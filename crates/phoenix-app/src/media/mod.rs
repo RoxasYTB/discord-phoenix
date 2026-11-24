@@ -164,6 +164,36 @@ pub struct ViewerImage {
     pub filename: SharedString,
     pub width: u32,
     pub height: u32,
+    /// Message author shown in the viewer's top bar (`topBar_` author block).
+    pub author: Option<ViewerAuthor>,
+}
+
+/// Author block of the media viewer: avatar, coloured name, message time.
+#[derive(Clone, Debug)]
+pub struct ViewerAuthor {
+    pub user: Option<crate::model::User>,
+    pub name: SharedString,
+    pub color: gpui::Hsla,
+    pub time: SharedString,
+}
+
+impl PartialEq for ViewerAuthor {
+    fn eq(&self, o: &Self) -> bool {
+        self.name == o.name && self.time == o.time && self.user.as_ref().map(|u| u.id) == o.user.as_ref().map(|u| u.id)
+    }
+}
+
+thread_local! {
+    static CURRENT_AUTHOR: std::cell::RefCell<Option<ViewerAuthor>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Set while a message's media is being built, so clicks open the viewer with its author.
+pub fn set_current_author(a: Option<ViewerAuthor>) {
+    CURRENT_AUTHOR.with(|c| *c.borrow_mut() = a);
+}
+
+pub fn current_author() -> Option<ViewerAuthor> {
+    CURRENT_AUTHOR.with(|c| c.borrow().clone())
 }
 
 #[derive(Default)]

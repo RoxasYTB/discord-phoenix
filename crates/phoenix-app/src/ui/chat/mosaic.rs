@@ -50,6 +50,7 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
         filename: a.filename.clone(),
         width: a.width,
         height: a.height,
+        author: media::current_author(),
     };
     let video = a.kind == AttachmentKind::Video;
     let original = viewer.original.clone();

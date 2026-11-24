@@ -46,6 +46,8 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("plus-circle", &["CirclePlusIcon"]),
     ("compass", &["CompassIcon"]),
     ("download", &["DownloadIcon"]),
+    ("viewer/zoom", &["MagnifyingGlassPlusIcon"]),
+    ("viewer/open", &["WindowLaunchIcon"]),
     ("close", &["XLargeIcon", "XLargeBoldIcon"]),
     ("threads", &["ThreadIcon"]),
     // Forum "Sort & View" dropdown (ForumChannel sortDropdown → ArrowsUpDownIcon xs).

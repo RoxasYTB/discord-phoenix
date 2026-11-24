@@ -1005,6 +1005,12 @@ fn message(
     if msg.edited && !edited_after_embeds && !last_text.is_some_and(|l| l + 1 == n_blocks) {
         content = content.child(edited_marker(ts));
     }
+    media::set_current_author(Some(media::ViewerAuthor {
+        user: author.cloned(),
+        name: name.clone(),
+        color,
+        time: r.time_full.clone(),
+    }));
     // Two or more images/videos share one mosaic; files follow (nonVisualMediaItem_ margin-top 8px).
     let visual: Vec<&Attachment> = msg.attachments.iter().filter(|a| mosaic::is_visual(a)).collect();
     if visual.len() >= 2 && crate::ui::settings::effects::inline_attachments() {
@@ -1020,6 +1026,7 @@ fn message(
     for e in msg.embeds.iter().filter(show_embed) {
         content = content.child(embed(app, e));
     }
+    media::set_current_author(None);
     // Forward: the snapshot sits inside the quote frame; reactions/threads stay outside.
     if let Some(f) = &msg.forward {
         content = div().flex().flex_col().min_w_0().text_size(fz(16.)).text_color(c(Palette::TEXT_NORMAL)).child(forward::wrap(app, f, content));
@@ -1662,6 +1669,7 @@ fn media_image(url: &str, original: SharedString, filename: SharedString, (ow, o
         filename,
         width: ow,
         height: oh,
+        author: media::current_author(),
     };
     let mut im = img(src.clone());
     // Bounded LRU instead of the window's keep-forever asset cache.
