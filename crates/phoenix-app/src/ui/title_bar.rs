@@ -20,6 +20,10 @@ fn title(app: &PhoenixApp) -> (Icon, SharedString) {
     if app.nav.home == HomeView::Dm {
         return (Icon::Members, crate::t!("dm.title"));
     }
+    // nitro-home dump: the title bar reads "Nitro" with the Nitro glyph.
+    if app.nav.home == HomeView::Nitro {
+        return (Icon::Nitro, crate::t!("settings.page.nitro"));
+    }
     (Icon::Members, crate::t!("friends.title"))
 }
 

@@ -559,7 +559,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
         .when(requests > 0, |d| {
             d.child(nav("msg-requests", Icon::Inbox, crate::t!("friends.message_requests"), Some(HomeView::MessageRequests), requests))
         })
-        .child(nav("nitro", Icon::Nitro, crate::t!("dm.nitro"), None, 0))
+        .child(nav("nitro", Icon::Nitro, crate::t!("dm.nitro"), Some(HomeView::Nitro), 0))
         .child(nav("shop", Icon::Gift, crate::t!("dm.shop"), None, 0))
         // Quests (`/quest-home`): QuestsIcon (vanilla-friends-online #653).
         .child(nav("quests", Icon::Quests, crate::t!("dm.quests"), None, 0))

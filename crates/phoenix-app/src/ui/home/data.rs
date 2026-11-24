@@ -150,6 +150,8 @@ pub enum HomeView {
     MessageRequests,
     /// A DM is open in the chat pane.
     Dm,
+    /// "Ton Nitro" page (/store).
+    Nitro,
 }
 
 /// Modal / popout currently shown above the main layout.
