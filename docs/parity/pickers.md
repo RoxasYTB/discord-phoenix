@@ -19,4 +19,4 @@ Source: dumps `vanilla-picker-emoji`, `vanilla-picker-gif`, `vanilla-picker-stic
 | GIF trending tile | img under categoryFade | image | first trending GIF | gif.rs | ❌ blank on real data, cause unknown |
 | sticker cell | sticker_5z8c5P | size / gap | 98 / 13 | sticker.rs | ✅ |
 | sticker frequent | stickerCategoryGeneric (#2731) | rail + section | clock, first | sticker.rs | ✅ |
-| soundboard | — | — | no dump (needs voice) | — | ❌ not measured |
+| soundboard | official [Soundboard guide](https://support.discord.com/hc/en-us/articles/12612888127767-Discord-Soundboard-Guide-Using-Adding-and-Managing-Sounds); reference UI still needs an active voice call | access | opened from voice controls; guide describes choosing an available server, then a sound. No Phoenix call, sound playback, upload, or settings mutation was performed for this audit | — | ❌ UI/API not measured; guide establishes the high-level flow only |

@@ -8,6 +8,12 @@ Nothing was typed into the live client (typing would broadcast "is typing"). Pop
 from typed text are built from the CSS rules alone, marked **CSS only**: no live dump, no
 side-by-side compare.
 
+The `send-btn` preference is wired locally in Phoenix. A temporary visual-only capture of the
+official client at 1920×1050 showed the regular composer actions, with no Send Message control in
+that observed state. The preference state was not changed, so this does **not** establish how the
+composer looks when Send Message is enabled. No screenshot or private account content was retained.
+Compare enabled and disabled states before upgrading the row below from ⚠.
+
 Renders: `cargo run -p phoenix-app --example shortcuts_shot -- out.png <mention|emoji|channel|long|upload>` (mock data).
 
 | element | CSS / JS source | property | value | our code | status |
@@ -38,6 +44,7 @@ Renders: `cargo run -p phoenix-app --example shortcuts_shot -- out.png <mention|
 | drop modal icons | 865429 `icons_`, `icon_ one/two/three` | art / pose | default icons [document, image, code] (JS `ir:[1,0,2]`), 100x130 `icon_` in a 100x60 `icons_`, wraps -70/-80/-70, final keyframe translate(∓44,-6) rotate(∓30deg) | panels.rs upload_icons, icons/art.rs | ✅ the client's own art, read at runtime from the local cache (background-image of `.document_/.image_/.code_<hash>`), posed at the final keyframe. Each new drag replays the enter keyframes (`panels::track_drop`): icon translate/opacity (.8s ease, per-keyframe), bgScale_ bounce, title/instructions fade-in from -4px (.175s/.185s delays). ⚠ the art is pre-rotated to ±30deg so the rotation itself doesn't animate, and the middle icon's drop-shadow(0 0 48px) is not drawn |
 | slowmode | d53e40 `cooldownWrapper_bbCgC2`, `slowModeIcon_bbCgC2` | state | right of the typing row: margin-inline-start auto, padding 3 8 / inline-end 16, gap 4; countdown text then icon (margin-inline-start 4); bypass with MANAGE_MESSAGES/MANAGE_CHANNELS | ChannelExtra.slowmode/bypass_slowmode (rate_limit_per_user, cache permissions), composer.rs cooldown(), send held while counting down | ✅ CSS only. The icon (clock) and the mm:ss format are assumed |
 | no-permission composer | client notice | state | disabled text area with the notice, no buttons | ChannelExtra.send_blocked (SEND_MESSAGES / SEND_MESSAGES_IN_THREADS from the cache's overwrite computation), composer.rs | ✅ wording = locale key `IYKTTc` of the client's fr/en bundles (fr: "Tu n'as pas la permission…") |
+| Send Message preference | official composer screenshot, 1920×1050; enabled state not observed | visibility / interaction | visible control when setting enabled; empty-draft and no-permission behavior still unmeasured | composer.rs `send-btn` → `should_show_send_button`; reuses `submit_composer` | ⚠ wired; enabled client state and layout not compared |
 | multiline input | 962953 `scrollableContainer_2x8-Qn`, `buttons_2x8-Qn`, `textArea_2x8-Qn` | layout | grows with the text up to --custom-channel-textarea-text-area-max-height (50vh) then scrolls; buttons are a 56px row pinned to the top; text padding 17 0, 16/22; Enter sends, Shift+Enter newline | app.rs composer (TextareaState auto_grow + submit_on_enter), composer.rs | ✅ (was a single-line input). 22px lines: `.line_height` on the Textarea overrides the Input's 1.25rem (its refinement is applied last), padding back to 17 |
 | typing indicator | 56501 `base_U9Tvvz` | text / dots | see chat.md | composer.rs typing | ✅ (chat.md) |
 | reply bar | 841136 `replyBar_` | see chat.md | — | composer.rs reply_bar | ✅ (chat.md) |
