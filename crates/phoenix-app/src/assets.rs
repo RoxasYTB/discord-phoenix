@@ -128,6 +128,7 @@ fn svg_for(path: &str) -> Option<&'static str> {
         // Left-pointing cap of the red "NEW" pill (unreadPillCap_: 8x13, drawn here, not Discord's).
         "icons/chat/unread-cap.svg" => concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 13" fill="black">"#, r#"<path d="M8 0v13H5L0 6.5 5 0z"/>"#, "</svg>"),
         "icons/chat-check.svg" => s!(r#"<path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>"#),
+        "icons/chat/eye-slash.svg" => s!(r#"<path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6a12.6 12.6 0 0 1-2.9 3.6M6.3 7.6C4.4 8.8 3.1 10.5 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.8-.3 4-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/>"#),
         "icons/chat/forwarded.svg" => s!(r#"<path d="M20 8h-7a8 8 0 0 0-8 8v4M15 3l5 5-5 5"/>"#),
         // Context menu row icons (our own drawings; the real ones come from the icon provider).
         "icons/menu/view-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>"#),
