@@ -859,6 +859,9 @@ impl Backend for DiscordBackend {
     fn shop_storefront(&self) -> BoxFuture<serde_json::Value> {
         self.shop_storefront_impl()
     }
+    fn orbs_balance(&self) -> BoxFuture<Option<u64>> {
+        self.orbs_balance_impl()
+    }
     fn collectible_product(&self, sku: u64) -> BoxFuture<Option<crate::ui::settings::collectibles::Collectible>> {
         self.collectible_product_impl(sku)
     }

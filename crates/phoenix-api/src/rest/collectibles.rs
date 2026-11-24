@@ -45,6 +45,13 @@ pub fn recommended_skus(v: &Value) -> Vec<u64> {
 }
 
 impl RestClient {
+    /// Orbs balance (`VIRTUAL_CURRENCY_USER_BALANCE`, `{ balance }`), as the
+    /// Shop header pill fetches it. Read-only.
+    pub async fn get_orbs_balance(&self) -> Result<Option<u64>> {
+        let v: Value = self.call(Method::GET, "/users/@me/virtual-currency/balance", Body::None).await?;
+        Ok(v.get("balance").and_then(Value::as_u64))
+    }
+
     /// The shop catalogue (raw JSON; CDN asset URLs are read at runtime).
     pub async fn get_collectibles_categories(&self) -> Result<Value> {
         self.call(Method::GET, CATEGORIES_V2, Body::None).await

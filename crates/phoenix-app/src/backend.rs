@@ -355,6 +355,10 @@ pub trait Backend: Send + Sync + 'static {
     fn shop_storefront(&self) -> BoxFuture<serde_json::Value> {
         Box::pin(async { Ok(serde_json::Value::Null) })
     }
+    /// Orbs balance for the Shop header (`GET /users/@me/virtual-currency/balance`).
+    fn orbs_balance(&self) -> BoxFuture<Option<u64>> {
+        Box::pin(async { Ok(None) })
+    }
     /// One collectible by SKU (`GET /collectibles-products/{sku}`): the
     /// applied profile effect / frame of a shown profile.
     fn collectible_product(&self, _sku: u64) -> BoxFuture<Option<crate::ui::settings::collectibles::Collectible>> {

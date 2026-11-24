@@ -29,6 +29,7 @@ thread_local! {
     static CARDS: RefCell<Option<Vec<ShopCard>>> = const { RefCell::new(None) };
     static REQUESTED: Cell<bool> = const { Cell::new(false) };
     static TAB: Cell<usize> = const { Cell::new(0) };
+    static ORBS: Cell<Option<u64>> = const { Cell::new(None) };
 }
 
 fn price(p: &Value, tier: &str) -> Option<(i64, u32, String)> {
@@ -84,6 +85,14 @@ fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     if REQUESTED.with(|r| r.replace(true)) {
         return;
     }
+    let orbs = app.backend.orbs_balance();
+    cx.spawn(async move |this, cx| {
+        if let Ok(b) = orbs.await {
+            ORBS.with(|o| o.set(b));
+            let _ = this.update(cx, |_, cx| cx.notify());
+        }
+    })
+    .detach();
     let fut = app.backend.shop_storefront();
     cx.spawn(async move |this, cx| {
         let v = fut.await.unwrap_or(Value::Null);
@@ -178,7 +187,21 @@ fn header(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .child(crate::t!("shop.search")),
                 )
                 .child(pill("shop-wishlist").w(z(32.)).child(glyph("heart", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
-                .child(pill("shop-orbs").px(z(12.)).child(glyph("orbs", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT)))),
+                // container_0XT54_ padding 8 12: orb 20px, balance body-md/semibold --text-strong (2px after).
+                .child(
+                    pill("shop-orbs")
+                        .px(z(12.))
+                        .gap(z(2.))
+                        .child(glyph("orbs", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
+                        .children(ORBS.with(Cell::get).map(|b| {
+                            div()
+                                .text_size(z(16.))
+                                .line_height(z(20.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(tk(idx::TEXT_STRONG))
+                                .child(b.to_string())
+                        })),
+                ),
         )
 }
 
@@ -214,6 +237,7 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
             div()
                 .absolute()
                 .inset_0()
+                .group_hover(group.clone(), |s| s.top(z(-6.)).bottom(z(6.)))
                 .px(z(8.))
                 .pb(z(56.))
                 .flex()
