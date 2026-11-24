@@ -185,7 +185,7 @@ pub(super) async fn search(inner: Arc<Inner>, s: Arc<Session>, req: SearchReques
                 }
                 inner.emit(AppEvent::Users(users));
                 if let Some(g) = req.guild.map(sf) {
-                    let mut ids: Vec<api::Snowflake> = Vec::new();
+                    let mut ids: Vec<phoenix_api::models::Snowflake> = Vec::new();
                     for m in &hits {
                         let refd = m.referenced_message.as_deref().map(|r| r.author.id);
                         for u in std::iter::once(m.author.id).chain(refd) {
