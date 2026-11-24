@@ -31,10 +31,26 @@ pub fn status_label(text: SharedString, font_px: f32) -> AnyElement {
 
 /// Wrapping version of [`status_label`] for the profile status bubble (two
 /// lines): words and emoji images flow in a wrapping row.
-pub fn status_wrapped(text: SharedString, font_px: f32) -> AnyElement {
+///
+/// Official CSS (`rmCN9_`):
+/// - `.statusEmoji_rmCN9_:not(:has(~.statusText_rmCN9_))` (emoji-only): 32×32 px
+/// - `.statusEmoji_rmCN9_:has(~.statusText_rmCN9_)` (emoji + text): 16×16 px, `margin-inline-end: 4px`
+pub fn status_wrapped(text: SharedString, _font_px: f32) -> AnyElement {
     let ranges = crate::richtext::emoji_ranges(&text);
     if ranges.is_empty() {
         return text.into_any_element();
+    }
+    let zoom = crate::theme::zoom();
+    let emoji_only = ranges.len() == 1
+        && text[..ranges[0].0.start].trim().is_empty()
+        && text[ranges[0].0.end..].trim().is_empty();
+    if emoji_only {
+        return div()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(crate::media::emoji::emoji_element(&ranges[0].1, 32. * zoom))
+            .into_any_element();
     }
     let mut row = div().flex().flex_wrap().items_center();
     let mut at = 0;
@@ -45,7 +61,7 @@ pub fn status_wrapped(text: SharedString, font_px: f32) -> AnyElement {
     };
     for (r, tok) in &ranges {
         row = words(row, at..r.start);
-        row = row.child(div().flex_none().mx(gpui::px(1.)).child(crate::media::emoji::emoji_element(tok, font_px * 1.375)));
+        row = row.child(div().flex_none().mr(gpui::px(4. * zoom)).child(crate::media::emoji::emoji_element(tok, 16. * zoom)));
         at = r.end;
     }
     words(row, at..text.len()).into_any_element()

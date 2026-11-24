@@ -1049,16 +1049,18 @@ fn message(
     let n_blocks = r.blocks.len();
     // Discord exposes `display_compact_avatars` only as an option for compact
     // message display. Cozy mode always shows its normal group avatar.
+    // 738015 `.compact_2i8Bfm .avatar_2i8Bfm`: inline 1em x 1em, margin-inline .1em .25em,
+    // inside the compact header (which starts at 1rem = 16px * font_scale).
     let compact_avatars = compact && app.prefs.synced.flag("avatars");
-    // Compact first line starts 1rem in (contents_ text-indent -(5rem - 1rem)).
-    let compact_header_left = if compact_avatars { 64. } else { 16. * crate::theme::font_scale() };
-    // Compact: the absolute "[time] Name" header overlaps the first line by
+    let compact_header_left = 16. * crate::theme::font_scale();
+    // Compact: the absolute "[time] [avatar] Name" header overlaps the first line by
     // `overflow` px; pad the first text line with thin spaces to clear it.
     let is_bot = author.is_some_and(|a| a.bot);
     let overflow = if compact {
         compact_header_overflow(
             &r.time_short,
             &name,
+            compact_avatars,
             is_bot,
             author.and_then(|u| u.tag.as_ref()).map(|t| t.0.as_ref()),
             compact_header_left,
@@ -1360,41 +1362,6 @@ fn message(
         base.pl(fz(80.))
             .py(fz(2.))
             .when_some(reply, |d, reply| d.child(reply))
-            .when(compact_avatars, |d| {
-                d.child(
-                    div()
-                        .absolute()
-                        .left(z(16.))
-                        .top(fz(if msg.reply_to.is_some() { 24. } else { 2. }))
-                        .id(("msg-avatar-compact", id.0))
-                        .cursor_pointer()
-                        .rounded_full()
-                        .hover(|s| {
-                            s.shadow(vec![gpui::BoxShadow {
-                                color: gpui::hsla(0., 0., 0., 0.16),
-                                offset: gpui::point(z(0.), z(4.)),
-                                blur_radius: z(4.),
-                                spread_radius: z(0.),
-                                inset: false,
-                            }])
-                        })
-                        .active(|s| s.mt(z(1.)))
-                        .on_click(message_ext::open_author(entity, msg))
-                        .child(avatar(author, m::AVATAR))
-                        .when_some(author.and_then(|u| u.decoration.clone()), |d, deco| {
-                            let size = m::AVATAR * 1.2;
-                            let offset = (size - m::AVATAR) / 2.;
-                            d.child(
-                                gpui::img(crate::ui::avatar_deco::src_for(&deco, crate::ui::avatar_deco::hover_key(2, id.0)))
-                                    .id("deco-frames")
-                                    .absolute()
-                                    .size(z(size))
-                                    .left(z(-offset))
-                                    .top(z(-offset)),
-                            )
-                        }),
-                )
-            })
             .child(
                 div()
                     .absolute()
@@ -1415,6 +1382,21 @@ fn message(
                             .tooltip(time_tooltip(ts))
                             .child(r.time_short.clone()),
                     )
+                    .when(compact_avatars, |d| {
+                        // 738015 `.compact_2i8Bfm .avatar_2i8Bfm`: 1em x 1em inline,
+                        // margin-inline: .1em .25em.
+                        d.child(
+                            div()
+                                .id(("msg-avatar-compact", id.0))
+                                .flex_none()
+                                .ml(fz(1.6))
+                                .mr(fz(4.))
+                                .cursor_pointer()
+                                .rounded_full()
+                                .on_click(message_ext::open_author(entity, msg))
+                                .child(avatar(author, 16. * crate::theme::font_scale())),
+                        )
+                    })
                     .child(author_name)
                     .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, false)))
                     .when_some(app.author_role_icon(msg.author), |d, u| d.child(role_icon(u)))
@@ -1552,12 +1534,16 @@ fn text_width(cx: &App, font: &gpui::Font, size: gpui::Pixels, s: &str) -> f32 {
     s.chars().map(|ch| ts.advance(id, size, ch).map(|a| f32::from(a.width)).unwrap_or(0.)).sum()
 }
 
-/// How far the compact "[time] Name " header runs past the 80 px content
+/// How far the compact "[time] [avatar] Name " header runs past the 80 px content
 /// indent, i.e. the first-line text indent.
-fn compact_header_overflow(time: &str, name: &str, bot: bool, tag: Option<&str>, left: f32, cx: &App) -> f32 {
+fn compact_header_overflow(time: &str, name: &str, compact_avatars: bool, bot: bool, tag: Option<&str>, left: f32, cx: &App) -> f32 {
     let mut name_font = crate::richtext::ui_font();
     name_font.weight = FontWeight::MEDIUM;
     let mut w = text_width(cx, &crate::richtext::ui_font(), fz(11.), time) + f32::from(fz(4.));
+    if compact_avatars {
+        // 1em avatar + .1em start + .25em end margin (.compact_2i8Bfm .avatar_2i8Bfm)
+        w += f32::from(fz(16. + 1.6 + 4.));
+    }
     w += text_width(cx, &name_font, fz(16.), name);
     if bot {
         let mut f = name_font.clone();

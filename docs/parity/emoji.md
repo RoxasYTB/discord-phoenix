@@ -14,7 +14,7 @@ CDNs. ✅ = matches the measurement, ⚠ = implemented but not compared live, �
 | Twemoji file names | FE0F dropped unless the sequence has a ZWJ; the eye in a speech bubble is `1f441-200d-1f5e8` | `twemoji_code` on the fully qualified form, same exception | ✅ |
 | Names, channel names, role group headers | Text in `"gg sans","Noto Sans",…`; Chromium draws the emoji with the system colour font (`fc-match emoji`) | `ui::emoji_text::label` (Noto Color Emoji fallback) | ✅ (unchanged) |
 | Custom status and activity line (member list, user panel) | `customStatusContent_` and the activity text hold `img.emoji` 14px Twemoji, not font glyphs | `emoji_text::status_label`: Unicode and custom emoji as images at 14px | ✅ member list (live DOM), ⚠ user panel (no emoji in the account's own status) |
-| Profile status bubble | — | `emoji_text::status_wrapped`: words and emoji images in a wrapping row (custom `<:name:id>` tokens no longer show raw) | ⚠ size not measured (19.25px = 1.375em of 14px assumed) |
+| Profile status bubble | CSS (`rmCN9_`): `.statusEmoji_rmCN9_:not(:has(~.statusText_rmCN9_))` 32×32px (emoji-only); `.statusEmoji_rmCN9_:has(~.statusText_rmCN9_)` 16×16px, `margin-inline-end: 4px` (emoji + text) | `emoji_text::status_wrapped`: 32px for emoji-only, 16px + 4px right margin when paired with text (was 19.25px = 1.375em) | ✅ (CSS verified) |
 | Picker data | Emoji 16.0 | `ui/pickers/emoji_data.rs` regenerated with entries ≤ E16.0 (1906 entries, was ≤ E15.1) | ✅ coverage; shortcodes are still CLDR names, not the client's (`:grinning:`) ⚠ |
 
 ## Animation
