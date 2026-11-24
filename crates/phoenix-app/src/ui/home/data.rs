@@ -56,6 +56,9 @@ pub struct ChannelExtra {
     pub bypass_slowmode: bool,
     /// Guild channel where we lack SEND_MESSAGES (SEND_MESSAGES_IN_THREADS in threads).
     pub send_blocked: bool,
+    /// Thread `thread_metadata.archived` / `.locked` (chatHeaderBar_ banners).
+    pub thread_archived: bool,
+    pub thread_locked: bool,
 }
 
 #[derive(Clone, Debug)]

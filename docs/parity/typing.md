@@ -16,3 +16,12 @@ Source: current-client/css (`base_U9Tvvz`, `inTextChannel_U9Tvvz`, `dot_U9Tvvz`,
 | strings | lJ9sZX/rB0CUa/StKThj/Q8lUnE | "… est en train d'écrire...", "A et B sont…", "A, B, et C sont…", "**Plusieurs personnes** sont…" | locales/*.yml chat.typing_* | ✅ |
 | overflow fallback | JS qD/0qZ | 1–3 typers, text width + 56px > typingDots_ box → "**Plusieurs personnes** sont en train d'écrire…" | composer.rs `overflow` | ✅ |
 | slowmode | cooldownWrapper_ | right of the same row, padding 3 8, pe 16 | composer.rs `cooldown` | ✅ |
+
+# Locked thread banner (ChannelChatNotice, chatHeaderBar_By_-nl)
+
+| element | source | property | value | our code | status |
+|---|---|---|---|---|---|
+| banner | chatHeaderBar_By_-nl | bg / padding / gap | --background-mod-normal, 8px 16px, 16px | ui/chat/thread_banner.rs | ✅ |
+| text | chatHeaderBarText_ + body-sm/normal | flex 1, text-default | V/JF2N (locked) / rEeodK (archived + locked) | thread_banner.rs | ✅ |
+| composer | client canSendMessage | locked thread without MANAGE_THREADS | no-permission text area | discord_backend/nav.rs `send_blocked` | ✅ |
+| Open / Unlock buttons | 0dvvEi / zA9d1J | MANAGE_THREADS only | write actions, not shown | — | ❌ |

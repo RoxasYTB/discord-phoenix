@@ -27,6 +27,7 @@ pub mod mosaic;
 pub mod panels;
 pub mod scrollbar;
 pub mod state;
+pub mod thread_banner;
 pub mod slash;
 pub mod spoiler;
 pub mod system;
@@ -78,6 +79,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                             panels::drop_ended();
                             a.add_paths(paths.paths().to_vec(), cx)
                         }))
+                        .children(thread_banner::render(app))
                         .children(discovery_notice(app, cx))
                         .child(
                             div()

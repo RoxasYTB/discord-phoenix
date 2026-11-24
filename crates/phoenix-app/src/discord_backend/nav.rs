@@ -211,12 +211,18 @@ fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
     let group = c.kind == ChannelType::GroupDm;
     // Read-only permission check for the composer (the cache's overwrite computation).
     let perms = cache.permissions_in(c.id);
+    let locked_thread = c.kind.is_thread() && c.thread_metadata.as_ref().is_some_and(|m| m.locked);
     let send_bit = if c.kind.is_thread() { api::Permissions::SEND_MESSAGES_IN_THREADS } else { api::Permissions::SEND_MESSAGES };
     ChannelExtra {
         slowmode: c.rate_limit_per_user.unwrap_or(0),
         bypass_slowmode: perms.intersects(api::Permissions::MANAGE_MESSAGES | api::Permissions::MANAGE_CHANNELS),
         // Empty = roles not cached yet: don't lock the composer on missing data.
-        send_blocked: c.guild_id.is_some() && !perms.is_empty() && !perms.contains(send_bit),
+        // A locked thread only takes messages from MANAGE_THREADS holders.
+        send_blocked: c.guild_id.is_some()
+            && !perms.is_empty()
+            && (!perms.contains(send_bit) || (locked_thread && !perms.contains(api::Permissions::MANAGE_THREADS))),
+        thread_archived: c.thread_metadata.as_ref().is_some_and(|m| m.archived),
+        thread_locked: locked_thread,
         nsfw: c.nsfw,
         locked: everyone_denied(c),
         group_icon: c
@@ -289,6 +295,7 @@ pub fn on_gateway(cache: &Cache, ev: &GatewayEvent) -> Vec<AppEvent> {
             out.push(AppEvent::Nav(NavEvent::RelationshipRemove(id(r.user_id.unwrap_or(r.id)))));
         }
         GatewayEvent::ThreadCreate(c) | GatewayEvent::ThreadUpdate(c) => {
+            out.push(AppEvent::Nav(NavEvent::Extras(vec![(id(c.id), extra(cache, c))])));
             out.push(AppEvent::Nav(match thread(c) {
                 Some(t) => NavEvent::ThreadUpsert(t),
                 None => NavEvent::ThreadDelete(id(c.id)),
