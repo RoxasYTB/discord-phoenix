@@ -400,7 +400,8 @@ fn field(app: &PhoenixApp, i: usize, input: &Entity<InputState>, picks: &[String
                     .child(pick_label(app, key, v)),
             );
         }
-        content = content.child(div().flex_1().min_w(z(40.)).text_size(z(16.)).child(Input::new(input).appearance(false).bordered(false)));
+        // The Input adds its own padding and text size: the field pads 12 and sets 16/20.
+        content = content.child(div().flex_1().min_w(z(40.)).child(Input::new(input).appearance(false).bordered(false).px(z(0.)).text_size(z(16.)).line_height(z(20.))));
     }
     let wrap = div()
         .id(gpui::ElementId::Name(format!("search-field-{i}").into()))
