@@ -10,10 +10,15 @@
 //! - `img_AFi54G`: `height: 100%`, `inset-inline-end: 0`, `object-position: right center`,
 //!   opacity `.6` (`.selected` `.9`, `.channel.hover` `.4`, `.account` `.4`).
 
-use gpui::{div, img, prelude::*, AnyElement, Hsla, Rgba};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
+
+use futures::AsyncReadExt;
+use gpui::{div, img, prelude::*, AnyElement, App, Global, Hsla, ImageCacheError, RenderImage, Rgba, SharedString};
 
 use crate::model::User;
-use crate::theme::{Palette, c, generated::idx, tok, z};
+use crate::theme::z;
 
 /// Nameplate palette name -> `darkBackground` (client module `641886`).
 pub fn palette_dark(name: &str) -> Option<u32> {
@@ -79,18 +84,141 @@ pub fn layer(user: &User, h: f32, place: Place, hovered: bool, selected: bool) -
     layer_with_fade(user, h, place, hovered, selected, 220.)
 }
 
+/// Maximum number of masked nameplate `RenderImage`s kept in memory.
+const MAX_CACHED: usize = 128;
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+struct MaskKey {
+    url: SharedString,
+    start_q: u16,
+    end_q: u16,
+}
+
+enum State {
+    Loading,
+    Ready(Arc<RenderImage>),
+    Failed,
+}
+
+#[derive(Default)]
+struct Store {
+    images: HashMap<MaskKey, (State, Instant)>,
+}
+
+impl Global for Store {}
+
+/// Continuous horizontal alpha mask matching CSS:
+/// `mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.3) <start>, rgb(0, 0, 0) <end>)`.
+fn mask_alpha(u: f32, start: f32, end: f32) -> f32 {
+    if u <= start {
+        0.3
+    } else if u >= end || end <= start {
+        1.0
+    } else {
+        0.3 + 0.7 * ((u - start) / (end - start))
+    }
+}
+
+/// Decode `bytes` and apply the horizontal alpha mask pixel by pixel into a BGRA
+/// `RenderImage`, eliminating all div-slicing seams and banding at any DPR.
+fn bake_masked(bytes: &[u8], start: f32, end: f32) -> Option<RenderImage> {
+    let src = image::load_from_memory(bytes).ok()?.into_rgba8();
+    let (w, h) = src.dimensions();
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let col_alpha: Vec<f32> = (0..w).map(|x| mask_alpha((x as f32 + 0.5) / w as f32, start, end)).collect();
+    let mut out = image::RgbaImage::new(w, h);
+    for (x, y, p) in out.enumerate_pixels_mut() {
+        let [r, g, b, a] = src.get_pixel(x, y).0;
+        let out_a = ((a as f32) * col_alpha[x as usize]).round().clamp(0.0, 255.0) as u8;
+        // GPUI textures are BGRA.
+        *p = image::Rgba([b, g, r, out_a]);
+    }
+    Some(RenderImage::new(vec![image::Frame::new(out)]))
+}
+
+fn load_masked(
+    url: &SharedString,
+    start_ratio: f32,
+    end_ratio: f32,
+    cx: &mut App,
+) -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
+    let start_q = (start_ratio.clamp(0.0, 1.0) * 1000.0).round() as u16;
+    let end_q = (end_ratio.clamp(0.0, 1.0) * 1000.0).round() as u16;
+    let key = MaskKey { url: url.clone(), start_q, end_q };
+
+    let store = cx.default_global::<Store>();
+    if let Some((st, used)) = store.images.get_mut(&key) {
+        *used = Instant::now();
+        return match st {
+            State::Loading => None,
+            State::Ready(img) => Some(Ok(img.clone())),
+            State::Failed => Some(Err(ImageCacheError::Other(Arc::new(anyhow::anyhow!("nameplate decode failed"))))),
+        };
+    }
+
+    if store.images.len() >= MAX_CACHED
+        && let Some(old) = store
+            .images
+            .iter()
+            .filter(|(_, (st, _))| !matches!(st, State::Loading))
+            .min_by_key(|(_, (_, t))| *t)
+            .map(|(k, _)| k.clone())
+    {
+        store.images.remove(&old);
+    }
+
+    // Local disk paths (offscreen mock renders) decode synchronously.
+    if url.starts_with('/') {
+        let state = std::fs::read(url.as_ref())
+            .ok()
+            .and_then(|bytes| bake_masked(&bytes, start_q as f32 / 1000.0, end_q as f32 / 1000.0))
+            .map(|img| State::Ready(Arc::new(img)))
+            .unwrap_or(State::Failed);
+        let res = match &state {
+            State::Ready(img) => Some(Ok(img.clone())),
+            _ => Some(Err(ImageCacheError::Other(Arc::new(anyhow::anyhow!("nameplate local decode failed"))))),
+        };
+        store.images.insert(key, (state, Instant::now()));
+        return res;
+    }
+
+    store.images.insert(key.clone(), (State::Loading, Instant::now()));
+    let http = cx.http_client();
+    let fetch = url.clone();
+    let s = start_q as f32 / 1000.0;
+    let e = end_q as f32 / 1000.0;
+    cx.spawn(async move |cx| {
+        let mut bytes = Vec::new();
+        let ok = match http.get(&fetch, Default::default(), true).await {
+            Ok(mut r) => r.status().is_success() && r.body_mut().read_to_end(&mut bytes).await.is_ok(),
+            Err(_) => false,
+        };
+        let img = if ok { cx.background_spawn(async move { bake_masked(&bytes, s, e) }).await } else { None };
+        cx.update(|cx| {
+            if let Some(entry) = cx.default_global::<Store>().images.get_mut(&key) {
+                entry.0 = match img {
+                    Some(i) => State::Ready(Arc::new(i)),
+                    None => State::Failed,
+                };
+            }
+            cx.refresh_windows();
+        });
+    })
+    .detach();
+    None
+}
+
 /// [`layer`] with an explicit horizontal mask fade start (`fade_start_px` from
 /// the left edge of `img_AFi54G`).
 ///
 /// Live client (2026-11-24, `img_AFi54G` + module `351952`):
 /// `mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.3) <fade>px, rgb(0, 0, 0) <fade+50>px)`.
 ///
-/// GPUI has no CSS `mask-image`; instead of slicing the `<img>` into multiple
-/// clipped divs (which produces visible subpixel vertical seams at fractional
-/// DPR such as 1.25/1.5), we render a single `<img>` at `base_opacity` and
-/// attenuate its left region with a smooth surface-colored overlay (alpha 0.7 -> 0.0)
-/// snapped to 4px boundaries (exact physical pixels at 1.0, 1.25, 1.5, and 2.0 DPR),
-/// then draw the palette gradient on top so the tint is never dimmed.
+/// The alpha mask is baked pixel-by-pixel into a cached `RenderImage` keyed by
+/// `(url, fade_start_ratio, fade_end_ratio)` so there are zero seams, bands, or
+/// tearing at any DPR.
 pub fn layer_with_fade(
     user: &User,
     h: f32,
@@ -115,65 +243,39 @@ pub fn layer_with_fade(
     };
 
     let img_w = h * (16. / 3.);
-    let make_img = |op: f32| {
-        // Absolute paths load from disk (offscreen mock renders); URLs as usual.
-        img(if url.starts_with('/') {
+
+    // 1. Single seam-free image layer with continuous per-pixel alpha mask.
+    if place == Place::Account {
+        let src = if url.starts_with('/') {
             gpui::ImageSource::from(std::path::PathBuf::from(url.as_ref()))
         } else {
-            gpui::ImageSource::from(url.clone())
-        })
-        .h_full()
-        .w(z(img_w))
-        .object_fit(gpui::ObjectFit::Cover)
-        .opacity(op)
-    };
-
-    // 1. Single seam-free image layer.
-    if place == Place::Account {
-        d = d.child(make_img(base_opacity).absolute().top_0().right_0().rounded_r(z(8.)));
-    } else if fade_start_px >= img_w {
-        d = d.child(make_img(base_opacity * 0.3).absolute().top_0().right_0().rounded_r(z(8.)));
-    } else {
-        // Snap to 4px logical grid -> exact integer physical pixels at 1.0, 1.25, 1.5, 2.0 DPR.
-        let fade_start = ((fade_start_px / 4.).round() * 4.).clamp(0., img_w);
-        let ramp_w = 48.0_f32.min((img_w - fade_start).max(0.));
-        let mut surface = match place {
-            Place::Member => c(Palette::BG_SECONDARY),
-            Place::Channel | Place::Account => c(tok(idx::BACKGROUND_BASE_LOW)),
+            gpui::ImageSource::from(url)
         };
-        let mut art = div()
-            .absolute()
-            .top_0()
-            .right_0()
-            .h_full()
-            .w(z(img_w))
-            .rounded_r(z(8.))
-            .overflow_hidden()
-            .child(make_img(base_opacity).absolute().top_0().left_0().rounded_r(z(8.)));
-        if fade_start > 0. {
-            surface.a = 0.7;
-            art = art.child(div().absolute().top_0().bottom_0().left_0().w(z(fade_start)).bg(surface));
-        }
-        if ramp_w > 0. {
-            let mut s0 = surface;
-            s0.a = 0.7;
-            let mut s1 = surface;
-            s1.a = 0.0;
-            art = art.child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .bottom_0()
-                    .left(z(fade_start))
-                    .w(z(ramp_w))
-                    .bg(gpui::linear_gradient(
-                        90.,
-                        gpui::linear_color_stop(s0, 0.),
-                        gpui::linear_color_stop(s1, 1.),
-                    )),
-            );
-        }
-        d = d.child(art);
+        d = d.child(
+            img(src)
+                .h_full()
+                .w(z(img_w))
+                .object_fit(gpui::ObjectFit::Cover)
+                .opacity(base_opacity)
+                .absolute()
+                .top_0()
+                .right_0()
+                .rounded_r(z(8.)),
+        );
+    } else {
+        let start_ratio = (fade_start_px / img_w).clamp(0.0, 1.0);
+        let end_ratio = ((fade_start_px + 50.0) / img_w).clamp(0.0, 1.0);
+        d = d.child(
+            img(move |_: &mut gpui::Window, cx: &mut App| load_masked(&url, start_ratio, end_ratio, cx))
+                .h_full()
+                .w(z(img_w))
+                .object_fit(gpui::ObjectFit::Cover)
+                .opacity(base_opacity)
+                .absolute()
+                .top_0()
+                .right_0()
+                .rounded_r(z(8.)),
+        );
     }
 
     // 2. Palette background gradient (module `351952`).
@@ -214,4 +316,36 @@ pub fn layer_with_fade(
     }
 
     Some(d.into_any_element())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mask_alpha_ramps_continuously() {
+        assert!((mask_alpha(0.0, 0.5, 0.75) - 0.3).abs() < 1e-6);
+        assert!((mask_alpha(0.5, 0.5, 0.75) - 0.3).abs() < 1e-6);
+        assert!((mask_alpha(0.625, 0.5, 0.75) - 0.65).abs() < 1e-6);
+        assert!((mask_alpha(0.75, 0.5, 0.75) - 1.0).abs() < 1e-6);
+        assert!((mask_alpha(1.0, 0.5, 0.75) - 1.0).abs() < 1e-6);
+        // Full-width fade (fade_start_px >= img_w) stays at 0.3 everywhere.
+        assert!((mask_alpha(0.999, 1.0, 1.0) - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bake_masked_applies_alpha_and_bgra() {
+        let mut src = image::RgbaImage::new(4, 1);
+        for x in 0..4 {
+            src.put_pixel(x, 0, image::Rgba([200, 100, 50, 255]));
+        }
+        let mut buf = std::io::Cursor::new(Vec::new());
+        src.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        let rendered = bake_masked(buf.get_ref(), 0.25, 0.75).unwrap();
+        let raw = rendered.as_bytes(0).unwrap();
+        // Pixel 0 (u=0.125 <= 0.25): alpha = round(255 * 0.3) = 77, BGRA = [50, 100, 200, 77]
+        assert_eq!(&raw[0..4], &[50, 100, 200, 77]);
+        // Pixel 3 (u=0.875 >= 0.75): alpha = 255, BGRA = [50, 100, 200, 255]
+        assert_eq!(&raw[12..16], &[50, 100, 200, 255]);
+    }
 }
