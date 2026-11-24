@@ -1,6 +1,6 @@
 # Project Phoenix — état et handoff
 
-> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). Dernière mise à jour : `main` à `3cf6524`, quatre commits locaux devant `origin/main`; un lot Send Message est en cours de validation/commit.
+> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). Dernière mise à jour : `main` à `c479f54`, cinq commits locaux devant `origin/main`.
 
 Ce document est le point de reprise pour les sessions qui poursuivent la parité visuelle et fonctionnelle de Discord Phoenix. Il complète les tableaux par fonctionnalité dans [`docs/parity/`](parity/) et l’inventaire des routes dans [`docs/PARITY.md`](PARITY.md). Il ne remplace pas les preuves d’exécution ni les tests.
 
@@ -17,9 +17,9 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 - `docs/screenshots/` contenait quatre PNG non suivis au début de la reprise. Ils ont été préservés; `voice-settings.png` est maintenant suivi et intégré au README comme capture historique de développement. Les trois autres PNG restent non suivis; ils montrent un logo Discord et ne sont pas publiés.
 - Le client officiel était disponible via CDP. Une capture temporaire à 1920×1050 a confirmé une vue de salon avec le panneau des membres; le contenu était privé et la capture a été supprimée. Cette vue personnalisée n’est pas utilisée comme référence de score.
 - La sauvegarde initiale et son journal de test sont dans `/mnt/windata/project-phoenix/backups/20261124-112201Z/`. Une sauvegarde plus récente de `main` à `b22e6b1` est dans `/mnt/windata/project-phoenix/backups/20261124-113638Z/` (`main.bundle`, `worktree.patch`, `screenshots/`, `status.txt`). Elles ne contiennent aucun jeton.
-- Le commit `3cf6524` complète le handoff avec la vérification ciblée et les limites de la capture CDP. Le test ciblé des fallbacks a été relancé avec la suite `cargo test -p phoenix-app --lib`: 211 réussis, 2 ignorés. Le dernier essai a d’abord révélé une signature `.tooltip` incorrecte dans le nouveau bouton d’envoi; corrigée en utilisant `ui::tooltip::tip`, puis la suite complète est passée.
-- L’option locale `send-btn` est maintenant câblée à un bouton d’envoi Phoenix qui réutilise `submit_composer`; une icône SVG originale a été ajoutée. Le bouton est actuellement montré pour un brouillon non vide et autorisé. Ce critère reste explicitement à comparer au client officiel; aucun message n’a été envoyé pendant la validation.
-- Dernière sauvegarde antérieure à ce lot : `/mnt/windata/project-phoenix/backups/20261124-114033Z/`. Le log `phoenix-app-lib-test-retry.log` contient le résultat des 211 tests. Trois captures PNG non suivies restent préservées et ne doivent pas être ajoutées sans examen.
+- Le commit `3cf6524` complète le handoff avec la vérification ciblée et les limites de la capture CDP. La suite `cargo test -p phoenix-app --lib` passe: 211 réussis, 2 ignorés.
+- Le commit `c479f54` câble l’option locale `send-btn` à un bouton Phoenix qui réutilise `submit_composer`, avec une icône SVG originale. Le bouton apparaît actuellement pour un brouillon non vide et autorisé. Ce critère reste à comparer au client officiel; aucun message n’a été envoyé pendant la validation.
+- La sauvegarde actuelle de `c479f54` est `/mnt/windata/project-phoenix/backups/20261124-120000Z/` (`main.bundle`, `main-since-origin.patch`, `HEAD.txt`, état Git, log de test et copie des trois captures PNG non suivies). Le log contient le résultat des 211 tests; les captures ne sont pas ajoutées au dépôt.
 - Aucun intégrateur, build Cargo ou agent de la session précédente ne tournait pendant la vérification.
 
 ## Règle de contribution et méthode de référence
@@ -52,7 +52,7 @@ La capture écran permet de mesurer le rendu visible. Ne pas extraire les styles
 
 La reprise du handoff a confirmé que plusieurs éléments mentionnés comme en cours ont depuis été intégrés : historique détaché pour les sauts vers d’anciens messages, surbrillance pulsée, barre de titre, icônes de contrôles vidéo, barre de scène, thèmes, tooltips et carte de prévisualisation du stream. Les commits récents comprennent `90bb675`, `e45e2c5`, `cb8fa6f` et `e6f3b7a`.
 
-Depuis la référence initiale, `b50d800` a ajouté le handoff et le protocole, `2972f75` a ajouté deux icônes de secours, `b22e6b1` a documenté le résultat ciblé et `3cf6524` a complété les limites CDP. Le test ciblé de fallback et la suite bibliothèque passent. `/home` a environ 4,0 Go libres; vérifier avant toute compilation suivante et sérialiser les builds.
+Depuis la référence initiale, `b50d800` a ajouté le handoff et le protocole, `2972f75` a ajouté deux icônes de secours, `b22e6b1` a documenté le résultat ciblé, `3cf6524` a complété les limites CDP, et `c479f54` a câblé la préférence Send Message. Le test ciblé de fallback et la suite bibliothèque passent. `/home` a environ 4,0 Go libres; vérifier avant toute compilation suivante et sérialiser les builds.
 
 Ces intégrations ne signifient pas que toute la parité est atteinte. Les lignes des tableaux doivent être réévaluées avec leur preuve et leur état courant. Le tableau de bord de développement et `BACKLOG.md` contiennent des affectations d’agents périmées; aucun travailleur n’était actif à la reprise. Ne pas supposer qu’un label `CLAIMED` est encore pris en charge.
 
@@ -88,4 +88,4 @@ Les fichiers `.result` de `/home/yohan/.local/share/phoenix-queue/` indiquaient 
 
 ## Sauvegarde et reprise
 
-La sauvegarde créée pendant cette reprise : `/mnt/windata/project-phoenix/backups/20261124-112201Z/`. Le bundle restaure `main`; le patch restaure les modifications suivies de l’arbre; le sous-dossier `screenshots/` préserve les PNG non suivis. Les sauvegardes ultérieures sont dans `20261124-113638Z/` et `20261124-114033Z/`; créer un nouveau bundle/patch après le commit du lot Send Message.
+La sauvegarde la plus récente est `/mnt/windata/project-phoenix/backups/20261124-120000Z/`. Le bundle restaure la branche locale, le patch `main-since-origin.patch` contient les cinq commits locaux au-dessus de `origin/main`, et `screenshots/` préserve les trois captures non suivies. Le log `phoenix-app-lib-test-retry.log` correspond à `c479f54`.
