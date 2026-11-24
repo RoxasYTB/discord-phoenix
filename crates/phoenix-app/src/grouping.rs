@@ -203,8 +203,11 @@ mod tests {
     }
 
     #[test]
-    fn out_of_order_timestamps_break_group() {
-        assert!(starts_group(Some(&msg(1, 1, T0)), &msg(2, 1, T0 - 10), 0));
+    fn out_of_order_timestamps_group_within_window() {
+        // The client compares `Math.abs(prev - cur) < 7 min`: a message dated 10 s before the
+        // previous one still joins its group; 7 minutes before does not.
+        assert!(!starts_group(Some(&msg(1, 1, T0)), &msg(2, 1, T0 - 10), 0));
+        assert!(starts_group(Some(&msg(1, 1, T0)), &msg(2, 1, T0 - GROUP_WINDOW_SECS), 0));
     }
 
     #[test]
