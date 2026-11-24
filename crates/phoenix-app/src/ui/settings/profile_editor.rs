@@ -600,7 +600,7 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 .child(tile("frame", 100., 100., false).child(plus_icon(24.)).on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Frame, cx))))
                 .into_any_element(),
         ));
-    let aside = div()
+    div()
         .relative()
         .w(z(242.))
         .h_full()
@@ -651,8 +651,7 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                         })),
                 );
             div().px(z(16.)).pt(z(16.)).child(notice)
-        })).child(content));
-    aside
+        })).child(content))
 }
 
 fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {

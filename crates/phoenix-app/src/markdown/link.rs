@@ -253,10 +253,8 @@ pub(super) fn label_ok(label: &str, emoji_links: bool) -> bool {
     if clean.char_indices().any(|(k, c)| c == '[' && match_at(&clean[k..]).is_some_and(|m| validate_url(&clean[k..][m.url.clone()]).is_some())) {
         return false;
     }
-    if !emoji_links {
-        if !crate::richtext::emoji_ranges(&clean).is_empty() {
-            return false;
-        }
+    if !emoji_links && !crate::richtext::emoji_ranges(&clean).is_empty() {
+        return false;
     }
     true
 }

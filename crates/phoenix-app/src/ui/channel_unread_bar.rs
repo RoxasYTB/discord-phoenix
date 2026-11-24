@@ -44,10 +44,8 @@ fn bars(app: &PhoenixApp) -> (Bar, Bar) {
             }
             _ => continue,
         };
-        if unread {
-            if is_above || side.unread.is_none() {
-                side.unread = Some(ix);
-            }
+        if unread && (is_above || side.unread.is_none()) {
+            side.unread = Some(ix);
         }
         if ch.mentions > 0 {
             if is_above || side.mention.is_none() {

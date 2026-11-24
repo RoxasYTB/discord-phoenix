@@ -71,10 +71,10 @@ async fn run(
     mut stop: oneshot::Receiver<()>,
 ) -> ashpd::Result<()> {
     let conn = ashpd::zbus::Connection::session().await?;
-    if let Ok(id) = APP_ID.parse() {
-        if let Err(e) = ashpd::register_host_app_with_connection(conn.clone(), id).await {
-            tracing::debug!(error = %e, "portal registry");
-        }
+    if let Ok(id) = APP_ID.parse()
+        && let Err(e) = ashpd::register_host_app_with_connection(conn.clone(), id).await
+    {
+        tracing::debug!(error = %e, "portal registry");
     }
     let gs = GlobalShortcuts::with_connection(conn).await?;
     let session = gs.create_session(Default::default()).await?;
