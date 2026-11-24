@@ -1557,7 +1557,7 @@ pub fn player(url: &SharedString, meta: &VoiceMeta, cx: &App) -> AnyElement {
         open || s.vol_drag.as_ref().is_some_and(|(k, _)| *k == key) || s.vol_keys.as_ref() == Some(&key)
     });
     let vol_color = state_mix(cx, &key, v.playing, c(tok(idx::INTERACTIVE_TEXT_DEFAULT)), c(tok(idx::BRAND_200)), ease_in_out);
-    let vol_hover = if v.playing { white } else { c(tok(idx::INTERACTIVE_TEXT_HOVER)) };
+    let vol_hover_fg = if v.playing { white } else { c(tok(idx::INTERACTIVE_TEXT_HOVER)) };
     let vol_active = if v.playing { c(tok(idx::BRAND_200)) } else { c(tok(idx::INTERACTIVE_TEXT_ACTIVE)) };
     let rate_group: SharedString = format!("vm-rate-{key}").into();
     let vol_group: SharedString = format!("vm-vol-{key}").into();
@@ -1665,7 +1665,7 @@ pub fn player(url: &SharedString, meta: &VoiceMeta, cx: &App) -> AnyElement {
                         .size(z(24.))
                         .flex_none()
                         .text_color(vol_color)
-                        .group_hover(vol_group.clone(), move |s| s.text_color(vol_hover))
+                        .group_hover(vol_group.clone(), move |s| s.text_color(vol_hover_fg))
                         .id("vm-vol-icon")
                         .group_active(vol_group, move |s| s.text_color(vol_active)),
                 )
