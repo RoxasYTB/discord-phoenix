@@ -774,14 +774,18 @@ fn keyframes(stops: &[(f32, f32)], p: f32) -> f32 {
 }
 
 /// uploadIconAnimateInLeft/Middle/Right_TLgD1o (.8s ease forwards):
-/// (x, y, opacity) of the left icon at progress `p`; the right one mirrors x.
-fn icon_pose(p: f32) -> (f32, f32, f32) {
+/// (x, y, opacity, tilt in degrees) of the left icon at progress `p`; the
+/// right one mirrors x and the tilt. The tilt was sampled every 50ms on the
+/// live client (overshoot to -35.9° at 250ms, -28° at 450ms, -32° at 600ms,
+/// settling at -30°) and fits these stops within 0.2°.
+fn icon_pose(p: f32) -> (f32, f32, f32, f32) {
     const T: [f32; 7] = [0., 0.041667, 0.308334, 0.583334, 0.75, 0.833334, 1.];
     const X: [f32; 7] = [0., 0., -48., -41., -45., -44., -44.];
     const Y: [f32; 7] = [0., -1., -10., -3., -8., -7., -6.];
     const O: [f32; 7] = [0.6, 0.68, 1., 1., 1., 1., 1.];
+    const R: [f32; 7] = [0., 0., -36., -28., -32., -30.5, -30.];
     let at = |v: &[f32; 7]| keyframes(&T.iter().copied().zip(v.iter().copied()).collect::<Vec<_>>(), p);
-    (at(&X), at(&Y), at(&O))
+    (at(&X), at(&Y), at(&O), at(&R))
 }
 
 /// uploadTextFadeIn_TLgD1o: (opacity, y) at `ms` after the overlay appeared.
@@ -792,33 +796,36 @@ fn text_pose(ms: f32, delay: f32, dur: f32) -> (f32, f32) {
 }
 
 /// 865429 `icons_` (100x60, relative): `wrapOne/Three_` translateY -70, `wrapTwo_` -80,
-/// each holding an absolute 100x130 `icon_` posed at its final keyframe (= the
-/// reduce-motion pose): one translate(-44,-6) rotate(-30deg), two (0,-6), three
-/// (44,-6) rotate(30deg). Painted one, three, two like the client's DOM order.
+/// each holding an absolute 100x130 `icon_` that flies in to its final keyframe
+/// (= the reduce-motion pose): one translate(-44,-6) rotate(-30deg), two (0,-6)
+/// with its blurple glow, three (44,-6) rotate(30deg). Painted one, three, two
+/// like the client's DOM order.
 /// The art comes from the local Discord cache ([`crate::icons::art`]); without it, one glyph.
 ///
 /// The three icons at `ms` into the fly-in (`None`: final pose).
 fn upload_icons_at(ms: Option<f32>) -> AnyElement {
     use crate::icons::art;
-    let Some([one, two, three]) = art::upload_icons() else {
+    let Some(arts) = art::upload_icons() else {
         return icon(ChatIcon::Upload, 48., gpui::white()).into_any_element();
     };
-    // The canvas is 10px wider than icon_ on each side (see art::UPLOAD_CANVAS_W).
+    // The side canvases are 10px wider than icon_ on each side, the middle one
+    // UPLOAD_GLOW_PAD on every side for its glow (see art::UPLOAD_CANVAS_W).
     let pad = (art::UPLOAD_CANVAS_W - 100.) / 2.;
     let place = |p: &std::path::PathBuf, x: f32, y: f32| {
         gpui::img(p.clone()).absolute().left(z(x - pad)).top(z(y)).w(z(art::UPLOAD_CANVAS_W)).h(z(art::UPLOAD_CANVAS_H))
     };
-    // The art is pre-rotated to the final ±30deg: only translate and opacity replay.
-    let (x, y, o) = ms.map_or((-44., -6., 1.), |ms| icon_pose(ms / 800.));
-    let (_, my, _) = ms.map_or((0., -6., 1.), |ms| icon_pose(ms / 800.));
+    let (x, y, o, r) = ms.map_or((-44., -6., 1., -30.), |ms| icon_pose(ms / 800.));
+    // One pre-rotated file per whole degree of tilt.
+    let tilt = ((-r).round().max(0.) as usize).min(art::UPLOAD_MAX_TILT);
+    let g = art::UPLOAD_GLOW_PAD;
     div()
         .relative()
         .flex_none()
         .w(z(100.))
         .h(z(60.))
-        .child(place(one, x, -70. + y).opacity(o))
-        .child(place(three, -x, -70. + y).opacity(o))
-        .child(place(two, 0., -80. + my))
+        .child(place(&arts.one[tilt], x, -70. + y).opacity(o))
+        .child(place(&arts.three[tilt], -x, -70. + y).opacity(o))
+        .child(gpui::img(arts.two.clone()).absolute().left(z(-g)).top(z(-80. + y - g)).w(z(100. + 2. * g)).h(z(130. + 2. * g)))
         .into_any_element()
 }
 
@@ -902,4 +909,24 @@ pub fn drop_overlay(app: &PhoenixApp) -> impl IntoElement {
         .items_center()
         .justify_center()
         .child(modal)
+}
+
+#[cfg(test)]
+mod tests {
+    /// Tilt and position of the left upload icon, sampled on the live client
+    /// with the animation paused at these times (ms, x, y, degrees).
+    #[test]
+    fn upload_icon_pose_matches_live_samples() {
+        for (ms, x, y, deg) in [
+            (100., -25.80, -5.84, -19.35),
+            (250., -47.95, -9.95, -35.94),
+            (450., -41.02, -3.02, -28.03),
+            (600., -45., -8., -32.),
+            (800., -44., -6., -30.),
+        ] {
+            let (px, py, _, pr) = super::icon_pose(ms / 800.);
+            assert!((px - x).abs() < 0.6 && (py - y).abs() < 0.6, "{ms}ms: ({px}, {py}) vs ({x}, {y})");
+            assert!((pr - deg).abs() < 0.3, "{ms}ms: {pr}° vs {deg}°");
+        }
+    }
 }

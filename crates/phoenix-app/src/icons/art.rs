@@ -12,17 +12,33 @@ use super::cache;
 /// `[1, 0, 2]` = document, image, code for `one`, `two`, `three`. Each art is
 /// the `background-image` of `.document_` / `.image_` / `.code_` (same module
 /// hash as `uploadDropModal_`), centred in the 100x130 `icon_` box.
-const UPLOAD: [(&str, f32); 3] = [("document", -30.), ("image", 0.), ("code", 30.)];
+const UPLOAD: [&str; 3] = ["document", "image", "code"];
 
 /// Width of the posed canvas: the 100px `icon_` box plus 10px each side so a
-/// 30° rotation of the 72x96 art isn't clipped.
+/// 36° rotation (the fly-in overshoot) of the 72x96 art isn't clipped.
 pub const UPLOAD_CANVAS_W: f32 = 120.;
 pub const UPLOAD_CANVAS_H: f32 = 130.;
+/// Extra room around the middle icon's 100x130 box for its glow
+/// (`drop-shadow(rgba(88,101,242,.5) 0 0 48px)` measured on the live client).
+pub const UPLOAD_GLOW_PAD: f32 = 60.;
+/// Largest tilt reached by the side icons during the fly-in (measured: -35.9°
+/// at 250ms), so one file per whole degree in `0..=UPLOAD_MAX_TILT`.
+pub const UPLOAD_MAX_TILT: usize = 36;
 
-static UPLOAD_ICONS: OnceLock<Option<[PathBuf; 3]>> = OnceLock::new();
+/// Posed drop-modal art: the side icons at every whole degree of tilt, and
+/// the middle one with its glow baked in.
+pub struct UploadArt {
+    /// `one[d]`: document rotated by `-d` degrees.
+    pub one: Vec<PathBuf>,
+    pub two: PathBuf,
+    /// `three[d]`: code rotated by `+d` degrees.
+    pub three: Vec<PathBuf>,
+}
 
-/// Posed drop-modal icons `[one, two, three]`, once extracted.
-pub fn upload_icons() -> Option<&'static [PathBuf; 3]> {
+static UPLOAD_ICONS: OnceLock<Option<UploadArt>> = OnceLock::new();
+
+/// Posed drop-modal icons, once extracted.
+pub fn upload_icons() -> Option<&'static UploadArt> {
     UPLOAD_ICONS.get().and_then(|o| o.as_ref())
 }
 
@@ -32,10 +48,12 @@ pub(super) fn init(dir: &Path) {
     let _ = UPLOAD_ICONS.set(upload(&dir.join("art")));
 }
 
-fn upload(out: &Path) -> Option<[PathBuf; 3]> {
-    let paths = ["one", "two", "three"].map(|n| out.join(format!("upload-{n}.svg")));
-    if paths.iter().all(|p| p.is_file()) {
-        return Some(paths);
+fn upload(out: &Path) -> Option<UploadArt> {
+    let side = |n: &str| (0..=UPLOAD_MAX_TILT).map(|d| out.join(format!("upload-{n}-r{d}.svg"))).collect::<Vec<_>>();
+    let art = UploadArt { one: side("one"), two: out.join("upload-two-glow.svg"), three: side("three") };
+    let all = || art.one.iter().chain(&art.three).chain(std::iter::once(&art.two));
+    if all().all(|p| p.is_file()) {
+        return Some(art);
     }
     let caches = super::discord_caches();
     let css = caches.iter().flat_map(|c| cache::asset_entries(c, ".css")).find_map(|(_, p)| {
@@ -43,15 +61,17 @@ fn upload(out: &Path) -> Option<[PathBuf; 3]> {
         body.contains(".uploadDropModal_").then_some(body)
     })?;
     let hash = module_hash(&css, ".uploadDropModal_")?;
-    let names: Vec<String> = UPLOAD.iter().map(|(class, _)| art_url(&css, &format!(".{class}_{hash}"))).collect::<Option<_>>()?;
+    let names: Vec<String> = UPLOAD.iter().map(|class| art_url(&css, &format!(".{class}_{hash}"))).collect::<Option<_>>()?;
     let svgs = caches.iter().flat_map(|c| cache::asset_entries(c, ".svg")).collect::<Vec<_>>();
+    let body = |name: &String| svgs.iter().find(|(k, _)| k == name).and_then(|e| cache::read_body(&e.1));
+    let [doc, image, code] = [body(&names[0])?, body(&names[1])?, body(&names[2])?];
     std::fs::create_dir_all(out).ok()?;
-    for ((name, (_, deg)), path) in names.iter().zip(UPLOAD).zip(&paths) {
-        let entry = svgs.iter().find(|(k, _)| k == name)?;
-        let svg = cache::read_body(&entry.1)?;
-        std::fs::write(path, pose(&svg, deg)?).ok()?;
+    for d in 0..=UPLOAD_MAX_TILT {
+        std::fs::write(&art.one[d], pose(&doc, -(d as f32))?).ok()?;
+        std::fs::write(&art.three[d], pose(&code, d as f32)?).ok()?;
     }
-    Some(paths)
+    std::fs::write(&art.two, glow(&image)?).ok()?;
+    Some(art)
 }
 
 /// Class hash following `prefix` (e.g. `TLgD1o` in `.uploadDropModal_TLgD1o{`).
@@ -82,9 +102,8 @@ fn root_size(svg: &str) -> Option<(f32, f32)> {
 }
 
 /// The art centred in the `icon_` box (on the wider canvas) and rotated by
-/// `deg` around the box centre: the final keyframe of
-/// `uploadIconAnimateInLeft/Right_` (rotate ∓30deg; the translation is done
-/// by the layout).
+/// `deg` around the box centre (`uploadIconAnimateInLeft/Right_` tilt; the
+/// translation is done by the layout).
 fn pose(svg: &str, deg: f32) -> Option<String> {
     let (w, h) = root_size(svg)?;
     let doc = &svg[svg.find("<svg")?..];
@@ -93,6 +112,20 @@ fn pose(svg: &str, deg: f32) -> Option<String> {
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{UPLOAD_CANVAS_W}\" height=\"{UPLOAD_CANVAS_H}\" viewBox=\"0 0 {UPLOAD_CANVAS_W} {UPLOAD_CANVAS_H}\"><g transform=\"rotate({deg} {cx} {cy}) translate({} {})\">{doc}</g></svg>",
         cx - w / 2.,
         cy - h / 2.,
+    ))
+}
+
+/// The art centred in the `icon_` box, on a canvas [`UPLOAD_GLOW_PAD`] wider
+/// on every side, with the measured `drop-shadow(rgba(88,101,242,.5) 0 0 48px)`
+/// (a CSS blur radius of 48px is a Gaussian deviation of 24).
+fn glow(svg: &str) -> Option<String> {
+    let (w, h) = root_size(svg)?;
+    let doc = &svg[svg.find("<svg")?..];
+    let (cw, ch) = (100. + 2. * UPLOAD_GLOW_PAD, 130. + 2. * UPLOAD_GLOW_PAD);
+    Some(format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{cw}\" height=\"{ch}\" viewBox=\"0 0 {cw} {ch}\"><defs><filter id=\"g\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"{cw}\" height=\"{ch}\"><feDropShadow dx=\"0\" dy=\"0\" stdDeviation=\"24\" flood-color=\"rgb(88,101,242)\" flood-opacity=\"0.5\"/></filter></defs><g filter=\"url(#g)\"><g transform=\"translate({} {})\">{doc}</g></g></svg>",
+        (cw - w) / 2.,
+        (ch - h) / 2.,
     ))
 }
 
@@ -114,5 +147,13 @@ mod tests {
         let s = pose("<svg fill=\"none\" height=\"96\" viewBox=\"0 0 72 96\" width=\"72\"><path d=\"m0 0\"/></svg>", -30.).unwrap();
         assert!(s.contains("rotate(-30 60 65) translate(24 17)"), "{s}");
         assert!(s.ends_with("</svg></g></svg>"));
+    }
+
+    #[test]
+    fn glow_svg_centres_art_on_padded_canvas() {
+        let s = glow("<svg fill=\"none\" height=\"96\" viewBox=\"0 0 72 96\" width=\"72\"><path d=\"m0 0\"/></svg>").unwrap();
+        assert!(s.contains("width=\"220\" height=\"250\""), "{s}");
+        assert!(s.contains("translate(74 77)"), "{s}");
+        assert!(s.contains("stdDeviation=\"24\""), "{s}");
     }
 }
