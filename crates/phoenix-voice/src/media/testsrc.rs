@@ -36,13 +36,36 @@ impl TestPattern {
     }
 
     pub fn frame(&mut self) -> VideoFrame {
-        let mut data = Vec::with_capacity((self.width * self.height * 4) as usize);
-        for y in 0..self.height {
-            for x in 0..self.width {
-                data.extend_from_slice(&self.pixel(x, y, self.n));
+        let (w, h) = (self.width as usize, self.height as usize);
+        let n = self.n;
+        let bars: Vec<u8> = (0..self.width)
+            .flat_map(|x| {
+                let c = BARS[((x * 7 / self.width.max(1)) as usize).min(6)];
+                [c[0], c[1], c[2], 255]
+            })
+            .collect();
+        let counter: Vec<u8> = (0..self.width).flat_map(|x| self.pixel(x, self.height - 1, n)).collect();
+        let side = (self.height / 4).max(4) as usize;
+        let travel = w.saturating_sub(side).max(1) as u64;
+        let pos = (n * 6) % (travel * 2);
+        let bx = (if pos < travel { pos } else { travel * 2 - pos }) as usize;
+        let by = h / 2 - side / 2;
+        let bottom = h - h / 8;
+        let mut data = Vec::with_capacity(w * h * 4);
+        for y in 0..h {
+            if y >= bottom {
+                data.extend_from_slice(&counter);
+                continue;
+            }
+            let start = data.len();
+            data.extend_from_slice(&bars);
+            if y >= by && y < by + side {
+                let a = start + bx * 4;
+                let b = start + (bx + side).min(w) * 4;
+                data[a..b].fill(255);
             }
         }
-        let pts_us = self.n * 1_000_000 / self.fps as u64;
+        let pts_us = n * 1_000_000 / self.fps as u64;
         self.n += 1;
         VideoFrame { width: self.width, height: self.height, pts_us, data: Arc::from(data) }
     }
@@ -60,5 +83,12 @@ mod tests {
         assert_eq!(a.data.len(), 64 * 36 * 4);
         assert_ne!(a.data, b.data);
         assert_eq!(b.pts_us, 33_333);
+        let p = TestPattern::new(64, 36, 30);
+        for y in [0u32, 20, 35] {
+            for x in [0u32, 10, 63] {
+                let i = ((y * 64 + x) * 4) as usize;
+                assert_eq!(a.data[i..i + 4], p.pixel(x, y, 0), "{x},{y}");
+            }
+        }
     }
 }
