@@ -581,15 +581,18 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                     .child(div().flex_1().min_w_0().child(Input::new(&t.input).appearance(false).bordered(false)))
                     .when(empty, |d| {
                         d.child(
+                            // Long post titles end with an ellipsis inside the field instead of
+                            // running past its border.
                             div()
                                 .absolute()
                                 .left(z(18.))
+                                .right(z(16.))
                                 .top_0()
                                 .bottom_0()
                                 .flex()
                                 .items_center()
                                 .text_color(tk(idx::TEXT_MUTED))
-                                .child(crate::t!("chat.placeholder_thread", name = t.thread.name)),
+                                .child(div().flex_1().min_w_0().text_ellipsis().child(crate::t!("chat.placeholder_thread", name = t.thread.name))),
                         )
                     }),
             )
