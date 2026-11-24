@@ -9,6 +9,7 @@ CSS under ~/discord-phoenix-ref/current-client/css. Tokens are from `theme::gene
 | header divider | 436803 divider_ybUK7Z | size, margin | 1x24, 0 4px | chat.rs header() | ✅ |
 | message wrapper (cozy) | 738015 cozy_.wrapper_ | padding | 2px, start 72px, end 16px | chat.rs message() | ✅ (pr was 48) |
 | compact wrapper | 738015 compact_.wrapper_ | padding-start | 5rem | chat.rs message() | ✅ |
+| compact avatar preference | [Discord display settings guide](https://discord.com/blog/making-discord-on-desktop-look-just-right-display-settings-to-ease-the-eyes) says “Show user avatars” is available in Compact mode | state / placement | when enabled, render an avatar before the compact timestamp/name header | chat.rs message(); `display_compact_avatars` (6, 41) | ⚠ wired at 40px, left 16px; enabled reference geometry not yet compared |
 | group start | 524434 groupStart_ (.group-spacing-16) | margin-top | 1.0625rem | chat.rs gap 17 | ✅ |
 | avatar | 738015 avatar_ | size / left / top | 40px / 16px / 4px | chat.rs | ✅ (top was 2) |
 | username | 738015 username_ | font / color | 1rem medium 1.375rem / --text-strong | chat.rs author_name | ✅ (fallback was text-default) |

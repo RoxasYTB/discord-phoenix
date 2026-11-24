@@ -920,10 +920,25 @@ fn message(
     let mut content = div().flex().flex_col().min_w_0().text_size(fz(16.)).text_color(c(Palette::TEXT_NORMAL));
     let last_text = r.blocks.iter().rposition(|b| matches!(b, RBlock::Text(_)));
     let n_blocks = r.blocks.len();
+    // Discord exposes `display_compact_avatars` only as an option for compact
+    // message display. Cozy mode always shows its normal group avatar.
+    let compact_avatars = compact && app.prefs.synced.flag("avatars");
+    let compact_header_left = if compact_avatars { 64. } else { 16. };
     // Compact: the absolute "[time] Name" header overlaps the first line by
     // `overflow` px; pad the first text line with thin spaces to clear it.
     let is_bot = author.is_some_and(|a| a.bot);
-    let overflow = if compact { compact_header_overflow(&r.time_short, &name, is_bot, author.and_then(|u| u.tag.as_ref()).map(|t| t.0.as_ref()), cx) } else { 0. };
+    let overflow = if compact {
+        compact_header_overflow(
+            &r.time_short,
+            &name,
+            is_bot,
+            author.and_then(|u| u.tag.as_ref()).map(|t| t.0.as_ref()),
+            compact_header_left,
+            cx,
+        )
+    } else {
+        0.
+    };
     if compact && !matches!(r.blocks.first(), Some(RBlock::Text(_))) {
         content = content.child(div().flex_none().h(fz(22.)));
     }
@@ -1188,10 +1203,44 @@ fn message(
         base.pl(z(80.))
             .py(z(2.))
             .when_some(reply, |d, reply| d.child(reply))
+            .when(compact_avatars, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .left(z(16.))
+                        .top(z(if msg.reply_to.is_some() { 24. } else { 2. }))
+                        .id(("msg-avatar-compact", id.0))
+                        .cursor_pointer()
+                        .rounded_full()
+                        .hover(|s| {
+                            s.shadow(vec![gpui::BoxShadow {
+                                color: gpui::hsla(0., 0., 0., 0.16),
+                                offset: gpui::point(z(0.), z(4.)),
+                                blur_radius: z(4.),
+                                spread_radius: z(0.),
+                                inset: false,
+                            }])
+                        })
+                        .active(|s| s.mt(z(1.)))
+                        .on_click(message_ext::open_author(entity, msg))
+                        .child(avatar(author, m::AVATAR))
+                        .when_some(author.and_then(|u| u.decoration.clone()), |d, deco| {
+                            let size = m::AVATAR * 1.2;
+                            let offset = (size - m::AVATAR) / 2.;
+                            d.child(
+                                gpui::img(crate::ui::avatar_deco::src_for(&deco, crate::ui::avatar_deco::hover_key(2, id.0)))
+                                    .absolute()
+                                    .size(z(size))
+                                    .left(z(-offset))
+                                    .top(z(-offset)),
+                            )
+                        }),
+                )
+            })
             .child(
                 div()
                     .absolute()
-                    .left(z(16.))
+                    .left(z(compact_header_left))
                     .top(z(if msg.reply_to.is_some() { 24. } else { 2. }))
                     .h(fz(22.))
                     .flex()
@@ -1339,7 +1388,7 @@ fn text_width(cx: &App, font: &gpui::Font, size: gpui::Pixels, s: &str) -> f32 {
 
 /// How far the compact "[time] Name " header runs past the 80 px content
 /// indent, i.e. the first-line text indent.
-fn compact_header_overflow(time: &str, name: &str, bot: bool, tag: Option<&str>, cx: &App) -> f32 {
+fn compact_header_overflow(time: &str, name: &str, bot: bool, tag: Option<&str>, left: f32, cx: &App) -> f32 {
     let mut name_font = crate::richtext::ui_font();
     name_font.weight = FontWeight::MEDIUM;
     let mut w = text_width(cx, &crate::richtext::ui_font(), z(11.), time) + f32::from(z(4.));
@@ -1355,7 +1404,7 @@ fn compact_header_overflow(time: &str, name: &str, bot: bool, tag: Option<&str>,
         w += text_width(cx, &f, fz(11.52), tg) + f32::from(z(14.)); // ml 6 + px 4*2
     }
     w += f32::from(z(4.));
-    (f32::from(z(16.)) + w - f32::from(z(80.))).max(0.)
+    (f32::from(z(left)) + w - f32::from(z(80.))).max(0.)
 }
 
 /// Prefix `t` with transparent thin spaces at least `width` px wide.

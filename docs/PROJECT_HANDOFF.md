@@ -1,6 +1,6 @@
 # Project Phoenix — état et handoff
 
-> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). Les captures de référence et changements documentaires les plus récents sont consignés par `6466375`, `68856ec` et `e3132a9`; la branche est en avance de neuf commits sur `origin/main`.
+> Baseline de cette reprise : `main` à `1583cf0`, dix commits locaux devant `origin/main`. Le lot avatars compacts décrit ici ajoute une intégration locale supplémentaire; aucun push n’a été fait.
 
 Ce document est le point de reprise pour les sessions qui poursuivent la parité visuelle et fonctionnelle de Discord Phoenix. Il complète les tableaux par fonctionnalité dans [`docs/parity/`](parity/) et l’inventaire des routes dans [`docs/PARITY.md`](PARITY.md). Il ne remplace pas les preuves d’exécution ni les tests.
 
@@ -22,7 +22,9 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 - La dernière sauvegarde vérifiée est le `main` à `68856ec` dans `/mnt/windata/project-phoenix/backups/20261124-120131Z/` (`main.bundle`, `main-since-origin.patch`, `HEAD.txt`, état Git, log de test et copie des trois captures PNG non suivies). Le bundle a été vérifié; le log contient le résultat des 211 tests. Les commits documentaires ultérieurs doivent être inclus dans la prochaine sauvegarde.
 - Reprise suivante : le client officiel est encore accessible en CDP sur la capture d’écran. Une capture visuelle temporaire 1920×1050 du compositeur a été inspectée puis supprimée. La préférence Send Message n’a pas été modifiée; le contrôle n’était pas visible dans cet état, ce qui ne permet pas d’inférer le rendu activé. Cette limite et la méthode à suivre figurent dans `docs/parity/composer.md`.
 - La documentation Soundboard est enrichie à partir du guide officiel : le flux de haut niveau est ouvrir les contrôles vocaux, choisir un serveur disponible puis un son. L’interface et les endpoints Phoenix ne sont toujours pas mesurés; aucune action vocale ou lecture audio n’a été faite. Voir `docs/parity/pickers.md`.
-- Cette reprise a consigné les limites de référence composer/Soundboard et actualisé le handoff. La branche est en avance de dix commits sur `origin/main`, sans push. `git diff --check` est propre; aucune compilation n’a été lancée lors de cette reprise et `/home` conserve environ 4 Go libres.
+- Le checkpoint précédent consignait les limites de référence composer/Soundboard. À ce point de reprise, la branche était en avance de dix commits sur `origin/main`, sans push, et `/home` avait environ 4 Go libres.
+- Le lot suivant utilise `display_compact_avatars` uniquement avec l’affichage compact: avatar 40px à x=16px et en-tête déplacé à x=64px. La documentation Discord confirme que l’option est destinée au mode Compact; la capture officielle activée n’a pas été mesurée et ces dimensions restent donc provisoires. La suite de bibliothèque a compilé et passé: 211 réussis, 2 ignorés. Aucun réglage du compte réel n’a été modifié.
+- La dernière sauvegarde préexistante, `/mnt/windata/project-phoenix/backups/20261124-120231Z/`, précède ce lot. Après son commit, créer un nouveau bundle, patch et copie des trois PNG non suivis avant de réduire l’espace libre ou lancer un autre build.
 - Aucun intégrateur, build Cargo ou agent de la session précédente ne tournait pendant la vérification.
 
 ## Règle de contribution et méthode de référence

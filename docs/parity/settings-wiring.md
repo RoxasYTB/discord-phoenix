@@ -71,7 +71,7 @@ where its value is stored and what it changes in the UI.
 | reactions | Show emoji reactions | settings-proto `text_and_images.render_reactions` (6, 13) | reaction bar hidden when off (chat.rs) | ✅ |
 | spoilers | Show spoiler content | settings-proto `text_and_images.render_spoilers` (6, 4) | "Always" reveals text + media spoilers (richtext, media::is_revealed); "If moderator" = on click | ✅ |
 | split-threads | Open threads in split view | settings-proto `text_and_images.use_thread_sidebar` (6, 3) | — | 🟡 stored, no effect yet |
-| avatars | Show user avatars | settings-proto `text_and_images.display_compact_avatars` (6, 41) | — | 🟡 stored, no effect yet |
+| avatars | Show user avatars (available in compact message display) | settings-proto `text_and_images.display_compact_avatars` (6, 41) | Compact mode: show an avatar beside each message header; default/cozy mode keeps its normal group avatars | ⚠ wired; enabled reference geometry not yet compared |
 | favs | Show favorite servers | local prefs (settings.json) | — | 🟡 stored, no effect yet |
 | md-preview | Preview emojis, mentions and markdown syntax as you type | settings-proto `text_and_images.use_rich_chat_input` (6, 2) | — | 🟡 stored, no effect yet |
 | emoticons | Automatically convert emoticons in your messages to emoji | settings-proto `text_and_images.convert_emoticons` (6, 21) | ":)" → 🙂 on send/edit (settings/emoticons.rs) | ✅ |
@@ -117,9 +117,10 @@ where its value is stored and what it changes in the UI.
 
 ## Known gaps
 * `anim-emoji` is synced in the client (`text_and_images.animate_emoji`, 6/14) but stays a local pref here.
-* Stored but without effect yet: compact avatars, game autocomplete,
+* Stored but without effect yet: game autocomplete,
   streamer mode, high contrast, sticker animations, split thread view,
   the notification toggles (server-side behaviour, nothing to render), system tray/startup/hw-accel.
+* Compact avatars are now gated by `display_compact_avatars`; the avatar size/offset still needs comparison in the official enabled state.
 * Role colors "Next to names" should draw a colored dot; currently it just stops tinting.
 * Spoilers "If moderator" behaves as "On click".
 * Gateway `USER_SETTINGS_PROTO_UPDATE` is not applied live (values refresh on the next load/save).
