@@ -52,6 +52,34 @@ From the cached READY `user_settings_proto` (text_and_images): `gif_auto_play` =
 `animate_emoji` absent (default true), `animate_stickers` = 0 (Always). Phoenix's
 `effects::sync` reads the same fields.
 
-## Measurements
+## Animation numbers
 
-See the "Animation numbers" section below (filled from `anim_emoji_shot`).
+`int-bin/anim_emoji_shot <prefix> <dir> 111` at `58273ab`, test art = 4-frame 96×96 GIF,
+100 ms per frame (no real emoji), headless renderer, 2026-11-24:
+
+| measure | value |
+|---|---|
+| Inline animated emoji, before the fix | 0 frame changes (still on frame 0) |
+| Inline animated emoji, after | 42 frame changes in 3.0 s sampled every 20 ms on the headless clock (14 per second; the GIF asks for 10, the virtual clock of the sampling loop runs a little ahead) |
+| Control `img` without id / with id | 0 / 62 frame changes in 3 s |
+| CPU, 5 s of 60 Hz redraws | 2.2 % of one core playing, 1.8 % with Play animated emoji off (≈ 0.4 % for decoding/painting one animated emoji) |
+
+Decoded frames are kept in memory as RGBA for the whole loop (GPUI decodes every frame
+when the image loads):
+
+| asset (measured on the CDN) | frames | timing | decoded RGBA |
+|---|---|---|---|
+| Klipy gifv thumbnail, 286×300 WebP | 72 | 33/66 ms, 2.4 s loop ≈ 30 fps | 24.7 MB |
+| APNG sticker as `.webp?size=320&animated=true` | 25 | 78 ms ≈ 12.8 fps | 10.2 MB |
+
+Frames only advance while the image is painted (virtualised list: off-screen rows stop)
+and the window is active, so an unfocused or idle window costs nothing.
+
+## Not done / open
+
+- Animated avatars play on hover of the avatar itself; the client also plays them on
+  message and member row hover.
+- Sticker animations "on hover" (Animate on interaction) shows the still without hover play.
+- The DM profile panel of the real account showed no custom status bubble in the offscreen
+  render (client: "🔨 …" bubble); profile loading is outside this branch.
+- Picker shortcodes are CLDR names, not the client's.
