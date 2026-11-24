@@ -644,7 +644,11 @@ fn member_row(
     mem: &Member,
     nick: Option<&SharedString>,
 ) -> AnyElement {
-    let owner = app.guilds.iter().find(|x| x.id == g).and_then(|x| x.owner) == Some(mem.user);
+    // The crown only shows outside hoisted role sections: live, the owner listed under a
+    // hoisted role has no ownerIcon_, while dumps show it in the Online / Offline groups.
+    let hoisted = mem.presence != Presence::Offline
+        && app.roles.get(&g).is_some_and(|rs| rs.iter().any(|r| r.hoist && mem.roles.contains(&r.id)));
+    let owner = !hoisted && app.guilds.iter().find(|x| x.id == g).and_then(|x| x.owner) == Some(mem.user);
     member_row_in(app, entity, Some(g), mem, nick, owner)
 }
 
