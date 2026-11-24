@@ -35,6 +35,32 @@ struct Page {
     from: Option<Id>,
     data: Option<GuildGuide>,
     error: Option<SharedString>,
+    /// Resource channel → text and first image of its oldest message, shown when
+    /// the resource has no description / no custom icon.
+    previews: std::collections::HashMap<Id, Preview>,
+}
+
+#[derive(Clone, Default)]
+struct Preview {
+    text: Option<String>,
+    /// (url, width, height) of the first image.
+    media: Option<(SharedString, u32, u32)>,
+}
+
+/// Like the client: the message content, else the first embed description; the
+/// first image attachment, else the first embed image or thumbnail.
+fn preview_of(msgs: &[crate::model::Message]) -> Preview {
+    let Some(m) = msgs.first() else { return Preview::default() };
+    let text = Some(m.content.to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| m.embeds.iter().find_map(|e| e.description.as_ref().filter(|d| !d.is_empty()).map(|d| d.to_string())));
+    let media = m
+        .attachments
+        .iter()
+        .find(|a| a.is_image)
+        .map(|a| (a.url.clone(), a.width, a.height))
+        .or_else(|| m.embeds.iter().find_map(|e| e.image.as_ref().or(e.thumbnail.as_ref()).map(|i| (i.url.clone(), i.width, i.height))));
+    Preview { text, media }
 }
 
 fn t(i: usize) -> gpui::Hsla {
@@ -57,11 +83,18 @@ pub fn close(cx: &mut App) {
 
 pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
     crate::ui::community::close(cx);
-    cx.set_global(Slot(Some(Page { guild, from: app.selected_channel, data: None, error: None })));
-    app.parity_request(ParityRequest::ServerGuide { guild }, cx, move |_, r, cx| {
+    cx.set_global(Slot(Some(Page { guild, from: app.selected_channel, data: None, error: None, previews: Default::default() })));
+    app.parity_request(ParityRequest::ServerGuide { guild }, cx, move |a, r, cx| {
         let Some(mut page) = cx.try_global::<Slot>().and_then(|s| s.0.clone()).filter(|p| p.guild == guild) else { return };
         match r {
-            Ok(ParityReply::Guide(g)) => page.data = Some(*g),
+            Ok(ParityReply::Guide(g)) => {
+                // The client loads the oldest messages of a resource channel without a
+                // description or icon (`GET /channels/{c}/messages?after={c}&limit=5`).
+                for r in g.resources.iter().filter(|r| r.description.is_empty() || r.icon.is_none()) {
+                    load_preview(a, guild, r.channel, cx);
+                }
+                page.data = Some(*g);
+            }
             Ok(_) => page.data = Some(GuildGuide::default()),
             Err(e) => {
                 page.data = Some(GuildGuide::default());
@@ -72,6 +105,20 @@ pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
         cx.notify();
     });
     cx.notify();
+}
+
+fn load_preview(app: &PhoenixApp, guild: Id, channel: Id, cx: &mut Context<PhoenixApp>) {
+    let fut = app.backend.load_messages_at(channel, crate::backend::HistoryAt::After(channel), 5);
+    cx.spawn(async move |this, cx| {
+        let Ok(msgs) = fut.await else { return };
+        let _ = this.update(cx, |_, cx| {
+            let Some(mut page) = cx.try_global::<Slot>().and_then(|s| s.0.clone()).filter(|p| p.guild == guild) else { return };
+            page.previews.insert(channel, preview_of(&msgs));
+            cx.set_global(Slot(Some(page)));
+            cx.notify();
+        });
+    })
+    .detach();
 }
 
 /// "1 393" (narrow no-break space) in French, "1,393" in English.
@@ -146,7 +193,7 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
         .child(div().w_full().pt(gpui::relative(0.25)))
         .when_some(art, |d, h| {
             d.child(
-                gpui::img(cdn(format!("guilds/{}/home-headers/{h}.png?size=1536", gid.0)))
+                gpui::img(cdn(format!("home-headers/{}/{h}.png?size=1536", gid.0)))
                     .absolute()
                     .inset_0()
                     .size_full()
@@ -194,9 +241,28 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
 
 /// One "Resources" row (row_Qo6EL-): padding 16, radius 8, 1px --border-subtle,
 /// --background-surface-high (hover --background-surface-higher); title
-/// body-md/semibold 16/20 + 8, description body-sm 14/18 --text-default on 2 lines.
-fn resource(i: usize, r: &GuideEntry, cx: &Context<PhoenixApp>) -> AnyElement {
+/// body-md/semibold 16/20 + 8, description body-sm 14/18 --text-default on at most
+/// 3 lines (the oldest message of the channel when the description is empty); the
+/// custom icon (72x72) or the message's first image (72 on its long side) on the right.
+fn resource(i: usize, r: &GuideEntry, preview: Option<&Preview>, cx: &Context<PhoenixApp>) -> AnyElement {
     let ch = r.channel;
+    let text = Some(r.description.clone()).filter(|d| !d.is_empty()).or_else(|| preview.and_then(|p| p.text.clone()));
+    let thumb: Option<AnyElement> = match (&r.icon, preview.and_then(|p| p.media.clone())) {
+        (Some(h), _) => Some(
+            // CDN `resource-channels/{channel}/{hash}` (128px), not seen on a real guild yet.
+            gpui::img(cdn(format!("resource-channels/{}/{h}.jpg?size=128", ch.0)))
+                .size(z(72.))
+                .rounded(z(8.))
+                .flex_none()
+                .into_any_element(),
+        ),
+        (None, Some((url, w, h))) => {
+            let (w, h) = (w.max(1) as f32, h.max(1) as f32);
+            let (tw, th) = if h > w { (72. * w / h, 72.) } else { (72., 72. * h / w) };
+            Some(gpui::img(url).w(z(tw)).h(z(th)).rounded(z(8.)).flex_none().object_fit(gpui::ObjectFit::Cover).into_any_element())
+        }
+        _ => None,
+    };
     div()
         .id(("guide-res", i))
         .p(z(16.))
@@ -230,10 +296,9 @@ fn resource(i: usize, r: &GuideEntry, cx: &Context<PhoenixApp>) -> AnyElement {
                         .text_color(t(idx::TEXT_STRONG))
                         .child(crate::ui::emoji_text::label(r.title.clone().into(), 16.)),
                 )
-                .when(!r.description.is_empty(), |d| {
-                    d.child(crate::ui::profile_bio::bio(&r.description, false, t(idx::TEXT_DEFAULT)).line_clamp(2).max_h(z(36.)).overflow_hidden())
-                }),
+                .when_some(text, |d, txt| d.child(crate::ui::profile_bio::bio(&txt, true, t(idx::TEXT_DEFAULT)))),
         )
+        .children(thumb)
         .into_any_element()
 }
 
@@ -388,7 +453,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                     div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("guide.resources")),
                 );
                 for (i, r) in d.resources.iter().enumerate() {
-                    col = col.child(resource(i, r, cx));
+                    col = col.child(resource(i, r, page.previews.get(&r.channel), cx));
                 }
                 main = main.child(col);
             }

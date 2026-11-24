@@ -87,6 +87,10 @@ impl Backend for ReadOnly {
     fn load_messages(&self, channel: Id, before: Option<Id>, limit: u32) -> BoxFuture<Vec<Message>> {
         self.0.load_messages(channel, before, limit)
     }
+    /// Server Guide resource previews: GET messages `after` the channel id (read-only).
+    fn load_messages_at(&self, channel: Id, at: phoenix_app::backend::HistoryAt, limit: u32) -> BoxFuture<Vec<Message>> {
+        self.0.load_messages_at(channel, at, limit)
+    }
     fn send_message(&self, _: Id, _: String, _: Option<Id>) -> BoxFuture<Message> {
         denied()
     }
