@@ -13,7 +13,7 @@ Phoenix aims to be visually and functionally identical to the official 2026 clie
 
 How we use Discord's files in practice:
 
-- **Measured values go into the code**: sizes, colours, radii and timings, with a comment citing the CSS rule or dump they come from (see `docs/parity/`).
+- **Measured values go into the code**: sizes, colours, radii and timings, with the source (CSS rule, dump or measurement) recorded in `docs/parity/`.
 - **Binary assets are loaded at runtime from the user's own Discord install or cache**: icons, fonts and sounds. They are not committed to this repository; see `crates/phoenix-app/src/icons` and `src/fonts`. Hand-drawn fallbacks cover users without a local Discord.
 - **Dumps and captures from a real account stay private**: never commit names, messages, IDs, signed URLs or tokens. Public screenshots use demo data.
 - Never contribute anything obtained under an NDA or by breaching an agreement.
@@ -43,6 +43,7 @@ Workspace layout:
 - Keep PRs focused; one topic each.
 - CI (fmt, clippy with `-D warnings`, tests on Linux/Windows/macOS) must pass.
 - Tests and fixtures must not contain real tokens, user IDs or message content.
+- No code comments (`//`, `///`, `//!`, `/* */`, `#` in scripts), except `// SAFETY:` above an `unsafe` block. Explanations go in the commit message or `docs/`; parity sources go in `docs/parity/`; example usage goes in `docs/examples.md`.
 - By contributing, you agree your work is dual-licensed under MIT OR Apache-2.0, like the project.
 
 ## Releases
