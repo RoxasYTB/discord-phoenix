@@ -155,7 +155,7 @@ Measured in the user's test channel (Aperture Sciences #général, the only chan
 | nonce | time snowflake, zero low 22 bits (`1574791082821025792` → 15:17:32.348, low bits 0) | `pending::make_nonce` = `Snowflake::now()`, sent as `nonce` + `enforce_nonce` | ✅ (unit test) |
 | grouping | groups with my previous message (no header) | normal `starts_group` | ✅ |
 | pending style | `messageContent_.isSending_`: content `opacity: .5`, colour unchanged; header/avatar at 1 | `content.opacity(0.5)` in chat.rs `message()` | ✅ |
-| pending hover bar | not measured (the hold was too short to hover) | empty | ⚠ |
+| pending hover bar | `ceb73656db6e6af4.js`: `h = r.state === SENDING; return h || (g && !p) ? null : ...` (no hover toolbar while sending) | `message_ext::toolbar` returns empty while `SendState::Sending` | ✅ |
 | replacement | id changes nonce → server id in the same `<li>` slot; row height 26 → 26, `scrollTop` unchanged | `take_echo` swaps the row in place (`splice(ix+1..ix+2, 1)`) from MESSAGE_CREATE or the POST answer, whichever comes first | ✅ |
 | network error | retried: second POST ~1.5 s after the first, still pending | `SEND_RETRY_DELAYS` 1.5 s, 3 s (only the first delay is measured) | ✅ / ⚠ later delays |
 | failed style (HTTP 500) | `messageContent_.isFailed_`: colour `--text-feedback-critical` (#eb5f5e in midnight), opacity 1, no system message | `render_msg` re-renders the blocks in `TEXT_FEEDBACK_CRITICAL` | ✅ |
@@ -165,8 +165,8 @@ Measured in the user's test channel (Aperture Sciences #général, the only chan
 | HTTP 4xx | failed copy + local ephemeral notice from the system bot ("Clyde", APP tag with check): "Ton message n'a pas pu être envoyé." / reasons link; footer "Toi seul(e) peux voir celui-ci — Rejeter le message" (12px/16px `--text-muted`, margin-top 4px, 16px icon, link `--text-link`) | `insert_system_notice` (id nonce+1, `FLAG_EPHEMERAL`), `ephemeral_footer` | ✅ text / ⚠ avatar is a default avatar, not the client's mascot art (not copied) |
 | ephemeral row | `ephemeral_` background `--brand-05a`, 2px `--brand-500` bar | same tokens; hover `--brand-10a` is assumed | ✅ / ⚠ hover |
 | dismiss | "Rejeter le message" removes it locally (no request) | `discard_local` | ✅ |
-| slowmode | not observable: the test channel has `rate_limit_per_user = 0` (GET) | the cooldown check `send_held` was skipped for every send (chat_submit always handled them); now applied | ⚠ not compared |
-| attachment upload | progress card belongs to wt/upload; the pending copy is shown above it | `Sending` card removed when the copy settles | ⚠ see wt/upload |
+| slowmode | `ee411b7c20ef82cb.js` + `56501.cc2ece064d14c9ca.css`: `cooldownWrapper_bbCgC2` (`padding: 3 8 3 8; padding-inline-end: 16; gap: 4`), `TimerIcon` xxs (12px, ml 4) before `body-xs/medium` (12/16) text, flashes `--text-feedback-critical` for 1s on `EMPHASIZE_SLOWMODE_COOLDOWN` | `composer.rs` `send_held` + `cooldown()` (12px clock before 12/16 medium text, 1s critical flash on held send) | ✅ |
+| attachment upload | progress card under the pending message (`fileWrapper_-9z-XO` + `progressContainer_`) | `attach::upload_progress_card` under pending message in `chat.rs`, removed when the copy settles | ✅ |
 
 Phoenix vs client, same size (1536×840 CSS, dpr 1.25, midnight/Onyx), real account, 2026-11-24 (private shots in `/mnt/windata/project-phoenix/compare/pending/`): brightest text pixel of the pending line 106,106,108 (client 106,107,108), settled line 212,213,216 on both. The failed line is red, and the 4xx notice shows the same layout (APP tag with check, link, footer). One difference: Phoenix breaks the long support URL at a `/`, while the browser moves the whole URL to the next line. This is a general line-breaking difference in rich text, not specific to this notice.
 

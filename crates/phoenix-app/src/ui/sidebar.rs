@@ -1108,8 +1108,8 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                 .children(timer.map(|t| top_line(t, connected)))
                 .children(limit_pill)
                 .children(close)
-                // Tab focus ring, inset 4px inside the row like the member list rows.
-                .map(|d| crate::ui::focus_ring::ring_inset(d, crate::ui::states::key(("chrow", id.0)), ROW_RADIUS, 4., 4.)),
+                // Tab focus ring (3d994642c869c81b.js FocusRing offset:{top:2,bottom:2,right:4}).
+                .map(|d| crate::ui::focus_ring::ring_inset_edges(d, crate::ui::states::key(("chrow", id.0)), ROW_RADIUS, 0., 2., 4., 2.)),
         )
         .into_any_element()
 }

@@ -84,20 +84,39 @@ pub fn ring(el: Stateful<Div>, key: u64, radius: f32) -> Stateful<Div> {
 /// Like [`ring`], with the ring box inset by `dx` / `dy` from the element
 /// (negative grows it), as the client does on list rows.
 pub fn ring_inset(el: Stateful<Div>, key: u64, radius: f32, dx: f32, dy: f32) -> Stateful<Div> {
+    ring_inset_edges(el, key, radius, dx, dy, dx, dy)
+}
+
+/// Like [`ring_inset`], with per-edge insets (`left`, `top`, `right`, `bottom`)
+/// matching Discord's `FocusRing` `offset: { left, top, right, bottom }` prop.
+pub fn ring_inset_edges(
+    el: Stateful<Div>,
+    key: u64,
+    radius: f32,
+    left: f32,
+    top: f32,
+    right: f32,
+    bottom: f32,
+) -> Stateful<Div> {
     let Some(h) = handle(key) else { return el };
     let shown = VISIBLE.with(|v| v.get()) == Some(key);
-    el.track_focus(&h).when(shown, |el| el.child(ring_box(radius, dx, dy)))
+    el.track_focus(&h).when(shown, |el| el.child(ring_box_edges(radius, left, top, right, bottom)))
 }
 
 /// The ring itself, for a `relative()` parent: 4px around the parent's box
 /// inset by `dx` / `dy`, with `radius` the radius of that box.
 pub fn ring_box(radius: f32, dx: f32, dy: f32) -> Div {
+    ring_box_edges(radius, dx, dy, dx, dy)
+}
+
+/// Like [`ring_box`], with per-edge insets (`left`, `top`, `right`, `bottom`).
+pub fn ring_box_edges(radius: f32, left: f32, top: f32, right: f32, bottom: f32) -> Div {
     div()
         .absolute()
-        .left(z(dx - WIDTH))
-        .right(z(dx - WIDTH))
-        .top(z(dy - WIDTH))
-        .bottom(z(dy - WIDTH))
+        .left(z(left - WIDTH))
+        .right(z(right - WIDTH))
+        .top(z(top - WIDTH))
+        .bottom(z(bottom - WIDTH))
         .border(z(WIDTH))
         .border_color(rgb(RING))
         .rounded(z(radius + WIDTH))

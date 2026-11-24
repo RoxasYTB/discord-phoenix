@@ -148,7 +148,8 @@ pub fn panel_button(id: impl Into<gpui::ElementId>, glyph: AnyElement, red: bool
         .cursor_pointer()
         .group("panel-btn")
         .child(div().relative().child(glyph))
-        .map(|d| crate::ui::focus_ring::ring(d, key, 8.))
+        // Tab focus ring (web.b63d846b329d6470.js button_Y-8oZW focusProps:{offset:{left:-1,top:-1,right:1,bottom:1}}).
+        .map(|d| crate::ui::focus_ring::ring_inset_edges(d, key, 8., -1., -1., 1., 1.))
 }
 
 /// Glyph colour of a panel button (`--icon-subtle` / `--icon-feedback-critical`).

@@ -640,6 +640,9 @@ fn full_buttons() -> bool {
 thread_local! {
     /// Our last send per channel (slowmode countdown).
     static LAST_SENT: std::cell::RefCell<std::collections::HashMap<crate::model::Id, std::time::Instant>> = Default::default();
+    /// Emphasize slowmode cooldown in critical colour for 1s after a held send
+    /// (ee411b7c20ef82cb.js `EMPHASIZE_SLOWMODE_COOLDOWN`).
+    static SLOWMODE_FLASH: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
 }
 
 fn slowmode_of(app: &PhoenixApp, ch: crate::model::Id) -> u32 {
@@ -652,9 +655,14 @@ pub fn cooldown_left(app: &PhoenixApp, ch: crate::model::Id) -> u64 {
     LAST_SENT.with(|m| m.borrow().get(&ch).map_or(0, |t| secs.saturating_sub(t.elapsed().as_secs())))
 }
 
-/// Slowmode still running: the send is held back (the client keeps the text).
+/// Slowmode still running: the send is held back (the client keeps the text)
+/// and flashes the cooldown label in `--text-feedback-critical` for 1 s.
 pub fn send_held(app: &PhoenixApp, ch: crate::model::Id) -> bool {
-    cooldown_left(app, ch) > 0
+    let held = cooldown_left(app, ch) > 0;
+    if held {
+        SLOWMODE_FLASH.with(|f| f.set(Some(std::time::Instant::now() + std::time::Duration::from_secs(1))));
+    }
+    held
 }
 
 pub fn note_sent(ch: crate::model::Id) {
@@ -675,13 +683,16 @@ pub fn format_cooldown(secs: u64) -> String {
     if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m}:{s:02}") }
 }
 
-/// cooldownWrapper_bbCgC2: right side of the typing row (margin-inline-start auto,
-/// padding 3 8, padding-inline-end 16, gap 4); countdown text, then slowModeIcon_
-/// (margin-inline-start 4). CSS only: the icon glyph (clock) and text format are assumed.
+/// cooldownWrapper_bbCgC2 / cooldownText_bbCgC2 (ee411b7c20ef82cb.js + 56501.cc2ece064d14c9ca.css):
+/// right side of the typing row (margin-inline-start auto, padding 3 8, padding-inline-end 16, gap 4);
+/// TimerIcon xxs (12px, ml 4) before the body-xs/medium (12/16) text, `--text-muted` or
+/// `--text-feedback-critical` for 1s after a held send.
 fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
     let ch = app.selected_channel?;
     let x = app.nav.extras.get(&ch).filter(|x| x.slowmode > 0)?;
     let left = cooldown_left(app, ch);
+    let flash = SLOWMODE_FLASH.with(|f| f.get().is_some_and(|until| std::time::Instant::now() < until));
+    let fg = super::tk(if flash { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_MUTED });
     // Client text: "Immunité au mode lent" when we bypass it, the countdown
     // while it runs, else "Mode lent activé.".
     let text: SharedString = if x.bypass_slowmode {
@@ -702,8 +713,12 @@ fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
             .items_center()
             .gap(z(4.))
             .whitespace_nowrap()
+            .text_size(z(12.))
+            .line_height(z(16.))
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(fg)
+            .child(div().ml(z(4.)).child(gpui::svg().path(crate::icons::path("inbox/clock")).size(z(12.)).text_color(fg)))
             .child(text)
-            .child(div().ml(z(4.)).child(gpui::svg().path(crate::icons::path("inbox/clock")).size(z(16.)).text_color(super::tk(idx::TEXT_MUTED))))
             .into_any_element(),
     )
 }
