@@ -42,17 +42,19 @@ pub fn frame(id: &'static str, on_cancel: Action, card: impl IntoElement) -> Any
             .justify_center()
             .on_mouse_down(MouseButton::Left, move |_, w, cx| on_cancel(w, cx))
             .child(
-                div()
-                    .id("modal-card")
-                    .occlude()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(card)
-                    // Discord: card fades in and grows from ~0.9 over ~200ms.
-                    .with_animation(
-                        id,
-                        Animation::new(crate::ui::settings::effects::motion(200)).with_easing(ease_out_quint()),
-                        |d, t| d.opacity(t).mt(px(24. * (1. - t))),
-                    ),
+                crate::ui::focus_ring::trap_modal(
+                    div()
+                        .id("modal-card")
+                        .occlude()
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                )
+                .child(card)
+                // Discord: card fades in and grows from ~0.9 over ~200ms.
+                .with_animation(
+                    id,
+                    Animation::new(crate::ui::settings::effects::motion(200)).with_easing(ease_out_quint()),
+                    |d, t| d.opacity(t).mt(px(24. * (1. - t))),
+                ),
             )
             .with_animation(
                 "modal-backdrop-fade",
@@ -146,23 +148,27 @@ pub fn confirm(m: Confirm) -> AnyElement {
         // 16/24 padding -> the 40px md icon-only close button sits 8px from the
         // card's top and right edges. Icon 20px --control-icon-only-icon-default.
         .child(
-            div()
-                .id("modal-close")
-                .absolute()
-                .top(z(8.))
-                .right(z(8.))
-                .size(z(40.))
-                .rounded(z(8.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
-                .on_click({
-                    let cancel = m.on_cancel.clone();
-                    move |_, w, cx| cancel(w, cx)
-                })
-                .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
+            crate::ui::focus_ring::ring(
+                div()
+                    .id("modal-close")
+                    .absolute()
+                    .top(z(8.))
+                    .right(z(8.))
+                    .size(z(40.))
+                    .rounded(z(8.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
+                    .on_click({
+                        let cancel = m.on_cancel.clone();
+                        move |_, w, cx| cancel(w, cx)
+                    })
+                    .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
+                crate::ui::states::key("modal-close"),
+                8.,
+            ),
         )
         // footer.actionBar_: padding 16 24 8; actionBarTrailing stack gap 8 with
         // both md buttons stretched to equal widths.
@@ -174,14 +180,24 @@ pub fn confirm(m: Confirm) -> AnyElement {
                 .flex()
                 .gap(z(8.))
                 .child(
-                    button("modal-cancel", crate::t!("common.cancel"), BtnKind::Secondary)
-                        .flex_1()
-                        .on_click(move |_, w, cx| cancel2(w, cx)),
+                    crate::ui::focus_ring::ring(
+                        button("modal-cancel", crate::t!("common.cancel"), BtnKind::Secondary)
+                            .relative()
+                            .flex_1()
+                            .on_click(move |_, w, cx| cancel2(w, cx)),
+                        crate::ui::states::key("modal-cancel"),
+                        8.,
+                    ),
                 )
                 .child(
-                    button("modal-confirm", m.confirm_label, if m.danger { BtnKind::Critical } else { BtnKind::Primary })
-                        .flex_1()
-                        .on_click(move |_, w, cx| ok(w, cx)),
+                    crate::ui::focus_ring::ring(
+                        button("modal-confirm", m.confirm_label, if m.danger { BtnKind::Critical } else { BtnKind::Primary })
+                            .relative()
+                            .flex_1()
+                            .on_click(move |_, w, cx| ok(w, cx)),
+                        crate::ui::states::key("modal-confirm"),
+                        8.,
+                    ),
                 ),
         );
     frame("modal-backdrop", cancel, card)

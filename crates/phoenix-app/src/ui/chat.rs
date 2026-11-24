@@ -605,11 +605,18 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                                         p.header_bell_slashed(c.guild.map(|g| g.0), c.id.0, c.parent.map(|p| p.0))
                                     })
                             });
-                            if slashed {
-                                d.child(hdr_named("bell", "bell-slash", ic))
+                            let bell_col = if crate::ui::nav_menus::is_bell_open() { on } else { ic };
+                            let bell_ch = ch.map(|c| c.id);
+                            let btn = if slashed {
+                                hdr_named("bell", "bell-slash", bell_col)
                             } else {
-                                d.child(hdr_button("bell", Icon::Bell, ic, HDR_ICON))
-                            }
+                                hdr_button("bell", Icon::Bell, bell_col, HDR_ICON)
+                            };
+                            d.child(btn.on_click(move |ev, w, _| {
+                                if let Some(id) = bell_ch {
+                                    crate::ui::nav_menus::toggle_bell(id, ev.position(), w);
+                                }
+                            }))
                         })
                         .when(!is_forum, |d| {
                             d.child(

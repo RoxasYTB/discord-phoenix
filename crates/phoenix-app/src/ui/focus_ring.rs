@@ -27,6 +27,9 @@ pub const RING: u32 = 0x00b0f4;
 /// Ring thickness (`0 0 0 4px` spread).
 const WIDTH: f32 = 4.;
 
+/// Key for the active modal's focus-trap scope handle.
+const MODAL_KEY: u64 = 0x6d6f64616c5f7472;
+
 thread_local! {
     static HANDLES: RefCell<HashMap<u64, FocusHandle>> = Default::default();
     static WANTED: RefCell<Vec<u64>> = Default::default();
@@ -34,24 +37,35 @@ thread_local! {
     /// Where the last Tab / Shift+Tab put the focus (focus-visible is decided when
     /// the focus moves, so typing into a field that was clicked never shows a ring).
     static TABBED: RefCell<Option<FocusHandle>> = const { RefCell::new(None) };
+    /// True when a modal (`modal::frame`) was rendered on the current frame.
+    static MODAL_OPEN: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Creates the handles asked for during the previous frame and records the
 /// keyboard-focused key. Call at the start of the root render; returns true
 /// when new handles were created (the caller re-renders once to track them).
 pub fn sync(window: &Window, cx: &mut App) -> bool {
+    MODAL_OPEN.with(|m| m.set(false));
     let wanted: Vec<u64> = WANTED.with(|w| std::mem::take(&mut *w.borrow_mut()));
     let created = !wanted.is_empty();
     HANDLES.with(|h| {
         let mut h = h.borrow_mut();
         for k in wanted {
-            h.entry(k).or_insert_with(|| cx.focus_handle().tab_stop(true));
+            h.entry(k).or_insert_with(|| cx.focus_handle().tab_stop(k != MODAL_KEY));
         }
         let tabbed = TABBED.with(|t| t.borrow().clone()).filter(|t| t.is_focused(window));
         let focused = tabbed.and_then(|t| h.iter().find(|(_, f)| *f == &t).map(|(k, _)| *k));
         VISIBLE.with(|v| v.set(focused));
     });
     created
+}
+
+/// Marks `el` (a modal card) as the active focus-trap scope for this frame so
+/// Tab / Shift+Tab stay inside the modal instead of walking the window behind it.
+pub fn trap_modal(el: Stateful<Div>) -> Stateful<Div> {
+    MODAL_OPEN.with(|m| m.set(true));
+    let Some(h) = handle(MODAL_KEY) else { return el };
+    el.track_focus(&h)
 }
 
 /// True when `handle` holds the focus and got it from Tab (for fields that
@@ -134,11 +148,29 @@ pub fn on_key_down(ev: &KeyDownEvent, window: &mut Window, cx: &mut App) -> bool
 }
 
 /// One Tab (`back` = Shift+Tab): moves the focus and marks it focus-visible.
+/// When a modal is open, Tab / Shift+Tab stay trapped inside the modal's focus scope.
 pub fn tab(back: bool, window: &mut Window, cx: &mut App) {
-    if back {
-        window.focus_prev(cx);
-    } else {
-        window.focus_next(cx);
+    let step = |w: &mut Window, cx: &mut App| {
+        if back {
+            w.focus_prev(cx);
+        } else {
+            w.focus_next(cx);
+        }
+    };
+    step(window, cx);
+    if MODAL_OPEN.with(|m| m.get())
+        && let Some(scope) = HANDLES.with(|h| h.borrow().get(&MODAL_KEY).cloned())
+        && !scope.contains_focused(window, cx)
+    {
+        for _ in 0..64 {
+            step(window, cx);
+            if scope.contains_focused(window, cx) {
+                break;
+            }
+        }
+        if !scope.contains_focused(window, cx) {
+            window.focus(&scope, cx);
+        }
     }
     let now = window.focused(cx);
     TABBED.with(|t| *t.borrow_mut() = now);

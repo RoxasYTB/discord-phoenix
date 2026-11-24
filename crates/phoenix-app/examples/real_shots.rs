@@ -933,6 +933,11 @@ fn main() -> anyhow::Result<()> {
         let (kind, arg) = (kind.to_string(), arg.to_string());
         cx.update_window(win.into(), |_, window, cx| {
             v.update(cx, |app, cx| match kind.as_str() {
+                "bell" => {
+                    if let Some(ch) = app.selected_channel {
+                        phoenix_app::ui::nav_menus::toggle_bell(ch, gpui::point(gpui::px(820.), gpui::px(48.)), window);
+                    }
+                }
                 "pins" => app.toggle_pins(cx),
                 "threads" => app.toggle_threads_popout(cx),
                 "search" => {

@@ -300,6 +300,33 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
             ee.update(cx, |a, cx| a.report_message(ch, id, cx))
         }));
     }
+    // vanilla-menu-message: "View Interaction Info" on application / interaction messages.
+    let interaction_app = crate::commands::store::interaction_info(id)
+        .map(|i| i.app_id)
+        .or_else(|| crate::commands::store::get(id).map(|p| p.app))
+        .or_else(|| app.users.get(&msg.author).filter(|u| u.bot).map(|u| u.id));
+    if let Some(app_id) = interaction_app {
+        let app_name = app
+            .users
+            .get(&msg.author)
+            .map(|u| u.display_name.to_string())
+            .unwrap_or_else(|| app_id.0.to_string());
+        let ee = e.clone();
+        items.push(MenuItem::action(
+            crate::t!("msg.view_interaction_info"),
+            Some(crate::icons::path("info")),
+            move |_, _, cx| {
+                let text = crate::t!(
+                    "msg.interaction_info_body",
+                    app = app_name.clone(),
+                    app_id = app_id.0.to_string(),
+                    msg_id = id.0.to_string()
+                )
+                .to_string();
+                ee.update(cx, |a, cx| a.parity_toast(text, cx));
+            },
+        ));
+    }
     if app.prefs.synced.developer_mode {
     items.push(MenuItem::Separator);
     items.push(MenuItem::action(crate::t!("msg.copy_id"), ic(ChatIcon::IdBadge), move |_, _, cx| {

@@ -80,22 +80,23 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Inbox, threads browser and pins: the header popouts. Closes them all;
-    /// true when one was open (Esc, a click outside, a channel switch).
+    /// Inbox, threads browser, pins and header bell menu: the header popouts.
+    /// Closes them all; true when one was open (Esc, a click outside, a channel switch).
     pub fn close_header_popouts(&mut self, cx: &mut Context<Self>) -> bool {
         let open = self.header_popout_open();
         self.parity.inbox.open = false;
         self.parity.inbox.filter_menu = false;
         self.parity.threads_open = false;
         self.chat.pins = None;
-        if open {
+        let bell = crate::ui::nav_menus::close_bell();
+        if open || bell {
             cx.notify();
         }
-        open
+        open || bell
     }
 
     pub fn header_popout_open(&self) -> bool {
-        self.parity.inbox.open || self.parity.threads_open || self.chat.pins.is_some()
+        self.parity.inbox.open || self.parity.threads_open || self.chat.pins.is_some() || crate::ui::nav_menus::is_bell_open()
     }
 
     /// Esc: the Mentions filter menu first, then the popout itself.

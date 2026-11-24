@@ -133,19 +133,38 @@ pub struct Parts {
     pub poll: Option<PollView>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InteractionInfo {
+    pub app_id: Id,
+}
+
+fn interactions() -> &'static Mutex<HashMap<u64, InteractionInfo>> {
+    static I: OnceLock<Mutex<HashMap<u64, InteractionInfo>>> = OnceLock::new();
+    I.get_or_init(Default::default)
+}
+
+pub fn interaction_info(msg: Id) -> Option<InteractionInfo> {
+    interactions().lock().get(&msg.0).cloned()
+}
+
 fn slot() -> &'static Mutex<HashMap<u64, Arc<Parts>>> {
     static S: OnceLock<Mutex<HashMap<u64, Arc<Parts>>>> = OnceLock::new();
     S.get_or_init(Default::default)
 }
 
-/// Remember components / poll of a message (no-op for plain messages).
+/// Remember components / poll / interaction metadata of a message (no-op for plain messages).
 pub fn record(m: &api::Message) {
+    let app = m.application_id.or(m.webhook_id).map(|s| s.0).unwrap_or(m.author.id.0);
+    if m.application_id.is_some()
+        || matches!(m.kind, api::MessageType::ChatInputCommand | api::MessageType::ContextMenuCommand)
+    {
+        interactions().lock().insert(m.id.0, InteractionInfo { app_id: Id(app) });
+    }
     let components = m.components.clone();
     let poll = m.poll.as_ref().and_then(PollView::from_value);
     if components.is_empty() && poll.is_none() {
         return;
     }
-    let app = m.application_id.or(m.webhook_id).map(|s| s.0).unwrap_or(m.author.id.0);
     let parts = Parts { app: Id(app), flags: m.flags, components, poll };
     slot().lock().insert(m.id.0, Arc::new(parts));
 }

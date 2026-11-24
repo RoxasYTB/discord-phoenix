@@ -286,7 +286,7 @@ the press that closes the popout never reaches what lies under it.
 | inbox Mentions filter menu | closes with the inbox | closes the menu first | — | — | `escape_header_popouts` | ✅ test `inbox_filter_menu_closes_first_on_escape` |
 | pinned messages | closes, press swallowed | closes | closes | — | `close_on_press_outside` (pins now deferred); test `pins_popout_closes_like_the_client` | ✅ (was: no outside press) |
 | threads browser | closes, press swallowed | closes | closes | — | `close_on_press_outside`; closes on channel switch; test `threads_popout_closes_like_the_client` | ✅ (was: no outside press, no Esc) |
-| channel notification menu (bell) | closes, press swallowed | closes | closes | — | the header bell has no menu in Phoenix yet | ❌ not built |
+| channel notification menu (bell) | closes, press swallowed | closes | closes | — | `nav_menus::Target::ChannelBell` + `toggle_bell` / `close_bell` (Mute Channel > + notification level radios), wired on header bell button and closed on outside press, Esc, toggle, and channel switch | ✅ (wt/bell-and-menus) |
 | guild header menu | closes, press swallowed | closes | closes | — | `guild_menu.rs` backdrop (already) | ✅ |
 | search options popout | closes, the press goes through (trap without `trapClicks_`) | closes and blurs | — | — | `search.rs` `on_mouse_down_out` (press outside the bar and the popout closes the search; the press reaches what is under it) | ✅ ⚠ the typed query is dropped; the client keeps it in the bar |
 | context menus, profile popout, status picker, voice popout, pickers, switcher | — | — | — | — | full-window backdrops (already) | ✅ code audit (not re-measured) |

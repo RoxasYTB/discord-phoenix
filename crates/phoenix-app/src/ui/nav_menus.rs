@@ -33,6 +33,10 @@ use crate::{
 #[derive(Clone, Copy, PartialEq)]
 pub enum Target {
     Channel(Id),
+    /// Header bell notification menu for the open channel.
+    ChannelBell(Id),
+    /// Right-click menu on a sidebar thread row.
+    Thread(Id),
     Guild(Id),
     /// Guild folder (`guild_folders` id).
     Folder(u64),
@@ -51,6 +55,36 @@ thread_local! {
 pub fn open(target: Target, pos: Point<Pixels>, window: &mut Window) {
     OPEN.with(|o| *o.borrow_mut() = Some((target, pos)));
     window.refresh();
+}
+
+/// Toggle the channel header bell notification menu.
+pub fn toggle_bell(channel: Id, pos: Point<Pixels>, window: &mut Window) {
+    OPEN.with(|o| {
+        let mut cur = o.borrow_mut();
+        if matches!(*cur, Some((Target::ChannelBell(c), _)) if c == channel) {
+            *cur = None;
+        } else {
+            *cur = Some((Target::ChannelBell(channel), pos));
+        }
+    });
+    window.refresh();
+}
+
+/// Close the header bell menu if open; returns true when it was open.
+pub fn close_bell() -> bool {
+    OPEN.with(|o| {
+        let mut cur = o.borrow_mut();
+        if matches!(*cur, Some((Target::ChannelBell(_), _))) {
+            *cur = None;
+            true
+        } else {
+            false
+        }
+    })
+}
+
+pub fn is_bell_open() -> bool {
+    OPEN.with(|o| matches!(*o.borrow(), Some((Target::ChannelBell(_), _))))
 }
 
 const DURATIONS: [(&str, Option<u32>); 6] = [
@@ -118,7 +152,7 @@ fn guild_muted(app: &PhoenixApp, g: Id) -> bool {
     })
 }
 
-fn notify_item(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<Id>) -> MenuItem {
+fn notify_radios(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<Id>) -> Vec<MenuItem> {
     let default = if channel.is_some() { 3 } else { 0 };
     let cur = LEVELS
         .with(|l| l.borrow().get(&(guild, channel)).copied())
@@ -134,8 +168,7 @@ fn notify_item(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<Id>
     // "Use Category Default" shows what the category resolves to.
     let parent = channel.and_then(|c| app.channels.get(&c)).and_then(|c| c.parent);
     let inherited = level_label(app, guild, parent);
-    let items = opts
-        .into_iter()
+    opts.into_iter()
         .map(|(l, lv)| {
             let e = e.clone();
             let item = MenuItem::radio(crate::t!(l), cur == lv, move |_, _, cx: &mut App| {
@@ -144,8 +177,11 @@ fn notify_item(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<Id>
             });
             if lv == 3 { item.with_subtext(inherited.clone()) } else { item }
         })
-        .collect();
-    MenuItem::submenu(crate::t!("menu.notify_settings"), items)
+        .collect()
+}
+
+fn notify_item(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<Id>) -> MenuItem {
+    MenuItem::submenu(crate::t!("menu.notify_settings"), notify_radios(app, e, guild, channel))
 }
 
 /// Label of the level a scope resolves to (the "Notification Settings" subtext):
@@ -530,6 +566,52 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 items.push(copy(crate::t!("menu.copy_server_id"), g.0.to_string()).with_icon("id"));
             }
         }
+        Target::ChannelBell(id) => {
+            let Some(ch) = app.channels.get(&id) else { return None };
+            let guild = ch.guild;
+            let muted = ch.muted;
+            items.push(mute_item(
+                &e,
+                crate::t!("menu.mute_channel"),
+                crate::t!("menu.unmute_channel"),
+                muted,
+                guild,
+                Some(id),
+            ));
+            items.push(MenuItem::Separator);
+            items.extend(notify_radios(app, &e, guild, Some(id)));
+        }
+        Target::Thread(id) => {
+            let live = app.channels.get(&id);
+            let guild = live.and_then(|c| c.guild).or(app.selected_guild);
+            let unread = live.is_some_and(|c| c.unread);
+            let muted = live.is_some_and(|c| c.muted);
+            if unread {
+                items.push(act(&e, crate::t!("menu.mark_read"), move |a, _, cx| a.mark_nav_read(Target::Channel(id), cx)));
+            } else {
+                items.push(MenuItem::disabled(crate::t!("menu.mark_read"), None));
+            }
+            items.push(MenuItem::Separator);
+            items.push(crate::actions::channel::favorite_item(&e, id));
+            if let Some(g) = guild {
+                items.push(MenuItem::Separator);
+                items.push(copy(crate::t!("menu.copy_link"), format!("https://discord.com/channels/{}/{}", g.0, id.0)));
+            }
+            items.push(MenuItem::Separator);
+            items.push(mute_item(
+                &e,
+                crate::t!("menu.mute_channel"),
+                crate::t!("menu.unmute_channel"),
+                muted,
+                guild,
+                Some(id),
+            ));
+            items.push(notify_item(app, &e, guild, Some(id)).with_subtext(level_label(app, guild, Some(id))));
+            if dev {
+                items.push(MenuItem::Separator);
+                items.push(copy(crate::t!("menu.copy_thread_id"), id.0.to_string()).with_icon("id"));
+            }
+        }
         Target::Folder(f) => {
             // Live folder menu: Mark Folder As Read | Move To… > | Folder
             // Settings, Close All Folders.
@@ -560,7 +642,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
 impl PhoenixApp {
     pub fn mark_nav_read(&mut self, target: Target, cx: &mut Context<Self>) {
         let req = match target {
-            Target::Channel(id) => {
+            Target::Channel(id) | Target::ChannelBell(id) | Target::Thread(id) => {
                 if let Some(ch) = self.channels.get_mut(&id) {
                     ch.unread = false;
                     ch.mentions = 0;
