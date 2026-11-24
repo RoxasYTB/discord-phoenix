@@ -78,6 +78,21 @@ impl PhoenixApp {
         cx.background_spawn(self.backend.set_status(self.presence, text)).detach();
         cx.notify();
     }
+
+    /// Custom status from the "Set your status" modal, cleared by the server at `expires_at`.
+    pub fn set_custom_status_until(&mut self, text: Option<String>, expires_at: Option<String>, cx: &mut Context<Self>) {
+        self.people.custom_status = text.clone().map(Into::into);
+        cx.background_spawn(self.backend.set_status_until(self.presence, text, expires_at)).detach();
+        cx.notify();
+    }
+
+    /// Pencil on the status bubble: the account popout closes and the modal opens.
+    pub fn open_custom_status_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let cur = self.people.custom_status.as_ref().map(|s| s.to_string());
+        self.people.close_overlays();
+        crate::actions::open_modal(crate::ui::modals::Modal::CustomStatus(crate::ui::modals::custom_status::State::new(cur.as_deref())), Some(window));
+        cx.notify();
+    }
 }
 
 /// Status submenu order (Online, separator, then the rest with subtexts).

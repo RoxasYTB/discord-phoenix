@@ -47,6 +47,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("sticker", &["StickerIcon"]),
     ("emoji", &["EmojiSlightlySmilingFaceIcon"]),
     ("plus-circle", &["CirclePlusIcon"]),
+    ("circle-x", &["CircleXIcon"]),
     ("compass", &["CompassIcon"]),
     ("download", &["DownloadIcon"]),
     ("viewer/zoom", &["MagnifyingGlassPlusIcon"]),

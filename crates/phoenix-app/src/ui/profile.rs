@@ -393,7 +393,7 @@ fn badges(i: &Info) -> Option<Div> {
 }
 
 /// Custom status thought bubble (82171 `outer_rmCN9_` / `inner_rmCN9_`).
-fn status_bubble(t: SharedString) -> Div {
+pub(crate) fn status_bubble(t: SharedString) -> Div {
     div()
         .max_w(z(181.)) // outer_rmCN9_ max-width
         .min_w(z(42.))

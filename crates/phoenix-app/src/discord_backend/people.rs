@@ -37,7 +37,7 @@ impl DiscordBackend {
         self.with_session(move |_, s| async move { s.rest.set_user_note(sf(user), &note).await.map_err(api_err) })
     }
 
-    pub(super) fn people_status(&self, status: Presence, custom: Option<String>) -> BoxFuture<()> {
+    pub(super) fn people_status(&self, status: Presence, custom: Option<String>, expires_at: Option<String>) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
             let custom = custom.filter(|t| !t.trim().is_empty());
             let activities = custom
@@ -50,7 +50,7 @@ impl DiscordBackend {
                 status: status_str(status).into(),
                 afk: false,
             }));
-            let cs = custom.map(|t| CustomStatus { text: Some(t), ..Default::default() });
+            let cs = custom.map(|t| CustomStatus { text: Some(t), expires_at, ..Default::default() });
             s.rest.update_status_settings(Some(status_str(status)), Some(cs.as_ref())).await.map_err(api_err)
         })
     }

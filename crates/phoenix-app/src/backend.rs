@@ -377,6 +377,11 @@ pub trait Backend: Send + Sync + 'static {
     fn set_status(&self, _status: Presence, _custom: Option<String>) -> BoxFuture<()> {
         Box::pin(async { Ok(()) })
     }
+    /// Own status with a custom status that clears itself at `expires_at`
+    /// (ISO 8601, `None` = never). Backends without expiry keep it forever.
+    fn set_status_until(&self, status: Presence, custom: Option<String>, _expires_at: Option<String>) -> BoxFuture<()> {
+        self.set_status(status, custom)
+    }
     /// Slash commands, interactions, inbox, moderation, forums, polls (`crate::commands`).
     fn parity(&self, _req: crate::commands::ParityRequest) -> BoxFuture<crate::commands::ParityReply> {
         Box::pin(async { Err(BackendError(crate::t!("backend.offline").to_string())) })

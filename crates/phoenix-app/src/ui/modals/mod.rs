@@ -4,6 +4,7 @@
 
 pub mod channel_settings;
 pub mod create_channel;
+pub mod custom_status;
 pub mod forward;
 pub mod guild_notify;
 pub mod member;
@@ -70,6 +71,7 @@ pub enum Modal {
     Privacy(privacy::Privacy),
     Security(privacy::Security),
     GuildNotify(guild_notify::State),
+    CustomStatus(custom_status::State),
 }
 
 /// Create the inputs that need a `Window`.
@@ -105,6 +107,11 @@ pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
         Some(Modal::ChannelSettings(s)) => channel_settings::prepare(s, &mut mk),
         _ => {}
     });
+    with_modal(|m| {
+        if let Some(Modal::CustomStatus(s)) = m {
+            custom_status::prepare(s, window, cx);
+        }
+    });
 }
 
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -122,6 +129,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::Privacy(p) => privacy::render_privacy(app, p, cx),
             Modal::Security(s) => privacy::render_security(s, cx),
             Modal::GuildNotify(s) => guild_notify::render(app, s, cx),
+            Modal::CustomStatus(s) => custom_status::render(app, s, cx),
         })
     })
 }

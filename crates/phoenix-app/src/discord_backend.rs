@@ -907,7 +907,10 @@ impl Backend for DiscordBackend {
         self.profile_update_impl(guild, patch)
     }
     fn set_status(&self, status: crate::model::Presence, custom: Option<String>) -> BoxFuture<()> {
-        self.people_status(status, custom)
+        self.people_status(status, custom, None)
+    }
+    fn set_status_until(&self, status: crate::model::Presence, custom: Option<String>, expires_at: Option<String>) -> BoxFuture<()> {
+        self.people_status(status, custom, expires_at)
     }
     fn open_dm(&self, user: Id) -> BoxFuture<Id> {
         self.people_open_dm(user)

@@ -206,6 +206,7 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/sticker.svg" => f!(r#"<path d="M5 3h14a2 2 0 0 1 2 2v9l-7 7H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm8 18v-5a2 2 0 0 1 2-2h6z"/>"#),
         "icons/emoji.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM8.5 8a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM6.5 13.5a5.5 5.5 0 0 0 11 0z"/>"#),
         "icons/plus-circle.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm-1 5v4H7v2h4v4h2v-4h4v-2h-4V7z"/>"#),
+        "icons/circle-x.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM8.5 7.1 7.1 8.5l3.5 3.5-3.5 3.5 1.4 1.4 3.5-3.5 3.5 3.5 1.4-1.4-3.5-3.5 3.5-3.5-1.4-1.4-3.5 3.5z"/>"#),
         "icons/compass.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm4.5 5.5-6.4 2.6-2.6 6.4 6.4-2.6zM12 10.7a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z"/>"#),
         "icons/download.svg" => s!(r#"<path d="M12 3v12m-5-5 5 5 5-5M4 21h16"/>"#),
         // Window close glyph (winButtonClose_ svg #52: 12×12 box, 10×10 cross, ~0.8px arms), drawn here.
