@@ -1255,10 +1255,20 @@ impl PhoenixApp {
             .and_then(|r| r.color)
     }
 
+    /// Guild owning `channel` (regular channels and cached threads).
+    pub fn channel_guild(&self, channel: Id) -> Option<Id> {
+        self.channels.get(&channel).or_else(|| self.nav.find_thread(channel)).and_then(|c| c.guild)
+    }
+
+    /// Guild nickname of `user` in `guild`, from the member cache.
+    pub fn member_nick_in(&self, guild: Option<Id>, user: Id) -> Option<SharedString> {
+        let g = guild?;
+        crate::member_index::find(self.members.get(&g)?, g, user)?.nick.clone()
+    }
+
     /// Guild nickname of `user` in the selected guild, from the member cache.
     pub fn member_nick(&self, user: Id) -> Option<SharedString> {
-        let g = self.selected_guild?;
-        crate::member_index::find(self.members.get(&g)?, g, user)?.nick.clone()
+        self.member_nick_in(self.selected_guild, user)
     }
 
     /// `user` as shown in guild `g`: the per-guild avatar, decoration and
@@ -1284,27 +1294,51 @@ impl PhoenixApp {
         }
     }
 
-    /// Role dot of Accessibility "Role colors: Show next to names".
-    pub fn author_role_dot(&self, user: Id) -> Option<u32> {
+    /// Role dot of Accessibility "Role colors: Show next to names" in `guild`.
+    pub fn author_role_dot_in(&self, guild: Option<Id>, user: Id) -> Option<u32> {
         if self.prefs.local.pick("roles", 0) != 1 {
             return None;
         }
-        let g = self.selected_guild?;
-        let m = self.members.get(&g)?.iter().find(|m| m.user == user)?;
+        let g = guild?;
+        let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
         self.member_role_color(g, m)
     }
 
-    pub fn author_color(&self, user: Id) -> Option<u32> {
-        let g = self.selected_guild?;
+    /// Role dot of Accessibility "Role colors: Show next to names".
+    pub fn author_role_dot(&self, user: Id) -> Option<u32> {
+        self.author_role_dot_in(self.selected_guild, user)
+    }
+
+    pub fn author_color_in(&self, guild: Option<Id>, user: Id) -> Option<u32> {
+        let g = guild?;
         let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
         self.member_color(g, m)
     }
 
-    /// Icon of the highest role of `user` that has one, in the selected guild.
-    pub fn author_role_icon(&self, user: Id) -> Option<SharedString> {
-        let g = self.selected_guild?;
+    pub fn author_color(&self, user: Id) -> Option<u32> {
+        self.author_color_in(self.selected_guild, user)
+    }
+
+    /// Gradient stops of `user`'s top coloured role in `guild` (when role colours show in names).
+    pub fn author_role_gradient_in(&self, guild: Option<Id>, user: Id) -> Option<[u32; 3]> {
+        if self.prefs.local.pick("roles", 0) != 0 {
+            return None;
+        }
+        let g = guild?;
+        let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
+        crate::ui::role_gradient::for_member(self, g, m)
+    }
+
+    /// Icon of the highest role of `user` that has one, in `guild`.
+    pub fn author_role_icon_in(&self, guild: Option<Id>, user: Id) -> Option<SharedString> {
+        let g = guild?;
         let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
         self.roles.get(&g)?.iter().filter(|r| m.roles.contains(&r.id) && r.icon.is_some()).max_by_key(|r| r.position)?.icon.clone()
+    }
+
+    /// Icon of the highest role of `user` that has one, in the selected guild.
+    pub fn author_role_icon(&self, user: Id) -> Option<SharedString> {
+        self.author_role_icon_in(self.selected_guild, user)
     }
 
     /// Client rule for the "New member" badge (module `HU`, maxDaysOld 7): the

@@ -333,7 +333,9 @@ const FILTERS: [(&str, &str, &str, &str, &str); 4] = [
 /// (`buttonsContainer_` top 8 right 8: 24px, padding 4, radius 3, body-xs/medium
 /// --text-default on --background-base-lowest), which jumps to the message.
 fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let author = app.users.get(&m.author);
+    let guild = app.channel_guild(m.channel).or(app.selected_guild);
+    let author_cow = app.member_user(guild, m.author);
+    let author = author_cow.as_deref();
     let channel = m.channel;
     let id = m.id;
     let content: String = m.content.chars().take(400).collect();
@@ -354,9 +356,10 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
     let shown: SharedString = m
         .author_nick
         .clone()
-        .or_else(|| app.member_nick(m.author))
+        .or_else(|| app.member_nick_in(guild, m.author))
         .or_else(|| author.map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("common.unknown"));
+    let role_gradient = app.author_role_gradient_in(guild, m.author);
     let reply = m.reply_to.is_some().then(|| reply_line(app, m));
     // Mentions, emoji and markdown like in the chat, with the searched words highlighted.
     let text: Option<AnyElement> = rich.then(|| crate::ui::components::markdown_highlighted(app, &content, &cx.entity(), m.id, hl));
@@ -391,14 +394,14 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
                             .text_size(z(16.))
                             .line_height(z(22.))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(app.author_color(m.author).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
+                            .text_color(app.author_color_in(guild, m.author).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
                         author,
                         false,
                     )
-                    .child(crate::fonts::name_text(shown, author, 16.)),
+                    .child(crate::fonts::name_text_with(shown, author, 16., role_gradient)),
                 )
                 .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(crate::ui::chat::server_tag_chip(&tg, false)))
-                .when_some(app.author_role_icon(m.author), |d, u| d.child(crate::ui::chat::role_icon(u)))
+                .when_some(app.author_role_icon_in(guild, m.author), |d, u| d.child(crate::ui::chat::role_icon(u)))
                 .when(bot, |d| d.child(crate::ui::chat::bot_tag(author.is_some_and(|u| u.verified_bot))))
                 .child(
                     div()
@@ -465,11 +468,13 @@ fn reply_line(app: &PhoenixApp, m: &Message) -> gpui::Div {
     let row = div().relative().h(z(18.)).mb(z(4.)).flex().items_center().gap(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::TEXT_DEFAULT)).child(spine);
     match &m.reply_preview {
         Some((a, nick, text)) => {
-            let ru = app.users.get(a);
-            let name: SharedString = nick.clone().or_else(|| app.member_nick(*a)).or_else(|| ru.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
+            let guild = app.channel_guild(m.channel).or(app.selected_guild);
+            let ru_cow = app.member_user(guild, *a);
+            let ru = ru_cow.as_deref();
+            let name: SharedString = nick.clone().or_else(|| app.member_nick_in(guild, *a)).or_else(|| ru.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
             let preview: String = text.chars().take(200).collect::<String>().replace('\n', " ");
             row.child(avatar(ru, 16.))
-                .child(div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).text_color(app.author_color(*a).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))).child(name))
+                .child(div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).text_color(app.author_color_in(guild, *a).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))).child(name))
                 .child(div().flex_1().min_w_0().truncate().child(preview))
         }
         None => row

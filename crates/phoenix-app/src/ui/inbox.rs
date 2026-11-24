@@ -829,8 +829,19 @@ fn channel_head(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>
 /// padding 2 20 2 80, 40px avatar at 20px, username 16/22 500 --text-strong,
 /// timestamp 12px 500 --chat-text-muted (margin-start 4), content 16/22 --text-default.
 fn cozy_message(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<PhoenixApp>) -> gpui::Div {
-    let u = app.users.get(&m.author);
-    let name_color = app.author_color(m.author).map(|c2| crate::theme::role_color(Some(c2))).unwrap_or_else(|| tk(idx::TEXT_STRONG));
+    let guild = app.channel_guild(m.channel);
+    let author_cow = app.member_user(guild, m.author);
+    let u = author_cow.as_deref();
+    let name: SharedString = m
+        .author_nick
+        .clone()
+        .or_else(|| app.member_nick_in(guild, m.author))
+        .or_else(|| u.map(|u| u.display_name.clone()))
+        .unwrap_or_else(|| crate::t!("common.unknown"));
+    let name_color = app.author_color_in(guild, m.author).map(|c2| crate::theme::role_color(Some(c2))).unwrap_or_else(|| tk(idx::TEXT_STRONG));
+    let role_gradient = app.author_role_gradient_in(guild, m.author);
+    let role_dot = app.author_role_dot_in(guild, m.author);
+    let bot = u.is_some_and(|u| u.bot);
     div()
         .relative()
         .pl(z(80.))
@@ -841,17 +852,25 @@ fn cozy_message(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<PhoenixA
         .child(
             div()
                 .flex()
-                .items_baseline()
+                .items_center()
                 .child(
-                    div()
-                        .mr(z(4.))
-                        .text_size(z(16.))
-                        .line_height(z(22.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(name_color)
-                        .child(u.map(|u| u.display_name.clone()).unwrap_or_else(|| crate::t!("common.unknown"))),
+                    crate::fonts::styled_name(
+                        div()
+                            .mr(z(4.))
+                            .when(role_dot.is_some(), |d| d.flex().items_center())
+                            .text_size(z(16.))
+                            .line_height(z(22.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(name_color),
+                        u,
+                        false,
+                    )
+                    .child(crate::fonts::name_text_with(name, u, 16., role_gradient))
+                    .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col)))),
                 )
                 .when_some(u.and_then(|u| u.tag.clone()), |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(2.)).mr(z(4.))))
+                .when_some(app.author_role_icon_in(guild, m.author), |d, icon| d.child(crate::ui::chat::role_icon(icon)))
+                .when(bot, |d| d.child(crate::ui::chat::bot_tag(u.is_some_and(|u| u.verified_bot))))
                 .child(div().ml(z(4.)).text_size(z(12.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::CHAT_TEXT_MUTED)).child(crate::app::format_time_full(m.timestamp))),
         )
         .child(div().text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::ui::components::markdown_in(app, &m.content, &cx.entity(), m.id)))
@@ -1407,7 +1426,8 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
                 )
                 .when(!t.voice_users.is_empty(), |d| {
                     d.child(div().ml(z(16.)).flex().children(t.voice_users.iter().take(3).enumerate().map(|(k, u)| {
-                        div().when(k > 0, |d| d.ml(z(-6.))).child(avatar(app.users.get(u), 24.))
+                        let u_cow = app.member_user(app.selected_guild, *u);
+                        div().when(k > 0, |d| d.ml(z(-6.))).child(avatar(u_cow.as_deref(), 24.))
                     })))
                 }),
         );
@@ -1947,8 +1967,13 @@ fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Contex
     let last = p.last_message.unwrap_or(p.thread);
     let secs = ((last.0 >> 22) / 1000 + 1_420_070_400) as i64;
     let date = chrono::DateTime::from_timestamp(secs, 0).map(|d| crate::i18n::long_date(d.with_timezone(&chrono::Local).date_naive())).unwrap_or_default();
-    let owner = p.owner.and_then(|o| app.users.get(&o));
-    let owner_name = owner.map(|u| if u.display_name.is_empty() { u.name.clone() } else { u.display_name.clone() }).unwrap_or_default();
+    let owner_cow = p.owner.and_then(|o| app.member_user(app.selected_guild, o));
+    let owner = owner_cow.as_deref();
+    let owner_name = p
+        .owner
+        .and_then(|o| app.member_nick(o))
+        .or_else(|| owner.map(|u| if u.display_name.is_empty() { u.name.clone() } else { u.display_name.clone() }))
+        .unwrap_or_default();
     div()
         .id(("archived-thread-row", p.thread.0))
         .flex_none()
@@ -2028,7 +2053,8 @@ fn thread_facepile(app: &PhoenixApp, ids: &[Id], count: u32) -> Option<gpui::Div
             .items_center()
             .children(ids.iter().enumerate().map(|(k, u)| {
                 let last = k + 1 == n && !has_more;
-                div().flex_none().size(z(24.)).when(!last, |d| d.mr(z(-6.))).child(avatar(app.users.get(u), 24.))
+                let u_cow = app.member_user(app.selected_guild, *u);
+                div().flex_none().size(z(24.)).when(!last, |d| d.mr(z(-6.))).child(avatar(u_cow.as_deref(), 24.))
             }))
             .when_some(more, |d, t| {
                 d.child(

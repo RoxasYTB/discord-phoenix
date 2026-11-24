@@ -515,9 +515,33 @@ impl Backend for DiscordBackend {
     }
 
     fn parity(&self, req: crate::commands::ParityRequest) -> BoxFuture<crate::commands::ParityReply> {
-        self.with_session(move |inner, s| {
+        self.with_session(move |inner, s| async move {
             let emit: crate::backend::EventSink = Arc::new(move |e| inner.emit(e));
-            crate::commands::exec::request(s.rest.clone(), req, emit)
+            let reply = crate::commands::exec::request(s.rest.clone(), req, emit).await?;
+            if let crate::commands::ParityReply::Messages(ref msgs) = reply {
+                let mut by_guild: std::collections::HashMap<api::Snowflake, Vec<api::Snowflake>> = std::collections::HashMap::new();
+                for m in msgs {
+                    if let Some(g) = s.cache.channel(sf(m.channel)).and_then(|c| c.guild_id) {
+                        let u = sf(m.author);
+                        if s.cache.member(g, u).is_none() {
+                            let list = by_guild.entry(g).or_default();
+                            if !list.contains(&u) {
+                                list.push(u);
+                            }
+                        }
+                    }
+                }
+                for (g, mut ids) in by_guild {
+                    ids.truncate(100);
+                    let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
+                        guild_id: vec![g],
+                        user_ids: Some(ids),
+                        presences: true,
+                        ..Default::default()
+                    });
+                }
+            }
+            Ok(reply)
         })
     }
 
@@ -894,6 +918,23 @@ impl Backend for DiscordBackend {
                 convert::message_users(m, &mut users);
             }
             inner.emit(AppEvent::Users(users));
+            if let Some(g) = s.cache.channel(sf(channel)).and_then(|c| c.guild_id) {
+                let mut ids: Vec<api::Snowflake> = Vec::new();
+                for m in &msgs {
+                    if !ids.contains(&m.author.id) && s.cache.member(g, m.author.id).is_none() {
+                        ids.push(m.author.id);
+                    }
+                }
+                if !ids.is_empty() {
+                    ids.truncate(100);
+                    let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
+                        guild_id: vec![g],
+                        user_ids: Some(ids),
+                        presences: true,
+                        ..Default::default()
+                    });
+                }
+            }
             Ok(msgs.iter().map(convert::message).collect())
         })
     }
