@@ -8,6 +8,8 @@ use gpui_component::Root;
 use phoenix_app::{app::PhoenixApp, assets::Assets, mock::MockBackend};
 
 /// `PHX_FRAMES=1`: frame times per interaction (examples/frames.rs), no allocation counts.
+/// `PHX_COMPACT=1` selects compact messages; `PHX_COMPACT_AVATARS=0|1` overrides
+/// the compact avatar preference in memory for screenshot comparisons.
 #[path = "common/frames_impl.rs"]
 mod frames_impl;
 
@@ -71,6 +73,28 @@ fn main() -> anyhow::Result<()> {
             });
         })?;
         pump(&mut cx, 30);
+    }
+    let compact = std::env::var_os("PHX_COMPACT").is_some();
+    let compact_avatars = std::env::var("PHX_COMPACT_AVATARS").ok().and_then(|v| match v.as_str() {
+        "0" | "false" => Some(false),
+        "1" | "true" => Some(true),
+        _ => None,
+    });
+    if compact || compact_avatars.is_some() {
+        let v = view.borrow().clone().expect("view");
+        cx.update_window(win.into(), |_, window, cx| {
+            v.update(cx, |app, cx| {
+                if compact {
+                    app.prefs.synced.compact = true;
+                }
+                if let Some(show) = compact_avatars {
+                    app.prefs.synced.proto.insert("avatars", if show { 1 } else { 0 });
+                }
+                cx.notify();
+            });
+            window.refresh();
+        })?;
+        pump(&mut cx, 2);
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);

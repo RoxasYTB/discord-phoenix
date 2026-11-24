@@ -1,6 +1,6 @@
 # Project Phoenix — état et handoff
 
-> Baseline de cette reprise : `main` à `1583cf0`, dix commits locaux devant `origin/main`. Le lot avatars compacts décrit ici ajoute une intégration locale supplémentaire; aucun push n’a été fait.
+> Baseline de cette reprise : `main` à `1583cf0`, dix commits locaux devant `origin/main`. Deux commits locaux ajoutent l’intégration d’avatars compacts et son harness de capture; `main` est ensuite à douze commits devant `origin/main`, sans push.
 
 Ce document est le point de reprise pour les sessions qui poursuivent la parité visuelle et fonctionnelle de Discord Phoenix. Il complète les tableaux par fonctionnalité dans [`docs/parity/`](parity/) et l’inventaire des routes dans [`docs/PARITY.md`](PARITY.md). Il ne remplace pas les preuves d’exécution ni les tests.
 
@@ -24,7 +24,9 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 - La documentation Soundboard est enrichie à partir du guide officiel : le flux de haut niveau est ouvrir les contrôles vocaux, choisir un serveur disponible puis un son. L’interface et les endpoints Phoenix ne sont toujours pas mesurés; aucune action vocale ou lecture audio n’a été faite. Voir `docs/parity/pickers.md`.
 - Le checkpoint précédent consignait les limites de référence composer/Soundboard. À ce point de reprise, la branche était en avance de dix commits sur `origin/main`, sans push, et `/home` avait environ 4 Go libres.
 - Le lot suivant utilise `display_compact_avatars` uniquement avec l’affichage compact: avatar 40px à x=16px et en-tête déplacé à x=64px. La documentation Discord confirme que l’option est destinée au mode Compact; la capture officielle activée n’a pas été mesurée et ces dimensions restent donc provisoires. La suite de bibliothèque a compilé et passé: 211 réussis, 2 ignorés. Aucun réglage du compte réel n’a été modifié.
-- La dernière sauvegarde préexistante, `/mnt/windata/project-phoenix/backups/20261124-120231Z/`, précède ce lot. Après son commit, créer un nouveau bundle, patch et copie des trois PNG non suivis avant de réduire l’espace libre ou lancer un autre build.
+- L’exemple `screenshot` accepte maintenant `PHX_COMPACT=1` et `PHX_COMPACT_AVATARS=0|1`, uniquement sur `MockBackend`; voir `docs/PARITY_WORKFLOW.md`. Les deux PNG synthétiques ont été rendus en 2560×1600, inspectés puis supprimés de `/tmp`. L’état activé place l’avatar avant l’en-tête sans chevauchement visible dans le scénario mock; ce n’est pas une comparaison avec le client officiel activé.
+- La sauvegarde préexistante `/mnt/windata/project-phoenix/backups/20261124-121028Z/` contient l’implémentation et le test, mais précède le harness synthétique et ses docs. Après le commit du harness, sauvegarder le nouvel état dans `/mnt/windata/project-phoenix/backups/20261124-1218Z/` (bundle, patch, log(s), status et copie des trois PNG non suivis).
+- Le test `cargo test -p phoenix-app --lib` passe: 211 réussis, 2 ignorés. Le `cargo run -p phoenix-app --example screenshot` avec `PHX_COMPACT=1 PHX_COMPACT_AVATARS=0|1` compile et rend les deux captures mock 2560×1600; elles ont été visualisées puis supprimées. Il reste ~3,3 Go libres sur `/home`; ne pas lancer d’autre build sans recontrôle.
 - Aucun intégrateur, build Cargo ou agent de la session précédente ne tournait pendant la vérification.
 
 ## Règle de contribution et méthode de référence

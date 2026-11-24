@@ -29,6 +29,15 @@ Inspecter localement puis noter seulement les mesures nécessaires (dimensions v
 
 Ne pas lire ou extraire les bundles, CSS, SVG, polices, traductions ou assets Discord. Ne pas coder à partir d’eux. Décrire le comportement observé en termes neutres et réaliser une implémentation originale.
 
+Pour vérifier un état sans toucher au compte réel, l’exemple `screenshot` utilise le `MockBackend` :
+
+```sh
+PHX_COMPACT=1 PHX_COMPACT_AVATARS=1 cargo run -p phoenix-app --example screenshot -- /tmp/phoenix-compact-avatars.png
+PHX_COMPACT=1 PHX_COMPACT_AVATARS=0 cargo run -p phoenix-app --example screenshot -- /tmp/phoenix-compact-no-avatars.png
+```
+
+Ces variables ne changent que les préférences en mémoire de la capture synthétique. La sortie n’est pas une référence officielle et ne doit pas être utilisée pour fermer une mesure de parité sans comparaison séparée avec la capture CDP correspondante.
+
 ## 3. Référence API
 
 - Privilégier les endpoints documentés et les requêtes GET de lecture de l’utilisateur autorisé.
