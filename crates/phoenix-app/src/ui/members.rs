@@ -946,10 +946,10 @@ fn activity_text(a: &crate::presence::Activity) -> Option<SharedString> {
         Some(2) if details.is_some() => m = details.clone(),
         _ => {}
     }
-    if a.is_spotify() {
-        if let Some(st) = state {
-            return Some(st.replace("; ", ", ").into());
-        }
+    if a.is_spotify()
+        && let Some(st) = state
+    {
+        return Some(st.replace("; ", ", ").into());
     }
     m
 }
@@ -1032,10 +1032,10 @@ fn sub_text(in_voice: bool, bot: bool, sub: Option<SubText>, fallback: Option<Sh
                     .child(SharedString::from(format!("+{}", total - 1))),
             );
         }
-    } else if custom.is_none() {
-        if let Some(t) = fallback.filter(|_| !in_voice) {
-            row = row.child(text_el(t));
-        }
+    } else if custom.is_none()
+        && let Some(t) = fallback.filter(|_| !in_voice)
+    {
+        row = row.child(text_el(t));
     }
     if let Some((emoji, state)) = custom {
         if total > 0 {
