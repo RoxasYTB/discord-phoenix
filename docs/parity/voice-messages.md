@@ -80,4 +80,6 @@ Discord accepted the upload (`flags` 8192, `duration_secs` 4.5, 300-char wavefor
 client at zoom 1.25: container 246.6×48 at x 496.6; play button x 504.6 (32, margin −4),
 waveform x 548.6 width 62 (= `canvas_width(4.5)`), duration x 622.6 (28.6 wide), speed
 x 663.2 (32×16 inside a 4 px padded box), volume x 707.2 (24). Phoenix matches every x; its
-height was 56 until the −4 px canvas margin was added.
+height was 56 until the −4 px canvas margin was added, and it stretched to the message width
+until it got `align-self: flex-start`. After both fixes (c4f9a001) the real-account render matches
+the client crop (246.6×48).
