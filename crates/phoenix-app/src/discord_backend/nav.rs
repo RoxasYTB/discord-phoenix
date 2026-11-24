@@ -32,9 +32,14 @@ fn rel_kind(k: RelationshipType) -> Option<RelationshipKind> {
 }
 
 fn relationship(r: &api::Relationship) -> Option<Relationship> {
+    let kind = match rel_kind(r.kind) {
+        Some(k) => k,
+        None if r.user_ignored => RelationshipKind::None,
+        None => return None,
+    };
     Some(Relationship {
         user: id(r.user.as_ref().map(|u| u.id).or(r.user_id).unwrap_or(r.id)),
-        kind: rel_kind(r.kind)?,
+        kind,
         nickname: r.nickname.clone().filter(|n| !n.is_empty()).map(Into::into),
         since: r.since.as_deref().and_then(crate::presence::iso_to_unix),
         ignored: r.user_ignored,
@@ -224,6 +229,7 @@ fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
             && (!perms.contains(send_bit) || (locked_thread && !perms.contains(api::Permissions::MANAGE_THREADS))),
         thread_archived: c.thread_metadata.as_ref().is_some_and(|m| m.archived),
         thread_locked: locked_thread,
+        can_manage_threads: perms.contains(api::Permissions::MANAGE_THREADS),
         nsfw: c.nsfw,
         locked: everyone_denied(c),
         group_icon: c

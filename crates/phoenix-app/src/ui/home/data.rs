@@ -11,6 +11,8 @@ use crate::model::{Channel, Id, ImageRef};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RelationshipKind {
+    /// Type 0 / 5 (none / implicit): kept when `user_ignored` is true.
+    None,
     Friend,
     Blocked,
     Incoming,
@@ -61,6 +63,8 @@ pub struct ChannelExtra {
     /// Thread `thread_metadata.archived` / `.locked` (chatHeaderBar_ banners).
     pub thread_archived: bool,
     pub thread_locked: bool,
+    /// `MANAGE_THREADS`: shows Open / Unlock buttons on archived / locked threads.
+    pub can_manage_threads: bool,
 }
 
 #[derive(Clone, Debug)]

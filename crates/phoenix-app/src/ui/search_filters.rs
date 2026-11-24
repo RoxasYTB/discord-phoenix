@@ -384,20 +384,34 @@ fn field(app: &PhoenixApp, i: usize, input: &Entity<InputState>, picks: &[String
             None => div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_MUTED))).child(placeholder(app, key)),
         });
     } else {
-        for v in picks {
+        for (pi, v) in picks.iter().enumerate() {
+            let val = v.clone();
             content = content.child(
                 div()
+                    .id(gpui::ElementId::Name(format!("search-pill-{i}-{pi}").into()))
                     .flex_none()
                     .px(z(6.))
                     .py(z(2.))
                     .rounded(z(4.))
                     .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
+                    .flex()
+                    .items_center()
+                    .gap(z(4.))
+                    .cursor_pointer()
                     .text_size(z(14.))
                     .line_height(z(18.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(tok(idx::TEXT_STRONG)))
                     .whitespace_nowrap()
-                    .child(pick_label(app, key, v)),
+                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |_, _, _, cx| {
+                        with_modal(cx, |m| {
+                            m.picks[i].retain(|x| x != &val);
+                        });
+                        cx.stop_propagation();
+                        cx.notify();
+                    }))
+                    .child(pick_label(app, key, v))
+                    .child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child("×")),
             );
         }
         // The Input adds its own padding and text size: the field pads 12 and sets 16/20.

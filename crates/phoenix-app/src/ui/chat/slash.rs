@@ -58,7 +58,7 @@ fn name_query(t: &str) -> Option<&str> {
     (!q.contains(char::is_whitespace)).then_some(q)
 }
 
-fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
+pub fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let Some(ch) = app.selected_channel else { return };
     let st = state(cx);
     if st.cache.contains_key(&ch) || st.loading == Some(ch) {
@@ -80,6 +80,12 @@ fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
         });
     })
     .detach();
+}
+
+/// Cached slash commands for the currently selected channel.
+pub fn cached_commands(app: &PhoenixApp, cx: &App) -> Vec<SlashCommand> {
+    let Some(ch) = app.selected_channel else { return vec![] };
+    cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch)).cloned().unwrap_or_default()
 }
 
 /// Filtered matches, grouped by app (stable: app name, then command name).

@@ -61,10 +61,10 @@ of the date type list in dump `search-date-operator`), closed without applying.
 | De / Mentions rows | screen | content | 24px avatar, gap 8, display name 16/20, username on the right (muted), 20px checkbox; you first | options() users | ✅ (order after you: recent authors then members, the client's exact ranking is not known) |
 | Dans rows | screen | content | channel glyph, name, checkbox; open channel first | options() "in:" | ✅ (the rest in sidebar order; the client's order looks frecency-based) |
 | Contient rows | screen | content | glyph + image, vidéo, lien, fichier, intégration (more under the scroll) | HAS | ✅ first five; son / autocollant / sondage and the glyphs are ours |
-| Type d'auteur / Épinglé | dump search-more-filters | kind | Type d'auteur is a combobox (input), Épinglé a plain select (`selectButton_`) | field() | ⚠ lists not opened (see below): Utilisateur / Bot / Webhook and Vrai / Faux |
+| Type d'auteur / Épinglé | dump search-more-filters | kind | Type d'auteur is a combobox (input), Épinglé a plain select (`selectButton_`) | field(), options() | ✅ Type d'auteur combobox (Utilisateur / Bot / Webhook) + Épinglé select (Vrai / Faux) wired with option lists |
 | open field | screen | style | --input-border-active border, chevron up | field() | ✅ |
 | autocomplete | comboBoxInput_vWC4bk | behaviour | typing filters the list (exact, prefix, contains) | options() score | ✅ |
-| picked values | — | style | pills before the text | field() | ⚠ not observed on the client (we did not pick anything there) |
+| picked values | — | style | pills before the text | field() | ✅ removable pills (`×`) rendered before the text input |
 | popout | CDP | behaviour | "Plus de filtres" hides the search popout (bar back to idle); closing the modal (Escape) brings the popout back with the bar focused | search.rs render | ✅ |
 | calendar / type list / option list | — | position | flipped above the field when they would pass the window bottom | render | ✅ |
 

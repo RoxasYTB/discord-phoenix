@@ -406,6 +406,7 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
     // Pending rows show the username as subtext (`applicationSublabel_nByiE3`,
     // body-sm/medium --text-subtle) and no hover discriminator.
     let sub: SharedString = match r.kind {
+        RelationshipKind::None => SharedString::default(),
         RelationshipKind::Incoming | RelationshipKind::Outgoing => username.clone(),
         RelationshipKind::Blocked => crate::t!("friends.blocked"),
         RelationshipKind::Friend => app.nav.activities.get(&user).cloned().unwrap_or_else(|| {
@@ -439,6 +440,7 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
     let (hover, positive, critical) =
         (c(tok(idx::INTERACTIVE_TEXT_HOVER)), c(tok(idx::ICON_FEEDBACK_POSITIVE)), c(tok(idx::ICON_FEEDBACK_CRITICAL)));
     match r.kind {
+        RelationshipKind::None => {}
         RelationshipKind::Friend => {
             actions = actions
                 .child(

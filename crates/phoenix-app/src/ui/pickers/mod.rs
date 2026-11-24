@@ -269,7 +269,7 @@ fn on_query(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
 }
 
 /// Fetch the account frecency once; rebuild the open emoji grid when it lands.
-fn load_frecency(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
+pub fn load_frecency(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let p = cx.global_mut::<Pickers>();
     if p.frecency.is_some() || p.frecency_loading {
         return;

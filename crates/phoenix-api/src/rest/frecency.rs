@@ -63,6 +63,13 @@ pub struct EmojiFrecency {
 }
 
 #[derive(Clone, PartialEq, prost::Message)]
+pub struct ApplicationFrecency {
+    /// Keyed by application id (decimal snowflake string).
+    #[prost(map = "string, message", tag = "1")]
+    pub applications: HashMap<String, FrecencyItem>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
 pub struct FrecencyUserSettings {
     #[prost(message, optional, tag = "2")]
     pub favorite_gifs: Option<FavoriteGifs>,
@@ -70,6 +77,8 @@ pub struct FrecencyUserSettings {
     pub sticker_frecency: Option<StickerFrecency>,
     #[prost(message, optional, tag = "6")]
     pub emoji_frecency: Option<EmojiFrecency>,
+    #[prost(message, optional, tag = "9")]
+    pub application_frecency: Option<ApplicationFrecency>,
 }
 
 fn rank(it: &FrecencyItem) -> (i32, u32, u64) {
@@ -102,6 +111,18 @@ impl FrecencyUserSettings {
             self.favorite_gifs.iter().flat_map(|f| f.gifs.iter()).map(|(k, g)| (k.clone(), g.clone())).collect();
         v.sort_by_key(|g| std::cmp::Reverse(g.1.order));
         v
+    }
+
+    /// Application ids, most used first (`FrecencyUserSettings.application_frecency`, field 9).
+    pub fn applications_ranked(&self) -> Vec<u64> {
+        let mut v: Vec<(u64, &FrecencyItem)> = self
+            .application_frecency
+            .iter()
+            .flat_map(|a| a.applications.iter())
+            .filter_map(|(k, it)| k.parse::<u64>().ok().map(|id| (id, it)))
+            .collect();
+        v.sort_by(|a, b| rank(b.1).cmp(&rank(a.1)).then_with(|| a.0.cmp(&b.0)));
+        v.into_iter().map(|(id, _)| id).collect()
     }
 }
 
@@ -136,11 +157,15 @@ mod tests {
             emoji_frecency: Some(EmojiFrecency {
                 emojis: HashMap::from([("joy".into(), item(10, 4)), ("123".into(), item(20, 1))]),
             }),
+            application_frecency: Some(ApplicationFrecency {
+                applications: HashMap::from([("100".into(), item(5, 1)), ("200".into(), item(15, 2))]),
+            }),
         };
         let b64 = STANDARD.encode(prost::Message::encode_to_vec(&s));
         let d = FrecencyUserSettings::decode_base64(&b64).unwrap();
         assert_eq!(d.emojis_ranked(), vec!["123".to_string(), "joy".to_string()]);
         assert_eq!(d.stickers_ranked(), vec![2, 1]);
         assert_eq!(d.favorite_gifs()[0].0, "b");
+        assert_eq!(d.applications_ranked(), vec![200, 100]);
     }
 }

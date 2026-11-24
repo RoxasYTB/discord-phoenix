@@ -77,4 +77,6 @@ pub struct Frecency {
     pub stickers: Vec<Id>,
     /// Favorite GIFs, newest first.
     pub favorite_gifs: Vec<GifItem>,
+    /// Recently used application ids, most used first.
+    pub applications: Vec<u64>,
 }

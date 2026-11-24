@@ -82,7 +82,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                             panels::drop_ended();
                             a.add_paths(paths.paths().to_vec(), cx)
                         }))
-                        .children(thread_banner::render(app))
+                        .children(thread_banner::render(app, cx))
                         .children(discovery_notice(app, cx))
                         .child(
                             div()

@@ -28,6 +28,7 @@ use serde_json::Value;
 
 use crate::{
     app::PhoenixApp,
+    commands::SlashCommand,
     theme::{c, generated::idx, tok},
 };
 
@@ -103,6 +104,62 @@ pub fn search(cols: &[Collection], q: &str) -> Vec<LauncherApp> {
     cols.iter().flat_map(|c| &c.apps).filter(|a| a.name.to_lowercase().contains(&q) && seen.insert(a.id)).cloned().collect()
 }
 
+/// Slash commands matching `q` (case-insensitive) on command name, description, or app name.
+pub fn search_commands(cmds: &[SlashCommand], q: &str) -> Vec<SlashCommand> {
+    let q = q.trim().to_lowercase();
+    if q.is_empty() {
+        return Vec::new();
+    }
+    let mut hits: Vec<(u8, SlashCommand)> = cmds
+        .iter()
+        .filter_map(|c| {
+            let name = c.name.to_lowercase();
+            let rank = if name == q {
+                0
+            } else if name.starts_with(&q) {
+                1
+            } else if name.contains(&q) {
+                2
+            } else if c.app_name.to_lowercase().contains(&q) || c.description.to_lowercase().contains(&q) {
+                3
+            } else {
+                return None;
+            };
+            Some((rank, c.clone()))
+        })
+        .collect();
+    hits.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    hits.truncate(25);
+    hits.into_iter().map(|(_, c)| c).collect()
+}
+
+/// Recently used apps from `FrecencyUserSettings.application_frecency`, resolved
+/// against the loaded directory collections or the channel's slash commands.
+pub fn recents(ids: &[u64], cols: &[Collection], cmds: &[SlashCommand]) -> Vec<LauncherApp> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for &id in ids {
+        if !seen.insert(id) {
+            continue;
+        }
+        if let Some(a) = cols.iter().flat_map(|c| &c.apps).find(|a| a.id == id) {
+            out.push(a.clone());
+            continue;
+        }
+        let id_str = id.to_string();
+        if let Some(cmd) = cmds.iter().find(|c| c.raw.get("application_id").and_then(Value::as_str) == Some(id_str.as_str())) {
+            out.push(LauncherApp {
+                id,
+                name: cmd.app_name.clone().into(),
+                description: SharedString::default(),
+                icon: cmd.app_icon.clone().map(Into::into),
+                cover: None,
+            });
+        }
+    }
+    out
+}
+
 struct Open {
     input: Entity<InputState>,
     _sub: gpui::Subscription,
@@ -141,6 +198,8 @@ pub fn toggle(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     input.update(cx, |s, cx| s.focus(window, cx));
     OPEN.with(|o| *o.borrow_mut() = Some(Open { input, _sub: sub }));
     EXPANDED.with(|e| e.borrow_mut().clear());
+    crate::ui::pickers::load_frecency(app, cx);
+    crate::ui::chat::slash::ensure_loaded(app, cx);
     if !REQUESTED.with(|r| r.replace(true)) {
         let fut = app.backend.app_directory_collections(crate::i18n::locale().to_owned());
         cx.spawn(async move |this, cx| {
@@ -297,7 +356,103 @@ fn section(col: &Collection, cx: &mut Context<PhoenixApp>) -> AnyElement {
     div().flex().flex_col().gap(px(8.)).child(header(col.title.clone(), more)).child(body).into_any_element()
 }
 
-pub fn render(_app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+fn recents_section(apps: &[LauncherApp], cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let body = div()
+        .flex()
+        .flex_wrap()
+        .gap(px(12.))
+        .children(apps.iter().map(|a| {
+            div()
+                .id(SharedString::from(format!("launcher-recent-{}", a.id)))
+                .cursor_pointer()
+                .child(app_icon(a, 48.))
+                .on_click(pick(a, cx))
+        }))
+        .into_any_element();
+    div().flex().flex_col().gap(px(8.)).child(header(crate::t!("launcher.recents"), None)).child(body).into_any_element()
+}
+
+fn command_rows(cmds: &[SlashCommand], cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let n = cmds.len();
+    div()
+        .flex()
+        .flex_col()
+        .children(cmds.iter().enumerate().map(|(i, cmd)| {
+            let (first, last) = (i == 0, i + 1 == n);
+            let icon = LauncherApp {
+                id: 0,
+                name: cmd.app_name.clone().into(),
+                description: SharedString::default(),
+                icon: cmd.app_icon.clone().map(Into::into),
+                cover: None,
+            };
+            let cmd_name = cmd.name.clone();
+            div()
+                .id(SharedString::from(format!("launcher-cmd-{i}-{}", cmd.name)))
+                .h(px(64.))
+                .p(px(12.))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .bg(tk(idx::CARD_BACKGROUND_DEFAULT))
+                .when(first, |d| d.rounded_tl(px(12.)).rounded_tr(px(12.)))
+                .when(last, |d| d.rounded_bl(px(12.)).rounded_br(px(12.)))
+                .when(!last, |d| d.border_b_1().border_color(tk(idx::BACKGROUND_MOD_SUBTLE)))
+                .cursor_pointer()
+                .child(app_icon(&icon, 40.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .h(px(20.))
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_size(px(16.))
+                                        .line_height(px(20.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(tk(idx::TEXT_STRONG))
+                                        .truncate()
+                                        .child(format!("/{}", cmd.name)),
+                                )
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(12.))
+                                        .line_height(px(16.))
+                                        .text_color(tk(idx::TEXT_MUTED))
+                                        .child(cmd.app_name.clone()),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .h(px(18.))
+                                .text_size(px(14.))
+                                .line_height(px(18.))
+                                .text_color(tk(idx::TEXT_SUBTLE))
+                                .truncate()
+                                .child(cmd.description.clone()),
+                        ),
+                )
+                .on_click(cx.listener(move |app, _, window, cx| {
+                    let v = format!("/{cmd_name} ");
+                    app.composer.update(cx, |s, cx| {
+                        s.set_value(v, window, cx);
+                        s.focus(window, cx);
+                    });
+                    close(app, window, cx);
+                }))
+        }))
+        .into_any_element()
+}
+
+pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let input = OPEN.with(|o| o.borrow().as_ref().map(|o| o.input.clone()))?;
     let vp = window.viewport_size();
     let (vw, vh) = (f32::from(vp.width), f32::from(vp.height));
@@ -306,17 +461,43 @@ pub fn render(_app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixAp
     let h = if bottom - 8. < H { (bottom - 8.).max(200.) } else { H };
     let left = (right - W).max(8.);
     let q = input.read(cx).value().to_string();
+    let cmds = crate::ui::chat::slash::cached_commands(app, cx);
+    let freq_ids: Vec<u64> = cx
+        .try_global::<crate::ui::pickers::Pickers>()
+        .and_then(|p| p.frecency.as_ref())
+        .map(|f| f.applications.clone())
+        .unwrap_or_default();
     let content: Vec<AnyElement> = DATA.with(|d| match d.borrow().as_ref() {
         None => vec![],
         Some(cols) if !q.trim().is_empty() => {
-            let hits = search(cols, &q);
-            if hits.is_empty() {
+            let app_hits = search(cols, &q);
+            let cmd_hits = search_commands(&cmds, &q);
+            if app_hits.is_empty() && cmd_hits.is_empty() {
                 vec![div().pt(px(24.)).text_center().text_size(px(16.)).text_color(tk(idx::TEXT_SUBTLE)).child(crate::t!("launcher.no_results")).into_any_element()]
             } else {
-                vec![rows(&hits, cx)]
+                let mut sections = Vec::new();
+                if !app_hits.is_empty() {
+                    if !cmd_hits.is_empty() {
+                        sections.push(div().flex().flex_col().gap(px(8.)).child(header(crate::t!("launcher.apps"), None)).child(rows(&app_hits, cx)).into_any_element());
+                    } else {
+                        sections.push(rows(&app_hits, cx));
+                    }
+                }
+                if !cmd_hits.is_empty() {
+                    sections.push(div().flex().flex_col().gap(px(8.)).child(header(crate::t!("launcher.commands"), None)).child(command_rows(&cmd_hits, cx)).into_any_element());
+                }
+                sections
             }
         }
-        Some(cols) => cols.iter().map(|c| section(c, cx)).collect(),
+        Some(cols) => {
+            let mut sections = Vec::new();
+            let recent_apps = recents(&freq_ids, cols, &cmds);
+            if !recent_apps.is_empty() {
+                sections.push(recents_section(&recent_apps, cx));
+            }
+            sections.extend(cols.iter().map(|c| section(c, cx)));
+            sections
+        }
     });
     Some(
         div()
@@ -398,5 +579,40 @@ mod tests {
         ];
         let hits: Vec<u64> = search(&cols, " MERGE ").iter().map(|a| a.id).collect();
         assert_eq!(hits, [1, 3]);
+    }
+
+    #[test]
+    fn recents_resolves_directory_and_commands() {
+        let a = |id: u64, n: &str| LauncherApp { id, name: n.to_owned().into(), description: "".into(), icon: None, cover: None };
+        let cols = vec![Collection { title: "A".into(), cards: true, apps: vec![a(10, "Wordle")] }];
+        let cmds = vec![SlashCommand {
+            name: "ping".into(),
+            description: "Check latency".into(),
+            app_name: "HelperBot".into(),
+            app_icon: None,
+            raw: serde_json::json!({"application_id": "20"}),
+        }];
+        let r = recents(&[20, 10, 99, 20], &cols, &cmds);
+        let ids: Vec<u64> = r.iter().map(|x| x.id).collect();
+        assert_eq!(ids, [20, 10]);
+        assert_eq!(r[0].name.as_ref(), "HelperBot");
+    }
+
+    #[test]
+    fn search_commands_ranks_prefix_before_contains() {
+        let cmd = |name: &str, desc: &str, app: &str| SlashCommand {
+            name: name.into(),
+            description: desc.into(),
+            app_name: app.into(),
+            app_icon: None,
+            raw: Value::Null,
+        };
+        let cmds = vec![
+            cmd("superplay", "desc", "Music"),
+            cmd("play", "start music", "Music"),
+            cmd("queue", "play list", "Music"),
+        ];
+        let names: Vec<String> = search_commands(&cmds, "play").into_iter().map(|c| c.name).collect();
+        assert_eq!(names, ["play", "superplay", "queue"]);
     }
 }

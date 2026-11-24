@@ -24,7 +24,7 @@ Source: current-client/css (`base_U9Tvvz`, `inTextChannel_U9Tvvz`, `dot_U9Tvvz`,
 | banner | chatHeaderBar_By_-nl | bg / padding / gap | --background-mod-normal, 8px 16px, 16px | ui/chat/thread_banner.rs | ✅ |
 | text | chatHeaderBarText_ + body-sm/normal | flex 1, text-default | V/JF2N (locked) / rEeodK (archived + locked) | thread_banner.rs | ✅ |
 | composer | client canSendMessage | locked thread without MANAGE_THREADS | no-permission text area | discord_backend/nav.rs `send_blocked` | ✅ |
-| Open / Unlock buttons | 0dvvEi / zA9d1J | MANAGE_THREADS only | write actions, not shown | — | ❌ |
+| Open / Unlock buttons | 0dvvEi / zA9d1J | MANAGE_THREADS only | `ChannelExtra.can_manage_threads` + `thread_banner.rs` secondary sm button (read-only stub on click to avoid writes outside sandbox) | ✅ |
 
 # Blocked / ignored users
 
@@ -37,4 +37,4 @@ Source: current-client/css (`base_U9Tvvz`, `inTextChannel_U9Tvvz`, `dot_U9Tvvz`,
 | typing | TypingUsers rejects isBlockedOrIgnored | app.rs `typing_name` | ✅ |
 | mentions / notifications | blocked authors don't ping | app.rs append_message, notifications.rs | ✅ |
 | blocked DM | composer notice + Unblock (existing) | composer.rs blocked_dm_notice | ✅ |
-| ignored with relationship type 0/5 | not kept by rel_kind | — | ❌ |
+| ignored with relationship type 0/5 | kept as `RelationshipKind::None` when `user_ignored` is true | `discord_backend/nav.rs` `relationship()`, `ui/home/data.rs` `RelationshipKind::None` | ✅ |
