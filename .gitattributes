@@ -1,0 +1,2 @@
+# Every branch appends translation keys at the end of these files; union merges keep both sides.
+crates/phoenix-app/locales/*.yml merge=union
