@@ -48,7 +48,7 @@ Sources (Nov 24 2026 client, French, page zoom 125 %, CDP on 127.0.0.1:9222):
 | submit legal text | `te` (`Q0tSKT`) | body-sm 14/18 `--text-default`, link `--text-link` → discord.com/guidelines | `legal()` | ✅ |
 | content | `content__KoJTP contentScrollbarGutter__KoJTP` | padding 24 / 24 inline (16 + 8 gutter), gap 16, no bottom padding with a footer | | ✅ |
 | "Message sélectionné" | `header_QOd4rY` | heading-xs/medium 14/18 `--text-default`, mb 8 | `section_title` | ✅ |
-| message preview box | `messagePreviewContainer_QOd4rY` | 1px `--border-subtle`, radius 8, padding 16 16 16 0, max-height 100 | `message_preview` | ✅ |
+| message preview box | `messagePreviewContainer_QOd4rY` | 1px `--border-subtle`, radius 8, padding 16 16 16 0, max-height 100; server avatar, role gradient name, server tag, time | `message_preview` (`member_user`, `role_gradient::for_author`) | ✅ (compared on Clem's message, real account) |
 | reason rows | `listElement_5tvYxx`, `childButton_anhLH-` | `--background-mod-subtle`, hover `--background-mod-normal`, active `--background-mod-strong`, 1px `--border-muted` between rows, radius 12 on the first/last, text margin 8 16 + padding 12 (60.8 for one line), body-md 16/20 `--text-default`, wraps | `list_row` | ✅ (was: "›" glyph, no wrap) |
 | row chevron | `childIcon_anhLH-` | ChevronSmallRightIcon 24, margin 0 16 0 8, `--interactive-text-default` | `chevron-right` | ✅ |
 | external link row | `linkButton_nlOah7` | min-height 64, LinkExternalSmallIcon 18 in a 24 box | `link-external` (new icon mapping) | ✅ |
@@ -64,4 +64,6 @@ Sources (Nov 24 2026 client, French, page zoom 125 %, CDP on 127.0.0.1:9222):
 | element | why | status |
 |---|---|---|
 | success illustration and "Davantage de choses que tu peux faire" (ignore / block / mute / delete cards) | only visible after a real submit or an auto-submit node; never opened in the client to avoid sending a report | ❌ (header, subheader and Done shown) |
-| message preview server tag / role icon pixel match | preview reuses the chat name renderer, not compared at pixel level | ❌ |
+| content scrollbar | the client shows its thin modal scrollbar in the 8px gutter; Phoenix scrolls without a visible bar | ❌ |
+
+Comparison (private, real account): `/mnt/windata/project-phoenix/compare/report/compare-wide.png`, `compare-narrow.png`, `icons-zoom.png`; renders with `PHX_OPEN=report:<message id>` and `PHX_REPORT_PATH="label|+checkbox key|>|<"` in `real_shots` (steps into auto-submit nodes are refused there and the submit action stays denied).
