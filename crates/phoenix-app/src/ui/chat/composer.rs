@@ -362,6 +362,10 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                     .border_color(super::tk(idx::BORDER_MUTED))
                     .bg(super::tk(idx::CHAT_BACKGROUND_DEFAULT))
                     .relative() // autocompleteAttached_ is positioned against channelTextArea_
+                    // Tab into the text field: the client rings the whole channelTextArea_ box (radius 8).
+                    .when(crate::ui::focus_ring::tab_focused(&gpui::Focusable::focus_handle(app.composer.read(cx), cx), window), |d| {
+                        d.child(crate::ui::focus_ring::ring_box(8., 0., 0.))
+                    })
                     .child(super::width_probe(&TEXT_AREA_W))
                     .children(crate::ui::autocomplete::render(app, cx))
                     .children(reply)

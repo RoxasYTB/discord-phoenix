@@ -7,8 +7,8 @@
 //! `--focus-primary` (unset in the 2026 themes, so the `#00b0f4` fallback,
 //! rgb(0,176,244)), with the element's own border radius. Most controls put the
 //! ring on their own bounds; list rows (member rows) inset it by 4px so it
-//! stays inside the scroller. It only shows after keyboard input (focus-visible),
-//! never on mouse clicks. Enter / Space on a focused control clicks it.
+//! stays inside the scroller. It only shows when Tab moved the focus there
+//! (focus-visible), never after a click. Enter / Space on a focused control clicks it.
 //!
 //! The helpers here are called from render code that has no `Window` / `App`,
 //! so focus handles live in a thread-local registry: a control asks for its
@@ -31,6 +31,9 @@ thread_local! {
     static HANDLES: RefCell<HashMap<u64, FocusHandle>> = Default::default();
     static WANTED: RefCell<Vec<u64>> = Default::default();
     static VISIBLE: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Where the last Tab / Shift+Tab put the focus (focus-visible is decided when
+    /// the focus moves, so typing into a field that was clicked never shows a ring).
+    static TABBED: RefCell<Option<FocusHandle>> = const { RefCell::new(None) };
 }
 
 /// Creates the handles asked for during the previous frame and records the
@@ -44,10 +47,17 @@ pub fn sync(window: &Window, cx: &mut App) -> bool {
         for k in wanted {
             h.entry(k).or_insert_with(|| cx.focus_handle().tab_stop(true));
         }
-        let focused = if window.last_input_was_keyboard() { h.iter().find(|(_, f)| f.is_focused(window)).map(|(k, _)| *k) } else { None };
+        let tabbed = TABBED.with(|t| t.borrow().clone()).filter(|t| t.is_focused(window));
+        let focused = tabbed.and_then(|t| h.iter().find(|(_, f)| *f == &t).map(|(k, _)| *k));
         VISIBLE.with(|v| v.set(focused));
     });
     created
+}
+
+/// True when `handle` holds the focus and got it from Tab (for fields that
+/// draw their own ring, like the composer).
+pub fn tab_focused(handle: &FocusHandle, window: &Window) -> bool {
+    handle.is_focused(window) && TABBED.with(|t| t.borrow().as_ref() == Some(handle))
 }
 
 /// True when the window focus is on one of the ring controls (the app treats
@@ -76,19 +86,21 @@ pub fn ring(el: Stateful<Div>, key: u64, radius: f32) -> Stateful<Div> {
 pub fn ring_inset(el: Stateful<Div>, key: u64, radius: f32, dx: f32, dy: f32) -> Stateful<Div> {
     let Some(h) = handle(key) else { return el };
     let shown = VISIBLE.with(|v| v.get()) == Some(key);
-    el.track_focus(&h).when(shown, |el| {
-        el.child(
-            div()
-                .absolute()
-                .left(z(dx - WIDTH))
-                .right(z(dx - WIDTH))
-                .top(z(dy - WIDTH))
-                .bottom(z(dy - WIDTH))
-                .border(z(WIDTH))
-                .border_color(rgb(RING))
-                .rounded(z(radius + WIDTH)),
-        )
-    })
+    el.track_focus(&h).when(shown, |el| el.child(ring_box(radius, dx, dy)))
+}
+
+/// The ring itself, for a `relative()` parent: 4px around the parent's box
+/// inset by `dx` / `dy`, with `radius` the radius of that box.
+pub fn ring_box(radius: f32, dx: f32, dy: f32) -> Div {
+    div()
+        .absolute()
+        .left(z(dx - WIDTH))
+        .right(z(dx - WIDTH))
+        .top(z(dy - WIDTH))
+        .bottom(z(dy - WIDTH))
+        .border(z(WIDTH))
+        .border_color(rgb(RING))
+        .rounded(z(radius + WIDTH))
 }
 
 /// Root key handler: plain Tab / Shift+Tab move focus when nothing below
@@ -103,5 +115,7 @@ pub fn on_key_down(ev: &KeyDownEvent, window: &mut Window, cx: &mut App) -> bool
     } else {
         window.focus_next(cx);
     }
+    let now = window.focused(cx);
+    TABBED.with(|t| *t.borrow_mut() = now);
     true
 }
