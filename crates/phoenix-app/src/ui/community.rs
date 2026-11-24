@@ -206,7 +206,9 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
             gpui::svg().path(crate::icons::path("search")).size(z(20.)).flex_none().text_color(t(idx::TEXT_DEFAULT)),
         ))
         .child(div().text_size(z(16.)).line_height(z(20.)).text_color(t(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT)).child(crate::t!("community.search_channels")));
-    let mut list = div().pl(z(8.)).pr(z(8.)).pb(z(4.)).flex().flex_col();
+    // browser_fTKmdS starts 8px in, its content_ adds 8 each side, then a 16px scrollbar gutter:
+    // rows span page-left + 16 to page-right - 32 like the search field.
+    let mut list = div().pl(z(16.)).pr(z(8.)).pb(z(4.)).flex().flex_col();
     if !page.intro_closed {
         // container_oQmK1h: padding 16, margin-bottom 24, radius 8, heading-lg/semibold
         // title (mb 8), body-md text, tip with a semibold lead (mt 4), 24px close icon.
@@ -344,7 +346,7 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
         .flex()
         .flex_col()
         .child(search)
-        .child(div().id("community-browse-scroll").flex_1().min_h_0().overflow_y_scroll().pr(z(16.)).child(list))
+        .child(div().id("community-browse-scroll").flex_1().min_h_0().overflow_y_scroll().pr(z(24.)).child(list))
         .into_any_element()
 }
 
