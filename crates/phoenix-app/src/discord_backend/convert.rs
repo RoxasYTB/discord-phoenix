@@ -334,6 +334,10 @@ pub fn message(m: &api::Message) -> model::Message {
         }),
         send_state: model::SendState::Sent,
         flags: m.flags,
+        type_id: m.kind.value(),
+        webhook_name: m.webhook_id.map(|_| m.author.username.clone().into()),
+        application_id: m.application_id.map(id),
+        has_mentions: !m.mentions.is_empty() || !m.mention_roles.is_empty() || m.mention_everyone,
     }
 }
 
@@ -1473,6 +1477,7 @@ fn voice_flags(v: &phoenix_api::models::VoiceState) -> crate::model::VoiceFlags 
         stream: v.self_stream.unwrap_or(false),
         video: v.self_video,
         suppress: v.suppress,
+        undiscoverable: v.discoverable == Some(false),
     }
 }
 

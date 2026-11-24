@@ -38,6 +38,8 @@ pub struct Activity {
     pub image: Option<SharedString>,
     /// Unix milliseconds the activity started.
     pub start: Option<i64>,
+    /// `application_id`: the member list counts two activities of one application once.
+    pub application_id: Option<SharedString>,
 }
 
 impl Activity {
@@ -120,6 +122,7 @@ pub fn parse_activity(a: &Value) -> Option<Activity> {
         display_type: a.get("status_display_type").and_then(Value::as_u64).map(|n| n as u8),
         image: asset_url(a),
         start: a.get("timestamps").and_then(|t| t.get("start")).and_then(Value::as_i64),
+        application_id: a.get("application_id").and_then(|v| v.as_str().map(str::to_owned).or_else(|| v.as_u64().map(|n| n.to_string()))).map(Into::into),
     };
     let empty = match kind {
         ActivityKind::Custom => act.state.is_none() && act.emoji.is_none(),

@@ -649,6 +649,7 @@ impl Backend for MockBackend {
                         display_type: None,
                         image: None,
                         start: Some((now() - 86_400 * (2 - k as i64).max(1)) * 1000),
+                        application_id: None,
                     }];
                     self.emit_later(Duration::from_millis(80), move || AppEvent::Activities { user, activities });
                 }

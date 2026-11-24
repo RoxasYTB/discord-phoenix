@@ -684,7 +684,10 @@ pub fn member_row_in(
             .get(&g)
             .is_some_and(|ids| ids.iter().filter_map(|i| app.channels.get(i)).any(|ch| ch.voice_users.contains(&uid))),
         None => app.channels.values().any(|ch| ch.guild.is_some() && ch.voice_users.contains(&uid)),
-    };
+    } && !crate::ui::voice_panel::flags(uid).undiscoverable;
+    // ^ the client's `voiceStatusChannel` (module 714114): a *discoverable* voice state in a
+    // channel we can VIEW (`guild_channels` only lists those), so a hidden voice activity
+    // adds neither the voice line nor the "+1".
     // Second line only when the client's activity status renders something; the
     // list item's fallback text is used only before the activities arrive.
     let two_lines = !offline && (in_voice || sub.is_some() || (acts.is_empty() && mem.activity.is_some()));
@@ -1000,14 +1003,20 @@ impl SubText {
             .find(|a| a.kind == K::Custom)
             .map(|a| (a.emoji.clone(), a.state.as_ref().map(|t| SharedString::from(t.trim().to_string())).filter(|t| !t.is_empty())))
             .filter(|(e, t)| e.is_some() || t.is_some());
-        let mut names: Vec<&str> = Vec::new();
+        // ActivityStatus (`current-client/js/9fb052bb9a0957b3.js` `V`): activities but the
+        // custom / hang status (hang is dropped at parse time), `uniqWith` same
+        // application_id or same name.
+        let mut seen: Vec<&crate::presence::Activity> = Vec::new();
         for a in acts.iter().filter(|a| a.kind != K::Custom) {
-            if !names.contains(&a.name.as_ref()) {
-                names.push(a.name.as_ref());
+            let same = |b: &&crate::presence::Activity| {
+                a.application_id.is_some() && a.application_id == b.application_id || a.name == b.name
+            };
+            if !seen.iter().any(same) {
+                seen.push(a);
             }
         }
         let main = acts.iter().find(|a| a.kind != K::Custom).map(|a| (activity_text(a).unwrap_or_default(), activity_icon(a)));
-        let count = names.len();
+        let count = seen.len();
         (custom.is_some() || main.is_some()).then_some(Self { custom, main, count })
     }
 }

@@ -248,6 +248,26 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
     blocks
 }
 
+mod link;
+
+thread_local! {
+    /// `allowEmojiLinks`: emoji allowed in masked link labels (rich embeds, webhook messages).
+    static EMOJI_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn emoji_links() -> bool {
+    EMOJI_LINKS.with(std::cell::Cell::get)
+}
+
+/// [`parse`] with emoji allowed in masked link labels, as the client parses rich embed
+/// text (`parseRichEmbedText` … `allowEmojiLinks: true`) and webhook messages.
+pub fn parse_emoji_links(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
+    let prev = EMOJI_LINKS.with(|e| e.replace(true));
+    let out = parse(src, r);
+    EMOJI_LINKS.with(|e| e.set(prev));
+    out
+}
+
 /// Parse inline markdown into flattened spans.
 pub fn parse_inline(src: &str, r: &dyn MentionResolver, spoiler_counter: &mut usize) -> Inline {
     let mut out = Inline::default();
@@ -430,27 +450,28 @@ impl Ctx<'_> {
                 }
             }
 
-            // Masked link [text](https://...)
+            // Masked link `[label](url)`: the client's link rule (see `link`). A match that
+            // fails validation is kept as literal text, unformatted.
             if c == b'['
-                && let Some(close) = rest.find("](")
-                && let Some(paren) = rest[close + 2..].find(')')
+                && let Some(m) = link::match_at(rest)
             {
-                let raw = &rest[close + 2..close + 2 + paren];
-                let url = raw.strip_prefix('<').and_then(|u| u.strip_suffix('>')).unwrap_or(raw);
-                if !rest[1..close].contains('\n') && url.starts_with("http://") || url.starts_with("https://") {
+                let label = &rest[m.label.clone()];
+                let target = link::validate_url(&rest[m.url.clone()]).filter(|_| link::label_ok(label, emoji_links()));
+                if let Some(url) = target {
                     self.push(&src[plain_start..i], style, spoiler);
                     // The label keeps its own inline markdown (`[**Title** by **Artist**](url)`
                     // in music bot embeds showed the asterisks).
-                    let label = &rest[1..close];
                     let first = self.out.spans.len();
                     self.run(label, style | Style::LINK, spoiler);
                     for s in &mut self.out.spans[first..] {
-                        s.link = Some(url.to_string());
+                        s.link = Some(url.clone());
                     }
-                    i += close + 3 + paren;
+                    i += m.len;
                     plain_start = i;
-                    continue;
+                } else {
+                    i += m.len;
                 }
+                continue;
             }
 
             // Bare links.
@@ -763,5 +784,50 @@ mod tests {
         assert!(i.spans.iter().any(|s| s.link.as_deref() == Some("https://a.b")));
         assert_eq!(relative(-120), "2 minutes ago");
         assert_eq!(relative(3600), "in an hour");
+    }
+
+    /// yohan's 16:40 message in #phoenix (24/11), the channel mention swapped for the test
+    /// resolver's: the client links only `[phxsurligne](…)`; the leading `[Test Phoenix]`
+    /// stays literal (its `]` is followed by a `[` before any other `]`).
+    #[test]
+    fn masked_link_takes_the_nearest_bracket() {
+        let src = "[Test Phoenix] envoyé depuis le client officiel — surlignage de recherche : phxsurligne **phxsurligne** *phxsurligne* __phxsurligne__ ~~phxsurligne~~ [phxsurligne](https://example.com/a) `phxsurligne` ||phxsurligne|| <#7> fire 🔥 https://example.com/phxsurligne";
+        let i = inline(src);
+        assert!(i.text.starts_with("[Test Phoenix] envoyé"), "{}", i.text);
+        assert_eq!(
+            i.text,
+            "[Test Phoenix] envoyé depuis le client officiel — surlignage de recherche : phxsurligne phxsurligne phxsurligne phxsurligne phxsurligne phxsurligne phxsurligne phxsurligne #general fire 🔥 https://example.com/phxsurligne"
+        );
+        let first = &i.spans[0];
+        assert!(first.link.is_none() && !first.style.has(Style::LINK));
+        let links: Vec<_> = i.spans.iter().filter_map(|s| s.link.as_deref().map(|l| (&i.text[s.range.clone()], l))).collect();
+        assert_eq!(links, vec![("phxsurligne", "https://example.com/a"), ("https://example.com/phxsurligne", "https://example.com/phxsurligne")]);
+        let code: Vec<_> = styled(&i).into_iter().filter(|(_, st)| st.has(Style::CODE)).map(|(t, _)| t).collect();
+        assert_eq!(code, vec!["phxsurligne"]);
+        // The code span right after the link is not swallowed into it.
+        let at = i.text.find("phxsurligne phxsurligne phxsurligne #").unwrap();
+        assert!(i.spans.iter().any(|s| s.range.start == at && s.link.is_some()));
+    }
+
+    #[test]
+    fn rejected_masked_links_stay_literal() {
+        // Mentions, URLs and (outside embeds) emoji are not allowed in the label; a bad
+        // protocol is refused: the whole match is shown as typed, unformatted.
+        for src in ["[a <@42>](https://x.y)", "[www.evil.com](https://x.y)", "[go **now**](javascript:alert(1))", "[🔥](https://x.y)", "[ ](https://x.y)"] {
+            let i = inline(src);
+            assert_eq!(i.text, src);
+            assert_eq!(styled(&i), vec![(src, Style::PLAIN)], "{src}");
+        }
+        // Emoji labels are fine in rich embeds.
+        let b = parse_emoji_links("[🔥 hot](https://x.y)", &R);
+        let i = b[0].inline().unwrap();
+        assert!(i.spans.iter().all(|s| s.link.as_deref() == Some("https://x.y")));
+        // Nested brackets and a paren group in the URL.
+        let i = inline("[a [b] c](https://x.y/w_(b)) d");
+        assert_eq!(i.text, "a [b] c d");
+        assert_eq!(i.spans[0].link.as_deref(), Some("https://x.y/w_(b)"));
+        // A label over two lines is still a link.
+        let i = inline("[a\nb](https://x.y)");
+        assert!(i.spans.iter().all(|s| s.link.is_some()));
     }
 }

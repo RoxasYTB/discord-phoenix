@@ -1637,7 +1637,9 @@ fn with_edited(t: &RichText) -> (SharedString, Vec<gpui::TextRun>) {
 }
 
 fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: bool) -> AnyElement {
-    if !t.emoji.is_empty() {
+    // Inline code needs its own bordered box (`code.inline`), which a text run can't draw:
+    // such text takes the segmented layout too.
+    if !t.emoji.is_empty() || !message_ext::code_ranges(t).is_empty() {
         let el = message_ext::rich_with_emoji(entity, msg, bi, t);
         if edited {
             // max-width 100%: as a bare flex item the text row took its unwrapped width and
@@ -2003,7 +2005,7 @@ fn embed_blocks(app: &PhoenixApp, src: &str) -> std::rc::Rc<[RBlock]> {
         }
         // Channel / role / user mentions resolved like message text (bots' embeds showed
         // "#unknown" and "@unknown-role" for channels and roles of the server).
-        let parsed = crate::markdown::parse(src, &app.resolver());
+        let parsed = crate::markdown::parse_emoji_links(src, &app.resolver());
         let blocks: Rc<[RBlock]> = crate::richtext::render_blocks(&parsed, &|_| true, c(Palette::TEXT_NORMAL)).into();
         map.insert(SharedString::from(src.to_owned()), blocks.clone());
         blocks

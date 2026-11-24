@@ -105,6 +105,7 @@ fn main() -> anyhow::Result<()> {
                     display_type: None,
                     image: None,
                     start: Some(now_ms - 463_000),
+                    application_id: None,
                 }],
             );
             if let Some(u) = app.users.get_mut(&Id(5)) {

@@ -291,6 +291,14 @@ pub struct Message {
     pub send_state: SendState,
     /// Message flags (`1 << 6` = ephemeral: "Only you can see this").
     pub flags: u64,
+    /// Raw `message.type`, for the client's grouping rules (`USER_MESSAGE`, command types).
+    /// 0 for local / mock messages, whose `kind` then decides.
+    pub type_id: u8,
+    /// `webhook_id` is set: the author name the webhook posted with.
+    pub webhook_name: Option<SharedString>,
+    pub application_id: Option<Id>,
+    /// `mentions`, `mention_roles` or `mention_everyone` non-empty.
+    pub has_mentions: bool,
 }
 
 /// Send lifecycle of a message we typed (the client's `SENDING` / `SEND_FAILED` states).
@@ -416,4 +424,6 @@ pub struct VoiceFlags {
     pub video: bool,
     /// Stage audience (VOICE_STATE `suppress`): listed in the audience row, not as a speaker.
     pub suppress: bool,
+    /// VOICE_STATE `discoverable: false`: not shown as "in a voice channel" in the member list.
+    pub undiscoverable: bool,
 }

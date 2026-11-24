@@ -513,6 +513,71 @@ pub(crate) fn words(text: &str, range: std::ops::Range<usize>) -> Vec<std::ops::
     out
 }
 
+/// Byte ranges of the inline code spans of `t` (the only monospace runs of message text),
+/// except inside a hidden spoiler (text drawn in its background colour).
+pub(crate) fn code_ranges(t: &crate::richtext::RichText) -> Vec<std::ops::Range<usize>> {
+    let mono = gpui::font(crate::theme::FONT_MONO()).family;
+    let mut out: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut pos = 0;
+    for r in &t.runs {
+        let (s, e) = (pos, pos + r.len);
+        pos = e;
+        if r.font.family != mono || r.background_color == Some(r.color) {
+            continue;
+        }
+        match out.last_mut() {
+            Some(last) if last.end == s => last.end = e,
+            _ => out.push(s..e),
+        }
+    }
+    out
+}
+
+/// `range` cut at the boundaries of the `code` spans: (piece, is code).
+pub(crate) fn split_code(code: &[std::ops::Range<usize>], range: std::ops::Range<usize>) -> Vec<(std::ops::Range<usize>, bool)> {
+    let mut out = Vec::new();
+    let mut at = range.start;
+    for c in code {
+        let (a, b) = (c.start.max(range.start), c.end.min(range.end));
+        if a >= b {
+            continue;
+        }
+        if at < a {
+            out.push((at..a, false));
+        }
+        out.push((a..b, true));
+        at = b;
+    }
+    if at < range.end {
+        out.push((at..range.end, false));
+    }
+    out
+}
+
+/// One word of an inline code span. `.markup_ code.inline` (2026 CSS): font --font-code 85%,
+/// padding 0 .2em, margin -.2em 0 (no effect on the 22px line), radius 4px, `.markup_ code`
+/// --background-code + 1px solid --border-normal, `box-decoration-break: slice` (computed):
+/// a span cut over several flex items keeps its start edge on the first one and its end edge
+/// on the last one. Live dump (#phoenix, 24/11): 13.6px text in a 19.2px box.
+fn code_box(open: bool, close: bool, k: f32, child: AnyElement) -> Div {
+    let fs = 16. * 0.85 * k;
+    let pad = 0.2 * fs;
+    let b = div()
+        .h(z(19.2 * k))
+        .flex()
+        .items_center()
+        .text_size(z(fs))
+        .line_height(z(17.6 * k))
+        .bg(tk(idx::BACKGROUND_CODE))
+        .border_color(tk(idx::BORDER_NORMAL))
+        .border_t(z(1.))
+        .border_b(z(1.))
+        .when(open, |d| d.border_l(z(1.)).rounded_l(z(4.)).pl(z(pad)))
+        .when(close, |d| d.border_r(z(1.)).rounded_r(z(4.)).pr(z(pad)))
+        .child(child);
+    div().flex_none().max_w_full().h(z(22. * k)).flex().items_center().child(b)
+}
+
 /// Text runs covering `range` of a run list that covers the whole text.
 pub(crate) fn slice_runs(runs: &[gpui::TextRun], range: std::ops::Range<usize>) -> Vec<gpui::TextRun> {
     let mut out = Vec::new();
@@ -558,12 +623,21 @@ pub fn rich_with_emoji_scaled(
     let mut row = div().flex().flex_wrap().items_center().text_size(z(16. * k)).line_height(z(22. * k));
     let mut last = 0;
     let mut seg = 0usize;
-    let push_text = |row: Div, range: std::ops::Range<usize>, seg: &mut usize| -> Div {
+    let code = code_ranges(t);
+    // `code`: this word is (part of) an inline code span; (opens it, closes it).
+    let push_text = |row: Div, range: std::ops::Range<usize>, seg: &mut usize, code: Option<(bool, bool)>| -> Div {
         if range.is_empty() {
             return row;
         }
         let text: SharedString = t.text[range.clone()].to_owned().into();
-        let seg_runs = slice_runs(&t.runs, range.clone());
+        let mut seg_runs = slice_runs(&t.runs, range.clone());
+        if code.is_some() {
+            // The box below draws --background-code (a search highlight stays on the text).
+            let bg = Some(c(crate::theme::tok(idx::BACKGROUND_CODE)));
+            for r in seg_runs.iter_mut().filter(|r| r.background_color == bg) {
+                r.background_color = None;
+            }
+        }
         // Click ranges fully inside this segment, shifted.
         let mut ranges = Vec::new();
         let mut targets = Vec::new();
@@ -581,16 +655,19 @@ pub fn rich_with_emoji_scaled(
         // wrap of its wider intrinsic measure and spills past the message column (real
         // announcements with a #channel mention). Never shrink: a segment that doesn't fit
         // wraps to the next flex line, at most the full column wide.
-        let cell = || div().flex_none().max_w_full();
+        let cell = |child: AnyElement| match code {
+            None => div().flex_none().max_w_full().child(child),
+            Some((open, close)) => code_box(open, close, k, child),
+        };
         if ranges.is_empty() {
-            return row.child(cell().child(gpui::StyledText::new(text).with_runs(seg_runs)));
+            return row.child(cell(gpui::StyledText::new(text).with_runs(seg_runs).into_any_element()));
         }
         let sd = *seg as u64;
         let seg_runs = super::mention::hovered_runs(msg, bi, sd, &ranges, &targets, &seg_runs).unwrap_or(seg_runs);
         let styled = gpui::StyledText::new(text).with_runs(seg_runs);
         let e = entity.clone();
         let (hr, ht) = (ranges.clone(), targets.clone());
-        row.child(cell().child(
+        row.child(cell(
             gpui::InteractiveText::new(("rte", msg.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | *seg as u64)), styled)
                 .on_hover(move |ix, _ev, w, _cx| super::mention::on_hover(msg, bi, sd, &hr, &ht, ix, w))
                 .on_click(
@@ -603,7 +680,8 @@ pub fn rich_with_emoji_scaled(
                     }
                     crate::richtext::ClickTarget::Mention(m) => super::mention::click(&e, m, w, cx),
                 },
-            ),
+            )
+            .into_any_element(),
         ))
     };
     // A segment holding a newline would be one tall flex item: the next emoji/icon then sits
@@ -623,9 +701,20 @@ pub fn rich_with_emoji_scaled(
                 row = row.child(div().w_full().h(z(22. * k)));
             }
             // One flex item per word, so text after an emoji keeps flowing on the same line
-            // like Chromium's inline layout instead of starting a new one.
-            for w in words(&t.text, r.clone()) {
-                row = push_text(row, w, seg);
+            // like Chromium's inline layout instead of starting a new one. Inline code spans
+            // are cut out first: each of their words is drawn in a slice of the code box.
+            for (piece, in_code) in split_code(&code, r.clone()) {
+                let ws = words(&t.text, piece.clone());
+                let n = ws.len();
+                for (wi, w) in ws.into_iter().enumerate() {
+                    let edge = in_code.then(|| {
+                        let span = code.iter().find(|c| c.start <= piece.start && piece.end <= c.end);
+                        let open = wi == 0 && span.is_some_and(|c| c.start == piece.start);
+                        let close = wi + 1 == n && span.is_some_and(|c| c.end == piece.end);
+                        (open, close)
+                    });
+                    row = push_text(row, w, seg, edge);
+                }
             }
             start = r.end + 1;
         }
@@ -653,7 +742,7 @@ pub fn rich_with_emoji_scaled(
                     .bg(crate::theme::ca(crate::theme::Palette::MENTION_BG))
                     .child(crate::ui::icon(crate::assets::Icon::Hash, 16., crate::theme::c(crate::theme::Palette::MENTION_FG))),
             );
-            row = row.child(push_text(pill, r.end..end, &mut seg));
+            row = row.child(push_text(pill, r.end..end, &mut seg, None));
             last = end;
             continue;
         }
