@@ -89,7 +89,8 @@ pub fn presence(status: &str) -> model::Presence {
 /// Short activity line for the member list: custom status text, else
 /// "Playing X" style for the first activity.
 pub fn activity(activities: &[Value]) -> Option<SharedString> {
-    let a = activities.first()?;
+    // HANG_STATUS (6) never shows as an activity line.
+    let a = activities.iter().find(|a| a.get("type").and_then(Value::as_u64) != Some(6))?;
     let kind = a.get("type").and_then(Value::as_u64).unwrap_or(0);
     let name = a.get("name").and_then(Value::as_str).unwrap_or_default();
     let text = match kind {

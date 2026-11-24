@@ -89,6 +89,10 @@ fn asset_url(a: &Value) -> Option<SharedString> {
 }
 
 pub fn parse_activity(a: &Value) -> Option<Activity> {
+    // HANG_STATUS (6) is never an activity line in the client (filtered with CUSTOM_STATUS).
+    if a.get("type").and_then(Value::as_u64) == Some(6) {
+        return None;
+    }
     let kind = match a.get("type").and_then(Value::as_u64).unwrap_or(0) {
         1 => ActivityKind::Streaming,
         2 => ActivityKind::Listening,

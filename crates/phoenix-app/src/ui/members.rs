@@ -678,7 +678,9 @@ pub fn member_row_in(
             .is_some_and(|ids| ids.iter().filter_map(|i| app.channels.get(i)).any(|ch| ch.voice_users.contains(&uid))),
         None => app.channels.values().any(|ch| ch.guild.is_some() && ch.voice_users.contains(&uid)),
     };
-    let two_lines = !offline && (in_voice || mem.activity.is_some() || sub.is_some());
+    // Second line only when the client's activity status renders something; the
+    // list item's fallback text is used only before the activities arrive.
+    let two_lines = !offline && (in_voice || sub.is_some() || (acts.is_empty() && mem.activity.is_some()));
     // Dump `-channels-N-N+` node 1643: member_Iy0c7A margin-left 8px,
     // padding 1px 0, radius 8 (44px); childContainer_J1Adu_ padding 0 8px 0 10px;
     // memberInner_Iy0c7A padding 4px 0 (42px); avatar 32 + margin-right 12.
@@ -821,7 +823,7 @@ pub fn member_row_in(
                             )
                         }),
                 )
-                .when(two_lines, |d| d.child(sub_text(in_voice, user.is_some_and(|u| u.bot), sub, mem.activity.clone()))),
+                .when(two_lines, |d| d.child(sub_text(in_voice, user.is_some_and(|u| u.bot), sub, mem.activity.clone().filter(|_| acts.is_empty())))),
         ))
         .into_any_element()
 }
