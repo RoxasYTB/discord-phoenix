@@ -464,6 +464,10 @@ pub trait Backend: Send + Sync + 'static {
     fn channel_user_limit(&self, _channel: Id) -> Option<u32> {
         None
     }
+    /// Whether the current user has joined (follows) the given thread / forum post.
+    fn is_thread_joined(&self, _channel: Id) -> bool {
+        false
+    }
     /// Open (or create) the DM with `user`; emits `DmUpsert` first.
     fn open_dm(&self, _user: Id) -> BoxFuture<Id> {
         Box::pin(async { Err(BackendError(crate::t!("backend.dm_unavailable").to_string())) })

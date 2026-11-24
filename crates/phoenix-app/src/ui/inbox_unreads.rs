@@ -44,6 +44,8 @@ pub enum Kind {
     Messages,
     /// Forum / media channel: new posts instead of messages.
     Forum,
+    /// Guild scheduled events read state (`guild-events`, sortOrder 5).
+    GuildEvents,
 }
 
 /// One channel as the backend sees it (read state, settings, permissions).
@@ -91,6 +93,9 @@ pub fn snowflake_from_ms(ms: u64) -> u64 {
 }
 
 fn sort_order(c: &Candidate, last: u64, now_ms: u64) -> u8 {
+    if c.kind == Kind::GuildEvents {
+        return 5;
+    }
     if c.favorite {
         return 0;
     }

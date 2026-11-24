@@ -247,6 +247,9 @@ impl Backend for ReadOnly {
     fn channel_opted_in(&self, c: Id) -> Option<bool> {
         self.0.channel_opted_in(c)
     }
+    fn is_thread_joined(&self, c: Id) -> bool {
+        self.0.is_thread_joined(c)
+    }
     fn channel_last_message(&self, c: Id) -> Option<Id> {
         self.0.channel_last_message(c)
     }

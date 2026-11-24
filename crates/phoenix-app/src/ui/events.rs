@@ -75,19 +75,24 @@ fn when_label(e: &GuildEvent) -> String {
     format!("{} {}", crate::i18n::long_date(local.date_naive()), local.format("%H:%M"))
 }
 
-/// One event card (not measured on the live client yet: tokens only).
-fn card(app: &PhoenixApp, e: &GuildEvent) -> gpui::Div {
+/// One event card: optional 160px cover image (`guild-events/{id}/{hash}.png`),
+/// date/live header + interested count, title, description, and footer with
+/// location, "Interested" button, and copy-link button.
+fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
     let live = e.status == 2;
+    let ch_kind = e.channel.and_then(|ch| app.channels.get(&ch)).map(|ch| ch.kind);
+    let loc_icon = match ch_kind {
+        Some(crate::model::ChannelKind::Voice) => "voice",
+        Some(crate::model::ChannelKind::Stage) => "stage",
+        _ => "calendar",
+    };
     let place = e
         .location
         .clone()
         .or_else(|| e.channel.and_then(|ch| app.channels.get(&ch)).map(|ch| ch.name.to_string()))
         .unwrap_or_default();
-    div()
-        .rounded(z(8.))
-        .border_1()
-        .border_color(t(idx::BORDER_SUBTLE))
-        .bg(t(idx::BACKGROUND_BASE_LOW))
+    let link = format!("https://discord.com/events/{}/{}", guild.0, e.id.0);
+    let body = div()
         .p(z(16.))
         .flex()
         .flex_col()
@@ -132,9 +137,90 @@ fn card(app: &PhoenixApp, e: &GuildEvent) -> gpui::Div {
         .when(!e.description.is_empty(), |d| {
             d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(e.description.clone()))
         })
-        .when(!place.is_empty(), |d| {
-            d.child(div().pt(z(8.)).border_t_1().border_color(t(idx::BORDER_SUBTLE)).text_size(z(14.)).text_color(t(idx::TEXT_MUTED)).child(place))
+        .child(
+            div()
+                .mt(z(4.))
+                .pt(z(12.))
+                .border_t_1()
+                .border_color(t(idx::BORDER_SUBTLE))
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(z(8.))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap(z(6.))
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .text_color(t(idx::TEXT_MUTED))
+                        .when(!place.is_empty(), |d| {
+                            d.child(gpui::svg().path(crate::icons::path(loc_icon)).size(z(16.)).flex_none().text_color(t(idx::ICON_MUTED)))
+                                .child(div().min_w_0().text_ellipsis().child(place))
+                        }),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap(z(8.))
+                        .child(
+                            div()
+                                .id(("event-interested", e.id.0))
+                                .h(z(32.))
+                                .px(z(12.))
+                                .rounded(z(8.))
+                                .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                                .border_1()
+                                .border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
+                                .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
+                                .cursor_pointer()
+                                .flex()
+                                .items_center()
+                                .gap(z(6.))
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))
+                                .child(gpui::svg().path(crate::icons::path("bell")).size(z(16.)).flex_none().text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
+                                .child(crate::t!("events.interested")),
+                        )
+                        .child(
+                            div()
+                                .id(("event-link", e.id.0))
+                                .size(z(32.))
+                                .rounded(z(8.))
+                                .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                                .border_1()
+                                .border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
+                                .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
+                                .cursor_pointer()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(link.clone()));
+                                })
+                                .child(gpui::svg().path(crate::icons::path("chat/link")).size(z(16.)).flex_none().text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))),
+                        ),
+                ),
+        );
+    div()
+        .rounded(z(12.))
+        .border_1()
+        .border_color(t(idx::BORDER_SUBTLE))
+        .bg(t(idx::BACKGROUND_BASE_LOW))
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .when_some(e.image.as_ref(), |d, hash| {
+            let url: SharedString = format!("https://cdn.discordapp.com/guild-events/{}/{hash}.png?size=600", e.id.0).into();
+            d.child(gpui::img(url).w_full().h(z(160.)).flex_none().object_fit(gpui::ObjectFit::Cover))
         })
+        .child(body)
 }
 
 pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -237,7 +323,7 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         Some(list) => {
             let mut col = div().id("events-list").size_full().overflow_y_scroll().flex().flex_col().gap(z(16.));
             for ev in list {
-                col = col.child(card(app, ev));
+                col = col.child(card(app, guild, ev));
             }
             col.into_any_element()
         }

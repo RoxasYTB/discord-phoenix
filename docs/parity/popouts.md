@@ -316,7 +316,7 @@ such cards. The list is rebuilt from the code instead (`ui/inbox_unreads.rs`, un
 | messages | `fetchMessages({limit: 30, jump: {messageId: ack}})` = `GET …/messages?around=<ack>&limit=30`; kept: ack < id ≤ last message; 25 shown; "View all unreads ›" when the last one shown is older than the last message | `load_next_unread` + `shown_messages` (read-only GET, no ack) | ✅ |
 | loading | one card at a time while the list end is within 2000 px of the bottom; a card renders once loaded | `inbox::prepare` | ✅ |
 | card | guild icon, chevron, name + guild › category, bell (notification menu) and check (ack, a user action); day dividers unless the first message is from today; author groups | `unread_card` | ✅ ⚠ no bell button; no blocked-message collapse; forum cards show the header only (the client lists the new posts) |
-| guild events card | `guild-events` read state (sortOrder 5) | — | ❌ not built |
+| guild events card | `guild-events` read state (sortOrder 5) | `Kind::GuildEvents` (sort 5) + `unread_card` in `ui/inbox.rs` (opens Events modal) | ✅ |
 | Ctrl+Shift+E | marks the top card read | `mark_inbox_read` | ✅ (was: acked every unread channel) |
 | Mark All Read | acks the listed channels | header button | ✅ (was: every unread guild channel) |
 

@@ -302,12 +302,43 @@ fn resource(i: usize, r: &GuideEntry, preview: Option<&Preview>, cx: &Context<Ph
         .into_any_element()
 }
 
+/// How many trait chips fit on one 266px row (`items_rw6y68`, vanilla-server-guide #1097)
+/// before collapsing the rest into `+ N en plus` (`overflowMeasurement_rw6y68`, 85px).
+fn fit_traits(traits: &[crate::commands::guide::GuideTrait], max_w: f32) -> (usize, usize) {
+    if traits.is_empty() {
+        return (0, 0);
+    }
+    const GAP: f32 = 4.;
+    const OVERFLOW_W: f32 = 86.;
+    let chip_w = |tr: &crate::commands::guide::GuideTrait| -> f32 {
+        let emoji = if tr.emoji.token().is_some() { 20. } else { 0. };
+        18. + emoji + (tr.label.chars().count() as f32) * 7.2
+    };
+    let widths: Vec<f32> = traits.iter().map(chip_w).collect();
+    let total: f32 = widths.iter().sum::<f32>() + GAP * (widths.len().saturating_sub(1) as f32);
+    if total <= max_w {
+        return (traits.len(), 0);
+    }
+    let budget = (max_w - OVERFLOW_W - GAP).max(0.);
+    let mut used = 0.;
+    let mut shown = 0;
+    for (i, &w) in widths.iter().enumerate() {
+        let next = if i == 0 { w } else { used + GAP + w };
+        if next <= budget || i == 0 {
+            used = next;
+            shown += 1;
+        } else {
+            break;
+        }
+    }
+    (shown, traits.len() - shown)
+}
+
 /// Sidebar card (container_Xweo-z): 300 wide, radius 16, 1px --border-subtle,
 /// --background-surface-highest; 120px discovery splash; 70px icon frame at
 /// margin -34 inside padding 16; name heading-sm/semibold + badge + tag chiplet;
 /// online / member counts (8px dots, body-sm --text-muted, gap 0 8); creation
-/// month; description body-sm and trait chips (padding 4 8, radius 16, 1px
-/// --border-subtle, 16px emoji, gap 4).
+/// month; description body-sm and single-row trait chips with `+ N en plus` overflow.
 fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
     let gid = g.id;
     let muted = |s: SharedString| div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_MUTED)).child(s);
@@ -319,11 +350,12 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
             .child(div().size(z(8.)).rounded_full().bg(t(if online { idx::TEXT_STATUS_ONLINE } else { idx::TEXT_STATUS_OFFLINE })))
             .child(muted(s))
     };
-    let mut traits = div().flex().flex_wrap().gap(z(4.));
-    for tr in &p.traits {
+    let (shown, hidden) = fit_traits(&p.traits, 266.);
+    let mut traits = div().flex().items_center().gap(z(4.)).overflow_hidden();
+    for tr in p.traits.iter().take(shown) {
         traits = traits.child(
             div()
-                .max_w(z(268.))
+                .max_w(z(266.))
                 .py(z(4.))
                 .px(z(8.))
                 .rounded(z(16.))
@@ -335,6 +367,21 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
                 .gap(z(4.))
                 .when_some(tr.emoji.token(), |d, tk| d.child(crate::media::emoji::emoji_element(&tk, 16.)))
                 .child(div().min_w_0().text_ellipsis().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(tr.label.clone())),
+        );
+    }
+    if hidden > 0 {
+        traits = traits.child(
+            div()
+                .flex_none()
+                .py(z(4.))
+                .px(z(8.))
+                .rounded(z(16.))
+                .border_1()
+                .border_color(t(idx::BORDER_SUBTLE))
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .text_color(t(idx::TEXT_DEFAULT))
+                .child(crate::t!("guide.traits_more", n = hidden.to_string())),
         );
     }
     let tag = p.tag.clone().map(|tag| {
@@ -425,6 +472,55 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
         )
 }
 
+/// One "Getting Started" (`new_member_actions`) row.
+fn action_row(i: usize, a: &GuideEntry, cx: &Context<PhoenixApp>) -> AnyElement {
+    let ch = a.channel;
+    div()
+        .id(("guide-act", i))
+        .p(z(16.))
+        .rounded(z(8.))
+        .border_1()
+        .border_color(t(idx::BORDER_SUBTLE))
+        .bg(t(idx::BACKGROUND_SURFACE_HIGH))
+        .hover(|s| s.bg(t(idx::BACKGROUND_SURFACE_HIGHER)))
+        .cursor_pointer()
+        .on_click(cx.listener(move |app, _, _, cx| {
+            if app.channels.contains_key(&ch) {
+                app.select_channel(ch, cx);
+            }
+        }))
+        .flex()
+        .items_center()
+        .gap(z(12.))
+        .when_some(a.emoji.token(), |d, tk| d.child(div().flex_none().child(crate::media::emoji::emoji_element(&tk, 20.))))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(t(idx::TEXT_STRONG))
+                        .child(crate::ui::emoji_text::label(a.title.clone().into(), 16.)),
+                )
+                .when(!a.description.is_empty(), |d| {
+                    d.child(div().mt(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_MUTED)).child(a.description.clone()))
+                }),
+        )
+        .child(
+            gpui::svg()
+                .path(crate::icons::path(if a.action_type == 1 { "chat" } else { "chevron" }))
+                .size(z(16.))
+                .flex_none()
+                .text_color(t(idx::ICON_MUTED)),
+        )
+        .into_any_element()
+}
+
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if !is_open(app, cx) {
         return None;
@@ -447,6 +543,45 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     match &page.data {
         None => main = main.child(div().mt(z(16.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("common.loading"))),
         Some(d) => {
+            if !d.welcome_message.is_empty() {
+                let authors: Vec<String> = d.welcome_authors.iter().filter_map(|id| app.users.get(id).map(|u| u.name.to_string())).collect();
+                let mut wcard = div()
+                    .mt(z(16.))
+                    .p(z(16.))
+                    .rounded(z(8.))
+                    .border_1()
+                    .border_color(t(idx::BORDER_SUBTLE))
+                    .bg(t(idx::BACKGROUND_SURFACE_HIGH))
+                    .flex()
+                    .flex_col()
+                    .gap(z(8.));
+                if !authors.is_empty() {
+                    wcard = wcard.child(
+                        div()
+                            .text_size(z(14.))
+                            .line_height(z(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(t(idx::TEXT_STRONG))
+                            .child(authors.join(", ")),
+                    );
+                }
+                wcard = wcard.child(crate::ui::profile_bio::bio(&d.welcome_message, false, t(idx::TEXT_DEFAULT)));
+                main = main.child(wcard);
+            }
+            if !d.actions.is_empty() {
+                let mut col = div().mt(z(16.)).flex().flex_col().gap(z(8.)).child(
+                    div()
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(t(idx::TEXT_STRONG))
+                        .child(crate::t!("guide.getting_started")),
+                );
+                for (i, a) in d.actions.iter().enumerate() {
+                    col = col.child(action_row(i, a, cx));
+                }
+                main = main.child(col);
+            }
             if !d.resources.is_empty() {
                 // container_Qo6EL-: margin-top 16, gap 8; heading-lg/semibold 20/24.
                 let mut col = div().mt(z(16.)).flex().flex_col().gap(z(8.)).child(
@@ -493,5 +628,15 @@ mod tests {
         let f = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert!(super::has_guide(&f(&["COMMUNITY", "GUILD_ONBOARDING", "GUILD_SERVER_GUIDE", "NEWS"])));
         assert!(!super::has_guide(&f(&["COMMUNITY", "GUILD_ONBOARDING"])));
+    }
+
+    #[test]
+    fn fit_traits_collapses_overflow_to_one_row() {
+        let tr = |label: &str| crate::commands::guide::GuideTrait { label: label.to_owned(), emoji: Default::default() };
+        let short = vec![tr("Dev"), tr("Tech")];
+        assert_eq!(super::fit_traits(&short, 266.), (2, 0));
+        let many = vec![tr("Developpement"), tr("Tech"), tr("Rust"), tr("Linux"), tr("Gaming")];
+        let (shown, hidden) = super::fit_traits(&many, 266.);
+        assert!(shown >= 1 && hidden > 0 && shown + hidden == many.len());
     }
 }

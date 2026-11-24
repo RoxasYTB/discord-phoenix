@@ -901,6 +901,37 @@ fn message_entry(
 /// one is from today, and "View all" when more are unread.
 fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let ch = card.entry.channel;
+    if card.entry.kind == crate::ui::inbox_unreads::Kind::GuildEvents {
+        let gid = card.entry.guild.unwrap_or(ch);
+        let gname = app.guilds.iter().find(|g| g.id == gid).map(|g| g.name.clone()).unwrap_or_default();
+        return div()
+            .id(("inbox-events", gid.0))
+            .rounded(z(8.))
+            .border_1()
+            .border_color(tk(idx::BORDER_SUBTLE))
+            .bg(tk(idx::BACKGROUND_BASE_LOW))
+            .p(z(12.))
+            .cursor_pointer()
+            .hover(|s| s.bg(tk(idx::BACKGROUND_SURFACE_HIGH)))
+            .on_click(cx.listener(move |a, _, _, cx| {
+                a.parity.inbox.open = false;
+                crate::ui::events::open(a, gid, cx);
+            }))
+            .flex()
+            .items_center()
+            .gap(z(10.))
+            .child(gpui::svg().path(crate::icons::path("calendar")).size(z(20.)).flex_none().text_color(tk(idx::ICON_MUTED)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("events.server_events")))
+                    .when(!gname.is_empty(), |d| d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(gname))),
+            )
+            .into_any_element();
+    }
     let first = card.msgs.first().map(|m| m.id);
     let head = div()
         .id(("inbox-unread", ch.0))

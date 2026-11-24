@@ -568,6 +568,11 @@ impl Backend for DiscordBackend {
         s.cache.channel(sf(channel))?.user_limit.filter(|n| *n > 0)
     }
 
+    fn is_thread_joined(&self, channel: Id) -> bool {
+        let Ok(s) = self.inner.session() else { return false };
+        s.cache.channel(sf(channel)).is_some_and(|c| c.member.is_some())
+    }
+
     fn guild_permissions(&self, guild: Id) -> u64 {
         let Ok(s) = self.inner.session() else { return 0 };
         // Base permissions are the same in every channel for the bits we use.

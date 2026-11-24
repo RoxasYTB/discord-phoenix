@@ -438,8 +438,10 @@ thread_local! {
     static THREAD_SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
 }
 
-/// buttons_HeWz1C (vanilla-thread-channel): the forum post action buttons,
-/// gap 4; each button_F7qvhY sm secondary 32x32, radius 8, 16px icon.
+/// container_HeWz1C header_HeWz1C (vanilla-thread-channel #1336–#1371):
+/// forum post action bar with left `reactButtons_HeWz1C` (starter message
+/// reactions + add-reaction button) and right `buttons_HeWz1C` (Follow/Following
+/// + Copy Link + Jump to Top, gap 4; sm secondary h32 radius 8).
 fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::ScrollHandle, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     use crate::theme::{generated::idx, tok};
     // Posts opened from the forum list are not in the channel cache: the open forum.
@@ -450,6 +452,63 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
         return None;
     }
     let link = format!("https://discord.com/channels/{}/{}", f.guild.map_or(0, |g| g.0), thread.0);
+    let followed = app.backend.is_thread_joined(thread);
+    let starter = app.messages.get(&thread).and_then(|e| e.msgs.first());
+
+    let mut reacts = div().flex().items_center().flex_wrap().gap(z(4.)).mr(z(20.));
+    if let Some(m) = starter {
+        for (i, r) in m.reactions.iter().enumerate() {
+            let token = match r.emoji_id {
+                Some(id) => format!("<:{}:{}>", r.emoji, id.0),
+                None => r.emoji.to_string(),
+            };
+            let bg = if r.me { c(tok(idx::BACKGROUND_BRAND)).opacity(0.15) } else { c(tok(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT)) };
+            let border = if r.me { c(tok(idx::BORDER_FOCUS)) } else { c(tok(idx::CONTROL_SECONDARY_BORDER_DEFAULT)) };
+            let count_color = if r.me { c(tok(idx::TEXT_BRAND)) } else { c(tok(idx::TEXT_DEFAULT)) };
+            reacts = reacts.child(
+                div()
+                    .id(("forum-post-react", i))
+                    .h(z(28.))
+                    .px(z(6.))
+                    .rounded(z(8.))
+                    .bg(bg)
+                    .border_1()
+                    .border_color(border)
+                    .flex()
+                    .items_center()
+                    .gap(z(4.))
+                    .child(crate::media::emoji::emoji_element(&token, 18.))
+                    .child(
+                        div()
+                            .text_size(z(14.))
+                            .line_height(z(16.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(count_color)
+                            .child(r.count.to_string()),
+                    ),
+            );
+        }
+    }
+    // addReactButton_HeWz1C (vanilla-thread-channel #1352): 32x28, radius 8, secondary border, 18px icon.
+    reacts = reacts.child(
+        div()
+            .id("forum-post-add-react")
+            .w(z(32.))
+            .h(z(28.))
+            .flex_none()
+            .rounded(z(8.))
+            .bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT)))
+            .border_1()
+            .border_color(c(tok(idx::CONTROL_SECONDARY_BORDER_DEFAULT)))
+            .hover(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))))
+            .cursor_pointer()
+            .flex()
+            .items_center()
+            .justify_center()
+            .tip(crate::t!("forum.add_reaction"))
+            .child(gpui::svg().path(crate::icons::path("emoji")).size(z(18.)).flex_none().text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))),
+    );
+
     let btn = |id: &'static str, path: &'static str, tip: SharedString| {
         div()
             .id(id)
@@ -467,22 +526,63 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
             .tip(tip)
             .child(gpui::svg().path(crate::icons::path(path)).size(z(16.)).flex_none().text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
     };
+    // button_F7qvhY sm_F7qvhY secondary_F7qvhY hasText_F7qvhY (#1356): Follow / Following.
+    let follow_btn = div()
+        .id("forum-post-follow")
+        .h(z(32.))
+        .px(z(12.))
+        .flex_none()
+        .rounded(z(8.))
+        .bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT)))
+        .border_1()
+        .border_color(c(tok(idx::CONTROL_SECONDARY_BORDER_DEFAULT)))
+        .hover(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))))
+        .cursor_pointer()
+        .flex()
+        .items_center()
+        .gap(z(4.))
+        .tip(crate::t!("forum.follow_tip"))
+        .child(
+            gpui::svg()
+                .path(crate::icons::path(if followed { "check" } else { "bell" }))
+                .size(z(16.))
+                .flex_none()
+                .text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))),
+        )
+        .child(
+            div()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
+                .child(if followed { crate::t!("forum.following") } else { crate::t!("forum.follow") }),
+        );
     let top = scroll.clone();
     Some(
         div()
             .flex_none()
             .px(z(16.))
-            .pt(z(12.))
+            .py(z(6.))
+            .mt(z(8.))
             .flex()
-            .justify_end()
-            .gap(z(4.))
-            .child(btn("forum-post-link", "chat/link", crate::t!("menu.copy_link")).on_click(move |_, _, cx| {
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(link.clone()));
-            }))
-            .child(btn("forum-post-top", "nav/up", crate::t!("forum.go_top")).on_click(cx.listener(move |_, _, _, cx| {
-                top.scroll_to_item(0);
-                cx.notify();
-            })))
+            .items_center()
+            .justify_between()
+            .child(reacts)
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(z(4.))
+                    .child(follow_btn)
+                    .child(btn("forum-post-link", "chat/link", crate::t!("menu.copy_link")).on_click(move |_, _, cx| {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(link.clone()));
+                    }))
+                    .child(btn("forum-post-top", "nav/up", crate::t!("forum.go_top")).on_click(cx.listener(move |_, _, _, cx| {
+                        top.scroll_to_item(0);
+                        cx.notify();
+                    }))),
+            )
             .into_any_element(),
     )
 }
