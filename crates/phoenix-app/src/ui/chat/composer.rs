@@ -336,6 +336,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     let tray = upload_tray(app, cx);
     // No SEND_MESSAGES: disabled text area with the client's notice, no buttons (CSS only).
     let blocked = app.selected_channel.and_then(|c| app.nav.extras.get(&c)).is_some_and(|x| x.send_blocked);
+    let show_send_button = should_show_send_button(app.prefs.local.flag("send-btn", false), placeholder_empty, blocked);
     let placeholder = if blocked { crate::t!("chat.no_permission") } else { placeholder };
     div()
         .flex_none()
@@ -495,7 +496,14 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                                     .id("g")
                                                     .group_active("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_ACTIVE)))),
                                             ),
-                                    ),
+                                    )
+                                    .when(show_send_button, |d| {
+                                        d.child(
+                                            crate::ui::states::composer_button("send", Icon::Send)
+                                                .tooltip(crate::ui::tooltip::tip(crate::t!("menu.send_message")))
+                                                .on_click(cx.listener(|a, _, w, cx| a.submit_composer(w, cx))),
+                                        )
+                                    }),
                             ),
                     ),
             ),
@@ -550,6 +558,10 @@ pub fn char_count(premium: bool, len: i64) -> (i64, bool) {
     let max = if premium { 4000 } else { 2000 };
     let remaining = max - len;
     (remaining, remaining <= max / 10 || (premium && len > 2000 && remaining >= 0))
+}
+
+fn should_show_send_button(enabled: bool, draft_empty: bool, blocked: bool) -> bool {
+    enabled && !draft_empty && !blocked
 }
 
 thread_local! {
@@ -734,7 +746,15 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
 
 #[cfg(test)]
 mod tests {
-    use super::{char_count, dot_frame, format_cooldown};
+    use super::{char_count, dot_frame, format_cooldown, should_show_send_button};
+
+    #[test]
+    fn send_button_requires_enabled_nonempty_sendable_draft() {
+        assert!(!should_show_send_button(false, false, false));
+        assert!(!should_show_send_button(true, true, false));
+        assert!(!should_show_send_button(true, false, true));
+        assert!(should_show_send_button(true, false, false));
+    }
 
     #[test]
     fn typing_dots_follow_the_keyframes() {

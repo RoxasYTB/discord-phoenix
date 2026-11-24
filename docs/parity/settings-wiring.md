@@ -77,7 +77,7 @@ where its value is stored and what it changes in the UI.
 | emoticons | Automatically convert emoticons in your messages to emoji | settings-proto `text_and_images.convert_emoticons` (6, 21) | ":)" → 🙂 on send/edit (settings/emoticons.rs) | ✅ |
 | ac-stickers | Show sticker suggestions in autocomplete | settings-proto `text_and_images.include_stickers_in_autocomplete` (6, 28) | no sticker rows in the :emoji autocomplete when off (autocomplete.rs) | ✅ |
 | ac-games | Show games in autocomplete | settings-proto `text_and_images.include_game_mentions_in_autocomplete` (6, 39) | — | 🟡 stored, no effect yet |
-| send-btn | Show the Send Message button | local prefs (settings.json) | — | 🟡 stored, no effect yet |
+| send-btn | Show the Send Message button | local prefs (settings.json) | button appears for a nonempty, sendable draft and calls the existing submit path | ⚠ wired; visibility rule and screenshot not yet compared with the official client |
 | dm-search | By default, search in DMs… | settings-proto `text_and_images.is_cross_dm_search_enabled` (6, 36) | — | 🟡 stored, no effect yet |
 | streamer | Enable Streamer Mode | local prefs (settings.json) | — | 🟡 stored, no effect yet |
 | streamer-auto | Automatically enable if OBS or XSplit is running | local prefs (settings.json) | — | 🟡 stored, no effect yet |
@@ -118,7 +118,7 @@ where its value is stored and what it changes in the UI.
 ## Known gaps
 * `anim-emoji` is synced in the client (`text_and_images.animate_emoji`, 6/14) but stays a local pref here.
 * Stored but without effect yet: compact avatars, game autocomplete,
-  (stickers/games), send button, streamer mode, high contrast, sticker animations, split thread view,
+  streamer mode, high contrast, sticker animations, split thread view,
   the notification toggles (server-side behaviour, nothing to render), system tray/startup/hw-accel.
 * Role colors "Next to names" should draw a colored dot; currently it just stops tinting.
 * Spoilers "If moderator" behaves as "On click".

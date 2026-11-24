@@ -200,6 +200,7 @@ mod tests {
         for (name, _) in super::NAMES {
             assert!(crate::assets::fallback_svg(&super::path(name)).is_some(), "no fallback for {name}");
         }
+        assert!(crate::assets::fallback_svg("icons/send.svg").is_some(), "no fallback for send");
     }
 
     /// Extracted Discord SVGs must never end up in the repository.
