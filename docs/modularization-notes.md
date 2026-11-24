@@ -1,0 +1,1 @@
+- One entity (PhoenixApp) renders the whole window: every notify rebuilds and lays out the full tree (frames.rs: 29/40 stack samples are pure GPUI layout/prepaint/paint). Split sidebar, server bar, member list and chat into cached child views (AnyView::cached) during modularization. (perf agent)
