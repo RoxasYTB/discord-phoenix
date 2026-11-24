@@ -71,8 +71,17 @@ typed or sent, and no build/test ran during this investigation.
 - Soundboard is a separate confirmed functional gap: `crates/phoenix-app/src/ui/call_view.rs`
   renders `call-soundboard` with an empty callback, `crates/phoenix-app/src/shortcuts.rs` routes
   Ctrl+Shift+B to `stub`, and `crates/phoenix-app/src/ui/voice_panel.rs` only renders the button.
-  Search found no soundboard API or model in `backend.rs`, `discord_backend.rs`, or `phoenix-api`.
-  Implementing it needs a call-safe synthetic route/model first; do not click or play audio in the
-  real account. The official Soundboard support guide documents the high-level flow (open voice
-  controls, pick an available server, choose a sound), but not the rendered picker contract in the
-  current client: https://support.discord.com/hc/en-us/articles/12920801289623-Discord-Soundboard-Guide.
+  No soundboard API or model is wired in `backend.rs`, `discord_backend.rs`, or `phoenix-api`.
+  Further read-only inspection of local reference bundle
+  `/home/yohan/discord-phoenix-ref/current-client/js/web.b63d846b329d6470.js` found a concrete
+  read path: `GET /soundboard-default-sounds`; guild sounds are requested through Gateway
+  `REQUEST_SOUNDBOARD_SOUNDS` with `guild_ids` and returned as `SOUNDBOARD_SOUNDS` updates with
+  `guild_id` and `soundboard_sounds[]`. The observed gateway sound fields are `name`, `sound_id`,
+  `emoji_name`, `emoji_id`, `user_id`, `volume`, `available`. The route registry also includes
+  `/guilds/{id}/soundboard-sounds`, `/guilds/{id}/top-soundboard-sounds`, and sound metadata routes;
+  do not assume a method or behavior from their names alone. `REQUEST_SOUNDBOARD_SOUNDS` is a
+  read/fetch request; the separate sound-send route is deliberately not called. Implement a mock
+  parser/model and visible picker first; keep actual playback behind a later explicit safe test.
+  UI geometry still needs an eligible visual reference. The official guide establishes the basic
+  flow (open voice controls, choose a server, choose a sound):
+  https://support.discord.com/hc/en-us/articles/12612888127767-Discord-Soundboard-Guide-Using-Adding-and-Managing-Sounds.
