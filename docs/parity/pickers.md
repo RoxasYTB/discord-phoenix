@@ -48,3 +48,10 @@ shows the quick switcher, not this modal.
 | day cells | __day | box | 40x40, 1px --border-subtle left/top, last column/row closed in --primary-800, corner radius 3 | calendar | ✅ |
 | day states | __day--outside-month / --disabled / --today / --selected / :hover | colour | 500 at 30%; disabled on --primary-630; today bold; selected 3px --brand-500 bar; hover --brand-500 + white | calendar | ✅ |
 | Escape | — | behaviour | closes the calendar / type list before the modal | search.rs on_key | ✅ |
+
+Open points (2026-11-24): the calendar is not flipped or clamped at the window edge (the client scrolls
+the date row towards the middle first, so it rarely overflows); the search popout stays open behind
+the modal because the modal is a child of the popout; the De / Dans / Contient / Mentions / Type
+d'auteur / Épinglé comboboxes are still free-text inputs without their option lists.
+Implementation note: popovers inside a `modal::frame` must not use a nested `deferred` (it paints
+under the card's footer); search_filters.rs places them beside the card from canvas probes.
