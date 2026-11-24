@@ -281,10 +281,10 @@ impl Element for &'static str {
         _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         text_layout: &mut Self::RequestLayoutState,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut App,
     ) {
-        text_layout.prepaint(bounds, self)
+        text_layout.prepaint(bounds, self, window)
     }
 
     fn paint(
@@ -355,10 +355,10 @@ impl Element for SharedString {
         _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         text_layout: &mut Self::RequestLayoutState,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut App,
     ) {
-        text_layout.prepaint(bounds, self.as_ref())
+        text_layout.prepaint(bounds, self.as_ref(), window)
     }
 
     fn paint(
@@ -581,10 +581,10 @@ impl Element for StyledText {
         _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut App,
     ) {
-        self.layout.prepaint(bounds, &self.text)
+        self.layout.prepaint(bounds, &self.text, window)
     }
 
     fn paint(
@@ -628,6 +628,9 @@ struct TextLayoutInner {
     truncate_width: Option<Pixels>,
     size: Option<Size<Pixels>>,
     bounds: Option<Bounds<Pixels>>,
+    /// Wrapped, untruncated text: what `prepaint` needs to wrap it again at its
+    /// final width (text, runs, font size, line clamp).
+    rewrap: Option<(SharedString, Vec<TextRun>, Pixels, Option<usize>)>,
 }
 
 impl TextLayout {
@@ -741,6 +744,8 @@ impl TextLayout {
                     (text.clone(), Cow::Borrowed(&*runs))
                 };
                 let len = text.len();
+                let rewrap = (wrap_width.is_some() && truncate_width.is_none())
+                    .then(|| (text.clone(), runs.to_vec(), font_size, text_style.line_clamp));
 
                 let Some(lines) = window
                     .text_system()
@@ -761,6 +766,7 @@ impl TextLayout {
                         truncate_width,
                         size: Some(Size::default()),
                         bounds: None,
+                        rewrap: None,
                     });
                     return Size::default();
                 };
@@ -780,6 +786,7 @@ impl TextLayout {
                     truncate_width,
                     size: Some(size),
                     bounds: None,
+                    rewrap,
                 });
 
                 size
@@ -787,13 +794,38 @@ impl TextLayout {
         })
     }
 
-    fn prepaint(&self, bounds: Bounds<Pixels>, text: &str) {
+    fn prepaint(&self, bounds: Bounds<Pixels>, text: &str, window: &mut Window) {
         let mut element_state = self.0.borrow_mut();
         let element_state = element_state
             .as_mut()
             .with_context(|| format!("measurement has not been performed on {text}"))
             .unwrap();
         element_state.bounds = Some(bounds);
+        // Taffy can measure a text at several widths (intrinsic probes, then the final
+        // flex size) and the last measure is the one kept: a text shrunk as a flex item
+        // then painted with the wider wrap and spilled out of its box. Wrap it again at
+        // the width it was finally given.
+        let width = bounds.size.width;
+        if let Some(old) = element_state.wrap_width
+            && width > Pixels::ZERO
+            && (old > width + crate::px(0.5) || width > old + crate::px(0.5))
+            && let Some((text, runs, font_size, clamp)) = element_state.rewrap.clone()
+            && let Some(lines) = window
+                .text_system()
+                .shape_text(text, font_size, &runs, Some(width), clamp)
+                .log_err()
+        {
+            let line_height = element_state.line_height;
+            let mut size: Size<Pixels> = Size::default();
+            for line in &lines {
+                let line_size = line.size(line_height);
+                size.height += line_size.height;
+                size.width = size.width.max(line_size.width).ceil();
+            }
+            element_state.lines = lines;
+            element_state.wrap_width = Some(width);
+            element_state.size = Some(size);
+        }
     }
 
     fn paint(&self, text: &str, window: &mut Window, cx: &mut App) {
