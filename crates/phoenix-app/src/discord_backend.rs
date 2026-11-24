@@ -17,6 +17,7 @@ mod profile_widgets;
 pub(crate) mod profile_games;
 mod collectibles_shop;
 mod thread_members;
+mod member_list_id;
 mod history;
 mod msg_cache;
 mod snapshot;
@@ -25,7 +26,7 @@ pub(crate) use profile_edit::bodies as profile_edit_bodies;
 pub mod store;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -82,8 +83,8 @@ struct Session {
     selected_channel: Mutex<Option<api::Snowflake>>,
     /// Channels with a debounced ack in flight.
     pending_acks: Mutex<HashSet<u64>>,
-    /// Guilds already subscribed via op 37 (per channel member list).
-    subscribed: Mutex<HashSet<(u64, u64)>>,
+    /// Per guild, the channel whose member list op 37 last asked for.
+    subscribed: Mutex<HashMap<u64, u64>>,
     /// Last typing notification (channel, when): Discord shows it for ~10s.
     last_typing: Mutex<Option<(u64, Instant)>>,
     /// Notification levels / mutes for desktop notifications.
@@ -298,7 +299,7 @@ fn start_session(
         adapter,
         selected_channel: Mutex::new(None),
         pending_acks: Mutex::new(HashSet::new()),
-        subscribed: Mutex::new(HashSet::new()),
+        subscribed: Mutex::new(HashMap::new()),
         last_typing: Mutex::new(None),
         notify: Mutex::new(crate::notifications::NotifyPrefs::from_ready(ready.user_guild_settings.as_ref())),
     });
@@ -342,6 +343,8 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             let prefs = Prefs::from_ready(r);
             let data = convert::build_ready(&s.cache, r, &prefs);
             *s.adapter.lock() = Adapter::new(r.user.id, prefs);
+            // New session: nothing is subscribed any more.
+            s.subscribed.lock().clear();
             inner.emit(AppEvent::Resync(crate::commands::Resync(data)));
             nav::snapshot(&s.cache, r).into_iter().for_each(|e| inner.emit(e));
             continue;
@@ -620,16 +623,20 @@ impl Backend for DiscordBackend {
     }
 
     fn select_channel(&self, channel: Id) -> BoxFuture<()> {
-        self.with_session(move |_, s| async move {
+        self.with_session(move |inner, s| async move {
             let ch = sf(channel);
             *s.selected_channel.lock() = Some(ch);
             let c = s.cache.channel(ch);
             // Op 37 with a channel range populates the member list + presences.
+            // Sent again on every switch: the client asks for the open channel only.
             if let Some(g) = c.as_ref().and_then(|c| c.guild_id)
-                && s.subscribed.lock().insert((g.0, ch.0))
+                && s.subscribed.lock().insert(g.0, ch.0) != Some(ch.0)
             {
                 let _ = s.gateway.subscribe_guild(g, GuildSubscription::focused(Some(ch)));
             }
+            // The list shown follows the channel's list id, whatever SYNC lands last.
+            let shown = s.adapter.lock().show_list(&s.cache, ch);
+            shown.into_iter().for_each(|e| inner.emit(e));
             if let Some(last) = c.and_then(|c| c.last_message_id) {
                 let was_unread = {
                     let mut a = s.adapter.lock();

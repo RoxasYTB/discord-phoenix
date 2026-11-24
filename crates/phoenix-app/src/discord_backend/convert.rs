@@ -860,10 +860,10 @@ pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
 
 // --------------------------------------------------------- live event map
 
-/// One guild's lazy member list (op 37 / GUILD_MEMBER_LIST_UPDATE).
+/// One lazy member list (op 37 / GUILD_MEMBER_LIST_UPDATE). A guild has one
+/// per set of channel view overwrites (see `member_list_id`).
 #[derive(Default)]
 struct MemberList {
-    id: String,
     items: Vec<Option<MemberListItem>>,
 }
 
@@ -946,7 +946,11 @@ impl MemberList {
 pub struct Adapter {
     pub me: api::Snowflake,
     pub prefs: Prefs,
-    lists: HashMap<u64, MemberList>,
+    /// Lazy lists per guild, by list id.
+    lists: HashMap<u64, HashMap<String, MemberList>>,
+    /// Per guild, the list id of the open channel: only that list reaches the UI.
+    /// A SYNC for the channel open before can land after the new one's.
+    shown: HashMap<u64, String>,
     /// Members fetched by op 8 (authors / reply targets outside the synced list range).
     chunked: HashMap<u64, Vec<api::Snowflake>>,
     /// Last known status per user (PRESENCE_UPDATE, READY_SUPPLEMENTAL, op-8 chunk
@@ -956,7 +960,7 @@ pub struct Adapter {
 
 impl Adapter {
     pub fn new(me: api::Snowflake, prefs: Prefs) -> Self {
-        Self { me, prefs, lists: HashMap::new(), chunked: HashMap::new(), statuses: HashMap::new() }
+        Self { me, prefs, lists: HashMap::new(), shown: HashMap::new(), chunked: HashMap::new(), statuses: HashMap::new() }
     }
 
     /// Client `isMentioned` for `m`: a direct mention, @everyone unless the
@@ -1016,13 +1020,11 @@ impl Adapter {
 
     fn list_update(&mut self, cache: &Cache, l: &GuildMemberListUpdate, out: &mut Vec<AppEvent>) {
         let has_full_sync = l.ops.iter().any(|o| matches!(o, MemberListOp::Sync { range, .. } if range[0] == 0));
-        let list = self.lists.entry(l.guild_id.0).or_default();
-        if list.id != l.id {
-            if !has_full_sync && !list.id.is_empty() {
-                return; // Update for a list we don't display.
-            }
-            *list = MemberList { id: l.id.clone(), items: Vec::new() };
+        let lists = self.lists.entry(l.guild_id.0).or_default();
+        if !lists.contains_key(&l.id) && !has_full_sync {
+            return; // Update for a list we never synced.
         }
+        let list = lists.entry(l.id.clone()).or_default();
         list.apply(&l.ops);
         // Group rows in ops may omit `count`; the top-level `groups` array is authoritative.
         for it in list.items.iter_mut().flatten() {
@@ -1037,15 +1039,49 @@ impl Adapter {
         if total > 0 {
             list.items.resize(total, None);
         }
+        let shown = self.shown.entry(l.guild_id.0).or_insert_with(|| l.id.clone());
+        if *shown != l.id {
+            return; // Another channel's list: kept for when it opens again.
+        }
+        self.emit_list(cache, l.guild_id, out);
+    }
+
+    /// The open channel's list changes to `channel`'s: show it at once when it is
+    /// already synced (the SYNC asked for by the new op 37 refreshes it).
+    pub fn show_list(&mut self, cache: &Cache, channel: api::ChannelId) -> Vec<AppEvent> {
+        let mut out = Vec::new();
+        let Some(g) = cache.channel(channel).and_then(|c| c.guild_id) else { return out };
+        let Some(list_id) = super::member_list_id::for_channel(cache, channel) else {
+            // Unknown overwrites (thread parent not cached): the next SYNC wins.
+            self.shown.remove(&g.0);
+            return out;
+        };
+        if self.shown.get(&g.0) == Some(&list_id) {
+            return out;
+        }
+        let synced = self.lists.get(&g.0).is_some_and(|l| l.contains_key(&list_id));
+        self.shown.insert(g.0, list_id);
+        if synced {
+            self.emit_list(cache, g, &mut out);
+        }
+        out
+    }
+
+    fn shown_list(&self, guild: u64) -> Option<&MemberList> {
+        self.lists.get(&guild)?.get(self.shown.get(&guild)?)
+    }
+
+    fn emit_list(&self, cache: &Cache, guild: api::GuildId, out: &mut Vec<AppEvent>) {
+        let Some(list) = self.shown_list(guild.0) else { return };
         let (rows, acts) = crate::presence::list_rows(list.items.iter());
-        self.emit_members(cache, l.guild_id, out);
+        self.emit_members(cache, guild, out);
         out.extend(acts.into_iter().map(|(user, activities)| AppEvent::Activities { user, activities }));
-        out.push(AppEvent::MemberListRows { guild: id(l.guild_id), rows });
+        out.push(AppEvent::MemberListRows { guild: id(guild), rows });
     }
 
     /// Synced list members + my own member + op-8 chunked members, as one `GuildMembers`.
     fn emit_members(&self, cache: &Cache, guild: api::GuildId, out: &mut Vec<AppEvent>) {
-        let (mut members, users) = self.lists.get(&guild.0).map(|l| l.members(guild)).unwrap_or_default();
+        let (mut members, users) = self.shown_list(guild.0).map(|l| l.members(guild)).unwrap_or_default();
         // Own member (READY merged_members / GUILD_MEMBER_UPDATE) and members requested
         // with op 8 so server nicks resolve in headers and reply previews even when the
         // author is outside the synced list range.

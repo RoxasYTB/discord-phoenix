@@ -113,3 +113,45 @@ fn opt_in_channel_overrides_are_followed() {
     m.apply_guild_entry(1, &serde_json::json!({ "guild_id": "1", "channel_overrides": [{ "channel_id": "10", "flags": 0 }] }));
     assert!(!m.opted_in.contains(&10));
 }
+
+/// Live 2026-11-24: Phoenix opened the guild's first channel (staff only), then the
+/// one the user had open; the first channel's SYNC landed last and the staff list
+/// (6 members) replaced the 44-member one. Lists now go by the channel's list id.
+#[test]
+fn late_sync_of_the_previous_channel_is_not_shown() {
+    let (cache, r) = ready_cache();
+    let mut a = Adapter::new(r.user.id, Prefs::from_ready(&r));
+    let g = "300000000000000001";
+    for (c, ow) in [("700000000000000081", "[]"), ("700000000000000082", r#"[{"id":"300000000000000001","type":0,"allow":"0","deny":"1024"}]"#)] {
+        let raw = format!(r#"{{"id":"{c}","type":0,"guild_id":"{g}","name":"c","position":0,"permission_overwrites":{ow}}}"#);
+        cache.apply(&parse_dispatch("CHANNEL_CREATE", &raw));
+    }
+    let sync = |list: &str, user: &str| {
+        let raw = format!(
+            r#"{{"guild_id":"{g}","id":"{list}","groups":[{{"id":"online","count":1}}],"ops":[{{"op":"SYNC","range":[0,99],"items":[
+            {{"group":{{"id":"online"}}}},
+            {{"member":{{"user":{{"id":"{user}","username":"u","discriminator":"0"}},"roles":[],"presence":{{"status":"online"}}}}}}]}}]}}"#
+        );
+        parse_dispatch("GUILD_MEMBER_LIST_UPDATE", &raw)
+    };
+    let rows_of = |out: &[AppEvent]| {
+        out.iter().find_map(|x| match x {
+            AppEvent::MemberListRows { rows, .. } => Some(rows.iter().filter_map(|r| match r {
+                crate::presence::ListEntry::Member(m, _) => Some(m.user.0),
+                _ => None,
+            }).collect::<Vec<_>>()),
+            _ => None,
+        })
+    };
+    // Staff channel first, then the open one: its id is computed from the overwrites.
+    a.show_list(&cache, api::Snowflake(700000000000000082));
+    assert!(a.show_list(&cache, api::Snowflake(700000000000000081)).is_empty());
+    let open = a.map(&cache, &sync("everyone", "200000000000000011"));
+    assert_eq!(rows_of(&open), Some(vec![200000000000000011]));
+    // The staff list's SYNC arrives after: kept, not shown.
+    let late = a.map(&cache, &sync("1834083668", "200000000000000012"));
+    assert_eq!(rows_of(&late), None);
+    // Opening the staff channel again shows its list at once.
+    let back = a.show_list(&cache, api::Snowflake(700000000000000082));
+    assert_eq!(rows_of(&back), Some(vec![200000000000000012]));
+}
