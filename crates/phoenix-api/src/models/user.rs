@@ -62,10 +62,13 @@ pub struct User {
 
 pub(crate) fn nameplate_from_collectibles(collectibles: Option<&serde_json::Value>) -> Option<(String, Option<String>)> {
     let n = collectibles?.get("nameplate")?;
-    let asset = n.get("asset")?.as_str().filter(|a| !a.is_empty())?;
-    let sep = if asset.ends_with('/') { "" } else { "/" };
     let palette = n.get("palette").and_then(|p| p.as_str()).map(str::to_owned);
-    Some((format!("https://cdn.discordapp.com/assets/collectibles/{asset}{sep}static.png"), palette))
+    if let Some(asset) = n.get("asset").and_then(|a| a.as_str()).filter(|a| !a.is_empty()) {
+        let sep = if asset.ends_with('/') { "" } else { "/" };
+        return Some((format!("https://cdn.discordapp.com/assets/collectibles/{asset}{sep}static.png"), palette));
+    }
+    let sku_id = n.get("sku_id").and_then(|s| s.as_str()).filter(|s| !s.is_empty())?;
+    Some((format!("https://cdn.discordapp.com/media/v1/collectibles-shop/{sku_id}/static"), palette))
 }
 
 impl User {

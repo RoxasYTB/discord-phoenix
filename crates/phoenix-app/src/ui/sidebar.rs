@@ -1259,12 +1259,18 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
     // `container_g6VwXp` (dump -channels-N-N+ #979): 56px, padding 14px, gap
     // `--space-xs` (10px cozy).
     div()
+        .relative()
+        .overflow_hidden()
         .h(z(m::USER_PANEL_H))
         .flex_none()
         .px(z(14.))
         .flex()
         .items_center()
         .gap(z(10.))
+        .when_some(
+            crate::ui::nameplate::layer(&app.me, m::USER_PANEL_H, crate::ui::nameplate::Place::Account, false, false),
+            |d, l| d.child(l),
+        )
         .child(
             // `accountPopoutButtonWrapper_g6VwXp`: -4px inline-start margin,
             // 5px 4px padding, `--radius-xs`, 8px gap, hover `--background-mod-normal`.
