@@ -759,7 +759,8 @@ fn scheduled_demo() -> AnyElement {
 }
 
 fn channel_label(app: &PhoenixApp, ch: Id) -> (SharedString, Option<SharedString>) {
-    let c = app.channels.get(&ch);
+    // Threads (Inbox > Unreads lists joined ones) live in the nav thread cache.
+    let c = app.channels.get(&ch).or_else(|| app.nav.find_thread(ch));
     let name = c.map(|c| c.name.to_string()).unwrap_or_else(|| crate::t!("common.unknown_channel").to_string());
     let guild = c.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.clone());
     // `guildName_8ZcKCk` (vanilla-inbox-1 #2666): "<guild> › <category>" when the
@@ -778,7 +779,7 @@ fn channel_label(app: &PhoenixApp, ch: Id) -> (SharedString, Option<SharedString
 /// a 12px type glyph, guild line body-xs 12/16; trailing `buttonGroup_` gap 8.
 fn channel_head(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>>) -> gpui::Div {
     let (name, guild_name) = channel_label(app, ch);
-    let channel = app.channels.get(&ch);
+    let channel = app.channels.get(&ch).or_else(|| app.nav.find_thread(ch));
     let guild = channel.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g));
     let glyph = match channel.map(|c| c.kind) {
         Some(crate::model::ChannelKind::Voice) => "speaker",
