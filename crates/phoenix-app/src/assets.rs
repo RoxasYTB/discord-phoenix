@@ -139,6 +139,8 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/heart.svg" => s!(r#"<path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.6 1.2 4.6 2.8 1-1.6 2.6-2.8 4.6-2.8 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20z"/>"#),
         "icons/tag.svg" => s!(r#"<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/>"#),
         "icons/viewer/open.svg" => s!(r#"<path d="M13 4h7v7M20 4l-9 9"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>"#),
+        "icons/circle-check.svg" => f!(r#"<path fill-rule="evenodd" d="M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm-1.3 15.4-4.4-4.4 1.4-1.4 3 3 6.3-6.3 1.4 1.4z"/>"#),
+        "icons/circle-check-bg.svg" => f!(r#"<circle cx="12" cy="12" r="10"/>"#),
         "icons/attach/poll.svg" => s!(r#"<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h6M7 13h10M7 17h4"/>"#),
         "icons/chat/timer.svg" => s!(r#"<circle cx="12" cy="13" r="8"/><path d="M10 2h4M12 2v3M12 13l3-3M18.5 6.5l1-1"/>"#),
         "icons/send.svg" => s!(r#"<path d="m22 2-9 20-4-9-7-4z"/><path d="M22 2 9 13"/>"#),

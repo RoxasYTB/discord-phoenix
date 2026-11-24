@@ -287,6 +287,8 @@ pub struct ParityUi {
     pub select_values: HashMap<(Id, String), Vec<String>>,
     /// Answers ticked in multi-choice polls before "Vote".
     pub poll_choice: HashMap<Id, HashSet<u32>>,
+    /// Polls switched to "Show results" before voting (`showResults` of the client's poll store).
+    pub poll_show_results: HashSet<Id>,
     /// Interaction buttons waiting for the bot (spinner).
     pub pending: HashSet<(Id, String)>,
     /// Where the last interaction went (modals without `channel_id`).

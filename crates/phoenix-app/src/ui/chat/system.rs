@@ -307,7 +307,6 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         .pl(z(80.))
         .pr(z(48.))
         .py(z(2.))
-        .mt(z(if r.group_start { 17. } else { 0. }))
         .min_h(z(22.))
         .flex()
         .flex_wrap()
@@ -347,46 +346,66 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         })
         .child(div().ml(z(6.)).text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(r.time_full.clone()));
     let pct = if total == 0 { 0 } else { (votes as f64 * 100. / total as f64).round() as u32 };
+    // imageContainer_D5ZFqQ: 40×40, --background-mod-subtle, --radius-sm, the emoji at 22px.
     let emoji_el = emoji.map(|n| {
         let src: SharedString = match emoji_id {
             Some(id) => format!("https://cdn.discordapp.com/emojis/{id}.webp?size=48").into(),
             None => crate::media::emoji::twemoji_url(&n).unwrap_or_default(),
         };
-        div().size(z(40.)).flex_none().flex().items_center().justify_center().child(gpui::img(src).size(z(32.)))
+        div()
+            .size(z(40.))
+            .flex_none()
+            .rounded(z(8.))
+            .bg(tk(idx::BACKGROUND_MOD_SUBTLE))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(gpui::img(src).size(z(22.)))
     });
+    let has_image = emoji_el.is_some();
+    // description_: column, row gap 2, margin-inline-end auto, overflow hidden.
     let description = if victor.is_some() && votes > 0 {
         div()
             .flex()
             .flex_col()
+            .gap(z(2.))
             .child(
+                // victorAnswer_: row gap 4 — the answer body-sm/semibold --text-default (ellipsis),
+                // then Vx size 16 (victor, expired).
                 div()
                     .flex()
                     .items_center()
                     .gap(z(4.))
-                    .text_size(z(14.))
-                    .line_height(z(18.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(tk(idx::TEXT_DEFAULT))
-                    .child(victor.unwrap_or_default())
-                    // victorIcon_D5ZFqQ: 16px circle check (white disc, --control-connected ring)
-                    .child(div().size(z(16.)).flex().items_center().justify_center().child(
-                        div().size(z(15.)).rounded_full().bg(tk(idx::CONTROL_CONNECTED_BACKGROUND_DEFAULT)).flex().items_center().justify_center().child(
-                            gpui::svg().path(crate::icons::path("check")).size(z(10.)).text_color(gpui::white()),
-                        ),
-                    )),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .whitespace_nowrap()
+                            .text_size(z(14.))
+                            .line_height(z(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(tk(idx::TEXT_DEFAULT))
+                            .child(victor.unwrap_or_default()),
+                    )
+                    .child(crate::ui::components::voted_check(16. * crate::theme::zoom(), true, true)),
             )
-            .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("sys.poll_winner", pct = pct)))
+            // "Réponse gagnante • N%": body-xs/medium --text-muted.
+            .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("sys.poll_winner", pct = pct)))
     } else {
         div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("sys.poll_no_winner"))
     };
+    // container_D5ZFqQ: flex, centred, gap 8, max-width 376 (content box) + padding 8 16
+    // (containerWithImage_: 8 16 8 8) + 1px border: as wide as it may be, so the button
+    // sits at the right edge (live 2026-11-24: 402px wide).
     let card = div()
         .ml(z(80.))
         .mt(z(8.))
         .mb(z(2.))
-        .max_w(z(432.))
-        .pt(z(8.))
-        .pb(z(8.))
-        .pl(z(8.))
+        .w_full()
+        .max_w(z(376. + (if has_image { 24. } else { 32. }) + 2.))
+        .py(z(8.))
+        .pl(z(if has_image { 8. } else { 16. }))
         .pr(z(16.))
         .rounded(z(8.))
         .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
@@ -396,13 +415,35 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         .items_center()
         .gap(z(8.))
         .children(emoji_el)
-        .child(div().flex_1().min_w_0().child(description))
+        .child(div().flex_1().min_w_0().overflow_hidden().child(description))
         .child(crate::ui::controls::button_sm(("sys-poll-view", msg.id.0), crate::t!("sys.poll_view"), crate::ui::controls::BtnKind::Secondary).on_click(move |_, _, cx| {
             if let Some(p) = poll {
                 e2.update(cx, |a, cx| a.jump_to_message(ch, p, cx));
             }
         }));
-    div().flex().flex_col().pb(z(2.)).child(line).child(div().flex().child(card)).into_any_element()
+    // message_ padding 2px 0, margin-top 17 on a group start. POLL_RESULT carries
+    // `mentions: [poll author]` (live store, 2026-11-24), so the poll author sees the whole
+    // row as .mentioned_: --message-mentioned-background-default (hover -hover) and the 2px
+    // ::before bar in --icon-feedback-warning.
+    let mentioned = msg.author == app.me.id;
+    let (bg, hover) = if mentioned {
+        (Some(idx::MESSAGE_MENTIONED_BACKGROUND_DEFAULT), idx::MESSAGE_MENTIONED_BACKGROUND_HOVER)
+    } else {
+        (None, idx::MESSAGE_BACKGROUND_HOVER)
+    };
+    div()
+        .id(("sysmsg-poll", msg.id.0))
+        .relative()
+        .mt(z(if r.group_start { 17. } else { 0. }))
+        .py(z(2.))
+        .flex()
+        .flex_col()
+        .when_some(bg, |d, b| d.bg(tk(b)))
+        .hover(move |s| s.bg(tk(hover)))
+        .when(mentioned, |d| d.child(div().absolute().left_0().top_0().bottom_0().w(z(2.)).bg(tk(idx::ICON_FEEDBACK_WARNING))))
+        .child(line)
+        .child(div().flex().pr(z(48.)).child(card))
+        .into_any_element()
 }
 
 #[cfg(test)]

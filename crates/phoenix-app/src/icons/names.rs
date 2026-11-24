@@ -14,6 +14,10 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("new-user", &["NewUserIcon"]),
     ("chat-check", &["ChatCheckIcon"]),
     ("check", &["CheckmarkLargeIcon", "CheckmarkLargeBoldIcon"]),
+    // Two-tone CircleCheckIcon (poll answer we voted for, poll result winner): the ring with
+    // the check cut out (`color`) and the disc behind it (`secondaryColor`).
+    ("circle-check", &["CircleCheckIcon"]),
+    ("circle-check-bg", &["CircleCheckIcon#secondary"]),
     // Verified APP tag (botTagVerified_ path measured live, 2026-11-24).
     ("check-small-bold", &["CheckmarkSmallBoldIcon"]),
     ("plus", &["PlusLargeIcon"]),

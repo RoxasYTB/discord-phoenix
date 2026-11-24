@@ -317,7 +317,7 @@ fn container(app: &PhoenixApp, k: &Ctx, ct: &api::Container, ix: usize, cx: &App
     }
     let key: SharedString = format!("component-spoiler-{}-{ix}", k.message.0).into();
     if ct.spoiler && !crate::media::is_revealed(&key, cx) {
-        card = card.child(spoiler_overlay(key));
+        card = card.child(spoiler_cover(key, true).top(z(-1.)).left(z(-1.)).right(z(-1.)).bottom(z(-1.)));
     }
     card.into_any_element()
 }
@@ -327,16 +327,38 @@ fn container(app: &PhoenixApp, k: &Ctx, ct: &api::Container, ix: usize, cx: &App
 /// of `spoilerWarning_` (live dump: padding 8 12, radius 20, 15px semibold,
 /// --opacity-black-60), revealed on click.
 fn spoiler_overlay(key: SharedString) -> AnyElement {
+    spoiler_cover(key, false).inset_0().into_any_element()
+}
+
+/// The cover itself, positioned by the caller. Live 2026-11-24 (sandbox container
+/// spoiler): spoilerContainer_ hidden: --__spoiler-background-color--hidden (hover
+/// --hidden--hover), radius --radius-sm, box-shadow .5px .5px 1px 1px
+/// --__spoiler-container-box-shadow-color; spoilerWarning_ 15px/15px semibold, uppercase,
+/// padding 8 12 (87×31), radius 20, warning colours (hover variants). With `veil`, the
+/// covered card (container_rc97-L.isHidden_: filter blur(--custom-embed-spoiler-blur-radius
+/// 44px), --background-surface-high) shows through as a blurred dark layer, like in the client.
+fn spoiler_cover(key: SharedString, veil: bool) -> gpui::Stateful<gpui::Div> {
+    let group: SharedString = format!("{key}-cover").into();
     div()
         .id(gpui::ElementId::Name(key.clone()))
         .absolute()
-        .inset_0()
         .cursor_pointer()
+        .rounded(z(8.))
+        .overflow_hidden()
         .bg(t(idx::SPOILER_BACKGROUND_COLOR_HIDDEN))
-        .group("component-spoiler")
+        .hover(|s| s.bg(t(idx::SPOILER_BACKGROUND_COLOR_HIDDEN_HOVER)))
+        .shadow(vec![gpui::BoxShadow {
+            color: t(idx::SPOILER_CONTAINER_BOX_SHADOW_COLOR),
+            offset: gpui::point(z(0.5), z(0.5)),
+            blur_radius: z(1.),
+            spread_radius: z(1.),
+            inset: false,
+        }])
+        .group(group.clone())
         .flex()
         .items_center()
         .justify_center()
+        .when(veil, |d| d.child(blurred_veil(t(idx::BACKGROUND_SURFACE_HIGH), 44. * crate::theme::zoom(), 8. * crate::theme::zoom())))
         .child(
             div()
                 .px(z(12.))
@@ -344,15 +366,67 @@ fn spoiler_overlay(key: SharedString) -> AnyElement {
                 .rounded(z(20.))
                 .bg(t(idx::SPOILER_WARNING_BACKGROUND_COLOR))
                 .text_size(z(15.))
+                .line_height(z(15.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(t(idx::SPOILER_WARNING_TEXT_COLOR))
-                .group_hover("component-spoiler", |s| {
-                    s.bg(t(idx::SPOILER_WARNING_BACKGROUND_COLOR_HOVER)).text_color(t(idx::SPOILER_WARNING_TEXT_COLOR_HOVER))
-                })
+                .group_hover(group, |s| s.bg(t(idx::SPOILER_WARNING_BACKGROUND_COLOR_HOVER)).text_color(t(idx::SPOILER_WARNING_TEXT_COLOR_HOVER)))
                 .child(crate::t!("chat.spoiler")),
         )
         .on_click(move |_, _, cx| crate::media::reveal(key.clone(), cx))
-        .into_any_element()
+}
+
+/// Abramowitz–Stegun 7.1.26 (|error| < 1.5e-7).
+fn erf(x: f32) -> f32 {
+    let s = x.signum();
+    let x = x.abs();
+    let t = 1. / (1. + 0.327_591_1 * x);
+    let y = 1. - (((((1.061_405_4 * t - 1.453_152_1) * t) + 1.421_413_7) * t - 0.284_496_74) * t + 0.254_829_6) * t * (-x * x).exp();
+    s * y
+}
+
+/// Share of a box spanning [0, len] that lands on `x` once blurred with a gaussian of
+/// standard deviation `sigma` (CSS `blur(r)` uses σ = r).
+pub fn blur_coverage(x: f32, len: f32, sigma: f32) -> f32 {
+    let k = 1. / (sigma * std::f32::consts::SQRT_2);
+    0.5 * (erf((len - x) * k) + erf(x * k))
+}
+
+/// `color` box blurred by `sigma`, clipped to its own bounds (the spoiler container is
+/// overflow hidden): a grid of quads whose alpha is the separable gaussian coverage.
+fn blurred_veil(color: gpui::Hsla, sigma: f32, radius: f32) -> impl IntoElement {
+    gpui::canvas(
+        |_, _, _| {},
+        move |b, _, window, _| {
+            let (w, h) = (f32::from(b.size.width), f32::from(b.size.height));
+            if w <= 0. || h <= 0. {
+                return;
+            }
+            let cell = (w.max(h) / 64.).max(4.);
+            let (nx, ny) = ((w / cell).ceil() as usize, (h / cell).ceil() as usize);
+            let (cw, chh) = (w / nx as f32, h / ny as f32);
+            let cols: Vec<f32> = (0..nx).map(|i| blur_coverage((i as f32 + 0.5) * cw, w, sigma)).collect();
+            for j in 0..ny {
+                let cy = (j as f32 + 0.5) * chh;
+                let ay = blur_coverage(cy, h, sigma);
+                for (i, ax) in cols.iter().enumerate() {
+                    let cx = (i as f32 + 0.5) * cw;
+                    // Outside the rounded corners: left to the cover's own clip-free corner.
+                    let (dx, dy) = ((radius - cx).max(cx - (w - radius)).max(0.), (radius - cy).max(cy - (h - radius)).max(0.));
+                    if dx * dx + dy * dy > radius * radius {
+                        continue;
+                    }
+                    let mut c = color;
+                    c.a *= ax * ay;
+                    let o = gpui::point(b.origin.x + gpui::px(i as f32 * cw), b.origin.y + gpui::px(j as f32 * chh));
+                    window.paint_quad(gpui::fill(gpui::Bounds::new(o, gpui::size(gpui::px(cw), gpui::px(chh))), c));
+                }
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 /// Colours of a component button (e940c8e: PRIMARY and PREMIUM → Button BRAND,
@@ -782,26 +856,50 @@ fn file(f: &api::FileComponent, msg: Id, ix: usize, cx: &App) -> AnyElement {
     div().max_w_full().child(card).into_any_element()
 }
 
+/// e5 (poll CHECKBOXES selection icon, size 20): checkbox_SZxRc8 2px --text-default border,
+/// radius 3; checkboxSelected_ --brand-500 fill without border and a white
+/// CheckmarkLargeIcon at .85 × size.
 fn checkbox(on: bool) -> AnyElement {
     div()
         .size(px(20.))
         .flex_none()
-        .rounded(px(4.))
-        .border_1()
-        .border_color(if on { c(Palette::BLURPLE) } else { c(Palette::INTERACTIVE_MUTED) })
-        .bg(if on { c(Palette::BLURPLE) } else { gpui::transparent_black() })
+        .rounded(px(3.))
+        .when(!on, |d| d.border_2().border_color(c(tok(idx::TEXT_DEFAULT))))
+        .when(on, |d| d.bg(c(tok(idx::BRAND_500))))
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px(14.))
-        .text_color(gpui::white())
-        .when(on, |d| d.child("✓"))
+        .when(on, |d| d.child(gpui::svg().path(crate::icons::path("check")).size(px(17.)).text_color(gpui::white())))
         .into_any_element()
 }
 
-/// answerSelectionIcon_D4-WfD on the answer we voted for (live 2026-11-24): 24px box, a
-/// --brand-500 circle (r 11) with the check cut out over a white disc (r 10).
-fn voted_check() -> AnyElement {
+/// CircleCheckIcon at `size`: the `secondaryColor` disc (r 10) under the `color` ring with
+/// the check cut out (r 11), both on a 24 viewBox.
+pub fn circle_check(size: f32, color: gpui::Hsla, secondary: gpui::Hsla) -> gpui::Div {
+    div()
+        .relative()
+        .size(px(size))
+        .flex_none()
+        .child(gpui::svg().absolute().top_0().left_0().path(crate::icons::path("circle-check-bg")).size(px(size)).text_color(secondary))
+        .child(gpui::svg().absolute().top_0().left_0().path(crate::icons::path("circle-check")).size(px(size)).text_color(color))
+}
+
+/// Vx (answerSelectionIcon_ on the answer we voted for, LIST mode), live JS 2026-11-24:
+/// expired victor → --control-connected-background-default on white, expired loser →
+/// --icon-strong on --background-mod-muted, otherwise --brand-500 on white.
+pub fn voted_check(size: f32, victor: bool, expired: bool) -> gpui::Div {
+    let (fg, bg) = match (expired, victor) {
+        (true, true) => (c(tok(idx::CONTROL_CONNECTED_BACKGROUND_DEFAULT)), gpui::white()),
+        (true, false) => (c(tok(idx::ICON_STRONG)), c(tok(idx::BACKGROUND_MOD_MUTED))),
+        _ => (c(tok(idx::BRAND_500)), gpui::white()),
+    };
+    circle_check(size, fg, bg)
+}
+
+/// k$ (poll RADIO_BUTTONS selection icon, size 24): the 20px ring (r 10, 2px) in
+/// radioBackground_ --text-default and, selected, the r 5 dot in radioForeground_
+/// --control-brand-foreground.
+fn radio(on: bool) -> AnyElement {
     div()
         .size(px(24.))
         .flex_none()
@@ -809,25 +907,16 @@ fn voted_check() -> AnyElement {
         .items_center()
         .justify_center()
         .child(
-            div().size(px(22.)).rounded_full().bg(c(crate::theme::tok(crate::theme::generated::idx::BRAND_500))).flex().items_center().justify_center().child(
-                gpui::svg().path(crate::icons::path("check")).size(px(14.)).text_color(gpui::white()),
-            ),
+            div()
+                .size(px(20.))
+                .rounded_full()
+                .border_2()
+                .border_color(c(tok(idx::TEXT_DEFAULT)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .when(on, |d| d.child(div().size(px(10.)).rounded_full().bg(c(tok(idx::CONTROL_BRAND_FOREGROUND))))),
         )
-        .into_any_element()
-}
-
-fn radio(on: bool) -> AnyElement {
-    // poll RADIO_BUTTONS selection icon: size 24 (checkboxes 20).
-    div()
-        .size(px(24.))
-        .flex_none()
-        .rounded_full()
-        .border_2()
-        .border_color(if on { c(Palette::BLURPLE) } else { c(Palette::INTERACTIVE_MUTED) })
-        .flex()
-        .items_center()
-        .justify_center()
-        .when(on, |d| d.child(div().size(px(10.)).rounded_full().bg(c(Palette::BLURPLE))))
         .into_any_element()
 }
 
@@ -861,128 +950,180 @@ pub fn percent(count: u32, total: u32) -> u32 {
     if total == 0 { 0 } else { ((count as f64 * 100.) / total as f64).round() as u32 }
 }
 
-/// Poll card of a message (question, answers with bars once voted, Vote /
-/// Remove Vote, "N votes · 3h left"). `None` when the message has no poll.
+/// Answer style of the client's poll view model (951727 `Ay`, live JS 2026-11-24), resolved
+/// to the custom properties of normalStyles_ / votedStyles_ / victorStyles_ JVBjO_:
+/// (--custom-poll-style-border, --custom-poll-style-vote-percentage).
+fn answer_style(expired: bool, leader: bool, self_vote: bool) -> (Option<usize>, usize) {
+    match (expired, leader, self_vote) {
+        // victorSelected / victorNotSelected
+        (true, true, _) => (Some(idx::STATUS_POSITIVE), idx::POLLS_VICTOR_FILL),
+        // voted
+        (false, _, true) => (Some(idx::CONTROL_BRAND_FOREGROUND), idx::POLLS_VOTED_FILL),
+        // loserSelected, notVoted, selected, normalVote: border transparent
+        _ => (None, idx::INTERACTIVE_BACKGROUND_ACTIVE),
+    }
+}
+
+/// Poll card of a message (306417 / 1b027c… live 2026-11-24). `None` when the message has
+/// no poll. The view model: results (LIST mode, bars, vote counts, Vx icon) once we voted,
+/// the poll expired or "Show results" was clicked; otherwise radio buttons / checkboxes.
+/// Prompt only while it can be answered; footer "N votes ∙ <time left | Poll closed>",
+/// then "Show results" (textButton) and Vote / Remove Vote / Go back to vote (sm buttons).
 pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> Option<AnyElement> {
     let poll = store::get(msg.id)?.poll.clone()?;
     let now = chrono::Utc::now().timestamp();
-    let ended = poll.ended(now);
+    let expired = poll.ended(now);
     let voted = poll.voted();
-    let show_results = ended || voted;
+    let show_votes = app.parity.poll_show_results.contains(&msg.id);
+    // canShowVoteCounts = hasVoted || isExpired || showResults (also tapShouldOpenVotersModal → LIST)
+    let results = voted || expired || show_votes;
     let total = poll.total();
     let choice = app.parity.poll_choice.get(&msg.id).cloned().unwrap_or_default();
     let (ch, id) = (msg.channel, msg.id);
-    let winner = poll.answers.iter().map(|a| a.count).max().unwrap_or(0);
+    // isLeader: count >= max && count != 0 (ties are all victors).
+    let top = poll.answers.iter().map(|a| a.count).max().unwrap_or(0);
 
     // answersContainer_D4-WfD: grid, gap 8, margin 8px 0 16px.
     let mut answers = div().mt(px(8.)).mb(px(16.)).flex().flex_col().gap(px(8.));
     for a in &poll.answers {
         let pct = percent(a.count, total);
         let ticked = choice.contains(&a.id);
+        let leader = a.count >= top && a.count != 0;
+        let self_vote = voted && a.me;
+        let (style_border, fill) = answer_style(expired, leader, self_vote);
         let e = entity.clone();
         let aid = a.id;
         let multi = poll.multi;
-        let mut row = div()
-            .id(("poll-answer", (id.0 << 6) ^ a.id as u64))
+        let gid: SharedString = format!("poll-answer-{}-{}", id.0, a.id).into();
+        // answerInner_: outline 1px var(--custom-poll-style-border); currentlyVoting_.selected_
+        // → --control-brand-foreground; .answer_:hover .currentlyVoting_ → --border-strong.
+        // An outline doesn't take room: drawn as an overlay just outside the 50px row.
+        let outline = if !results && ticked { Some(idx::CONTROL_BRAND_FOREGROUND) } else { style_border };
+        let mut inner = div()
             .relative()
-            // answerInner_D4-WfD: min-height 50, --radius-sm, --background-mod-muted, 1px outline
-            // var(--custom-poll-style-border): transparent; voted → --control-brand-foreground;
-            // victor → --status-positive; selected while voting → --control-brand-foreground.
+            // answerInner_D4-WfD: min-height 50, padding 8 16, gap 8, --radius-sm,
+            // --background-mod-muted, overflow hidden, --text-default.
             .min_h(px(50.))
+            .px(px(16.))
+            .py(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(8.))
             .rounded(px(crate::theme::generated::global::RADIUS_SM))
             .overflow_hidden()
-            .bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_MOD_MUTED)))
-            .border_1()
-            .border_color(if ended && a.count == winner && winner > 0 {
-                c(crate::theme::tok(crate::theme::generated::idx::STATUS_POSITIVE))
-            } else if ticked || (show_results && a.me) {
-                c(crate::theme::tok(crate::theme::generated::idx::CONTROL_BRAND_FOREGROUND))
-            } else {
-                gpui::transparent_black()
-            });
-        if show_results {
-            // votePercentageBar_: --custom-poll-style-vote-percentage (default
-            // --interactive-background-active, voted --polls-voted-fill, victor --polls-victor-fill).
-            let fill = if ended && a.count == winner && winner > 0 {
-                c(crate::theme::tok(crate::theme::generated::idx::POLLS_VICTOR_FILL))
-            } else if a.me {
-                c(crate::theme::tok(crate::theme::generated::idx::POLLS_VOTED_FILL))
-            } else {
-                c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_ACTIVE))
-            };
-            row = row.child(div().absolute().top_0().left_0().h_full().w(gpui::relative(pct as f32 / 100.)).bg(fill));
-        } else {
-            // .answer_:hover .currentlyVoting_ outline --border-strong.
-            row = row.cursor_pointer().when(!ticked, |r| r.hover(|s| s.border_color(c(crate::theme::tok(crate::theme::generated::idx::BORDER_STRONG))))).on_click(move |_, _, cx: &mut App| {
+            .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
+            .text_color(c(tok(idx::TEXT_DEFAULT)));
+        if results {
+            // votePercentageBar_: absolute, var(--custom-poll-style-vote-percentage), z-index -1.
+            inner = inner.child(div().absolute().top_0().left_0().h_full().w(gpui::relative(pct as f32 / 100.)).bg(c(tok(fill))));
+        }
+        inner = inner
+            // emoji_D4-WfD: 24px, margin-inline-end 2.
+            .when_some(a.emoji.as_ref(), |d, em| d.child(div().mr(px(2.)).flex_none().child(emoji_el(em, 24.))))
+            .child(
+                // label_: margin-inline-end auto, body-sm/semibold (14 / 18, 600)
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(px(14.))
+                    .line_height(px(18.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(SharedString::from(a.text.clone())),
+            )
+            .when(results, |d| {
+                // votesData_: row, gap 8, nowrap — the count is a secondary textButton
+                // (--text-strong) body-xs/semibold, then "X%" body-md/semibold (inherited colour).
+                d.child(
+                    div()
+                        .relative()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .whitespace_nowrap()
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(c(tok(idx::TEXT_STRONG)))
+                                .child(votes_text(a.count)),
+                        )
+                        .child(div().text_size(px(16.)).line_height(px(20.)).font_weight(FontWeight::SEMIBOLD).child(format!("{pct}%"))),
+                )
+            })
+            // answerSelectionIcon_ (F): Vx in LIST mode on our own vote, radio / checkbox while voting.
+            .when(results && self_vote, |d| d.child(voted_check(24., leader && expired, expired)))
+            .when(!results, |d| d.child(if poll.multi { checkbox(ticked) } else { radio(ticked) }));
+        let mut row = div().id(gpui::ElementId::Name(gid.clone())).group(gid.clone()).relative().child(inner).child(
+            div()
+                .absolute()
+                .top(px(-1.))
+                .left(px(-1.))
+                .right(px(-1.))
+                .bottom(px(-1.))
+                .rounded(px(crate::theme::generated::global::RADIUS_SM + 1.))
+                .border_1()
+                .border_color(outline.map(|o| c(tok(o))).unwrap_or_else(gpui::transparent_black))
+                .when(!results && !ticked, |d| d.group_hover(gid.clone(), |s| s.border_color(c(tok(idx::BORDER_STRONG))))),
+        );
+        if !results {
+            row = row.cursor_pointer().on_click(move |_, _, cx: &mut App| {
                 e.update(cx, |a, cx| a.tick_poll_answer(id, aid, multi, cx));
             });
         }
-        row = row.child(
-            div()
-                .relative()
-                .min_h(px(50.))
-                .px(px(16.))
-                .py(px(8.))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .when_some(a.emoji.as_ref(), |d, em| d.child(emoji_el(em, 24.)))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        // answer label: body-sm/semibold (14 / 1.2857), --text-default
-                        .text_size(px(14.))
-                        .line_height(px(18.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_DEFAULT)))
-                        .child(SharedString::from(a.text.clone())),
-                )
-                .when(show_results, |d| {
-                    // votesData_: row, gap 8 — "N votes" body-xs/semibold, then "X%" body-md/semibold.
-                    d.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .whitespace_nowrap()
-                            .text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_DEFAULT)))
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(16.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(votes_text(a.count)),
-                            )
-                            .child(div().text_size(px(16.)).line_height(px(20.)).font_weight(FontWeight::SEMIBOLD).child(format!("{pct}%"))),
-                    )
-                })
-                .when(show_results && a.me, |d| d.child(voted_check()))
-                .when(!show_results, |d| d.child(if poll.multi { checkbox(ticked) } else { radio(ticked) })),
-        );
         answers = answers.child(row);
     }
 
-    let mut footer_text = votes_text(total);
-    footer_text.push_str(" • ");
-    footer_text.push_str(&if ended {
-        crate::t!("poll.closed").to_string()
-    } else {
-        poll.expiry.map(|e| time_left(e - now)).unwrap_or_default()
+    // secondaryAction (P, showVoterDetails): "N votes" textButton secondary body-sm/medium,
+    // then the expiration label body-sm/normal --text-muted after a "∙" (margin 0 .5rem).
+    let muted = c(tok(idx::TEXT_MUTED));
+    let label = if expired { crate::t!("poll.closed").to_string() } else { poll.expiry.map(|e| time_left(e - now)).unwrap_or_default() };
+    let details = div()
+        .mr_auto()
+        .flex()
+        .whitespace_nowrap()
+        .text_size(px(14.))
+        .line_height(px(18.))
+        .child(div().font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(votes_text(total)))
+        .when(!label.is_empty(), |d| d.child(div().mx(px(8.)).text_color(muted).child("\u{2219}")).child(div().text_color(muted).child(label)));
+    // tertiaryAction: "Show results" while it can be answered and nothing is shown yet.
+    let tertiary = (!expired && !voted && !show_votes).then(|| {
+        let e = entity.clone();
+        div()
+            .id(("poll-show-results", id.0))
+            .cursor_pointer()
+            .text_size(px(14.))
+            .line_height(px(18.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(c(tok(idx::TEXT_STRONG)))
+            .hover(|s| s.underline())
+            .child(crate::t!("poll.show_results"))
+            .on_click(move |_, _, cx: &mut App| e.update(cx, |a, cx| a.poll_show_results(ch, id, true, cx)))
     });
+    // primaryAction: none once expired; Remove Vote (secondary) after voting; Go back to vote
+    // (secondary) while showing results; else Vote (primary), enabled with a selection.
+    use crate::ui::controls::{BtnKind, button_sm};
     let e = entity.clone();
-    let can_vote = !choice.is_empty();
-    let action: Option<AnyElement> = if ended {
+    let primary: Option<AnyElement> = if expired {
         None
     } else if voted {
         Some(
-            pill_button("poll-remove", crate::t!("poll.remove_vote"), false, true)
+            button_sm(("poll-remove", id.0), crate::t!("poll.remove_vote"), BtnKind::Secondary)
                 .on_click(move |_, _, cx: &mut App| e.update(cx, |a, cx| a.vote_poll(ch, id, Vec::new(), cx)))
                 .into_any_element(),
         )
-    } else {
+    } else if show_votes {
         Some(
-            pill_button("poll-vote", crate::t!("poll.vote"), true, can_vote)
+            button_sm(("poll-back", id.0), crate::t!("poll.back_to_vote"), BtnKind::Secondary)
+                .on_click(move |_, _, cx: &mut App| e.update(cx, |a, cx| a.poll_show_results(ch, id, false, cx)))
+                .into_any_element(),
+        )
+    } else {
+        let can_vote = !choice.is_empty();
+        Some(
+            button_sm(("poll-vote", id.0), crate::t!("poll.vote"), BtnKind::Primary)
+                .when(!can_vote, |b| b.opacity(0.5).cursor_not_allowed())
                 .when(can_vote, |b| {
                     b.on_click(move |_, _, cx: &mut App| {
                         e.update(cx, |a, cx| {
@@ -996,6 +1137,8 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
         )
     };
 
+    // promptLabel: only while the poll can be answered (not expired).
+    let prompt = (!expired).then(|| if poll.multi { crate::t!("poll.multi") } else { crate::t!("poll.single") });
     Some(
         div()
             // pollContainer_ margin 4px 0; container_HOJNvw: --background-surface-high, 1px
@@ -1006,38 +1149,41 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
             .min_w(px(302.))
             .p(px(16.))
             .rounded(px(crate::theme::generated::global::RADIUS_SM))
-            .bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_SURFACE_HIGH)))
+            .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
             .border_1()
-            .border_color(c(crate::theme::tok(crate::theme::generated::idx::BORDER_SUBTLE)))
+            .border_color(c(tok(idx::BORDER_SUBTLE)))
             .flex()
             .flex_col()
             .child(
-                // question_: body-md/medium (16 / 1.25, 500)
+                // header_: grid 1fr 24px (infoIcon), column gap 8 → the question wraps 32px short.
                 div()
-                    .text_size(px(16.))
-                    .line_height(px(20.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_STRONG)))
-                    .child(SharedString::from(poll.question.clone())),
+                    .pr(px(32.))
+                    .flex()
+                    .flex_col()
+                    .child(
+                        // question_: body-md/medium (16 / 20, 500)
+                        div()
+                            .text_size(px(16.))
+                            .line_height(px(20.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(c(tok(idx::TEXT_STRONG)))
+                            .child(SharedString::from(poll.question.clone())),
+                    )
+                    // prompt_: margin-top 4, body-sm/normal --text-muted
+                    .when_some(prompt, |d, p| d.child(div().mt(px(4.)).text_size(px(14.)).line_height(px(18.)).text_color(muted).child(p))),
             )
-            // prompt_: margin-top 4, body-sm/normal --text-muted
-            .child(div().mt(px(4.)).text_size(px(14.)).line_height(px(18.)).text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_MUTED))).child(if poll.multi {
-                crate::t!("poll.multi")
-            } else {
-                crate::t!("poll.single")
-            }))
             .child(answers)
             .child(
-                // bottomBar_: row, gap 16, min-height --custom-button-button-md-height; details
-                // body-sm/normal --text-muted.
+                // bottomBar_: row wrap, gap 16, centred, min-height --custom-button-button-md-height.
                 div()
                     .min_h(px(crate::theme::generated::global::CUSTOM_BUTTON_BUTTON_MD_HEIGHT))
                     .flex()
+                    .flex_wrap()
                     .items_center()
-                    .justify_between()
                     .gap(px(16.))
-                    .child(div().text_size(px(14.)).line_height(px(18.)).text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_MUTED))).child(footer_text))
-                    .children(action),
+                    .child(details)
+                    .children(tertiary)
+                    .children(primary),
             )
             .into_any_element(),
     )
@@ -1115,6 +1261,17 @@ impl PhoenixApp {
             }
         }
         self.refresh_message(k.channel, k.message);
+        cx.notify();
+    }
+
+    /// "Show results" / "Go back to vote" (local only, like the client's poll store).
+    fn poll_show_results(&mut self, channel: Id, msg: Id, on: bool, cx: &mut gpui::Context<Self>) {
+        if on {
+            self.parity.poll_show_results.insert(msg);
+        } else {
+            self.parity.poll_show_results.remove(&msg);
+        }
+        self.refresh_message(channel, msg);
         cx.notify();
     }
 
@@ -1423,6 +1580,30 @@ pub fn overlays(app: &mut PhoenixApp, window: &mut Window, cx: &mut gpui::Contex
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn spoiler_veil_matches_the_client_blur() {
+        // Live 2026-11-24: a 53px container blurred by 44px over the spoiler grey shows
+        // ~44% of the dark card at its centre (61,61,68 between 89,90,99 and the card).
+        let a = super::blur_coverage(26.4, 52.85, 44.);
+        assert!((0.42..0.47).contains(&a), "{a}");
+        // A tall box is fully opaque in the middle and half at its edge.
+        assert!(super::blur_coverage(500., 1000., 44.) > 0.99);
+        assert!((super::blur_coverage(0., 1000., 44.) - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn poll_answer_styles_follow_the_client() {
+        use crate::theme::generated::idx;
+        // Expired leader (with or without our vote): victor border and fill.
+        assert_eq!(super::answer_style(true, true, true), (Some(idx::STATUS_POSITIVE), idx::POLLS_VICTOR_FILL));
+        assert_eq!(super::answer_style(true, true, false), (Some(idx::STATUS_POSITIVE), idx::POLLS_VICTOR_FILL));
+        // Expired loser we voted for: normal style (no brand outline any more).
+        assert_eq!(super::answer_style(true, false, true), (None, idx::INTERACTIVE_BACKGROUND_ACTIVE));
+        // Open poll, our vote: voted style.
+        assert_eq!(super::answer_style(false, true, true), (Some(idx::CONTROL_BRAND_FOREGROUND), idx::POLLS_VOTED_FILL));
+        assert_eq!(super::answer_style(false, true, false), (None, idx::INTERACTIVE_BACKGROUND_ACTIVE));
+    }
 
     #[test]
     fn button_actions() {
