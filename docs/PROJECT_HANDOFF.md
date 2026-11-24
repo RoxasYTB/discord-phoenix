@@ -1,6 +1,6 @@
 # Project Phoenix — état et handoff
 
-> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). État courant : `main` à `68856ec`, huit commits locaux devant `origin/main`.
+> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). Les captures de référence et changements documentaires les plus récents sont consignés par `6466375`, `68856ec` et `e3132a9`; la branche est en avance de neuf commits sur `origin/main`.
 
 Ce document est le point de reprise pour les sessions qui poursuivent la parité visuelle et fonctionnelle de Discord Phoenix. Il complète les tableaux par fonctionnalité dans [`docs/parity/`](parity/) et l’inventaire des routes dans [`docs/PARITY.md`](PARITY.md). Il ne remplace pas les preuves d’exécution ni les tests.
 
@@ -19,10 +19,10 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 - La sauvegarde initiale et son journal de test sont dans `/mnt/windata/project-phoenix/backups/20261124-112201Z/`. Une sauvegarde plus récente de `main` à `b22e6b1` est dans `/mnt/windata/project-phoenix/backups/20261124-113638Z/` (`main.bundle`, `worktree.patch`, `screenshots/`, `status.txt`). Elles ne contiennent aucun jeton.
 - Le commit `3cf6524` complète le handoff avec la vérification ciblée et les limites de la capture CDP. La suite `cargo test -p phoenix-app --lib` passe: 211 réussis, 2 ignorés.
 - Le commit `c479f54` câble l’option locale `send-btn` à un bouton Phoenix qui réutilise `submit_composer`, avec une icône SVG originale. Le bouton apparaît actuellement pour un brouillon non vide et autorisé. Ce critère reste à comparer au client officiel; aucun message n’a été envoyé pendant la validation.
-- La sauvegarde du `main` à `68856ec` est `/mnt/windata/project-phoenix/backups/20261124-120131Z/` (`main.bundle`, `main-since-origin.patch`, `HEAD.txt`, état Git, log de test et copie des trois captures PNG non suivies). Le bundle a été vérifié; le log contient le résultat des 211 tests. Les captures ne sont pas ajoutées au dépôt.
+- La dernière sauvegarde vérifiée est le `main` à `68856ec` dans `/mnt/windata/project-phoenix/backups/20261124-120131Z/` (`main.bundle`, `main-since-origin.patch`, `HEAD.txt`, état Git, log de test et copie des trois captures PNG non suivies). Le bundle a été vérifié; le log contient le résultat des 211 tests. Les commits documentaires ultérieurs doivent être inclus dans la prochaine sauvegarde.
 - Reprise suivante : le client officiel est encore accessible en CDP sur la capture d’écran. Une capture visuelle temporaire 1920×1050 du compositeur a été inspectée puis supprimée. La préférence Send Message n’a pas été modifiée; le contrôle n’était pas visible dans cet état, ce qui ne permet pas d’inférer le rendu activé. Cette limite et la méthode à suivre figurent dans `docs/parity/composer.md`.
 - La documentation Soundboard est enrichie à partir du guide officiel : le flux de haut niveau est ouvrir les contrôles vocaux, choisir un serveur disponible puis un son. L’interface et les endpoints Phoenix ne sont toujours pas mesurés; aucune action vocale ou lecture audio n’a été faite. Voir `docs/parity/pickers.md`.
-- Les commits de cette reprise sont `6466375` (limites de référence composer/Soundboard) et `68856ec` (mise à jour handoff). La branche est en avance de huit commits sur `origin/main`, sans push. `git diff --check` est propre; aucune compilation n’a été lancée lors de cette reprise et `/home` conserve environ 4 Go libres.
+- Cette reprise a consigné les limites de référence composer/Soundboard et actualisé le handoff. La branche est en avance de dix commits sur `origin/main`, sans push. `git diff --check` est propre; aucune compilation n’a été lancée lors de cette reprise et `/home` conserve environ 4 Go libres.
 - Aucun intégrateur, build Cargo ou agent de la session précédente ne tournait pendant la vérification.
 
 ## Règle de contribution et méthode de référence
