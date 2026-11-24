@@ -350,6 +350,11 @@ pub trait Backend: Send + Sync + 'static {
     fn collectibles_shop(&self) -> BoxFuture<crate::ui::settings::collectibles::ShopCatalog> {
         Box::pin(async { Ok(Default::default()) })
     }
+    /// Raw shop catalogue (`GET /collectibles-categories/v2`) for the Shop
+    /// page cards (names, prices, previews). Read-only.
+    fn shop_storefront(&self) -> BoxFuture<serde_json::Value> {
+        Box::pin(async { Ok(serde_json::Value::Null) })
+    }
     /// One collectible by SKU (`GET /collectibles-products/{sku}`): the
     /// applied profile effect / frame of a shown profile.
     fn collectible_product(&self, _sku: u64) -> BoxFuture<Option<crate::ui::settings::collectibles::Collectible>> {

@@ -26,6 +26,8 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("bell", &["BellIcon"]),
     ("pin", &["PinIcon"]),
     ("star", &["StarIcon"]),
+    ("heart", &["HeartIcon"]),
+    ("tag", &["TagIcon"]),
     ("members", &["GroupIcon"]),
     ("calendar", &["CalendarIcon"]),
     ("channel-browse", &["ChannelListMagnifyingGlassIcon"]),

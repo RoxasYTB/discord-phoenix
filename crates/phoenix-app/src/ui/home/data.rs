@@ -150,6 +150,8 @@ pub enum HomeView {
     MessageRequests,
     /// A DM is open in the chat pane.
     Dm,
+    /// Shop page (`/shop`).
+    Shop,
 }
 
 /// Modal / popout currently shown above the main layout.

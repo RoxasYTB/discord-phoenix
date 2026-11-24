@@ -178,6 +178,12 @@ pub fn applied_skus(c: &[Value]) -> (Option<u64>, Option<u64>) {
     (find(1), find(3))
 }
 
+/// Shop page card art: the preview of a product's first item (any kind).
+pub fn product_preview(p: &Value) -> Option<SharedString> {
+    let it = p.get("items")?.as_array()?.first()?;
+    preview(Kind::from_type(it.get("type")?.as_u64()?)?, it)
+}
+
 fn full(kind: Kind, item: &Value) -> Option<SharedString> {
     (kind == Kind::Effect).then(|| item.get("reducedMotionSrc").and_then(Value::as_str).map(|s| s.to_owned().into())).flatten()
 }

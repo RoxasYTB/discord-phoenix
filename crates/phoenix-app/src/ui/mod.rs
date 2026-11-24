@@ -58,6 +58,7 @@ pub mod channel_unread_bar;
 pub mod user_menu;
 pub mod voice_panel;
 pub mod voice_row;
+pub mod shop_page;
 pub mod emoji_text;
 
 use crate::theme::z;
