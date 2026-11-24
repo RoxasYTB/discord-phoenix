@@ -13,7 +13,7 @@ use crate::{
     model::{Id, ImageRef},
     presence::{Activity, ActivityKind, Popout, Profile, format_date, status_label},
     theme::{DEFAULT_AVATAR, Palette, c, role_color},
-    ui::{avatar_with_status, members::app_tag, status_picker},
+    ui::{avatar_with_status, members::bot_tag_px, status_picker},
 };
 
 // 253781 `:root` --custom-user-profile-popout-width
@@ -418,6 +418,7 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
     let tag = i.user.as_deref().and_then(|u| u.tag.clone());
     let pronouns = i.prof.map(|p| p.pronouns.clone()).filter(|p| !p.is_empty());
     let bot = i.user.as_deref().is_some_and(|u| u.bot);
+    let verified = i.user.as_deref().is_some_and(|u| u.verified_bot);
     div()
         .flex()
         .flex_col()
@@ -436,7 +437,7 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
                         .text_ellipsis()
                         .child(crate::fonts::name_text(i.display.clone(), i.user.as_deref(), if big { 24. } else { 20. })),
                 )
-                .when(bot, |d| d.child(app_tag()))
+                .when(bot, |d| d.child(bot_tag_px(verified)))
                 // displayNameTrailing_C2XpHA: the note button (popout / DM panel)
                 .children(trailing),
         )

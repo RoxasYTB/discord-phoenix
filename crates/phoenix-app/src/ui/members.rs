@@ -812,7 +812,7 @@ pub fn member_row_in(
                                 )),
                         )
                         .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.)))) // chipletContainerInner_k8jyN7 margin 1px 0 1px 4px
-                        .when(user.is_some_and(|u| u.bot), |d| d.child(member_bot_tag(user.is_some_and(|u| u.verified_bot))))
+                        .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot)).ml(z(4.))))
                         .when(owner, |d| {
                             // ownerIcon_Iy0c7A: 14px (icon_Iy0c7A), --text-feedback-warning
                             d.child(gpui::svg().path(crate::icons::path("crown")).size(z(14.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))
@@ -864,13 +864,13 @@ fn streaming_dot() -> gpui::Div {
         )
 }
 
-/// Member list APP tag (vanilla botTag_Iy0c7A botTagRegular_ px_): flex, 16px
-/// tall, padding 0 4px, radius 4, margin-inline-start 4, --background-brand;
-/// botTagVerified_ check 16px margin-left -2; botText_ 12/16 600 uppercase.
-fn member_bot_tag(verified: bool) -> gpui::Div {
+/// APP tag, px variant (vanilla botTagRegular_ px_, measured live in the member
+/// list): 16px tall, padding 0 4px, radius 4, --background-brand; botTagVerified_
+/// check 16px margin-left -2; botText_ 12/16 600 uppercase. The member list adds
+/// botTag_Iy0c7A's margin-inline-start 4; the profile's botTag_C2XpHA adds none.
+pub fn bot_tag_px(verified: bool) -> gpui::Div {
     div()
         .flex_none()
-        .ml(z(4.))
         .h(z(16.))
         .px(z(4.))
         .rounded(z(4.))
@@ -897,16 +897,6 @@ pub fn verified_check() -> gpui::Div {
         .tip(crate::t!("common.verified_app"))
 }
 
-pub fn app_tag() -> gpui::Div {
-    div()
-        .px(z(4.))
-        .rounded(z(3.))
-        .bg(c(Palette::BLURPLE))
-        .text_size(z(10.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(gpui::white())
-        .child(crate::t!("common.app"))
-}
 
 /// 32px avatar "online on mobile" (live client masks):
 /// `svg-mask-avatar-status-mobile-32` cuts a rect (.59375, .4375) .5x.65625,
