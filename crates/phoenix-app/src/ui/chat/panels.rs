@@ -16,7 +16,7 @@ use super::{
     state::{EmojiTarget, QUICK_REACTIONS},
 };
 use crate::{
-    app::{PhoenixApp, format_time_full},
+    app::{PhoenixApp, format_time_full, format_time_short},
     assets::Icon,
     model::Message,
     theme::{Palette, c, z},
@@ -589,7 +589,16 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
     if app.chat.at_bottom {
         return None;
     }
-    let since = format_time_full(ts);
+    // Client unread bar: same day "N nouveaux messages depuis 10:42" (BctFH/), older
+    // "… depuis le 23 novembre 2026 à 10:42" (3wXb9P, its \n rendered as a space).
+    let today = chrono::TimeZone::timestamp_opt(&chrono::Local, ts, 0)
+        .single()
+        .is_some_and(|d| d.date_naive() == chrono::Local::now().date_naive());
+    let since: SharedString = if today {
+        format_time_short(ts)
+    } else {
+        crate::t!("chat.new_since_date", date = crate::app::format_day(ts), time = format_time_short(ts))
+    };
     let text = if n == 1 { crate::t!("chat.new_since_one", since = since) } else { crate::t!("chat.new_since_many", n = n, since = since) };
     Some(
         div()
