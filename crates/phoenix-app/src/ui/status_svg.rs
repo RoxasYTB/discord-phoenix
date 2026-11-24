@@ -31,6 +31,15 @@ pub fn path(p: Presence, streaming: bool) -> &'static str {
 
 /// SVG for a `status/*.svg` asset path, in a 0..100 view box.
 pub fn svg(path: &str) -> Option<String> {
+    if path == MOBILE {
+        // svg-mask-status-online-mobile over its 10x15 rect (view box 100x150):
+        // rect rx .1875 ry .125, minus screen (.125, .1667) .75x.5 and the
+        // home button ellipse (.5, .8333) .125x.0833.
+        return Some(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 150"><path fill="white" fill-rule="evenodd" d="M18.75 0 H81.25 A18.75 18.75 0 0 1 100 18.75 V131.25 A18.75 18.75 0 0 1 81.25 150 H18.75 A18.75 18.75 0 0 1 0 131.25 V18.75 A18.75 18.75 0 0 1 18.75 0 Z M12.5 25 V100 H87.5 V25 Z M37.5 125 A12.5 12.5 0 1 0 62.5 125 A12.5 12.5 0 1 0 37.5 125 Z"/></svg>"#
+                .to_owned(),
+        );
+    }
     let body = match path.strip_prefix("status/")?.strip_suffix(".svg")? {
         "online" => CIRCLE.to_owned(),
         "offline" => format!("{CIRCLE} M75 50 A25 25 0 1 0 25 50 A25 25 0 1 0 75 50 Z"),
@@ -45,6 +54,9 @@ pub fn svg(path: &str) -> Option<String> {
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="white" fill-rule="evenodd" d="{body}"/></svg>"#
     ))
 }
+
+/// Asset path of the "online on mobile" phone glyph.
+pub const MOBILE: &str = "status/mobile.svg";
 
 const CIRCLE: &str = "M100 50 A50 50 0 1 0 0 50 A50 50 0 1 0 100 50 Z";
 
@@ -110,6 +122,7 @@ mod tests {
 
     #[test]
     fn svgs_parse() {
+        assert!(svg(MOBILE).is_some_and(|s| s.contains("150")));
         for p in ["online", "idle", "dnd", "offline", "streaming"] {
             let s = svg(&format!("status/{p}.svg")).unwrap();
             assert!(s.contains("<path"), "{p}");

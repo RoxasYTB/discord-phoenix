@@ -741,10 +741,15 @@ pub fn member_row_in(
                 .child({
                     // the status cut shows the row's hover / selected background like the mask
                     let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
-                    crate::ui::avatar_with_status_overlay(user, 32., mem.presence, c(Palette::BG_SECONDARY), move |d| {
+                    let cut = move |d: gpui::Div| {
                         d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
                             .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
-                    })
+                    };
+                    if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
+                        mobile_avatar(user, cut)
+                    } else {
+                        crate::ui::avatar_with_status_overlay(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut)
+                    }
                 })
                 .when(streaming, |d| d.child(streaming_dot()))
                 .when_some(user.and_then(|u| u.decoration.clone()), |d, deco| {
@@ -878,6 +883,38 @@ pub fn app_tag() -> gpui::Div {
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(gpui::white())
         .child(crate::t!("common.app"))
+}
+
+/// 32px avatar "online on mobile" (live client masks):
+/// `svg-mask-avatar-status-mobile-32` cuts a rect (.59375, .4375) .5x.65625,
+/// radius .13125, and the phone glyph is a 10x15 rect at 22,17 in --status-online.
+fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) -> gpui::Div) -> gpui::Div {
+    div()
+        .relative()
+        .flex_none()
+        .size(px(32.))
+        .child(crate::ui::avatar(user, 32.))
+        .child(
+            div()
+                .absolute()
+                .left(px(32. * 0.59375))
+                .top(px(32. * 0.4375))
+                .w(px(32. * 0.5))
+                .h(px(32. * 0.65625))
+                .rounded(px(32. * 0.13125))
+                .bg(c(Palette::BG_SECONDARY))
+                .child(cut(div().size_full().rounded(px(32. * 0.13125)))),
+        )
+        .child(
+            gpui::svg()
+                .path(crate::ui::status_svg::MOBILE)
+                .absolute()
+                .left(px(22.))
+                .top(px(17.))
+                .w(px(10.))
+                .h(px(15.))
+                .text_color(crate::theme::presence_color(crate::model::Presence::Online)),
+        )
 }
 
 /// What the member row's second line shows (vanilla dump `vanilla-members`, subText_J1Adu_).

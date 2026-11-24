@@ -1,5 +1,6 @@
 pub mod autocomplete;
 pub mod avatar_deco;
+pub mod mobile_status;
 pub mod profile_theme;
 pub mod profile_games;
 pub mod profile_board;

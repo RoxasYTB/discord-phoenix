@@ -904,6 +904,9 @@ impl MemberList {
             }
             us.push(user(u));
             let p = m.presence.as_ref();
+            if let Some(p) = p {
+                crate::ui::mobile_status::note_value(u.id.0, p);
+            }
             ms.push(model::Member {
                 user: id(u.id),
                 roles: m.member.roles.iter().copied().map(id).collect(),
@@ -1155,6 +1158,7 @@ impl Adapter {
                     out.push(AppEvent::Users(vec![user(&u)]));
                 }
                 self.statuses.insert(p.user.id.0, presence(&p.status));
+                crate::ui::mobile_status::note(p.user.id.0, &p.status, p.client_status.as_ref());
                 out.push(AppEvent::PresenceUpdate { user: id(p.user.id), presence: presence(&p.status) });
                 let activities = crate::presence::parse_activities(&p.activities);
                 out.push(AppEvent::Activities { user: id(p.user.id), activities });
@@ -1168,6 +1172,7 @@ impl Adapter {
                         if let Some(u) = uid {
                             let st = p.get("status").and_then(Value::as_str).unwrap_or("offline");
                             self.statuses.insert(u, presence(st));
+                            crate::ui::mobile_status::note_value(u, p);
                             out.push(AppEvent::PresenceUpdate { user: Id(u), presence: presence(st) });
                             let a = p.get("activities").and_then(Value::as_array).map(|a| crate::presence::parse_activities(a));
                             out.push(AppEvent::Activities { user: Id(u), activities: a.unwrap_or_default() });
@@ -1191,6 +1196,7 @@ impl Adapter {
                     if let Some(u) = uid {
                         let st = presence(p.get("status").and_then(Value::as_str).unwrap_or("offline"));
                         self.statuses.insert(u, st);
+                        crate::ui::mobile_status::note_value(u, p);
                         out.push(AppEvent::PresenceUpdate { user: Id(u), presence: st });
                         let a = p.get("activities").and_then(Value::as_array).map(|a| crate::presence::parse_activities(a));
                         out.push(AppEvent::Activities { user: Id(u), activities: a.unwrap_or_default() });
