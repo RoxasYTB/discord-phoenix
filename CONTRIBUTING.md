@@ -2,17 +2,21 @@
 
 Thanks for helping. Discord Phoenix is an **unofficial** client. It is not affiliated with, endorsed by, or supported by Discord Inc. "Discord" is a trademark of Discord Inc. and is used here only to describe what the client connects to.
 
-## Clean-room rule (mandatory)
+## Reference material: 1:1 parity
 
-We implement against publicly documented behaviour only: the [official developer docs](https://discord.com/developers/docs), community documentation, and observation of network traffic from your own account.
+Phoenix aims to be visually and functionally identical to the official 2026 client. To get there, contributors may and should work from the real client:
 
-You must **never** contribute:
+- its CSS (values, variables, class rules), computed styles and DOM, read from your own running client (for example through the Chrome DevTools Protocol);
+- the behaviour of its JavaScript: settings protobuf fields, request flows, timings, animation curves;
+- its icons, fonts, sounds, images and translation strings, used as the reference for what Phoenix shows;
+- network traffic from your own account, and the [official developer docs](https://discord.com/developers/docs).
 
-- code copied, translated or derived from Discord's official clients (desktop, web or mobile JS bundles, decompiled or deobfuscated sources, native modules);
-- Discord's proprietary assets: logos, Clyde, sounds, fonts, icons, illustrations, CSS or translation strings;
-- anything you obtained under an NDA or by breaching an agreement.
+How we use Discord's files in practice:
 
-If you have studied Discord's client source closely, describe the behaviour in an issue and let someone else implement it. PRs that break this rule will be closed and the history rewritten if needed.
+- **Measured values go into the code**: sizes, colours, radii and timings, with a comment citing the CSS rule or dump they come from (see `docs/parity/`).
+- **Binary assets are loaded at runtime from the user's own Discord install or cache**: icons, fonts and sounds. They are not committed to this repository; see `crates/phoenix-app/src/icons` and `src/fonts`. Hand-drawn fallbacks cover users without a local Discord.
+- **Dumps and captures from a real account stay private**: never commit names, messages, IDs, signed URLs or tokens. Public screenshots use demo data.
+- Never contribute anything obtained under an NDA or by breaching an agreement.
 
 We also don't accept self-bot features, spam/automation tools, or ways to bypass rate limits, Nitro restrictions or moderation.
 

@@ -34,7 +34,7 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 
 ## Règle de contribution et méthode de référence
 
-[`CONTRIBUTING.md`](../CONTRIBUTING.md) impose une approche clean-room : ne pas copier, traduire ni dériver de code des bundles Discord; ne pas ajouter leurs CSS, polices, traductions, sons, logos, icônes ou illustrations. Les observations du client peuvent guider une description de comportement, mais l’implémentation doit rester originale et s’appuyer sur la documentation publique, les réponses d’API autorisées et des captures de pixels.
+Objectif : un client identique 1:1 au client officiel 2026 ([`CONTRIBUTING.md`](../CONTRIBUTING.md)). Le CSS réel (valeurs, variables, règles), les styles calculés, le DOM, le comportement du JS (champs protobuf, flux de requêtes, timings) et les assets du client servent de référence. Les valeurs mesurées vont dans le code, avec leur source citée. Les assets binaires (icônes, polices, sons) sont chargés au runtime depuis l'installation ou le cache Discord local de l'utilisateur : on ne les committe pas.
 
 Le client officiel est déjà accessible via le débogueur lié à `127.0.0.1:9222`. Le helper de référence est `/home/yohan/discord-phoenix-ref/cdp.mjs`. Pour une capture temporaire et visuelle seulement :
 
@@ -44,9 +44,9 @@ node /home/yohan/discord-phoenix-ref/cdp.mjs shot /tmp/phoenix-reference.png
 
 Ne pas lancer `dump` ou `autodump.sh` : ils peuvent enregistrer du texte, des libellés ARIA, des noms et des captures privés dans le dépôt. Ne pas archiver une capture de compte réel ni la joindre au README, au changelog ou à un commit sans inspection et assainissement explicite. Pour les comparaisons publiques, utiliser en priorité les fixtures/données synthétiques et masquer tout identifiant ou contenu réel. Les captures de progression doivent porter cet avertissement, en majuscules, gras et souligné :
 
-**<u>CES CAPTURES NE SONT PAS LES VERSIONS DÉFINITIVES.</u>**
+**<u>THESE SCREENSHOTS ARE NOT FINAL VERSIONS.</u>**
 
-La capture écran permet de mesurer le rendu visible. Ne pas extraire les styles calculés, les feuilles CSS ou les SVG du client pour les transformer en code Phoenix. Les hovers, états de focus et largeurs doivent être décrits à partir de ce qui est visiblement observé et reproduits avec du code original.
+La capture écran permet de mesurer le rendu visible. Les styles calculés, les feuilles CSS et les SVG du client sont la référence à reproduire : il faut mesurer les hovers, états de focus et largeurs sur le client réel, puis citer la règle source dans le code.
 
 ## Garde-fous persistants
 

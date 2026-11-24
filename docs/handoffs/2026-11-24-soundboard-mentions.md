@@ -19,7 +19,7 @@ Implement only the static rendering of Discord's inline Soundboard token in mess
 2. Add focused API deserialization and backend-conversion coverage, including missing/null metadata and guild-scoped lookup.
 3. Render the synthetic showcase and compare a screenshot to the official client only if the reference can show a synthetic/safe mention without exposing private account content. Use screenshot-only CDP; do not dump DOM/ARIA/text or persist account screenshots.
 4. Measure width changes and hover/focus styling on a safe fixture. Keep this row ⚠ until measured. Do not connect playback as part of this static-rendering change.
-5. Update README/changelog only with inspected synthetic screenshots. Add the required warning: **<u>CES CAPTURES NE SONT PAS LES VERSIONS DÉFINITIVES.</u>**
+5. Update README/changelog only with inspected synthetic screenshots. Add the required warning: **<u>THESE SCREENSHOTS ARE NOT FINAL VERSIONS.</u>**
 6. Make a dated backup before the next substantial edit and commit this slice only after validation. Do not push without a request.
 
 ## Current validation status

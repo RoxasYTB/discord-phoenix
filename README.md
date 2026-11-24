@@ -51,7 +51,7 @@ Beta: under active development. Expect missing features and bugs.
 
 ## Development progress
 
-**<u>CES CAPTURES NE SONT PAS LES VERSIONS DÉFINITIVES.</u>**
+**<u>THESE SCREENSHOTS ARE NOT FINAL VERSIONS.</u>**
 
 The image below is a development snapshot of the Voice & Video settings screen. It is retained as a historical UI reference and does not claim that every control is wired in the current build. See the [parity handoff](docs/PROJECT_HANDOFF.md) and [comparison protocol](docs/PARITY_WORKFLOW.md) for verified scope and remaining gaps.
 
@@ -114,7 +114,8 @@ See [SECURITY.md](SECURITY.md) for how credentials are handled and how to report
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first. In short: everything is
-written from scratch; do not copy Discord's proprietary code or assets into this repository.
+aimed at 1:1 parity with the official client. The real client's CSS, behaviour and assets are the reference.
+Binary assets are loaded from your local Discord install and are not shipped in this repository.
 
 ## License
 

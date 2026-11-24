@@ -1,6 +1,6 @@
 # Protocole de parité visuelle et fonctionnelle
 
-Ce protocole garde les comparaisons reproductibles et compatibles avec le clean-room énoncé dans [`CONTRIBUTING.md`](../CONTRIBUTING.md). Pour les détails sur l’état actuel du projet, voir [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md).
+Ce protocole garde les comparaisons reproductibles pour atteindre la parité 1:1 décrite dans [`CONTRIBUTING.md`](../CONTRIBUTING.md). Pour les détails sur l’état actuel du projet, voir [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md).
 
 ## 1. Définir une observation
 
@@ -27,7 +27,7 @@ node /home/yohan/discord-phoenix-ref/cdp.mjs shot /tmp/phoenix-reference.png
 
 Inspecter localement puis noter seulement les mesures nécessaires (dimensions visibles, alignements, états, texte générique si non privé). Ne pas capturer le corps complet de la page, ne pas exporter les dumps DOM/ARIA, ne pas enregistrer les URL privées ou signées. Une capture de l’interface réelle peut exposer conversations, noms, serveurs, notifications ou recherche : elle reste temporaire et ne va ni dans Git, ni dans `docs/`, ni dans le changelog.
 
-Ne pas lire ou extraire les bundles, CSS, SVG, polices, traductions ou assets Discord. Ne pas coder à partir d’eux. Décrire le comportement observé en termes neutres et réaliser une implémentation originale.
+Le CSS, les styles calculés, les SVG, les polices, les traductions et le comportement du JS du client sont la référence : les valeurs mesurées vont dans le code avec leur source (règle CSS, dump, mesure en direct). Les assets binaires se chargent au runtime depuis l’installation Discord locale et ne sont jamais committés. Seules restrictions qui restent : la confidentialité (aucune donnée de compte réel dans git) et aucune écriture sur le compte en dehors du salon de test autorisé.
 
 Pour vérifier un état sans toucher au compte réel, l’exemple `screenshot` utilise le `MockBackend` :
 
@@ -74,7 +74,7 @@ Pour chaque paire Phoenix/référence :
 
 Les noms, messages, URLs et autres contenus réels n’apparaissent jamais dans une image publique. Chaque capture de progrès affichée dans le README doit porter :
 
-**<u>CES CAPTURES NE SONT PAS LES VERSIONS DÉFINITIVES.</u>**
+**<u>THESE SCREENSHOTS ARE NOT FINAL VERSIONS.</u>**
 
 ## 6. Triage et état des lignes
 
