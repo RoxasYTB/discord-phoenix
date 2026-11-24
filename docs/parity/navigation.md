@@ -200,3 +200,4 @@ written to the account; the write path is covered by unit tests only.
 | menu | `m_` + dumps vanilla-menu-channel / -dm / -group-dm | rows | "Ajouter aux favoris" > "Favoris" + one row per category; checked row removes, another row moves | actions/channel.rs favorite_item | ✅ (was a local file before) |
 | empty view | `D5SN5/`, `6uDHk6` | — | welcome text + "Ajouter un salon" | — | ❌ falls back to Home |
 | real_shots | example | env | `PHX_VIEW=favorites PHX_FAVORITES="id,id|Catégorie:id,id"` builds favorites in memory only (save_settings is denied there) | examples/real_shots.rs | ✅ |
+| rail + view render | real_shots 2026-11-24 (Aperture Sciences channels injected in memory) | — | star tile selected (blurple + pill), "Favoris" header, uncategorized channel then a category | — | ✅ (a READY that arrives after the view setup calls `select_guild` and leaves the view: in real_shots rerun; in the app a full resync does the same ⚠) |
