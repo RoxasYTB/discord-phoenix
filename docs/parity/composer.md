@@ -8,6 +8,14 @@ Nothing was typed into the live client (typing would broadcast "is typing"). Pop
 from typed text are built from the CSS rules alone, marked **CSS only**: no live dump, no
 side-by-side compare.
 
+The official August 11, 2026 changelog describes desktop game mentions: type `@game`, search games
+with a Discord profile, and insert a game embed (examples: Palworld and Sunderfolk). It does not
+specify the suggestion row layout, keyboard behavior, exact inserted token payload, or search
+endpoint. Phoenix's `GET /games/{id}` use is only for known profile-widget IDs and is not a search
+API. `ac-games` remains stored but unwired until a read-only catalog/search route and response
+shape are established. Do not substitute the user's current activity list: that is not documented
+as the searchable catalog. Evidence: [Discord Update: August 11, 2026](https://discord.com/blog/discord-update-august-11-2026-changelog).
+
 The `send-btn` preference is wired locally in Phoenix. A temporary visual-only capture of the
 official client at 1920×1050 showed the regular composer actions, with no Send Message control in
 that observed state. The preference state was not changed, so this does **not** establish how the

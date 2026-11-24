@@ -76,7 +76,7 @@ where its value is stored and what it changes in the UI.
 | md-preview | Preview emojis, mentions and markdown syntax as you type | settings-proto `text_and_images.use_rich_chat_input` (6, 2) | — | 🟡 stored, no effect yet |
 | emoticons | Automatically convert emoticons in your messages to emoji | settings-proto `text_and_images.convert_emoticons` (6, 21) | ":)" → 🙂 on send/edit (settings/emoticons.rs) | ✅ |
 | ac-stickers | Show sticker suggestions in autocomplete | settings-proto `text_and_images.include_stickers_in_autocomplete` (6, 28) | no sticker rows in the :emoji autocomplete when off (autocomplete.rs) | ✅ |
-| ac-games | Show games in autocomplete | settings-proto `text_and_images.include_game_mentions_in_autocomplete` (6, 39) | — | 🟡 stored, no effect yet |
+| ac-games | Show games in autocomplete | settings-proto `text_and_images.include_game_mentions_in_autocomplete` (6, 39) | gate the `@game` search/suggestion flow; selected result inserts a Discord game mention/embed | 🟡 stored, no effect yet; game catalog/search route and result shape not yet established |
 | send-btn | Show the Send Message button | local prefs (settings.json) | button appears for a nonempty, sendable draft and calls the existing submit path | ⚠ wired; visibility rule and screenshot not yet compared with the official client |
 | dm-search | By default, search in DMs… | settings-proto `text_and_images.is_cross_dm_search_enabled` (6, 36) | — | 🟡 stored, no effect yet |
 | streamer | Enable Streamer Mode | local prefs (settings.json) | — | 🟡 stored, no effect yet |
