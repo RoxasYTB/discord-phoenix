@@ -598,6 +598,7 @@ impl Backend for MockBackend {
                         state: None,
                         emoji: None,
                         url: None,
+                        display_type: None,
                         image: None,
                         start: Some((now() - 86_400 * (2 - k as i64).max(1)) * 1000),
                     }];

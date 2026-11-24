@@ -101,6 +101,7 @@ fn main() -> anyhow::Result<()> {
                     state: None,
                     emoji: None,
                     url: None,
+                    display_type: None,
                     image: None,
                     start: Some(now_ms - 463_000),
                 }],

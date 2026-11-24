@@ -32,6 +32,8 @@ pub struct Activity {
     /// Unicode emoji (custom status) when present.
     pub emoji: Option<SharedString>,
     pub url: Option<SharedString>,
+    /// `status_display_type`: which field the status line shows (0 name, 1 state, 2 details).
+    pub display_type: Option<u8>,
     /// Large asset image URL (Spotify album art, game art) when resolvable.
     pub image: Option<SharedString>,
     /// Unix milliseconds the activity started.
@@ -111,6 +113,7 @@ pub fn parse_activity(a: &Value) -> Option<Activity> {
         state: s(a, "state"),
         emoji,
         url: s(a, "url"),
+        display_type: a.get("status_display_type").and_then(Value::as_u64).map(|n| n as u8),
         image: asset_url(a),
         start: a.get("timestamps").and_then(|t| t.get("start")).and_then(Value::as_i64),
     };

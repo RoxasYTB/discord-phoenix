@@ -136,6 +136,8 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("deny", &["DenyIcon"]),
     ("shop", &["ShopIcon"]),
     ("game-controller", &["GameControllerIcon"]),
+    ("music", &["MusicIcon"]),
+    ("tv", &["TvIcon"]),
     ("more-horizontal", &["MoreHorizontalIcon"]),
     ("medal", &["NewUserSimpleIcon", "MedalIcon"]),
     ("streak", &["FlashIcon", "LightningIcon", "BoltIcon", "FireIcon"]),

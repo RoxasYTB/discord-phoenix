@@ -821,7 +821,7 @@ pub fn member_row_in(
                             )
                         }),
                 )
-                .when(two_lines, |d| d.child(sub_text(in_voice, sub, mem.activity.clone()))),
+                .when(two_lines, |d| d.child(sub_text(in_voice, user.is_some_and(|u| u.bot), sub, mem.activity.clone()))),
         ))
         .into_any_element()
 }
@@ -917,12 +917,51 @@ fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) 
         )
 }
 
-/// What the member row's second line shows (vanilla dump `vanilla-members`, subText_J1Adu_).
+/// What the member row's second line shows (client activity status component,
+/// module 9fb052bb `ActivityStatus`).
 struct SubText {
-    /// Custom status (emoji, text): customStatusContent_HigqCD.
+    /// Custom status (emoji, text): customStatusContent_HigqCD. Kept when it has
+    /// a trimmed non-empty state or an emoji.
     custom: Option<(Option<SharedString>, Option<SharedString>)>,
-    /// First non-custom activity: (name, shows the gamepad icon).
-    main: Option<(SharedString, bool)>,
+    /// First non-custom activity: (text, icon).
+    main: Option<(SharedString, Option<&'static str>)>,
+    /// Non-custom activities, unique by name.
+    count: usize,
+}
+
+/// Activity text (client activity text helper): the name; a stream's details
+/// first; `status_display_type` 0/1/2 picks name/state/details; Spotify's
+/// artists ("a; b" -> "a, b").
+fn activity_text(a: &crate::presence::Activity) -> Option<SharedString> {
+    use crate::presence::ActivityKind as K;
+    let nz = |v: &Option<SharedString>| v.clone().filter(|t| !t.is_empty());
+    let name = Some(a.name.clone()).filter(|t| !t.is_empty());
+    let (details, state) = (nz(&a.details), nz(&a.state));
+    let mut m = if a.kind == K::Streaming { details.clone().or(name.clone()) } else { name.clone() };
+    match a.display_type {
+        Some(0) if name.is_some() => m = name.clone(),
+        Some(1) if state.is_some() => m = state.clone(),
+        Some(2) if details.is_some() => m = details.clone(),
+        _ => {}
+    }
+    if a.is_spotify() {
+        if let Some(st) = state {
+            return Some(st.replace("; ", ", ").into());
+        }
+    }
+    m
+}
+
+/// Activity icon (client activity icon helper): gamepad for playing/competing,
+/// music for listening, TV for watching/streaming.
+fn activity_icon(a: &crate::presence::Activity) -> Option<&'static str> {
+    use crate::presence::ActivityKind as K;
+    match a.kind {
+        K::Playing | K::Competing => Some("game-controller"),
+        K::Listening => Some("music"),
+        K::Watching | K::Streaming => Some("tv"),
+        K::Custom => None,
+    }
 }
 
 impl SubText {
@@ -930,29 +969,35 @@ impl SubText {
         use crate::presence::ActivityKind as K;
         let custom = acts
             .iter()
-            .find(|a| a.kind == K::Custom && (a.state.is_some() || a.emoji.is_some()))
-            .map(|a| (a.emoji.clone(), a.state.clone()));
-        // A stream shows its title (`details`, the "Streame …" line), no icon.
-        let main = acts.iter().find(|a| a.kind == K::Streaming).map(|a| (a.details.clone().unwrap_or_else(|| a.name.clone()), false));
-        let main = main.or_else(|| acts.iter().find(|a| a.kind != K::Custom).map(|a| (a.name.clone(), matches!(a.kind, K::Playing | K::Competing))));
-        (custom.is_some() || main.is_some()).then_some(Self { custom, main })
+            .find(|a| a.kind == K::Custom)
+            .map(|a| (a.emoji.clone(), a.state.as_ref().map(|t| SharedString::from(t.trim().to_string())).filter(|t| !t.is_empty())))
+            .filter(|(e, t)| e.is_some() || t.is_some());
+        let mut names: Vec<&str> = Vec::new();
+        for a in acts.iter().filter(|a| a.kind != K::Custom) {
+            if !names.contains(&a.name.as_ref()) {
+                names.push(a.name.as_ref());
+            }
+        }
+        let main = acts.iter().find(|a| a.kind != K::Custom).map(|a| (activity_text(a).unwrap_or_default(), activity_icon(a)));
+        let count = names.len();
+        (custom.is_some() || main.is_some()).then_some(Self { custom, main, count })
     }
 }
 
-/// subText_J1Adu_ (margin-top -2px) > container_HigqCD textXs_HigqCD (flex, gap 4):
-/// - leading 12px icon (icon_HigqCD): speaker in voice, else the gamepad for games,
-///   both --status-online (dump fill #45a366);
-/// - with a custom status the activity keeps only its icon, then the "•" dot
-///   (dot_HigqCD body-xs/normal, --text-default) and the status (emoji 14px + text);
-/// - otherwise the activity name, or "In a voice channel" (body-xs/medium 12/16).
-fn sub_text(in_voice: bool, sub: Option<SubText>, fallback: Option<SharedString>) -> gpui::Div {
+/// subText_J1Adu_ (margin-top -2px) > container_HigqCD textXs_HigqCD (flex, gap 4),
+/// in the client's order:
+/// 1. the activity (12px icon_HigqCD in --status-online, then its text), else the
+///    voice line ("In a voice channel" with the speaker). With a custom status
+///    TEXT only the icon stays (`iconOnly_HigqCD`). Bots get no icon.
+/// 2. "+N" (activityCounter_HigqCD) when there are several (activities + voice),
+///    not for bots; --status-positive when the custom status has text.
+/// 3. the "•" dot (dot_HigqCD body-xs/normal) when there is a custom status too;
+/// 4. the custom status (emoji 14px + text).
+fn sub_text(in_voice: bool, bot: bool, sub: Option<SubText>, fallback: Option<SharedString>) -> gpui::Div {
     let green = c(tok(idx::STATUS_ONLINE));
-    let (custom, main) = sub.map(|s| (s.custom, s.main)).unwrap_or((None, None));
-    let icon = if in_voice {
-        Some("speaker")
-    } else {
-        main.as_ref().filter(|m| m.1).map(|_| "game-controller")
-    };
+    let (custom, main, count) = sub.map(|s| (s.custom, s.main, s.count)).unwrap_or((None, None, 0));
+    let total = count + usize::from(in_voice);
+    let custom_text = custom.as_ref().is_some_and(|c| c.1.is_some());
     let text_el = |t: SharedString| div().min_w_0().font_weight(FontWeight::MEDIUM).text_ellipsis().child(crate::ui::emoji_text::label(t, 12.));
     let mut row = div()
         .mt(z(-2.))
@@ -964,29 +1009,42 @@ fn sub_text(in_voice: bool, sub: Option<SubText>, fallback: Option<SharedString>
         .line_height(z(16.))
         .text_color(c(Palette::TEXT_MUTED))
         .overflow_hidden();
-    if let Some(i) = icon {
-        row = row.child(gpui::svg().path(crate::icons::path(i)).size(z(12.)).flex_none().text_color(green));
-    }
-    match custom {
-        Some((emoji, state)) => {
-            if icon.is_some() {
-                row = row.child(div().flex_none().font_weight(FontWeight::NORMAL).text_color(c(Palette::TEXT_NORMAL)).child("•"));
-            }
-            if let Some(e) = emoji {
-                // emoji_HigqCD 14px; custom (animated) emoji as images
-                row = row.child(div().flex_none().text_size(z(14.)).child(crate::ui::emoji_text::label_with_custom(e, 14. * crate::theme::zoom() / 1.375)));
-            }
-            if let Some(t) = state {
-                row = row.child(text_el(t));
-            }
+    let piece = match main {
+        Some((t, icon)) => Some((Some(t), icon)),
+        None if in_voice => Some((Some(crate::t!("members.in_voice")), Some("speaker"))),
+        None => None,
+    };
+    if let Some((t, icon)) = piece {
+        if let Some(i) = icon.filter(|_| !bot) {
+            row = row.child(gpui::svg().path(crate::icons::path(i)).size(z(12.)).flex_none().text_color(green));
         }
-        None => {
-            let t = main.map(|m| m.0).or(fallback.filter(|_| !in_voice));
-            row = match t {
-                Some(t) => row.child(text_el(t)),
-                None if in_voice => row.child(text_el(crate::t!("members.in_voice"))),
-                None => row,
-            };
+        if let Some(t) = t.filter(|t| !custom_text && !t.is_empty()) {
+            row = row.child(text_el(t));
+        }
+        if total > 1 && !bot {
+            row = row.child(
+                div()
+                    .flex_none()
+                    .font_weight(FontWeight::MEDIUM)
+                    .when(custom_text, |d| d.text_color(c(tok(idx::STATUS_POSITIVE))))
+                    .child(SharedString::from(format!("+{}", total - 1))),
+            );
+        }
+    } else if custom.is_none() {
+        if let Some(t) = fallback.filter(|_| !in_voice) {
+            row = row.child(text_el(t));
+        }
+    }
+    if let Some((emoji, state)) = custom {
+        if total > 0 {
+            row = row.child(div().flex_none().font_weight(FontWeight::NORMAL).text_color(c(Palette::TEXT_NORMAL)).child("•"));
+        }
+        if let Some(e) = emoji {
+            // emoji_HigqCD 14px; custom (animated) emoji as images
+            row = row.child(div().flex_none().text_size(z(14.)).child(crate::ui::emoji_text::label_with_custom(e, 14. * crate::theme::zoom() / 1.375)));
+        }
+        if let Some(t) = state {
+            row = row.child(text_el(t));
         }
     }
     row
