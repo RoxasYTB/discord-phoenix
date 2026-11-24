@@ -1019,7 +1019,7 @@ impl Backend for DiscordBackend {
             return;
         }
         if let Some(s) = self.state.lock().as_ref() {
-            let ids = guilds.into_iter().map(|g| phoenix_api::models::GuildId(g.0)).collect();
+            let ids = guilds.into_iter().map(|g| phoenix_api::models::Snowflake(g.0)).collect();
             let _ = s.gateway.request_soundboard_sounds(ids);
         }
     }

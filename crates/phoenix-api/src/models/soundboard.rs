@@ -44,7 +44,7 @@ mod tests {
         .unwrap();
         assert_eq!(s.name, "quack");
         assert_eq!(s.sound_id, Snowflake(1));
-        assert_eq!(s.guild_id, Some(GuildId(42)));
+        assert_eq!(s.guild_id, Some(Snowflake(42)));
         assert_eq!(s.emoji_name.as_deref(), Some("🦆"));
         assert!(s.available);
     }
