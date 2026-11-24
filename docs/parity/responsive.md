@@ -31,7 +31,7 @@ Offscreen check without a zoom setting: `PHX_W=<css width> PHX_SCALE=<dpr × zoo
 | Server rail badges | Icon 40 px; `upperBadge_` 16 px at (24, 0), `lowerBadge_` 16 px at (24, 24), cut-out rings; the two never touch | same boxes at 100 % (pixel check on `theme_shots` at dpr 2) | ✅ (layout); rasterisation at 150/200 % not compared against a live capture at that zoom |
 
 Offscreen check after the merge (7b62021, `theme_shots` demo data, 1280×800 at dpr 2): at 150 %
-(853 CSS px) the title stays whole, the topic takes the remaining room, the search is 186 px and
+(853 CSS px) the title stays whole, the topic takes the remaining room, the search is about 175 px (read off the image) and
 the composer shows gift, emoji, apps; at 200 % (640 CSS px) the search is 64 px and the title is
 clipped by `children_` exactly like the client at that width.
 
