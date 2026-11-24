@@ -720,17 +720,39 @@ impl TextLayout {
                         .text_system()
                         .shape_text(text.clone(), font_size, &runs, None, None)
                         .log_err()
-                        && unclipped
+                    {
+                        if unclipped
                             .iter()
                             .all(|line| line.size(line_height).width <= truncate_width)
-                    {
-                        // The truncation decision below sums per-character advances,
-                        // which overestimates the shaped width (no kerning), truncating
-                        // text that fits exactly in its measured width. Skip truncation
-                        // whenever the honestly-shaped text fits; the shaping result
-                        // comes from the line layout cache when the same text was
-                        // already measured untruncated this frame.
-                        (text.clone(), Cow::Borrowed(&*runs))
+                        {
+                            // The truncation decision below sums per-character advances,
+                            // which overestimates the shaped width (no kerning), truncating
+                            // text that fits exactly in its measured width. Skip truncation
+                            // whenever the honestly-shaped text fits; the shaping result
+                            // comes from the line layout cache when the same text was
+                            // already measured untruncated this frame.
+                            (text.clone(), Cow::Borrowed(&*runs))
+                        } else if truncate_from == TruncateFrom::End
+                            && let [line] = unclipped.as_slice()
+                        {
+                            // PHOENIX PATCH (ellipsis): cut on the shaped advances, at the
+                            // last grapheme that fits, like Chromium's text-overflow.
+                            line_wrapper.truncate_line_end_shaped(
+                                text.clone(),
+                                &line.unwrapped_layout,
+                                truncate_width,
+                                &truncation_affix,
+                                &runs,
+                            )
+                        } else {
+                            line_wrapper.truncate_line(
+                                text.clone(),
+                                truncate_width,
+                                &truncation_affix,
+                                &runs,
+                                truncate_from,
+                            )
+                        }
                     } else {
                         line_wrapper.truncate_line(
                             text.clone(),

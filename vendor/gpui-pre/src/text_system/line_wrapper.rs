@@ -383,11 +383,11 @@ impl LineWrapper {
                     "{truncation_affix}{}",
                     &line[line.ceil_char_boundary(truncate_ix + 1)..]
                 )),
-                TruncateFrom::End => SharedString::from(format!(
-                    "{}{truncation_affix}",
-                    line[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
-                )),
+                // PHOENIX PATCH (ellipsis): Chromium's `text-overflow: ellipsis` keeps
+                // the spaces and punctuation before the ellipsis ("Happy 03/1…").
+                TruncateFrom::End => {
+                    SharedString::from(format!("{}{truncation_affix}", &line[..truncate_ix]))
+                }
                 TruncateFrom::Middle => unreachable!("Middle truncation is handled above"),
             };
             let mut runs = runs.to_vec();
@@ -396,6 +396,38 @@ impl LineWrapper {
         } else {
             (line, Cow::Borrowed(runs))
         }
+    }
+
+    /// PHOENIX PATCH (ellipsis): end truncation of one shaped line, like Chromium's
+    /// `text-overflow: ellipsis`. Keeps the longest prefix of whole graphemes whose
+    /// shaped advance plus the affix fits in `truncate_width`, and keeps the spaces and
+    /// punctuation before the affix. `layout` must be the unwrapped shaping of `line`.
+    /// Per-character advances (`truncate_line`) ignore kerning and cut one glyph early.
+    pub fn truncate_line_end_shaped<'a>(
+        &mut self,
+        line: SharedString,
+        layout: &crate::LineLayout,
+        truncate_width: Pixels,
+        truncation_affix: &str,
+        runs: &'a [TextRun],
+    ) -> (SharedString, Cow<'a, [TextRun]>) {
+        let affix_width: Pixels = truncation_affix
+            .chars()
+            .map(|c| self.width_for_char(c))
+            .sum();
+        let budget = truncate_width - affix_width;
+        let mut cut = 0;
+        for (ix, grapheme) in line.grapheme_indices(true) {
+            let end = ix + grapheme.len();
+            if layout.x_for_index(end) > budget {
+                break;
+            }
+            cut = end;
+        }
+        let result = SharedString::from(format!("{}{truncation_affix}", &line[..cut]));
+        let mut runs = runs.to_vec();
+        update_runs_after_truncation(&result, truncation_affix, &mut runs, TruncateFrom::End);
+        (result, Cow::Owned(runs))
     }
 
     /// Truncate text to fit within a given number of wrapped lines.
@@ -452,8 +484,8 @@ impl LineWrapper {
                 if line >= max_lines - 1 && !text[ix + 1..].trim().is_empty() {
                     // Newline on the last allowed line with real content
                     // below. Truncate here.
-                    let truncated = text[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
+                    // PHOENIX PATCH (ellipsis): collapsible spaces go, punctuation stays.
+                    let truncated = text[..truncate_ix].trim_end_matches(char::is_whitespace);
                     let result = SharedString::from(format!("{truncated}{truncation_affix}"));
                     let mut runs = runs.to_vec();
                     update_runs_after_truncation(
@@ -521,8 +553,15 @@ impl LineWrapper {
                 }
 
                 if width > wrap_width {
-                    let truncated = text[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
+                    // PHOENIX PATCH (ellipsis): Chromium's `-webkit-line-clamp` keeps the
+                    // last line's own soft wrap: the ellipsis follows the last whole word
+                    // that fits (collapsible spaces dropped) and only cuts inside a word
+                    // when no break on that line fits. Punctuation is never dropped.
+                    let mut end = truncate_ix;
+                    if last_candidate_ix > last_wrap_ix && last_candidate_ix < end {
+                        end = last_candidate_ix;
+                    }
+                    let truncated = text[..end].trim_end_matches(char::is_whitespace);
                     let result = SharedString::from(format!("{truncated}{truncation_affix}"));
                     let mut runs = runs.to_vec();
                     update_runs_after_truncation(
@@ -1185,6 +1224,25 @@ mod tests {
             "aa bbb cccc 🦀🦀🦀🦀…",
             "…",
         );
+        // PHOENIX PATCH (ellipsis): punctuation before the ellipsis is kept, like Chromium.
+        perform_test(
+            &mut wrapper,
+            "aa/bb/cc/dd/ee/ff/gg/hh/ii",
+            "aa/bb/cc/dd/ee/ff/gg/…",
+            "…",
+        );
+    }
+
+    #[test]
+    fn test_multiline_truncation_keeps_last_line_word_wrap() {
+        // PHOENIX PATCH (ellipsis): Chromium's -webkit-line-clamp ends the last line at its
+        // own soft wrap ("bbbb…"), not in the middle of the next word ("bbbb c…").
+        let mut wrapper = build_wrapper();
+        let text = "aaaa bbbb cccc dddd eeee";
+        let runs = generate_test_runs(&[text.len()]);
+        let (truncated, _) =
+            wrapper.truncate_wrapped_line(text.into(), px(72.), 2, "…", &runs, TruncateFrom::End);
+        assert_eq!(truncated.as_ref(), "aaaa bbbb…");
     }
 
     #[test]
