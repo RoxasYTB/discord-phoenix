@@ -150,6 +150,9 @@ thread_local! {
     /// The GIF under the pointer (gifv embed or GIF attachment), which plays even
     /// with "Play GIFs when Discord is focused" off, like the client.
     static HOVERED_GIF: std::cell::RefCell<Option<SharedString>> = const { std::cell::RefCell::new(None) };
+    /// The sticker under the pointer, which plays when "Sticker animations" is set
+    /// to "Animate on interaction" (`animate_stickers == 1`).
+    static HOVERED_STICKER: std::cell::RefCell<Option<SharedString>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Whether the GIF keyed `key` should play: autoplay on, or hovered. GPUI then
@@ -169,6 +172,30 @@ pub fn gif_hover(key: SharedString, child: impl IntoElement) -> gpui::Stateful<g
             changed
         });
         if changed && !crate::ui::settings::effects::gif_autoplay() {
+            window.refresh();
+        }
+    })
+}
+
+/// Whether the sticker keyed `key` should play: Always (0), or On interaction (1) while hovered.
+pub fn sticker_plays(key: &SharedString) -> bool {
+    crate::ui::settings::effects::sticker_autoplay()
+        || (crate::ui::settings::effects::sticker_hover_plays()
+            && HOVERED_STICKER.with(|h| h.borrow().as_ref() == Some(key)))
+}
+
+/// Wraps an animated sticker so hovering it plays it when "Sticker animations"
+/// is set to "Animate on interaction" (re-render on change).
+pub fn sticker_hover(key: SharedString, child: impl IntoElement) -> gpui::Stateful<gpui::Div> {
+    div().id(gpui::ElementId::Name(format!("sticker-hover-{key}").into())).child(child).on_hover(move |h, window, _| {
+        let changed = HOVERED_STICKER.with(|cur| {
+            let mut cur = cur.borrow_mut();
+            let next = if *h { Some(key.clone()) } else if cur.as_ref() == Some(&key) { None } else { cur.clone() };
+            let changed = *cur != next;
+            *cur = next;
+            changed
+        });
+        if changed && crate::ui::settings::effects::sticker_hover_plays() {
             window.refresh();
         }
     })

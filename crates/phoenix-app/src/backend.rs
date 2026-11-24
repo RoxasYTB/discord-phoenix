@@ -109,6 +109,8 @@ pub enum AppEvent {
     Nav(crate::ui::home::data::NavEvent),
     /// Synced settings were changed by another client (USER_SETTINGS_PROTO_UPDATE): reload them.
     SettingsChanged,
+    /// Gateway `SOUNDBOARD_SOUNDS` response for a guild.
+    SoundboardSounds { guild: Id, sounds: Vec<crate::model::SoundboardSound> },
     /// Server-ordered lazy member list of a guild (groups + members).
     MemberListRows { guild: Id, rows: Vec<crate::presence::ListEntry> },
     /// Rich presence of a user (empty = no activity).
@@ -468,4 +470,10 @@ pub trait Backend: Send + Sync + 'static {
     fn open_dm(&self, _user: Id) -> BoxFuture<Id> {
         Box::pin(async { Err(BackendError(crate::t!("backend.dm_unavailable").to_string())) })
     }
+    /// `GET /soundboard-default-sounds` — Discord's built-in Soundboard sounds.
+    fn soundboard_default_sounds(&self) -> BoxFuture<Vec<crate::model::SoundboardSound>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    /// Gateway op 31 `REQUEST_SOUNDBOARD_SOUNDS` for the given guilds.
+    fn request_soundboard_sounds(&self, _guilds: Vec<Id>) {}
 }

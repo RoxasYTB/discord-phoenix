@@ -43,7 +43,7 @@ headless clock): bare `img` without id 0 frame changes, with an id 62–64. Ever
 | APNG stickers | APNG | GPUI decodes APNG as one frame: messages now ask the CDN for `stickers/<id>.webp?size=320&animated=true` (measured: 25 frames, 78 ms ≈ 12.8 fps, 349 KB at 320px; still = same URL without `animated=true`) | ✅ |
 | GIF stickers | GIF | id added | ✅ |
 | Lottie stickers | Lottie | `media::lottie` (unchanged) | ✅ |
-| Sticker animations setting | Always / on hover / never | Always: plays; otherwise first frame (hover-to-play not done) | ⚠ |
+| Sticker animations setting | Always / on hover / never | Always (0): plays; On interaction (1): first frame until hovered (`media::sticker_plays` / `sticker_hover`, APNG/GIF + Lottie); Never (2): first frame | ✅ |
 | GIF picker tiles | autoplay | the tile `img`s get ids (picker search itself belongs to another branch) | ✅ |
 
 ## Account settings read (not changed)
@@ -79,7 +79,6 @@ and the window is active, so an unfocused or idle window costs nothing.
 
 - Animated avatars play on hover of the avatar itself; the client also plays them on
   message and member row hover.
-- Sticker animations "on hover" (Animate on interaction) shows the still without hover play.
 - The DM profile panel of the real account showed no custom status bubble in the offscreen
   render (client: "🔨 …" bubble); profile loading is outside this branch.
 - Picker shortcodes are CLDR names, not the client's.

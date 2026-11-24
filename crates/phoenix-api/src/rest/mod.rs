@@ -19,6 +19,7 @@ pub mod thread_create;
 pub mod content_inventory;
 pub mod collectibles;
 pub mod frecency;
+pub mod soundboard;
 pub mod uploads;
 
 use std::sync::Arc;

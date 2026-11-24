@@ -332,6 +332,7 @@ pub enum GatewayEvent {
 
     VoiceStateUpdate(Box<VoiceState>),
     VoiceServerUpdate(VoiceServerUpdate),
+    SoundboardSounds(Box<SoundboardSounds>),
 
     /// Any dispatch not modelled above (or that failed to parse), verbatim.
     Unknown { name: String, data: Value },
@@ -368,6 +369,7 @@ pub fn parse_dispatch(name: &str, raw: &str) -> GatewayEvent {
         "GUILD_ROLE_UPDATE" => GuildRoleUpdate,
         "GUILD_ROLE_DELETE" => GuildRoleDelete,
         "GUILD_EMOJIS_UPDATE" => GuildEmojisUpdate,
+        "SOUNDBOARD_SOUNDS" => SoundboardSounds(Box::new),
         "CHANNEL_CREATE" => ChannelCreate(Box::new),
         "CHANNEL_UPDATE" => ChannelUpdate(Box::new),
         "CHANNEL_DELETE" => ChannelDelete(Box::new),
@@ -419,6 +421,20 @@ pub struct UpdatePresence {
     /// "online", "idle", "dnd", "invisible".
     pub status: String,
     pub afk: bool,
+}
+
+/// Dispatch `SOUNDBOARD_SOUNDS` in response to op 31 `REQUEST_SOUNDBOARD_SOUNDS`.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct SoundboardSounds {
+    pub guild_id: GuildId,
+    #[serde(default, deserialize_with = "null_default")]
+    pub soundboard_sounds: Vec<SoundboardSound>,
+}
+
+/// Op 31: `REQUEST_SOUNDBOARD_SOUNDS`.
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+pub struct RequestSoundboardSounds {
+    pub guild_ids: Vec<GuildId>,
 }
 
 /// Op 8.

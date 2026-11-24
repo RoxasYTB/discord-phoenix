@@ -342,7 +342,8 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     let tray = upload_tray(app, cx);
     // No SEND_MESSAGES: disabled text area with the client's notice, no buttons (CSS only).
     let blocked = app.selected_channel.and_then(|c| app.nav.extras.get(&c)).is_some_and(|x| x.send_blocked);
-    let show_send_button = should_show_send_button(app.prefs.local.flag("send-btn", false), placeholder_empty, blocked);
+    let show_send_button = should_show_send_button(app.prefs.local.flag("send-btn", false), blocked);
+    let can_send = !placeholder_empty || !app.chat.uploads.is_empty();
     let placeholder = if blocked { crate::t!("chat.no_permission") } else { placeholder };
     div()
         .flex_none()
@@ -535,11 +536,32 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                             .on_click(cx.listener(|a, _, w, cx| super::app_launcher::toggle(a, w, cx))),
                                     )
                                     .when(show_send_button, |d| {
-                                        d.child(
-                                            crate::ui::states::composer_button("send", Icon::Send)
-                                                .tooltip(crate::ui::tooltip::tip(crate::t!("menu.send_message")))
-                                                .on_click(cx.listener(|a, _, w, cx| a.submit_composer(w, cx))),
-                                        )
+                                        // 601152.css: separator_plpOf8 1×22px --border-normal, button_plpOf8 32×32,
+                                        // sendIcon_plpOf8 20×20; active --text-brand, disabled --icon-muted + not-allowed.
+                                        d.child(div().w(z(1.)).h(fz(22.)).bg(super::tk(idx::BORDER_NORMAL)))
+                                            .child(
+                                                div()
+                                                    .id("send")
+                                                    .size(z(32.))
+                                                    .rounded(z(8.))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .child(
+                                                        gpui::svg()
+                                                            .path(Icon::Send.path())
+                                                            .size(z(20.))
+                                                            .flex_none()
+                                                            .text_color(super::tk(if can_send { idx::TEXT_BRAND } else { idx::ICON_MUTED })),
+                                                    )
+                                                    .when(can_send, |b| {
+                                                        b.cursor_pointer()
+                                                            .hover(|s| s.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                                                            .tooltip(crate::ui::tooltip::tip(crate::t!("menu.send_message")))
+                                                            .on_click(cx.listener(|a, _, w, cx| a.submit_composer(w, cx)))
+                                                    })
+                                                    .when(!can_send, |b| b.cursor(gpui::CursorStyle::OperationNotAllowed)),
+                                            )
                                     }),
                             ),
                     ),
@@ -597,8 +619,10 @@ pub fn char_count(premium: bool, len: i64) -> (i64, bool) {
     (remaining, remaining <= max / 10 || (premium && len > 2000 && remaining >= 0))
 }
 
-fn should_show_send_button(enabled: bool, draft_empty: bool, blocked: bool) -> bool {
-    enabled && !draft_empty && !blocked
+/// Client 601152.css: when "Show the Send Message button" is enabled and the
+/// channel is not send-blocked, the button is always shown (disabled when empty).
+fn should_show_send_button(enabled: bool, blocked: bool) -> bool {
+    enabled && !blocked
 }
 
 thread_local! {
@@ -807,10 +831,9 @@ mod tests {
 
     #[test]
     fn send_button_requires_enabled_nonempty_sendable_draft() {
-        assert!(!should_show_send_button(false, false, false));
-        assert!(!should_show_send_button(true, true, false));
-        assert!(!should_show_send_button(true, false, true));
-        assert!(should_show_send_button(true, false, false));
+        assert!(!should_show_send_button(false, false));
+        assert!(should_show_send_button(true, false));
+        assert!(!should_show_send_button(true, true));
     }
 
     #[test]

@@ -1278,6 +1278,20 @@ impl Adapter {
                 self.emit_members(cache, c.guild_id, &mut out);
             }
             GatewayEvent::UserUpdate(u) => out.push(AppEvent::Users(vec![user(u)])),
+            GatewayEvent::SoundboardSounds(s) => {
+                let sounds = s
+                    .soundboard_sounds
+                    .iter()
+                    .map(|x| model::SoundboardSound {
+                        id: Id(x.sound_id.0),
+                        guild: x.guild_id.map(|g| Id(g.0)).or(Some(Id(s.guild_id.0))),
+                        name: Some(x.name.clone().into()),
+                        emoji_id: x.emoji_id.map(|e| Id(e.0)),
+                        emoji_name: x.emoji_name.clone().map(Into::into),
+                    })
+                    .collect();
+                out.push(AppEvent::SoundboardSounds { guild: Id(s.guild_id.0), sounds });
+            }
             GatewayEvent::GuildCreate(g) => {
                 let rc = self.prefs.ctx();
                 let chs = guild_channels(cache, g.id, &rc);

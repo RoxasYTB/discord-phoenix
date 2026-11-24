@@ -520,9 +520,9 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
     // UI-only placeholders (the same stub the voice panel's buttons open): nothing is recorded or sent.
     .on_action(cx.listener(|a, _: &RecordVoiceMessage, _, cx| a.stub(&crate::t!("shortcuts.voice_message"), cx)))
     // The live client ignores Ctrl+Shift+B outside a voice connection (checked over CDP, 2026-11-24).
-    .on_action(cx.listener(|a, _: &ToggleSoundboard, _, cx| {
+    .on_action(cx.listener(|a, _: &ToggleSoundboard, w, cx| {
         if a.voice_channel.is_some() {
-            a.stub(&crate::t!("voice.soundboard"), cx);
+            crate::ui::pickers::soundboard::toggle(a, w, cx);
         }
     }))
     .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url("https://support.discord.com")))

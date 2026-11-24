@@ -997,4 +997,30 @@ impl Backend for DiscordBackend {
     fn open_dm(&self, user: Id) -> BoxFuture<Id> {
         self.people_open_dm(user)
     }
+    fn soundboard_default_sounds(&self) -> BoxFuture<Vec<crate::model::SoundboardSound>> {
+        let state = self.state.clone();
+        self.spawn_fut(async move {
+            let s = state.lock().clone().ok_or_else(not_ready)?;
+            let sounds = s.rest.soundboard_default_sounds().await.map_err(api_err)?;
+            Ok(sounds
+                .into_iter()
+                .map(|x| crate::model::SoundboardSound {
+                    id: Id(x.sound_id.0),
+                    guild: x.guild_id.map(|g| Id(g.0)),
+                    name: Some(x.name.into()),
+                    emoji_id: x.emoji_id.map(|e| Id(e.0)),
+                    emoji_name: x.emoji_name.map(Into::into),
+                })
+                .collect())
+        })
+    }
+    fn request_soundboard_sounds(&self, guilds: Vec<Id>) {
+        if guilds.is_empty() {
+            return;
+        }
+        if let Some(s) = self.state.lock().as_ref() {
+            let ids = guilds.into_iter().map(|g| phoenix_api::models::GuildId(g.0)).collect();
+            let _ = s.gateway.request_soundboard_sounds(ids);
+        }
+    }
 }

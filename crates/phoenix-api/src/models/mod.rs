@@ -57,6 +57,7 @@ mod message;
 mod permissions;
 mod role;
 mod snowflake;
+mod soundboard;
 mod user;
 mod voice;
 
@@ -68,6 +69,7 @@ pub use message::*;
 pub use permissions::*;
 pub use role::*;
 pub use snowflake::*;
+pub use soundboard::*;
 pub use user::*;
 pub use voice::*;
 

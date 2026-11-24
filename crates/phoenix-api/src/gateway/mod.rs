@@ -81,6 +81,7 @@ mod op {
     pub const HELLO: u8 = 10;
     pub const HEARTBEAT_ACK: u8 = 11;
     pub const LAZY_REQUEST: u8 = 14;
+    pub const REQUEST_SOUNDBOARD_SOUNDS: u8 = 31;
     pub const GUILD_SUBSCRIPTIONS_BULK: u8 = 37;
 }
 
@@ -165,6 +166,7 @@ pub enum GatewayCommand {
     UpdateVoiceState(UpdateVoiceState),
     UpdatePresence(UpdatePresence),
     RequestGuildMembers(RequestGuildMembers),
+    RequestSoundboardSounds(RequestSoundboardSounds),
     LazyRequest(LazyGuildRequest),
     GuildSubscriptionsBulk(std::collections::BTreeMap<GuildId, GuildSubscription>),
     /// Send an arbitrary opcode.
@@ -225,6 +227,11 @@ impl GatewayHandle {
 
     pub fn request_guild_members(&self, req: RequestGuildMembers) -> crate::Result<()> {
         self.send(GatewayCommand::RequestGuildMembers(req))
+    }
+
+    /// Op 31: request custom Soundboard sounds for the given guilds.
+    pub fn request_soundboard_sounds(&self, guild_ids: Vec<GuildId>) -> crate::Result<()> {
+        self.send(GatewayCommand::RequestSoundboardSounds(RequestSoundboardSounds { guild_ids }))
     }
 
     pub fn shutdown(&self) {
@@ -406,6 +413,9 @@ impl Runner {
             GatewayCommand::UpdateVoiceState(v) => (op::VOICE_STATE_UPDATE, serde_json::to_value(v).ok()?),
             GatewayCommand::UpdatePresence(v) => (op::PRESENCE_UPDATE, serde_json::to_value(v).ok()?),
             GatewayCommand::RequestGuildMembers(v) => (op::REQUEST_GUILD_MEMBERS, serde_json::to_value(v).ok()?),
+            GatewayCommand::RequestSoundboardSounds(v) => {
+                (op::REQUEST_SOUNDBOARD_SOUNDS, serde_json::to_value(v).ok()?)
+            }
             GatewayCommand::LazyRequest(v) => (op::LAZY_REQUEST, serde_json::to_value(v).ok()?),
             GatewayCommand::GuildSubscriptionsBulk(m) => {
                 (op::GUILD_SUBSCRIPTIONS_BULK, json!({ "subscriptions": m }))

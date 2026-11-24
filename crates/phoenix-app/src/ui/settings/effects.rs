@@ -12,7 +12,8 @@ static GIF_AUTOPLAY: AtomicBool = AtomicBool::new(true);
 static UNDERLINE_LINKS: AtomicBool = AtomicBool::new(false);
 static REDUCED_MOTION: AtomicBool = AtomicBool::new(false);
 static INLINE_ATTACHMENTS: AtomicBool = AtomicBool::new(true);
-static STICKER_AUTOPLAY: AtomicBool = AtomicBool::new(true);
+/// `animate_stickers`: 0 always, 1 on interaction (hover), 2 never.
+static STICKER_MODE: AtomicU8 = AtomicU8::new(0);
 
 pub fn sync(app: &PhoenixApp) {
     let p = &app.prefs;
@@ -34,7 +35,7 @@ pub fn sync(app: &PhoenixApp) {
     }
     GIF_AUTOPLAY.store(p.synced.flag("gifs"), Relaxed);
     REDUCED_MOTION.store(p.local.reduced_motion, Relaxed);
-    STICKER_AUTOPLAY.store(p.synced.pick("stickers") == 0, Relaxed);
+    STICKER_MODE.store(p.synced.pick("stickers") as u8, Relaxed);
     INLINE_ATTACHMENTS.store(p.synced.flag("media-uploads"), Relaxed);
 }
 
@@ -63,9 +64,19 @@ pub fn motion(ms: u64) -> std::time::Duration {
     std::time::Duration::from_millis(if REDUCED_MOTION.load(Relaxed) { 1 } else { ms })
 }
 
+/// Accessibility "Sticker animations": 0 always, 1 on interaction (hover), 2 never.
+pub fn sticker_mode() -> u8 {
+    STICKER_MODE.load(Relaxed)
+}
+
 /// Accessibility "Sticker animations: Always".
 pub fn sticker_autoplay() -> bool {
-    STICKER_AUTOPLAY.load(Relaxed)
+    sticker_mode() == 0
+}
+
+/// Accessibility "Sticker animations: Animate on interaction" (hover-to-play).
+pub fn sticker_hover_plays() -> bool {
+    sticker_mode() == 1
 }
 
 /// Images/videos uploaded to Discord render inline (else as file cards).

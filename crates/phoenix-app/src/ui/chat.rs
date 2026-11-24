@@ -1868,11 +1868,11 @@ pub(crate) fn spoiler_cover(key: SharedString, url: &str, (w, h): (f32, f32), cx
     )
 }
 
-/// Accessibility "Sticker animations" other than Always: the media proxy's
-/// first frame (`passthrough=false`) instead of the animated file.
+/// Accessibility "Sticker animations" other than Always (or On interaction while hovered):
+/// the media proxy's first frame (`passthrough=false`) instead of the animated file.
 fn still_sticker(u: SharedString, fmt: media::StickerFormat) -> SharedString {
     let animated = matches!(fmt, media::StickerFormat::Apng | media::StickerFormat::Gif);
-    if !animated || crate::ui::settings::effects::sticker_autoplay() || !u.contains("media.discordapp.net") {
+    if !animated || media::sticker_plays(&u) || !u.contains("media.discordapp.net") {
         return u;
     }
     // APNG stickers play as `.webp?…&animated=true`: the still is the same URL without it.
@@ -1891,25 +1891,29 @@ pub(crate) fn attachment(a: &Attachment, cx: &App) -> AnyElement {
     match a.kind {
         AttachmentKind::Sticker(media::StickerFormat::Lottie) if !a.url.is_empty() => {
             let name = a.filename.clone();
-            // 160px sticker, rasterized at 200 device px (scale 1.25) and played in a loop.
-            return media::lottie::image(a.url.clone(), 200, false)
+            // 160px sticker, rasterized at 200 device px (scale 1.25) and played in a loop
+            // (or on hover when "Animate on interaction" is selected).
+            let im = media::lottie::image(a.url.clone(), 200, !media::sticker_plays(&a.url))
                 .id(gpui::ElementId::Name(a.url.clone()))
                 .mt(z(4.))
                 .size(z(160.))
                 .object_fit(gpui::ObjectFit::Contain)
-                .with_fallback(move || sticker_name(name.clone()))
-                .into_any_element();
+                .with_fallback(move || sticker_name(name.clone()));
+            return media::sticker_hover(a.url.clone(), im).into_any_element();
         }
         AttachmentKind::Sticker(fmt) => {
             let name = a.filename.clone();
+            let animated = matches!(fmt, media::StickerFormat::Apng | media::StickerFormat::Gif);
             return match media::sticker_url(0, fmt).and(Some(a.url.clone())).filter(|u| !u.is_empty()) {
-                Some(u) => img(still_sticker(u.clone(), fmt))
-                    .id(media::anim_id(&u))
-                    .mt(z(4.))
-                    .size(z(160.))
-                    .object_fit(gpui::ObjectFit::Contain)
-                    .with_fallback(move || sticker_name(name.clone()))
-                    .into_any_element(),
+                Some(u) => {
+                    let im = img(still_sticker(u.clone(), fmt))
+                        .id(media::anim_id(&u))
+                        .mt(z(4.))
+                        .size(z(160.))
+                        .object_fit(gpui::ObjectFit::Contain)
+                        .with_fallback(move || sticker_name(name.clone()));
+                    if animated { media::sticker_hover(u, im).into_any_element() } else { im.into_any_element() }
+                }
                 None => div().mt(z(4.)).child(sticker_name(name)).into_any_element(),
             };
         }

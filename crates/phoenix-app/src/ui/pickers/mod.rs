@@ -15,6 +15,7 @@ pub mod emoji_data;
 mod gif;
 pub mod grid;
 mod prefs;
+pub mod soundboard;
 pub(crate) mod sticker;
 pub mod types;
 
@@ -95,6 +96,7 @@ pub struct Pickers {
     pub prefs: Prefs,
     pub gifs: GifState,
     pub stickers: StickerState,
+    pub soundboard: soundboard::SoundboardState,
     /// Account frecency (settings-proto/2): "Frequently used" + favorite GIFs.
     pub frecency: Option<types::Frecency>,
     pub frecency_loading: bool,
@@ -112,6 +114,7 @@ pub fn install(composer: &Entity<gpui_component::input::TextareaState>, window: 
         prefs: Prefs::load(),
         gifs: GifState::default(),
         stickers: StickerState::default(),
+        soundboard: soundboard::SoundboardState::default(),
         frecency: None,
         frecency_loading: false,
     });
@@ -418,6 +421,9 @@ pub fn render_overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<P
         out.push(el);
     }
     if let Some(el) = render_picker(app, window, cx) {
+        out.push(el);
+    }
+    if let Some(el) = soundboard::render(app, window, cx) {
         out.push(el);
     }
     out

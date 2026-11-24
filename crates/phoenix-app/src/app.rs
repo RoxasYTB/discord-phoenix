@@ -998,6 +998,7 @@ impl PhoenixApp {
             }
             AppEvent::Nav(e) => self.on_nav_event(e, cx),
             AppEvent::SettingsChanged => ui::settings::on_ready(self, cx),
+            AppEvent::SoundboardSounds { guild, sounds } => ui::pickers::soundboard::on_sounds(guild, sounds, cx),
             ev @ (AppEvent::MemberListRows { .. } | AppEvent::Activities { .. }) => {
                 // Own custom status changed from another client (SESSIONS_REPLACE).
                 if let AppEvent::Activities { user, activities } = &ev
