@@ -562,7 +562,7 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
 /// Search field (container_0PLWhS md): height 40, --radius-sm, padding-left 4px, gap 4px,
 /// --input-background-default, 1px border (focused: --border-focus); 30px icon box with
 /// a 16px magnifier; input 16px/20px with padding-right 12px.
-fn search_box(input: &Entity<InputState>) -> gpui::Div {
+pub(crate) fn search_box(input: &Entity<InputState>) -> gpui::Div {
     div()
         .flex_1()
         .min_w_0()

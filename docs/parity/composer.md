@@ -56,3 +56,27 @@ Renders: `cargo run -p phoenix-app --example shortcuts_shot -- out.png <mention|
 | multiline input | 962953 `scrollableContainer_2x8-Qn`, `buttons_2x8-Qn`, `textArea_2x8-Qn` | layout | grows with the text up to --custom-channel-textarea-text-area-max-height (50vh) then scrolls; buttons are a 56px row pinned to the top; text padding 17 0, 16/22; Enter sends, Shift+Enter newline | app.rs composer (TextareaState auto_grow + submit_on_enter), composer.rs | ✅ (was a single-line input). 22px lines: `.line_height` on the Textarea overrides the Input's 1.25rem (its refinement is applied last), padding back to 17 |
 | typing indicator | 56501 `base_U9Tvvz` | text / dots | see chat.md | composer.rs typing | ✅ (chat.md) |
 | reply bar | 841136 `replyBar_` | see chat.md | — | composer.rs reply_bar | ✅ (chat.md) |
+
+## App launcher (Applications button)
+
+Measured 2026-11-24 on the live client (1536x788, Onyx, French), plus the older dump
+`vanilla-apps-launcher`. Code: `ui/chat/app_launcher.rs`.
+
+> **Do not open the launcher on the real account.** Opening it makes the official client send
+> `PATCH /users/@me/settings-proto/1` (plus `POST /science`), seen with the CDP Network domain.
+> It was opened four times while measuring before this was noticed. Measure it from the dump or
+> a throwaway account from now on.
+
+| Element | Live value | Phoenix | Status |
+|---|---|---|---|
+| popout | `contentWrapper_` 500x680, right edge = button right, bottom 8px above the button, radius 8, `--shadow-border` + `--shadow-high`, bg black in Onyx (`--background-base-lower` family) | `app_launcher::render`, anchor from a probe painted in the button | ✅ geometry; ⚠ bg token chosen among several equal ones in Onyx, other themes not compared |
+| search | `searchBarContainer_` padding 16, 468x40 field, radius 8, `--input-background-default`, 1px `--input-border-active` (focused on open), 30px icon box, 16/20 text | reuses the expression picker's `search_box`, focused on open | ✅ |
+| sections | `scrollableContent_` padding 0 16 16, 32px between sections, header 24px (pt 4, 16/20 medium `--text-strong`), 8px to the content | same | ✅ |
+| Promoted (`type` 5) | two columns of 224x180 cards, gap 12, `--card-background-default` radius 12, 126px banner, details padding 8: 38px icon radius 12 with 1px `--border-subtle`, gap 12, name 16/20 600 `--text-strong`, one line 14/18 `--text-subtle` | `card` | ✅ layout; ⚠ banner uses the app `cover_image`, not checked against the client's banner source |
+| row sections (`type` 4) | 460x64 rows, padding 12, 40px icon, 12px radius on the outer corners, 1px `--background-mod-subtle` divider, four rows, "Voir plus" 16/20 medium `--text-brand` on the right of the header | `rows`, "Voir plus" expands the section in place | ✅ rows; ⚠ what "Voir plus" opens in the client was not checked (can't reopen the launcher) |
+| data | `GET /application-directory-static/collections?surface=2&active_state=1&platform=1&locale=…`: public, read-only, returns Promoted / Puzzle Games / Strategy… in `position` order, items in `position` order | `Backend::app_directory_collections` | ✅ same order as the live popout (Wordle, Magic Garden, Farm Merge Valley, Watch Together; Daily Word Wheel first in Puzzle Games) |
+| Récentes | 48px icon cards, radius 12, gap 12: the account's recently used apps | not shown | ❌ needs the application frecency from the settings protobuf; not parsed yet |
+| search results | client searches apps and commands | Phoenix filters the loaded apps by name | ⚠ commands not searched |
+| hover / pressed | not measured | none | ⚠ can't reopen the launcher on the real account |
+| click an app | opens the app's page (launch / authorise flows) | shows the "not available" notice only | ➖ launching, authorising or installing an app writes to the account |
+| window height | only 788px measured | shrinks to keep 8px from the top, 200px minimum | ⚠ |

@@ -17,6 +17,7 @@ use crate::{
 };
 
 // Messaging features live in submodules (composer moved to `composer.rs`).
+pub mod app_launcher;
 pub mod attach;
 pub mod composer;
 pub mod icons;

@@ -859,6 +859,14 @@ impl Backend for DiscordBackend {
     fn shop_storefront(&self) -> BoxFuture<serde_json::Value> {
         self.shop_storefront_impl()
     }
+    fn app_directory_collections(&self, locale: String) -> BoxFuture<serde_json::Value> {
+        // Query of the client's launcher (surface 2, active state 1, platform 1);
+        // platform must be numeric, other surfaces/platforms come back empty.
+        self.with_session(move |_, s| async move {
+            let path = format!("/application-directory-static/collections?surface=2&active_state=1&platform=1&locale={locale}");
+            s.rest.request_json(reqwest::Method::GET, &path, None).await.map_err(api_err)
+        })
+    }
     fn orbs_balance(&self) -> BoxFuture<Option<u64>> {
         self.orbs_balance_impl()
     }

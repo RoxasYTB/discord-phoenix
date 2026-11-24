@@ -1326,6 +1326,9 @@ impl PhoenixApp {
             cx.notify();
             return;
         }
+        if ui::chat::app_launcher::close(self, window, cx) {
+            return;
+        }
         if crate::media::close_viewer(cx) {
         } else if self.people.any_overlay() {
             self.people.close_overlays();
@@ -1429,6 +1432,7 @@ impl Render for PhoenixApp {
             .when_some(self.switcher.as_ref(), |d, sw| d.child(ui::switcher::render(self, sw, cx)))
             .children(ui::image_viewer::render(window, cx))
             .children(ui::pickers::render_overlays(self, window, cx))
+            .children(ui::chat::app_launcher::render(self, window, cx))
             .children(ui::profile::overlays(self, window, cx))
             .children(ui::components::overlays(self, window, cx))
             .children(ui::voice_panel::overlays(self, window, cx))

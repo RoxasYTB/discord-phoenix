@@ -10,6 +10,7 @@ use phoenix_app::{app::PhoenixApp, assets::Assets, mock::MockBackend};
 /// `PHX_FRAMES=1`: frame times per interaction (examples/frames.rs), no allocation counts.
 /// `PHX_COMPACT=1` selects compact messages; `PHX_COMPACT_AVATARS=0|1` overrides
 /// the compact avatar preference in memory for screenshot comparisons.
+/// `PHX_LAUNCHER=1` opens the composer's app launcher.
 #[path = "common/frames_impl.rs"]
 mod frames_impl;
 
@@ -95,6 +96,16 @@ fn main() -> anyhow::Result<()> {
             window.refresh();
         })?;
         pump(&mut cx, 2);
+    }
+    // PHX_LAUNCHER=1: open the composer's app launcher (mock collections).
+    if std::env::var_os("PHX_LAUNCHER").is_some() {
+        cx.update_window(win.into(), |_, window, _| window.refresh())?;
+        pump(&mut cx, 2);
+        let v = view.borrow().clone().expect("view");
+        cx.update_window(win.into(), |_, window, cx| {
+            v.update(cx, |app, cx| phoenix_app::ui::chat::app_launcher::toggle(app, window, cx));
+        })?;
+        pump(&mut cx, 4);
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);

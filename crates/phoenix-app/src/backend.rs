@@ -355,6 +355,11 @@ pub trait Backend: Send + Sync + 'static {
     fn shop_storefront(&self) -> BoxFuture<serde_json::Value> {
         Box::pin(async { Ok(serde_json::Value::Null) })
     }
+    /// App launcher collections (`GET /application-directory-static/collections`,
+    /// public and read-only): Promoted, Puzzle Games, ...
+    fn app_directory_collections(&self, _locale: String) -> BoxFuture<serde_json::Value> {
+        Box::pin(async { Ok(serde_json::Value::Null) })
+    }
     /// Orbs balance for the Shop header (`GET /users/@me/virtual-currency/balance`).
     fn orbs_balance(&self) -> BoxFuture<Option<u64>> {
         Box::pin(async { Ok(None) })

@@ -482,6 +482,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                         // app-launcher-entrypoint: button_ 32px radius 8px, 20px glyph (#1479).
                                         div()
                                             .id("apps")
+                                            .relative()
                                             .size(z(32.))
                                             .rounded(z(8.))
                                             .flex()
@@ -500,7 +501,9 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                                     .group_hover("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_HOVER))))
                                                     .id("g")
                                                     .group_active("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_ACTIVE)))),
-                                            ),
+                                            )
+                                            .child(super::app_launcher::anchor_probe())
+                                            .on_click(cx.listener(|a, _, w, cx| super::app_launcher::toggle(a, w, cx))),
                                     )
                                     .when(show_send_button, |d| {
                                         d.child(

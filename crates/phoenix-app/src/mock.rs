@@ -444,6 +444,32 @@ impl MockBackend {
 }
 
 impl Backend for MockBackend {
+    /// Synthetic launcher collections (invented apps, no artwork).
+    fn app_directory_collections(&self, _locale: String) -> BoxFuture<serde_json::Value> {
+        let app = |id: u64, name: &str, desc: &str, pos: i64| {
+            serde_json::json!({"position": pos, "application": {"id": id.to_string(), "name": name, "description": desc}})
+        };
+        let v = serde_json::json!([
+            {"title": "Promoted", "type": 5, "position": 1, "application_directory_collection_items": [
+                app(9001, "Pixel Garden", "Grow a shared garden with friends.", 1),
+                app(9002, "Word Ladder", "One daily word puzzle for the whole server.", 2),
+                app(9003, "Tiny Racers", "Quick races for up to eight players.", 3),
+                app(9004, "Watch Party", "Watch videos together in sync.", 4),
+            ]},
+            {"title": "Puzzle Games", "type": 4, "position": 2, "application_directory_collection_items": [
+                app(9002, "Word Ladder", "One daily word puzzle for the whole server.", 1),
+                app(9005, "Hex Tiles", "Slide hexagons into place.", 2),
+                app(9006, "Sudoku Club", "Solve the daily grid together.", 3),
+                app(9007, "Block Drop", "Clear lines before the stack fills.", 4),
+                app(9008, "Maze Run", "Find the exit first.", 5),
+            ]},
+            {"title": "Chill Together", "type": 4, "position": 3, "application_directory_collection_items": [
+                app(9004, "Watch Party", "Watch videos together in sync.", 1),
+                app(9009, "Sketchboard", "Draw on one canvas.", 2),
+            ]},
+        ]);
+        Box::pin(async move { Ok(v) })
+    }
     /// A few channel overrides on the first guild (notification settings table).
     fn notify_prefs(&self) -> Option<crate::notifications::NotifyPrefs> {
         let mut p = crate::notifications::NotifyPrefs::default();
