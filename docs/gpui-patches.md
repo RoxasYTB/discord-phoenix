@@ -171,3 +171,13 @@ never rounds down, so a text given its own measured width does not re-wrap. Unit
 `text_width_rounds_up_to_a_layout_unit`. Search `PHOENIX PATCH (text width)`.
 
 Rev: `265d2211` on `gpui-marks` (patches 4 to 7).
+
+## Running the vendored tests
+
+`cargo test -p gpui-pre -p gpui-pre-wgpu --lib` (from the workspace, on the pinned rev) does not
+compile: the crates.io packages ship without their dev-dependencies (`naga`, `util_macros`) and
+without the files their tests `include_bytes!` (`assets/fonts/lilex`, `assets/fonts/ibm-plex-sans`,
+`examples/image/*.jpg`). Tried on 2026-11-24 (95 s, compile errors only, no test ran). The
+patch tests (`test_multiline_truncation_keeps_last_line_word_wrap`,
+`cluster_goes_to_the_first_font_covering_every_mark`, `text_width_rounds_up_to_a_layout_unit`…)
+need those pieces restored in `vendor/` before they can run.
