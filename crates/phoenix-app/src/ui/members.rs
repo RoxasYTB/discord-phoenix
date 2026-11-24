@@ -881,8 +881,20 @@ fn member_bot_tag(verified: bool) -> gpui::Div {
         .line_height(z(16.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(gpui::white())
-        .when(verified, |d| d.child(gpui::svg().path(crate::icons::path("check")).flex_none().size(z(16.)).ml(z(-2.)).text_color(gpui::white())))
+        .when(verified, |d| d.child(verified_check().ml(z(-2.))))
         .child(crate::t!("common.app").to_uppercase())
+}
+
+/// botTagVerified_: 16px CheckmarkSmallBoldIcon in --white; hovering it shows
+/// the "Verified App" tooltip (aria-describedby on the live svg).
+pub fn verified_check() -> gpui::Div {
+    use crate::ui::tooltip::Tipped;
+    div()
+        .relative()
+        .flex_none()
+        .size(z(16.))
+        .child(gpui::svg().path(crate::icons::path("check-small-bold")).size_full().text_color(gpui::white()))
+        .tip(crate::t!("common.verified_app"))
 }
 
 pub fn app_tag() -> gpui::Div {

@@ -935,10 +935,8 @@ fn bot_tag(verified: bool) -> gpui::Div {
         .line_height(z(15.))
         .font_weight(FontWeight::SEMIBOLD) // botText_ 600
         .text_color(gpui::white())
-        .when(verified, |d| {
-            // botTagVerified_ 16px, margin-inline-start -.2rem, fill --white
-            d.child(gpui::svg().path(crate::icons::path("check")).flex_none().size(z(16.)).ml(z(-3.2)).text_color(gpui::white()))
-        })
+        // botTagVerified_ 16px, margin -.02rem 0 0 -.2rem, fill --white
+        .when(verified, |d| d.child(crate::ui::members::verified_check().mt(z(-0.32)).ml(z(-3.2))))
         .child(crate::t!("common.app"))
 }
 

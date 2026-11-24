@@ -14,6 +14,8 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("new-user", &["NewUserIcon"]),
     ("chat-check", &["ChatCheckIcon"]),
     ("check", &["CheckmarkLargeIcon", "CheckmarkLargeBoldIcon"]),
+    // Verified APP tag (botTagVerified_ path measured live, 2026-11-24).
+    ("check-small-bold", &["CheckmarkSmallBoldIcon"]),
     ("plus", &["PlusLargeIcon"]),
     ("palette", &["PaintPaletteIcon"]),
     ("info", &["CircleInformationIcon"]),
