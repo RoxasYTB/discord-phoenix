@@ -178,6 +178,7 @@ pub fn message(m: &api::Message) -> model::Message {
             let nick = r.member.as_ref().and_then(|mb| mb.nick.as_deref()).filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into());
             (id(r.author.id), nick, r.content.clone().into())
         }),
+        reply_voice: m.referenced_message.as_ref().is_some_and(|r| r.flags & phoenix_voice::audio::voice_message::FLAG_IS_VOICE_MESSAGE != 0),
         forward: None,
         author_nick: m.member.as_ref().and_then(|mb| mb.nick.as_deref()).filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into()),
         embeds: model::merge_embeds_on_url(m

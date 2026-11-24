@@ -50,6 +50,10 @@ pub fn gif_autoplay() -> bool {
     GIF_AUTOPLAY.load(Relaxed)
 }
 
+pub fn reduced_motion() -> bool {
+    REDUCED_MOTION.load(Relaxed)
+}
+
 pub fn motion(ms: u64) -> std::time::Duration {
     std::time::Duration::from_millis(if REDUCED_MOTION.load(Relaxed) { 1 } else { ms })
 }

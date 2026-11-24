@@ -512,7 +512,13 @@ fn reply_line(app: &PhoenixApp, m: &Message) -> gpui::Div {
                         None => crate::fonts::name_text(name, ru, 14.),
                     }),
                 )
-                .child(div().flex_1().min_w_0().truncate().child(preview))
+                .map(|r| {
+                    if preview.trim().is_empty() && m.reply_voice {
+                        r.child(div().flex_1().min_w_0().truncate().italic().child(crate::t!("chat.reply_click_to_see_voice")))
+                    } else {
+                        r.child(div().flex_1().min_w_0().truncate().child(preview))
+                    }
+                })
         }
         None => row
             .child(div().size(z(16.)).flex().items_center().justify_center().child(named("reply", 12., tk(idx::TEXT_DEFAULT))))

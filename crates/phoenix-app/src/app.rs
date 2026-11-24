@@ -1310,6 +1310,10 @@ impl PhoenixApp {
     }
 
     pub(crate) fn on_escape(&mut self, _: &Escape, window: &mut Window, cx: &mut Context<Self>) {
+        if ui::chat::voice_message::close_modal(cx) {
+            cx.notify();
+            return;
+        }
         if ui::settings::on_escape(self, cx) {
             return;
         }

@@ -311,7 +311,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     let show_send_button = should_show_send_button(app.prefs.local.flag("send-btn", false), blocked);
     let can_send = !placeholder_empty || !app.chat.uploads.is_empty();
     let placeholder = if blocked { crate::t!("chat.no_permission") } else { placeholder };
-    let vbar = super::voice_message::bar(app, cx);
+    let vbar = super::voice_message::bar(app, window, cx);
     let voice_on = vbar.is_some();
     div()
         .flex_none()

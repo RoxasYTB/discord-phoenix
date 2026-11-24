@@ -1211,6 +1211,15 @@ fn main() -> anyhow::Result<()> {
             pump(&mut cx, 100);
         }
     }
+    if let Ok(spec) = std::env::var("PHX_VMSG") {
+        cx.update_window(win.into(), |_, _, cx| {
+            v.update(cx, |app, cx| {
+                phoenix_app::ui::chat::voice_message::shot_state(app, &spec, cx);
+                cx.notify();
+            })
+        })?;
+        pump(&mut cx, 400);
+    }
     if let Some((x, y)) = std::env::var("PHX_MOUSE").ok().and_then(|v| {
         let (x, y) = v.split_once(',')?;
         Some((x.trim().parse::<f32>().ok()?, y.trim().parse::<f32>().ok()?))

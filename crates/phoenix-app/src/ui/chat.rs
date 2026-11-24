@@ -1038,6 +1038,10 @@ pub(crate) fn message(
                 None => (None, (crate::t!("chat.reply_deleted"), Vec::new()), None),
             },
         };
+        let reply_voice = match found {
+            Some(p) => entry.msgs[p].flags & phoenix_voice::audio::voice_message::FLAG_IS_VOICE_MESSAGE != 0,
+            None => msg.reply_voice,
+        };
         let found = found.or_else(|| msg.reply_preview.as_ref().map(|_| usize::MAX));
         div()
             .relative()
@@ -1105,7 +1109,11 @@ pub(crate) fn message(
                     .text_ellipsis()
                     .when(found.is_none() || preview.is_empty(), |d| d.italic())
                     .map(|d| {
-                        let text = if found.is_some() && preview.is_empty() { crate::t!("chat.reply_click_to_see") } else { preview };
+                        let text = if found.is_some() && preview.is_empty() {
+                            if reply_voice { crate::t!("chat.reply_click_to_see_voice") } else { crate::t!("chat.reply_click_to_see") }
+                        } else {
+                            preview
+                        };
                         let seg = |a: usize, b: usize| -> gpui::AnyElement {
                             let hl: Vec<_> = mranges
                                 .iter()

@@ -151,6 +151,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("stop", &["StopIcon"]),
     ("send-message", &["SendMessageIcon"]),
     ("volume-off", &["VoiceXIcon"]),
+    ("voice-low", &["VoiceLowIcon"]),
     ("image-plus", &["ImagePlusIcon", "ImageIcon"]),
     ("user", &["UserIcon"]),
     ("shield-lock", &["ShieldLockIcon"]),

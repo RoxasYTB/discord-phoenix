@@ -263,6 +263,7 @@ pub struct Message {
     pub reply_to: Option<Id>,
     pub reply_mentions_author: bool,
     pub reply_preview: Option<(Id, Option<SharedString>, SharedString)>,
+    pub reply_voice: bool,
     pub forward: Option<Forward>,
     pub author_nick: Option<SharedString>,
     pub embeds: Vec<Embed>,

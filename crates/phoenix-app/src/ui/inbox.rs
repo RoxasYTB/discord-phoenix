@@ -806,6 +806,7 @@ fn cozy_message(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<PhoenixA
                 .child(div().ml(z(4.)).text_size(z(12.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::CHAT_TEXT_MUTED)).child(crate::app::format_time_full(m.timestamp))),
         )
         .child(div().text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::ui::components::markdown_in(app, &m.content, &cx.entity(), m.id)))
+        .children(m.attachments.iter().map(|a| crate::ui::chat::attachment(a, cx)))
 }
 
 fn inbox_box() -> gpui::Div {
@@ -1847,6 +1848,7 @@ pub fn dialogs(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement
     out.extend(moderation_dialog(app, cx));
     out.extend(crate::ui::events::modal(app, cx));
     out.extend(group_dm(app, cx));
+    out.extend(crate::ui::chat::voice_message::draft_modal(app, cx));
     out.extend(crate::ui::forum::compose_modal(app, cx));
     out
 }
