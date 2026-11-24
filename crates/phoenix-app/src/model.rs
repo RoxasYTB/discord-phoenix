@@ -197,6 +197,14 @@ pub struct Attachment {
     pub kind: AttachmentKind,
     /// Full-resolution URL (viewer / open in browser). Empty = same as `url`.
     pub original: SharedString,
+    /// Hidden behind the spoiler cover (attachment flag IS_SPOILER or `SPOILER_` name).
+    pub spoiler: bool,
+}
+
+impl Attachment {
+    pub fn is_spoiler(&self) -> bool {
+        self.spoiler || self.filename.starts_with("SPOILER_")
+    }
 }
 
 #[derive(Clone, Debug, Default)]

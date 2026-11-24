@@ -1885,7 +1885,7 @@ fn still_sticker(u: SharedString, fmt: media::StickerFormat) -> SharedString {
 
 pub(crate) fn attachment(a: &Attachment, cx: &App) -> AnyElement {
     let remote = attach::loadable(&a.url);
-    let spoiler = a.filename.starts_with("SPOILER_");
+    let spoiler = a.is_spoiler();
     // "Display images, videos and lolcats: when uploaded directly" (inline_attachment_media).
     let inline = crate::ui::settings::effects::inline_attachments();
     match a.kind {

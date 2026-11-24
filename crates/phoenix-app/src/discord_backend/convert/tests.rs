@@ -155,3 +155,22 @@ fn late_sync_of_the_previous_channel_is_not_shown() {
     let back = a.show_list(&cache, api::Snowflake(700000000000000082));
     assert_eq!(rows_of(&back), Some(vec![200000000000000012]));
 }
+
+/// The client now flags spoilers with IS_SPOILER (8) and keeps the name; old
+/// uploads use the SPOILER_ prefix. Both are hidden.
+#[test]
+fn attachment_spoilers_from_flag_or_prefix() {
+    let m: phoenix_api::models::Message = serde_json::from_value(serde_json::json!({
+        "id": "5", "channel_id": "7", "content": "", "timestamp": "2026-11-24T15:00:00+00:00",
+        "author": {"id": "1", "username": "me"},
+        "attachments": [
+            {"id": "1", "filename": "a.png", "size": 3, "url": "https://cdn.discordapp.com/a.png", "proxy_url": "https://media.discordapp.net/a.png", "content_type": "image/png", "flags": 8},
+            {"id": "2", "filename": "SPOILER_b.png", "size": 3, "url": "https://cdn.discordapp.com/b.png", "proxy_url": "https://media.discordapp.net/b.png", "content_type": "image/png"},
+            {"id": "3", "filename": "c.png", "size": 3, "url": "https://cdn.discordapp.com/c.png", "proxy_url": "https://media.discordapp.net/c.png", "content_type": "image/png"}
+        ]
+    }))
+    .unwrap();
+    let out = message(&m);
+    let s: Vec<bool> = out.attachments.iter().map(|a| a.is_spoiler()).collect();
+    assert_eq!(s, [true, true, false]);
+}

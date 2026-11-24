@@ -41,7 +41,7 @@ fn radius(outer: bool) -> gpui::Pixels {
 
 fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
     let key = a.url.clone();
-    let spoiler = a.filename.starts_with("SPOILER_") && !media::is_revealed(&key, cx);
+    let spoiler = a.is_spoiler() && !media::is_revealed(&key, cx);
     // Proxy asked for the largest cell size at 2x (the cell is at most 550×350).
     let src = if a.kind == AttachmentKind::Video { media::video_poster(&a.url, 1100, 700) } else { media::resized(&a.url, 1100, 700) };
     let viewer = media::ViewerImage {
