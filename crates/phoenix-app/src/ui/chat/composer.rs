@@ -705,7 +705,9 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
         };
         strong.iter().map(|t| text_w(window, t, FontWeight::SEMIBOLD)).sum::<f32>() + text_w(window, &rest, FontWeight::MEDIUM)
     };
-    let overflow = (1..=3).contains(&names.len()) && full_w() + f32::from(z(56.)) > DOTS_BOX_W.with(|w| w.get());
+    // A box narrower than the 56px slack is not laid out yet (first frame / zero-size canvas).
+    let box_w = DOTS_BOX_W.with(|w| w.get());
+    let overflow = (1..=3).contains(&names.len()) && box_w > f32::from(z(56.)) && full_w() + f32::from(z(56.)) > box_w;
     match names.as_slice() {
         [] => {}
         _ if overflow => line = line.child(bold(crate::t!("chat.typing_multiple"))).child(crate::t!("chat.typing_suffix_multiple")),
@@ -750,7 +752,7 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
         .text_color(super::tk(idx::TEXT_SUBTLE))
         .child(
             div().relative().flex_1().min_w_0().overflow_hidden().flex().items_center().pl(z(8.))
-            .child(gpui::canvas(|b, _, _| DOTS_BOX_W.with(|w| w.set(f32::from(b.size.width))), |_, _, _, _| {}).absolute().size_full())
+            .child(gpui::canvas(|b, _, _| DOTS_BOX_W.with(|w| w.set(f32::from(b.size.width))), |_, _, _, _| {}).absolute().top_0().left_0().w_full().h_full())
             .when(active, |d| {
                 d.child(div().flex_none().flex().items_center().gap(z(2.)).child(dot(0)).child(dot(1)).child(dot(2))).child(line)
             }),
