@@ -385,7 +385,8 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
 
 pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     ensure_loaded(app, cx);
-    let head = header(window, cx);
+    // AnyElement ends the header's borrow of `cx` (2024 `impl Trait` captures).
+    let head = header(window, cx).into_any_element();
     // Local name filter over the loaded catalogue (the client also queries /shop/search).
     let q = SEARCH.with(|s| s.borrow().clone()).map(|i| i.read(cx).value().to_lowercase()).unwrap_or_default();
     let cards = CARDS.with(|c| c.borrow().clone());
