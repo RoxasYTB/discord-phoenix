@@ -104,7 +104,10 @@ and `d4030cd60f4ad310.js` (`Context Menu`).
 
 ### Views
 - Full view toolbar of a text channel thread: Threads, bell, pins, member list, More (live). The member list button is hidden on an archived thread (live). The bell is slashed when the thread is not joined (live after leaving), muted or not on all messages. ✅
-- Threads browser rows: « Nom : message • Il y a 6 h » with a 16px avatar; archived rows « Commencé par … • Dernière activité : Il y a 6 h »; clicking opens the full view (live). ✅ code, render pending. Facepile of active rows and the search field are still static. ❌
+- Threads browser rows: « Nom : message • Il y a 6 h » with a 16px avatar; archived rows « Commencé par … • Dernière activité : Il y a 6 h »; clicking opens the full view (live). ✅ real_shots 4a18475a (sandbox: 2 joined + archived private thread). When the gateway sent no `most_recent_messages`, the preview comes from `GET messages?limit=1` (read only). ⚠ the author shows the account name instead of the server nick, and a channel name change system message is previewed as plain text; ❌ facepile of active rows.
+- Threads browser search filters joined and archived threads by name (case insensitive). ✅
+- Thread member list with nobody in it: « Il n'y a personne sur ce fil. » + « Tu peux inviter des personnes en utilisant @mention dans un message. » (live after leaving). ✅ code
+- Full view `Plus` menu compared with real_shots c1ad21f9 on the sandbox thread: same items, order and separators as the live dump. ✅
 - Sidebar thread rows take unread and mentions from the joined thread's read state. ✅ code.
 
 ## Forum settings (GET `/guilds/{g}/channels`, 2026-11-24)
