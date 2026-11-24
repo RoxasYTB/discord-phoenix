@@ -160,6 +160,9 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/angle-brackets.svg" => s!(r#"<path d="m8 6-6 6 6 6M16 6l6 6-6 6"/>"#),
         "icons/door-exit.svg" => s!(r#"<path d="M14 4H5v16h9M10 12h11m-3-3 3 3-3 3"/>"#),
         "icons/discord-logo.svg" => f!(r#"<path d="M19.7 5.4a17 17 0 0 0-4.3-1.3l-.5 1.1a15.7 15.7 0 0 0-4.8 0l-.5-1.1a17 17 0 0 0-4.3 1.3C2.6 9.5 1.9 13.5 2.2 17.4a17.2 17.2 0 0 0 5.3 2.7l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.3 12.3 0 0 0 10.4 0l.4.3a11 11 0 0 1-1.7.8l1.1 1.8a17.1 17.1 0 0 0 5.3-2.7c.4-4.5-.8-8.5-3.1-12zM8.7 15c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z"/>"#),
+        // Activity type glyphs on member rows (our own drawings): a note, a screen.
+        "icons/music.svg" => f!(r#"<path d="M20 3v12.5a3.5 3.5 0 1 1-2-3.2V7.3l-8 1.6v8.6A3.5 3.5 0 1 1 8 14.3V5.4z"/>"#),
+        "icons/tv.svg" => s!(r#"<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>"#),
         "icons/game-controller.svg" => f!(r#"<path d="M7 7h10a5 5 0 0 1 5 5v1a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-1a5 5 0 0 1 5-5zm0 3v2H5v2h2v2h2v-2h2v-2H9v-2zm9 1a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>"#),
         "icons/more-horizontal.svg" => f!(r#"<path d="M4 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>"#),
         "icons/medal.svg" => f!(r#"<path d="M7 2h4l1 4 1-4h4l-3 7a6 6 0 1 1-4 0zM12 11a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>"#),
