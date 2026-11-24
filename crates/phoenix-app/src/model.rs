@@ -346,6 +346,8 @@ pub struct Member {
     pub avatar: Option<SharedString>,
     /// Per-guild avatar decoration URL (`member.avatar_decoration_data`).
     pub decoration: Option<SharedString>,
+    /// Per-guild nameplate `(static_url, dark_palette_rgb)` (`member.collectibles.nameplate`).
+    pub nameplate: Option<(SharedString, Option<u32>)>,
     /// `member.joined_at` as unix seconds (drives the "New member" badge).
     pub joined_at: Option<i64>,
     /// `member.flags` DID_REJOIN (bit 0): rejoining members never get the badge.

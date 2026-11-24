@@ -52,10 +52,14 @@ pub enum Place {
 /// 213x40 in the dump).
 pub fn layer(user: &User, h: f32, place: Place, hovered: bool, selected: bool) -> Option<AnyElement> {
     let (url, pal) = user.nameplate.clone()?;
+    // Live client (2026-11-24, `img_AFi54G`): `opacity: 0.6` (`.selected` 0.9,
+    // `.channel.hover` 0.4) combined with
+    // `mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.3) 220px, rgb(0, 0, 0) 270px)`.
+    // At the 224px member/channel row width, the mask attenuates the image by 0.3×.
     let opacity = match (place, selected, hovered) {
-        (_, true, _) => 0.9,
-        (Place::Channel, false, true) => 0.4,
-        _ => 0.6,
+        (_, true, _) => 0.9 * 0.3,
+        (Place::Channel, false, true) => 0.4 * 0.3,
+        _ => 0.6 * 0.3,
     };
     let seg = |l: f32, r: f32, a0: f32, a1: f32, c: u32| {
         div()

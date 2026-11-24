@@ -88,6 +88,7 @@ pub fn members_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
             nick: None,
             avatar: None,
             decoration: None,
+            nameplate: None,
             joined_at: None,
             rejoined: false,
             premium_since: None,

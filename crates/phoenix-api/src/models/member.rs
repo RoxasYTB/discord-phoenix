@@ -22,6 +22,9 @@ pub struct Member {
     /// Per-guild avatar decoration (`{asset, sku_id}`), overrides the user's.
     #[serde(default)]
     pub avatar_decoration_data: Option<serde_json::Value>,
+    /// Per-guild collectibles (`{nameplate: {asset, palette, ...}}`), overrides the user's.
+    #[serde(default)]
+    pub collectibles: Option<serde_json::Value>,
     #[serde(default, deserialize_with = "null_default")]
     pub roles: Vec<RoleId>,
     #[serde(default)]
@@ -52,5 +55,10 @@ impl Member {
         self.nick
             .as_deref()
             .or_else(|| self.user.as_ref().map(|u| u.display_name()))
+    }
+
+    /// Per-guild nameplate (`collectibles.nameplate`), overrides the user's.
+    pub fn nameplate(&self) -> Option<(String, Option<String>)> {
+        super::user::nameplate_from_collectibles(self.collectibles.as_ref())
     }
 }

@@ -77,6 +77,11 @@ pub fn member_decoration_url(m: &api::Member) -> Option<SharedString> {
     crate::ui::avatar_deco::url(m.avatar_decoration_data.as_ref()?)
 }
 
+/// Per-guild nameplate (`member.collectibles.nameplate`).
+pub fn member_nameplate(m: &api::Member) -> Option<(SharedString, Option<u32>)> {
+    m.nameplate().map(|(url, pal)| (url.into(), pal.as_deref().and_then(crate::ui::nameplate::palette_dark)))
+}
+
 pub fn presence(status: &str) -> model::Presence {
     match status {
         "online" => model::Presence::Online,
@@ -945,6 +950,7 @@ impl MemberList {
                 nick: m.member.nick.as_deref().filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into()),
                 avatar: member_avatar_url(guild, u.id, &m.member),
                 decoration: member_decoration_url(&m.member),
+                nameplate: member_nameplate(&m.member),
                 joined_at: joined_unix(&m.member),
                 rejoined: m.member.flags & 1 != 0,
                 premium_since: premium_unix(&m.member),
@@ -1124,6 +1130,7 @@ impl Adapter {
                     nick: m.nick.as_deref().filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into()),
                     avatar: member_avatar_url(guild, u, &m),
                     decoration: member_decoration_url(&m),
+                    nameplate: member_nameplate(&m),
                     joined_at: joined_unix(&m),
                     rejoined: m.flags & 1 != 0,
                     premium_since: premium_unix(&m),

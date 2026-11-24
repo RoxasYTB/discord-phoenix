@@ -273,6 +273,7 @@ impl MockBackend {
                     nick: None,
                     avatar: None,
                     decoration: None,
+                    nameplate: None,
                     joined_at: None,
                     rejoined: false,
                     premium_since: None,

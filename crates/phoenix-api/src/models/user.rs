@@ -60,15 +60,19 @@ pub struct User {
     pub bio: Option<String>,
 }
 
+pub(crate) fn nameplate_from_collectibles(collectibles: Option<&serde_json::Value>) -> Option<(String, Option<String>)> {
+    let n = collectibles?.get("nameplate")?;
+    let asset = n.get("asset")?.as_str().filter(|a| !a.is_empty())?;
+    let sep = if asset.ends_with('/') { "" } else { "/" };
+    let palette = n.get("palette").and_then(|p| p.as_str()).map(str::to_owned);
+    Some((format!("https://cdn.discordapp.com/assets/collectibles/{asset}{sep}static.png"), palette))
+}
+
 impl User {
     /// Static image of the nameplate shown behind the name in the DM list
     /// and member list (`collectibles.nameplate.asset`), with its palette.
     pub fn nameplate(&self) -> Option<(String, Option<String>)> {
-        let n = self.collectibles.as_ref()?.get("nameplate")?;
-        let asset = n.get("asset")?.as_str().filter(|a| !a.is_empty())?;
-        let sep = if asset.ends_with('/') { "" } else { "/" };
-        let palette = n.get("palette").and_then(|p| p.as_str()).map(str::to_owned);
-        Some((format!("https://cdn.discordapp.com/assets/collectibles/{asset}{sep}static.png"), palette))
+        nameplate_from_collectibles(self.collectibles.as_deref())
     }
 }
 

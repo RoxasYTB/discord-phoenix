@@ -1261,19 +1261,22 @@ impl PhoenixApp {
         crate::member_index::find(self.members.get(&g)?, g, user)?.nick.clone()
     }
 
-    /// `user` as shown in guild `g`: the per-guild avatar and decoration of its
-    /// member replace the global ones (client `getGuildMemberAvatarURL`).
+    /// `user` as shown in guild `g`: the per-guild avatar, decoration and
+    /// nameplate of its member replace the global ones.
     pub fn member_user(&self, g: Option<Id>, user: Id) -> Option<std::borrow::Cow<'_, crate::model::User>> {
         let u = self.users.get(&user)?;
         let m = g.and_then(|g| crate::member_index::find(self.members.get(&g)?, g, user));
         match m {
-            Some(m) if m.avatar.is_some() || m.decoration.is_some() => {
+            Some(m) if m.avatar.is_some() || m.decoration.is_some() || m.nameplate.is_some() => {
                 let mut u = u.clone();
                 if let Some(a) = &m.avatar {
                     u.avatar = crate::model::ImageRef::Url(a.clone());
                 }
                 if m.decoration.is_some() {
                     u.decoration = m.decoration.clone();
+                }
+                if m.nameplate.is_some() {
+                    u.nameplate = m.nameplate.clone();
                 }
                 Some(std::borrow::Cow::Owned(u))
             }

@@ -200,6 +200,7 @@ pub fn list_rows<'a>(items: impl Iterator<Item = &'a Option<MemberListItem>>) ->
                     nick: None,
                     avatar: None,
                     decoration: None,
+                    nameplate: crate::discord_backend::convert::member_nameplate(&m.member),
                     joined_at: m.member.joined_at.as_deref().and_then(iso_to_unix),
                     rejoined: m.member.flags & 1 != 0,
                     premium_since: m.member.premium_since.as_deref().and_then(iso_to_unix),
