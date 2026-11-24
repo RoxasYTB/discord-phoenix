@@ -1,6 +1,6 @@
 # Project Phoenix — état et handoff
 
-> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). Dernière mise à jour : `main` à `c479f54`, cinq commits locaux devant `origin/main`.
+> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). État Git détaillé jusqu’à `ea3bfe6` (six commits locaux devant `origin/main`); les commits suivants consignent la comparaison visuelle et ses limites.
 
 Ce document est le point de reprise pour les sessions qui poursuivent la parité visuelle et fonctionnelle de Discord Phoenix. Il complète les tableaux par fonctionnalité dans [`docs/parity/`](parity/) et l’inventaire des routes dans [`docs/PARITY.md`](PARITY.md). Il ne remplace pas les preuves d’exécution ni les tests.
 
@@ -19,7 +19,9 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 - La sauvegarde initiale et son journal de test sont dans `/mnt/windata/project-phoenix/backups/20261124-112201Z/`. Une sauvegarde plus récente de `main` à `b22e6b1` est dans `/mnt/windata/project-phoenix/backups/20261124-113638Z/` (`main.bundle`, `worktree.patch`, `screenshots/`, `status.txt`). Elles ne contiennent aucun jeton.
 - Le commit `3cf6524` complète le handoff avec la vérification ciblée et les limites de la capture CDP. La suite `cargo test -p phoenix-app --lib` passe: 211 réussis, 2 ignorés.
 - Le commit `c479f54` câble l’option locale `send-btn` à un bouton Phoenix qui réutilise `submit_composer`, avec une icône SVG originale. Le bouton apparaît actuellement pour un brouillon non vide et autorisé. Ce critère reste à comparer au client officiel; aucun message n’a été envoyé pendant la validation.
-- La sauvegarde actuelle de `c479f54` est `/mnt/windata/project-phoenix/backups/20261124-120000Z/` (`main.bundle`, `main-since-origin.patch`, `HEAD.txt`, état Git, log de test et copie des trois captures PNG non suivies). Le log contient le résultat des 211 tests; les captures ne sont pas ajoutées au dépôt.
+- La sauvegarde de `c479f54` est `/mnt/windata/project-phoenix/backups/20261124-120000Z/` (`main.bundle`, `main-since-origin.patch`, `HEAD.txt`, état Git, log de test et copie des trois captures PNG non suivies). Le log contient le résultat des 211 tests; les captures ne sont pas ajoutées au dépôt. Après les commits de documentation de cette reprise, créer une nouvelle sauvegarde datée.
+- Reprise suivante : le client officiel est encore accessible en CDP sur la capture d’écran. Une capture visuelle temporaire 1920×1050 du compositeur a été inspectée puis supprimée. La préférence Send Message n’a pas été modifiée; le contrôle n’était pas visible dans cet état, ce qui ne permet pas d’inférer le rendu activé. Cette limite et la méthode à suivre figurent dans `docs/parity/composer.md`.
+- La documentation Soundboard est enrichie à partir du guide officiel : le flux de haut niveau est ouvrir les contrôles vocaux, choisir un serveur disponible puis un son. L’interface et les endpoints Phoenix ne sont toujours pas mesurés; aucune action vocale ou lecture audio n’a été faite. Voir `docs/parity/pickers.md`.
 - Aucun intégrateur, build Cargo ou agent de la session précédente ne tournait pendant la vérification.
 
 ## Règle de contribution et méthode de référence
