@@ -48,6 +48,28 @@ Mismatch % per region.
 | 1920×1080 | inbox (B) | 1.2 | 31.6 | 3.2 | 2.7 | 7.8 | 2.3 | 16.6 | 8.1 | 11.6 | — | **8.5** |
 | 1920×1080 | search (B) | 1.2 | 31.6 | 3.2 | 2.1 | 9.5 | 2.8 | — | 8.1 | — | 23.9 | **9.1** |
 
+## After (int-bin 478aa7f, same method, 15:16–15:20)
+
+All rows on guild B (the client stayed there). Search at 1536×788 measured this time.
+
+| Size | View | Title bar | Rail | Channels | Header | Messages | Composer | Members | User panel | Inbox | Search | Overall |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1280×720 | channel | 1.8 | 4.4 | 3.0 | 4.3 | 30.6 | 4.7 | 16.3 | 7.9 | — | — | **15.8** |
+| 1280×720 | inbox | 1.9 | 4.4 | 3.0 | 4.6 | 10.4 | 4.8 | 14.2 | 7.9 | 11.1 | — | **8.0** |
+| 1280×720 | search | 1.8 | 4.4 | 3.0 | 3.8 | 29.4 | 4.5 | — | 7.9 | — | 15.2 | **17.5** |
+| 1536×788 | channel | 1.5 | 4.2 | 3.1 | 3.2 | 4.6 | 3.3 | 15.5 | 8.0 | — | — | **5.7** |
+| 1536×788 | inbox | 1.5 | 4.2 | 3.1 | 3.6 | 10.8 | 3.4 | 13.6 | 8.0 | 11.7 | — | **8.2** |
+| 1536×788 | search | 1.5 | 4.2 | 3.1 | 2.9 | 21.4 | 4.3 | — | 8.0 | — | 15.3 | **14.2** |
+| 1920×1080 | channel | 1.2 | 3.8 | 3.2 | 2.4 | 8.4 | 2.3 | 15.0 | 7.9 | — | — | **7.5** |
+| 1920×1080 | inbox | 1.2 | 3.8 | 3.2 | 2.7 | 12.6 | 2.3 | 13.5 | 7.9 | 13.3 | — | **9.6** |
+| 1920×1080 | search | 1.2 | 3.8 | 3.2 | 2.1 | 12.9 | 2.8 | — | 7.9 | — | 23.9 | **10.3** |
+
+Reading: the rail drops from 30–32 % to 4 % wherever the client rail was scrolled. The user
+panel now shows the custom status (the 8 % left is text antialiasing and the ellipsis). The
+messages region is decided by timing (new messages between the two captures) and by the
+client sitting above the loaded history at 1280×720 (30 %). Member list scores are left to
+wt/members2. Search results (15–24 %) are being rebuilt on wt/search.
+
 ## Gaps found, by visibility
 
 | Gap | Cause (observed) | State |
@@ -58,4 +80,6 @@ Mismatch % per region.
 | User panel "Ne pas déranger" vs the custom status; own member row without it | the member list sync sends our own row with `activities: []` (checked on the gateway: READY and SESSIONS_REPLACE carry the custom status), and that reset the own activities | ✅ |
 | Header bell: the client shows the slashed bell on guild A's channel, Phoenix the plain bell | Phoenix slashes only when `channel.muted`; the client's reason (guild or category mute) was not observed, because reading it would need a menu on a route the user was not on | ❌ open |
 | Member list nameplate differs on one member (another image), one name ellipsized early (combining marks) | member list zone | ❌ handed to wt/members2 |
+| Search results panel: old layout (query field, "Plus récents / Plus anciens" tabs, plain author names, no highlight, no reply line, no embeds) vs the client's "N résultats" + Filtres + Trier header and full message cards | search results | ❌ handed to wt/search (rebuild in progress at 15:20) |
+| Voice channel member rows: the client shows "Muet" + "En sourdine" for a self-muted, self-deafened member; one Phoenix render had the row without the icons, a later one had no voice rows at all, while the app state held both users. The gateway sends `self_mute`/`self_deaf` true in READY_SUPPLEMENTAL (checked) | race between READY_SUPPLEMENTAL, ReadyData (`clear_session`) and the sidebar rebuild, not pinned down without an instrumented build | ❌ open |
 | Channel list "Nouveaux messages non lus" pill missing | compare artefact: with `NO_ACKS` the selected channel stays unread in `real_shots`, which hides the pill | — (not a product bug) |
