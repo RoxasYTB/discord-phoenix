@@ -3,9 +3,9 @@
 //! --custom-avatar-avatar-decoration-border-position
 //! (`(1 - --decoration-to-avatar-ratio) / 2 * 100%`), size avatar ×
 //! --decoration-to-avatar-ratio (1.2), pointer-events none, drawn above the
-//! avatar and its status cut-out.
+//! avatar but masked by the status cut-out (the status stays on top).
 
-use gpui::{img, px, Div, ParentElement, SharedString, Styled};
+use gpui::{img, px, SharedString, Styled};
 
 use crate::model::User;
 
@@ -18,21 +18,19 @@ pub fn geometry(size: f32) -> (f32, f32) {
     ((size - side) / 2., side)
 }
 
-/// Adds the user's decoration on top of `avatar` (a `relative` box of `size`).
-pub fn decorate(avatar: Div, user: Option<&User>, size: f32) -> Div {
-    decorate_hover(avatar, user, size, None)
+/// The decoration image `src` for an avatar of `size`, positioned in the
+/// avatar's own (relative) box. Avatars with a status take it through
+/// [`crate::ui::avatar_with_status_deco`] so the status cut-out and glyph
+/// are painted above it.
+pub fn layer(src: SharedString, size: f32) -> gpui::Img {
+    let (off, side) = geometry(size);
+    img(src).absolute().left(px(off)).top(px(off)).size(px(side))
 }
 
-/// [`decorate`] that plays the animation while row `key` is hovered.
-pub fn decorate_hover(avatar: Div, user: Option<&User>, size: f32, key: Option<u64>) -> Div {
-    match user.and_then(|u| u.decoration.clone()) {
-        Some(deco) => {
-            let (off, side) = geometry(size);
-            let src = key.map(|k| src_for(&deco, k)).unwrap_or(deco);
-            avatar.child(img(src).absolute().left(px(off)).top(px(off)).size(px(side)))
-        }
-        None => avatar,
-    }
+/// The user's decoration source, animated while row `key` is hovered.
+pub fn source(user: Option<&User>, key: Option<u64>) -> Option<SharedString> {
+    let deco = user?.decoration.clone()?;
+    Some(key.map(|k| src_for(&deco, k)).unwrap_or(deco))
 }
 
 #[cfg(test)]
@@ -41,6 +39,19 @@ mod tests {
     fn border_position_is_minus_ten_percent() {
         let (off, side) = super::geometry(32.);
         assert!((off + 3.2).abs() < 1e-4 && (side - 38.4).abs() < 1e-4);
+    }
+
+    /// Live `svg-mask-avatar-decoration-status-round-<n>` holes (cx = cy, r, in
+    /// fractions of the decoration box) land on the avatar's own status cut,
+    /// which is what lets the cut be painted over the decoration.
+    #[test]
+    fn decoration_hole_is_the_avatar_cut() {
+        for (size, c, r) in [(32., 0.786_458_3, 0.208_333_3), (80., 0.791_666_7, 0.145_833_3), (96., 0.777_777_8, 0.156_25), (120., 0.777_777_8, 0.138_888_9)] {
+            let (off, side) = super::geometry(size);
+            let (cx, cr, _) = crate::ui::status_svg::geometry(size);
+            assert!((off + c * side - cx).abs() < 0.05, "{size}: centre {} vs {cx}", off + c * side);
+            assert!((r * side - cr).abs() < 0.05, "{size}: radius {} vs {cr}", r * side);
+        }
     }
 }
 

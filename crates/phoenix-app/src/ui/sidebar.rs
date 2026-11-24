@@ -791,14 +791,22 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         let p = ch.voice_users.first().map(|u| app.presence_of(*u)).unwrap_or_default();
         // the status cut shows the row's hover / selected background like the mask
         let g = SharedString::from(format!("chrow{}", id.0));
-        let ring = crate::ui::avatar_with_status_overlay(u, 32., p, c(Palette::BG_SECONDARY), move |d| {
-            if selected {
-                d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED))
-            } else {
-                d.group_hover(g, |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)))
-            }
-        });
-        crate::ui::avatar_deco::decorate(ring, u, 32.).into_any_element()
+        let deco = crate::ui::avatar_deco::source(u, None);
+        crate::ui::avatar_with_status_deco(
+            u,
+            32.,
+            p,
+            c(Palette::BG_SECONDARY),
+            move |d| {
+                if selected {
+                    d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED))
+                } else {
+                    d.group_hover(g, |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)))
+                }
+            },
+            deco,
+        )
+        .into_any_element()
     } else {
         // `icon_TNyK-N` `--channel-icon`; muted `--icon-muted`; unread `--icon-subtle`.
         // `iconLive_Wx6SnQ`: the channel we're connected to tints its icon
@@ -1259,13 +1267,13 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                     }
                 }))
                 .overflow_hidden()
-                .child(crate::ui::avatar_deco::decorate_hover(
-                    crate::ui::avatar_with_status_overlay(Some(&app.me), 32., app.presence, c(Palette::BG_SECONDARY_ALT), |d| {
-                        d.group_hover("user-panel-avatar", |s| s.bg(t(idx::BACKGROUND_MOD_NORMAL)))
-                    }),
+                .child(crate::ui::avatar_with_status_deco(
                     Some(&app.me),
                     32.,
-                    Some(crate::ui::avatar_deco::hover_key(3, 0)),
+                    app.presence,
+                    c(Palette::BG_SECONDARY_ALT),
+                    |d| d.group_hover("user-panel-avatar", |s| s.bg(t(idx::BACKGROUND_MOD_NORMAL))),
+                    crate::ui::avatar_deco::source(Some(&app.me), Some(crate::ui::avatar_deco::hover_key(3, 0))),
                 ))
                 .child(
                     div()

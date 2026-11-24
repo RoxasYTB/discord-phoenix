@@ -756,18 +756,15 @@ pub fn member_row_in(
                         d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
                             .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
                     };
+                    // The decoration sits under the status cut-out and glyph (ui::avatar_with_status_deco).
+                    let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
                     if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
-                        mobile_avatar(user, cut)
+                        mobile_avatar(user, cut, deco)
                     } else {
-                        crate::ui::avatar_with_status_overlay(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut)
+                        crate::ui::avatar_with_status_deco(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut, deco)
                     }
                 })
-                .when(streaming, |d| d.child(streaming_dot()))
-                .when_some(user.and_then(|u| u.decoration.clone()), |d, deco| {
-                    // avatarDecorationContainer_: inset/top --custom-avatar-avatar-decoration-border-position
-                    // = (1 − 1.2)/2 × 100%, size 120% of the 32px avatar.
-                    d.child(gpui::img(crate::ui::avatar_deco::src_for(&deco, crate::ui::avatar_deco::hover_key(1, uid.0))).absolute().size(z(32. * 1.2)).left(z(-3.2)).top(z(-3.2)))
-                }),
+                .when(streaming, |d| d.child(streaming_dot())),
         )
         .child(
             div()
@@ -901,12 +898,14 @@ pub fn verified_check() -> gpui::Div {
 /// 32px avatar "online on mobile" (live client masks):
 /// `svg-mask-avatar-status-mobile-32` cuts a rect (.59375, .4375) .5x.65625,
 /// radius .13125, and the phone glyph is a 10x15 rect at 22,17 in --status-online.
-fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) -> gpui::Div) -> gpui::Div {
+fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) -> gpui::Div, deco: Option<SharedString>) -> gpui::Div {
     div()
         .relative()
         .flex_none()
         .size(px(32.))
         .child(crate::ui::avatar(user, 32.))
+        // svg-mask-avatar-decoration-status-mobile-32: same hole as the avatar's (x 19, y 14, 16x21 r 4.2).
+        .when_some(deco, |d, src| d.child(crate::ui::avatar_deco::layer(src, 32.)))
         .child(
             div()
                 .absolute()

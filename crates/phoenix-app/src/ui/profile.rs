@@ -13,7 +13,7 @@ use crate::{
     model::{Id, ImageRef},
     presence::{Activity, ActivityKind, Popout, Profile, format_date, status_label},
     theme::{DEFAULT_AVATAR, Palette, c, role_color},
-    ui::{avatar_with_status, members::bot_tag_px, status_picker},
+    ui::{members::bot_tag_px, status_picker},
 };
 
 // 253781 `:root` --custom-user-profile-popout-width
@@ -352,13 +352,16 @@ pub(crate) fn avatar_block(i: &Info, size: f32, ring: f32, ring_color: u32) -> D
         .p(z(ring))
         .rounded_full()
         .bg(c(ring_color))
-        .child(avatar_with_status(i.user.as_deref(), size, i.presence, c(ring_color)))
-        .when_some(i.prof.and_then(|p| p.decoration.clone()), |d, deco| {
-            // Avatar decorations are drawn at 1.2x the avatar, centred.
-            let s = size * 1.2;
-            // Popouts, the full profile and the DM panel play it (animated WebP).
-            d.child(img(crate::ui::avatar_deco::src(&deco, true)).absolute().size(z(s)).left(z(ring - (s - size) / 2.)).top(z(ring - (s - size) / 2.)))
-        })
+        // Decoration at 1.2x the avatar, centred, under the status cut-out and glyph.
+        // Popouts, the full profile and the DM panel play it (animated WebP).
+        .child(crate::ui::avatar_with_status_deco(
+            i.user.as_deref(),
+            size,
+            i.presence,
+            c(ring_color),
+            |d| d,
+            i.prof.and_then(|p| p.decoration.clone()).map(|deco| crate::ui::avatar_deco::src(&deco, true)),
+        ))
 }
 
 /// Badges row (`container_IqWmhA`: inline in the username row, gap 2px,

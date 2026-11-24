@@ -510,7 +510,8 @@ fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
                             150,
                             ICON_RADIUS,
                         ))
-                        .child(svg().path(crate::icons::path("discord-logo")).size(z(30.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
+                        // Live (dpr 1.25): the 24x24 glyph sits 8px inside the 40px tile.
+                        .child(svg().path(crate::icons::path("discord-logo")).size(z(24.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
                 )
                 .when(pending > 0, |d| d.child(mention_badge(pending))),
         )

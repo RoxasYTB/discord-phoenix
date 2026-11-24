@@ -108,12 +108,31 @@ pub fn avatar_with_status(user: Option<&User>, size: f32, p: Presence, ring: Hsl
 /// background: `overlay` styles a layer over `ring` (e.g. `group_hover`), so
 /// the cut keeps matching a translucent row background like a real mask.
 pub fn avatar_with_status_overlay(user: Option<&User>, size: f32, p: Presence, ring: Hsla, overlay: impl FnOnce(Div) -> Div) -> Div {
+    avatar_with_status_deco(user, size, p, ring, overlay, None)
+}
+
+/// [`avatar_with_status_overlay`] with an avatar decoration (`deco`, the image
+/// source to draw). Layers, bottom to top: avatar, decoration, status cut-out,
+/// status glyph. The client masks the decoration with
+/// `svg-mask-avatar-decoration-status-round-<size>`, whose hole is the same
+/// circle as the avatar's cut (32: centre 27, r 8; 80: 68/14; 96: 80/18;
+/// 120: 100/20, in avatar coordinates), so painting the cut over the
+/// decoration reproduces the mask and the status always stays on top.
+pub fn avatar_with_status_deco(
+    user: Option<&User>,
+    size: f32,
+    p: Presence,
+    ring: Hsla,
+    overlay: impl FnOnce(Div) -> Div,
+    deco: Option<SharedString>,
+) -> Div {
     let (cx, r, s) = status_svg::geometry(size);
     div()
         .relative()
         .flex_none()
         .size(px(size))
         .child(avatar(user, size))
+        .when_some(deco, |d, src| d.child(avatar_deco::layer(src, size)))
         .child(
             div()
                 .absolute()
