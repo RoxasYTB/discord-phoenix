@@ -184,3 +184,12 @@ priority = -1
 [lints.rust.unexpected_cfgs]
 level = "allow"
 priority = 0
+
+[dev-dependencies.naga]
+version = "30.0.2"
+features = ["wgsl-in"]
+
+[dev-dependencies.image]
+version = "0.25.1"
+features = ["png"]
+default-features = false

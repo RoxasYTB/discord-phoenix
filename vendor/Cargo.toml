@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["gpui-pre", "gpui-pre-wgpu"]
+
+[patch.crates-io]
+gpui-pre = { path = "gpui-pre" }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
