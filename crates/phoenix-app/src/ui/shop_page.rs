@@ -30,6 +30,7 @@ thread_local! {
     static REQUESTED: Cell<bool> = const { Cell::new(false) };
     static TAB: Cell<usize> = const { Cell::new(0) };
     static ORBS: Cell<Option<u64>> = const { Cell::new(None) };
+    static SEARCH: RefCell<Option<gpui::Entity<gpui_component::input::InputState>>> = const { RefCell::new(None) };
 }
 
 fn price(p: &Value, tier: &str) -> Option<(i64, u32, String)> {
@@ -112,7 +113,23 @@ fn glyph(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
 }
 
 /// `headerBar_ViLURN container_ybUK7Z themed_`: 48px + 1px bottom border, padding 0 14 0 20.
-fn header(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn search_input(window: &mut Window, cx: &mut Context<PhoenixApp>) -> gpui::Entity<gpui_component::input::InputState> {
+    if let Some(i) = SEARCH.with(|s| s.borrow().clone()) {
+        return i;
+    }
+    let i = cx.new(|cx| gpui_component::input::InputState::new(window, cx).placeholder(crate::t!("shop.search")));
+    cx.subscribe_in(&i, window, |_: &mut PhoenixApp, _, ev: &gpui_component::input::InputEvent, _, cx| {
+        if let gpui_component::input::InputEvent::Change = ev {
+            cx.notify();
+        }
+    })
+    .detach();
+    SEARCH.with(|s| *s.borrow_mut() = Some(i.clone()));
+    i
+}
+
+fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+    let search = search_input(window, cx);
     let tabs = [crate::t!("shop.tab_now"), crate::t!("shop.tab_browse"), crate::t!("shop.tab_orbs"), crate::t!("shop.tab_more")];
     let carets = [false, true, false, true];
     let sel = TAB.with(Cell::get);
@@ -184,7 +201,11 @@ fn header(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .text_size(z(14.))
                         .text_color(tk(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT))
                         .child(div().size(z(22.)).flex().items_center().justify_center().child(glyph("search", 16., tk(idx::ICON_MUTED))))
-                        .child(crate::t!("shop.search")),
+                        .child(
+                            div().flex_1().min_w_0().child(
+                                gpui_component::input::Input::new(&search).appearance(false).bordered(false).pl(z(0.)).text_size(z(14.)),
+                            ),
+                        ),
                 )
                 .child(pill("shop-wishlist").w(z(32.)).child(glyph("heart", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
                 // container_0XT54_ padding 8 12: orb 20px, balance body-md/semibold --text-strong (2px after).
@@ -362,15 +383,18 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
         .into_any_element()
 }
 
-pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     ensure_loaded(app, cx);
+    let head = header(window, cx);
+    // Local name filter over the loaded catalogue (the client also queries /shop/search).
+    let q = SEARCH.with(|s| s.borrow().clone()).map(|i| i.read(cx).value().to_lowercase()).unwrap_or_default();
     let cards = CARDS.with(|c| c.borrow().clone());
     let body: AnyElement = match cards {
         None => div().p(z(32.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")).into_any_element(),
         Some(v) => {
             // Card rows: 246px cards, 30px apart (vanilla-shop 449 → 725), 32px page inset.
             let mut grid = div().p(z(32.)).flex().flex_wrap().gap(z(30.));
-            for k in &v {
+            for k in v.iter().filter(|k| q.is_empty() || k.name.to_lowercase().contains(q.trim())) {
                 grid = grid.child(card(app, k, cx));
             }
             grid.into_any_element()
@@ -382,7 +406,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
         .flex()
         .flex_col()
         .bg(tk(idx::BACKGROUND_BASE_LOWEST))
-        .child(header(cx))
+        .child(head)
         .child(div().id("shop-scroll").flex_1().min_h_0().overflow_y_scroll().child(body))
         .into_any_element()
 }
