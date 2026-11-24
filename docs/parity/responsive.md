@@ -30,5 +30,24 @@ Offscreen check without a zoom setting: `PHX_W=<css width> PHX_SCALE=<dpr × zoo
 | Composer buttons | `channelTextArea_` ≥ 450 px: gift, GIF, sticker, emoji, apps. Below (449.8 measured): gift, emoji, apps. Nothing else hides, even at 2 px | `full_buttons` from a width probe on the text area | ✅ |
 | Server rail badges | Icon 40 px; `upperBadge_` 16 px at (24, 0), `lowerBadge_` 16 px at (24, 24), cut-out rings; the two never touch | same boxes at 100 % (pixel check on `theme_shots` at dpr 2) | ✅ (layout); rasterisation at 150/200 % not compared against a live capture at that zoom |
 
+Offscreen check after the merge (7b62021, `theme_shots` demo data, 1280×800 at dpr 2): at 150 %
+(853 CSS px) the title stays whole, the topic takes the remaining room, the search is 186 px and
+the composer shows gift, emoji, apps; at 200 % (640 CSS px) the search is 64 px and the title is
+clipped by `children_` exactly like the client at that width.
+
 Not measured: a channel with a topic (the user's channel had none; Phoenix keeps the topic as
 the flexible, ellipsized part after the title), DM and forum headers, compact density.
+
+## Member list (read-only checks, 2026-11-24)
+
+Same guild (44 members, under the lazy list's first 100-row range), live list read with a 2080 px
+tall emulated viewport so the whole list is in the DOM, Phoenix with `real_shots PHX_H=2080`.
+
+| Check | Live | Phoenix | State |
+|---|---|---|---|
+| Groups and counts | hoisted roles in server order, then "Hors ligne — 25" | same four groups, same counts and order (rows come from GUILD_MEMBER_LIST_UPDATE as sent) | ✅ |
+| Offline group | present below the role groups for this guild size | rendered from the server's `offline` group | ✅ |
+| Owner crown | no `ownerIcon_` when the owner sits in a hoisted role group; dumps (`vanilla-threads-lrer`, `vanilla-search-popout-2`) show it in "Hors ligne" | crown only outside hoisted role sections (wt/members26) | ✅ (2 data points) |
+| Range loading | — | [0, 99] on open, then the chunk in view and the next one (op 37) with placeholder rows | ❌ not compared: needs a guild with more than 100 members open in the live client, which would mean navigating (and acking) there |
+| "Afficher plus" | not found in this guild's list | — | ❌ not observed live |
+| Activity section | absent in the live list right now | Phoenix shows "Activité — 7" for the same guild | ❌ gate differs (`activity_feed_enabled`), not handled here |
