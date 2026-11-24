@@ -57,3 +57,22 @@ typed or sent, and no build/test ran during this investigation.
 5. Before ending a substantial batch: review `git diff --check`, commit docs/code as one scoped
    checkpoint, create a dated bundle/patch backup under `/mnt/windata/project-phoenix/backups/`,
    verify `git bundle verify`, and preserve all untracked user PNGs.
+
+## Additional read-only research (same session)
+
+- Official Discord's public [Developer Newsletter, March 2026](https://discord.com/developer-newsletter/march-2026),
+  [game profile announcement](https://discord.com/blog/claim-your-game), and
+  [Profile Widgets FAQ](https://support.discord.com/hc/en-us/articles/35344672307607-Profile-Widgets-FAQ)
+  establish that Discord has a game database/profile and profile widgets select games from that
+  database. They do not document an end-user autocomplete search endpoint or mention payload.
+- Official developer documentation search did not surface a public route for `@game` search. This
+  supports the decision to leave `ac-games` unwired pending a read-only, evidenced contract; it is
+  not proof that Discord has no private client route.
+- Soundboard is a separate confirmed functional gap: `crates/phoenix-app/src/ui/call_view.rs`
+  renders `call-soundboard` with an empty callback, `crates/phoenix-app/src/shortcuts.rs` routes
+  Ctrl+Shift+B to `stub`, and `crates/phoenix-app/src/ui/voice_panel.rs` only renders the button.
+  Search found no soundboard API or model in `backend.rs`, `discord_backend.rs`, or `phoenix-api`.
+  Implementing it needs a call-safe synthetic route/model first; do not click or play audio in the
+  real account. The official Soundboard support guide documents the high-level flow (open voice
+  controls, pick an available server, choose a sound), but not the rendered picker contract in the
+  current client: https://support.discord.com/hc/en-us/articles/12920801289623-Discord-Soundboard-Guide.
