@@ -304,11 +304,10 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     let interaction_app = crate::commands::store::interaction_info(id)
         .map(|i| i.app_id)
         .or_else(|| crate::commands::store::get(id).map(|p| p.app))
-        .or_else(|| app.users.get(&msg.author).filter(|u| u.bot).map(|u| u.id));
+        .or_else(|| msg.and_then(|m| app.users.get(&m.author)).filter(|u| u.bot).map(|u| u.id));
     if let Some(app_id) = interaction_app {
-        let app_name = app
-            .users
-            .get(&msg.author)
+        let app_name = msg
+            .and_then(|m| app.users.get(&m.author))
             .map(|u| u.display_name.to_string())
             .unwrap_or_else(|| app_id.0.to_string());
         let ee = e.clone();
