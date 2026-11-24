@@ -262,12 +262,11 @@ impl DiscordBackend {
             };
             let me = s.cache.current_user().map(|u| u.id.0).unwrap_or(0);
             let mut squad = None;
-            if let Some(m) = get("/users/@me/premium-group/membership".into()).await {
-                if let Some(id) = m.get("subscription_id").and_then(serde_json::Value::as_str) {
-                    if let Some(v) = get(format!("/users/@me/billing/subscriptions/{id}/members")).await {
-                        squad = Some(sub::parse_members(&v, me));
-                    }
-                }
+            if let Some(m) = get("/users/@me/premium-group/membership".into()).await
+                && let Some(id) = m.get("subscription_id").and_then(serde_json::Value::as_str)
+                && let Some(v) = get(format!("/users/@me/billing/subscriptions/{id}/members")).await
+            {
+                squad = Some(sub::parse_members(&v, me));
             }
             let credits = get(format!("/users/@me/applications/{}/entitlements?exclude_consumed=true", sub::NITRO_APP))
                 .await
