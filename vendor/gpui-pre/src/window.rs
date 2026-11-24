@@ -1267,6 +1267,11 @@ pub struct Window {
     modifiers: Modifiers,
     capslock: Capslock,
     scale_factor: f32,
+    /// PHOENIX PATCH (page zoom): Chromium-style page zoom factor and the raw
+    /// platform values it is applied to.
+    page_zoom: f32,
+    platform_scale_factor: f32,
+    platform_content_size: Size<Pixels>,
     pub(crate) bounds_observers: SingleSubscriberSet<AnyObserver>,
     appearance: WindowAppearance,
     pub(crate) appearance_observers: SingleSubscriberSet<AnyObserver>,
@@ -2390,6 +2395,9 @@ impl Window {
             modifiers,
             capslock,
             scale_factor,
+            page_zoom: 1.0,
+            platform_scale_factor: scale_factor,
+            platform_content_size: content_size,
             bounds_observers: SingleSubscriberSet::new(),
             appearance,
             appearance_observers: SingleSubscriberSet::new(),
@@ -2731,7 +2739,14 @@ impl Window {
     /// - `Some(&[])` is an empty region, so the window receives no pointer or touch input.
     /// - `None` resets the region to the default, so the whole window receives input again.
     pub fn set_input_region(&self, region: Option<&[Bounds<Pixels>]>) {
-        self.platform_window.set_input_region(region);
+        let k = self.page_zoom;
+        if k == 1.0 {
+            self.platform_window.set_input_region(region);
+        } else {
+            let scaled: Option<Vec<Bounds<Pixels>>> =
+                region.map(|r| r.iter().map(|b| b.map(|v| v * k)).collect());
+            self.platform_window.set_input_region(scaled.as_deref());
+        }
     }
 
     /// Return the `WindowBounds` to indicate that how a window should be opened
@@ -3001,9 +3016,11 @@ impl Window {
     /// the platform window, then notifies observers. Normally called automatically
     /// by the platform's resize callback, but exposed publicly for test infrastructure.
     pub fn bounds_changed(&mut self, cx: &mut App) {
-        self.scale_factor = self.platform_window.scale_factor();
-        self.viewport_size = self.platform_window.content_size();
-        self.mouse_position = self.platform_window.mouse_position();
+        self.platform_scale_factor = self.platform_window.scale_factor();
+        self.platform_content_size = self.platform_window.content_size();
+        self.apply_page_zoom();
+        let k = self.page_zoom;
+        self.mouse_position = self.platform_window.mouse_position().map(|v| v * (1.0 / k));
 
         self.refresh();
 
@@ -3227,7 +3244,8 @@ impl Window {
 
     /// Opens the native title bar context menu, useful when implementing client side decorations (Wayland and X11)
     pub fn show_window_menu(&self, position: Point<Pixels>) {
-        self.platform_window.show_window_menu(position)
+        let k = self.page_zoom;
+        self.platform_window.show_window_menu(position.map(|v| v * k))
     }
 
     /// Handle window movement for Linux and macOS.
@@ -3241,7 +3259,7 @@ impl Window {
     /// When using client side decorations, set this to the width of the invisible decorations (Wayland and X11)
     pub fn set_client_inset(&mut self, inset: Pixels) {
         self.client_inset = Some(inset);
-        self.platform_window.set_client_inset(inset);
+        self.platform_window.set_client_inset(inset * self.page_zoom);
     }
 
     /// Sets the client-drawn corner radii so platform effects can match the window's shape.
@@ -3328,10 +3346,39 @@ impl Window {
         self.scale_factor
     }
 
+    /// PHOENIX PATCH (page zoom): the page zoom factor (1.0 = 100 %).
+    pub fn page_zoom(&self) -> f32 {
+        self.page_zoom
+    }
+
+    /// PHOENIX PATCH (page zoom): zoom the whole window like Chromium's page
+    /// zoom. Every logical pixel becomes `zoom` device-independent pixels: the
+    /// viewport shrinks by `zoom`, input positions are divided by it, and the
+    /// scene is rasterized at `platform scale * zoom`, so borders, icons, text,
+    /// hit areas and popouts all scale together.
+    pub fn set_page_zoom(&mut self, zoom: f32) {
+        let zoom = if zoom.is_finite() { zoom.clamp(0.25, 5.0) } else { 1.0 };
+        if (zoom - self.page_zoom).abs() < f32::EPSILON {
+            return;
+        }
+        let old = self.page_zoom;
+        self.page_zoom = zoom;
+        self.mouse_position = self.mouse_position.map(|v| v * (old / zoom));
+        self.apply_page_zoom();
+        self.refresh();
+    }
+
+    fn apply_page_zoom(&mut self) {
+        let k = self.page_zoom;
+        self.scale_factor = self.platform_scale_factor * k;
+        self.viewport_size = self.platform_content_size.map(|v| v * (1.0 / k));
+    }
+
     /// Overrides the display scale factor for tests.
     #[cfg(any(test, feature = "test-support"))]
     pub fn set_scale_factor(&mut self, scale_factor: f32) {
-        self.scale_factor = scale_factor;
+        self.platform_scale_factor = scale_factor;
+        self.apply_page_zoom();
         self.refresh();
     }
 
@@ -5876,6 +5923,8 @@ impl Window {
         // Track input modality for focus-visible styling and hover suppression.
         // Hover is suppressed during keyboard modality so that keyboard navigation
         // doesn't show hover highlights on the item under the mouse cursor.
+        // PHOENIX PATCH (page zoom): platform positions are in unzoomed pixels.
+        let event = if self.page_zoom != 1.0 { event.unzoomed(self.page_zoom) } else { event };
         let old_modality = self.last_input_modality;
         self.last_input_modality = match &event {
             PlatformInput::KeyDown(_) => InputModality::Keyboard,

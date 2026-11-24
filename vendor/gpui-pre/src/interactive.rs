@@ -824,6 +824,39 @@ pub enum PlatformInput {
 }
 
 impl PlatformInput {
+    /// PHOENIX PATCH (page zoom): map device-logical positions to zoomed
+    /// layout pixels by dividing by the window's page zoom `k`.
+    pub(crate) fn unzoomed(self, k: f32) -> Self {
+        let f = |p: Point<Pixels>| p.map(|v| v * (1.0 / k));
+        match self {
+            PlatformInput::MouseDown(mut e) => { e.position = f(e.position); PlatformInput::MouseDown(e) }
+            PlatformInput::MouseUp(mut e) => { e.position = f(e.position); PlatformInput::MouseUp(e) }
+            PlatformInput::MouseMove(mut e) => { e.position = f(e.position); PlatformInput::MouseMove(e) }
+            PlatformInput::MousePressure(mut e) => { e.position = f(e.position); PlatformInput::MousePressure(e) }
+            PlatformInput::MouseExited(mut e) => { e.position = f(e.position); PlatformInput::MouseExited(e) }
+            PlatformInput::Pinch(mut e) => { e.position = f(e.position); PlatformInput::Pinch(e) }
+            PlatformInput::Scroll(mut e) => {
+                e.position = f(e.position);
+                if let ScrollDelta::Pixels(d) = e.delta {
+                    e.delta = ScrollDelta::Pixels(f(d));
+                }
+                PlatformInput::Scroll(e)
+            }
+            PlatformInput::Touch(mut e) => {
+                e.position = f(e.position);
+                e.predicted_position = e.predicted_position.map(f);
+                PlatformInput::Touch(e)
+            }
+            PlatformInput::FileDrop(e) => PlatformInput::FileDrop(match e {
+                FileDropEvent::Entered { position, paths } => FileDropEvent::Entered { position: f(position), paths },
+                FileDropEvent::Pending { position } => FileDropEvent::Pending { position: f(position) },
+                FileDropEvent::Submit { position } => FileDropEvent::Submit { position: f(position) },
+                other => other,
+            }),
+            other => other,
+        }
+    }
+
     pub(crate) fn mouse_event(&self) -> Option<&dyn Any> {
         match self {
             PlatformInput::KeyDown { .. } => None,

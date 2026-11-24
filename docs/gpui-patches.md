@@ -77,3 +77,17 @@ children in prepaint and then painted them: the `vc-chat` stateful child panicke
 paint follows that list instead of reading `display` again. The panic messages of
 `Drawable::prepaint`/`paint` now name the element type, its id, its source location and
 the phase it was in.
+
+## Page zoom (`src/window.rs`, `src/interactive.rs`, `src/platform.rs`)
+
+**Problem.** Discord's zoom (Ctrl+= / Ctrl+- / Ctrl+0, Appearance > Zoom level) is
+Electron `webFrame.setZoomFactor`, i.e. Chromium page zoom: every CSS px, border, icon,
+hit area, scrollbar and popout position scales together, and the viewport shrinks in
+CSS px. Scaling lengths by hand in the app (`z(v)`) left every unwrapped `px()` at 100 %.
+
+**Patch.** `Window::set_page_zoom(f32)` / `Window::page_zoom()`. The window keeps the raw
+platform scale factor and content size; the effective `scale_factor` becomes
+`platform * zoom` and `viewport_size` becomes `content / zoom`. `dispatch_event` divides
+input positions (and pixel scroll deltas) by the zoom, and the values going back to the
+platform (window menu position, client inset, input region, IME bounds, character index
+lookups) are multiplied by it. Search `PHOENIX PATCH (page zoom)`.
