@@ -93,6 +93,11 @@ fn desc_text(t: SharedString) -> Div {
 
 /// baseControlItem row with the trailing control aligned to the title line.
 fn item(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyElement>, top: bool) -> Div {
+    item_ex(title, desc, trailing, top, false)
+}
+
+/// [`item`] with the disabled look (`dim`: title at opacity .5).
+fn item_ex(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyElement>, top: bool, dim: bool) -> Div {
     div()
         .flex()
         .gap(z(12.))
@@ -105,7 +110,7 @@ fn item(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyEleme
         .rounded(z(16.)) // --radius-lg
         // vanilla-settings-02 #2700 description_VhFsFg: switch rows wrap
         // their description at 572px, other rows use the full 696.
-        .child(div().flex_1().min_w_0().flex().flex_col().justify_center().gap(z(4.)).child(title_text(title)).children(desc.map(|d| div().when(top, |d| d.max_w(z(572.))).child(d))))
+        .child(div().flex_1().min_w_0().flex().flex_col().justify_center().gap(z(4.)).child(title_text(title).when(dim, |d| d.opacity(0.5))).children(desc.map(|d| div().when(top, |d| d.max_w(z(572.))).child(d))))
         .children(trailing.map(|t| {
             let d = div().flex_none().flex();
             if top { d.items_start().child(t) } else { d.items_center().child(t) }
@@ -172,7 +177,22 @@ fn set_pick(app: &mut PhoenixApp, id: &'static str, p: Pick, v: usize, cx: &mut 
 }
 
 fn switch_row(app: &PhoenixApp, id: &'static str, title: SharedString, desc: Option<AnyElement>, b: Bind, cx: &mut Cx) -> AnyElement {
-    let on = get_bool(app, id, b);
+    let synced = &app.prefs.synced;
+    let disabled = matches!(b, Bind::Proto) && super::synced_map::disabled(&synced.proto, synced.compact, id);
+    // APPEARANCE_DISPLAY_COMPACT_AVATARS reads `!compact || display_compact_avatars`.
+    let on = get_bool(app, id, b) || (id == "avatars" && !synced.compact);
+    if disabled {
+        // container_VhFsFg[data-disabled=true]: label + description at .5,
+        // the indicator at .5 too, cursor not-allowed, no toggle.
+        let row = item_ex(
+            title,
+            desc.map(|d| div().opacity(0.5).child(d).into_any_element()),
+            Some(div().opacity(0.5).child(controls::switch(eid(format!("sw-knob-{id}")), on)).into_any_element()),
+            true,
+            true,
+        );
+        return row.id(eid(format!("sw-{id}"))).cursor(gpui::CursorStyle::OperationNotAllowed).into_any_element();
+    }
     item(title, desc, Some(controls::switch(eid(format!("sw-knob-{id}")), on).into_any_element()), true)
         .id(eid(format!("sw-{id}")))
         .group(controls::SWITCH_ROW)
@@ -1065,9 +1085,9 @@ static DATA: &[B] = &[
     }),
     B::Switch("data-improve", "sp.data.improve", "sp.data.improve_d", Bind::Proto),
     B::Switch("data-personalize", "sp.data.personalize", "sp.data.personalize_d", Bind::Proto),
-    B::Switch("data-sponsored", "sp.data.sponsored", "sp.data.sponsored_d", Bind::Ui(false)),
-    B::Switch("data-third", "sp.data.third", "sp.data.third_d", Bind::Ui(false)),
-    B::Switch("data-discovery", "sp.data.discovery", "sp.data.discovery_d", Bind::Ui(false)),
+    B::Switch("data-sponsored", "sp.data.sponsored", "sp.data.sponsored_d", Bind::Proto),
+    B::Switch("data-third", "sp.data.third", "sp.data.third_d", Bind::Proto),
+    B::Switch("data-discovery", "sp.data.discovery", "sp.data.discovery_d", Bind::Proto),
     B::Switch("data-clips", "sp.data.clips", "sp.data.clips_d", Bind::Proto),
     B::Action("sp.data.request", "sp.data.request_d", "sp.data.request_b", false),
     B::Related("apps", "sp.games", "sp.games_d", Page::RegisteredGames),
@@ -1079,7 +1099,7 @@ static DATA: &[B] = &[
         "sp.data.share_profile",
         "",
         &[("sp.data.sp_all", "sp.data.sp_all_d"), ("sp.data.sp_small", "sp.data.sp_small_d"), ("sp.data.sp_friends", "sp.data.sp_friends_d")],
-        Pick::Ui(0),
+        Pick::Proto,
     ),
     B::Switch("share-update", "sp.data.share_update", "sp.data.share_update_d", Bind::Proto),
     B::Related("user-profile", "settings.page.activity", "sp.activity_related_d", Page::ActivityPrivacy),
@@ -1139,7 +1159,7 @@ static NOTIF: &[B] = &[
         Bind::Local(|p| p.desktop_notifications, |p, v| p.desktop_notifications = v),
     ),
     B::Legend("sp.no.when"),
-    B::Switch("n-stream", "sp.no.stream", "", Bind::Ui(true)),
+    B::Switch("n-stream", "sp.no.stream", "", Bind::Proto),
     B::Switch("n-anniv", "sp.no.anniv", "", Bind::Proto),
     B::Switch("n-online", "sp.no.online", "", Bind::Proto),
     B::Switch("n-event", "sp.no.event", "", Bind::Proto),
@@ -1175,7 +1195,13 @@ static NOTIF: &[B] = &[
         "sp.no.adv",
         "sp.no.adv_d",
         &[
-            B::Select("push-delay", "sp.no.push", "sp.no.push_d", &["sp.no.min1", "sp.no.min5", "sp.no.min10"], Pick::Pref(0)),
+            B::Select(
+                "push-delay",
+                "sp.no.push",
+                "sp.no.push_d",
+                &["sp.no.min1", "sp.no.min2", "sp.no.min3", "sp.no.min4", "sp.no.min5", "sp.no.min6", "sp.no.min7", "sp.no.min8", "sp.no.min9", "sp.no.min10"],
+                Pick::Proto,
+            ),
             B::Switch("tts", "sp.no.tts", "sp.no.tts_d", Bind::Proto),
             B::Radios("read-all", "sp.no.read_all", "sp.no.read_all_d", &[("sp.no.ra_all", ""), ("sp.no.ra_cur", ""), ("sp.no.r_never", "")], Pick::Pref(2)),
         ],
@@ -1339,7 +1365,7 @@ static APPEARANCE: &[B] = &[
     B::Select("spoilers", "sp.ap.spoilers", "", &["sp.ap.sp_click", "sp.ap.sp_always", "sp.ap.sp_mod"], Pick::Proto),
     B::Switch("split-threads", "sp.ap.split", "", Bind::Proto),
     B::Switch("avatars", "sp.ap.avatars", "sp.ap.avatars_d", Bind::Proto),
-    B::Switch("favs", "sp.ap.favs", "sp.ap.favs_d", Bind::Pref(true)),
+    B::Switch("favs", "sp.ap.favs", "sp.ap.favs_d", Bind::Proto),
     B::Related("help", "settings.page.accessibility", "sp.ap.density_d", Page::Accessibility),
     B::Divider,
     B::Title("sp.ap.t3"),

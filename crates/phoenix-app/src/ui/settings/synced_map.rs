@@ -44,9 +44,16 @@ const fn en(id: &'static str, path: &'static [u32], wrapper: bool, opts: &'stati
     Entry { id, path, wrapper, kind: Kind::Enum(opts), default }
 }
 
-// Top-level tags: 6 text_and_images, 7 notifications, 8 privacy,
-// 11 status, 13 appearance, 19 clips, 5 voice_and_video.
+/// Mobile push delay options: `voice_and_video.afk_timeout` seconds (client: 1..=10 minutes).
+pub const AFK_TIMEOUTS: &[u64] = &[60, 120, 180, 240, 300, 360, 420, 480, 540, 600];
+
+// Top-level tags: 5 voice_and_video, 6 text_and_images, 7 notifications,
+// 8 privacy, 11 status, 13 appearance, 15 favorites, 19 clips.
 pub static ENTRIES: &[Entry] = &[
+    // --- Voice & video (5)
+    // afk_timeout (UInt32Value, seconds; unset = 60)
+    en("push-delay", &[5, 6], true, AFK_TIMEOUTS, 0),
+    b("n-stream", &[5, 7], true),        // stream_notifications_enabled
     // --- Text & images (6)
     b("md-preview", &[6, 2], true),      // use_rich_chat_input
     b("split-threads", &[6, 3], true),   // use_thread_sidebar
@@ -97,16 +104,27 @@ pub static ENTRIES: &[Entry] = &[
     Entry { id: "fr-fof", path: &[8, 11], wrapper: true, kind: Kind::Bits(2), default: 1 },
     Entry { id: "fr-members", path: &[8, 11], wrapper: true, kind: Kind::Bits(4), default: 1 },
     inv("msg-requests", &[8, 17], true), // default_message_request_restricted
+    // drops_opted_out: "Use my Discord activity to personalize Sponsored Content" (DATA_USAGE_QUESTS_SETTING)
+    inv("data-sponsored", &[8, 18], true),
     b("game-dms", &[8, 26], true),       // allow_game_friend_dms_in_discord
     // slayer_sdk_receive_dms_in_game: 1 all, 2 users with game, 3 none
     en("ingame", &[8, 28], false, &[1, 2, 3], 0),
     // default_guilds_activity_restricted_v2: 3 on, 2 on for large guilds, 1 off
     en("act-where", &[8, 29], false, &[3, 2, 1], 0),
+    // quests_3p_data_opted_out: "Use third-party data to personalize Sponsored Content"
+    inv("data-third", &[8, 30], true),
+    // profile_visibility: FRIENDS_AND_ALL_GUILDS 3, FRIENDS_AND_SMALL_GUILDS 2, FRIENDS_ONLY 1 (UNSET 0 = all)
+    en("share-profile", &[8, 32], false, &[3, 2, 1], 0),
     inv("fr-msg", &[8, 33], true),       // hide_friend_request_notes
+    // swp_message_promotion_opted_out: Discoverable message content on the web
+    // ("pinot_member_setting"); unset = READY `swp_message_promotion_default_opted_out`.
+    inv("data-discovery", &[8, 35], false),
     // --- Status (11)
     b("act-share", &[11, 3], true),      // show_current_game
     // --- Appearance (13): timestamp_hour_cycle AUTO 0, H12 1, H23 2
     en("time-format", &[13, 9], false, &[0, 1, 2], 0),
+    // --- Favorites (15): guild_visible ("Show favorite servers", beta)
+    b("favs", &[15, 3], false),
     // --- Clips (19)
     b("data-clips", &[19, 1], true),     // allow_voice_recording
 ];
@@ -184,7 +202,57 @@ pub fn get_bool(map: &std::collections::HashMap<&'static str, u64>, id: &str) ->
     match (e.kind, map.get(id)) {
         (Kind::Bits(m), _) => bits_of(map, id) & m != 0,
         (Kind::Bool { invert }, Some(v)) => (*v != 0) != invert,
+        _ if id == "data-discovery" => !ready_flags().discovery_default_opted_out,
         _ => e.default != 0,
+    }
+}
+
+/// READY fields the client reads next to settings-proto for the Data &
+/// Privacy switches (`PINOT_MEMBER_SETTING_STATE`, `AD_PERSONALIZATION_TOGGLES_RESTRICTED`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReadyFlags {
+    /// `ad_personalization_toggles_disabled`: both Sponsored Content switches greyed out.
+    pub ad_toggles_disabled: bool,
+    /// `swp_message_promotion_locked` (client default true): Discoverable switch greyed out.
+    pub discovery_locked: bool,
+    /// `swp_message_promotion_default_opted_out` (client default true).
+    pub discovery_default_opted_out: bool,
+}
+
+impl ReadyFlags {
+    pub const DEFAULT: Self = Self { ad_toggles_disabled: false, discovery_locked: true, discovery_default_opted_out: true };
+
+    pub fn from_ready(ad: Option<bool>, locked: Option<bool>, opted_out: Option<bool>) -> Self {
+        let d = Self::DEFAULT;
+        Self {
+            ad_toggles_disabled: ad.unwrap_or(d.ad_toggles_disabled),
+            discovery_locked: locked.unwrap_or(d.discovery_locked),
+            discovery_default_opted_out: opted_out.unwrap_or(d.discovery_default_opted_out),
+        }
+    }
+}
+
+static READY_FLAGS: parking_lot::RwLock<ReadyFlags> = parking_lot::RwLock::new(ReadyFlags::DEFAULT);
+
+pub fn set_ready_flags(f: ReadyFlags) {
+    *READY_FLAGS.write() = f;
+}
+
+pub fn ready_flags() -> ReadyFlags {
+    *READY_FLAGS.read()
+}
+
+/// Switches the client greys out (opacity .5, not-allowed, no toggle).
+pub fn disabled(map: &std::collections::HashMap<&'static str, u64>, compact: bool, id: &str) -> bool {
+    let f = ready_flags();
+    match id {
+        // NP(): toggles disabled || drops opted out
+        "data-third" => f.ad_toggles_disabled || !get_bool(map, "data-sponsored"),
+        "data-sponsored" => f.ad_toggles_disabled,
+        "data-discovery" => f.discovery_locked,
+        // APPEARANCE_DISPLAY_COMPACT_AVATARS only applies to compact mode.
+        "avatars" => !compact,
+        _ => false,
     }
 }
 
@@ -269,6 +337,38 @@ mod tests {
         assert_eq!(m.get("e-social"), Some(&false));
         assert_eq!(m.get("e-tips"), Some(&true));
         assert!(!m.contains_key("e-comm"));
+    }
+
+    #[test]
+    fn privacy_wire_fields() {
+        // Sponsored off = drops_opted_out true (8, 18) as a BoolValue.
+        let c = change("data-sponsored", bool_wire(&Default::default(), "data-sponsored", false)).unwrap();
+        let raw = c.encode();
+        assert_eq!(raw, vec![0x42, 5, 0x92, 1, 2, 8, 1], "privacy(8){{drops_opted_out(18){{value: true}}}}");
+        let m = read_all(&raw);
+        assert!(!get_bool(&m, "data-sponsored"));
+        assert!(disabled(&m, false, "data-third"), "3p switch greys out once activity personalisation is off");
+        // Profile visibility: friends only = enum 1 at (8, 32), not wrapped.
+        let raw = change("share-profile", pick_wire("share-profile", 2)).unwrap().encode();
+        assert_eq!(raw, vec![0x42, 3, 0x80, 2, 1]);
+        assert_eq!(get_pick(&read_all(&raw), "share-profile"), 2);
+        assert_eq!(get_pick(&Default::default(), "share-profile"), 0, "UNSET = friends and all servers");
+        // Push delay: afk_timeout 300 s at (5, 6).
+        let raw = change("push-delay", pick_wire("push-delay", 4)).unwrap().encode();
+        assert_eq!(get_pick(&read_all(&raw), "push-delay"), 4);
+        assert_eq!(get_pick(&Default::default(), "push-delay"), 0, "unset = 1 minute");
+    }
+
+    #[test]
+    fn discovery_defaults_follow_ready() {
+        let m = Default::default();
+        set_ready_flags(ReadyFlags::DEFAULT);
+        assert!(!get_bool(&m, "data-discovery"));
+        assert!(disabled(&m, true, "data-discovery"));
+        set_ready_flags(ReadyFlags::from_ready(None, Some(false), Some(false)));
+        assert!(get_bool(&m, "data-discovery"));
+        assert!(!disabled(&m, true, "data-discovery"));
+        set_ready_flags(ReadyFlags::DEFAULT);
     }
 
     #[test]

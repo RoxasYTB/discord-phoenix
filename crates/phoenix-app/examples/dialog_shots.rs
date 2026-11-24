@@ -99,6 +99,7 @@ fn main() -> anyhow::Result<()> {
                         "games" => Page::RegisteredGames,
                         "nitro" => Page::Nitro,
                         "billing" => Page::Billing,
+                        "subscriptions" => Page::Subscriptions,
                         _ => Page::MyAccount,
                     };
                     if let Some(s) = app.settings.as_mut() {

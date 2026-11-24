@@ -17,6 +17,7 @@ pub mod billing;
 mod boost;
 mod gift;
 mod pages;
+pub mod subscriptions;
 pub mod synced_map;
 pub mod effects;
 pub mod emoticons;
@@ -383,6 +384,7 @@ pub fn open(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         app.settings = Some(SettingsState::default());
         account::fetch_sessions(app, cx);
         billing::fetch(app, cx);
+        subscriptions::fetch(app, cx);
         authorized_apps::fetch(app, cx);
         cx.notify();
     }

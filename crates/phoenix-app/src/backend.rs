@@ -336,6 +336,10 @@ pub trait Backend: Send + Sync + 'static {
     fn billing(&self) -> BoxFuture<Option<crate::ui::settings::billing::Billing>> {
         Box::pin(async { Ok(None) })
     }
+    /// Settings > Subscriptions: Nitro Squad membership and plan credits (GET only).
+    fn subscriptions(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
+        Box::pin(async { Ok(None) })
+    }
     /// Logged-in devices count (`GET /auth/sessions`) for Settings > Account.
     fn session_count(&self) -> BoxFuture<Option<usize>> {
         Box::pin(async { Ok(None) })

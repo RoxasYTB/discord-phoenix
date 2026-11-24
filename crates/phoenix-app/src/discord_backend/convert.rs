@@ -799,6 +799,11 @@ pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
     let me = cache.current_user().map(|u| user(&u)).unwrap_or_else(|| user(&ready.user));
     crate::ui::settings::account::set_from_user(cache.current_user().as_deref().unwrap_or(&ready.user));
     crate::ui::settings::account::set_connections(ready.connected_accounts.len());
+    crate::ui::settings::synced_map::set_ready_flags(crate::ui::settings::synced_map::ReadyFlags::from_ready(
+        ready.ad_personalization_toggles_disabled,
+        ready.swp_message_promotion_locked,
+        ready.swp_message_promotion_default_opted_out,
+    ));
 
     let mut ids: Vec<api::Snowflake> = cache.guilds().iter().filter(|g| !g.unavailable).map(|g| g.id).collect();
     // Keep READY order as the base (cache order is a HashMap).

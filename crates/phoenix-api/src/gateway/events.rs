@@ -45,6 +45,15 @@ pub struct Ready {
     pub country_code: Option<String>,
     #[serde(default)]
     pub auth_session_id_hash: Option<String>,
+    /// Greys out the Sponsored Content personalisation switches.
+    #[serde(default)]
+    pub ad_personalization_toggles_disabled: Option<bool>,
+    /// Discoverable-content switch locked (client default: true).
+    #[serde(default)]
+    pub swp_message_promotion_locked: Option<bool>,
+    /// Discoverable-content default when the settings-proto field is unset.
+    #[serde(default)]
+    pub swp_message_promotion_default_opted_out: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

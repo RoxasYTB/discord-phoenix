@@ -473,6 +473,18 @@ impl Backend for MockBackend {
     fn has_premium(&self) -> bool {
         std::env::var_os("PHX_NO_PREMIUM").is_none()
     }
+    /// Settings > Subscriptions demo: a six-seat Nitro Squad owned by the second
+    /// demo user, plus one paused Nitro Basic credit.
+    fn subscriptions(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
+        use crate::ui::settings::subscriptions as sub;
+        let users: Vec<User> = self.inner.lock().map(|i| i.users.iter().take(6).cloned().collect()).unwrap_or_default();
+        Box::pin(async move {
+            let mut members: Vec<sub::Member> = users.into_iter().enumerate().map(|(k, user)| sub::Member { owner: k == 1, me: user.id == ME, user }).collect();
+            members.sort_by_key(|m| !m.owner);
+            let credits = vec![sub::Credit { plan: "sp.su.plan_basic_month", tier: 0, months: 1 }];
+            Ok(Some(sub::Subs { squad: Some(sub::Squad { members }), credits }))
+        })
+    }
     /// Profile editor: accepted locally, nothing leaves the machine.
     fn update_profile(&self, _guild: Option<Id>, _patch: crate::ui::settings::profile_editor::ProfilePatch) -> BoxFuture<()> {
         Box::pin(async { Ok(()) })
@@ -817,5 +829,29 @@ impl Backend for MockBackend {
             }),
             _ => Box::pin(async { Err(crate::backend::BackendError("Not available offline.".into())) }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::settings::{SettingsPatch, synced_map};
+
+    /// Writes go through the same `SettingsPatch` path as the Discord backend,
+    /// applied in memory: nothing reaches an account.
+    #[test]
+    fn settings_writes_apply_offline() {
+        let b = MockBackend::new();
+        let m = Default::default();
+        let s = futures::executor::block_on(b.save_settings(SettingsPatch::Proto("data-sponsored", synced_map::bool_wire(&m, "data-sponsored", false)))).unwrap();
+        assert!(!s.flag("data-sponsored"));
+        assert!(synced_map::disabled(&s.proto, s.compact, "data-third"));
+        let s = futures::executor::block_on(b.save_settings(SettingsPatch::Proto("share-profile", synced_map::pick_wire("share-profile", 2)))).unwrap();
+        assert_eq!(s.pick("share-profile"), 2);
+        assert_eq!(s.proto.get("share-profile"), Some(&1), "FRIENDS_ONLY on the wire");
+        let s = futures::executor::block_on(b.save_settings(SettingsPatch::Proto("push-delay", synced_map::pick_wire("push-delay", 9)))).unwrap();
+        assert_eq!(s.proto.get("push-delay"), Some(&600));
+        let s = futures::executor::block_on(b.save_settings(SettingsPatch::Rest("e-tips", true))).unwrap();
+        assert!(s.flag("e-tips"));
     }
 }

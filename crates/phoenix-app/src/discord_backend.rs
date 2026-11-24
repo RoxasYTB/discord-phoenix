@@ -865,6 +865,9 @@ impl Backend for DiscordBackend {
     fn billing(&self) -> BoxFuture<Option<crate::ui::settings::billing::Billing>> {
         self.billing_impl()
     }
+    fn subscriptions(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
+        self.subscriptions_impl()
+    }
     fn session_count(&self) -> BoxFuture<Option<usize>> {
         self.session_count_impl()
     }

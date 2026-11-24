@@ -251,6 +251,31 @@ impl DiscordBackend {
             Ok(Some(b::Billing { country, sources, payments }))
         })
     }
+
+    /// Settings > Subscriptions, the client's read-only routes (see `ui::settings::subscriptions`).
+    pub(super) fn subscriptions_impl(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
+        use crate::ui::settings::subscriptions as sub;
+        self.with_session(move |_, s| async move {
+            let get = |p: String| {
+                let rest = s.rest.clone();
+                async move { rest.request_json(reqwest::Method::GET, &p, None).await.ok() }
+            };
+            let me = s.cache.current_user().map(|u| u.id.0).unwrap_or(0);
+            let mut squad = None;
+            if let Some(m) = get("/users/@me/premium-group/membership".into()).await {
+                if let Some(id) = m.get("subscription_id").and_then(serde_json::Value::as_str) {
+                    if let Some(v) = get(format!("/users/@me/billing/subscriptions/{id}/members")).await {
+                        squad = Some(sub::parse_members(&v, me));
+                    }
+                }
+            }
+            let credits = get(format!("/users/@me/applications/{}/entitlements?exclude_consumed=true", sub::NITRO_APP))
+                .await
+                .map(|v| sub::parse_credits(&v))
+                .unwrap_or_default();
+            Ok(Some(sub::Subs { squad, credits }))
+        })
+    }
 }
 
 impl DiscordBackend {
