@@ -49,6 +49,14 @@ Beta: under active development. Expect missing features and bugs.
 | End-to-end encryption for calls (DAVE) | In progress |
 | Settings, themes, notifications | Planned |
 
+## Development progress
+
+**<u>CES CAPTURES NE SONT PAS LES VERSIONS DÉFINITIVES.</u>**
+
+The image below is a development snapshot of the Voice & Video settings screen. It is retained as a historical UI reference and does not claim that every control is wired in the current build. See the [parity handoff](docs/PROJECT_HANDOFF.md) and [comparison protocol](docs/PARITY_WORKFLOW.md) for verified scope and remaining gaps.
+
+![Development snapshot: Voice & Video settings](docs/screenshots/voice-settings.png)
+
 ## Benchmarks
 
 First measurements (i7-6700K, GTX 1050 Ti, 32 GB, Wayland). Discord Phoenix ran on **mock data**,
