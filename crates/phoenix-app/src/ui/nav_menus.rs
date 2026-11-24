@@ -567,7 +567,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             }
         }
         Target::ChannelBell(id) => {
-            let Some(ch) = app.channels.get(&id) else { return None };
+            let ch = app.channels.get(&id)?;
             let guild = ch.guild;
             let muted = ch.muted;
             items.push(mute_item(
