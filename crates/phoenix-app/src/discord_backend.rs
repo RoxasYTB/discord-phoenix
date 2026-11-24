@@ -998,9 +998,7 @@ impl Backend for DiscordBackend {
         self.people_open_dm(user)
     }
     fn soundboard_default_sounds(&self) -> BoxFuture<Vec<crate::model::SoundboardSound>> {
-        let state = self.state.clone();
-        self.spawn_fut(async move {
-            let s = state.lock().clone().ok_or_else(not_ready)?;
+        self.with_session(move |_, s| async move {
             let sounds = s.rest.soundboard_default_sounds().await.map_err(api_err)?;
             Ok(sounds
                 .into_iter()
@@ -1018,9 +1016,8 @@ impl Backend for DiscordBackend {
         if guilds.is_empty() {
             return;
         }
-        if let Some(s) = self.state.lock().as_ref() {
-            let ids = guilds.into_iter().map(|g| phoenix_api::models::Snowflake(g.0)).collect();
-            let _ = s.gateway.request_soundboard_sounds(ids);
-        }
+        let Ok(s) = self.inner.session() else { return };
+        let ids = guilds.into_iter().map(sf).collect();
+        let _ = s.gateway.request_soundboard_sounds(ids);
     }
 }
