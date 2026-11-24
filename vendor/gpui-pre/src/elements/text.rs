@@ -797,8 +797,9 @@ impl TextLayout {
                 for line in &lines {
                     let line_size = line.size(line_height);
                     size.height += line_size.height;
-                    size.width = size.width.max(line_size.width).ceil();
+                    size.width = size.width.max(line_size.width);
                 }
+                size.width = ceil_to_layout_unit(size.width);
 
                 element_state.0.borrow_mut().replace(TextLayoutInner {
                     lines,
@@ -842,8 +843,9 @@ impl TextLayout {
             for line in &lines {
                 let line_size = line.size(line_height);
                 size.height += line_size.height;
-                size.width = size.width.max(line_size.width).ceil();
+                size.width = size.width.max(line_size.width);
             }
+            size.width = ceil_to_layout_unit(size.width);
             element_state.lines = lines;
             element_state.wrap_width = Some(width);
             element_state.size = Some(size);
@@ -1367,9 +1369,23 @@ impl IntoElement for InteractiveText {
     }
 }
 
+// PHOENIX PATCH (text width, docs/gpui-patches.md): Chromium keeps a text box at its shaped
+// width rounded up to a LayoutUnit (1/64 px). Upstream rounded it up to a whole logical pixel,
+// so "APP" (23.16px) took 24px and every inline row after a text drifted by up to 1px.
+fn ceil_to_layout_unit(width: Pixels) -> Pixels {
+    crate::px((f32::from(width) * 64.).ceil() / 64.)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_width_rounds_up_to_a_layout_unit() {
+        assert_eq!(ceil_to_layout_unit(crate::px(23.1625)), crate::px(23.171875));
+        assert_eq!(ceil_to_layout_unit(crate::px(24.)), crate::px(24.));
+        assert_eq!(ceil_to_layout_unit(crate::px(0.)), crate::px(0.));
+    }
 
     #[test]
     fn test_into_element_for() {
