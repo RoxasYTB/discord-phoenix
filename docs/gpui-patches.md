@@ -62,3 +62,18 @@ A git rev has one id everywhere, so all checkouts share one compiled GPUI.
 
 After changing `vendor/gpui-pre`: commit and push it, then set `rev` in `Cargo.toml`
 to that commit and run `cargo update -p gpui-pre`.
+
+## 3. Paint only the children that were prepainted (`src/elements/div.rs`, `src/element.rs`)
+
+**Problem.** The real app panicked intermittently with `must call prepaint before paint`
+in `paint<Stateful<Div>>`. `Div::prepaint` and `Div::paint` each recompute the style
+and skip the children when `display == None`. Hover and group-hover styles are part of
+that style, and the hover state can differ between the two calls (the group hitbox of
+the current frame is only known after prepaint). A div that is `hidden()` and becomes
+`flex()` on group hover (the voice channel row icons in `ui/sidebar.rs`) skipped its
+children in prepaint and then painted them: the `vc-chat` stateful child panicked.
+
+**Patch.** `Div` remembers which children it prepainted (`prepainted_children`) and
+paint follows that list instead of reading `display` again. The panic messages of
+`Drawable::prepaint`/`paint` now name the element type, its id, its source location and
+the phase it was in.

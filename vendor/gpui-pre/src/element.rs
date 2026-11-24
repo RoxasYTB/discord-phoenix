@@ -347,6 +347,18 @@ enum ElementDrawPhase<RequestLayoutState, PrepaintState> {
     Painted,
 }
 
+impl<R, P> ElementDrawPhase<R, P> {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Start => "Start",
+            Self::RequestLayout { .. } => "RequestLayout",
+            Self::LayoutComputed { .. } => "LayoutComputed",
+            Self::Prepaint { .. } => "Prepaint",
+            Self::Painted => "Painted",
+        }
+    }
+}
+
 /// A wrapper around an implementer of [`Element`] that allows it to be drawn in a window.
 impl<E: Element> Drawable<E> {
     pub(crate) fn new(element: E) -> Self {
@@ -512,7 +524,13 @@ impl<E: Element> Drawable<E> {
                     prepaint,
                 };
             }
-            _ => panic!("must call request_layout before prepaint"),
+            other => panic!(
+                "must call request_layout before prepaint: {} id={:?} at {:?} (phase {})",
+                std::any::type_name::<E>(),
+                self.element.id(),
+                self.element.source_location(),
+                other.name(),
+            ),
         }
     }
 
@@ -554,7 +572,14 @@ impl<E: Element> Drawable<E> {
                 self.phase = ElementDrawPhase::Painted;
                 (request_layout, prepaint)
             }
-            _ => panic!("must call prepaint before paint"),
+            // PHOENIX PATCH: name the element so the culprit can be found from the panic.
+            other => panic!(
+                "must call prepaint before paint: {} id={:?} at {:?} (phase {})",
+                std::any::type_name::<E>(),
+                self.element.id(),
+                self.element.source_location(),
+                other.name(),
+            ),
         }
     }
 

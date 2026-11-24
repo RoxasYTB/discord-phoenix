@@ -1848,6 +1848,7 @@ pub fn div() -> Div {
         prepaint_listener: None,
         image_cache: None,
         prepaint_order_fn: None,
+        prepainted_children: None,
     }
 }
 
@@ -1858,6 +1859,10 @@ pub struct Div {
     prepaint_listener: Option<Box<dyn Fn(Vec<Bounds<Pixels>>, &mut Window, &mut App) + 'static>>,
     image_cache: Option<Box<dyn ImageCacheProvider>>,
     prepaint_order_fn: Option<Box<dyn Fn(&mut Window, &mut App) -> SmallVec<[usize; 8]>>>,
+    // PHOENIX PATCH: which children were prepainted this frame (`None` = all). Paint
+    // follows this instead of re-reading `display`, which can flip between prepaint and
+    // paint when a hover/group-hover style toggles `hidden()`/`flex()`.
+    prepainted_children: Option<SmallVec<[usize; 8]>>,
 }
 
 impl Div {
@@ -2076,6 +2081,7 @@ impl Element for Div {
             |style, scroll_offset, hitbox, window, cx| {
                 // skip children
                 if style.display == Display::None {
+                    self.prepainted_children = Some(SmallVec::new());
                     return hitbox;
                 }
 
@@ -2083,12 +2089,18 @@ impl Element for Div {
                     window.with_element_offset(scroll_offset, |window| {
                         if let Some(order_fn) = &self.prepaint_order_fn {
                             let order = order_fn(window, cx);
+                            let mut done = SmallVec::new();
                             for idx in order {
                                 if let Some(child) = self.children.get_mut(idx) {
                                     child.prepaint(window, cx);
+                                    done.push(idx);
                                 }
                             }
+                            done.sort_unstable();
+                            done.dedup();
+                            self.prepainted_children = Some(done);
                         } else {
+                            self.prepainted_children = None;
                             for child in &mut self.children {
                                 child.prepaint(window, cx);
                             }
@@ -2129,14 +2141,21 @@ impl Element for Div {
                 hitbox.as_ref(),
                 window,
                 cx,
-                |style, window, cx| {
-                    // skip children
-                    if style.display == Display::None {
-                        return;
-                    }
-
-                    for child in &mut self.children {
-                        child.paint(window, cx);
+                |_style, window, cx| {
+                    // PHOENIX PATCH: paint exactly the children that were prepainted.
+                    match &self.prepainted_children {
+                        None => {
+                            for child in &mut self.children {
+                                child.paint(window, cx);
+                            }
+                        }
+                        Some(indices) => {
+                            for &idx in indices {
+                                if let Some(child) = self.children.get_mut(idx) {
+                                    child.paint(window, cx);
+                                }
+                            }
+                        }
                     }
                 },
             )
