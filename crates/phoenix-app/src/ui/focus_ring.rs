@@ -110,12 +110,18 @@ pub fn on_key_down(ev: &KeyDownEvent, window: &mut Window, cx: &mut App) -> bool
     if k.key != "tab" || k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
         return false;
     }
-    if k.modifiers.shift {
+    tab(k.modifiers.shift, window, cx);
+    true
+}
+
+/// One Tab (`back` = Shift+Tab): moves the focus and marks it focus-visible.
+pub fn tab(back: bool, window: &mut Window, cx: &mut App) {
+    if back {
         window.focus_prev(cx);
     } else {
         window.focus_next(cx);
     }
     let now = window.focused(cx);
     TABBED.with(|t| *t.borrow_mut() = now);
-    true
+    window.refresh();
 }

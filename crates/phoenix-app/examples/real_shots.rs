@@ -20,6 +20,7 @@
 //! `PHX_PROFILE=member:<n>` = nth member of the list; `PHX_DEBUG_GIF=1` prints the GIF home previews.
 //! `PHX_FX_STILL=1` = still profile effects (reduce motion).
 //! `PHX_WAIT` = seconds to wait for messages and images (default 15).
+//! `PHX_TABS=n` presses Tab n times before the capture (`-n` = Shift+Tab), for the focus rings.
 
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
@@ -1030,6 +1031,13 @@ fn main() -> anyhow::Result<()> {
         })
     })?;
     pump(&mut cx, 300);
+    // PHX_TABS=n (or -n for Shift+Tab): press Tab n times before the capture (focus rings).
+    if let Some(n) = std::env::var("PHX_TABS").ok().and_then(|n| n.parse::<i32>().ok()) {
+        for _ in 0..n.unsigned_abs() {
+            cx.update_window(win.into(), |_, window, cx| phoenix_app::ui::focus_ring::tab(n < 0, window, cx))?;
+            pump(&mut cx, 100);
+        }
+    }
     let mut img = None;
     for _ in 0..2 {
         cx.update_window(win.into(), |_, window, _| window.refresh())?;
