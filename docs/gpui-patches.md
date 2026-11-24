@@ -174,10 +174,35 @@ Rev: `265d2211` on `gpui-marks` (patches 4 to 7).
 
 ## Running the vendored tests
 
-`cargo test -p gpui-pre -p gpui-pre-wgpu --lib` (from the workspace, on the pinned rev) does not
-compile: the crates.io packages ship without their dev-dependencies (`naga`, `util_macros`) and
-without the files their tests `include_bytes!` (`assets/fonts/lilex`, `assets/fonts/ibm-plex-sans`,
-`examples/image/*.jpg`). Tried on 2026-11-24 (95 s, compile errors only, no test ran). The
-patch tests (`test_multiline_truncation_keeps_last_line_word_wrap`,
-`cluster_goes_to_the_first_font_covering_every_mark`, `text_width_rounds_up_to_a_layout_unit`…)
-need those pieces restored in `vendor/` before they can run.
+The lib tests of both crates run from a small test-only workspace, `vendor/Cargo.toml`
+(members `gpui-pre` and `gpui-pre-wgpu`, `gpui-pre` patched to its path). Its
+`vendor/Cargo.lock` started as a copy of the main lockfile, so the shared target dir reuses
+the same dependency builds:
+
+```sh
+flock /tmp/phoenix-build.lock env CARGO_TARGET_DIR=$HOME/discord-phoenix/target CARGO_PROFILE_DEV_DEBUG=0 \
+  cargo test --manifest-path vendor/Cargo.toml -p gpui-pre -p gpui-pre-wgpu --lib --features gpui-pre/test-support
+```
+
+The integrator runs this after the Phoenix tests, but only for a batch that touches `vendor/`.
+In the shared target, the test build is a third variant of gpui, and the pruning in
+`phoenix-disk-guard` keeps only two per crate. Running it on every batch would evict the Phoenix variant and
+rebuild gpui and everything above it.
+
+Cost, measured on 2026-11-25: first build 4 min 40 s and about 1.4 GB in `target/`, then
+30 s to run (436 tests passed in gpui-pre and 48 in gpui-pre-wgpu; 2 ignored by upstream,
+`frame_cost` and `hash_cost`, which are timing probes). Every patch test passes, so nothing
+in the patches had to be fixed.
+
+The crates.io packages ship without dev-dependencies or test files. What was restored, from
+zed@d2a4fb6 (the snapshot named in `[package.metadata.gpui-pre]`):
+- dev-dependencies: `util_macros` = crates.io `gpui_util_macros` 0.2.2 (Zed's crate, published,
+  for `#[perf]`); `naga` 30.0.2 with `wgsl-in` (the version wgpu 30 uses) and `image` (png)
+  for gpui-pre-wgpu;
+- `vendor/test-assets/fonts/{lilex,ibm-plex-sans}`: Lilex Regular/Bold and IBM Plex Sans
+  Regular, SIL OFL 1.1 (license files alongside). The `include_bytes!` paths in
+  `svg_renderer.rs` and `cosmic_text_system.rs` point there instead of Zed's top-level `assets/`;
+- `vendor/gpui-pre/examples/image/exif-orientation-rotate-180.jpg` (Apache-2.0, like the crate).
+
+`vendor/Cargo.toml` does not affect the main build. A git dependency on a rev that contains it
+still resolves (checked with `cargo metadata` against a `file://` rev).
