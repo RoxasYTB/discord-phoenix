@@ -2,7 +2,8 @@
 //! main bundle): after every app event a snapshot of the voice state is compared with
 //! the previous one and at most one cue plays per hook, at volume `.4`.
 //!
-//! - `Nc`: self deafen changed -> `deafen` / `undeafen`, else self mute -> `mute` / `unmute`;
+//! - `Nc`: self deafen changed -> `deafen` / `undeafen`, else self mute -> `mute` / `unmute`
+//!   (from our toggles only, [`on_self_toggle`]);
 //! - `Nu`: own camera while in voice -> `camera_on` / `camera_off`;
 //! - `N_`: RTC connected -> `user_join`, connected -> gone -> `disconnect` (not stages);
 //! - `Nh`: moved by someone else -> `user_moved`;
@@ -43,14 +44,26 @@ pub struct Snap {
 }
 
 /// One-shot cues for a change from `a` to `b` (`moved`: the channel change was not ours).
+/// Self mute / deafen are this client's own state (the client's MediaEngineStore), so
+/// they only change through our toggles: `Nc` runs from [`on_self_toggle`], never on
+/// the start-up restore of the saved state.
 pub fn cues(a: &Snap, b: &Snap, moved: bool) -> Vec<&'static str> {
-    let mut out = Vec::new();
-    // Nc
+    voice_cues(a, b, moved)
+}
+
+/// `Nc`: deafen wins over mute.
+pub fn toggle_cue(a: &Snap, b: &Snap) -> Option<&'static str> {
     if a.deaf != b.deaf {
-        out.push(if b.deaf { "deafen" } else { "undeafen" });
+        Some(if b.deaf { "deafen" } else { "undeafen" })
     } else if a.mute != b.mute {
-        out.push(if b.mute { "mute" } else { "unmute" });
+        Some(if b.mute { "mute" } else { "unmute" })
+    } else {
+        None
     }
+}
+
+fn voice_cues(a: &Snap, b: &Snap, moved: bool) -> Vec<&'static str> {
+    let mut out = Vec::new();
     // Nu
     if a.video != b.video && a.channel.is_some() && b.channel.is_some() {
         out.push(if b.video { "camera_on" } else { "camera_off" });
@@ -179,6 +192,19 @@ pub fn watch(app: &PhoenixApp) {
     set_loop(&RING_OUT, b.outgoing && !is_disabled("call_calling"), || play_loop("call_calling", VOLUME));
 }
 
+/// The user panel / shortcut toggled mute or deafen.
+pub fn on_self_toggle(app: &PhoenixApp) {
+    let b = snapshot(app);
+    let prev = PREV.with(|p| p.borrow().clone());
+    if let Some(a) = prev
+        && let Some(s) = toggle_cue(&a, &b)
+        && !is_disabled(s)
+    {
+        play(s, VOLUME);
+    }
+    watch(app);
+}
+
 /// Push-to-talk key (`NE`): only in push-to-talk mode, in voice and not muted.
 pub fn on_ptt(app: &PhoenixApp, pressed: bool) {
     if app.voice_channel.is_none() || app.mic_muted || app.deafened {
@@ -201,8 +227,9 @@ mod tests {
     #[test]
     fn voice_cues() {
         let a = s();
-        assert_eq!(cues(&a, &Snap { deaf: true, mute: true, ..a.clone() }, false), ["deafen"]);
-        assert_eq!(cues(&a, &Snap { mute: true, ..a.clone() }, false), ["mute"]);
+        assert!(cues(&a, &Snap { deaf: true, ..a.clone() }, false).is_empty(), "restored state is silent");
+        assert_eq!(toggle_cue(&a, &Snap { deaf: true, mute: true, ..a.clone() }), Some("deafen"));
+        assert_eq!(toggle_cue(&a, &Snap { mute: true, ..a.clone() }), Some("mute"));
         let idle = Snap { channel: None, connected: false, ..a.clone() };
         assert_eq!(cues(&Snap { connected: false, ..a.clone() }, &a, false), ["user_join"]);
         assert_eq!(cues(&a, &idle, false), ["disconnect"]);

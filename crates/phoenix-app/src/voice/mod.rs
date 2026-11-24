@@ -185,7 +185,7 @@ pub fn sync_self_state(app: &crate::app::PhoenixApp) {
     drop(app.backend.voice_control(VoiceControl::SetDeaf(app.deafened)));
     let (m, d) = (app.mic_muted, app.deafened);
     prefs::update(|p| (p.self_mute, p.self_deaf) = (m, d), true);
-    crate::sounds::watch::watch(app);
+    crate::sounds::watch::on_self_toggle(app);
 }
 
 #[cfg(test)]
