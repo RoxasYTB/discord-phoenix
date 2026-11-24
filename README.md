@@ -47,7 +47,7 @@ Beta: under active development. Expect missing features and bugs.
 | Voice (Opus) | In progress |
 | Camera and screen share | In progress |
 | End-to-end encryption for calls (DAVE) | In progress |
-| Settings, themes, notifications | Planned |
+| Settings, themes, notifications | In progress |
 
 ## Development progress
 

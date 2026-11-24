@@ -1,6 +1,6 @@
 # Project Phoenix — état et handoff
 
-> Dernière vérification de cette note : 2026-11-24. Référence locale : `main` à `e6f3b7a`.
+> État initial de reprise : `main` à `e6f3b7a` (2026-11-24). Mise à jour après `b50d800` et `2972f75`.
 
 Ce document est le point de reprise pour les sessions qui poursuivent la parité visuelle et fonctionnelle de Discord Phoenix. Il complète les tableaux par fonctionnalité dans [`docs/parity/`](parity/) et l’inventaire des routes dans [`docs/PARITY.md`](PARITY.md). Il ne remplace pas les preuves d’exécution ni les tests.
 
@@ -12,9 +12,10 @@ Construire un client natif Rust + GPUI qui reproduit les comportements utiles et
 
 - `main` est synchronisé avec `origin/main` à `e6f3b7a` après avance rapide de 301 commits.
 - Le dernier état de production n’a pas été compilé dans cette reprise.
-- Modification locale non commitée : fallbacks SVG `icons/viewer/zoom.svg` et `icons/viewer/open.svg` dans `crates/phoenix-app/src/assets.rs`. Elle répond au test d’intégration isolé du lot lightbox, qui échouait sur `no fallback for viewer/zoom`. La correction est **non vérifiée par compilation/test**.
+- La correction des fallbacks SVG `icons/viewer/zoom.svg` et `icons/viewer/open.svg` est commitée en `2972f75`. Le test ciblé `cargo test -p phoenix-app --lib icons::tests::every_name_has_fallback -- --exact` passe (1 réussi). Clippy et la suite complète ne sont pas vérifiés.
+- `int-bin/REV` indique `e6f3b7a`; le binaire local ne contient donc pas le commit de fallbacks. Le test a compilé le crate dans `target/`.
 - `docs/screenshots/` contenait quatre PNG non suivis au début de la reprise. Ils ont été préservés. `voice-settings.png` est une ancienne capture de développement sans données de compte; les autres captures ont un logo Discord visible. Ne rien publier avant contrôle de conformité aux règles ci-dessous.
-- Une sauvegarde du commit, du diff et des PNG existants se trouve dans `/mnt/windata/project-phoenix/backups/20261124-112201Z/` (`main.bundle`, `worktree.patch`, `screenshots/`, `status.txt`). Elle ne contient aucun jeton.
+- Une sauvegarde du commit, du diff et des PNG existants se trouve dans `/mnt/windata/project-phoenix/backups/20261124-112201Z/` (`main.bundle`, `worktree.patch`, `screenshots/`, `status.txt`, `icon-test.log`). Elle ne contient aucun jeton.
 - Aucun intégrateur, build Cargo ou agent de la session précédente ne tournait pendant la vérification.
 
 ## Règle de contribution et méthode de référence
@@ -46,6 +47,8 @@ La capture écran permet de mesurer le rendu visible. Ne pas extraire les styles
 ## Progrès déjà présents sur `main`
 
 La reprise du handoff a confirmé que plusieurs éléments mentionnés comme en cours ont depuis été intégrés : historique détaché pour les sauts vers d’anciens messages, surbrillance pulsée, barre de titre, icônes de contrôles vidéo, barre de scène, thèmes, tooltips et carte de prévisualisation du stream. Les commits récents comprennent `90bb675`, `e45e2c5`, `cb8fa6f` et `e6f3b7a`.
+
+Depuis la référence initiale, `b50d800` a ajouté le handoff et le protocole; `2972f75` a ajouté deux icônes de secours. Le test ciblé passe. L’espace libre après ce test était d’environ 4,3 Go; le recontrôler avant toute compilation suivante.
 
 Ces intégrations ne signifient pas que toute la parité est atteinte. Les lignes des tableaux doivent être réévaluées avec leur preuve et leur état courant. Le tableau de bord de développement et `BACKLOG.md` contiennent des affectations d’agents périmées; aucun travailleur n’était actif à la reprise. Ne pas supposer qu’un label `CLAIMED` est encore pris en charge.
 
