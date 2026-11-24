@@ -483,6 +483,9 @@ pub fn rich_with_emoji_scaled(
     k: f32,
 ) -> AnyElement {
     let jumbo = crate::richtext::is_jumbo(&[crate::richtext::RBlock::Text(t.clone())]);
+    // Text, line height and emoji are rem / em based: they follow the font size setting too
+    // (a 24px client rendered emoji messages at 16px).
+    let k = k * crate::theme::font_scale();
     // markup_ .emoji 1.375em, jumbo 3em
     let size = k * if jumbo { 48. } else { 22. };
     let mut row = div().flex().flex_wrap().items_center().text_size(z(16. * k)).line_height(z(22. * k));
