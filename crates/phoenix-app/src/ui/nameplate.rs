@@ -9,6 +9,19 @@
 //!     with `fitInAccount_AFi54G` (`top: -1px; height: calc(100% + 2px); width: calc(100% + 1px)`).
 //! - `img_AFi54G`: `height: 100%`, `inset-inline-end: 0`, `object-position: right center`,
 //!   opacity `.6` (`.selected` `.9`, `.channel.hover` `.4`, `.account` `.4`).
+//!   It is a child of `container_AFi54G`, so the palette gradient (the container's
+//!   background) is painted UNDER the image, never over it.
+//! - Live member list (2026-11-24, 1536x840 @125 %): the row `childContainer_J1Adu_
+//!   nameplated_J1Adu_` is 252px wide (`member_Iy0c7A` margin-left 8, scroller
+//!   `content_tqapBM` 260 of 268: `scrollbarGutterStable thin` keeps an 8px gutter),
+//!   padding `0 32px 0 10px`; `img_AFi54G` 223.925x41.99 (`left: 28.075px; right: 0`,
+//!   natural 448x84, `object-fit: fill`) ends on the row's right edge; one-line rows
+//!   are 40px tall with a 213x40 image, DM rows 48px with 256x48.
+//! - Mask (module `351952`): a `ResizeObserver` on the row's `layout_` element sets
+//!   `fade = contentRect.width + 10` (member list) or `- 5` (DM channel), then
+//!   `mask-image: linear-gradient(to right, rgba(0,0,0,.3) <fade>px, #000 <fade+50>px)`
+//!   in the image's own box. The ramp is NOT clamped to the image: with `fade` 220 on a
+//!   224px image the right edge only reaches alpha .356.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -81,11 +94,70 @@ pub enum Place {
 /// `h` is the row height in px (image width follows the asset's 16:3 ratio,
 /// 448x84 natural / 224x42 at h=42).
 pub fn layer(user: &User, h: f32, place: Place, hovered: bool, selected: bool) -> Option<AnyElement> {
-    layer_with_fade(user, h, place, hovered, selected, 220.)
+    layer_with_fade(user, h, place, hovered, selected, Fade::Fixed(220.))
+}
+
+/// Measured `layout_` widths (CSS px) per (place, row id): the client's `ResizeObserver`.
+#[derive(Default)]
+struct Widths(HashMap<(u8, u64), f32>);
+
+impl Global for Widths {}
+
+fn place_key(place: Place) -> u8 {
+    match place {
+        Place::Member => 0,
+        Place::Channel => 1,
+        Place::Account => 2,
+    }
+}
+
+/// Absolute, full-size probe to put inside the row's `layout_` equivalent: it records
+/// that element's laid-out width, which [`Fade::Measured`] reads on the next frame
+/// (the client applies its `ResizeObserver` result one frame later as well).
+pub fn width_probe(place: Place, id: u64) -> impl IntoElement {
+    gpui::canvas(
+        move |b, window, cx| {
+            let w = f32::from(b.size.width) / crate::theme::zoom();
+            let old = cx.default_global::<Widths>().0.insert((place_key(place), id), w);
+            if old.is_none_or(|o| (o - w).abs() > 0.25) {
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+}
+
+/// Where the mask fade starts, in px from the image's left edge.
+#[derive(Clone, Copy)]
+pub enum Fade {
+    /// A fixed value.
+    Fixed(f32),
+    /// `width_probe(place, id)` width + `offset` (`+10` member list, `-5` DM),
+    /// `fallback` until the probe has run.
+    Measured { place: Place, id: u64, offset: f32, fallback: f32 },
+}
+
+impl Fade {
+    fn resolve(self, cx: &App) -> f32 {
+        match self {
+            Fade::Fixed(v) => v,
+            Fade::Measured { place, id, offset, fallback } => cx
+                .try_global::<Widths>()
+                .and_then(|w| w.0.get(&(place_key(place), id)).copied())
+                .map_or(fallback, |w| w + offset),
+        }
+    }
 }
 
 /// Maximum number of masked nameplate `RenderImage`s kept in memory.
 const MAX_CACHED: usize = 128;
+
+/// Upper bound for the quantized mask ratios (u16 per mille).
+const MAX_RATIO: f32 = 60.;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct MaskKey {
@@ -144,18 +216,31 @@ fn load_masked(
     end_ratio: f32,
     cx: &mut App,
 ) -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
-    let start_q = (start_ratio.clamp(0.0, 1.0) * 1000.0).round() as u16;
-    let end_q = (end_ratio.clamp(0.0, 1.0) * 1000.0).round() as u16;
+    // Ratios may exceed 1: the CSS ramp runs past the image's right edge.
+    let start_q = (start_ratio.clamp(0.0, MAX_RATIO) * 1000.0).round() as u16;
+    let end_q = (end_ratio.clamp(0.0, MAX_RATIO) * 1000.0).round() as u16;
     let key = MaskKey { url: url.clone(), start_q, end_q };
 
     let store = cx.default_global::<Store>();
-    if let Some((st, used)) = store.images.get_mut(&key) {
+    // While a new mask bakes (the measured width changed), keep showing a mask of the
+    // same image instead of nothing.
+    let same_url = |store: &Store| {
+        store
+            .images
+            .iter()
+            .filter(|(k, _)| k.url == *url)
+            .find_map(|(_, (st, _))| if let State::Ready(img) = st { Some(Ok(img.clone())) } else { None })
+    };
+    let cached = store.images.get_mut(&key).map(|(st, used)| {
         *used = Instant::now();
-        return match st {
+        match st {
             State::Loading => None,
             State::Ready(img) => Some(Ok(img.clone())),
             State::Failed => Some(Err(ImageCacheError::Other(Arc::new(anyhow::anyhow!("nameplate decode failed"))))),
-        };
+        }
+    });
+    if let Some(res) = cached {
+        return res.or_else(|| same_url(store));
     }
 
     if store.images.len() >= MAX_CACHED
@@ -184,6 +269,7 @@ fn load_masked(
         return res;
     }
 
+    let fallback = same_url(store);
     store.images.insert(key.clone(), (State::Loading, Instant::now()));
     let http = cx.http_client();
     let fetch = url.clone();
@@ -207,11 +293,11 @@ fn load_masked(
         });
     })
     .detach();
-    None
+    fallback
 }
 
-/// [`layer`] with an explicit horizontal mask fade start (`fade_start_px` from
-/// the left edge of `img_AFi54G`).
+/// [`layer`] with an explicit horizontal mask fade start (`fade`, px from the left
+/// edge of `img_AFi54G`).
 ///
 /// Live client (2026-11-24, `img_AFi54G` + module `351952`):
 /// `mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.3) <fade>px, rgb(0, 0, 0) <fade+50>px)`.
@@ -219,14 +305,7 @@ fn load_masked(
 /// The alpha mask is baked pixel-by-pixel into a cached `RenderImage` keyed by
 /// `(url, fade_start_ratio, fade_end_ratio)` so there are zero seams, bands, or
 /// tearing at any DPR.
-pub fn layer_with_fade(
-    user: &User,
-    h: f32,
-    place: Place,
-    hovered: bool,
-    selected: bool,
-    fade_start_px: f32,
-) -> Option<AnyElement> {
+pub fn layer_with_fade(user: &User, h: f32, place: Place, hovered: bool, selected: bool, fade: Fade) -> Option<AnyElement> {
     let (url, pal) = user.nameplate.clone()?;
     let base_opacity = match (place, selected, hovered) {
         (Place::Account, _, _) => 0.4,
@@ -242,43 +321,9 @@ pub fn layer_with_fade(
         div().absolute().top_0().left_0().size_full().rounded(z(8.)).overflow_hidden()
     };
 
-    let img_w = h * (16. / 3.);
-
-    // 1. Single seam-free image layer with continuous per-pixel alpha mask.
-    if place == Place::Account {
-        let src = if url.starts_with('/') {
-            gpui::ImageSource::from(std::path::PathBuf::from(url.as_ref()))
-        } else {
-            gpui::ImageSource::from(url)
-        };
-        d = d.child(
-            img(src)
-                .h_full()
-                .w(z(img_w))
-                .object_fit(gpui::ObjectFit::Cover)
-                .opacity(base_opacity)
-                .absolute()
-                .top_0()
-                .right_0()
-                .rounded_r(z(8.)),
-        );
-    } else {
-        let start_ratio = (fade_start_px / img_w).clamp(0.0, 1.0);
-        let end_ratio = ((fade_start_px + 50.0) / img_w).clamp(0.0, 1.0);
-        d = d.child(
-            img(move |_: &mut gpui::Window, cx: &mut App| load_masked(&url, start_ratio, end_ratio, cx))
-                .h_full()
-                .w(z(img_w))
-                .object_fit(gpui::ObjectFit::Cover)
-                .opacity(base_opacity)
-                .absolute()
-                .top_0()
-                .right_0()
-                .rounded_r(z(8.)),
-        );
-    }
-
-    // 2. Palette background gradient (module `351952`).
+    // 1. Palette gradient: `container_AFi54G`'s own background (module `351952`), so
+    //    it sits under the image. Painting it over the image washed the art out
+    //    towards the right edge (live 1536x840: client (36,10,38) vs (29,12,44)).
     if let Some(dark_rgb) = pal {
         let rgb = palette_for_theme(dark_rgb);
         let seg = |l: f32, r: f32, a0: f32, a1: f32| {
@@ -315,6 +360,45 @@ pub fn layer_with_fade(
         }
     }
 
+    // 2. `img_AFi54G`: h x h*16/3 (448x84 natural, `object-fit: fill`), right-aligned,
+    //    with the continuous per-pixel alpha mask baked in.
+    let img_w = h * (16. / 3.);
+    if place == Place::Account {
+        // `.account`: no mask (the hook has no `content` ref there).
+        let src = if url.starts_with('/') {
+            gpui::ImageSource::from(std::path::PathBuf::from(url.as_ref()))
+        } else {
+            gpui::ImageSource::from(url)
+        };
+        d = d.child(
+            img(src)
+                .h_full()
+                .w(z(img_w))
+                .object_fit(gpui::ObjectFit::Fill)
+                .opacity(base_opacity)
+                .absolute()
+                .top_0()
+                .right_0()
+                .rounded_r(z(8.)),
+        );
+    } else {
+        d = d.child(
+            img(move |_: &mut gpui::Window, cx: &mut App| {
+                let f = fade.resolve(cx);
+                // Not clamped to 1: past the right edge the ramp simply never ends.
+                load_masked(&url, (f / img_w).max(0.), ((f + 50.) / img_w).max(0.), cx)
+            })
+            .h_full()
+            .w(z(img_w))
+            .object_fit(gpui::ObjectFit::Fill)
+            .opacity(base_opacity)
+            .absolute()
+            .top_0()
+            .right_0()
+            .rounded_r(z(8.)),
+        );
+    }
+
     Some(d.into_any_element())
 }
 
@@ -331,6 +415,9 @@ mod tests {
         assert!((mask_alpha(1.0, 0.5, 0.75) - 1.0).abs() < 1e-6);
         // Full-width fade (fade_start_px >= img_w) stays at 0.3 everywhere.
         assert!((mask_alpha(0.999, 1.0, 1.0) - 0.3).abs() < 1e-6);
+        // Live member row: fade 220px on a 224px image, ramp to 270px. The right
+        // edge only reaches .3 + .7 * 4/50 = .356, never 1.
+        assert!((mask_alpha(1.0, 220. / 224., 270. / 224.) - 0.356).abs() < 1e-3);
     }
 
     #[test]

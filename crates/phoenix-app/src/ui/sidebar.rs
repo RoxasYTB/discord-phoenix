@@ -1029,7 +1029,17 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         .flatten()
                         // Only the selected row and the hovered one draw it (vanilla-home-friends:
                         // no `container_AFi54G` under idle rows); hovered `.channel_.hover_` opacity .4.
-                        .and_then(|u| crate::ui::nameplate::layer(u, 48., crate::ui::nameplate::Place::Channel, !selected, selected)),
+                        // Mask start (module 351952, `content: ti` = the `layout_TBNqol` ref):
+                        // its width - 5, i.e. avatar 32 + margin 12 + name/tag width - 5.
+                        .and_then(|u| {
+                            let fade = crate::ui::nameplate::Fade::Measured {
+                                place: crate::ui::nameplate::Place::Channel,
+                                id: id.0,
+                                offset: 32. + 12. - 5.,
+                                fallback: 220.,
+                            };
+                            crate::ui::nameplate::layer_with_fade(u, 48., crate::ui::nameplate::Place::Channel, !selected, selected, fade)
+                        }),
                     |d, l| {
                         d.child(
                             div()
@@ -1066,18 +1076,30 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                 .flex()
                                 .items_center()
                                 .child(
-                                    // 1:1 DM: `withDisplayNameStyles_zln_tS` > `container_or4Hj- dnsFont_`
-                                    // (vanilla-dm #675/#734): the recipient's name style font.
-                                    crate::fonts::styled_name(
-                                        div().min_w_0().text_ellipsis(),
-                                        (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u))).flatten(),
-                                        false,
-                                    )
-                                    .child(crate::ui::emoji_text::label(name, 16.)),
-                                )
-                                // 1:1 DM: server tag chiplet after the name, chipletContainerInner_ margin-left 4px
-                                // (vanilla-dm #677).
-                                .when_some(dm_tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.)))),
+                                    // Name + tag, as wide as their content: the DM nameplate
+                                    // mask reads this width (`content_TBNqol`).
+                                    div()
+                                        .relative()
+                                        .min_w_0()
+                                        .flex()
+                                        .items_center()
+                                        .child(
+                                            // 1:1 DM: `withDisplayNameStyles_zln_tS` > `container_or4Hj- dnsFont_`
+                                            // (vanilla-dm #675/#734): the recipient's name style font.
+                                            crate::fonts::styled_name(
+                                                div().min_w_0().text_ellipsis(),
+                                                (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u))).flatten(),
+                                                false,
+                                            )
+                                            .child(crate::ui::emoji_text::label(name, 16.)),
+                                        )
+                                        // 1:1 DM: server tag chiplet after the name, chipletContainerInner_ margin-left 4px
+                                        // (vanilla-dm #677).
+                                        .when_some(dm_tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
+                                        .when(plated, |d| {
+                                            d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Channel, id.0))
+                                        }),
+                                ),
                         )
                         .when(connected, |d| {
                             // `linkBottom_TNyK-N` (live connected voice row): margin-left 30 from

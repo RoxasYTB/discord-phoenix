@@ -688,6 +688,7 @@ pub fn member_row_in(
     // Second line only when the client's activity status renders something; the
     // list item's fallback text is used only before the activities arrive.
     let two_lines = !offline && (in_voice || sub.is_some() || (acts.is_empty() && mem.activity.is_some()));
+    let has_plate = user.is_some_and(|u| u.nameplate.is_some());
     // Dump `-channels-N-N+` node 1643: member_Iy0c7A margin-left 8px,
     // padding 1px 0, radius 8 (44px); childContainer_J1Adu_ padding 0 8px 0 10px;
     // memberInner_Iy0c7A padding 4px 0 (42px); avatar 32 + margin-right 12.
@@ -710,12 +711,11 @@ pub fn member_row_in(
         .pl(z(space::xs())) // childContainer_J1Adu_ padding-inline-start --space-xs
         // childContainer_J1Adu_ padding-right 8px, 32px with `nameplated_J1Adu_`
         // (vanilla-members row at y 718): names ellipsize before the nameplate art.
-        .pr(z(if user.is_some_and(|u| u.nameplate.is_some()) { 32. } else { 8. }))
+        .pr(z(if has_plate { 32. } else { 8. }))
         .py(z(4.))
         .rounded(z(8.))
         .flex()
         .items_center()
-        .gap(z(12.))
         .cursor_pointer()
         .when(offline, |d| d.opacity(0.3))
         // clickable_J1Adu_:hover .childContainer_J1Adu_ / .avatar opacity 1
@@ -729,8 +729,8 @@ pub fn member_row_in(
         .when_some(
             user.and_then(|u| {
                 let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
-                // Estimate text content width to match the live client's dynamic
-                // `mask-image: linear-gradient(to right, rgba(0,0,0,0.3) <fade>px, rgb(0,0,0) <fade+50>px)`.
+                // Until the probe has measured the `memberInner layout_` box, estimate its
+                // text width for the client's `ResizeObserver` mask start.
                 let name_w = name.chars().count() as f32 * 9.0
                     + if tag.is_some() { 56.0 } else { 0.0 }
                     + if u.bot { 50.0 } else { 0.0 }
@@ -743,9 +743,16 @@ pub fn member_row_in(
                     })
                     .unwrap_or(0);
                 let sub_w = if two_lines { sub_chars as f32 * 6.5 + 16.0 } else { 0.0 };
-                let fade_start = (26.0 + name_w.max(sub_w) + 30.0).clamp(120.0, 220.0);
+                let fallback = (26.0 + name_w.max(sub_w) + 30.0).clamp(120.0, 220.0);
                 let row_h = if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. };
-                crate::ui::nameplate::layer_with_fade(u, row_h, crate::ui::nameplate::Place::Member, false, sel, fade_start)
+                // module 351952: fade = layout_ contentRect.width + 10 (MEMBER_LIST).
+                let fade = crate::ui::nameplate::Fade::Measured {
+                    place: crate::ui::nameplate::Place::Member,
+                    id: uid.0,
+                    offset: 10.,
+                    fallback,
+                };
+                crate::ui::nameplate::layer_with_fade(u, row_h, crate::ui::nameplate::Place::Member, false, sel, fade)
             }),
             |d, l| d.child(l),
         )
@@ -761,91 +768,106 @@ pub fn member_row_in(
             cx.stop_propagation();
             crate::ui::user_menu::open(uid, g, ev.position, window);
         })
+        // `memberInner_Iy0c7A layout_J1Adu_` (live): flex 0 1 auto, max-width 100%, so it
+        // is as wide as its content (Clem 132px) up to the 210px content box; the
+        // nameplate mask starts at its width + 10.
         .child(
             div()
                 .relative()
-                .flex_none()
-                .child({
-                    // the status cut shows the row's hover / selected background like the mask
-                    let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
-                    let cut = move |d: gpui::Div| {
-                        d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
-                            .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
-                    };
-                    // The decoration sits under the status cut-out and glyph (ui::avatar_with_status_deco).
-                    let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
-                    if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
-                        mobile_avatar(user, cut, deco)
-                    } else {
-                        crate::ui::avatar_with_status_deco(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut, deco)
-                    }
-                })
-                .when(streaming, |d| d.child(streaming_dot())),
-        )
-        .child(
-            div()
-                .flex_1()
                 .min_w_0()
+                .max_w_full()
                 .flex()
-                .flex_col()
+                .items_center()
+                .gap(z(12.))
                 .child(
                     div()
+                        .relative()
+                        .flex_none()
+                        .child({
+                            // the status cut shows the row's hover / selected background like the mask
+                            let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
+                            let cut = move |d: gpui::Div| {
+                                d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
+                                    .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                            };
+                            // The decoration sits under the status cut-out and glyph (ui::avatar_with_status_deco).
+                            let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
+                            if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
+                                mobile_avatar(user, cut, deco)
+                            } else {
+                                crate::ui::avatar_with_status_deco(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut, deco)
+                            }
+                        })
+                        .when(streaming, |d| d.child(streaming_dot())),
+                )
+                .child(
+                    // content_J1Adu_: flex 1 1 auto
+                    div()
+                        .flex_grow_1()
+                        .flex_shrink_1()
                         .min_w_0()
                         .flex()
-                        .items_center()
-                        .gap(z(4.))
+                        .flex_col()
                         .child(
-                            crate::fonts::styled_name(div(), user, false)
-                                .text_size(z(16.))
-                                .line_height(z(20.))
-                                .font_weight(FontWeight::MEDIUM)
-                                // container_J1Adu_ color --channels-default; :hover
-                                // --interactive-text-hover, selected --interactive-text-active
-                                // (role colours keep their own colour).
-                                .map(|d| match g.and_then(|g| app.member_color(g, mem)) {
-                                    Some(col) => d.text_color(role_color(Some(col))),
-                                    None if app.people.popout.as_ref().is_some_and(|p| p.user == uid) => {
-                                        d.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
-                                    }
-                                    None => d
-                                        .text_color(c(tok(idx::CHANNELS_DEFAULT)))
-                                        .group_hover("member-row", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))),
-                                })
-                                // name_ ellipsis: only the name shrinks, the decorators keep their width
+                            div()
                                 .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                // name_Wo4EpK: style font letter-spacing, gradient role colours
-                                .child(crate::fonts::name_text_with(
-                                    name,
-                                    user,
-                                    16.,
-                                    g.and_then(|g| crate::ui::role_gradient::for_member(app, g, mem)),
-                                )),
+                                .flex()
+                                .items_center()
+                                .gap(z(4.))
+                                .child(
+                                    crate::fonts::styled_name(div(), user, false)
+                                        .text_size(z(16.))
+                                        .line_height(z(20.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        // container_J1Adu_ color --channels-default; :hover
+                                        // --interactive-text-hover, selected --interactive-text-active
+                                        // (role colours keep their own colour).
+                                        .map(|d| match g.and_then(|g| app.member_color(g, mem)) {
+                                            Some(col) => d.text_color(role_color(Some(col))),
+                                            None if app.people.popout.as_ref().is_some_and(|p| p.user == uid) => {
+                                                d.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
+                                            }
+                                            None => d
+                                                .text_color(c(tok(idx::CHANNELS_DEFAULT)))
+                                                .group_hover("member-row", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))),
+                                        })
+                                        // name_ ellipsis: only the name shrinks, the decorators keep their width
+                                        .min_w_0()
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        // name_Wo4EpK: style font letter-spacing, gradient role colours
+                                        .child(crate::fonts::name_text_with(
+                                            name,
+                                            user,
+                                            16.,
+                                            g.and_then(|g| crate::ui::role_gradient::for_member(app, g, mem)),
+                                        )),
+                                )
+                                .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.)))) // chipletContainerInner_k8jyN7 margin 1px 0 1px 4px
+                                .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))
+                                .when(owner, |d| {
+                                    // ownerIcon_Iy0c7A: 14px (icon_Iy0c7A), --text-feedback-warning
+                                    d.child(gpui::svg().path(crate::icons::path("crown")).size(z(14.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))
+                                })
+                                .when(mem.premium_since.is_some(), |d| {
+                                    // premiumIcon_Iy0c7A + icon_Iy0c7A: 14px, margin-inline-start 3px, top 1px;
+                                    // path fill --guild-boosting-pink (dump vanilla-guild-chat-busy node 1757).
+                                    d.child(
+                                        gpui::svg()
+                                            .path(crate::icons::path("chat/boost"))
+                                            .size(z(14.))
+                                            .flex_none()
+                                            .ml(z(3.)) // after the row gap(4), as the client (wrapper span + 3px)
+                                            .relative()
+                                            .top(z(1.))
+                                            .text_color(c(tok(idx::GUILD_BOOSTING_PINK))),
+                                    )
+                                }),
                         )
-                        .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.)))) // chipletContainerInner_k8jyN7 margin 1px 0 1px 4px
-                        .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))
-                        .when(owner, |d| {
-                            // ownerIcon_Iy0c7A: 14px (icon_Iy0c7A), --text-feedback-warning
-                            d.child(gpui::svg().path(crate::icons::path("crown")).size(z(14.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))
-                        })
-                        .when(mem.premium_since.is_some(), |d| {
-                            // premiumIcon_Iy0c7A + icon_Iy0c7A: 14px, margin-inline-start 3px, top 1px;
-                            // path fill --guild-boosting-pink (dump vanilla-guild-chat-busy node 1757).
-                            d.child(
-                                gpui::svg()
-                                    .path(crate::icons::path("chat/boost"))
-                                    .size(z(14.))
-                                    .flex_none()
-                                    .ml(z(3.)) // after the row gap(4), as the client (wrapper span + 3px)
-                                    .relative()
-                                    .top(z(1.))
-                                    .text_color(c(tok(idx::GUILD_BOOSTING_PINK))),
-                            )
-                        }),
+                        .when(two_lines, |d| d.child(sub_text(in_voice, user.is_some_and(|u| u.bot), sub, mem.activity.clone().filter(|_| acts.is_empty())))),
                 )
-                .when(two_lines, |d| d.child(sub_text(in_voice, user.is_some_and(|u| u.bot), sub, mem.activity.clone().filter(|_| acts.is_empty())))),
+                .when(has_plate, |d| d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Member, uid.0))),
         ))
         .into_any_element()
 }

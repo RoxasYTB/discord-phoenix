@@ -16,7 +16,7 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 | Header "More" button | hidden (opacity 0), shown on header hover | #655 `moreButton_Bce46W` | ui/sidebar.rs `dm_top` | ✅ (this pass, menu is a stub) |
 | Header "Create DM" button | rest `--icon-muted`, hover `--icon-subtle`, tooltip | #657 `iconWrapper_ybUK7Z clickable_` | ui/sidebar.rs `dm_top` | ✅ (this pass) |
 | DM row | rest, hover, active, selected (48px, link pl 10 / pr 0, avatar 32 + 12) | #659–#694 | ui/sidebar.rs channel row | ✅ |
-| DM row nameplate | rest / hover / selected opacity | #661 `container_AFi54G` | ui/nameplate.rs | ✅ |
+| DM row nameplate | rest / hover / selected opacity; gradient under the image; mask start = `layout_TBNqol` width − 5 (module 351952, ref `ti`), measured with `nameplate::width_probe` | #661 `container_AFi54G` | ui/nameplate.rs, ui/sidebar.rs | ✅ |
 | DM row server tag | chiplet, margin-left 4 | #675 | ui/sidebar.rs | ✅ |
 | Group DM row | face pile 32px, "N members" | group-dm #800 | ui/sidebar.rs, ui/group_dm.rs | ✅ |
 | Close button | display:none until the row is hovered; 24px, padding 3, margin-right 6, opacity .7 → 1 on hover | #680–#698 `closeButton_zln_tS` | ui/sidebar.rs `close` | ✅ (this pass; it used to take room with opacity 0) |
