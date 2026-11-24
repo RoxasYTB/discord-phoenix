@@ -1,14 +1,3 @@
-//! Latest message page per channel, so opening a channel needs no network.
-//!
-//! - Memory: an LRU of [`MEM_CAP`] channels. Pages fetched during this session
-//!   are `fresh`: MESSAGE_CREATE / DELETE keep them exact. Any other change
-//!   (edit, reaction) marks the page stale.
-//! - Disk: `~/.cache/discord-phoenix/messages/<channel>.json` (0600), the raw
-//!   API messages of the last page seen, read back as stale pages at launch.
-//!
-//! A stale page is shown at once, then refreshed in the background (see
-//! `DiscordBackend::load_messages`).
-
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -53,8 +42,6 @@ fn file(channel: u64) -> Option<PathBuf> {
     Some(dir()?.join(format!("{channel}.json")))
 }
 
-/// Cached latest page (oldest first) and whether it is known to be exact.
-/// Falls back to the disk copy (stale). Blocking on a disk miss: call off the UI thread.
 pub fn get(channel: u64) -> Option<(Vec<api::Message>, bool)> {
     {
         let mut st = STATE.lock();
@@ -70,17 +57,14 @@ pub fn get(channel: u64) -> Option<(Vec<api::Message>, bool)> {
     Some((msgs, false))
 }
 
-/// The memory page only (no disk), oldest first.
 pub fn peek(channel: u64) -> Option<Vec<api::Message>> {
     STATE.lock().pages.get(&channel).map(|p| p.msgs.clone())
 }
 
-/// Whether a fresh page is in memory (prefetch can skip it).
 pub fn has_fresh(channel: u64) -> bool {
     STATE.lock().pages.get(&channel).is_some_and(|p| p.fresh)
 }
 
-/// Claim a background fetch for `channel`; false if one is already running.
 pub fn begin_fetch(channel: u64) -> bool {
     STATE.lock().inflight.insert(channel)
 }
@@ -100,12 +84,10 @@ fn insert(channel: u64, msgs: Vec<api::Message>, fresh: bool) {
     }
 }
 
-/// Store a freshly fetched latest page (oldest first) in memory and on disk.
 pub fn put(channel: u64, msgs: &[api::Message]) {
     put_with(channel, msgs, true);
 }
 
-/// `fresh = false` for pages fetched before the gateway is up (events may be missed).
 pub fn put_with(channel: u64, msgs: &[api::Message], fresh: bool) {
     insert(channel, msgs.to_vec(), fresh);
     let Ok(json) = serde_json::to_vec(msgs) else { return };
@@ -134,7 +116,6 @@ fn write(channel: u64, json: &[u8]) {
     }
 }
 
-/// Keep the [`DISK_CAP`] most recently written pages.
 fn trim(d: &std::path::Path) {
     let mut files: Vec<(SystemTime, PathBuf)> = fs::read_dir(d)
         .into_iter()
@@ -151,7 +132,6 @@ fn trim(d: &std::path::Path) {
     }
 }
 
-/// Channels with a page on disk, most recently written first.
 pub fn recent_on_disk(n: usize) -> Vec<u64> {
     let Some(d) = dir() else { return Vec::new() };
     let mut files: Vec<(SystemTime, u64)> = fs::read_dir(d)
@@ -173,15 +153,12 @@ fn mark_stale(channel: u64) {
     }
 }
 
-/// A non-resumed reconnect may have missed events: nothing is exact any more.
 pub fn mark_all_stale() {
     for p in STATE.lock().pages.values_mut() {
         p.fresh = false;
     }
 }
 
-/// A full page that shrinks would look like the start of the channel to the
-/// app (fewer than 50 = no older history): drop it so the next open refetches.
 fn remove(channel: u64, ids: &[api::Snowflake]) {
     let mut st = STATE.lock();
     let Some(p) = st.pages.get_mut(&channel) else { return };
@@ -195,7 +172,6 @@ fn remove(channel: u64, ids: &[api::Snowflake]) {
     }
 }
 
-/// Keep memory pages in step with the gateway.
 pub fn on_gateway(ev: &GatewayEvent) {
     match ev {
         GatewayEvent::MessageCreate(m) => {
@@ -224,7 +200,6 @@ pub fn on_gateway(ev: &GatewayEvent) {
     }
 }
 
-/// Logout: forget everything, including the disk copies.
 pub fn clear() {
     *STATE.lock() = State::default();
     if let Some(d) = dir() {

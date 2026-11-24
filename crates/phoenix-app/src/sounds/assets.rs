@@ -1,16 +1,3 @@
-//! Where the sound files come from. Nothing is bundled:
-//!
-//! 1. `~/.cache/discord-phoenix/sounds/<name>.mp3` from an earlier run;
-//! 2. the local Discord web cache (`Cache/Cache_Data`): played sounds are stored as
-//!    sparse range entries (`<hash>_s`: header + key, then
-//!    `{magic u64, offset i64, length i64, crc u32, pad u32}` + data per range);
-//! 3. otherwise `https://discord.com/assets/<file>`, the URL the client itself loads
-//!    (a plain GET of a public asset).
-//!
-//! The name -> file table is read from the cached main bundle (webpack context
-//! `"./message1.mp3": moduleId`, module `e.exports = n.p + "<hash>.mp3"`), with
-//! [`KNOWN`] (the same table from the 2026-11-24 build) when no bundle is cached.
-
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -18,7 +5,6 @@ use std::sync::OnceLock;
 
 use phoenix_voice::audio::effects::Pcm;
 
-/// Sound name -> asset file, from `web.5233bd6fd7ed31db.js` (module 696354), 2026-11-24.
 pub const KNOWN: &[(&str, &str)] = &[
     ("activity_end", "878f7e7f2b3bf972.mp3"),
     ("activity_launch", "a71f183dc4de32a3.mp3"),
@@ -123,7 +109,6 @@ pub fn out_dir() -> Option<PathBuf> {
     crate::icons::out_dir().map(|d| d.with_file_name("sounds"))
 }
 
-/// `"./name.mp3":"id"` pairs and `id(e,t,n){"use strict";e.exports=n.p+"x.mp3"}` modules.
 pub fn parse_bundle(js: &str) -> HashMap<String, String> {
     let mut out = HashMap::new();
     let Some(at) = js.find("\"./message1.mp3\":") else { return out };
@@ -141,7 +126,6 @@ pub fn parse_bundle(js: &str) -> HashMap<String, String> {
             while let Some(i) = js[from..].find(&pat) {
                 let i = from + i;
                 from = i + pat.len();
-                // Whole module id only (not the tail of a longer one).
                 if js[..i].bytes().last().is_some_and(|b| b.is_ascii_digit()) {
                     continue;
                 }
@@ -155,7 +139,6 @@ pub fn parse_bundle(js: &str) -> HashMap<String, String> {
     out
 }
 
-/// Name -> asset file (cached bundle, else [`KNOWN`]).
 pub fn table() -> &'static HashMap<String, String> {
     static T: OnceLock<HashMap<String, String>> = OnceLock::new();
     T.get_or_init(|| {
@@ -175,7 +158,6 @@ pub fn table() -> &'static HashMap<String, String> {
     })
 }
 
-/// Body of a cache entry: the sparse `_s` ranges in offset order, or the plain `_0` stream.
 pub fn entry_body(bytes: &[u8]) -> Option<Vec<u8>> {
     if bytes.len() < 24 || bytes[..8] != MAGIC {
         return None;
@@ -204,7 +186,7 @@ pub fn entry_body(bytes: &[u8]) -> Option<Vec<u8>> {
         let mut out = Vec::new();
         for (o, d) in ranges {
             if o != out.len() {
-                return None; // a hole: only part of the file was fetched
+                return None;
             }
             out.extend_from_slice(d);
         }
@@ -219,12 +201,10 @@ fn looks_like_mp3(b: &[u8]) -> bool {
     b.starts_with(b"ID3") || (b.len() > 1 && b[0] == 0xff && b[1] & 0xe0 == 0xe0)
 }
 
-/// Cached `/assets/<file>` mp3 entries of every local Discord cache.
 fn cached_assets() -> HashMap<String, PathBuf> {
     cached_with(".mp3")
 }
 
-/// Cached `/assets/<file>` entries ending in `ext`.
 fn cached_with(ext: &str) -> HashMap<String, PathBuf> {
     let mut out = HashMap::new();
     for cache in crate::icons::discord_caches() {
@@ -241,7 +221,6 @@ fn cached_with(ext: &str) -> HashMap<String, PathBuf> {
             let Some(key) = h.get(24..24 + kl).and_then(|k| std::str::from_utf8(k).ok()) else { continue };
             let Some(name) = key.rsplit_once("/assets/").map(|(_, n)| n.split('?').next().unwrap_or(n)) else { continue };
             if name.ends_with(ext) {
-                // The sparse `_s` file holds the body; prefer it over the `_0` headers.
                 let is_sparse = p.to_string_lossy().ends_with("_s");
                 if is_sparse || !out.contains_key(name) {
                     out.insert(name.to_owned(), p);
@@ -281,7 +260,6 @@ fn fetch_into(dir: &Path, name: &str, cached: &HashMap<String, PathBuf>) -> Opti
     Some(bytes)
 }
 
-/// The mp3 bytes of `name` (blocking: file read, else cache extraction or download).
 pub fn load(name: &str) -> Option<Vec<u8>> {
     let dir = out_dir()?;
     if let Ok(b) = std::fs::read(dir.join(format!("{name}.mp3"))) {
@@ -290,9 +268,6 @@ pub fn load(name: &str) -> Option<Vec<u8>> {
     fetch_into(&dir, name, &cached_assets())
 }
 
-/// Any other client asset (`/assets/<file>`: easter egg images, DDR arrows) as a local
-/// path: `Some` once it is on disk, else `None` and a background fetch starts (local
-/// Discord cache first, then `discord.com/assets`).
 pub fn asset_file(file: &str) -> Option<PathBuf> {
     let dir = out_dir()?.with_file_name("assets");
     let path = dir.join(file);
@@ -323,7 +298,6 @@ pub fn asset_file(file: &str) -> Option<PathBuf> {
     None
 }
 
-/// Like [`entry_body`] without the mp3 check on plain `_0` bodies (decompressed if needed).
 fn entry_body_any(bytes: &[u8]) -> Option<Vec<u8>> {
     if let Some(b) = entry_body(bytes) {
         return Some(b);
@@ -342,10 +316,8 @@ fn entry_body_any(bytes: &[u8]) -> Option<Vec<u8>> {
     (!raw.is_empty()).then(|| raw.to_vec())
 }
 
-/// Sounds fetched ahead of time, so the first cue plays without a download.
 const PRELOAD: &[&str] = &["message1", "message3", "call_ringing"];
 
-/// Fill the sound directory in the background (missing files only).
 pub fn init() {
     let Some(dir) = out_dir() else { return };
     let _ = std::thread::Builder::new().name("sound-extract".into()).spawn(move || {
@@ -360,7 +332,6 @@ pub fn init() {
     });
 }
 
-/// Decode an mp3 to interleaved f32 (symphonia).
 pub fn decode(bytes: &[u8]) -> Option<Pcm> {
     use symphonia::core::{
         audio::SampleBuffer, codecs::DecoderOptions, errors::Error, formats::FormatOptions, io::MediaSourceStream,

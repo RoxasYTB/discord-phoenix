@@ -1,7 +1,3 @@
-//! Message composer (moved out of `chat.rs`): reply bar with the mention
-//! toggle, upload tray, upload progress, attach button, paste-image, typing
-//! indicator.
-
 use std::time::Duration;
 
 use gpui_component::Sizable as _;
@@ -31,10 +27,6 @@ fn reply_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl Into
     let own = m.author == app.me.id;
     let mention = app.chat.reply_mention;
     Some(
-        // replyBar_: transparent (background-color unset), top radius 8px; text_ margin-inline-start
-        // --space-16; closeButton_ / mentionButton_ padding 8px 12px; actions_ margin-end --space-4.
-        // vanilla-reply-bar: 34px row (mentionButton_ 18 + 8+8 padding); replyLabel_
-        // body-sm/normal --text-default, name_ semibold, white-space pre.
         div()
             .h(z(34.))
             .pl(z(16.))
@@ -64,7 +56,6 @@ fn reply_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl Into
                         .flex()
                         .items_center()
                         .cursor_pointer()
-                        // mentionButton_ body-sm/semibold; mentionIcon_ 16px, margin-inline-end 4.
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(c(if mention { Palette::TEXT_LINK } else { Palette::TEXT_MUTED }))
                         .child(gpui::svg().path(crate::icons::path("search/at")).size(z(16.)).mr(z(4.)).flex_none().text_color(c(if mention { Palette::TEXT_LINK } else { Palette::TEXT_MUTED })))
@@ -74,7 +65,7 @@ fn reply_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl Into
                             cx.notify();
                         })),
                 )
-                .child(div().w(z(1.)).h(z(20.)).bg(super::tk(idx::BORDER_SUBTLE))) // separator_ 1x20
+                .child(div().w(z(1.)).h(z(20.)).bg(super::tk(idx::BORDER_SUBTLE)))
             })
             .child(
                 icon_button("cancel-reply", Icon::Close, super::tk(idx::INTERACTIVE_TEXT_DEFAULT), 16.).px(z(12.)).on_click(cx.listener(
@@ -91,7 +82,6 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
     if app.chat.uploads.is_empty() {
         return None;
     }
-    // channelAttachmentArea_: flex, gap 24, padding 20 10 10, overflow-x auto.
     let mut tray = div()
         .id("upload-tray")
         .pt(z(20.))
@@ -105,13 +95,11 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
         let preview = match shown {
             Some(i) => img(i.clone())
                 .size_full()
-                .rounded(z(12.)) // media_ border-radius --radius-sm
+                .rounded(z(12.))
                 .object_fit(gpui::ObjectFit::Contain)
                 .into_any_element(),
             None => icon(ChatIcon::Upload, 64., super::tk(idx::TEXT_BRAND)).into_any_element(),
         };
-        // actionBar_ (hover-bar popover): --background-surface-high, 1px --border-muted,
-        // radius 8, padding 2; translate(25%, -25%) from the card's top-right corner.
         let button = |id: (&'static str, usize), glyph: ChatIcon, color: gpui::Hsla| {
             div()
                 .id(id)
@@ -122,7 +110,7 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
                 .rounded(z(6.))
                 .cursor_pointer()
                 .hover(|s| s.bg(super::tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
-                .child(icon(glyph, 20., color)) // actionBarIcon_ 20px
+                .child(icon(glyph, 20., color))
         };
         let bar = div()
             .absolute()
@@ -140,7 +128,6 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
                     .on_click(cx.listener(move |a, _, _, cx| a.toggle_upload_spoiler(ix, cx))),
             )
             .child(
-                // Client order: Spoiler, Edit (file name), Remove.
                 button(("up-edit", ix), ChatIcon::Edit, super::tk(idx::INTERACTIVE_TEXT_DEFAULT))
                     .on_click(cx.listener(move |a, _, _, cx| open_upload_edit(a, ix, cx))),
             )
@@ -149,8 +136,6 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
                     .on_click(cx.listener(move |a, _, _, cx| a.remove_upload(ix, cx))),
             );
         tray = tray.child(
-            // upload_JyxBSo: 200x200, padding 8, --background-surface-high, 1px --border-normal,
-            // radius --radius-sm (12), --shadow-low.
             div()
                 .relative()
                 .flex_none()
@@ -173,14 +158,10 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
                         .justify_center()
                         .overflow_hidden()
                         .rounded(z(12.))
-                        // spoiler_: blur(--custom-channel-attachment-upload-spoiler-blur-radius 44px),
-                        // rendered as a pre-blurred copy (ui/chat/spoiler.rs).
-                        // Until the blurred copy is ready, the raw preview is dimmed.
                         .when(f.spoiler && f.blurred.is_none(), |d| d.opacity(0.15).bg(super::tk(idx::BACKGROUND_MOD_STRONG)))
                         .child(preview),
                 )
                 .child(
-                    // filenameContainer_ margin-top auto; filename_ margin-top 8, ellipsis.
                     div()
                         .mt(z(8.))
                         .text_size(z(16.))
@@ -198,14 +179,9 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
 }
 
 thread_local! {
-    /// Bounds of the "+" button at the last paint, to anchor its menu.
     static ATTACH_BTN: std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>> = const { std::cell::Cell::new(None) };
 }
 
-/// The "+" menu of the 2026 client (`channel-attach-*` items, measured live
-/// 2026-11-24: 239px wide, 36px rows, opens 8px above the button, left edges
-/// aligned). Upload a File opens the file picker; Create Thread, Create Poll
-/// (ui/modals/poll_create.rs) and Use Apps are wired; scheduled and voice messages are not built yet.
 fn attach_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::AnyElement> {
     use crate::ui::context_menu::{self, MenuItem};
     if !app.chat.attach_menu {
@@ -232,7 +208,6 @@ fn attach_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::A
     if thread_ok {
         items.push(MenuItem::action(crate::t!("attach.thread"), Some(crate::icons::path("chat/thread")), act(|a, ch, w, cx| a.open_create_thread(ch, w, cx))));
     }
-    // "Créer le sondage" (PollsIcon, canPostPolls = DM or SEND_MESSAGES + SEND_POLLS 1<<49).
     let guild = app.channels.get(&ch).and_then(|c| c.guild);
     if guild.is_none() || crate::actions::has(app, guild, 1 << 49) {
         items.push(MenuItem::action(crate::t!("attach.poll"), Some(crate::icons::path("attach/poll")), act(|_, ch, w, _cx| {
@@ -240,7 +215,6 @@ fn attach_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::A
         })));
     }
     items.push(MenuItem::action(crate::t!("attach.apps"), Some(crate::icons::path("apps")), act(|a, _, w, cx| {
-        // Typing "/" opens the slash command popup.
         a.composer.update(cx, |s, cx| {
             if s.value().is_empty() {
                 s.set_value("/", w, cx);
@@ -256,7 +230,6 @@ fn attach_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::A
             cx.notify();
         });
     });
-    // Bottom-left corner 8px above the button.
     let pos = gpui::point(b.origin.x, b.origin.y - z(8.));
     Some(context_menu::render_anchored(pos, gpui::Anchor::BottomLeft, items, dismiss))
 }
@@ -269,9 +242,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
 }
 
 
-/// 1:1 DM with a user we blocked: the client swaps the text area for its
-/// chat blocker ("Tu ne peux pas envoyer de message à un utilisateur que tu
-/// as bloqué." + secondary sm "Débloquer"), CSS wrapper_ST_Y69.
 fn blocked_dm_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::AnyElement> {
     use crate::ui::home::data::{NavRequest, RelAction, RelationshipKind};
     let user = crate::ui::dm_profile_panel::peer(app)?;
@@ -285,15 +255,11 @@ fn blocked_dm_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<g
             cx.notify();
         }));
     Some(
-        // form_ padding-inline --space-xs, margin-bottom --custom-chat-input-margin-bottom (as the text area).
         div()
             .flex_none()
             .px(z(crate::theme::space::xs()))
             .mb(z(crate::theme::space::xs()))
             .child(
-                // wrapper_ST_Y69: --background-base-low, 1px --border-subtle, --radius-sm,
-                // height --space-32 (border-box), padding 12px 0, margin-bottom --space-8,
-                // flex space-between, align-items center.
                 div()
                     .h(z(32.))
                     .mb(z(8.))
@@ -306,7 +272,6 @@ fn blocked_dm_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<g
                     .border_color(super::tk(idx::BORDER_SUBTLE))
                     .bg(super::tk(idx::BACKGROUND_BASE_LOW))
                     .child(
-                        // content_ST_Y69: height 20, margin-inline-start 16; title_ heading-sm/semibold, 2-line clamp.
                         div().h(z(20.)).ml(z(16.)).min_w_0().flex().items_center().child(
                             div()
                                 .overflow_hidden()
@@ -318,7 +283,6 @@ fn blocked_dm_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<g
                                 .child(crate::t!("chat.blocked_dm")),
                         ),
                     )
-                    // buttonContainer_ margin-inline-end 12; button_ margin-inline-start 12.
                     .child(div().flex().flex_none().mr(z(12.)).child(div().flex().items_center().ml(z(12.)).child(unblock))),
             )
             .into_any_element(),
@@ -328,26 +292,21 @@ fn blocked_dm_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<g
 fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
     let placeholder: SharedString = match ch {
-        // Group DMs read "Message <name>" (no @), like threads.
         Some(c) if c.guild.is_none() && crate::ui::dm_profile_panel::is_group_dm(app, c.id) => crate::t!("chat.placeholder_thread", name = c.name),
         Some(c) if c.guild.is_none() => crate::t!("chat.placeholder_dm", name = c.name),
-        // Voice channel text chat: no "#" prefix (the name follows the voice icon).
         Some(c) if matches!(c.kind, crate::model::ChannelKind::Voice | crate::model::ChannelKind::Stage) => {
             crate::t!("chat.placeholder_voice", name = c.name)
         }
-        // Threads quote their name (vanilla-thread-channel composer).
         Some(c) if app.nav.thread_parent(c.id).is_some() => crate::t!("chat.placeholder_thread_quoted", name = c.name),
         Some(c) => crate::t!("chat.placeholder_channel", name = c.name),
         None => "".into(),
     };
     let ic = c(Palette::INTERACTIVE);
     let placeholder_empty = app.composer.read(cx).value().is_empty();
-    // Client CharacterCount: max 4000 with Nitro (canUseIncreasedMessageLength), else 2000.
     let (remaining, show_count) = char_count(app.backend.has_premium(), app.composer.read(cx).value().chars().count() as i64);
     let reply = reply_bar(app, cx);
     let has_banner = reply.is_some();
     let tray = upload_tray(app, cx);
-    // No SEND_MESSAGES: disabled text area with the client's notice, no buttons (CSS only).
     let blocked = app.selected_channel.and_then(|c| app.nav.extras.get(&c)).is_some_and(|x| x.send_blocked);
     let show_send_button = should_show_send_button(app.prefs.local.flag("send-btn", false), blocked);
     let can_send = !placeholder_empty || !app.chat.uploads.is_empty();
@@ -361,12 +320,6 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
         .children(attach_menu(app, cx))
         .children(super::slash::render(app, cx))
         .child(
-            // form_ padding-inline --space-xs; channelTextArea_ --chat-background-default,
-            // 1px --border-muted, radius --radius-sm, margin-bottom --custom-chat-input-margin-bottom.
-            // #1432 form padding-inline --space-xs; #1435 margin-bottom --custom-chat-input-margin-bottom (= --space-xs).
-            // Live CDP (1.25x): cta border is 0.8px (1 phys px), so 56 + 1.6 = 57.6px; GPUI border_1 is 1px (58px),
-            // offset mb by -0.8px so top/bottom borders and inner icons align 1:1 with the client.
-            // The typing row (inTextChannel_U9Tvvz) hangs above the form: top -24px, over the message list.
             div().relative().px(z(crate::theme::space::xs())).mb(z(crate::theme::space::xs() - 0.8))
             .child(div().absolute().top(z(-24.)).left_0().right_0().child(typing(app, window)))
             .child(
@@ -377,8 +330,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                     .border_1()
                     .border_color(super::tk(idx::BORDER_MUTED))
                     .bg(super::tk(idx::CHAT_BACKGROUND_DEFAULT))
-                    .relative() // autocompleteAttached_ is positioned against channelTextArea_
-                    // Tab into the text field: the client rings the whole channelTextArea_ box (radius 8).
+                    .relative()
                     .when(crate::ui::focus_ring::tab_focused(&gpui::Focusable::focus_handle(app.composer.read(cx), cx), window), |d| {
                         d.child(crate::ui::focus_ring::ring_box(8., 0., 0.))
                     })
@@ -389,12 +341,9 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                     .child(
                         div()
                             .id("composer")
-                            .min_h(z(56.)) // #1437 56px (17px padding + 22px line)
+                            .min_h(z(56.))
                             .when(has_banner, |d| d.rounded_b(z(8.)))
                             .relative()
-                            // Client CharacterCount: see char_count;
-                            // characterCount_ absolute bottom 10 / inset-inline-end 14; body-sm/semibold
-                            // tabular, --text-default, --text-feedback-critical when over the limit.
                             .when(show_count, |d| {
                                 d.child(
                                     div()
@@ -409,8 +358,6 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                 )
                             })
                             .flex()
-                            // buttons_/attachWrapper_ are text-area-height rows pinned to the top
-                            // (position sticky, top 0) while the text grows below.
                             .items_start()
                             .capture_key_down(cx.listener(|a, ev: &KeyDownEvent, w, cx| {
                                 let k = &ev.keystroke;
@@ -418,18 +365,12 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                     cx.stop_propagation();
                                     return;
                                 }
-                                // Ctrl+V goes through the text area's paste hook (on_paste below):
-                                // the bound Paste action runs before key listeners.
                                 let edit = k.key == "up" && k.modifiers.number_of_modifiers() == 0;
                                 if edit && a.edit_last(w, cx) {
                                     cx.stop_propagation();
                                 }
                             }))
                             .child(
-                                // inner_ padding-inline-start 15px; attachButton_ margin-inline
-                                // -(space-xs + space-6) 10px around a 32px button.
-                                // #1438 inner_ padding-inline-start 15px; #1439 attachWrapper_ padding 12px 14px;
-                                // #1440 attachButton_ 32px, radius 8px, margin 0 10px 0 -16px, PlusLargeIcon 20px.
                                 div().pl(z(15.)).h(z(56.)).flex().items_center().when(blocked, |d| d.invisible()).child(div().px(z(14.)).child(
                                     div()
                                         .relative()
@@ -453,19 +394,13 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                     .flex_1()
                                     .min_w_0()
                                     .relative()
-                                    // textArea_ 1rem/1.375rem; slateTextArea_ padding-block
-                                    // (--custom-channel-textarea-text-area-height 56px - 1.375rem) / 2 = 17px at a
-                                    // 16px font. gpui-component's Input sets 1.25rem on its frame, then applies our
-                                    // refinement: the line height set on the Textarea wins.
                                     .py(z(text_pad_y()))
                                     .text_size(fz(16.))
                                     .line_height(fz(22.))
                                     .text_color(c(Palette::TEXT_NORMAL))
                                     .child(
-                                        // xsmall: no editor padding (py 0, px 4), the 4px cancelled below.
                                         div().mx(z(-4.)).child(
                                             gpui_component::input::Textarea::new(&app.composer)
-                                                // Ctrl+V of an image / copied files: attach instead of inserting text.
                                                 .on_paste({
                                                     let this = cx.entity().downgrade();
                                                     move |item, _, cx| this.update(cx, |a, cx| a.paste_clipboard(item, cx)).unwrap_or(false)
@@ -473,8 +408,8 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                                 .appearance(false)
                                                 .bordered(false)
                                                 .xsmall()
-                                                .text_size(fz(16.)) // textArea_ 1rem (xsmall would impose its own size)
-                                                .line_height(fz(22.)) // textArea_ line-height 1.375rem
+                                                .text_size(fz(16.))
+                                                .line_height(fz(22.))
                                                 .disabled(blocked),
                                         ),
                                     )
@@ -484,32 +419,24 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                                 .absolute()
                                                 .top(z(text_pad_y() - 1.5))
                                                 .h(fz(22.))
-                                                // #1445 placeholder_ sits at the editor's x (496 in live form, glyph at 497.3).
                                                 .left_0()
                                                 .right_0()
                                                 .flex()
                                                 .items_center()
-                                                .text_color(super::tk(idx::CHANNEL_TEXT_AREA_PLACEHOLDER)) // #1445 placeholder_
-                                                // placeholder_ white-space nowrap, overflow hidden, text-overflow ellipsis.
+                                                .text_color(super::tk(idx::CHANNEL_TEXT_AREA_PLACEHOLDER))
                                                 .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(placeholder)),
                                         )
                                     }),
                             )
                             .child(
-                                // buttons_ gap --space-8, margin-inline-end 6px; button_ 32px;
-                                // icons --chat-input-icon-size (20px).
-                                // #1452 buttons_ gap 8px, 12.8px to the right edge (0.8px border + 12px margin);
-                                // order: gift, GIF, sticker, emoji, app launcher (#1457–#1480).
                                 div()
                                     .when(blocked, |d| d.invisible())
                                     .mr(z(13.))
-                                    .h(z(56.)) // buttons_ height --custom-channel-textarea-text-area-height
+                                    .h(z(56.))
                                     .flex()
                                     .gap(z(8.))
                                     .items_center()
                                     .child(crate::ui::states::composer_button_ext("gift", Icon::Gift, 20., false))
-                                    // GIF and sticker buttons only while channelTextArea_ is at least
-                                    // 450px wide (live: 449.8 → gift/emoji/apps, 450.6 → all five).
                                     .when(full_buttons(), |d| {
                                         d.child(crate::ui::states::composer_button("gif", Icon::Gif).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Gif, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
                                             .child(crate::ui::states::composer_button("sticker", Icon::Sticker).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Sticker, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
@@ -518,7 +445,6 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                         |a, _, _, cx| a.open_emoji_picker(EmojiTarget::Composer, cx),
                                     )))
                                     .child(
-                                        // app-launcher-entrypoint: button_ 32px radius 8px, 20px glyph (#1479).
                                         div()
                                             .id("apps")
                                             .relative()
@@ -528,7 +454,6 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                             .items_center()
                                             .justify_center()
                                             .cursor_pointer()
-                                            // button_hfM7yP states, as the other composer buttons.
                                             .group("apps")
                                             .hover(|s| s.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
                                             .child(
@@ -545,8 +470,6 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                             .on_click(cx.listener(|a, _, w, cx| super::app_launcher::toggle(a, w, cx))),
                                     )
                                     .when(show_send_button, |d| {
-                                        // 601152.css: separator_plpOf8 1×22px --border-normal, button_plpOf8 32×32,
-                                        // sendIcon_plpOf8 20×20; active --text-brand, disabled --icon-muted + not-allowed.
                                         d.child(div().w(z(1.)).h(fz(22.)).bg(super::tk(idx::BORDER_NORMAL)))
                                             .child(
                                                 div()
@@ -578,9 +501,6 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
         )
 }
 
-/// Edit button of an upload: the client's "Modify Attachment" modal (JS
-/// `onSubmit({name, description, spoiler})`): Filename, Description (Alt
-/// Text) with "Add a description", the "Mark as spoiler" checkbox, Save.
 fn open_upload_edit(app: &mut PhoenixApp, ix: usize, cx: &mut Context<PhoenixApp>) {
     use crate::ui::modals::{Field, Form, Modal};
     let Some(f) = app.chat.uploads.get(ix) else { return };
@@ -620,34 +540,26 @@ fn open_upload_edit(app: &mut PhoenixApp, ix: usize, cx: &mut Context<PhoenixApp
     cx.notify();
 }
 
-/// (remaining, visible) like the client's CharacterCount: shown once
-/// remaining <= max/10, and for Nitro users as soon as the text passes 2000.
 pub fn char_count(premium: bool, len: i64) -> (i64, bool) {
     let max = if premium { 4000 } else { 2000 };
     let remaining = max - len;
     (remaining, remaining <= max / 10 || (premium && len > 2000 && remaining >= 0))
 }
 
-/// Client 601152.css: when "Show the Send Message button" is enabled and the
-/// channel is not send-blocked, the button is always shown (disabled when empty).
 fn should_show_send_button(enabled: bool, blocked: bool) -> bool {
     enabled && !blocked
 }
 
 thread_local! {
-    /// Last painted width of the composer box (`channelTextArea_`).
     static TEXT_AREA_W: std::cell::Cell<f32> = const { std::cell::Cell::new(0.) };
 }
 
-/// Narrow composers drop the GIF and sticker buttons: the live client shows them only
-/// while `channelTextArea_` is at least 450 CSS px wide (docs/parity/responsive.md).
 fn full_buttons() -> bool {
     let w = TEXT_AREA_W.with(std::cell::Cell::get);
     w <= 0. || w >= 450.
 }
 
 thread_local! {
-    /// Our last send per channel (slowmode countdown).
     static LAST_SENT: std::cell::RefCell<std::collections::HashMap<crate::model::Id, std::time::Instant>> = Default::default();
 }
 
@@ -655,14 +567,11 @@ fn slowmode_of(app: &PhoenixApp, ch: crate::model::Id) -> u32 {
     app.nav.extras.get(&ch).filter(|x| !x.bypass_slowmode).map_or(0, |x| x.slowmode)
 }
 
-/// Seconds left before we may send again in `ch` (0 = free).
 pub fn cooldown_left(app: &PhoenixApp, ch: crate::model::Id) -> u64 {
     let secs = slowmode_of(app, ch) as u64;
     LAST_SENT.with(|m| m.borrow().get(&ch).map_or(0, |t| secs.saturating_sub(t.elapsed().as_secs())))
 }
 
-/// Slowmode still running: the send is held back (the client keeps the text)
-/// and flashes the cooldown label in `--text-feedback-critical` for 1 s.
 pub fn send_held(app: &PhoenixApp, ch: crate::model::Id) -> bool {
     let held = cooldown_left(app, ch) > 0;
     if held {
@@ -677,25 +586,19 @@ pub fn note_sent(ch: crate::model::Id) {
     });
 }
 
-/// A countdown is visible somewhere (1 s redraw tick).
 pub fn cooling() -> bool {
     LAST_SENT.with(|m| m.borrow().values().any(|t| t.elapsed().as_secs() < 6 * 3600))
 }
 
-/// "mm:ss" (or "h:mm:ss") like the client's cooldown text.
 pub fn format_cooldown(secs: u64) -> String {
     let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
-    // Client: hours "h:mm:ss", else minutes unpadded "m:ss".
     if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m}:{s:02}") }
 }
 
 thread_local! {
-    /// EMPHASIZE_SLOWMODE_COOLDOWN: the cooldown text turns --text-feedback-critical for 1 s.
     static EMPHASIZED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
 }
 
-/// A send was refused by slowmode (client: SLOWMODE_COOLDOWN failure dispatches SHAKE_APP
-/// {duration 200, intensity 2} and EMPHASIZE_SLOWMODE_COOLDOWN; the text is kept).
 pub fn emphasize_cooldown() {
     EMPHASIZED.with(|e| e.set(Some(std::time::Instant::now())));
     crate::ui::shake::start(200, 2.);
@@ -705,12 +608,8 @@ fn emphasized() -> bool {
     EMPHASIZED.with(|e| e.get().is_some_and(|t| t.elapsed().as_millis() < 1000))
 }
 
-/// The cooldown tooltip (module 960850 `VI`): "Mode lent activé. Les membres peuvent envoyer
-/// un message toutes les …" with hours/minutes/seconds; zero parts are dropped ("=0": []),
-/// the seconds-only form ends with "." (IWntYg) and the others don't (sY3wlG, 3hz51F).
 pub fn slowmode_tip(secs: u32) -> String {
     let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
-    // CLDR "one": French covers 0 and 1, English only 1.
     let one = |n: u32| if crate::i18n::locale() == "fr" { n < 2 } else { n == 1 };
     let part = |n: u32, k: &str| -> String {
         if n == 0 { String::new() } else { crate::i18n::t(&format!("chat.slowmode_{k}{}", if one(n) { "_one" } else { "" }), &[("n", &n.to_string())]).to_string() }
@@ -726,12 +625,6 @@ pub fn slowmode_tip(secs: u32) -> String {
     }
 }
 
-/// Slowmode cooldown (module ee411b7c `j`): cooldownWrapper_bbCgC2 (padding 3 16 3 8, measured
-/// live 2026-11-24 in the sandbox channel at 10 s / 60 s) under a tooltip with the rate, holding
-/// cooldownText_ (body-xs/medium 12/16 500, tabular-nums, flex gap 4, --text-muted or
-/// --text-feedback-critical while emphasized) = TimerIcon "xxs" 12px (slowModeIcon_, margin-inline-start 4)
-/// THEN the text: "Immunité au mode lent" with BYPASS_SLOWMODE, the countdown while it runs,
-/// else "Mode lent activé.".
 fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
     use crate::ui::tooltip::Tipped as _;
     let ch = app.selected_channel?;
@@ -773,10 +666,6 @@ fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
     )
 }
 
-/// Opacity and scale of typing dot `i` at `t` (0..1 of the 1.2 s loop).
-/// dot_U9Tvvz: typing-dot-pulse 1.2s steps(12) infinite, delays -1.2s / -1.05s / -0.9s;
-/// keyframes 0%,50%,100% {opacity .32; scale .8}, 25% {opacity 1; scale 1}.
-/// The timing function applies per keyframe segment, so each segment jumps in 12 steps.
 pub(crate) fn dot_frame(i: usize, t: f32) -> (f32, f32) {
     let p = (t + 1.0 - i as f32 * 0.125).rem_euclid(1.0);
     let step = |x: f32| (x * 12.).floor() / 12.;
@@ -791,7 +680,6 @@ pub(crate) fn dot_frame(i: usize, t: f32) -> (f32, f32) {
 }
 
 thread_local! {
-    /// Last laid-out width of the typingDots_ box (the client's `getBoundingClientRect`).
     static DOTS_BOX_W: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::MAX) };
 }
 
@@ -802,21 +690,14 @@ fn text_w(window: &Window, text: &str, weight: FontWeight) -> f32 {
     f32::from(window.text_system().layout_line(text, z(12.), &[run], None).width)
 }
 
-/// TypingUsers (inTextChannel): dots, then "**Name** est en train d'écrire..." with the
-/// name from `getName(guild, channel, user)` (nick → global name → username); 4+ typers
-/// give "**Plusieurs personnes** sont en train d'écrire...". Slowmode countdown on the right.
 fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
     let names: Vec<SharedString> = app
         .selected_channel
         .and_then(|c| app.typing.get(&c).map(|v| (c, v)))
         .map(|(c, v)| v.iter().filter_map(|(u, _)| app.typing_name(c, *u)).collect())
         .unwrap_or_default();
-    // inTextChannel_ .text_ > strong: --text-default, --font-weight-semibold.
     let bold = |s: SharedString| div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(super::tk(idx::TEXT_DEFAULT)).child(s);
-    // text_: margin-inline-start calc(--space-md + --space-8), nowrap, ellipsis.
     let mut line = div().flex().items_center().min_w_0().overflow_hidden().whitespace_nowrap().ml(z(crate::theme::space::md() + 8.));
-    // Client: 1–3 typers whose sentence (scrollWidth) + 56px overflows the typingDots_ box
-    // switch to qD/0qZ "**Plusieurs personnes** sont en train d'écrire…".
     let full_w = || -> f32 {
         let (strong, rest): (Vec<&str>, String) = match names.as_slice() {
             [a] => (vec![&a[..]], crate::t!("chat.typing_suffix_one").to_string()),
@@ -826,7 +707,6 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
         };
         strong.iter().map(|t| text_w(window, t, FontWeight::SEMIBOLD)).sum::<f32>() + text_w(window, &rest, FontWeight::MEDIUM)
     };
-    // A box narrower than the 56px slack is not laid out yet (first frame / zero-size canvas).
     let box_w = DOTS_BOX_W.with(|w| w.get());
     let overflow = (1..=3).contains(&names.len()) && box_w > f32::from(z(56.)) && full_w() + f32::from(z(56.)) > box_w;
     match names.as_slice() {
@@ -846,7 +726,6 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
         _ => line = line.child(bold(crate::t!("chat.typing_several"))).child(crate::t!("chat.typing_suffix_many")),
     }
     let active = !names.is_empty();
-    // dot_: 7px circle, currentColor = dots_ color --text-default; scale animated around the centre.
     let dot = |i: usize| {
         div().size(z(7.)).flex().items_center().justify_center().child(
             div().rounded_full().bg(super::tk(idx::TEXT_DEFAULT)).with_animation(
@@ -859,9 +738,6 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
             ),
         )
     };
-    // base_U9Tvvz: height 24px, 12px / 16px, weight 500, --text-subtle;
-    // inTextChannel_: padding-inline-start --space-md; typingDots_ padding-inline-start 8px;
-    // dots_ gap 2px, margin -1px, padding 1px.
     div()
         .h(z(24.))
         .pl(z(crate::theme::space::md()))
@@ -884,8 +760,6 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
         .children(cooldown(app))
 }
 
-/// slateTextArea_ padding-block: `(text-area-height - 1.375rem) / 2`, so the 56px row keeps
-/// its height and the text stays centred at every font size (17px at 16px).
 fn text_pad_y() -> f32 {
     ((56. - 22. * crate::theme::font_scale()) / 2.).max(0.)
 }
@@ -903,11 +777,9 @@ mod tests {
 
     #[test]
     fn typing_dots_follow_the_keyframes() {
-        // Dot 0 starts its loop at 0 (delay -1.2s): rest, peak at 25 %, back to rest at 50 %.
         assert_eq!(dot_frame(0, 0.0), (0.32, 0.8));
         assert_eq!(dot_frame(0, 0.25), (1.0, 1.0));
         assert_eq!(dot_frame(0, 0.6), (0.32, 0.8));
-        // Dot 1 lags by 0.15s (1/8 of the loop).
         assert_eq!(dot_frame(1, 0.375), (1.0, 1.0));
     }
 
@@ -930,7 +802,6 @@ mod tests {
 
     #[test]
     fn slowmode_tooltip_follows_the_client_strings() {
-        // Live 2026-11-24 (fr): "…toutes les 10\u{a0}secondes." and "…toutes les 1\u{a0}minute ".
         if crate::i18n::locale() == "fr" {
             assert!(slowmode_tip(10).ends_with("toutes les 10\u{a0}secondes."));
             assert!(slowmode_tip(60).ends_with("toutes les 1\u{a0}minute "));

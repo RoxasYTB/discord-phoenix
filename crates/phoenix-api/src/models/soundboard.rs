@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{EmojiId, GuildId, Snowflake, UserId};
 
-/// A Discord Soundboard sound (`GET /soundboard-default-sounds` or Gateway
-/// `SOUNDBOARD_SOUNDS`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct SoundboardSound {
     #[serde(default)]

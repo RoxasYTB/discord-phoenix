@@ -1,25 +1,3 @@
-//! DAVE media frame transform.
-//!
-//! Encrypted frame layout:
-//! ```text
-//! | interleaved frame (clear ranges + ciphertext) | tag (8) | ULEB128 nonce |
-//! | ULEB128 (offset, len) pairs of clear ranges | supplemental size (1) | 0xFA 0xFA |
-//! ```
-//! `supplemental size` counts everything after the frame body, itself and the
-//! magic included. Cipher: AES-128-GCM with an 8-byte tag; the 12-byte nonce
-//! has the 32-bit truncated nonce (little-endian) in bytes 8..12. The AAD is
-//! the concatenation of the clear ranges. The key generation is
-//! `truncated_nonce >> 24`.
-//!
-//! Clear ranges keep the bits that SFUs / packetizers need visible:
-//! - Opus: none (silence frames `F8 FF FE` are sent unencrypted as-is).
-//! - VP8: 10-byte keyframe header or 1-byte delta header.
-//! - VP9: none.
-//! - H.264: Annex-B start codes + NAL header byte of slices; non-VCL NALs
-//!   (SPS/PPS/SEI/AUD) fully clear. Ciphertext must not emulate a start code,
-//!   so encryption is retried with a fresh nonce when it does.
-//! - AV1: OBU headers and size fields clear, OBU payloads encrypted.
-
 use aes_gcm::aead::{AeadInPlace, KeyInit};
 use aes_gcm::Aes128Gcm;
 
@@ -27,11 +5,8 @@ use super::ratchet::KeyRatchet;
 use crate::codec::Codec;
 use crate::{leb128, Error, Result};
 
-/// AES-128-GCM; the 16-byte tag is truncated to [`TAG_LEN`] bytes on the wire
-/// (GCM's truncated tag is the prefix of the full tag, NIST SP 800-38D).
 type Aes128Gcm8 = Aes128Gcm;
 
-/// Seal in place, returning the truncated tag.
 fn seal(c: &Aes128Gcm8, nonce: &[u8; 12], aad: &[u8], buf: &mut [u8]) -> Result<[u8; TAG_LEN]> {
     let full = c.encrypt_in_place_detached(nonce.into(), aad, buf).map_err(|_| Error::Crypto("dave encrypt"))?;
     let mut t = [0u8; TAG_LEN];
@@ -39,9 +14,6 @@ fn seal(c: &Aes128Gcm8, nonce: &[u8; 12], aad: &[u8], buf: &mut [u8]) -> Result<
     Ok(t)
 }
 
-/// Open in place with a truncated tag. GCM is CTR mode, so encrypting the
-/// ciphertext yields the plaintext; re-encrypting the plaintext then gives
-/// the full tag over the original ciphertext, compared in constant time.
 fn open(c: &Aes128Gcm8, nonce: &[u8; 12], aad: &[u8], buf: &mut [u8], tag: &[u8; TAG_LEN]) -> Result<()> {
     let original = buf.to_vec();
     c.encrypt_in_place_detached(nonce.into(), aad, buf).map_err(|_| Error::Crypto("dave decrypt"))?;
@@ -61,14 +33,12 @@ pub const OPUS_SILENCE: [u8; 3] = [0xF8, 0xFF, 0xFE];
 const GENERATION_SHIFT: u32 = 24;
 const MAX_START_CODE_RETRIES: usize = 16;
 
-/// A clear (unencrypted) byte range in the original frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Range {
     pub offset: usize,
     pub len: usize,
 }
 
-/// Compute clear ranges for a codec frame. Ranges are sorted and non-overlapping.
 pub fn unencrypted_ranges(codec: Codec, frame: &[u8]) -> Result<Vec<Range>> {
     let mut r = match codec {
         Codec::Opus | Codec::Vp9 => Vec::new(),
@@ -100,7 +70,7 @@ fn merge(mut v: Vec<Range>) -> Vec<Range> {
 
 fn annex_b_ranges(codec: Codec, f: &[u8]) -> Vec<Range> {
     let mut out = Vec::new();
-    let mut starts = Vec::new(); // (start code offset, nal offset)
+    let mut starts = Vec::new();
     let mut i = 0;
     while i + 3 <= f.len() {
         if f[i] == 0 && f[i + 1] == 0 && f[i + 2] == 1 {
@@ -176,7 +146,6 @@ fn nonce_bytes(truncated: u32) -> [u8; 12] {
     n
 }
 
-/// True if `data` contains `00 00 0x` (x <= 3) not fully inside a clear range.
 fn emulates_start_code(data: &[u8], clear: &[Range]) -> bool {
     data.windows(3).enumerate().any(|(i, w)| {
         w[0] == 0
@@ -186,7 +155,6 @@ fn emulates_start_code(data: &[u8], clear: &[Range]) -> bool {
     })
 }
 
-/// Sender-side transform (one per outgoing media stream).
 pub struct FrameEncryptor {
     ratchet: Box<dyn KeyRatchet>,
     nonce: u32,
@@ -198,7 +166,6 @@ impl FrameEncryptor {
         Self { ratchet, nonce: 0, key: None }
     }
 
-    /// Replace the ratchet (new MLS epoch); nonce restarts at 0.
     pub fn set_ratchet(&mut self, ratchet: Box<dyn KeyRatchet>) {
         self.ratchet = ratchet;
         self.nonce = 0;
@@ -253,7 +220,6 @@ impl FrameEncryptor {
     }
 }
 
-/// Parsed footer of an encrypted DAVE frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameFooter {
     pub tag: [u8; TAG_LEN],
@@ -262,7 +228,6 @@ pub struct FrameFooter {
     pub body_len: usize,
 }
 
-/// True if `frame` ends with the DAVE magic marker.
 pub fn is_encrypted(frame: &[u8]) -> bool {
     frame.len() >= TAG_LEN + 4 && frame[frame.len() - 2..] == MAGIC
 }
@@ -300,11 +265,9 @@ pub fn parse_footer(frame: &[u8]) -> Result<FrameFooter> {
     Ok(FrameFooter { tag, truncated_nonce, ranges, body_len })
 }
 
-/// Receiver-side transform (one per remote sender).
 pub struct FrameDecryptor {
     ratchet: Box<dyn KeyRatchet>,
     keys: std::collections::BTreeMap<u32, Aes128Gcm8>,
-    /// If true, frames without the magic marker are passed through (transition periods).
     pub allow_passthrough: bool,
 }
 
@@ -377,7 +340,6 @@ mod tests {
         assert_ne!(enc, enc2);
         assert_eq!(parse_footer(&enc2).unwrap().truncated_nonce, 1);
         assert_eq!(d.decrypt(&enc2).unwrap(), frame);
-        // silence passthrough
         assert_eq!(e.encrypt(Codec::Opus, &OPUS_SILENCE).unwrap(), OPUS_SILENCE);
     }
 
@@ -385,7 +347,7 @@ mod tests {
     fn tamper_detected() {
         let (mut e, mut d) = pair();
         let mut enc = e.encrypt(Codec::Vp8, &[0x10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]).unwrap();
-        enc[0] ^= 0x01; // clear range is authenticated
+        enc[0] ^= 0x01;
         assert!(d.decrypt(&enc).is_err());
     }
 
@@ -410,7 +372,6 @@ mod tests {
         for _ in 0..20 {
             let enc = e.encrypt(Codec::H264, &frame).unwrap();
             let f = parse_footer(&enc).unwrap();
-            // SPS+PPS fully clear, then IDR header and slice header byte.
             assert_eq!(f.ranges[0], Range { offset: 0, len: 18 });
             assert_eq!(&enc[..18], &frame[..18]);
             let body = &enc[..f.body_len];
@@ -422,8 +383,8 @@ mod tests {
 
     #[test]
     fn av1_obu_headers_clear() {
-        let mut frame = vec![0x0a, 0x03, 1, 2, 3]; // seq header with size
-        frame.extend_from_slice(&[0x32, 0x05, 9, 9, 9, 9, 9]); // frame OBU
+        let mut frame = vec![0x0a, 0x03, 1, 2, 3];
+        frame.extend_from_slice(&[0x32, 0x05, 9, 9, 9, 9, 9]);
         let ranges = unencrypted_ranges(Codec::Av1, &frame).unwrap();
         assert_eq!(ranges, vec![Range { offset: 0, len: 2 }, Range { offset: 5, len: 2 }]);
         let (mut e, mut d) = pair();

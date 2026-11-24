@@ -1,9 +1,3 @@
-//! Discord form controls: marker slider, switch and radio cards.
-//!
-//! Observed values (dark theme): slider track 4px `#595A63`, fill brand
-//! `#5865F2`, round white 16px grabber with a subtle border, marker labels
-//! 12px/500 above the bar (default marker brighter), 48px tall with marks.
-
 use crate::theme::z;
 use std::rc::Rc;
 
@@ -17,9 +11,6 @@ use crate::theme::{c, generated::idx, tok};
 
 pub type OnSet = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
-/// Slider that sticks to evenly spaced markers. `labels[i]` is shown above
-/// marker `i`; `current` and `default` are marker indices. Click or drag
-/// anywhere on the track to pick the nearest marker.
 pub fn marker_slider(
     id: impl Into<SharedString>,
     labels: Vec<SharedString>,
@@ -30,9 +21,6 @@ pub fn marker_slider(
     let id: SharedString = id.into();
     let n = labels.len().max(2);
     let span = (n - 1) as f32;
-    // markValue_OnqacX sits at the value's proportional position (vanilla
-    // accessibility dump: 12/14/15/16/18/20/24px are unevenly spaced). Labels
-    // that aren't numbers fall back to even spacing.
     let nums: Vec<f32> = labels
         .iter()
         .filter_map(|l| l.chars().filter(|c| c.is_ascii_digit() || *c == '.').collect::<String>().parse().ok())
@@ -57,9 +45,6 @@ pub fn marker_slider(
                 .flex_col()
                 .items_center()
                 .child({
-                    // markValue_OnqacX (vanilla-settings-09 #2777-#2795): 12/16 500,
-                    // --text-subtle, the default one --text-default; the end labels
-                    // align to the bar edges instead of centring on their marker.
                     let label = div()
                         .whitespace_nowrap()
                         .text_size(z(12.))
@@ -75,15 +60,12 @@ pub fn marker_slider(
                         div().child(label)
                     }
                 })
-                // marker dash crossing the bar
                 .child(div().mt(z(8.)).w(z(2.)).h(z(24.)).rounded(z(12.)).bg(c(tok(idx::SLIDER_TRACK_BACKGROUND)))),
         );
     }
 
-    // Hit zones: one per marker, centred on it (ends are half width).
     let mut hits = div().absolute().top_0().left_0().size_full().flex();
     for i in 0..n {
-        // zone = between the midpoints to the neighbouring markers
         let lo = if i == 0 { 0. } else { (pos(i - 1) + pos(i)) / 2. };
         let hi = if i == n - 1 { 1. } else { (pos(i) + pos(i + 1)) / 2. };
         let w = hi - lo;
@@ -110,7 +92,6 @@ pub fn marker_slider(
         .mx(z(8.))
         .mb(z(20.))
         .child(marks)
-        // bar
         .child(
             div()
                 .absolute()
@@ -123,9 +104,6 @@ pub fn marker_slider(
                 .child(div().h_full().w(relative(frac)).rounded(z(2.)).bg(c(tok(idx::SLIDER_INDICATOR_BACKGROUND)))),
         )
         .child(hits)
-        // grabber, above the hit zones so it gets its own hover (ref-cache
-        // settings-grab0-hover: 16 -> 20px, centre kept by -2 margins); its
-        // hitbox doesn't block the zones underneath.
         .child(
             div().absolute().top(z(26.)).left(relative(frac)).w(z(0.)).flex().justify_center().child(
                 div()
@@ -135,7 +113,6 @@ pub fn marker_slider(
                     .rounded_full()
                     .bg(gpui::white())
                     .border_1()
-                    // slider_ .grabber_ border --border-normal; `.high-contrast-mode` --border-strong.
                     .border_color(c(tok(if crate::theme::high_contrast() { idx::BORDER_STRONG } else { idx::BORDER_NORMAL })))
                     .shadow_sm()
                     .cursor_pointer()
@@ -144,7 +121,6 @@ pub fn marker_slider(
         )
 }
 
-/// Pick the marker index nearest to `value`.
 pub fn nearest(values: &[f32], value: f32) -> usize {
     values
         .iter()
@@ -154,19 +130,9 @@ pub fn nearest(values: &[f32], value: f32) -> usize {
         .unwrap_or(0)
 }
 
-/// Group name a clickable row sets so pressing it shows the switch :active.
 pub const SWITCH_ROW: &str = "phx-switch-row";
 
-/// Mana switch (switchIndicator_9AraPt, live settings-accessibility dump):
-/// 48x24, 1px border, --radius-lg (16); thumb is a 24px box (margin -1) holding
-/// a 16px white disc, at left 1 off / 24 on.
-///
-/// `id` is a per-caller element id so the switch tracks its own pressed state.
-/// Pressed (`--switch-background-active`, set from JS in the client while the
-/// pointer is down) applies both on the switch itself and when the enclosing
-/// row carries `.group(SWITCH_ROW)`.
 pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
-    // Hover (ref-cache settings-switch-states): on #5865F2 → #4452BB, off border .2 → .4 alpha.
     let (bg, border, hbg, hborder) = if on {
         (
             idx::SWITCH_BACKGROUND_SELECTED_DEFAULT,
@@ -183,7 +149,7 @@ pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
         .flex_none()
         .w(z(48.))
         .h(z(24.))
-        .rounded(z(16.)) // --radius-lg
+        .rounded(z(16.))
         .border_1()
         .border_color(c(tok(border)))
         .bg(c(tok(bg)))
@@ -197,7 +163,7 @@ pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
             div()
                 .absolute()
                 .top(z(-1.))
-                .left(z(if on { 23. } else { 0. })) // left 24 / 1, margin-left -1
+                .left(z(if on { 23. } else { 0. }))
                 .size(z(24.))
                 .flex()
                 .items_center()
@@ -210,9 +176,6 @@ pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
         )
 }
 
-/// radioIndicator_oJuRbG (20px, viewBox 40): outer disc filled
-/// --radio-background-[selected-]default with a 2/40 (1px) --radio-border-*
-/// stroke; selected adds the r=8/40 (8px) --radio-thumb-background-active dot.
 pub fn radio_indicator(selected: bool) -> Div {
     let (bg, border) = if selected {
         (idx::RADIO_BACKGROUND_SELECTED_DEFAULT, idx::RADIO_BORDER_SELECTED_DEFAULT)
@@ -232,9 +195,6 @@ pub fn radio_indicator(selected: bool) -> Div {
         .when(selected, |d| d.child(div().size(z(8.)).rounded_full().bg(c(tok(idx::RADIO_THUMB_BACKGROUND_ACTIVE)))))
 }
 
-/// checkboxOption_vTUVyc: 20px indicator (1px border, --radius-xs 4px), label at
-/// 20 + --space-12, body-md 16/20. Selected: --checkbox-background/border-selected-default
-/// with the --checkbox-icon-active check; hover recolours the indicator.
 pub fn checkbox_option(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> gpui::Stateful<Div> {
     let (bg, border, hbg, hborder) = if selected {
         (
@@ -251,14 +211,14 @@ pub fn checkbox_option(id: impl Into<ElementId>, label: impl Into<SharedString>,
         .group("checkbox-option")
         .flex()
         .items_start()
-        .gap(z(12.)) // --custom-checkbox-gap: --space-12
-        .rounded(z(8.)) // --radius-sm
+        .gap(z(12.))
+        .rounded(z(8.))
         .cursor_pointer()
         .child(
             div()
-                .size(z(20.)) // --custom-checkbox-size
+                .size(z(20.))
                 .flex_none()
-                .rounded(z(4.)) // --radius-xs
+                .rounded(z(4.))
                 .border_1()
                 .border_color(c(tok(border)))
                 .bg(c(tok(bg)))
@@ -279,14 +239,12 @@ pub fn checkbox_option(id: impl Into<ElementId>, label: impl Into<SharedString>,
         )
 }
 
-/// radioGroupOption_oJuRbG: 20px indicator, label at 20 + --space-12,
-/// body-md 16/20, radius 8. Selected/hover recolour the indicator only.
 pub fn radio_option(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> gpui::Stateful<Div> {
     div()
         .id(id.into())
         .flex()
         .items_center()
-        .gap(z(12.)) // --custom-radio-text-start - --custom-radio-size
+        .gap(z(12.))
         .rounded(z(8.))
         .cursor_pointer()
         .child(radio_indicator(selected))
@@ -299,8 +257,6 @@ pub fn radio_option(id: impl Into<ElementId>, label: impl Into<SharedString>, se
         )
 }
 
-/// Mana button (button_F7qvhY), md size: 40px (7/15 padding + 1px border),
-/// radius 8, label 16/500/20. `kind`: secondary / primary / critical.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BtnKind {
     Secondary,
@@ -309,8 +265,6 @@ pub enum BtnKind {
 }
 
 pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: BtnKind) -> gpui::Stateful<Div> {
-    // [default, hover, active] × (background, text, border) per variant:
-    // `.secondary_F7qvhY` / `.primary_F7qvhY` / `.critical-primary_F7qvhY` (:hover, :active).
     use idx::*;
     let [bg, fg, border, hbg, hfg, hborder, abg, afg, aborder] = match kind {
         BtnKind::Secondary => [
@@ -354,13 +308,12 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bt
         .items_center()
         .justify_center()
         .h(z(40.))
-        .min_w(z(100.)) // --__button-min-width (md)
+        .min_w(z(100.))
         .px(z(16.))
         .rounded(z(8.))
         .border_1()
         .border_color(c(tok(border)))
         .bg(c(tok(bg)))
-        // button_F7qvhY transition is 50ms ease-in: close enough to instant.
         .hover(move |s| s.bg(c(tok(hbg))).text_color(c(tok(hfg))).border_color(c(tok(hborder))))
         .active(move |s| s.bg(c(tok(abg))).text_color(c(tok(afg))).border_color(c(tok(aborder))))
         .cursor_pointer()
@@ -372,8 +325,6 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bt
         .child(label.into())
 }
 
-/// `button_F7qvhY` with a leading 20px `icon_F7qvhY` (buttonChildren_ gap 4),
-/// e.g. vanilla-settings-10 #2743 "+ Add a keybind".
 pub fn button_icon(id: impl Into<ElementId>, icon: &'static str, label: impl Into<SharedString>, kind: BtnKind) -> gpui::Stateful<Div> {
     let fg = match kind {
         BtnKind::Secondary => idx::CONTROL_SECONDARY_TEXT_DEFAULT,
@@ -385,15 +336,10 @@ pub fn button_icon(id: impl Into<ElementId>, icon: &'static str, label: impl Int
     b.gap(z(4.)).child(gpui::svg().path(crate::icons::path(icon)).flex_none().size(z(20.)).text_color(c(tok(fg)))).child(label)
 }
 
-/// `sm_F7qvhY` button (vanilla-settings-10 #2772): 32px, padding 3 11 inside
-/// the 1px border, body-sm/medium 14/18.
 pub fn button_sm(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: BtnKind) -> gpui::Stateful<Div> {
     button(id, label, kind).h(z(32.)).min_w(z(60.)).px(z(12.)).text_size(z(14.)).line_height(z(18.))
 }
 
-/// Select field (selectField_vWC4bk): 40px, 1px --input-border-default,
-/// radius 8, --input-background-default; value body-md 16/20 at 4+8 inset;
-/// 20px chevron in a 36px button on the right.
 pub fn select_field(id: impl Into<ElementId>, value: impl Into<SharedString>) -> gpui::Stateful<Div> {
     div()
         .id(id.into())
@@ -425,10 +371,6 @@ pub fn select_field(id: impl Into<ElementId>, value: impl Into<SharedString>) ->
         )
 }
 
-/// baseControlItem_FiiQ6I: row with title (heading-sm/medium 16/20
-/// --text-strong), optional description (body-sm 14/18 --text-subtle, gap 4)
-/// and a trailing control; padding 12, margin-inline -12, radius --radius-lg,
-/// gap 12, min-height 48.
 pub fn control_item(title: impl Into<SharedString>, desc: Option<SharedString>, trailing: Option<gpui::AnyElement>) -> Div {
     div()
         .flex()
@@ -460,8 +402,6 @@ pub fn control_item(title: impl Into<SharedString>, desc: Option<SharedString>, 
         .children(trailing.map(|t| div().flex_none().flex().items_center().justify_center().child(t)))
 }
 
-/// Settings category heading (heading-xl/medium 24/500/32 --text-strong) with
-/// its 24px bottom padding.
 pub fn section_title(t: impl Into<SharedString>) -> Div {
     div()
         .pb(z(24.))

@@ -73,7 +73,6 @@ fn guild_create_classic_shape() {
     assert_eq!(g.members[0].user.as_ref().unwrap().username, "phoenix");
     assert!(g.voice_states[0].self_mute);
     assert_eq!(g.channels[0].guild_id, Some(g.id));
-    // Round-trip through our own Serialize (nested properties) still parses.
     let again: Guild = serde_json::from_value(serde_json::to_value(&g).unwrap()).unwrap();
     assert_eq!(again, g);
 }
@@ -184,7 +183,6 @@ fn unknown_and_malformed_dispatch_pass_through() {
         }
         e => panic!("{e:?}"),
     }
-    // A known event with a bad shape degrades to Unknown instead of erroring.
     assert!(matches!(parse_dispatch("MESSAGE_DELETE", r#"{"nope":true}"#), GatewayEvent::Unknown { .. }));
 }
 

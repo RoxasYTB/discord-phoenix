@@ -1,12 +1,3 @@
-//! Headless micro/macro benchmark on mock data (no on-screen window).
-//! `cargo run --release -p phoenix-app --example bench [-- N]`
-//!
-//! 1. markdown parse + rich-text layout of a message corpus (ns and allocs per message)
-//! 2. mock login and a channel of N (default 5000) messages loaded by scrolling to the top,
-//!    then frame time and allocations per frame while scrolling, and RSS.
-//!
-//! Prints `key=value` lines that scripts/bench/run.sh collects.
-
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::RefCell,
@@ -45,7 +36,6 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static A: Counting = Counting;
 
-/// `PHX_FRAMES=1`: frame times per interaction instead (examples/frames.rs).
 #[path = "common/frames_impl.rs"]
 mod frames_impl;
 
@@ -131,7 +121,6 @@ fn main() -> anyhow::Result<()> {
     let draw = |cx: &mut HeadlessAppContext| {
         cx.update_window(win.into(), |_, window, _| window.refresh()).ok();
         cx.run_until_parked();
-        // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
         cx.advance_clock(std::time::Duration::from_secs(2));
         let _ = cx.capture_screenshot(win.into());
     };
@@ -159,7 +148,6 @@ fn main() -> anyhow::Result<()> {
     println!("headless_login_to_messages_ms={}", t_login.elapsed().as_millis());
     println!("rss_main_view_kib={}", rss_kib());
 
-    // Load the whole channel by repeatedly scrolling to the top (pages of 50).
     let t_load = Instant::now();
     while count(&mut cx) < target && t_load.elapsed() < Duration::from_secs(120) {
         cx.update(|cx| {
@@ -172,7 +160,6 @@ fn main() -> anyhow::Result<()> {
     println!("channel_messages={}", count(&mut cx));
     println!("channel_load_ms={}", t_load.elapsed().as_millis());
 
-    // Scroll the whole channel top to bottom, 400px per frame.
     let frames = 600;
     let (a0, b0) = allocs();
     let mut times = Vec::with_capacity(frames);
@@ -189,7 +176,6 @@ fn main() -> anyhow::Result<()> {
     println!("scroll_allocs_per_frame={}", (a1 - a0) / frames as u64);
     println!("scroll_bytes_per_frame={}", (b1 - b0) / frames as u64);
 
-    // Idle frames (nothing changes) show the per-frame floor.
     let (a0, _) = allocs();
     let t = Instant::now();
     for _ in 0..100 {
@@ -198,7 +184,6 @@ fn main() -> anyhow::Result<()> {
     println!("idle_frame_us={}", t.elapsed().as_micros() / 100);
     println!("idle_allocs_per_frame={}", (allocs().0 - a0) / 100);
     println!("rss_after_scroll_kib={}", rss_kib());
-    // Same without the GPU readback: only what refresh + run_until_parked does.
     let (a0, b0) = allocs();
     let t = Instant::now();
     for _ in 0..100 {

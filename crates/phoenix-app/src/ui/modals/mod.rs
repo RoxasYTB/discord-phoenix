@@ -1,7 +1,3 @@
-//! Modals opened from the context menu actions (`crate::actions`): forward,
-//! reactions, report flow, text forms (thread name, nicknames, reminders,
-//! events), mod view, DM call card and the server settings overlay.
-
 pub mod channel_settings;
 pub mod create_channel;
 pub mod forward;
@@ -42,15 +38,12 @@ impl Field {
     }
 }
 
-/// Generic form: text fields, an optional radio list and a submit button.
 pub struct Form {
     pub title: SharedString,
     pub subtitle: Option<SharedString>,
     pub fields: Vec<Field>,
     pub choices: Vec<SharedString>,
     pub choice: Option<usize>,
-    /// Optional checkbox under the fields: its state is passed to `on_submit`
-    /// as one more value after the fields' ("1" / "0").
     pub check: Option<(SharedString, bool)>,
     pub submit: SharedString,
     pub danger: bool,
@@ -63,7 +56,6 @@ pub enum Modal {
     Reactions(reactions::Reactions),
     Report(report::Report),
     ModView { guild: Id, user: Id },
-    /// DM call card: shown only, no call is started from it.
     Call { channel: Id, user: Id },
     ServerSettings { guild: Id, section: usize },
     CreateChannel(create_channel::State),
@@ -74,7 +66,6 @@ pub enum Modal {
     CreatePoll(poll_create::State),
 }
 
-/// Create the inputs that need a `Window`.
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
     let mut mk = |placeholder: SharedString, initial: &str, focus: bool| {
         let i = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
@@ -138,8 +129,6 @@ pub fn close_action(cx: &mut Context<PhoenixApp>) -> crate::ui::modal::Action {
     })
 }
 
-/// Card in the confirm dialog style (`container_dvN-MP`): title, optional
-/// subtitle, body, footer; 40px close button top right.
 pub fn card(width: f32, title: SharedString, subtitle: Option<SharedString>, body: AnyElement, footer: Option<AnyElement>, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let close = close_action(cx);
     let close2 = close.clone();
@@ -194,7 +183,6 @@ pub fn card(width: f32, title: SharedString, subtitle: Option<SharedString>, bod
     crate::ui::modal::frame("amodal-backdrop", close2, el)
 }
 
-/// 40px text input box (`input_` default/hover border tokens).
 pub fn input_box(i: &Entity<InputState>) -> gpui::Div {
     div()
         .h(z(40.))

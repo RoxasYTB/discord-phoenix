@@ -1,18 +1,8 @@
-//! Bounded image cache for chat media.
-//!
-//! GPUI's default `img()` path keeps every decoded image (and its GPU
-//! texture) for the life of the window, so scrolling a long channel full of
-//! attachments grows memory without limit. This cache keeps decoded images
-//! up to a pixel-byte budget and evicts the least recently drawn ones, never
-//! touching images drawn in the last [`KEEP_RECENT`] loads (on screen now).
-
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use gpui::{App, AppContext, Entity, Global, ImageCache, ImageCacheError, ImageCacheItem, RenderImage, Resource, WeakEntity, Window, hash};
 
-/// Decoded RGBA bytes kept across all chat images.
 pub const BUDGET_BYTES: u64 = 128 * 1024 * 1024;
-/// Loads (roughly: images drawn) protected from eviction.
 const KEEP_RECENT: u64 = 256;
 
 pub struct LruImageCache {
@@ -87,7 +77,6 @@ impl ImageCache for LruImageCache {
         let entry = self.items.entry(key).or_insert_with(|| (ImageCacheItem::new(resource, cx), tick));
         entry.1 = tick;
         let out = entry.0.use_image(window);
-        // Only a new image can push us over budget; check every 32 inserts.
         if inserted && self.items.len().is_multiple_of(32) {
             self.evict(window, cx);
         }
@@ -95,8 +84,6 @@ impl ImageCache for LruImageCache {
     }
 }
 
-/// The app owns the cache (dropped with it); render code reaches it through
-/// a weak handle because the media helpers don't get a context.
 struct ChatCache(#[allow(dead_code)] Entity<LruImageCache>);
 impl Global for ChatCache {}
 
@@ -104,14 +91,12 @@ thread_local! {
     static CHAT: RefCell<Option<WeakEntity<LruImageCache>>> = const { RefCell::new(None) };
 }
 
-/// Create the shared chat media cache (call once from `init`).
 pub fn init(cx: &mut App) {
     let c = LruImageCache::new(BUDGET_BYTES, cx);
     CHAT.with_borrow_mut(|s| *s = Some(c.downgrade()));
     cx.set_global(ChatCache(c));
 }
 
-/// The shared chat media cache, if [`init`] ran and the app is alive.
 pub fn chat() -> Option<Entity<LruImageCache>> {
     CHAT.with_borrow(|s| s.as_ref()?.upgrade())
 }

@@ -1,10 +1,3 @@
-//! Per-message data the plain `model::Message` doesn't carry: bot message
-//! components (buttons, selects, Components V2 layout) and polls.
-//!
-//! Filled by `convert::message` (one call per converted message) and read by
-//! `ui::components` when a row is drawn. Only messages that actually have
-//! components or a poll are kept.
-
 use std::{
     collections::HashMap,
     sync::{Arc, OnceLock},
@@ -16,7 +9,6 @@ use serde_json::Value;
 
 use crate::model::Id;
 
-/// Message components, parsed by `phoenix_api` (types from the Discord docs).
 pub use phoenix_api::models::Component as Comp;
 
 fn snowflake(v: &Value) -> Option<u64> {
@@ -27,10 +19,8 @@ fn snowflake(v: &Value) -> Option<u64> {
     }
 }
 
-/// Emoji of a poll answer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Emoji {
-    /// Unicode emoji, or the name of a custom one.
     pub name: String,
     pub id: Option<u64>,
     pub animated: bool,
@@ -48,7 +38,6 @@ impl Emoji {
         })
     }
 
-    /// Token understood by `media::emoji::emoji_element`.
     pub fn token(&self) -> String {
         match self.id {
             Some(id) => format!("<{}:{}:{}>", if self.animated { "a" } else { "" }, self.name, id),
@@ -71,7 +60,6 @@ pub struct PollView {
     pub question: String,
     pub answers: Vec<PollAnswer>,
     pub multi: bool,
-    /// Unix seconds.
     pub expiry: Option<i64>,
     pub finalized: bool,
 }
@@ -113,7 +101,6 @@ impl PollView {
         self.finalized || self.expiry.is_some_and(|e| e <= now)
     }
 
-    /// Apply a live vote (`MESSAGE_POLL_VOTE_ADD/REMOVE`).
     pub fn apply_vote(&mut self, answer: u32, add: bool, mine: bool) {
         if let Some(a) = self.answers.iter_mut().find(|a| a.id == answer) {
             a.count = if add { a.count + 1 } else { a.count.saturating_sub(1) };
@@ -126,7 +113,6 @@ impl PollView {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Parts {
-    /// Application that owns the components (interaction target).
     pub app: Id,
     pub flags: u64,
     pub components: Vec<Comp>,
@@ -152,7 +138,6 @@ fn slot() -> &'static Mutex<HashMap<u64, Arc<Parts>>> {
     S.get_or_init(Default::default)
 }
 
-/// Remember components / poll / interaction metadata of a message (no-op for plain messages).
 pub fn record(m: &api::Message) {
     let app = m.application_id.or(m.webhook_id).map(|s| s.0).unwrap_or(m.author.id.0);
     if m.application_id.is_some()
@@ -173,7 +158,6 @@ pub fn get(msg: Id) -> Option<Arc<Parts>> {
     slot().lock().get(&msg.0).cloned()
 }
 
-/// Edit the stored poll in place; returns false when there is none.
 pub fn update_poll(msg: Id, f: impl FnOnce(&mut PollView)) -> bool {
     let mut map = slot().lock();
     let Some(p) = map.get_mut(&msg.0) else { return false };
@@ -184,7 +168,6 @@ pub fn update_poll(msg: Id, f: impl FnOnce(&mut PollView)) -> bool {
     true
 }
 
-/// Store parts for a message directly (tests, mock backend).
 pub fn insert(msg: Id, parts: Parts) {
     slot().lock().insert(msg.0, Arc::new(parts));
 }

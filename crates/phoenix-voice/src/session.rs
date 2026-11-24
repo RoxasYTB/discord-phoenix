@@ -1,10 +1,3 @@
-//! Per-stream media sessions: camera and screen share run as fully separate
-//! encoder sessions (own SSRC/RTX SSRC, own encoder, own packetizer, own
-//! keyframe state, own DAVE encryptor), so a failure in one never affects
-//! the other. When an encoder errors, the stream falls back to the next codec
-//! in the preference list (AV1 > H.264 > VP8) and forces a keyframe. Nothing
-//! here panics: every failure surfaces as `Result`/[`StreamEvent`].
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -18,21 +11,18 @@ use crate::rtp::vp8::Vp8Packetizer;
 use crate::rtp::{Packetizer, RtpSender, DEFAULT_MAX_PAYLOAD};
 use crate::{Error, Result};
 
-/// Video stream kinds a user can publish simultaneously.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamKind {
     Camera,
     Screen,
 }
 
-/// SSRCs assigned by the voice server (Ready `streams`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StreamSsrcs {
     pub ssrc: u32,
     pub rtx_ssrc: u32,
 }
 
-/// Requested capture parameters for a stream.
 #[derive(Debug, Clone, Copy)]
 pub struct StreamParams {
     pub width: u32,
@@ -40,11 +30,9 @@ pub struct StreamParams {
     pub fps: u32,
 }
 
-/// Things the caller should react to (e.g. resend op 12 on codec change).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamEvent {
     CodecChanged { kind: StreamKind, from: Codec, to: Codec, reason: String },
-    /// Every codec failed: stream stopped; tell the user, keep the call alive.
     StreamFailed { kind: StreamKind, reason: String },
 }
 
@@ -76,15 +64,12 @@ struct VideoStream {
     dave: Option<FrameEncryptor>,
 }
 
-/// Packets produced for one input frame.
 #[derive(Debug, Default)]
 pub struct EncodeOutput {
-    /// Unencrypted (transport-wise) RTP packets, ready for [`crate::crypto::TransportCipher`].
     pub packets: Vec<Vec<u8>>,
     pub events: Vec<StreamEvent>,
 }
 
-/// Owns every outgoing video stream of a connection.
 pub struct VideoSessionManager {
     caps: LocalCapabilities,
     remote_accepts: Vec<Codec>,
@@ -126,7 +111,6 @@ impl VideoSessionManager {
         }
     }
 
-    /// Try `first` and then every following codec until an encoder can be created.
     fn open_encoder(
         &self,
         kind: StreamKind,
@@ -155,7 +139,6 @@ impl VideoSessionManager {
         })
     }
 
-    /// Start a stream; returns the selected codec.
     pub fn start(&mut self, kind: StreamKind, ssrcs: StreamSsrcs, params: StreamParams) -> Result<Codec> {
         if self.streams.values().any(|s| s.ssrcs.ssrc == ssrcs.ssrc) || ssrcs.ssrc == ssrcs.rtx_ssrc {
             return Err(Error::Protocol("SSRC reused across streams".into()));
@@ -184,7 +167,6 @@ impl VideoSessionManager {
         self.rebalance();
     }
 
-    /// Attach/replace the DAVE encryptor of a stream (None = transport-only).
     pub fn set_dave(&mut self, kind: StreamKind, enc: Option<FrameEncryptor>) {
         if let Some(s) = self.streams.get_mut(&kind) {
             s.dave = enc;
@@ -217,7 +199,6 @@ impl VideoSessionManager {
         }
     }
 
-    /// Route RTCP feedback (PLI → keyframe on the matching stream only).
     pub fn handle_feedback(&mut self, fb: &Feedback) {
         if let Feedback::Pli { media_ssrc } = fb {
             for s in self.streams.values_mut() {
@@ -228,7 +209,6 @@ impl VideoSessionManager {
         }
     }
 
-    /// Switch a stream to the next codec after a failure.
     fn fallback(&mut self, kind: StreamKind, reason: String) -> Result<StreamEvent> {
         let (from, params, bitrate) = {
             let s = self.streams.get(&kind).ok_or(Error::Protocol("stream not active".into()))?;
@@ -256,11 +236,8 @@ impl VideoSessionManager {
         }
     }
 
-    /// Encode one captured frame for `kind` and produce RTP packets.
-    /// `rtp_timestamp` is in the 90 kHz video clock.
     pub fn encode(&mut self, kind: StreamKind, frame: &VideoFrame, rtp_timestamp: u32) -> Result<EncodeOutput> {
         let mut out = EncodeOutput::default();
-        // At most one attempt per codec in the chain (bounded: <= 3).
         let max = self.max_payload;
         for _ in 0..4 {
             let Some(s) = self.streams.get_mut(&kind) else {

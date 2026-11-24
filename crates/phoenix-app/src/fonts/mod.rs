@@ -1,17 +1,8 @@
-//! Runtime provider for the fonts used by Discord "display name styles"
-//! (Sakura, Pricedown, Journal...). Nothing is bundled: at startup we read the
-//! local Discord web cache (Chromium simple cache, like `icons::cache`), parse
-//! the cached CSS bundles' `@font-face` rules to map family -> `/assets/*.woff2`,
-//! and copy the matching cached font bodies to ~/.cache/discord-phoenix/fonts/.
-//! The WOFF2 files are decoded to TTF (pure Rust `wuff` crate) and registered
-//! with GPUI's text system at startup (`register`).
-
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Families used by display name styles (from the client's @font-face rules).
 pub const NAME_STYLE_FAMILIES: &[&str] = &[
     "Sakura", "Pricedown", "Journal", "Jellybean", "Headbang", "Mainframe", "Medieval",
     "Modern", "Monkey Bars", "Munro", "Tempo", "Vampyre", "8Bit", "Corinthia",
@@ -25,7 +16,6 @@ pub fn out_dir() -> Option<PathBuf> {
     crate::icons::out_dir().map(|d| d.with_file_name("fonts"))
 }
 
-/// `/assets/<name>` of a cache entry header, query dropped.
 fn asset_key(head: &[u8]) -> Option<String> {
     if head.len() < 24 || head[..8] != MAGIC {
         return None;
@@ -37,7 +27,6 @@ fn asset_key(head: &[u8]) -> Option<String> {
     (!name.contains('/')).then(|| name.to_owned())
 }
 
-/// Decoded body bytes (plain, brotli or gzip) of a cache entry.
 fn body(entry: &Path) -> Option<Vec<u8>> {
     let b = std::fs::read(entry).ok()?;
     let kl = u32::from_le_bytes(b.get(12..16)?.try_into().ok()?) as usize;
@@ -60,15 +49,12 @@ fn is_font(b: &[u8]) -> bool {
     b.starts_with(b"wOF2") || b.starts_with(b"wOFF") || b.starts_with(&[0, 1, 0, 0]) || b.starts_with(b"OTTO")
 }
 
-/// UI fonts of the client: `--font-primary` / `--font-code` first families.
 pub const UI_FAMILIES: &[&str] = &["gg sans", "gg mono"];
 
-/// Parses `@font-face` rules: `(family, weight, asset file name)`.
 pub fn parse_font_faces(css: &str) -> Vec<(String, u16, String)> {
     parse_font_faces_styled(css).into_iter().map(|(f, w, _, a)| (f, w, a)).collect()
 }
 
-/// Like [`parse_font_faces`], plus whether the face is `font-style:italic`.
 pub fn parse_font_faces_styled(css: &str) -> Vec<(String, u16, bool, String)> {
     let mut out = Vec::new();
     for rule in css.split("@font-face{").skip(1) {
@@ -88,7 +74,6 @@ pub fn parse_font_faces_styled(css: &str) -> Vec<(String, u16, bool, String)> {
     out
 }
 
-/// Extracts the name-style fonts from `cache` into `dir`. Returns the files written.
 pub fn extract(cache: &Path, dir: &Path) -> Vec<PathBuf> {
     let mut entries: HashMap<String, PathBuf> = HashMap::new();
     for e in std::fs::read_dir(cache).into_iter().flatten().flatten() {
@@ -127,44 +112,36 @@ pub fn extract(cache: &Path, dir: &Path) -> Vec<PathBuf> {
     written
 }
 
-/// Extracts fonts from every local Discord cache (best effort, call off the UI thread).
 pub fn init() -> Vec<PathBuf> {
     let Some(dir) = out_dir() else { return Vec::new() };
     crate::icons::discord_caches().iter().flat_map(|c| extract(c, &dir)).collect()
 }
 
-/// `display_name_styles.font_id` (protobuf enum `DisplayNameFont`) -> CSS
-/// family and `letter-spacing` in em (from the `dnsFont_` font classes:
-/// `.cherryBomb_ {font-family:Sakura; letter-spacing:.04em}` ...).
-/// Bangers / BioRhyme / Compagnon / Ribes / Default have no class -> gg sans.
 pub fn font_for_id(font_id: u32) -> Option<(&'static str, f32)> {
     Some(match font_id {
-        3 => ("Sakura", 0.04),     // CHERRY_BOMB  .cherryBomb_
-        4 => ("Jellybean", 0.),    // CHICLE       .chicle_
-        6 => ("Modern", 0.01),     // MUSEO_MODERNO .museoModerno_
-        7 => ("Medieval", 0.02),   // NEO_CASTEL   .neoCastel_
-        8 => ("8Bit", 0.02),       // PIXELIFY     .pixelify_
-        10 => ("Vampyre", 0.01),   // SINISTRE     .sinistre_
-        12 => ("Tempo", 0.03),     // ZILLA_SLAB   .zillaSlab_
-        13 => ("Monkey Bars", 0.), // PLAYPEN_SANS .playpenSans_
-        14 => ("Mainframe", 0.03), // ORBITRON     .orbitron_
-        15 => ("Headbang", 0.),    // NEW_ROCKER   .newRocker_
-        16 => ("Journal", 0.),     // KALAM        .kalam_
-        17 => ("Pricedown", 0.),   // HEXAGON      .pricedown_
+        3 => ("Sakura", 0.04),
+        4 => ("Jellybean", 0.),
+        6 => ("Modern", 0.01),
+        7 => ("Medieval", 0.02),
+        8 => ("8Bit", 0.02),
+        10 => ("Vampyre", 0.01),
+        12 => ("Tempo", 0.03),
+        13 => ("Monkey Bars", 0.),
+        14 => ("Mainframe", 0.03),
+        15 => ("Headbang", 0.),
+        16 => ("Journal", 0.),
+        17 => ("Pricedown", 0.),
         _ => return None,
     })
 }
 
-/// CSS family -> real family name inside the registered TTF (what GPUI matches on).
 static FAMILIES: parking_lot::RwLock<Option<HashMap<String, gpui::SharedString>>> = parking_lot::RwLock::new(None);
 
-/// GPUI family to use for a display name style font id, once its font is registered.
 pub fn family_for_id(font_id: u32) -> Option<gpui::SharedString> {
     let (css, _) = font_for_id(font_id)?;
     FAMILIES.read().as_ref()?.get(css).cloned()
 }
 
-/// Decodes a WOFF2 font to TTF (TTF/OTF pass through).
 pub fn to_ttf(b: &[u8]) -> Option<Vec<u8>> {
     if b.starts_with(b"wOF2") {
         wuff::decompress_woff2(b).ok()
@@ -175,7 +152,6 @@ pub fn to_ttf(b: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-/// Typographic family name (name id 16, else 1) of a TTF.
 pub fn ttf_family(ttf: &[u8]) -> Option<String> {
     let face = ttf_parser::Face::parse(ttf, 0).ok()?;
     let names = face.names();
@@ -186,22 +162,16 @@ pub fn ttf_family(ttf: &[u8]) -> Option<String> {
 
 static GG_SANS: AtomicBool = AtomicBool::new(false);
 static GG_MONO: AtomicBool = AtomicBool::new(false);
-/// Real family inside the gg mono TTF ("gg sans mono").
 static GG_MONO_NAME: parking_lot::RwLock<&'static str> = parking_lot::RwLock::new("gg mono");
 
-/// UI font family: `--font-primary` = "gg sans", ..., "Noto Sans", ... GPUI on
-/// Linux has no per-font fallback list, so we pick the first family of the
-/// chain that is actually available: gg sans when extracted, else Noto Sans.
 pub fn ui_family() -> &'static str {
     if GG_SANS.load(Ordering::Relaxed) { "gg sans" } else { "Noto Sans" }
 }
 
-/// Code font family: `--font-code` = "gg mono", ..., "DejaVu Sans Mono", ...
 pub fn mono_family() -> &'static str {
     if GG_MONO.load(Ordering::Relaxed) { *GG_MONO_NAME.read() } else { "DejaVu Sans Mono" }
 }
 
-/// `(css family, real family, ttf)` of decoded fonts cached as `.ttf` in `dir`.
 fn load_decoded(dir: &Path) -> Vec<(String, String, Vec<u8>)> {
     let mut out = Vec::new();
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
@@ -217,7 +187,6 @@ fn load_decoded(dir: &Path) -> Vec<(String, String, Vec<u8>)> {
     out
 }
 
-/// Extracts from the Discord cache and decodes every WOFF2 next to it as `.ttf`.
 fn extract_and_decode() -> Vec<(String, String, Vec<u8>)> {
     let Some(dir) = out_dir() else { return Vec::new() };
     for p in init() {
@@ -233,7 +202,6 @@ fn extract_and_decode() -> Vec<(String, String, Vec<u8>)> {
 }
 
 fn install(fonts: Vec<(String, String, Vec<u8>)>, cx: &mut gpui::App) -> bool {
-    // `PHX_NO_GG_FONTS=1`: keep the Noto Sans fallback (before/after compares).
     let fonts: Vec<_> = if std::env::var_os("PHX_NO_GG_FONTS").is_some() {
         fonts.into_iter().filter(|(css, ..)| !UI_FAMILIES.contains(&css.as_str())).collect()
     } else {
@@ -260,9 +228,6 @@ fn install(fonts: Vec<(String, String, Vec<u8>)>, cx: &mut gpui::App) -> bool {
     true
 }
 
-/// Registers the fonts with GPUI: the already decoded ones synchronously (so
-/// the first frame, and offscreen shots, use gg sans), then a background
-/// re-extraction from the Discord cache when nothing was cached yet.
 pub fn register(cx: &mut gpui::App) {
     fallback::register(cx);
     let cached = out_dir().map(|d| load_decoded(&d)).unwrap_or_default();
@@ -281,11 +246,6 @@ pub fn register(cx: &mut gpui::App) {
     .detach();
 }
 
-/// Applies a user's display name style to a name element. Message headers and
-/// the member list only switch the font (`dnsFont_` + font class, color stays
-/// the role color); the profile (`inProfile_ showEffect_`) also paints the
-/// style's first color (GPUI text has no gradient fill, so gradient/neon/
-/// toon/pop/glow fall back to their first stop).
 pub fn styled_name<E: gpui::Styled>(el: E, user: Option<&crate::model::User>, in_profile: bool) -> E {
     let Some((font, _effect, colors)) = user.and_then(|u| u.name_style.as_ref()) else { return el };
     let el = match family_for_id(*font) {
@@ -298,10 +258,6 @@ pub fn styled_name<E: gpui::Styled>(el: E, user: Option<&crate::model::User>, in
     }
 }
 
-/// The name text of a styled display name. GPUI text has no `letter-spacing`,
-/// so a style with one (`.cherryBomb_ letter-spacing:.04em`, ...) lays the
-/// characters out one by one with `spacing * size` px after each, like the
-/// browser adds the tracking after every glyph. `size`: the font size in px.
 pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, size: f32) -> gpui::AnyElement {
     let stops = user.and_then(|u| u.name_style.as_ref()).and_then(|(_, _, c)| match c.as_slice() {
         [a, b, ..] => Some([*a, *b, *a]),
@@ -310,8 +266,6 @@ pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, si
     name_text_with(text, user, size, stops)
 }
 
-/// [`name_text`] with explicit gradient stops (e.g. a gradient role's
-/// `twoColorGradient_` c1, c2, c1), tiled every 100px by `usernameGradient_`.
 pub fn name_text_with(
     text: gpui::SharedString,
     user: Option<&crate::model::User>,
@@ -326,7 +280,6 @@ pub fn name_text_with(
         .map_or(0., |(_, ls)| ls);
     let stops: Vec<gpui::Hsla> = stops.map(|s| s.iter().map(|&c| gpui::rgb(c).into()).collect()).unwrap_or_default();
     if ls <= 0. && stops.is_empty() {
-        // Plain names: emoji in the color emoji font (ui::emoji_text).
         return crate::ui::emoji_text::label(text, size);
     }
     name_paint::NameText::new(text, crate::theme::z(ls * size), stops, Some(crate::theme::z(100.))).into_any_element()
@@ -348,7 +301,6 @@ mod tests {
         assert_eq!(parse_font_faces_styled(css), vec![("gg sans".into(), 600, true, "cd.woff2".into())]);
     }
 
-    /// Manual: `cargo test -p phoenix-app --lib fonts::tests::extract_local -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn extract_local() {
@@ -369,7 +321,6 @@ mod tests {
         }
     }
 
-    /// Extracted Discord fonts must never end up in the repository.
     #[test]
     fn no_font_files_in_repo() {
         fn walk(d: &Path, bad: &mut Vec<PathBuf>) {
@@ -390,4 +341,3 @@ mod tests {
         assert!(bad.is_empty(), "font files must not be committed (extracted at runtime): {bad:?}");
     }
 }
-

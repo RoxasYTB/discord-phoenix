@@ -1,10 +1,5 @@
-//! Token persistence in the OS credential store (Secret Service / KWallet on
-//! Linux, Credential Manager on Windows, Keychain on macOS) via `keyring`.
-//! The token never touches a config file or a log line.
-
 use std::sync::Mutex;
 
-/// A secret string whose `Debug` never shows the value.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Secret(String);
 
@@ -32,7 +27,6 @@ pub trait TokenStore: Send + Sync + 'static {
 pub const SERVICE: &str = "discord-phoenix";
 pub const ACCOUNT: &str = "token";
 
-/// Calls block on D-Bus: only use from `spawn_blocking`.
 #[derive(Debug, Default)]
 pub struct KeyringStore;
 
@@ -61,7 +55,6 @@ impl TokenStore for KeyringStore {
     }
 }
 
-/// In-memory store for tests.
 #[derive(Debug, Default)]
 pub struct MemoryStore(pub Mutex<Option<Secret>>);
 

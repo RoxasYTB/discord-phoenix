@@ -1,5 +1,3 @@
-//! Rendering of the User Settings overlay.
-
 use crate::theme::z;
 use gpui::{
     AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Stateful, Styled,
@@ -26,12 +24,6 @@ fn st(app: &mut PhoenixApp) -> Option<&mut SettingsState> {
     app.settings.as_mut()
 }
 
-// Live 2026 settings modal (dumps settings-home / set-* via CDP, 2026-11-23).
-// Content panel_nNq2Vb: max-width 696 + padding-inline 16, margin-block 64.
-// Each category: heading-xl/medium title + 24px gap, then stacked
-// baseControlItem_FiiQ6I rows (gap 10), categories split by a divider_
-// with margin 50 (--space-xxl + --space-xs).
-
 fn h1(t: impl Into<SharedString>) -> Div {
     controls::section_title(t)
 }
@@ -43,7 +35,6 @@ fn note(t: impl Into<SharedString>) -> Div {
 }
 
 fn divider() -> Div {
-    // divider_ZaYWLb: 1px --border-subtle, margin 50px 0
     div().my(z(50.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))
 }
 
@@ -57,7 +48,6 @@ fn secondary(id: impl Into<String>, label: impl Into<SharedString>) -> Stateful<
 
 
 
-/// Marker slider bound to a local preference.
 pub(super) fn slider(
     id: &str,
     values: &[f32],
@@ -82,8 +72,6 @@ pub(super) fn slider(
     )
 }
 
-/// "Username   kasiopy  [Edit]" row: value (16/500 --text-default) and the
-/// trailing button, 20px apart.
 fn field_row(label: impl Into<SharedString>, value: SharedString, action: Option<AnyElement>) -> AnyElement {
     let trailing = div()
         .flex()
@@ -94,7 +82,6 @@ fn field_row(label: impl Into<SharedString>, value: SharedString, action: Option
     controls::control_item(label, None, Some(trailing.into_any_element())).into_any_element()
 }
 
-/// vanilla-settings-01 #2690-#2716: "value [Afficher]", 4px apart.
 fn masked_value(shown: bool, v: String, masked: String, id: &'static str, flip: fn(&mut PhoenixApp), cx: &mut Cx) -> AnyElement {
     div()
         .flex()
@@ -110,12 +97,10 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
     let me = &app.me;
     let info = acct::info();
     let (reveal_em, reveal_ph) = if app.prefs.local.streamer_hides_info() {
-        (false, false) // Streamer Mode keeps them masked
+        (false, false)
     } else {
         app.settings.as_ref().map_or((false, false), |s| (s.reveal_email, s.reveal_phone))
     };
-    // vanilla-settings-01 #2690-#2716: "value [Afficher]  [Modifier]", the
-    // value/reveal pair 4px apart, 20px before the button.
     let trailing = |val: AnyElement, btn: Stateful<Div>| div().flex().items_center().gap(z(20.)).child(val).child(btn).into_any_element();
     let email_row = match info.email.clone() {
         Some(e) => {
@@ -143,7 +128,6 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
         }
         None => field_row(crate::t!("settings.account.phone"), crate::t!("settings.account.no_phone"), Some(secondary("edit-ph", crate::t!("common.add")).into_any_element())),
     };
-    // Clickable rows with "value >" (#2749-#2768).
     let link_row = |id: &'static str, title: SharedString, v: Option<SharedString>| {
         controls::control_item(title, None, Some(acct::value_chevron(v)))
             .id(id)
@@ -156,7 +140,6 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
         .child(category(
             crate::t!("settings.account.info"),
             vec![
-                // vanilla-settings-01: no display-name row (it moved to Profiles).
                 field_row(crate::t!("settings.account.username"), me.name.clone(), Some(secondary("edit-un", crate::t!("common.edit")).into_any_element())),
                 email_row,
                 phone_row,
@@ -196,13 +179,9 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
             .into_any_element()],
         ))
         .child(divider())
-        // #2824: the last category has no title.
         .child(div().flex().flex_col().gap(z(10.)).children(acct::removal_rows()))
 }
 
-/// Profiles page: the 2026 profile editor's styles panel (h3 body-sm/medium
-/// 14/18 --text-strong labels, 100px tiles / 208x48 nameplate tile, 8px
-/// apart, radius 8) beside the live profile preview card.
 pub(super) fn profiles(app: &PhoenixApp) -> Div {
     let me = &app.me;
     let label = |k: &str| {
@@ -292,9 +271,6 @@ pub const LOCALES: &[(&str, &str)] = &[
 ];
 
 
-/// themeSelection_IhyaN_ (live Appearance dump): 48x48 swatch, radius 8,
-/// 8px apart; the selected one gets the 52px selectionCircle_ ring in
-/// --control-brand-foreground-new with a check badge.
 pub(super) fn theme_card(t: AppTheme, selected: bool) -> Stateful<Div> {
     div()
         .id(eid(format!("theme-{}", t.label())))
@@ -350,14 +326,7 @@ fn page(app: &PhoenixApp, cx: &mut Cx) -> Div {
     }
 }
 
-/// Sidebar page icon (icons are requested by name; the provider swaps in the
-/// client's own glyphs when available).
 fn page_icon(p: Page) -> &'static str {
-    // Client *_SIDEBAR_ITEM icons (settings bundle): UserIcon, ShieldLockIcon,
-    // ChatShieldIcon, BellIcon, NitroWheelIcon, BoostGemIcon, SubscriptionIcon,
-    // GiftIcon, CreditCardIcon, MicrophoneIcon, PaintPaletteIcon,
-    // AccessibilityIcon, KeyboardIcon, LanguageIcon, GameControllerIcon,
-    // UserPlatformIcon, LinkIcon, AngleBracketsIcon.
     match p {
         Page::MyAccount | Page::Profiles => "user",
         Page::DataPrivacy => "shield-lock",
@@ -381,9 +350,6 @@ fn page_icon(p: Page) -> &'static str {
     }
 }
 
-/// item_xyJHva: padding 10, radius 8 (--radius-sm), --text-muted; hover
-/// --background-mod-muted, active --background-mod-normal + --text-strong.
-/// itemContent gap 10: 20px icon + body-md/medium 16/20 label.
 fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, selected: bool, destructive: bool) -> Stateful<Div> {
     let fg = if selected { idx::TEXT_STRONG } else { idx::TEXT_MUTED };
     let label_fg = if destructive { idx::TEXT_FEEDBACK_CRITICAL } else { fg };
@@ -394,8 +360,6 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
         .id(eid(id))
         .group(group.clone())
         .relative()
-        // item_xyJHva.active_: background-color .3s ease when it becomes selected
-        // (from the hover colour; leaving the selection is instant).
         .when(selected, |d| {
             d.child(crate::ui::states::fade_to(
                 fade_key,
@@ -427,7 +391,6 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
                 .size(z(20.))
                 .flex_none()
                 .text_color(c(tok(fg)))
-                // item_xyJHva:hover color --text-strong (the glyph uses currentColor)
                 .when(!destructive, |d| d.group_hover(group, |s| s.text_color(c(tok(idx::TEXT_STRONG))))),
         )
         .child(
@@ -437,23 +400,13 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
-                // Non-destructive labels inherit the row colour, so the row's :hover tint reaches them.
                 .when(destructive, |d| d.text_color(c(tok(label_fg))))
                 .child(label.into()),
         )
 }
 
-/// subnav_8qMUr2 under the active "Account" item: 2px --background-mod-subtle
-/// track (19px in, padding 10 0) with the --interactive-text-active thumb on
-/// the current row; rows body-md/normal 16/20, 20px apart.
-/// subnav_8qMUr2 under the active item: the page's category titles beside a
-/// 2px --background-mod-subtle track (19px in, padding 10 0) with the
-/// --interactive-text-active thumb on the first row; rows body-md 16/20,
-/// 20px apart.
 fn subnav(rows: Vec<SharedString>) -> Div {
     let n = rows.len() as f32;
-    // vanilla-settings-01 #2510/#2518: first row 40px under the item label
-    // (padding-top 10 minus the 4px sublist gap already above it).
     div()
         .pt(z(6.))
         .pb(z(10.))
@@ -478,9 +431,6 @@ fn subnav(rows: Vec<SharedString>) -> Div {
         })))
 }
 
-/// Sidebar footer (vanilla-settings-01 #2646-#2663): footnote 10/12
-/// --text-muted build line "stable 679055 1.0.170 x64", then the
-/// --text-link legal links with bullets and a muted "Plus".
 fn footer() -> Div {
     static INFO: std::sync::OnceLock<phoenix_api::build_info::BuildInfo> = std::sync::OnceLock::new();
     let b = INFO.get_or_init(phoenix_api::build_info::BuildInfo::detect_fast);
@@ -512,7 +462,6 @@ fn footer() -> Div {
 
 fn subnav_rows(p: Page) -> Vec<SharedString> {
     match p {
-        // vanilla-settings-01 #2518..#2527: four rows incl. "Family Centre".
         Page::MyAccount => vec![
             crate::t!("settings.account.info"),
             crate::t!("settings.account.security"),
@@ -526,9 +475,6 @@ fn subnav_rows(p: Page) -> Vec<SharedString> {
     }
 }
 
-/// Sidebar sub-navigation labels per page (vanilla-settings-02..14 dumps,
-/// body-md/normal rows under the active item): shorter than the category
-/// titles on some pages ("Messages privés" for "Permissions de messages privés (MP)").
 fn subnav_keys(p: Page) -> &'static [&'static str] {
     match p {
         Page::DataPrivacy => &["settings.sub.data_use", "settings.sub.profile_privacy", "settings.sub.e2ee"],
@@ -563,8 +509,6 @@ fn select_page(p: Page, cx: &mut Cx) -> impl Fn(&gpui::ClickEvent, &mut Window, 
 
 fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
     let cur = app.settings.as_ref().map(|s| s.page).unwrap_or_default();
-    // fixedContent_: padding-inline 4 16. Profile tab: 48px avatar, gap 12,
-    // name 16/500 --text-strong over "Edit Profiles" 14/18 --text-muted.
     let profile = div()
         .id("nav-profiles")
         .p(z(10.))
@@ -594,7 +538,6 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
                         .overflow_hidden()
                         .child(app.me.display_name.clone()),
                 )
-                // vanilla-settings-01 #2489/#2490: label + 12px pencil, 4px apart.
                 .child(
                     div()
                         .flex()
@@ -607,8 +550,6 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
                         .child(gpui::svg().path(crate::icons::path("pen")).size(z(12.)).flex_none().text_color(c(tok(idx::TEXT_MUTED)))),
                 ),
         );
-    // searchBar: 40px text input (--input-*), 30px icon box + 16px glyph;
-    // focused/filled it takes the --input-border-active ring and a clear button.
     let query = app.settings.as_ref().and_then(|s| s.search.as_ref()).map(|i| i.read(cx).value().trim().to_lowercase()).unwrap_or_default();
     let field: AnyElement = match app.settings.as_ref().and_then(|s| s.search.clone()) {
         Some(input) => div()
@@ -616,7 +557,6 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
             .min_w_0()
             .text_size(z(16.))
             .text_color(c(tok(idx::TEXT_DEFAULT)))
-            // input_0PLWhS: padding-inline-start 0, 16px text.
             .child(gpui_component::input::Input::new(&input).appearance(false).bordered(false).px_0().text_size(z(16.)))
             .into_any_element(),
         None => div()
@@ -668,11 +608,6 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
         .child(div().pb(z(10.)).child(profile))
         .child(search);
 
-    // navScroller_: padding 12 12 16 4, margin-end 4; sublist gap 10;
-    // section_: border-bottom 1 --border-subtle (none on the last), pb 10,
-    // gap 4; label_ heading-xs/medium 14/18 --text-muted, margin 8 8 4.
-    // While searching, only pages whose texts match stay; emptied sections,
-    // the sub-navigation and "Log Out" go away (live client behaviour).
     let searching = !query.is_empty();
     let mut list = div().flex().flex_col().gap(z(10.));
     let sections: Vec<(&str, Vec<Page>)> = NAV
@@ -722,8 +657,6 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
     if searching && last == 0 && list_is_empty(&query) {
         list = list.child(div().p(z(10.)).text_size(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("settings.no_results")));
     }
-    // sidebar_: flex 0 0 240 (+12 padding-start), --background-base-lower,
-    // border-inline-end 1 --border-muted, padding-top 16.
     div()
         .w(z(253.))
         .flex_none()
@@ -751,9 +684,6 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
         )
 }
 
-/// contentHeader_: 48px, --background-base-low, border-bottom 1
-/// --border-muted, padding-inline 16 8; breadcrumb body-md/medium 16/20
-/// --text-default; sm icon-only close button (32px, 16px glyph).
 fn content_header(label: SharedString, cx: &mut Cx) -> Div {
     div()
         .h(z(48.))
@@ -808,9 +738,6 @@ fn logout_modal(cx: &mut Cx) -> AnyElement {
     })
 }
 
-/// The overlay, when open: the 2026 settings modal (modal__F9ieB) inset by
-/// --custom-viewport-padding (40) over the scrim, max-width 1400, radius 12,
-/// 1px --border-subtle; sidebar + content (--background-base-low).
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyElement> {
     let s = app.settings.as_ref()?;
     if s.page == Page::Profiles {
@@ -839,7 +766,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
         .overflow_y_scroll()
         .track_scroll(&s.scroll)
         .child(
-            // panel_nNq2Vb: margin-block 64 auto, max-width 696, padding 0 16
             div()
                 .mx_auto()
                 .my(z(64.))

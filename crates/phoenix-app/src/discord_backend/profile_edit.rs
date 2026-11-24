@@ -1,13 +1,9 @@
-//! Profile editor save (settings > Profiles).
-
 use reqwest::Method;
 use serde_json::{Map, Value, json};
 
 use super::{DiscordBackend, api_err, convert::sf};
 use crate::{backend::BoxFuture, model::Id, ui::settings::profile_editor::ProfilePatch};
 
-/// JSON bodies for a patch: (account body, profile body). For a guild the
-/// whole patch goes to `/guilds/{id}/members/@me` (nick/bio/pronouns/avatar/banner).
 pub(crate) fn bodies(guild: bool, p: &ProfilePatch) -> (Map<String, Value>, Map<String, Value>) {
     let mut acct = Map::new();
     let mut prof = Map::new();

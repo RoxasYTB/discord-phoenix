@@ -1,6 +1,3 @@
-//! Forwarded message frame (`container_4dy_KE`): a 4px quote bar, a "Forwarded" header and an
-//! origin footer around the snapshot's content (vanilla guild text, CDP 2026-11-23).
-
 use gpui::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, prelude::*};
 
 use crate::{
@@ -15,8 +12,6 @@ fn tk(i: usize) -> gpui::Hsla {
 
 pub fn wrap(app: &PhoenixApp, f: &Forward, body: gpui::Div) -> AnyElement {
     let guild = f.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g));
-    // Seen from outside the origin guild (e.g. a DM) the footer names the guild, not the channel
-    // (live client, DM with a forward from a guild, CDP 2026-11-23).
     let channel = match guild {
         Some(g) if app.selected_guild != Some(g.id) => Some(g.name.clone()),
         _ => app.channels.get(&f.channel).map(|c| c.name.clone()),
@@ -29,10 +24,9 @@ pub fn wrap(app: &PhoenixApp, f: &Forward, body: gpui::Div) -> AnyElement {
         (None, None) => String::new(),
     };
     div()
-        .flex() // container_ display flex, width 100%
+        .flex()
         .w_full()
         .child(
-            // quote_: 4px, radius 2px, --border-subtle, margin-inline-end 12px
             div().flex_none().w(z(4.)).rounded(z(2.)).mr(z(12.)).bg(tk(idx::BORDER_SUBTLE)),
         )
         .child(
@@ -42,7 +36,6 @@ pub fn wrap(app: &PhoenixApp, f: &Forward, body: gpui::Div) -> AnyElement {
                 .flex_grow(1.)
                 .min_w_0()
                 .child(
-                    // headerContainer_: gap 4px, margin 2px 0 4px; headerText_ body-sm/semibold italic, --text-muted
                     div()
                         .flex()
                         .items_center()
@@ -53,13 +46,11 @@ pub fn wrap(app: &PhoenixApp, f: &Forward, body: gpui::Div) -> AnyElement {
                         .text_size(z(14.))
                         .line_height(z(18.))
                         .text_color(tk(idx::TEXT_MUTED))
-                        // headerIcon_: 16x16 ArrowAngleRightUpIcon, --text-muted
                         .child(gpui::svg().path(crate::icons::path("chat/forwarded")).size(z(16.)).flex_none().text_color(tk(idx::TEXT_MUTED)))
                         .child(div().font_weight(FontWeight::SEMIBOLD).italic().child(crate::t!("chat.forwarded"))),
                 )
                 .child(body)
                 .when(!footer_text.is_empty(), |d| {
-                    // footerContainer_: gap 4px, margin-top 4px, padding 1px 0, radius 4px; footerText_ body-sm/medium --text-muted
                     d.child(
                         div()
                             .flex()

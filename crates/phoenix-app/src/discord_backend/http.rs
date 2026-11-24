@@ -1,10 +1,3 @@
-//! GPUI `HttpClient` backed by reqwest so `img(url)` can load avatars, guild
-//! icons and attachment previews. Requests run on the backend's tokio
-//! runtime; GPUI only awaits the join handle.
-//!
-//! Only Discord's media hosts are reachable: images never pull from
-//! arbitrary third-party servers, and no auth header is ever attached.
-
 use futures::{AsyncReadExt, FutureExt, future::BoxFuture};
 use gpui::http_client::{self, AsyncBody, HttpClient, Request, Response, Url, http::HeaderValue};
 
@@ -14,9 +7,6 @@ const ALLOWED_HOSTS: &[&str] = &[
     "images-ext-1.discordapp.net",
     "images-ext-2.discordapp.net",
     "cdn.jsdelivr.net",
-    // GIF providers, loaded directly like the official client does: the GIF picker's
-    // "GIF à la une" preview (`/gifs/trending` is not proxied) and the gifv embeds that
-    // `media::gifv_animated` rewrites to Tenor's gif / Giphy's webp renditions.
     "static.klipy.com",
     "media.tenor.com",
     "media.giphy.com",
@@ -27,7 +17,6 @@ pub fn host_allowed(url: &str) -> bool {
         u.scheme() == "https"
             && u.host_str().is_some_and(|h| {
                 ALLOWED_HOSTS.contains(&h)
-                    // the client's static art (settings logos, Nitro art), loaded at runtime
                     || (h == "discord.com" && u.path().starts_with("/assets/"))
             })
     })

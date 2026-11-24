@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# Read-only memory/CPU sampler for a set of PIDs (from /proc only).
-# usage: procstat.sh <seconds> <pid>...
-# Prints: procs=N rss_mib=.. pss_mib=.. cpu_pct=.. (cpu % of one core, averaged)
 set -euo pipefail
 secs=$1; shift
 pids=("$@")
 hz=$(getconf CLK_TCK)
-ticks() { # utime+stime of all live pids
+ticks() {
   local t=0 p
   for p in "${pids[@]}"; do
     [[ -r /proc/$p/stat ]] || continue
-    # fields after the ")" : state is $1, utime $12, stime $13
     t=$(( t + $(sed 's/^.*) //' /proc/$p/stat | awk '{print $12+$13}') ))
   done
   echo $t

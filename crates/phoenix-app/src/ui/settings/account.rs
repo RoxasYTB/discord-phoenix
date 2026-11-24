@@ -1,7 +1,3 @@
-//! "Compte" page (vanilla-settings-01 dump): account info from READY's
-//! current user (email, phone, MFA, age group) and the logged-in devices
-//! count (`GET /auth/sessions`). Everything here is read-only.
-
 use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use parking_lot::RwLock;
 
@@ -13,21 +9,17 @@ use crate::{
 
 type Cx<'a> = Context<'a, PhoenixApp>;
 
-/// Current-user fields only READY carries.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AccountInfo {
     pub email: Option<String>,
     pub phone: Option<String>,
     pub mfa: bool,
-    /// `nsfw_allowed`: adult age group.
     pub adult: Option<bool>,
 }
 
 static INFO: RwLock<Option<AccountInfo>> = RwLock::new(None);
-/// Logged-in devices (`user_sessions` of `GET /auth/sessions`).
 static SESSIONS: RwLock<Option<usize>> = RwLock::new(None);
 
-/// Called from READY conversion with the full current user.
 pub fn set_from_user(u: &phoenix_api::models::User) {
     *INFO.write() = Some(AccountInfo {
         email: u.email.clone().filter(|e| !e.is_empty()),
@@ -41,7 +33,6 @@ pub fn info() -> AccountInfo {
     INFO.read().clone().unwrap_or_default()
 }
 
-/// Settings opened: refresh the devices count (GET only).
 pub fn fetch_sessions(app: &PhoenixApp, cx: &mut Cx) {
     let fut = app.backend.session_count();
     cx.spawn(async move |this, cx| {
@@ -53,8 +44,6 @@ pub fn fetch_sessions(app: &PhoenixApp, cx: &mut Cx) {
     .detach();
 }
 
-/// Client mask: one `*` per character of the local part, domain kept
-/// ("*************@gmail.com").
 pub fn mask_email(e: &str) -> String {
     match e.split_once('@') {
         Some((local, domain)) => format!("{}@{domain}", "*".repeat(local.chars().count())),
@@ -62,13 +51,11 @@ pub fn mask_email(e: &str) -> String {
     }
 }
 
-/// Client mask: every digit but the last four starred ("********4599").
 pub fn mask_phone(p: &str) -> String {
     let n = p.chars().count();
     p.chars().enumerate().map(|(i, ch)| if i + 4 < n { '*' } else { ch }).collect()
 }
 
-/// body-md/medium 16/20 --text-default value (defaultColor_ body-md/medium_).
 pub(super) fn value(t: impl Into<SharedString>) -> Div {
     div()
         .text_size(z(16.))
@@ -79,8 +66,6 @@ pub(super) fn value(t: impl Into<SharedString>) -> Div {
         .child(t.into())
 }
 
-/// Trailing "value >" of a clickable row: stack_ gap 16, 24px chevron
-/// in --text-default (#2756-#2758).
 pub(super) fn value_chevron(v: Option<SharedString>) -> AnyElement {
     div()
         .flex()
@@ -91,7 +76,6 @@ pub(super) fn value_chevron(v: Option<SharedString>) -> AnyElement {
         .into_any_element()
 }
 
-/// "Afficher"/"Masquer" text button (textButton_: 16/500 --text-link).
 pub(super) fn reveal_button(id: &'static str, shown: bool, on: impl Fn(&mut PhoenixApp) + 'static, cx: &mut Cx) -> AnyElement {
     div()
         .id(id)
@@ -108,8 +92,6 @@ pub(super) fn reveal_button(id: &'static str, shown: bool, on: impl Fn(&mut Phoe
         .into_any_element()
 }
 
-/// body-sm/normal 14/18 --text-subtle description whose `[...]` parts are
-/// anchor_ links (--text-link).
 pub(super) fn linked_desc(t: SharedString) -> AnyElement {
     let link = gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() };
     let (plain, hl) = bracket_runs(&t, link);
@@ -121,8 +103,6 @@ pub(super) fn linked_desc(t: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// baseControlItem_ with a 48px icon_W6yko_ tile (radius 8) as leading
-/// element (#2779-#2781): `bg` is the tile color.
 fn leading_item(icon: &'static str, bg: gpui::Hsla, title: SharedString, desc: SharedString, trailing: AnyElement) -> AnyElement {
     div()
         .flex()
@@ -158,19 +138,17 @@ fn leading_item(icon: &'static str, bg: gpui::Hsla, title: SharedString, desc: S
         .into_any_element()
 }
 
-/// "Statut du compte" category rows (#2777-#2804).
 pub(super) fn standing_rows(info: &AccountInfo) -> Vec<AnyElement> {
     let mut rows = Vec::new();
     if let Some(adult) = info.adult {
         rows.push(leading_item(
             "user-circle",
-            c(tok(idx::BACKGROUND_MOD_MUTED)), // icon_W6yko_ rgba(151,151,159,.12)
+            c(tok(idx::BACKGROUND_MOD_MUTED)),
             crate::t!("settings.account.age_group"),
             if adult { crate::t!("settings.account.age_adult_d") } else { crate::t!("settings.account.age_teen_d") },
             value(if adult { crate::t!("settings.account.age_adult") } else { crate::t!("settings.account.age_teen") }).into_any_element(),
         ));
     }
-    // Green 8% tile (#2793: --status-positive at 0.078 alpha).
     let mut ok = c(tok(idx::STATUS_POSITIVE));
     ok.a = 0.078;
     rows.push(leading_item(
@@ -183,8 +161,6 @@ pub(super) fn standing_rows(info: &AccountInfo) -> Vec<AnyElement> {
     rows
 }
 
-/// "Désactive / Ferme ton compte" rows: critical-secondary and
-/// critical-primary md buttons (#2835, #2847).
 pub(super) fn removal_rows() -> Vec<AnyElement> {
     let disable = controls::button("acct-disable", crate::t!("settings.account.disable_btn"), BtnKind::Secondary)
         .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
@@ -199,7 +175,6 @@ pub(super) fn removal_rows() -> Vec<AnyElement> {
     ]
 }
 
-/// `privacy.activity_restricted_guild_ids` (settings proto field 13).
 static ACTIVITY_RESTRICTED: RwLock<Vec<u64>> = RwLock::new(Vec::new());
 
 pub fn set_activity_restricted(ids: Vec<u64>) {
@@ -210,7 +185,6 @@ pub fn activity_restricted() -> Vec<u64> {
     ACTIVITY_RESTRICTED.read().clone()
 }
 
-/// body-sm description whose `[...]` parts are `strong` (14/18 semibold).
 pub(super) fn bold_desc(t: SharedString) -> AnyElement {
     let strong = gpui::HighlightStyle { font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() };
     let (plain, hl) = bracket_runs(&t, strong);
@@ -222,7 +196,6 @@ pub(super) fn bold_desc(t: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// Strips `[`/`]` and returns the byte ranges they enclosed, styled `hl`.
 fn bracket_runs(t: &str, style: gpui::HighlightStyle) -> (String, Vec<(std::ops::Range<usize>, gpui::HighlightStyle)>) {
     let mut plain = String::new();
     let mut hl = Vec::new();
@@ -241,7 +214,6 @@ fn bracket_runs(t: &str, style: gpui::HighlightStyle) -> (String, Vec<(std::ops:
     (plain, hl)
 }
 
-/// READY `connected_accounts` count.
 static CONNECTIONS: RwLock<Option<usize>> = RwLock::new(None);
 
 pub fn set_connections(n: usize) {

@@ -1,7 +1,3 @@
-//! System message lines (joins, pins, boosts, thread created, calls...):
-//! icon in the avatar gutter, muted text with the actor's name in white,
-//! timestamp at the end.
-
 use gpui::{AnyElement, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
 use super::icons::ChatIcon;
@@ -12,8 +8,6 @@ use crate::{
     theme::{Palette, c, z},
 };
 
-/// Stable pick among the join phrasings (by message id) so a row never
-/// changes text between renders.
 fn join_text(id: u64) -> (SharedString, SharedString) {
     let n = (id >> 22) as usize % 6;
     (crate::i18n::t(&format!("sys.join{n}.before"), &[]), crate::i18n::t(&format!("sys.join{n}.after"), &[]))
@@ -27,15 +21,12 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
     if !is_system(msg.kind) {
         return None;
     }
-    // Types we don't know with no text: the client draws nothing for them, not a bare
-    // "⋯ name time" row (seen in real DMs).
     if msg.kind == MessageKind::OtherSystem && msg.content.is_empty() {
         return Some(match r.day_divider.clone() {
             Some(label) => super::day_divider(label).into_any_element(),
             None => div().into_any_element(),
         });
     }
-    // actorHook: the member's server nick and role colour, like a message author.
     if let MessageKind::PollResult(poll) = msg.kind {
         let line = poll_result(app, entity, msg, r, poll);
         return Some(match r.day_divider.clone() {
@@ -50,8 +41,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         .or_else(|| app.users.get(&msg.author).map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("sys.someone"));
     let name_color = app.author_color(msg.author).map(c).unwrap_or_else(|| c(Palette::TEXT_HEADER));
-    // Group DM add/remove name the other member ("X a ajouté Y au groupe."); leaving
-    // the group on one's own keeps the single-name line.
     let target = |t: Option<crate::model::Id>| t.filter(|t| *t != msg.author);
     let other: Option<(SharedString, SharedString)> = match msg.kind {
         MessageKind::RecipientAdd(t) | MessageKind::RecipientRemove(t) => target(t).map(|t| {
@@ -78,8 +67,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             ChatIcon::Thread,
             Palette::INTERACTIVE,
             "".into(),
-            // cZ9Uf2: "{actor} a commencé un fil : **{name}**. Voir tous les {fils}."; the
-            // name and "fils" are links drawn below.
             crate::t!("sys.thread_prefix"),
         ),
         MessageKind::RecipientAdd(t) => match target(t) {
@@ -97,7 +84,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             "".into(),
             crate::t!("sys.rename", c = msg.content),
         ),
-        // Stage system lines (real stage chat showed bare "⋯ name time" rows).
         MessageKind::StageStart => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.stage_start", c = msg.content)),
         MessageKind::StageEnd => (ChatIcon::Join, Palette::RED, "".into(), crate::t!("sys.stage_end", c = msg.content)),
         MessageKind::StageSpeaker => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.stage_speaker")),
@@ -113,8 +99,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
     let line = div()
         .id(("sysmsg", msg.id.0))
         .relative()
-        // systemMessage_ row: content at x+80; iconContainer_bLMKT5 72x22 at x+8, centred icon
-        // (live dump ref-cache message-content-*.json, 2026-11-24).
         .pl(z(80.))
         .pr(z(48.))
         .py(z(2.))
@@ -129,8 +113,8 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         .child(
             div()
                 .absolute()
-                .left(z(36.)) // 8 + (72 - 16) / 2
-                .top(z(7.)) // container_bLMKT5 padding-top 2 + (22 - 16) / 2 + row py 2
+                .left(z(36.))
+                .top(z(7.))
                 .child(super::icons::icon(icon, 16., c(color))),
         )
         .child(before)
@@ -147,8 +131,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             })
         })
         .child(after)
-        // content_bLMKT5 a: medium, --interactive-text-active (the <strong> keeps the
-        // anchor's 500 weight).
         .when_some(thread.clone(), |d, t| {
             let (e1, e2) = (entity.clone(), entity.clone());
             let link = |id: (&'static str, u64), text: SharedString| {
@@ -192,8 +174,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
     let cta = if msg.kind == MessageKind::Join { welcome_cta(app, entity, msg) } else { None };
     let line: AnyElement = match (cta, thread) {
         (Some(b), _) => div().child(line).child(b).into_any_element(),
-        // The thread card under the line (systemMessageContainer_: margin-top 0) and the
-        // .hasThread_.isSystemMessage_ spine from 1.75rem down.
         (None, Some(t)) => div()
             .relative()
             .child(line)
@@ -208,8 +188,6 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
     })
 }
 
-/// Greeting stickers the client cycles through for "Wave to say hi!"
-/// (id, is APNG); the rest are Lottie.
 const WAVE_STICKERS: [(u64, bool); 6] = [
     (749054660769218631, false),
     (751606379340365864, false),
@@ -219,14 +197,10 @@ const WAVE_STICKERS: [(u64, bool); 6] = [
     (819128604311027752, false),
 ];
 
-/// Client pick: (our snowflake timestamp + message timestamp) % 6.
 fn wave_sticker(me: u64, msg: u64) -> (u64, bool) {
     WAVE_STICKERS[((me >> 22) + (msg >> 22)) as usize % WAVE_STICKERS.len()]
 }
 
-/// welcomeCTA_eZQ1Gc (margin-bottom 2) under a join line: secondary button
-/// with the greeting sticker as its icon. Hidden for bots, ourselves and
-/// channels where we can't send.
 fn welcome_cta(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> Option<AnyElement> {
     let bot = app.users.get(&msg.author).is_some_and(|u| u.bot);
     let blocked = app.nav.extras.get(&msg.channel).is_some_and(|x| x.send_blocked);
@@ -235,7 +209,6 @@ fn welcome_cta(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> 
     }
     let (sticker, apng) = wave_sticker(app.me.id.0, msg.id.0);
     let label = crate::t!("sys.wave");
-    // The greeting sticker as a 20px still (Lottie ones rasterized from their JSON).
     let icon = if apng {
         gpui::img(SharedString::from(format!("https://media.discordapp.net/stickers/{sticker}.png?size=40")))
     } else {
@@ -250,13 +223,11 @@ fn welcome_cta(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> 
         .child(label);
     let (e, channel) = (entity.clone(), msg.channel);
     Some(
-        // flex row: the button keeps its content width (as a block child it stretched to
-        // the whole message column)
         div()
             .flex()
             .pl(z(80.))
             .pt(z(4.))
-            .mb(z(2.)) // welcomeCTA_eZQ1Gc margin-bottom 2px
+            .mb(z(2.))
             .child(button.on_click(move |_, _, cx| {
                 e.update(cx, |a, cx| crate::ui::pickers::detach(a.backend.send_sticker(channel, crate::model::Id(sticker)), cx));
             }))
@@ -264,23 +235,14 @@ fn welcome_cta(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> 
     )
 }
 
-/// Field `name` of the POLL_RESULT embed.
 fn poll_field<'a>(msg: &'a Message, name: &str) -> Option<&'a str> {
     msg.embeds.first()?.fields.iter().find(|f| f.name.as_ref() == name).map(|f| f.value.as_ref())
 }
 
-/// `s.EJ(question, 50)`: cut to 49 characters plus "…" when longer than 50.
 pub fn truncate_question(q: &str) -> String {
     if q.chars().count() > 50 { q.chars().take(49).collect::<String>() + "\u{2026}" } else { q.to_string() }
 }
 
-/// POLL_RESULT (live sandbox 2026-11-24): system line VJcK41 "Le sondage « **question** » de
-/// **author** est clos." (question cut at 50, a link to the poll; author in nick + role
-/// colour), PollsIcon 16px --interactive-icon-default in the gutter, then the embed card
-/// container_D5ZFqQ (margin 8 0 2, padding 8 16 8 8, radius 8, --background-surface-high,
-/// 1px --border-subtle, gap 8): the winner's emoji, "Réponse B" body-sm/semibold + check,
-/// "Réponse gagnante • 100%" body-xs/medium (a+lSZ/ "Il n'y a pas eu de vainqueur" without
-/// votes), and a secondary sm "Voir le sondage" that jumps to the poll.
 fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &RenderedMessage, poll: Option<crate::model::Id>) -> AnyElement {
     use crate::theme::{generated::idx, tok};
     let tk = |i: usize| c(tok(i));
@@ -318,7 +280,6 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
             div().absolute().left(z(36.)).top(z(7.)).child(gpui::svg().path(crate::icons::path("attach/poll")).size(z(16.)).text_color(tk(idx::INTERACTIVE_ICON_DEFAULT))),
         )
         .children({
-            // fr: "Le sondage « Q » de A est clos." / en: "A's poll Q has closed."
             let q = link(("sys-poll-q", msg.id.0), question.into(), tk(idx::INTERACTIVE_TEXT_ACTIVE))
                 .on_click(move |_, _, cx| {
                     if let Some(p) = poll {
@@ -346,7 +307,6 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         })
         .child(div().ml(z(6.)).text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(r.time_full.clone()));
     let pct = if total == 0 { 0 } else { (votes as f64 * 100. / total as f64).round() as u32 };
-    // imageContainer_D5ZFqQ: 40×40, --background-mod-subtle, --radius-sm, the emoji at 22px.
     let emoji_el = emoji.map(|n| {
         let src: SharedString = match emoji_id {
             Some(id) => format!("https://cdn.discordapp.com/emojis/{id}.webp?size=48").into(),
@@ -363,15 +323,12 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
             .child(gpui::img(src).size(z(22.)))
     });
     let has_image = emoji_el.is_some();
-    // description_: column, row gap 2, margin-inline-end auto, overflow hidden.
     let description = if victor.is_some() && votes > 0 {
         div()
             .flex()
             .flex_col()
             .gap(z(2.))
             .child(
-                // victorAnswer_: row gap 4 — the answer body-sm/semibold --text-default (ellipsis),
-                // then Vx size 16 (victor, expired).
                 div()
                     .flex()
                     .items_center()
@@ -390,14 +347,10 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                     )
                     .child(crate::ui::components::voted_check(16. * crate::theme::zoom(), true, true)),
             )
-            // "Réponse gagnante • N%": body-xs/medium --text-muted.
             .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("sys.poll_winner", pct = pct)))
     } else {
         div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("sys.poll_no_winner"))
     };
-    // container_D5ZFqQ: flex, centred, gap 8, max-width 376 (content box) + padding 8 16
-    // (containerWithImage_: 8 16 8 8) + 1px border: as wide as it may be, so the button
-    // sits at the right edge (live 2026-11-24: 402px wide).
     let card = div()
         .ml(z(80.))
         .mt(z(8.))
@@ -421,10 +374,6 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                 e2.update(cx, |a, cx| a.jump_to_message(ch, p, cx));
             }
         }));
-    // message_ padding 2px 0, margin-top 17 on a group start. POLL_RESULT carries
-    // `mentions: [poll author]` (live store, 2026-11-24), so the poll author sees the whole
-    // row as .mentioned_: --message-mentioned-background-default (hover -hover) and the 2px
-    // ::before bar in --icon-feedback-warning.
     let mentioned = msg.author == app.me.id;
     let (bg, hover) = if mentioned {
         (Some(idx::MESSAGE_MENTIONED_BACKGROUND_DEFAULT), idx::MESSAGE_MENTIONED_BACKGROUND_HOVER)
@@ -452,7 +401,6 @@ mod tests {
 
     #[test]
     fn poll_result_title_is_cut_like_the_client() {
-        // Live 2026-11-24: "[Test Phoenix] envoyé depuis le client Rust (Phoe…".
         let q = "[Test Phoenix] envoyé depuis le client Rust (Phoenix) — sondage de test : quelle réponse ?";
         assert_eq!(super::truncate_question(q), "[Test Phoenix] envoyé depuis le client Rust (Phoe\u{2026}");
         assert_eq!(super::truncate_question("court"), "court");

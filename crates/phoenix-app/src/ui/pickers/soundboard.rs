@@ -1,12 +1,3 @@
-//! Read-only Soundboard picker popover.
-//!
-//! Loads default sounds via `GET /soundboard-default-sounds` and guild sounds via
-//! Gateway op 31 `REQUEST_SOUNDBOARD_SOUNDS` → `SOUNDBOARD_SOUNDS`.
-//! Geometry from client CSS `967850.025085515c98e619.css`:
-//! - `soundButton_N99eHz`: 148×40px, radius 8px (`--radius-sm`), `--background-mod-subtle`,
-//!   hover `--background-mod-strong` + `1px --border-subtle`.
-//! - `soundInfo_N99eHz`: flex row, gap 8px, padding 8px, `20px` emoji + `soundName_` semibold.
-
 use std::collections::HashMap;
 
 use gpui::{
@@ -89,7 +80,6 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
     }
 
     let mut sections: Vec<(SharedString, Vec<SoundboardSound>)> = Vec::new();
-    // Current guild first, then other guilds with sounds, then Discord default sounds.
     if let Some(gid) = app.selected_guild
         && let Some(list) = st.guild_sounds.get(&gid)
         && !list.is_empty()
@@ -130,7 +120,6 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
         list.into_any_element()
     };
 
-    // 3 columns × 148px + 2 × 8px gaps + 24px horizontal padding = 484px wide.
     let panel = div()
         .id("soundboard-picker")
         .occlude()

@@ -1,11 +1,5 @@
-//! Turning composer text into slash command options.
-//!
-//! `/ban user:@x reason:spam` -> `[{type, name, value}]` following the
-//! command's option schema. Sub-commands are taken from leading words.
-
 use serde_json::{Value, json};
 
-/// Option type codes used by Discord.
 const SUB: u64 = 1;
 const GROUP: u64 = 2;
 
@@ -21,7 +15,6 @@ fn name(o: &Value) -> &str {
     o.get("name").and_then(Value::as_str).unwrap_or("")
 }
 
-/// Split `a:1 b:two words c:x` into pairs; a value runs until the next `key:`.
 fn pairs(args: &str) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     for word in args.split_whitespace() {
@@ -43,7 +36,6 @@ fn pairs(args: &str) -> Vec<(String, String)> {
     out
 }
 
-/// Strip `<@123>` / `<#123>` / `<@&123>` mention wrappers.
 fn snowflake(v: &str) -> String {
     v.trim_start_matches('<').trim_end_matches('>').trim_start_matches(['@', '#', '&', '!']).to_owned()
 }
@@ -59,7 +51,6 @@ fn typed(o: &Value, raw: &str) -> Result<Value, String> {
     })
 }
 
-/// Build the `options` tree. Errors are user-facing.
 pub fn build_options(schema: &Value, args: &str) -> Result<Value, String> {
     let opts = options(schema);
     let mut rest = args.trim();
@@ -75,7 +66,6 @@ pub fn build_options(schema: &Value, args: &str) -> Result<Value, String> {
     }
     let mut out = Vec::new();
     let mut given = pairs(rest);
-    // A bare value fills the first option.
     if let Some((k, _)) = given.first_mut()
         && k.is_empty()
     {
@@ -102,7 +92,6 @@ pub fn build_options(schema: &Value, args: &str) -> Result<Value, String> {
     Ok(Value::Array(out))
 }
 
-/// `"/name rest"` -> `("name", "rest")`.
 pub fn split_invocation(text: &str) -> Option<(&str, &str)> {
     let t = text.strip_prefix('/')?;
     let (n, rest) = t.split_once(char::is_whitespace).unwrap_or((t, ""));

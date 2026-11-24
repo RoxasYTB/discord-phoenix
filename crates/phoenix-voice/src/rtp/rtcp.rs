@@ -1,5 +1,3 @@
-//! Minimal RTCP: sender reports (SR), receiver reports (RR) parsing, PLI and NACK.
-
 use crate::{Error, Result};
 
 pub const PT_SR: u8 = 200;
@@ -41,7 +39,6 @@ impl SenderReport {
     }
 }
 
-/// Convert a wall-clock time to 64-bit NTP format.
 pub fn ntp_time(t: std::time::SystemTime) -> u64 {
     const EPOCH_DELTA: u64 = 2_208_988_800;
     let d = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
@@ -50,18 +47,14 @@ pub fn ntp_time(t: std::time::SystemTime) -> u64 {
     (secs << 32) | frac
 }
 
-/// Parsed RTCP feedback relevant to senders.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Feedback {
-    /// Picture loss indication: send a keyframe for `media_ssrc`.
     Pli { media_ssrc: u32 },
-    /// Generic NACK: retransmit sequence numbers.
     Nack { media_ssrc: u32, lost: Vec<u16> },
     SenderReport(SenderReport),
     Other(u8),
 }
 
-/// Build a PLI (PSFB FMT=1).
 pub fn build_pli(sender_ssrc: u32, media_ssrc: u32) -> Vec<u8> {
     let mut v = vec![0x81, PT_PSFB, 0, 2];
     v.extend_from_slice(&sender_ssrc.to_be_bytes());
@@ -69,7 +62,6 @@ pub fn build_pli(sender_ssrc: u32, media_ssrc: u32) -> Vec<u8> {
     v
 }
 
-/// Parse a compound RTCP packet (decrypted).
 pub fn parse(mut p: &[u8]) -> Result<Vec<Feedback>> {
     let mut out = Vec::new();
     while p.len() >= 4 {
@@ -114,8 +106,6 @@ pub fn parse(mut p: &[u8]) -> Result<Vec<Feedback>> {
     Ok(out)
 }
 
-/// Reception report blocks of SR/RR packets: (reported ssrc, fraction lost
-/// out of 256). Used for the outbound packet loss shown in the UI.
 pub fn report_blocks(mut p: &[u8]) -> Vec<(u32, u8)> {
     let mut out = Vec::new();
     while p.len() >= 4 {

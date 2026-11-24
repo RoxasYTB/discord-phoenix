@@ -1,12 +1,3 @@
-//! Voice calls in the app.
-//!
-//! - UI side (this file): [`VoiceUi`] state kept by `PhoenixApp`, updated
-//!   from [`VoiceUiEvent`]s (delivered as `AppEvent::Voice`), and the
-//!   [`VoiceControl`] commands the UI sends through `Backend::voice_control`.
-//! - Network side ([`call`]): joins through gateway op 4, waits for our
-//!   VOICE_STATE_UPDATE (session id) and VOICE_SERVER_UPDATE (endpoint,
-//!   token), then runs a `phoenix_voice` connection with the cpal audio engine.
-
 pub mod call;
 pub mod prefs;
 pub mod start_time;
@@ -22,39 +13,30 @@ use crate::model::Id;
 pub enum VoiceStatus {
     #[default]
     Idle,
-    /// Waiting for the voice server / handshake.
     Connecting,
     Connected,
     Reconnecting,
-    /// Connection lost; the message explains why.
     Failed,
 }
 
-/// Events from the voice runtime for the UI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VoiceUiEvent {
     Status(VoiceStatus),
     Ping(u32),
     Speaking { user: Id, speaking: bool },
-    /// DAVE end-to-end encryption on/off.
     Encryption(bool),
-    /// DAVE voice privacy code (30 digits, grouped by 5).
     PrivacyCode(Option<String>),
     Stats(ConnStats),
-    /// Voice server host and transport encryption mode.
     Server { endpoint: String, mode: String },
     Error(String),
 }
 
-/// Commands from the UI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VoiceControl {
     SetMute(bool),
     SetDeaf(bool),
-    /// `None` = system default device.
     SetInputDevice(Option<String>),
     SetOutputDevice(Option<String>),
-    /// `None` = automatic input sensitivity, else threshold in dBFS.
     SetSensitivity(Option<f32>),
     SetInputVolume(f32),
     SetOutputVolume(f32),
@@ -62,18 +44,14 @@ pub enum VoiceControl {
     SetNoiseSuppression(bool),
     SetEchoCancellation(bool),
     SetAgc(bool),
-    /// Push-to-talk instead of voice activity.
     SetPushToTalk(bool),
-    /// Global push-to-talk key (GPUI keystroke); `None` unbinds.
     SetPttKey(Option<String>),
     SetPttPressed(bool),
     SetPttDelay(u32),
 }
 
-/// Ping samples kept for the connection graph.
 pub const PING_HISTORY: usize = 40;
 
-/// Voice state shown by the UI.
 #[derive(Debug, Clone, Default)]
 pub struct VoiceUi {
     pub status: VoiceStatus,
@@ -142,7 +120,6 @@ impl VoiceUi {
         (n > 0).then(|| self.ping_history.iter().sum::<u32>() / n)
     }
 
-    /// Inbound packet loss in percent.
     pub fn inbound_loss_pct(&self) -> f32 {
         let s = self.stats;
         let total = s.packets_received + s.packets_lost;
@@ -153,7 +130,6 @@ impl VoiceUi {
         self.speaking.contains(&user)
     }
 
-    /// Discord's connection quality colour buckets.
     pub fn quality(&self) -> Quality {
         match self.ping_ms {
             None => Quality::Unknown,
@@ -172,15 +148,12 @@ pub enum Quality {
     Bad,
 }
 
-/// `PhoenixApp::join_voice` hook: show "RTC Connecting" right away.
 pub fn on_join_clicked(app: &mut crate::app::PhoenixApp, channel: Option<Id>) {
     app.voice.apply(VoiceUiEvent::Status(if channel.is_some() { VoiceStatus::Connecting } else { VoiceStatus::Idle }));
     crate::sounds::watch::on_join_requested(channel);
 }
 
-/// Push the user panel's mute/deafen toggles to the voice runtime.
 pub fn sync_self_state(app: &crate::app::PhoenixApp) {
-    // The real backend applies controls synchronously; the future is a no-op.
     drop(app.backend.voice_control(VoiceControl::SetMute(app.mic_muted || app.deafened)));
     drop(app.backend.voice_control(VoiceControl::SetDeaf(app.deafened)));
     let (m, d) = (app.mic_muted, app.deafened);

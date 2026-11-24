@@ -1,7 +1,3 @@
-//! Stable icon names used by the UI, mapped to the component names the
-//! official client registers for them (candidates tried in order).
-//! The names are only identifiers; no icon data lives in this repo.
-
 pub const MAP: &[(&str, &[&str])] = &[
     ("hash", &["TextIcon"]),
     ("speaker", &["VoiceNormalIcon"]),
@@ -14,11 +10,8 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("new-user", &["NewUserIcon"]),
     ("chat-check", &["ChatCheckIcon"]),
     ("check", &["CheckmarkLargeIcon", "CheckmarkLargeBoldIcon"]),
-    // Two-tone CircleCheckIcon (poll answer we voted for, poll result winner): the ring with
-    // the check cut out (`color`) and the disc behind it (`secondaryColor`).
     ("circle-check", &["CircleCheckIcon"]),
     ("circle-check-bg", &["CircleCheckIcon#secondary"]),
-    // Verified APP tag (botTagVerified_ path measured live, 2026-11-24).
     ("check-small-bold", &["CheckmarkSmallBoldIcon"]),
     ("plus", &["PlusLargeIcon"]),
     ("palette", &["PaintPaletteIcon"]),
@@ -59,7 +52,6 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("viewer/open", &["WindowLaunchIcon"]),
     ("close", &["XLargeIcon", "XLargeBoldIcon"]),
     ("threads", &["ThreadIcon"]),
-    // Forum "Sort & View" dropdown (ForumChannel sortDropdown → ArrowsUpDownIcon xs).
     ("sort", &["ArrowsUpDownIcon"]),
     ("chevron-up", &["ChevronSmallUpIcon"]),
     ("friends", &["FriendsIcon"]),
@@ -71,8 +63,6 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("forum-lock", &["ForumLockIcon"]),
     ("announcement-lock", &["AnnouncementsLockIcon"]),
     ("stage-lock", &["StageLockIcon"]),
-    // Discovery guild badge (`GuildBadge` DISCOVERABLE → ExperimentalWebBadgeIcon):
-    // background tone --badge-inverted-background, inner tone --badge-inverted-text.
     ("discovery-badge", &["ExperimentalWebBadgeIcon"]),
     ("discovery-badge-fg", &["ExperimentalWebBadgeIcon#secondary"]),
     ("pen", &["PencilIcon"]),
@@ -97,7 +87,6 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("chat/thread", &["ThreadIcon"]),
     ("chat/eye", &["EyeIcon"]),
     ("chat/eye-slash", &["EyeSlashIcon"]),
-    // vanilla-menu-message row icons (icon_M3qk4j).
     ("menu/view-reactions", &["ViewReactionIcon"]),
     ("menu/remove-reactions", &["RemoveReactionIcon"]),
     ("menu/remove-all-reactions", &["ReactionMinusIcon"]),
@@ -124,9 +113,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("inbox/jump", &["ChatArrowRightIcon"]),
     ("inbox/bookmark", &["BookmarkIcon"]),
     ("inbox/clock", &["ClockIcon"]),
-    // Slowmode cooldown (slowModeIcon_, measured live 2026-11-24).
     ("chat/timer", &["TimerIcon"]),
-    // Composer "+" menu (ceb73656 attach options, 2026-11-24).
     ("attach/poll", &["PollsIcon"]),
     ("inbox/schedule", &["CalendarPlusIcon", "CalendarIcon"]),
     ("search/user", &["UserIcon"]),
@@ -136,7 +123,6 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("more-vertical", &["MoreVerticalIcon"]),
     ("new-group-dm", &["ChatPlusIcon"]),
     ("flag", &["FlagIcon"]),
-    // Home button logo in the guild rail (--logo / ClydeIcon in the client).
     ("discord-logo", &["ClydeIcon"]),
     ("quests", &["QuestsIcon"]),
     ("note", &["PaperPlusIcon"]),
@@ -161,7 +147,6 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("blur", &["BlurBackgroundIcon"]),
     ("play", &["PlayIcon"]),
     ("image-plus", &["ImagePlusIcon", "ImageIcon"]),
-    // Settings sidebar items (client *_SIDEBAR_ITEM icons).
     ("user", &["UserIcon"]),
     ("shield-lock", &["ShieldLockIcon"]),
     ("chat-shield", &["ChatShieldIcon"]),

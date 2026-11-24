@@ -1,8 +1,3 @@
-//! Channel and server administration actions of the official client: Edit
-//! Channel (channel settings overlay), Create Channel / Category, Delete
-//! Channel / Category, Privacy Settings and Security Actions of a server.
-//! REST builders: `phoenix_api::rest::guild_manage`.
-
 use std::rc::Rc;
 
 use gpui::Context;
@@ -31,8 +26,6 @@ pub fn new_kind(k: ChannelKind) -> NewChannelKind {
     }
 }
 
-/// Channel names of text-like channels are lowercased with dashes, like the
-/// client does while typing (voice / stage / category names are kept).
 pub fn channel_name(kind: ChannelKind, raw: &str) -> String {
     let t = raw.trim();
     match kind {
@@ -57,7 +50,6 @@ fn id_of(v: &Value) -> Option<Id> {
     v.get("id")?.as_str()?.parse().ok().map(Id)
 }
 
-/// Offline replies (mock backend): plausible lists, nothing leaves the machine.
 pub fn mock_reply(c: &AdminCall) -> Value {
     use AdminCall as C;
     let user = |id: u64, name: &str| json!({ "id": id.to_string(), "username": name, "global_name": name, "avatar": null });
@@ -89,7 +81,6 @@ pub fn mock_reply(c: &AdminCall) -> Value {
 }
 
 impl PhoenixApp {
-    /// Run an admin call, handing back the JSON reply (or the error text).
     pub fn admin(&mut self, call: AdminCall, cx: &mut Context<Self>, done: impl FnOnce(&mut Self, Result<Value, String>, &mut Context<Self>) + 'static) {
         self.action(ActionRequest::Admin(call), cx, move |a, r, cx| {
             done(
@@ -104,7 +95,6 @@ impl PhoenixApp {
         });
     }
 
-    /// Fire an admin call and toast the error, if any.
     pub fn admin_toast(&mut self, call: AdminCall, ok: Option<gpui::SharedString>, cx: &mut Context<Self>) {
         self.admin(call, cx, move |a, r, cx| match r {
             Ok(_) => {
@@ -132,7 +122,6 @@ impl PhoenixApp {
         {
             list.retain(|c| *c != channel);
         }
-        // Children of a deleted category fall back to no category.
         for c in self.channels.values_mut() {
             if c.parent == Some(channel) {
                 c.parent = None;
@@ -143,8 +132,6 @@ impl PhoenixApp {
         }
         self.rebuild_sidebar();
     }
-
-    // ---- create -------------------------------------------------------------
 
     pub fn open_create_channel(&mut self, guild: Id, parent: Option<Id>, kind: ChannelKind, cx: &mut Context<Self>) {
         open_modal(Modal::CreateChannel(create_channel::State::new(guild, parent, kind)), None);
@@ -186,9 +173,6 @@ impl PhoenixApp {
         });
     }
 
-    // ---- delete -------------------------------------------------------------
-
-    /// "Delete Channel" / "Delete Category" confirm (critical button).
     pub fn confirm_delete_channel(&mut self, channel: Id, cx: &mut Context<Self>) {
         let Some(ch) = self.channels.get(&channel) else { return };
         let cat = ch.kind == ChannelKind::Category;
@@ -223,8 +207,6 @@ impl PhoenixApp {
         });
     }
 
-    // ---- edit ---------------------------------------------------------------
-
     pub fn open_channel_settings(&mut self, channel: Id, cx: &mut Context<Self>) {
         let Some(ch) = self.channels.get(&channel) else { return };
         open_modal(Modal::ChannelSettings(channel_settings::State::new(ch)), None);
@@ -243,7 +225,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Apply a saved overview locally (the gateway confirms it later).
     pub fn apply_channel_overview(&mut self, channel: Id, name: &str, topic: &str) {
         if let Some(c) = self.channels.get_mut(&channel) {
             c.name = name.to_owned().into();
@@ -251,8 +232,6 @@ impl PhoenixApp {
         }
         self.rebuild_sidebar();
     }
-
-    // ---- privacy / security -------------------------------------------------
 
     pub fn open_privacy_settings(&mut self, guild: Id, cx: &mut Context<Self>) {
         open_modal(Modal::Privacy(privacy::Privacy::new(guild)), None);
@@ -270,8 +249,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Toggle one privacy list (`restricted_guilds` or
-    /// `message_request_restricted_guild_ids`) for `guild`.
     pub fn set_guild_privacy(&mut self, guild: Id, key: &'static str, restricted: bool, current: Value, cx: &mut Context<Self>) {
         let list = phoenix_api::rest::guild_manage::toggle_list(&current, sf(guild), restricted);
         self.admin_toast(AdminCall::PatchUserSettings { patch: json!({ key: list }) }, None, cx);

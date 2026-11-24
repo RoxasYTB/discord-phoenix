@@ -1,22 +1,3 @@
-//! Cloud attachment uploads, the way the 2026 desktop client sends files.
-//!
-//! Observed on the official client (CDP Network, 2026-11-24, test channel):
-//! 1. `POST /channels/{id}/attachments` with
-//!    `{"files":[{"filename","file_size","id","is_clip":false,"original_content_type"}]}`
-//!    → `{"attachments":[{"id","upload_url","upload_filename"}]}`;
-//! 2. `PUT upload_url` on `discord-attachments-uploads-prd.storage.googleapis.com`
-//!    with the raw bytes, `Content-Type: application/octet-stream` and no
-//!    Discord headers (no token). The client resumes with `Content-Range`
-//!    (`308` + `Range` = resumable session), which is what lets us send large
-//!    files in chunks and report progress;
-//! 3. `POST /channels/{id}/messages` as JSON with
-//!    `attachments: [{"id":"0","filename","uploaded_filename","original_content_type"}]`
-//!    (`description` for alt text, `is_spoiler: true` for spoilers; the file
-//!    name keeps its original spelling).
-//!
-//! The old multipart `files[n]` path ([`RestClient::send_message_with_files`])
-//! is not used by the client any more.
-
 use std::sync::Arc;
 
 use reqwest::{Method, StatusCode};
@@ -27,18 +8,12 @@ use super::{Body, CreateMessage, FileUpload, RestClient, fill_nonce};
 use crate::error::{ApiErrorBody, Error, Result};
 use crate::models::{ChannelId, Message};
 
-/// Progress callback: `(bytes sent so far, total bytes)` over every file of a
-/// message. Returning `false` cancels: no further chunk, file or message is sent.
 pub type Progress = Arc<dyn Fn(u64, u64) -> bool + Send + Sync>;
 
-/// `Error::Protocol` text of an upload stopped by its progress callback.
 pub const UPLOAD_CANCELLED: &str = "upload cancelled";
 
-/// Chunk size of the resumable PUT. A multiple of 256 KiB (Cloud Storage rule).
-/// Files up to one chunk go in a single plain PUT.
 pub const UPLOAD_CHUNK: usize = 4 << 20;
 
-/// One slot of `POST /channels/{id}/attachments`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CloudUpload {
     #[serde(default, deserialize_with = "id_string")]
@@ -56,15 +31,9 @@ fn id_string<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Stri
 }
 
 const MIB: u64 = 1 << 20;
-/// Most files of one message (client `getMaxAttachmentsCount`).
 pub const MAX_ATTACHMENTS: usize = 10;
-/// Sum of the files of one message (client `uploadSumTooLarge`, 500 MiB).
 pub const MAX_TOTAL_SIZE: u64 = 500 * MIB;
 
-/// Per-file limit of the account and guild, as the 2026 client computes it:
-/// the account's Nitro limit (none 10 MiB, Classic 50, Nitro 500, Basic 50)
-/// or the guild's boost limit (`MAX_FILE_SIZE_50_MB` / `_100_MB` features,
-/// boost level 2 = 50 MiB, 3 = 100 MiB), whichever is larger.
 pub fn max_file_size<'a>(premium_type: Option<u8>, guild: Option<(Option<u8>, impl IntoIterator<Item = &'a str>)>) -> u64 {
     let user = match premium_type {
         Some(1) | Some(3) => 50 * MIB,
@@ -89,14 +58,10 @@ pub fn max_file_size<'a>(premium_type: Option<u8>, guild: Option<(Option<u8>, im
     user.max(guild)
 }
 
-/// What the client checks before uploading a message attachment: never
-/// under 20 MiB (`Math.max(0x1400000, limit)` in the message upload target);
-/// the server still answers 40005 above the real limit.
 pub fn message_upload_limit(file_limit: u64) -> u64 {
     file_limit.max(20 * MIB)
 }
 
-/// MIME type from the extension (the browser's `File.type`), `None` when unknown.
 pub fn content_type_for(filename: &str) -> Option<&'static str> {
     let ext = filename.rsplit_once('.')?.1.to_ascii_lowercase();
     Some(match ext.as_str() {
@@ -135,7 +100,6 @@ fn content_type(f: &FileUpload) -> Option<String> {
     f.content_type.clone().or_else(|| content_type_for(&f.filename).map(str::to_owned))
 }
 
-/// Body of `POST /channels/{id}/attachments`: one slot per file, ids `"0"`, `"1"`…
 pub fn attachment_slots_body(files: &[FileUpload]) -> Value {
     let slots: Vec<Value> = files
         .iter()
@@ -156,7 +120,6 @@ pub fn attachment_slots_body(files: &[FileUpload]) -> Value {
     json!({ "files": slots })
 }
 
-/// `attachments` of the message that references the uploaded files.
 pub fn message_attachments(files: &[FileUpload], uploaded: &[CloudUpload]) -> Value {
     Value::Array(
         files
@@ -184,8 +147,6 @@ pub fn message_attachments(files: &[FileUpload], uploaded: &[CloudUpload]) -> Va
     )
 }
 
-/// The `Content-Range` of each PUT for a file of `len` bytes: `None` for a
-/// single plain PUT, else `(start, end_inclusive, header)` per chunk.
 pub fn chunk_ranges(len: usize, chunk: usize) -> Vec<Option<(usize, usize, String)>> {
     if len <= chunk || chunk == 0 {
         return vec![None];
@@ -199,8 +160,6 @@ pub fn chunk_ranges(len: usize, chunk: usize) -> Vec<Option<(usize, usize, Strin
         .collect()
 }
 
-/// Upload URLs are only accepted on Cloud Storage over https, or on the REST
-/// base's own origin (local test servers). The PUT never carries the token.
 pub fn upload_url_allowed(url: &str, base: &str) -> bool {
     let Ok(u) = url::Url::parse(url) else { return false };
     if u.scheme() == "https"
@@ -221,7 +180,6 @@ fn put_error(status: StatusCode, bytes: &[u8]) -> Error {
 }
 
 impl RestClient {
-    /// Step 1: ask for one upload URL per file.
     pub async fn request_upload_urls(&self, channel: ChannelId, files: &[FileUpload]) -> Result<Vec<CloudUpload>> {
         #[derive(Deserialize)]
         struct Resp {
@@ -230,7 +188,6 @@ impl RestClient {
         let r: Resp = self
             .call(Method::POST, &format!("/channels/{channel}/attachments"), Body::Json(attachment_slots_body(files)))
             .await?;
-        // Match by id (the slots are numbered), falling back to order.
         let mut out = Vec::with_capacity(files.len());
         for (i, _) in files.iter().enumerate() {
             let id = i.to_string();
@@ -240,14 +197,10 @@ impl RestClient {
         Ok(out)
     }
 
-    /// Step 2: PUT the bytes to the upload URL, in `chunk`-sized resumable
-    /// pieces when the file is larger than one chunk. `on_sent` gets the
-    /// number of bytes of this file confirmed so far.
     pub async fn put_upload(&self, url: &str, bytes: &[u8], chunk: usize, on_sent: &(dyn Fn(u64) -> bool + Send + Sync)) -> Result<()> {
         if !upload_url_allowed(url, &self.inner.base) {
             return Err(Error::Protocol("upload URL outside Cloud Storage".into()));
         }
-        // No redirects: a resumable session answers `308 Resume Incomplete` without Location.
         let http = reqwest::Client::builder()
             .user_agent(self.inner.props.user_agent())
             .use_rustls_tls()
@@ -281,8 +234,6 @@ impl RestClient {
         Ok(())
     }
 
-    /// Steps 1–3: upload every file, then post the message that references
-    /// them. `progress` gets `(sent, total)` over all files.
     pub async fn send_message_with_uploads(
         &self,
         channel: ChannelId,
@@ -293,8 +244,6 @@ impl RestClient {
         self.send_message_with_uploads_chunked(channel, &mut msg, files, progress, UPLOAD_CHUNK).await
     }
 
-    /// Steps 1–2: upload slots, then every file PUT to the cloud. Returns the
-    /// slots, whose `upload_filename`s go in the message ([`message_attachments`]).
     pub async fn upload_files(
         &self,
         channel: ChannelId,
@@ -406,7 +355,6 @@ mod tests {
         assert!(!upload_url_allowed("http://127.0.0.1:10/up", "http://127.0.0.1:9"));
     }
 
-    /// One HTTP/1.1 exchange per connection; returns (request head, body).
     async fn serve_one(listener: &tokio::net::TcpListener, status: &str, extra: &str, body: &str) -> (String, Vec<u8>) {
         let (mut sock, _) = listener.accept().await.unwrap();
         let mut buf = Vec::new();
@@ -436,9 +384,6 @@ mod tests {
         (head, req_body)
     }
 
-    /// Full flow against a local server: attachments slot request, chunked
-    /// PUT (308 then 200) without the token, then the JSON message. Never
-    /// touches discord.com.
     #[tokio::test]
     async fn upload_flow_order_headers_and_bodies() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -499,7 +444,6 @@ mod tests {
         assert_eq!(*seen.lock(), vec![(0, 20), (16, 20), (20, 20)]);
     }
 
-    /// A refused PUT stops the flow before any message is posted.
     #[tokio::test]
     async fn failed_put_posts_no_message() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -508,7 +452,6 @@ mod tests {
             let slots = format!(r#"{{"attachments":[{{"id":"0","upload_url":"http://{addr}/up/x","upload_filename":"x"}}]}}"#);
             serve_one(&listener, "200 OK", "", &slots).await;
             serve_one(&listener, "403 Forbidden", "", "denied").await;
-            // Nothing else may arrive.
             tokio::time::timeout(std::time::Duration::from_millis(300), listener.accept()).await.is_err()
         });
         let rest = RestClient::with_base(Some("t".into()), crate::ClientProperties::linux_desktop(), format!("http://{addr}"));
@@ -517,8 +460,6 @@ mod tests {
         assert!(server.await.unwrap(), "a message was posted after a failed upload");
     }
 
-    /// Cancelling from the progress callback stops after the current chunk:
-    /// no further PUT and no message.
     #[tokio::test]
     async fn cancel_stops_before_the_message() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

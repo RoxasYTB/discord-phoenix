@@ -1,36 +1,19 @@
-//! Synced settings beyond the hand-modelled ones: each entry maps a settings
-//! control id to its `PreloadedUserSettings` field path, as declared by the
-//! 2026 client's protobuf descriptors (`discord_protos.discord_users.v1.*`,
-//! web bundle of the local Discord cache). See docs/parity/settings-wiring.md.
-//!
-//! Values are stored as wire integers in `SyncedSettings::proto` (strings as
-//! their index in [`Kind::Str`]); the UI reads them through [`get_bool`] /
-//! [`get_pick`].
-
 use phoenix_api::rest::settings::{ProtoValue, proto_read};
 
-/// How the wire value maps to the control.
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
-    /// Switch; `invert` when the proto field is the negation of the label.
     Bool { invert: bool },
-    /// Radio / select index `i` ↔ wire enum `opts[i]`.
     Enum(&'static [u64]),
-    /// Radio / select index `i` ↔ wire string `opts[i]`.
     Str(&'static [&'static str]),
-    /// Switch over bits of a flags field (`friend_source_flags`).
     Bits(u64),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Entry {
     pub id: &'static str,
-    /// Tags from `PreloadedUserSettings` down to the field.
     pub path: &'static [u32],
-    /// The field is a `google.protobuf.*Value` wrapper.
     pub wrapper: bool,
     pub kind: Kind,
-    /// Client default as a UI value (switch 0/1 or option index).
     pub default: u64,
 }
 
@@ -44,102 +27,73 @@ const fn en(id: &'static str, path: &'static [u32], wrapper: bool, opts: &'stati
     Entry { id, path, wrapper, kind: Kind::Enum(opts), default }
 }
 
-/// Mobile push delay options: `voice_and_video.afk_timeout` seconds (client: 1..=10 minutes).
 pub const AFK_TIMEOUTS: &[u64] = &[60, 120, 180, 240, 300, 360, 420, 480, 540, 600];
 
-// Top-level tags: 5 voice_and_video, 6 text_and_images, 7 notifications,
-// 8 privacy, 11 status, 13 appearance, 15 favorites, 19 clips.
 pub static ENTRIES: &[Entry] = &[
-    // --- Voice & video (5)
-    // afk_timeout (UInt32Value, seconds; unset = 60)
     en("push-delay", &[5, 6], true, AFK_TIMEOUTS, 0),
-    b("n-stream", &[5, 7], true),        // stream_notifications_enabled
-    // --- Text & images (6)
-    b("md-preview", &[6, 2], true),      // use_rich_chat_input
-    b("split-threads", &[6, 3], true),   // use_thread_sidebar
-    Entry { id: "spoilers", path: &[6, 4], wrapper: true, kind: Kind::Str(&["ON_CLICK", "ALWAYS", "IF_MODERATOR"]), default: 0 }, // render_spoilers
-    b("alt-text", &[6, 7], false),       // view_image_descriptions
-    b("media-uploads", &[6, 9], true),   // inline_attachment_media
-    b("media-links", &[6, 10], true),    // inline_embed_media
-    b("gifs", &[6, 11], true),           // gif_auto_play
-    b("embeds", &[6, 12], true),         // render_embeds
-    b("reactions", &[6, 13], true),      // render_reactions
-    // animate_stickers (UInt32Value): 0 always, 1 on interaction, 2 never
+    b("n-stream", &[5, 7], true),
+    b("md-preview", &[6, 2], true),
+    b("split-threads", &[6, 3], true),
+    Entry { id: "spoilers", path: &[6, 4], wrapper: true, kind: Kind::Str(&["ON_CLICK", "ALWAYS", "IF_MODERATOR"]), default: 0 },
+    b("alt-text", &[6, 7], false),
+    b("media-uploads", &[6, 9], true),
+    b("media-links", &[6, 10], true),
+    b("gifs", &[6, 11], true),
+    b("embeds", &[6, 12], true),
+    b("reactions", &[6, 13], true),
     en("stickers", &[6, 15], true, &[0, 1, 2], 0),
-    b("tts", &[6, 16], true),            // enable_tts_command
-    b("age-ios", &[6, 20], false),       // view_nsfw_guilds
-    b("anim-emoji", &[6, 14], true),     // animate_emoji
-    b("emoticons", &[6, 21], true),      // convert_emoticons
-    b("age-cmds", &[6, 23], false),      // view_nsfw_commands
-    b("legacy-input", &[6, 24], false),  // use_legacy_chat_input
-    // dm_spam_filter_v2: 3 friends+non-friends, 2 non-friends, 1 disabled
+    b("tts", &[6, 16], true),
+    b("age-ios", &[6, 20], false),
+    b("anim-emoji", &[6, 14], true),
+    b("emoticons", &[6, 21], true),
+    b("age-cmds", &[6, 23], false),
+    b("legacy-input", &[6, 24], false),
     en("spam", &[6, 27], false, &[3, 2, 1], 1),
-    b("ac-stickers", &[6, 28], true),    // include_stickers_in_autocomplete
-    // explicit_content_settings (29): ExplicitContentRedaction SHOW 1 BLUR 2 BLOCK 3
+    b("ac-stickers", &[6, 28], true),
     en("cf-servers", &[6, 29, 1], false, &[1, 2, 3], 0),
     en("cf-friends", &[6, 29, 2], false, &[1, 2, 3], 0),
     en("cf-others", &[6, 29, 3], false, &[1, 2, 3], 2),
-    // gore_content_settings (32), same enum
     en("cfv-servers", &[6, 32, 1], false, &[1, 2, 3], 0),
     en("cfv-friends", &[6, 32, 2], false, &[1, 2, 3], 0),
     en("cfv-others", &[6, 32, 3], false, &[1, 2, 3], 1),
-    en("dm-search", &[6, 36], true, &[0, 1], 0), // is_cross_dm_search_enabled
-    b("ac-games", &[6, 39], true),       // include_game_mentions_in_autocomplete
-    b("avatars", &[6, 41], true),        // display_compact_avatars
-    // --- Notifications (7)
-    b("act-stream", &[7, 2], true),      // notify_friends_on_go_live
-    // reaction_notifications: 0 enabled, 1 only DMs, 2 disabled
+    en("dm-search", &[6, 36], true, &[0, 1], 0),
+    b("ac-games", &[6, 39], true),
+    b("avatars", &[6, 41], true),
+    b("act-stream", &[7, 2], true),
     en("n-react", &[7, 7], false, &[0, 1, 2], 0),
-    b("n-online", &[7, 12], true),      // enable_friend_online_notifications
-    b("n-anniv", &[7, 14], true),        // enable_friend_anniversary_notifications
-    b("n-profile", &[7, 16], true),      // enable_profile_updates_notifications
-    b("n-event", &[7, 22], true),        // enable_upcoming_server_event_notifications
-    b("quiet-mode", &[7, 5], false),    // quiet_mode (BoolValue): no message notifications / sounds
-    b("share-update", &[7, 24], true),   // notify_friends_on_profile_update
-    b("act-online", &[7, 25], true),     // notify_friends_on_come_online
-    // --- Privacy (8)
-    b("act-friends", &[8, 1], true),     // allow_activity_party_privacy_friends
-    b("act-voice", &[8, 2], true),       // allow_activity_party_privacy_voice_channel
-    // friend_source_flags (UInt32Value): MUTUAL_FRIENDS 2, MUTUAL_GUILDS 4, NO_RELATION 8
+    b("n-online", &[7, 12], true),
+    b("n-anniv", &[7, 14], true),
+    b("n-profile", &[7, 16], true),
+    b("n-event", &[7, 22], true),
+    b("quiet-mode", &[7, 5], false),
+    b("share-update", &[7, 24], true),
+    b("act-online", &[7, 25], true),
+    b("act-friends", &[8, 1], true),
+    b("act-voice", &[8, 2], true),
     Entry { id: "fr-everyone", path: &[8, 11], wrapper: true, kind: Kind::Bits(8), default: 1 },
     Entry { id: "fr-fof", path: &[8, 11], wrapper: true, kind: Kind::Bits(2), default: 1 },
     Entry { id: "fr-members", path: &[8, 11], wrapper: true, kind: Kind::Bits(4), default: 1 },
-    inv("msg-requests", &[8, 17], true), // default_message_request_restricted
-    // drops_opted_out: "Use my Discord activity to personalize Sponsored Content" (DATA_USAGE_QUESTS_SETTING)
+    inv("msg-requests", &[8, 17], true),
     inv("data-sponsored", &[8, 18], true),
-    b("game-dms", &[8, 26], true),       // allow_game_friend_dms_in_discord
-    // slayer_sdk_receive_dms_in_game: 1 all, 2 users with game, 3 none
+    b("game-dms", &[8, 26], true),
     en("ingame", &[8, 28], false, &[1, 2, 3], 0),
-    // default_guilds_activity_restricted_v2: 3 on, 2 on for large guilds, 1 off
     en("act-where", &[8, 29], false, &[3, 2, 1], 0),
-    // quests_3p_data_opted_out: "Use third-party data to personalize Sponsored Content"
     inv("data-third", &[8, 30], true),
-    // profile_visibility: FRIENDS_AND_ALL_GUILDS 3, FRIENDS_AND_SMALL_GUILDS 2, FRIENDS_ONLY 1 (UNSET 0 = all)
     en("share-profile", &[8, 32], false, &[3, 2, 1], 0),
-    inv("fr-msg", &[8, 33], true),       // hide_friend_request_notes
-    // swp_message_promotion_opted_out: Discoverable message content on the web
-    // ("pinot_member_setting"); unset = READY `swp_message_promotion_default_opted_out`.
+    inv("fr-msg", &[8, 33], true),
     inv("data-discovery", &[8, 35], false),
-    // --- Status (11)
-    b("act-share", &[11, 3], true),      // show_current_game
-    // --- Appearance (13): timestamp_hour_cycle AUTO 0, H12 1, H23 2
+    b("act-share", &[11, 3], true),
     en("time-format", &[13, 9], false, &[0, 1, 2], 0),
-    // --- Favorites (15): guild_visible ("Show favorite servers", beta)
     b("favs", &[15, 3], false),
-    // --- Clips (19)
-    b("data-clips", &[19, 1], true),     // allow_voice_recording
+    b("data-clips", &[19, 1], true),
 ];
 
-/// Account settings outside settings-proto (REST routes of the client).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rest {
-    /// `/users/@me/consent` type.
     Consent(&'static str),
-    /// `/users/@me/email-settings` category.
     Email(&'static str),
 }
 
-/// (control id, route, client default)
 pub static REST: &[(&str, Rest, bool)] = &[
     ("data-improve", Rest::Consent("usage_statistics"), true),
     ("data-personalize", Rest::Consent("personalization"), true),
@@ -154,7 +108,6 @@ pub fn rest(id: &str) -> Option<(Rest, bool)> {
     REST.iter().find(|r| r.0 == id).map(|r| (r.1, r.2))
 }
 
-/// Values found in the consent and email-settings responses.
 pub fn read_rest(consent: Option<&serde_json::Value>, email: Option<&serde_json::Value>) -> std::collections::HashMap<&'static str, bool> {
     let cats = email.and_then(|e| e.get("categories").or_else(|| e.get("settings").and_then(|s| s.get("categories"))));
     REST.iter()
@@ -172,7 +125,6 @@ pub fn entry(id: &str) -> Option<&'static Entry> {
     ENTRIES.iter().find(|e| e.id == id)
 }
 
-/// Wire value for every entry present in a raw settings blob.
 pub fn read_all(raw: &[u8]) -> std::collections::HashMap<&'static str, u64> {
     let mut out = std::collections::HashMap::new();
     for e in ENTRIES {
@@ -193,7 +145,6 @@ pub fn read_all(raw: &[u8]) -> std::collections::HashMap<&'static str, u64> {
     out
 }
 
-/// Flags fields read as "all set" when unset (the client's default).
 fn bits_of(map: &std::collections::HashMap<&'static str, u64>, id: &str) -> u64 {
     map.get(id).copied().unwrap_or(2 | 4 | 8)
 }
@@ -208,15 +159,10 @@ pub fn get_bool(map: &std::collections::HashMap<&'static str, u64>, id: &str) ->
     }
 }
 
-/// READY fields the client reads next to settings-proto for the Data &
-/// Privacy switches (`PINOT_MEMBER_SETTING_STATE`, `AD_PERSONALIZATION_TOGGLES_RESTRICTED`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReadyFlags {
-    /// `ad_personalization_toggles_disabled`: both Sponsored Content switches greyed out.
     pub ad_toggles_disabled: bool,
-    /// `swp_message_promotion_locked` (client default true): Discoverable switch greyed out.
     pub discovery_locked: bool,
-    /// `swp_message_promotion_default_opted_out` (client default true).
     pub discovery_default_opted_out: bool,
 }
 
@@ -243,15 +189,12 @@ pub fn ready_flags() -> ReadyFlags {
     *READY_FLAGS.read()
 }
 
-/// Switches the client greys out (opacity .5, not-allowed, no toggle).
 pub fn disabled(map: &std::collections::HashMap<&'static str, u64>, compact: bool, id: &str) -> bool {
     let f = ready_flags();
     match id {
-        // NP(): toggles disabled || drops opted out
         "data-third" => f.ad_toggles_disabled || !get_bool(map, "data-sponsored"),
         "data-sponsored" => f.ad_toggles_disabled,
         "data-discovery" => f.discovery_locked,
-        // APPEARANCE_DISPLAY_COMPACT_AVATARS only applies to compact mode.
         "avatars" => !compact,
         _ => false,
     }
@@ -267,8 +210,6 @@ pub fn get_pick(map: &std::collections::HashMap<&'static str, u64>, id: &str) ->
     }
 }
 
-/// Wire value to store for switch `id` set to `on`. Bit switches combine
-/// with the other bits of the same field ("Everyone" sets them all).
 pub fn bool_wire(map: &std::collections::HashMap<&'static str, u64>, id: &str, on: bool) -> u64 {
     match entry(id).map(|e| e.kind) {
         Some(Kind::Bits(m)) => {
@@ -291,7 +232,6 @@ pub fn pick_wire(id: &str, i: usize) -> u64 {
     }
 }
 
-/// API change for a stored wire value of `id`.
 pub fn change(id: &str, wire: u64) -> Option<phoenix_api::rest::settings::SettingChange> {
     let e = entry(id)?;
     let value = match e.kind {
@@ -342,19 +282,16 @@ mod tests {
 
     #[test]
     fn privacy_wire_fields() {
-        // Sponsored off = drops_opted_out true (8, 18) as a BoolValue.
         let c = change("data-sponsored", bool_wire(&Default::default(), "data-sponsored", false)).unwrap();
         let raw = c.encode();
         assert_eq!(raw, vec![0x42, 5, 0x92, 1, 2, 8, 1], "privacy(8){{drops_opted_out(18){{value: true}}}}");
         let m = read_all(&raw);
         assert!(!get_bool(&m, "data-sponsored"));
         assert!(disabled(&m, false, "data-third"), "3p switch greys out once activity personalisation is off");
-        // Profile visibility: friends only = enum 1 at (8, 32), not wrapped.
         let raw = change("share-profile", pick_wire("share-profile", 2)).unwrap().encode();
         assert_eq!(raw, vec![0x42, 3, 0x80, 2, 1]);
         assert_eq!(get_pick(&read_all(&raw), "share-profile"), 2);
         assert_eq!(get_pick(&Default::default(), "share-profile"), 0, "UNSET = friends and all servers");
-        // Push delay: afk_timeout 300 s at (5, 6).
         let raw = change("push-delay", pick_wire("push-delay", 4)).unwrap().encode();
         assert_eq!(get_pick(&read_all(&raw), "push-delay"), 4);
         assert_eq!(get_pick(&Default::default(), "push-delay"), 0, "unset = 1 minute");

@@ -1,10 +1,3 @@
-//! Parity features that are not tied to one screen: slash commands and
-//! interactions, the mentions inbox, saved messages, moderation, forum posts,
-//! polls, group DMs, and rebuilding the UI after a fresh READY on reconnect.
-//!
-//! The UI sends a [`ParityRequest`] through `Backend::parity`; the real
-//! backend runs it in [`exec`].
-
 pub mod exec;
 pub mod guide;
 pub mod slash;
@@ -25,7 +18,6 @@ use crate::{
     model::{Id, Message},
 };
 
-/// Gateway session id, needed by `POST /interactions`.
 fn session_slot() -> &'static Mutex<String> {
     static S: OnceLock<Mutex<String>> = OnceLock::new();
     S.get_or_init(|| Mutex::new(String::new()))
@@ -39,15 +31,12 @@ pub fn session_id() -> String {
     session_slot().lock().clone()
 }
 
-/// One chat-input command offered by the composer autocomplete.
 #[derive(Clone, Debug)]
 pub struct SlashCommand {
     pub name: String,
     pub description: String,
     pub app_name: String,
-    /// `app-icons/{app}/{icon}.png` of the command's application, if it has one.
     pub app_icon: Option<String>,
-    /// Raw command, sent back as is to run it.
     pub raw: Value,
 }
 
@@ -59,30 +48,22 @@ pub struct ForumPost {
     pub message_count: u32,
     pub first_message: Option<Message>,
     pub owner: Option<Id>,
-    /// Latest message id (activity time), else the thread id.
     pub last_message: Option<Id>,
-    /// Thread `member_ids_preview` / `member_count` (threads browser facepile).
     pub member_ids_preview: Vec<Id>,
     pub member_count: u32,
-    /// Thread flag PINNED (1 << 1): pinned post shown first with a pin badge.
     pub pinned: bool,
-    /// Came from the archived search (forum "Older posts" section).
     pub archived: bool,
-    /// `thread_metadata.locked`: only moderators can reopen or reply.
     pub locked: bool,
 }
 
-/// Tag of a forum / media channel (`available_tags`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForumTag {
     pub id: Id,
     pub name: gpui::SharedString,
-    /// Unicode emoji or custom emoji token.
     pub emoji: Option<String>,
     pub moderated: bool,
 }
 
-/// One entry of the synced guild list: a folder (`id` set) or a lone guild.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FolderSync {
     pub id: Option<u64>,
@@ -93,24 +74,18 @@ pub struct FolderSync {
 
 #[derive(Clone, Debug)]
 pub enum ModAction {
-    /// Seconds; 0 removes the timeout.
     Timeout(u64),
     Kick,
-    /// Seconds of history to delete.
     Ban(u32),
     Unban,
 }
 
-/// Poll answer typed in the creation modal: text and optional (custom emoji id, emoji name).
 pub type PollAnswerDraft = (String, Option<(Option<Id>, String)>);
 
 #[derive(Clone, Debug)]
 pub enum ParityRequest {
-    /// Guild (or DM channel) + user-installed commands.
     Commands { guild: Option<Id>, channel: Id },
-    /// Run `command` (raw from [`SlashCommand`]) with the text typed after its name.
     RunCommand { guild: Option<Id>, channel: Id, command: Value, args: String },
-    /// Button (type 2) or select (3, 5..8) click on a bot message.
     Component {
         guild: Option<Id>,
         channel: Id,
@@ -121,43 +96,29 @@ pub enum ParityRequest {
         kind: u8,
         values: Option<Vec<String>>,
     },
-    /// Modal submit: `fields` = (custom_id, value) of each text input.
     ModalSubmit { guild: Option<Id>, channel: Id, app: Id, modal: Id, custom_id: String, fields: Vec<(String, String)> },
-    /// `GET /users/@me/mentions` with the inbox filters (`everyone`, `roles`).
     Mentions { before: Option<Id>, guild: Option<Id>, everyone: bool, roles: bool },
     DismissMention(Id),
     SavedMessages,
-    /// `GET /users/@me/scheduled-messages` (Inbox > Scheduled), read-only.
     ScheduledMessages,
-    /// `GET /content-inventory/users/@me`: activity card traits.
     ContentInventory,
     SetSaved { channel: Id, message: Id, saved: bool },
     VotePoll { channel: Id, message: Id, answers: Vec<u32> },
-    /// "Créer le sondage": answers are (text, optional (custom emoji id, emoji name)).
     CreatePoll { channel: Id, question: String, answers: Vec<PollAnswerDraft>, hours: u32, multi: bool },
-    /// "Mettre fin au sondage" (POLL_EXPIRE).
     EndPoll { channel: Id, message: Id },
-    /// `by_creation` sorts by post date instead of recent activity.
     ForumPosts { forum: Id, tags: Vec<Id>, offset: u32, by_creation: bool, archived: bool },
     CreatePost { forum: Id, title: String, content: String, tags: Vec<Id> },
     Moderate { guild: Id, user: Id, action: ModAction },
     BulkDelete { channel: Id, messages: Vec<Id> },
     CreateGroupDm(Vec<Id>),
-    /// Save the guild rail order and folders (`guild_folders`).
     GuildFolders(Vec<FolderSync>),
-    /// Archived public + joined private threads of a text channel (threads browser).
     ArchivedThreads { channel: Id },
-    /// `GET /guilds/{g}/scheduled-events` (Events modal), read-only.
     ScheduledEvents { guild: Id },
-    /// `GET /guilds/{g}/onboarding` (Channels & Roles), read-only.
     Onboarding { guild: Id },
-    /// `GET /guilds/{g}/new-member-welcome` + `GET /guilds/{g}/profile` (Server Guide), read-only.
     ServerGuide { guild: Id },
-    /// `GET /channels/{id}` for a thread / forum post opened by link.
     FetchThread { id: Id },
 }
 
-/// One onboarding question (Channels & Roles "Customize" tab).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct OnboardingPrompt {
     pub id: Id,
@@ -171,33 +132,26 @@ pub struct OnboardingOption {
     pub id: Id,
     pub title: String,
     pub description: String,
-    /// Custom emoji id, or a unicode emoji in `emoji_name`.
     pub emoji_id: Option<Id>,
     pub emoji_name: Option<String>,
     pub animated: bool,
 }
 
-/// A guild scheduled event (Events modal card).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuildEvent {
     pub id: Id,
     pub name: String,
     pub description: String,
-    /// Unix seconds.
     pub start: i64,
     pub end: Option<i64>,
-    /// 1 scheduled, 2 active, 3 completed, 4 canceled.
     pub status: u8,
-    /// Voice/stage channel, or `location` for external events.
     pub channel: Option<Id>,
     pub location: Option<String>,
     pub user_count: u32,
     pub creator: Option<Id>,
-    /// Cover image hash (`guild-events/{id}/{hash}.png`).
     pub image: Option<String>,
 }
 
-/// One content inventory feed entry (member list Activity card).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InventoryEntry {
     pub id: Id,
@@ -209,9 +163,7 @@ pub struct InventoryEntry {
     pub resurrected: bool,
     pub trending: bool,
     pub streak_days: Option<u64>,
-    /// `app-icons/{app}/{icon}.png` from `/applications/public`.
     pub icon: Option<gpui::SharedString>,
-    /// Live session (trait `is_live`): start and expiry, unix ms.
     pub live: bool,
     pub started_ms: Option<i64>,
     pub expires_ms: Option<i64>,
@@ -224,7 +176,6 @@ pub enum ParityReply {
     Messages(Vec<Message>),
     ForumPosts { posts: Vec<ForumPost>, has_more: bool },
     Channel(Id),
-    /// Content inventory feed entries.
     Inventory(Vec<InventoryEntry>),
     Events(Vec<GuildEvent>),
     Onboarding(Vec<OnboardingPrompt>),
@@ -232,7 +183,6 @@ pub enum ParityReply {
     Thread(crate::model::Channel),
 }
 
-/// Fresh READY after a non-resumable reconnect (carried by `AppEvent::Resync`).
 pub struct Resync(pub ReadyData);
 
 impl std::fmt::Debug for Resync {
@@ -241,7 +191,6 @@ impl std::fmt::Debug for Resync {
     }
 }
 
-/// Rebuild all state from the new READY, then return to where the user was.
 pub fn on_resync(app: &mut App, r: Resync, cx: &mut Context<App>) {
     let (guild, channel) = (app.selected_guild, app.selected_channel);
     app.apply_ready(r.0, cx);
@@ -287,10 +236,6 @@ mod tests {
             .unwrap();
     }
 
-    /// Start-up order seen on the real account: the disk snapshot is shown,
-    /// READY_SUPPLEMENTAL puts a user in a voice channel, then the live
-    /// ReadyData (built from READY, before the supplemental, so without voice
-    /// users) replaces the snapshot. The voice row must survive.
     #[gpui::test]
     fn voice_users_survive_ready_after_supplemental(cx: &mut gpui::TestAppContext) {
         use crate::backend::AppEvent;
@@ -308,7 +253,6 @@ mod tests {
                 let flags = crate::model::VoiceFlags { self_mute: true, self_deaf: true, ..Default::default() };
                 app.handle_event(AppEvent::VoiceFlags { user, flags }, cx);
                 let mut live = ready();
-                // READY has no guild voice states for user accounts.
                 for c in live.channels.iter_mut().filter(|c| c.guild.is_some()) {
                     c.voice_users.clear();
                 }
@@ -316,7 +260,6 @@ mod tests {
                 assert!(app.channels[&vc].voice_users.contains(&user), "voice row lost by the ReadyData after READY_SUPPLEMENTAL");
                 let f = crate::ui::voice_panel::flags(user);
                 assert!(f.self_mute && f.self_deaf);
-                // A later leave still removes it.
                 app.handle_event(AppEvent::VoiceStateUpdate { channel: None, user }, cx);
                 assert!(!app.channels[&vc].voice_users.contains(&user));
             })
@@ -324,7 +267,6 @@ mod tests {
     }
 }
 
-/// One `scheduled-events` entry; `None` without an id.
 pub fn parse_event(v: &serde_json::Value) -> Option<GuildEvent> {
     let sid = |k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
     let time = |k: &str| {
@@ -364,7 +306,6 @@ mod event_tests {
     }
 }
 
-/// `prompts` of `GET /guilds/{g}/onboarding`, in order.
 pub fn parse_onboarding(v: &serde_json::Value) -> Vec<OnboardingPrompt> {
     let sid = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
     let s = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_owned();

@@ -1,20 +1,8 @@
-//! Offscreen frames of animated custom emoji as Phoenix draws them (message size,
-//! jumbo, reaction, picker tile at rest and hovered-off):
-//! `anim_emoji_shot <out-prefix> <dir> <id>...` writes `<out-prefix>-<n>.png`,
-//! one frame every 150 ms. `<dir>` holds generated test art `<id>.gif` (playing)
-//! and `<id>.png` (still), served through the `local/` asset path: no real emoji.
-//!
-//! Then it measures playback: the colour at the centre of the first 22px emoji
-//! is sampled every 20 ms for 3 s (`fps` = colour changes per second), and the
-//! process CPU time is read from `/proc/self/stat` over 5 s of 60 Hz redraws,
-//! once with the emoji playing and once with `Play animated emoji` off.
-
 use std::{sync::Arc, time::Duration};
 
 use gpui::{AppContext, InteractiveElement, Context, HeadlessAppContext, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb, size};
 use phoenix_app::{assets::Assets, media::emoji};
 
-/// "Play animated emoji" for the CPU comparison.
 static PLAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 struct Shot {
@@ -40,11 +28,9 @@ impl Render for Shot {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(row(22., false, &self.ids)) // inline 1.375em at 16px
-            .child(row(48., false, &self.ids)) // jumbo 3em
-            .child(row(40., true, &self.ids)) // picker tile, not hovered: still
-            // Control: the same GIF as a bare `img` without / with an element id
-            // (GPUI keeps the frame index in the element state of an id'd img only).
+            .child(row(22., false, &self.ids))
+            .child(row(48., false, &self.ids))
+            .child(row(40., true, &self.ids))
             .child(
                 div()
                     .flex()
@@ -72,12 +58,10 @@ fn main() -> anyhow::Result<()> {
     let pump = |cx: &mut HeadlessAppContext, n: usize| {
         for _ in 0..n {
             std::thread::sleep(Duration::from_millis(50));
-            // Image frame timers run on the scheduler clock, virtual in headless.
             cx.advance_clock(Duration::from_millis(50));
             cx.run_until_parked();
         }
     };
-    // GPUI only advances GIF frames in the active window.
     cx.update_window(win.into(), |_, window, _| window.activate_window())?;
     pump(&mut cx, 60);
     for n in 0..6 {
@@ -88,7 +72,6 @@ fn main() -> anyhow::Result<()> {
     }
     println!("wrote {out}-0..5.png");
 
-    // Effective frame rate of the first inline emoji (centre of the 22px box at 16,16).
     let scale = cx.update_window(win.into(), |_, window, _| window.scale_factor())?;
     let at = ((16. + 11.) * scale) as u32;
     let mut last = None;
@@ -106,7 +89,6 @@ fn main() -> anyhow::Result<()> {
             changes += 1;
         }
         last = Some(px);
-        // Control row (4th row, y = 16 + 22 + 12 + 48 + 12 + 40 + 12): without id, with id.
         let cy = ((16. + 22. + 12. + 48. + 12. + 40. + 12. + 11.) * scale) as u32;
         let (a, b) = (shot.get_pixel(at, cy).0, shot.get_pixel(((16. + 22. + 8. + 11.) * scale) as u32, cy).0);
         ctl.0 += usize::from(ctl_last.is_some_and(|(la, _)| la != a));
@@ -116,7 +98,6 @@ fn main() -> anyhow::Result<()> {
     println!("fps {:.1} ({changes} frame changes in {:.1} s)", changes as f32 / t0.elapsed().as_secs_f32(), t0.elapsed().as_secs_f32());
     println!("control img without id: {} frame changes, with id: {}", ctl.0, ctl.1);
 
-    // CPU of 5 s of 60 Hz redraws, playing then still.
     let cpu = || -> f64 {
         let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
         let f: Vec<&str> = stat.rsplit_once(')').map_or("", |(_, r)| r).split_whitespace().collect();

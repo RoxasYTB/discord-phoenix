@@ -1,7 +1,3 @@
-//! Report flow for a message or a user. The steps come from the server menu
-//! (`GET /reporting/menu/{message|user}`); each node shows its header,
-//! subheader and choices, a Back button, and Submit / Done on leaf nodes.
-
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use phoenix_api::rest::reporting::{ReportMenu, ReportNode, ReportTarget};
 
@@ -16,7 +12,6 @@ use crate::{
 pub struct Report {
     pub target: ReportTarget,
     pub menu: Option<Box<ReportMenu>>,
-    /// Visited node ids (breadcrumbs), root first.
     pub path: Vec<u64>,
     pub error: Option<SharedString>,
     pub sending: bool,

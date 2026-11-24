@@ -1,9 +1,3 @@
-//! Voice & Video settings page (Discord layout): devices, volumes, mic test
-//! with live meter, input mode (voice activity / push-to-talk with keybind
-//! recording), input sensitivity, voice processing, attenuation, video.
-//!
-//! Also hosts the continuous [`slider`] used by the voice context menu.
-
 use crate::theme::z;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -34,9 +28,7 @@ const TRACK: u32 = 0x4E5058;
 const METER_OFF: u32 = 0x4E5058;
 const SENS_LOW: u32 = 0xF0B232;
 const SENS_HIGH: u32 = 0x23A55A;
-/// Segments of the mic test meter.
 const METER_SEGMENTS: usize = 48;
-/// Meter range in dBFS.
 const DB_MIN: f32 = -100.;
 
 thread_local! {
@@ -54,13 +46,11 @@ fn eid(s: impl Into<String>) -> ElementId {
     ElementId::Name(SharedString::from(s.into()))
 }
 
-/// Category title (heading-xl/medium 24/32 --text-strong, 24px under).
 fn h1(t: SharedString) -> Div {
     crate::ui::controls::section_title(t)
 }
 
 
-/// Field label (label body-md/medium 16/20 --text-strong, 8px under).
 fn h5(t: impl Into<SharedString>) -> Div {
     div()
         .pb(z(8.))
@@ -72,13 +62,11 @@ fn h5(t: impl Into<SharedString>) -> Div {
 }
 
 
-/// body-sm/normal 14/18 --text-subtle.
 fn note(t: impl Into<SharedString>) -> Div {
     div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(t.into())
 }
 
 
-/// divider_ZaYWLb: 1px --border-subtle, margin 50px 0.
 fn divider() -> Div {
     div().my(z(50.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))
 }
@@ -89,8 +77,6 @@ fn knob(id: ElementId, on: bool, disabled: bool) -> gpui::Stateful<Div> {
 }
 
 
-/// Switch row (baseControlItem: padding/gap 12, title body-md/medium 16/20
-/// --text-strong, body-sm description 4px under, switch aligned top).
 fn switch_row(
     id: &'static str,
     title: SharedString,
@@ -107,7 +93,6 @@ fn switch_row(
             .flex()
             .gap(z(12.))
             .mx(z(-12.))
-            // baseSettingWrapper_4Z2WJy: padding 10 0 (switch rows)
             .px(z(12.))
             .py(z(10.))
             .rounded(z(16.))
@@ -146,9 +131,6 @@ fn frac_at(id: &'static str, x: Pixels) -> Option<f32> {
     })
 }
 
-/// Continuous Discord slider: 8px track, blurple fill, 10x24 white grabber,
-/// value bubble above the grabber while dragging. `on_change(app, frac,
-/// done)`; `done` is true on release (save then).
 pub(crate) fn slider(
     id: &'static str,
     frac: f32,
@@ -212,7 +194,6 @@ pub(crate) fn slider(
         .child(
             div()
                 .absolute()
-                // vanilla-settings-07 #2734 bar_OnqacX: 4px, radius 4, centred in 24.
                 .top(z(10.))
                 .left_0()
                 .w_full()
@@ -222,8 +203,6 @@ pub(crate) fn slider(
                 .child(div().h_full().w(relative(frac)).rounded(z(4.)).bg(c(lo))),
         )
         .child(
-            // #2737 grabber_OnqacX: 16px white circle.
-            // ref-cache settings-grab0-hover: grows to 20px on hover (centre kept via -2 margins).
             div().absolute().top(z(4.)).left(relative(frac)).w(z(0.)).flex().justify_center().child(
                 div()
                     .id(eid(format!("slider-{id}-grab")))
@@ -233,7 +212,7 @@ pub(crate) fn slider(
                     .rounded_full()
                     .bg(gpui::white())
                     .border_1()
-                    .border_color(c(tok(idx::BORDER_NORMAL))) // grabber_OnqacX border --border-normal
+                    .border_color(c(tok(idx::BORDER_NORMAL)))
                     .shadow_sm()
                     .hover(|d| d.size(z(20.)).m(z(-2.)))
                     .when(dragging, |d| d.size(z(20.)).m(z(-2.)))
@@ -360,14 +339,11 @@ fn select(
         .when(open, |d| d.child(deferred(list).with_priority(2)))
 }
 
-/// Mana md button (button_F7qvhY: 40px, radius 8, 16/500 label); the
-/// caller's colours pick the variant (brand = primary, else secondary).
 fn button(id: &'static str, label: SharedString, bg: u32, _hover: u32) -> gpui::Stateful<Div> {
     let kind = if bg == Palette::BLURPLE { crate::ui::controls::BtnKind::Primary } else { crate::ui::controls::BtnKind::Secondary };
     crate::ui::controls::button(id, label, kind)
 }
 
-/// Segmented level meter (mic test).
 fn meter(level_db: f32, active: bool) -> Div {
     let frac = ((level_db - DB_MIN) / -DB_MIN).clamp(0., 1.);
     let lit = if active { (frac * METER_SEGMENTS as f32).round() as usize } else { 0 };
@@ -377,7 +353,6 @@ fn meter(level_db: f32, active: bool) -> Div {
     )
 }
 
-/// Live input level from the mic test, or from the call.
 fn live_level() -> Option<(f32, bool)> {
     let t = MIC_TEST.with(|m| m.borrow().as_ref().map(|t| (t.level_db(), t.gate_open())));
     t.or_else(|| {
@@ -416,7 +391,6 @@ fn restart_mic_test() {
     }
 }
 
-/// Repaint ~20 fps while the page is open (meters); stop the test after.
 fn ensure_ticker(cx: &mut Cx) {
     if TICKING.with(Cell::get) {
         return;
@@ -570,7 +544,6 @@ fn sensitivity(p: &VoicePrefs, cx: &mut Cx) -> Div {
     let level = live_level();
     let lvl_frac = level.map(|(db, _)| ((db - DB_MIN) / -DB_MIN).clamp(0., 1.)).unwrap_or(0.);
     let bar: AnyElement = if auto {
-        // Discord: a single bar that lights green while you are detected as speaking.
         let speaking = level.is_some_and(|(_, open)| open);
         div()
             .mt(z(4.))
@@ -595,7 +568,6 @@ fn sensitivity(p: &VoicePrefs, cx: &mut Cx) -> Div {
                 }),
                 cx,
             ))
-            // Live level: dim the part of the bar above the current level.
             .child(
                 div()
                     .absolute()
@@ -648,8 +620,6 @@ fn mic_test(app: &PhoenixApp, cx: &mut Cx) -> Div {
     div()
         .flex()
         .flex_col()
-        // vanilla-settings-07 #2769: no heading/note, just the "Mic Test"
-        // button + meter, then the body-sm help line (#2776) 36px under.
         .child(
             div()
                 .flex()
@@ -687,7 +657,6 @@ fn mic_test(app: &PhoenixApp, cx: &mut Cx) -> Div {
         .when_some(err, |d, e| d.child(div().mt(z(8.)).text_size(z(12.)).text_color(c(Palette::RED)).child(SharedString::from(e))))
 }
 
-/// The whole page.
 pub fn render(app: &PhoenixApp, cx: &mut Cx) -> Div {
     ensure_ticker(cx);
     ensure_devices(cx);
@@ -700,8 +669,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Cx) -> Div {
             }
         }))
         .child(h1(crate::t!("sp.vo.t1")))
-        // vanilla-settings-07 #2702: "Micro" label 67px under the title top
-        // (32 + 24 + 1px rule + 10 wrapper padding); volume labels 98 below.
         .child(
             div()
                 .mt(z(11.))
@@ -732,12 +699,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Cx) -> Div {
         )
         .child(div().mt(z(35.)).child(mic_test(app, cx)))
         .child(divider())
-        // vanilla-settings-07b: untitled category (input profile, push to
-        // talk, advanced voice), then Caméra and Streaming categories.
         .child(super::pages::render(app, LOWER, cx))
 }
-
-// ------------------------------------------------------------ lower half
 
 use super::pages::{B, Bind};
 
@@ -769,7 +732,7 @@ static LOWER: &[B] = &[
         "sp.vo.stream_adv",
         "sp.vo.stream_adv_d",
         &[B::Custom("sp.vo.stream_att", stream_attenuation), B::Custom("sp.vo.stream_att_force", stream_strength)],
-    ),    // SOUNDS_CATEGORY: "Sons", the collapsible list, the link back to Notifications.
+    ),
     B::Divider,
     B::Title("sp.vo.sounds"),
     B::Custom("sp.snd.deafen", voice_sounds),
@@ -778,7 +741,6 @@ static LOWER: &[B] = &[
 
 fn voice_sounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let notice = (!app.prefs.local.notification_sounds).then(|| {
-        // `useInlineNotice`: warning when "Disable all notification sounds" is on.
         div()
             .p(z(8.))
             .rounded(z(8.))
@@ -792,15 +754,10 @@ fn voice_sounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     div().flex().flex_col().gap(z(10.)).children(notice).child(super::pages::render(app, super::pages::VOICE_SOUNDS, cx)).into_any_element()
 }
 
-/// Divider closing the untitled voice category: #2859 sits 40px under the
-/// advanced expander (the shared divider margin is 50).
 fn adv_divider(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div().mt(z(40.)).mb(z(50.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))).into_any_element()
 }
 
-/// "Profil d'entrée audio" (#2786–#2806): label, then a radioGroup whose
-/// options are 42px (title 16/20 + body-sm description 4px under) 16px
-/// apart, text at 32px. "Personnalisés" reveals the manual controls.
 fn profile_row(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let p = prefs().lock().clone();
     let opts: [(&str, &str); 3] = [("sp.vo.iso", "sp.vo.iso_d"), ("sp.vo.studio", "sp.vo.studio_d"), ("sp.vo.custom", "sp.vo.custom_d")];
@@ -815,7 +772,6 @@ fn profile_row(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                 update(
                     move |p| {
                         p.audio_profile = i as u32;
-                        // Isolation = the whole processing chain, studio = none.
                         if i < 2 {
                             let on = i == 0;
                             p.echo_cancellation = on;
@@ -849,8 +805,6 @@ fn profile_row(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     col.into_any_element()
 }
 
-/// "Appuyer pour parler" switch (#2812); the keybind and release delay
-/// follow it while it is on.
 fn ptt_row(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let p = prefs().lock().clone();
     let on = p.input_mode == InputMode::PushToTalk;
@@ -871,8 +825,6 @@ fn ptt_row(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// cameraWrapper_3LYQ5J (#2894): 220px black box, radius 4, with the
-/// primary md "Test vidéo" button centred.
 fn camera_preview(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div()
         .py(z(10.))
@@ -881,8 +833,8 @@ fn camera_preview(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .h(z(220.))
                 .rounded(z(4.))
                 .border_1()
-                .border_color(gpui::black()) // cameraWrapper border oklab(0 0 0)
-                .bg(gpui::black()) // cameraWrapper background-color oklab(0 0 0)
+                .border_color(gpui::black())
+                .bg(gpui::black())
                 .flex()
                 .items_center()
                 .justify_center()
@@ -891,8 +843,6 @@ fn camera_preview(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// Capture devices from video4linux (name, deduplicated: the metadata
-/// node of a webcam repeats its name).
 fn cameras() -> Vec<String> {
     let mut nodes: Vec<(u32, String)> = std::fs::read_dir("/sys/class/video4linux")
         .into_iter()
@@ -915,7 +865,6 @@ fn cameras() -> Vec<String> {
     out
 }
 
-/// "Caméra" select (#2916–#2926): label, 40px field with the device.
 fn camera_select(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     thread_local!(static CAMS: RefCell<Option<Vec<String>>> = const { RefCell::new(None) });
     let cams = CAMS.with(|c| c.borrow_mut().get_or_insert_with(cameras).clone());
@@ -940,9 +889,6 @@ fn camera_select(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     div().py(z(10.)).flex().flex_col().gap(z(8.)).child(h5(crate::t!("sp.vo.camera")).pb_0()).child(dd).into_any_element()
 }
 
-/// Preset backgrounds the client offers (CDN content images, loaded at
-/// runtime like the client; the animated ones are videos we can't play,
-/// so they keep their tile and play badge only). (key, image, new badge)
 const PRESETS: &[(&str, Option<&str>, bool)] = &[
     ("sp.vo.bg1", None, true),
     ("sp.vo.bg2", None, true),
@@ -955,8 +901,6 @@ const PRESETS: &[(&str, Option<&str>, bool)] = &[
 ];
 const BLUR_IMG: &str = "https://cdn.discordapp.com/assets/content/9b1bb92a5685e3f1d67378826197687bb24f8cf1319a4ab2375fbc8a3fb7d0fe.png";
 
-/// newBadgeCutout_imJCJi: 3px page-coloured ring at (-6,-3) around a
-/// white body-xs/semibold 12/16 pill (padding 0 8), black uppercase text.
 fn new_badge() -> Div {
     div()
         .absolute()
@@ -981,14 +925,9 @@ fn new_badge() -> Div {
         )
 }
 
-/// backgroundOptions_imJCJi (#2934): 162x94 tiles, 4 per row, 16px
-/// columns / 15px rows apart, radius 4; the selected one has a 2px
-/// #5865F2 ring 4px outside it (backgroundOptionRing).
 fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let cur = app.settings.as_ref().and_then(|s| s.picks.get("vo-bg").copied()).unwrap_or(0);
     let label = |icon: &'static str, t: SharedString| {
-        // backgroundOptionContent: centred column, 18px icon in a 24px box,
-        // body-sm 14/18 white text (padding 0 4).
         div()
             .absolute()
             .inset_0()
@@ -1020,7 +959,6 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
             .when(badge, |d| d.child(new_badge()))
     };
     let mut tiles: Vec<AnyElement> = Vec::new();
-    // backgroundOptionInner #2937: rgb(30, 31, 34)
     tiles.push(tile(0, div().bg(c(0x1E1F22)).child(label("deny", crate::t!("sp.vo.bg_none"))), false, true, cx).into_any_element());
     tiles.push(
         tile(
@@ -1032,8 +970,6 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         )
         .into_any_element(),
     );
-    // backgroundCustomInlineUpsellBackground: Nitro gradient (133,71,198) →
-    // (171,93,138) under a 0.2 rgb(95,96,106) darkener; locked without Nitro.
     let custom = div()
         .bg(gpui::linear_gradient(90., gpui::linear_color_stop(c(0x8547C6), 0.), gpui::linear_color_stop(c(0xAB5D8A), 1.)))
         .child(div().absolute().inset_0().bg(c(0x5F606A)).opacity(0.2))
@@ -1060,7 +996,6 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         let i = k + 3;
         let inner = match img {
             Some(u) => div().bg(c(0x1E1F22)).child(gpui::img(*u).size_full().object_fit(gpui::ObjectFit::Cover)),
-            // playIcon_imJCJi: 16px box 4px in from the top-right, 12px glyph
             None => div().bg(c(0x1E1F22)).child(
                 div().absolute().top(z(4.)).right(z(4.)).size(z(16.)).flex().items_center().justify_center().child(
                     gpui::svg().path(crate::icons::path("play")).size(z(12.)).text_color(gpui::white()),
@@ -1078,7 +1013,6 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// "Atténuation du stream" (#3045): lowers others while they talk.
 fn stream_attenuation(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let p = prefs().lock().clone();
     switch_row(
@@ -1093,7 +1027,6 @@ fn stream_attenuation(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     .into_any_element()
 }
 
-/// "Force d'atténuation du stream" (#3057): label, 8px, 24px slider.
 fn stream_strength(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let p = prefs().lock().clone();
     div()

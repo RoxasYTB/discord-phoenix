@@ -26,16 +26,13 @@ fn ready_populates_cache() {
     assert_eq!(cache.current_user().unwrap().username, "phoenix");
     assert_eq!(cache.guilds().len(), 2);
     assert_eq!(cache.guild(g).unwrap().name(), "Rustaceans");
-    // Channels moved out of the guild into the channel map (8 + 1 thread).
     assert!(cache.guild(g).unwrap().channels.is_empty());
     assert_eq!(cache.guild_channels(g).len(), 9);
     let dms = cache.private_channels();
     assert_eq!(dms.len(), 2);
-    // Deduplicated recipients were resolved from READY.users.
     assert_eq!(dms[0].recipients[0].username, "alice");
     assert_eq!(dms[0].display_name(), "Alice");
     assert_eq!(cache.member(g, cache.current_user().unwrap().id).unwrap().nick.as_deref(), Some("phx"));
-    // Moderator role has ADMINISTRATOR in the fixture.
     assert_eq!(cache.permissions_in(Snowflake(400000000000000001)), Permissions::all());
     assert_eq!(cache.permissions_in(Snowflake(900000000000000001)), Permissions::all());
 }
@@ -50,7 +47,6 @@ fn message_ring_buffer_and_updates() {
     let ids: Vec<u64> = cache.messages(Snowflake(ch)).iter().map(|m| m.id.0).collect();
     assert_eq!(ids, vec![3, 4, 5]);
 
-    // Older history fetched over REST is merged in id order, capped.
     cache.insert_messages(Snowflake(ch), vec![msg(2, ch, "old")]);
     let ids: Vec<u64> = cache.messages(Snowflake(ch)).iter().map(|m| m.id.0).collect();
     assert_eq!(ids, vec![3, 4, 5]);
@@ -62,7 +58,6 @@ fn message_ring_buffer_and_updates() {
     let m = cache.message(Snowflake(ch), Snowflake(4)).unwrap();
     assert_eq!(m.content, "edited");
     assert_eq!(m.author.username, "u");
-    // Old snapshot unaffected (copy-on-write).
     assert_eq!(snapshot[1].content, "x");
 
     assert!(cache.apply(&parse_dispatch("MESSAGE_DELETE", r#"{"id":"3","channel_id":"77"}"#)));

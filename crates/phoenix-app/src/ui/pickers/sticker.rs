@@ -1,14 +1,8 @@
-//! Sticker tab: guild stickers then Discord's standard packs, searchable by
-//! name and tags. Clicking one sends it to the open channel.
-
 use gpui::{AnyElement, Context, ParentElement, SharedString, Styled, div, img, prelude::*, px};
 
 use super::{Pickers, close, empty_state, grid, idx, section_header, tk, types::StickerData, with_app};
 use crate::{app::PhoenixApp, media::sticker_url, model::ImageRef};
 
-// row_5z8c5P from the `picker-sticker` dump: 4 columns of 98px cells (96px preview,
-// --custom-stickers-constants-sticker-picker-preview-dimensions, + 1px padding),
-// 13px column gap, 12px row margin (--custom-stickers-constants-sticker-picker-preview-margin).
 const CELL: f32 = 98.;
 const COLS: usize = 4;
 const COL_GAP: f32 = 13.;
@@ -48,7 +42,6 @@ fn send(app: &mut PhoenixApp, id: crate::model::Id, window: &mut gpui::Window, c
 pub(crate) fn sticker_graphic(s: &StickerData, size: f32) -> AnyElement {
     match sticker_url(s.id.0, s.format) {
         Some(u) => img(u).size(px(size)).flex_none().into_any_element(),
-        // Lottie: the first frame (the picker shows stills until hovered).
         None => {
             let name = s.name.clone();
             crate::media::lottie::image(crate::media::lottie::url(s.id.0), (size * 2.) as u32, true)
@@ -60,7 +53,6 @@ pub(crate) fn sticker_graphic(s: &StickerData, size: f32) -> AnyElement {
     }
 }
 
-/// Text stand-in when a Lottie sticker can't be drawn.
 fn lottie_name(name: SharedString, size: f32) -> AnyElement {
     div()
         .size(px(size))
@@ -86,8 +78,6 @@ fn cell(s: &StickerData, section: SharedString, inspected: bool, locked: bool) -
         .p(px(1.))
         .rounded(px(4.))
         .cursor_pointer()
-        // stickerInspected_5z8c5P .inspectedIndicator: --interactive-background-selected
-        // behind the sticker (rounded mask, 12px like the keyboard focus ring).
         .when(inspected, |d| d.child(div().absolute().inset_0().rounded(px(12.)).bg(tk(idx::INTERACTIVE_BACKGROUND_SELECTED))))
         .on_hover(move |h, w, cx| {
             if *h {
@@ -102,8 +92,6 @@ fn cell(s: &StickerData, section: SharedString, inspected: bool, locked: bool) -
             }
         })
         .when(!locked, |d| d.on_click(move |_, w, cx| with_app(cx, w, move |a, w, cx| send(a, id, w, cx))))
-        // stickerLocked_5z8c5P: filter brightness(.4), approximated by opacity .3 over the
-        // dark surface (transparent pixels must stay clear); `.theme-light`: opacity .4.
         .child(
             div()
                 .relative()
@@ -114,14 +102,12 @@ fn cell(s: &StickerData, section: SharedString, inspected: bool, locked: bool) -
         .into_any_element()
 }
 
-/// (title, rail icon, stickers, locked)
 type Section = (SharedString, Option<(ImageRef, SharedString)>, Vec<StickerData>, bool);
 
 pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let p = cx.global::<Pickers>();
     let q = p.open.as_ref().map(|o| o.input.read(cx).value().trim().to_lowercase()).unwrap_or_default();
     let premium = app.backend.has_premium();
-    // (title, rail icon, stickers, locked)
     let mut sections: Vec<Section> = Vec::new();
     let mut guilds: Vec<_> = app.guilds.iter().collect();
     if let Some(sel) = app.selected_guild {
@@ -140,7 +126,6 @@ pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
             sections.push((pack.name.clone(), None, st, false));
         }
     }
-    // "Frequently used" on top (categoryItemRecentEmoji, clock icon), from the account frecency.
     let mut has_frequent = false;
     if q.is_empty()
         && let Some(f) = p.frecency.as_ref()
@@ -176,7 +161,6 @@ pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
                 _ => None,
             })
         };
-        // packHeader_dCw_12 bleedHeader: margin-left -8px (bleeds over the list padding).
         body = body.child(section_header(lead, title.clone()).ml(px(-8.)));
         let mut sec = div().flex().flex_col().pb(px(12.));
         for chunk in st.chunks(COLS) {

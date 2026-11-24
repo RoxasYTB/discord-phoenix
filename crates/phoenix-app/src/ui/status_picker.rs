@@ -1,18 +1,3 @@
-//! Account popout, opened from the avatar in the bottom user panel. Rebuilt
-//! from the vanilla client dumps `vanilla-account-popout` (#3643
-//! `outer_P1YEjQ` .. #3794) and `vanilla-account-status-sub` (#2911
-//! `menu_M3qk4j statusPickerModalMenu_nitlyF`), 2026-11-23:
-//! - the regular profile popout card (banner, avatar, editable custom status
-//!   bubble, name + copy-username button, username / server tag / badges, bio,
-//!   activities), Nitro theme gradient when the profile has one;
-//! - `menus_nitlyF` (gap 12): [Edit Profile | Status > | Badges] and
-//!   [Switch Accounts > | Copy User ID] overlay groups. The Orbs balance row
-//!   is not reproduced (no Orbs data is fetched).
-//! - the status submenu (300px): Online ‖ Idle, Do Not Disturb (subtext),
-//!   Invisible (subtext), each with a 10px status dot in a 20px accessory.
-//!
-//! Status changes go through op 3 and `PATCH /users/@me/settings`.
-
 use crate::theme::z;
 use gpui::{
     AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, anchored, deferred, div,
@@ -48,7 +33,6 @@ impl PhoenixApp {
             self.people.custom_input = Some(input);
             self.people.custom_sub = Some(sub);
             self.people.status_picker = true;
-            // The card shows our own profile (banner, theme, bio, badges).
             let me = self.me.id;
             if !self.people.profiles.contains_key(&me) {
                 let fut = self.backend.user_profile(me, None);
@@ -80,7 +64,6 @@ impl PhoenixApp {
     }
 }
 
-/// Status submenu order (Online, separator, then the rest with subtexts).
 const ITEMS: [(Presence, Option<&str>); 4] = [
     (Presence::Online, None),
     (Presence::Idle, None),
@@ -89,7 +72,6 @@ const ITEMS: [(Presence, Option<&str>); 4] = [
 ];
 
 thread_local! {
-    /// Status submenu shown next to the popout.
     static STATUS_SUB: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -99,16 +81,10 @@ fn set_sub(v: bool, w: &mut Window) {
     }
 }
 
-/// Open the status submenu (offscreen screenshots).
 pub fn debug_open_status_submenu(v: bool) {
     STATUS_SUB.with(|c| c.set(v));
 }
 
-/// `menuItemInner_nitlyF`: radius 8, --interactive-text-default, hover
-/// --user-profile-overlay-background-hover / --interactive-text-hover.
-/// `menuItemContent_nitlyF`: padding 8 (end 0 before a submenu caret), gap 8;
-/// `menuItemIcon_nitlyF` 16px; label body-sm/medium 14/16; trailing
-/// `submenuIconWrapper_nitlyF` padding-inline-start 8 + 16px chevron.
 fn pop_row(id: &'static str, icon: AnyElement, label: AnyElement, trailing: Option<AnyElement>, caret: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -122,7 +98,6 @@ fn pop_row(id: &'static str, icon: AnyElement, label: AnyElement, trailing: Opti
         .hover(|s| s.bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND_HOVER))).text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))))
         .child(div().size(z(16.)).flex_none().flex().items_center().justify_center().child(icon))
         .child(
-            // menuItemLabel_nitlyF: flex 1, gap 4, space-between
             div()
                 .flex_1()
                 .min_w_0()
@@ -144,9 +119,6 @@ fn text(t: SharedString) -> AnyElement {
     div().child(t).into_any_element()
 }
 
-/// `overlay_P1YEjQ menuOverlay_nitlyF`: padding 8, radius 8,
-/// --user-profile-overlay-background; `menuItem_nitlyF:after` separators
-/// (1px --user-profile-border, margin 8px 4px) between items.
 fn pop_group(rows: Vec<AnyElement>) -> gpui::Div {
     let n = rows.len();
     let mut g = div().rounded(z(8.)).p(z(8.)).bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND))).flex().flex_col();
@@ -159,10 +131,6 @@ fn pop_group(rows: Vec<AnyElement>) -> gpui::Div {
     g
 }
 
-/// Status submenu (`menu_M3qk4j`: 300px, --background-surface-higher, 1px
-/// --border-subtle, radius 8; scroller padding 8; `item_M3qk4j` padding 8,
-/// 14/18 500; `statusAccessory_` 20px box margin-end 8 with a 10px dot;
-/// subtext body-xs/normal 12/16 --text-muted margin-top 2; separator margin 8 0).
 fn status_submenu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let bg = c(tok(idx::BACKGROUND_SURFACE_HIGHER));
     let mut menu = div()
@@ -235,15 +203,12 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         let ch = |sh: u32| (((p >> sh) & 0xFF) as f32 * 0.4).round() as u32;
         (ch(16) << 16) | (ch(8) << 8) | ch(0)
     });
-    // header_NOlkhE: 151px; banner 105; avatar_WRLIGC top 59 / start 14 (80px + 6px ring).
     let header = div()
         .relative()
         .flex_none()
         .h(z(151.))
         .child(banner(&i, 105., 6.))
         .child(div().absolute().left(z(8.)).top(z(53.)).child(avatar_block(&i, 80., 6., ring.unwrap_or(surface))));
-    // container_rmCN9_ editable: start 105, top 98, end 14; outer_rmCN9_ radius 16,
-    // 1px --border-muted, --background-surface-highest; inner padding 8 12, 14/18.
     let bubble = app.people.custom_input.as_ref().map(|input| {
         let has = app.people.custom_status.is_some();
         div()
@@ -266,7 +231,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             .text_color(c(tok(idx::TEXT_STRONG)))
             .child(div().flex_1().min_w_0().child(Input::new(input).appearance(false).bordered(false)))
             .when(has, |d| {
-                // bar_UIX3Vg "Clear custom status" (TrashIcon 16px)
                 d.child(
                     div()
                         .id("custom-clear")
@@ -286,7 +250,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             })
     });
 
-    // copyButton_hpQ_E_: 24px, padding 4, round, CopyIcon 16 --interactive-text-default.
     let username = app.me.name.to_string();
     let copy_name = div()
         .id("acct-copy-username")
@@ -302,8 +265,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .child(icon("chat/copy"))
         .into_any_element();
 
-    // Status row: 12px status dot (mainStatusIcon_), label, BellSlashIcon 12px
-    // while Do Not Disturb mutes notifications, submenu chevron.
     let dnd = app.presence == Presence::Dnd;
     let sub_open = STATUS_SUB.with(|c| c.get());
     let status_row = pop_row(
@@ -320,7 +281,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         }
     })
     .on_click(|_, w, _| set_sub(!STATUS_SUB.with(|c| c.get()), w))
-    // statusPickerModalMenu_: 12px past the row's end, 14px above its top.
     .when(sub_open, |d| {
         d.child(deferred(
             anchored().position_mode(gpui::AnchoredPositionMode::Local).position(point(px(252. + 12.), px(-14.))).snap_to_window().child(status_submenu(app, cx)),
@@ -362,7 +322,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .child(pop_group(vec![edit.into_any_element(), status_row.into_any_element(), badges.into_any_element()]))
         .child(pop_group(vec![switch.into_any_element(), copy.into_any_element()]));
 
-    // body_nitlyF: padding 4 8 16 16 (scrollbar gutter), gap 12; userInfo_ margin-bottom -4.
     let mut body = div()
         .id("acct-body")
         .flex_1()
@@ -377,10 +336,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .gap(z(12.))
         .child(div().mb(z(-4.)).child(name_block(&i, false, Some(copy_name))));
     if let Some(bio) = i.prof.map(|p| p.bio.clone()).filter(|b| !b.is_empty()) {
-        // descriptionClamp_BcddaK: 3 lines of body-sm 14/18
         body = body.child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_STRONG))).line_clamp(3).child(bio));
     }
-    // Live account popout: the first Board app widget as a compact card under the bio.
     if let Some(w) = crate::ui::profile_board::get(app, me, cx).widgets.first() {
         let col = crate::ui::settings::profile_widgets::WidgetColors {
             strong: c(tok(idx::TEXT_STRONG)),
@@ -399,8 +356,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     }
     let body = body.child(menus);
 
-    // outer_P1YEjQ: 300 (+2px theme padding), radius 8; inner_P1YEjQ radius 6,
-    // gap 8, padding-bottom 4. Height: 100vh - 116 at most (dump: 584 of 700).
     let max_h = window.viewport_size().height - px(116.);
     let card = div()
         .id("status-picker")
@@ -429,7 +384,5 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .child(body),
         );
 
-    // panels_ at (10, 633) h 57; the popout sits at x 10 with its bottom 9px
-    // above the panels (dump: 40..624 in a 700px window).
     div().absolute().left(px(10.)).bottom(px(76.)).child(card).into_any_element()
 }

@@ -1,24 +1,10 @@
-//! "Abonnements" page data, measured on the live 2026 client (2026-11-24):
-//! the Nitro Squad card (`container_pmhtZL nitro-pink_pmhtZL container_xFL7Bm`)
-//! and the subscription credit rows (`accountCreditRow_ysRrD_`).
-//!
-//! Read-only GETs, the same routes the client uses:
-//! * `/users/@me/premium-group/membership` → `subscription_id`, `member_type`
-//! * `/users/@me/billing/subscriptions/{id}/members` → `[{user, member_type}]`
-//! * `/users/@me/applications/521842831262875670/entitlements?exclude_consumed=true`
-//!   → unconsumed entitlements carrying a `subscription_plan` are credits.
-//!
-//! "Leave plan" is drawn but inert: it would change the user's subscription.
-
 use parking_lot::RwLock;
 use serde_json::Value;
 
 use crate::model::User;
 
-/// Nitro application id (entitlements route).
 pub const NITRO_APP: &str = "521842831262875670";
 
-/// `member_type` of the premium group APIs.
 pub const OWNER: u64 = 1;
 
 #[derive(Clone, Debug)]
@@ -30,7 +16,6 @@ pub struct Member {
 
 #[derive(Clone, Debug, Default)]
 pub struct Squad {
-    /// Owner first, then the API order (as the client lists them).
     pub members: Vec<Member>,
 }
 
@@ -45,9 +30,7 @@ impl Squad {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Credit {
-    /// i18n key of the plan name ("Nitro Basic mensuel").
     pub plan: &'static str,
-    /// Premium tier: 0 Basic (iconBackgroundTier0), 2 Nitro (iconBackgroundTier2).
     pub tier: u8,
     pub months: u32,
 }
@@ -68,7 +51,6 @@ pub fn set(s: Subs) {
     *DATA.write() = Some(s);
 }
 
-/// Settings opened: load once (GET only).
 pub fn fetch(app: &crate::app::PhoenixApp, cx: &mut gpui::Context<crate::app::PhoenixApp>) {
     if DATA.read().is_some() {
         return;
@@ -83,7 +65,6 @@ pub fn fetch(app: &crate::app::PhoenixApp, cx: &mut gpui::Context<crate::app::Ph
     .detach();
 }
 
-/// Plan ids of the public Nitro plans → (name key, tier, months per credit).
 fn plan(id: &str) -> Option<(&'static str, u8, u32)> {
     Some(match id {
         "978380692553465866" => ("sp.su.plan_basic_month", 0, 1),
@@ -94,7 +75,6 @@ fn plan(id: &str) -> Option<(&'static str, u8, u32)> {
     })
 }
 
-/// Unconsumed plan entitlements grouped per plan, in first-seen order.
 pub fn parse_credits(v: &Value) -> Vec<Credit> {
     let mut out: Vec<Credit> = Vec::new();
     for e in v.as_array().into_iter().flatten() {
@@ -112,7 +92,6 @@ pub fn parse_credits(v: &Value) -> Vec<Credit> {
     out
 }
 
-/// `/billing/subscriptions/{id}/members`; `me` = current user id.
 pub fn parse_members(v: &Value, me: u64) -> Squad {
     let mut members: Vec<Member> = v
         .as_array()
@@ -125,12 +104,10 @@ pub fn parse_members(v: &Value, me: u64) -> Squad {
             Some(Member { user: crate::discord_backend::convert::user(&u), owner, me })
         })
         .collect();
-    // Stable: the owner moves first, the rest keep their order.
     members.sort_by_key(|m| !m.owner);
     Squad { members }
 }
 
-/// "1 mois" / "2 mois" ("1 month" / "2 months").
 pub fn months_label(n: u32) -> gpui::SharedString {
     if n == 1 { crate::t!("sp.su.month1") } else { crate::t!("sp.su.months", n = n) }
 }

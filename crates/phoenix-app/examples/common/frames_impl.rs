@@ -1,6 +1,3 @@
-//! Shared by `examples/frames.rs` and `examples/bench.rs` (`PHX_FRAMES=1`):
-//! frame times per interaction. See docs/perf.md.
-
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -22,7 +19,6 @@ fn rss_kib() -> u64 {
         .unwrap_or(0)
 }
 
-/// Allocation counters (count, bytes) of the host example's global allocator, if any.
 pub static COUNTER: OnceLock<fn() -> (u64, u64)> = OnceLock::new();
 
 fn counts() -> (u64, u64) {
@@ -49,7 +45,6 @@ impl Probe<'_> {
             .ok();
     }
 
-    /// Run `frames` frames, calling `step(i)` before each, and print the stats.
     fn measure(&mut self, name: &str, frames: usize, mut step: impl FnMut(&mut Self, usize)) {
         let (a0, b0) = counts();
         let mut times = Vec::with_capacity(frames);
@@ -87,7 +82,6 @@ fn mouse(x: f32, y: f32) -> PlatformInput {
     PlatformInput::MouseMove(MouseMoveEvent { position: point(px(x), px(y)), pressed_button: None, modifiers: Modifiers::default() })
 }
 
-/// Run every scenario (offscreen, mock data).
 pub fn run() -> anyhow::Result<()> {
     let target: usize = std::env::args().nth(1).and_then(|a| a.parse().ok()).unwrap_or(2000);
     // SAFETY: single-threaded at this point; the mock reads it when generating history.
@@ -108,8 +102,6 @@ pub fn run() -> anyhow::Result<()> {
     cx.update(|cx| {
         let _ = cx.text_system().add_fonts(fonts);
         phoenix_app::init(cx);
-        // Real media path (CDN + disk cache), like the app: images that fail
-        // to load would otherwise retry and skew every frame.
         let b = phoenix_app::discord_backend::DiscordBackend::new();
         cx.set_http_client(Arc::new(phoenix_app::media::cache::CachingHttpClient::new(b.http_client())));
         std::mem::forget(b);
@@ -154,7 +146,6 @@ pub fn run() -> anyhow::Result<()> {
     println!("messages={} rss_kib={}", count(&mut p), rss_kib());
 
     p.measure("idle", 60, |_, _| {});
-    // Chat column: x ≈ 700. Wheel 120 px per frame, like a mouse notch.
     p.measure("scroll_chat_wheel", 300, |p, _| p.input(wheel(700., 400., -120.)));
     p.measure("scroll_chat_fast", 200, |p, _| p.cx.update(|cx| v.read(cx).message_list.scroll_by(px(600.))));
     p.measure("hover_messages", 200, |p, i| p.input(mouse(700., 120. + (i % 40) as f32 * 15.)));
@@ -185,14 +176,11 @@ pub fn run() -> anyhow::Result<()> {
     for _ in 0..10 {
         p.frame();
     }
-    // Picker sits above the composer, right side.
     p.measure("scroll_emoji_picker_cold", 150, |p, _| p.input(wheel(1000., 450., -120.)));
     p.measure("scroll_emoji_picker_back", 150, |p, _| p.input(wheel(1000., 450., 120.)));
     p.measure("hover_emoji_picker", 150, |p, i| p.input(mouse(820. + (i % 9) as f32 * 40., 400. + (i / 9 % 5) as f32 * 40.)));
     println!("rss_end_kib={}", rss_kib());
 
-    // PHX_SOAK_SECS=600: keep browsing (guilds, channels, scroll, hover) and
-    // print RSS every minute, to spot leaks.
     let soak: u64 = std::env::var("PHX_SOAK_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
     if soak > 0 && !guilds.is_empty() {
         p.cx.update_window(p.win, |_, window, cx| v.update(cx, |app, cx| phoenix_app::ui::pickers::close(app, window, cx)))?;

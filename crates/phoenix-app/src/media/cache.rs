@@ -1,9 +1,3 @@
-//! On-disk LRU cache for media GETs, layered over any GPUI `HttpClient`.
-//!
-//! Files live in `~/.cache/discord-phoenix/media/<hash>`. Access refreshes the
-//! file mtime, and once the directory grows past [`CAP_BYTES`] the oldest
-//! files are deleted until it is back under 90% of the cap.
-
 use std::{
     fs,
     hash::{Hash, Hasher},
@@ -81,8 +75,6 @@ impl Store {
     }
 }
 
-/// Deletes least-recently-used files until the directory is at most
-/// `target` bytes. Returns the remaining size.
 fn evict_dir(dir: &Path, target: u64) -> u64 {
     let mut files: Vec<(SystemTime, u64, PathBuf)> = fs::read_dir(dir)
         .into_iter()
@@ -119,7 +111,6 @@ impl CachingHttpClient {
     pub fn with_dir(inner: Arc<dyn HttpClient>, dir: Option<PathBuf>, cap: u64) -> Self {
         let store = dir.filter(|d| fs::create_dir_all(d).is_ok()).map(|dir| {
             let s = Arc::new(Store { dir, cap, used: AtomicU64::new(0), evicting: AtomicBool::new(true) });
-            // Size the directory (and trim it) off the UI thread.
             let bg = s.clone();
             std::thread::Builder::new()
                 .name("media-cache-scan".into())
@@ -151,7 +142,6 @@ impl HttpClient for CachingHttpClient {
         let url = req.uri().to_string();
         let t0 = std::time::Instant::now();
         let inner = self.inner.clone();
-        // The disk read runs in the returned future (an executor thread), never in the caller.
         async move {
             if let Some(bytes) = store.read(&url) {
                 crate::perf::span("media_disk", t0);

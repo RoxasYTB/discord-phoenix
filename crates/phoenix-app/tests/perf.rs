@@ -1,5 +1,3 @@
-//! Correctness checks for the performance shortcuts.
-
 use phoenix_app::{app::ChannelMessages, model::{Id, Message}};
 
 fn msgs(ids: &[u64]) -> ChannelMessages {
@@ -19,7 +17,6 @@ fn index_of_sorted_history() {
 
 #[test]
 fn index_of_out_of_order_tail() {
-    // A local echo with a temporary id out of snowflake order is still found.
     let e = msgs(&[10, 20, 30, 5, 40]);
     assert_eq!(e.index_of(Id(5)), Some(3));
     assert_eq!(e.index_of(Id(40)), Some(4));

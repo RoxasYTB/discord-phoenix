@@ -1,7 +1,3 @@
-//! Guild "Privacy Settings" (direct messages and message requests from the
-//! server's members) and "Security Actions" (pause invites / DMs for a while)
-//! modals of the guild menu.
-
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use phoenix_api::rest::guild_manage::AdminCall;
 use serde_json::Value;
@@ -39,7 +35,6 @@ impl Privacy {
         self.settings.as_ref().and_then(|s| s.get(key)).and_then(Value::as_array).is_some_and(|a| a.iter().any(|x| x.as_str() == Some(&g)))
     }
 
-    /// Flip `key` locally and return (new listed state, previous list).
     fn flip(&mut self, key: &str) -> (bool, Value) {
         let now = !self.listed(key);
         let s = self.settings.get_or_insert_with(|| serde_json::json!({}));
@@ -49,9 +44,6 @@ impl Privacy {
     }
 }
 
-/// `container_VhFsFg` row (vanilla-guild-privacy-modal): label body-md/medium
-/// --text-strong, description body-sm --text-muted (gap 4), 48px switch
-/// top-aligned 24px to the right.
 fn row(id: &'static str, title: SharedString, desc: SharedString, on: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -86,9 +78,6 @@ pub fn render_privacy(app: &PhoenixApp, p: &Privacy, cx: &mut Context<PhoenixApp
             cx.notify();
         }
     };
-    // Switch on = allowed: the guild is NOT in the restriction list.
-    // Rows 16 apart (`categorySubGroup_`), no separators; "Message requests"
-    // is dimmed to .5 and inert while server DMs are off.
     let dms = !p.listed(DMS_KEY);
     let requests = row("priv-requests", crate::t!("admin.privacy_requests"), crate::t!("admin.privacy_requests_desc"), dms && !p.listed(REQUESTS_KEY));
     let body = div()
@@ -106,7 +95,6 @@ pub fn render_privacy(app: &PhoenixApp, p: &Privacy, cx: &mut Context<PhoenixApp
                 .on_click(cx.listener(toggle(JOINING_KEY))),
         )
         .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("admin.privacy_safety_note")));
-    // actionBar_: one full-width md primary "Done".
     let footer = button("priv-done", crate::t!("common.done"), BtnKind::Primary).flex_1().on_click({
         let close = close_action(cx);
         move |_, w, cx| close(w, cx)
@@ -115,7 +103,6 @@ pub fn render_privacy(app: &PhoenixApp, p: &Privacy, cx: &mut Context<PhoenixApp
     card(400., title.into(), None, body.into_any_element(), Some(footer.into_any_element()), cx)
 }
 
-/// Pause durations of Security Actions (seconds).
 pub const PAUSES: [(&str, u64); 4] = [("admin.pause_1h", 3600), ("admin.pause_6h", 21_600), ("admin.pause_12h", 43_200), ("admin.pause_24h", 86_400)];
 
 pub struct Security {

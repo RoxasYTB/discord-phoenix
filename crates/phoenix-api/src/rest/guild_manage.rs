@@ -1,11 +1,3 @@
-//! Channel and server administration calls made by the official client's
-//! channel settings, create channel / category, privacy, security actions and
-//! server settings pages (routes from DiscordBotClient's route list and the
-//! Discord API docs).
-//!
-//! Every call is first turned into an [`ApiReq`] by [`build`] (pure, tested),
-//! then sent with [`RestClient::admin`]. Lists come back as raw JSON.
-
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -13,11 +5,9 @@ use super::{RestClient, moderation::rfc3339};
 use crate::error::Result;
 use crate::models::Snowflake;
 
-/// `VIEW_CHANNEL`, `CONNECT` (permission bits).
 pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const CONNECT: u64 = 1 << 20;
 
-/// Channel types offered by the create channel modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewChannelKind {
     Text = 0,
@@ -28,7 +18,6 @@ pub enum NewChannelKind {
     Forum = 15,
 }
 
-/// Fields the channel settings overview can change (`None` = untouched).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChannelEdit {
     pub name: Option<String>,
@@ -37,20 +26,16 @@ pub struct ChannelEdit {
     pub nsfw: Option<bool>,
 }
 
-/// Fields the server Overview page can change.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GuildEdit {
     pub name: Option<String>,
     pub description: Option<String>,
-    /// `Some(None)` clears the system messages channel.
     pub system_channel: Option<Option<Snowflake>>,
     pub afk_channel: Option<Option<Snowflake>>,
     pub afk_timeout: Option<u32>,
-    /// 0 = all messages, 1 = only mentions.
     pub default_notifications: Option<u8>,
 }
 
-/// Fields of a role (create or edit).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RoleEdit {
     pub name: Option<String>,
@@ -65,9 +50,7 @@ pub enum AdminCall {
     CreateChannel { guild: Snowflake, name: String, kind: NewChannelKind, parent: Option<Snowflake>, private: bool, me: Snowflake },
     EditChannel { channel: Snowflake, edit: ChannelEdit },
     DeleteChannel { channel: Snowflake },
-    /// Raw channel (permission overwrites for the editor).
     Channel { channel: Snowflake },
-    /// `kind`: 0 role, 1 member.
     SetOverwrite { channel: Snowflake, target: Snowflake, kind: u8, allow: u64, deny: u64 },
     DeleteOverwrite { channel: Snowflake, target: Snowflake },
     ChannelInvites { channel: Snowflake },
@@ -84,14 +67,11 @@ pub enum AdminCall {
     DeleteEmoji { guild: Snowflake, emoji: Snowflake },
     Stickers { guild: Snowflake },
     DeleteSticker { guild: Snowflake, sticker: Snowflake },
-    /// The client's member list page (`members-search`, newest first).
     SearchMembers { guild: Snowflake, query: String, limit: u32 },
     Bans { guild: Snowflake },
     Unban { guild: Snowflake, user: Snowflake },
     AuditLog { guild: Snowflake, before: Option<Snowflake>, limit: u32 },
-    /// Security actions: pause until the given unix times (`None` = resume).
     IncidentActions { guild: Snowflake, invites_until: Option<u64>, dms_until: Option<u64> },
-    /// Legacy JSON user settings (privacy guild lists).
     UserSettings,
     PatchUserSettings { patch: Value },
 }
@@ -107,8 +87,6 @@ fn req(method: Method, path: String, body: Option<Value>) -> ApiReq {
     ApiReq { method, path, body }
 }
 
-/// `permission_overwrites` of a new private channel: @everyone (id = guild)
-/// loses View (and Connect for voice), we keep it.
 pub fn private_overwrites(guild: Snowflake, me: Snowflake, voice: bool) -> Value {
     let bits = if voice { VIEW_CHANNEL | CONNECT } else { VIEW_CHANNEL };
     json!([
@@ -117,8 +95,6 @@ pub fn private_overwrites(guild: Snowflake, me: Snowflake, voice: bool) -> Value
     ])
 }
 
-/// Add or remove `guild` from a user settings guild list (`restricted_guilds`,
-/// `message_request_restricted_guild_ids`).
 pub fn toggle_list(current: &Value, guild: Snowflake, present: bool) -> Value {
     let g = guild.to_string();
     let mut v: Vec<String> = current.as_array().into_iter().flatten().filter_map(|x| x.as_str().map(str::to_owned)).filter(|x| *x != g).collect();
@@ -250,7 +226,6 @@ fn role_body(e: &RoleEdit) -> Value {
 }
 
 impl RestClient {
-    /// Send an [`AdminCall`]; empty replies come back as `Value::Null`.
     pub async fn admin(&self, call: &AdminCall) -> Result<Value> {
         let r = build(call);
         self.request_json(r.method, &r.path, r.body).await

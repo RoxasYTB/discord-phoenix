@@ -1,7 +1,3 @@
-//! Ctrl+K quick switcher over guilds, channels, DMs and users, with fuzzy
-//! ranking. Prefixes narrow the search: `@` users/DMs, `#` text channels,
-//! `!` voice channels, `*` servers.
-
 use gpui::{
     AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Subscription, Window,
     div, prelude::*, px,
@@ -32,7 +28,6 @@ pub struct Switcher {
     pub _sub: Subscription,
 }
 
-/// Fuzzy score of `q` (lowercase) in `hay`; higher is better.
 pub fn fuzzy(hay: &str, q: &str) -> Option<i32> {
     if q.is_empty() {
         return Some(0);
@@ -48,7 +43,6 @@ pub fn fuzzy(hay: &str, q: &str) -> Option<i32> {
         let word_start = pos == 0 || !h.as_bytes()[pos - 1].is_ascii_alphanumeric();
         return Some(if word_start { 800 } else { 700 } - pos.min(100) as i32);
     }
-    // Subsequence: reward consecutive runs and word starts, punish gaps.
     let hc: Vec<char> = h.chars().collect();
     let mut score = 300;
     let mut hi = 0;
@@ -78,7 +72,6 @@ pub fn compute(app: &PhoenixApp, raw: &str) -> Vec<Target> {
     let mut scored: Vec<(i32, Target)> = Vec::new();
 
     if q.is_empty() && filter.is_none() {
-        // Recent channels first, then unread ones.
         for id in &recent {
             if let Some(ch) = app.channels.get(id) {
                 let t = if ch.guild.is_some() { Target::Channel(*id) } else { Target::Dm(*id) };
@@ -200,7 +193,6 @@ pub fn activate(app: &mut PhoenixApp, t: Target, window: &mut Window, cx: &mut C
     }
 }
 
-/// Arrow keys while the switcher is open.
 pub fn on_key(app: &mut PhoenixApp, key: &str, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> bool {
     let Some(sw) = app.switcher.as_mut() else { return false };
     let n = sw.results.len();
@@ -216,24 +208,19 @@ pub fn on_key(app: &mut PhoenixApp, key: &str, _window: &mut Window, cx: &mut Co
     true
 }
 
-// Layout from the live client dump `switcher` (quickswitcher_a1DYes subtree).
-/// Modal width (quickswitcher box 678.667px).
 const W: f32 = 679.;
 
 fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// (lead, name, username, note, misc)
 type Row = (AnyElement, SharedString, Option<SharedString>, Option<SharedString>, Option<SharedString>);
 
 pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let empty_query = sw.input.read(cx).value().trim().is_empty();
     let fg = tk(idx::INTERACTIVE_TEXT_DEFAULT);
-    // scroller_a1DYes: margin-top 16px, height 236px; content rows of 34px.
     let mut rows = div().id("switcher-results").mt(px(16.)).h(px(236.)).overflow_y_scroll().flex().flex_col();
     if sw.results.is_empty() {
-        // emptyState_a1DYes: centered, --font-weight-medium; emptyStateNote 16/20 --text-muted.
         rows = rows.child(
             div()
                 .size_full()
@@ -247,8 +234,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                 .child(crate::t!("switcher.cant_find")),
         );
     } else if empty_query {
-        // header_hm_rAU: 14px medium, line-height 30px, margin-top 4px,
-        // --interactive-text-default, letter-spacing .025em, in a 34px row with 10px padding.
         rows = rows.child(
             div()
                 .h(px(34.))
@@ -263,13 +248,11 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
         );
     }
     for (i, t) in sw.results.iter().copied().enumerate() {
-        // (lead, name, username, note, misc)
         let (lead, name, user, note, misc): Row = match t {
             Target::Channel(id) => {
                 let Some(ch) = app.channels.get(&id) else { continue };
                 let guild = ch.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.clone());
                 let note = ch.parent.and_then(|p| app.channels.get(&p)).map(|p| p.name.clone());
-                // iconContainer_hm_rAU 20x16 with a 16px icon.
                 let lead = div().w(px(20.)).h(px(16.)).flex().justify_center().child(icon(channel_icon(ch.kind), 16., fg)).into_any_element();
                 (lead, ch.name.clone(), None, note, guild)
             }
@@ -301,8 +284,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
             }
         };
         let selected = i == sw.selected;
-        // result_hm_rAU: 34px, radius 3px, 16px medium; selected: --interactive-background-selected.
-        // content_hm_rAU: padding 0 10px, --interactive-text-default, baseline-aligned row.
         rows = rows.child(
             div()
                 .id(("sw", i))
@@ -327,7 +308,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                     }
                 }))
                 .on_click(cx.listener(move |a, _, w, cx| activate(a, t, w, cx)))
-                // iconContainer margin-inline-end 5px
                 .child(div().flex_none().mr(px(5.)).child(lead))
                 .child(
                     div()
@@ -337,11 +317,8 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                         .items_center()
                         .overflow_hidden()
                         .whitespace_nowrap()
-                        // match_hm_rAU: margin-inline-end 4px, ellipsis
                         .child(div().mr(px(4.)).flex_shrink(1.).min_w_0().overflow_hidden().text_ellipsis().child(name))
-                        // username_hm_rAU: normal weight, opacity .6
                         .children(user.map(|u| div().flex_none().font_weight(FontWeight::NORMAL).opacity(0.6).child(u)))
-                        // note_hm_rAU: 10px/14px semibold --text-muted, margin-top 1px
                         .children(note.map(|n| {
                             div()
                                 .flex_shrink(1.)
@@ -356,7 +333,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                                 .child(n)
                         })),
                 )
-                // misc_hm_rAU (margin-left 4px) > miscContainer_a1DYes: body-sm/medium 14/18, opacity .6
                 .children(misc.map(|m| {
                     div()
                         .ml(px(4.))
@@ -372,7 +348,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                 })),
         );
     }
-    // autocompleteQuerySymbol_a1DYes: --background-base-lowest, radius 4px, --font-code, padding 2px.
     let sym = |s: &'static str| {
         div()
             .mx(px(1.))
@@ -382,8 +357,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
             .font_family(crate::theme::FONT_MONO())
             .child(s)
     };
-    // protip_a1DYes: padding-top 10px; pro_xW8MJW 12px semibold --text-feedback-positive,
-    // margin-right 3px; tip body-sm 12px/16px --text-default; anchor --text-link.
     let protip = div()
         .pt(px(10.))
         .flex()
@@ -407,15 +380,12 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
         .id("switcher-backdrop")
         .absolute()
         .inset_0()
-        // backdrop_: --opacity-black-70 equivalent scrim behind modals.
         .bg(tk(idx::BACKGROUND_SCRIM))
         .flex()
         .justify_center()
         .items_center()
         .on_click(cx.listener(|a, _, w, cx| a.close_switcher(w, cx)))
         .child(
-            // quickswitcher_a1DYes: padding 12px 20px 0, radius 8px, --text-default,
-            // on the modal root (--modal-background).
             div()
                 .id("switcher")
                 .w(px(W))
@@ -431,8 +401,6 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                 .flex_col()
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .child(
-                    // input_a1DYes: 70px, padding 0 12px, 22px/70px, --input-background-default,
-                    // 1px --input-border-default, --radius-sm.
                     div()
                         .h(px(70.))
                         .flex_none()
@@ -445,10 +413,8 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                         .items_center()
                         .text_size(px(22.))
                         .text_color(tk(idx::TEXT_DEFAULT))
-                        // The input draws its own text: set the 22px on it, not only on the box.
                         .child(Input::new(&sw.input).appearance(false).bordered(false).text_size(px(22.))),
                 )
-                // resultsArea_a1DYes: height 262px
                 .child(div().h(px(262.)).flex_none().child(rows))
                 .child(protip.pb(px(1.))),
         )

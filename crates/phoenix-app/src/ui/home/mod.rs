@@ -1,7 +1,3 @@
-//! Direct Messages home (Friends page, Message Requests) and the glue that
-//! connects navigation state to the app: nav events, persisted prefs, thread
-//! selection, backend requests.
-
 pub mod data;
 pub mod friends;
 pub mod nitro;
@@ -16,12 +12,8 @@ use crate::{
     ui::home::data::{HomeView, NavEvent, NavPrefs, NavReply, NavRequest, Overlay},
 };
 
-/// The pane right of the sidebar: chat, or the Friends / Message Requests
-/// page when Home is open without a DM.
 pub fn main_pane(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let page = page_content(app, window, cx);
-    // `.theme-midnight .page_pog62O` (and `.high-contrast-mode`): border-inline-start
-    // 1px `--border-subtle` between the channel list and the page (box-sizing border-box).
     if crate::theme::frame_borders() {
         use gpui::{ParentElement, Styled};
         return gpui::div()
@@ -60,7 +52,6 @@ fn page_content(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     }
 }
 
-/// Modals and popouts above everything else.
 pub fn overlay(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let ov = app.nav.overlay.clone()?;
     Some(match ov {
@@ -79,8 +70,6 @@ impl PhoenixApp {
         }
     }
 
-    /// Restore persisted prefs once per process (last channels, collapsed
-    /// categories, open folders).
     pub fn nav_after_ready(&mut self) {
         if self.nav.prefs_loaded {
             return;
@@ -131,7 +120,6 @@ impl PhoenixApp {
         self.save_nav_prefs();
     }
 
-    /// Home -> Friends (or Message Requests).
     pub fn open_home_view(&mut self, view: HomeView, cx: &mut Context<Self>) {
         if self.selected_guild.is_some() {
             self.select_guild(None, cx);
@@ -143,7 +131,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Threads aren't part of the guild channel list: register on demand.
     pub fn select_thread(&mut self, id: Id, cx: &mut Context<Self>) {
         if let Some(t) = self.nav.find_thread(id).cloned() {
             self.channels.entry(id).or_insert(t);
@@ -159,7 +146,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Fire a navigation request; `done` runs on the UI thread.
     pub fn nav_request(
         &mut self,
         req: NavRequest,

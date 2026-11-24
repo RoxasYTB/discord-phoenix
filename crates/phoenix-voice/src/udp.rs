@@ -1,5 +1,3 @@
-//! UDP media socket: IP discovery and encrypted RTP/RTCP send/receive.
-
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -10,7 +8,6 @@ use crate::{Error, Result};
 
 pub const DISCOVERY_LEN: usize = 74;
 
-/// Build an IP discovery request (type 0x1, length 70).
 pub fn discovery_request(ssrc: u32) -> [u8; DISCOVERY_LEN] {
     let mut b = [0u8; DISCOVERY_LEN];
     b[0..2].copy_from_slice(&1u16.to_be_bytes());
@@ -19,7 +16,6 @@ pub fn discovery_request(ssrc: u32) -> [u8; DISCOVERY_LEN] {
     b
 }
 
-/// Build a discovery response (used by tests / mock servers).
 pub fn discovery_response(ssrc: u32, ip: &str, port: u16) -> Result<[u8; DISCOVERY_LEN]> {
     let mut b = [0u8; DISCOVERY_LEN];
     b[0..2].copy_from_slice(&2u16.to_be_bytes());
@@ -34,7 +30,6 @@ pub fn discovery_response(ssrc: u32, ip: &str, port: u16) -> Result<[u8; DISCOVE
     Ok(b)
 }
 
-/// Parse a discovery response into (external ip, external port).
 pub fn parse_discovery_response(b: &[u8]) -> Result<(String, u16)> {
     if b.len() < DISCOVERY_LEN || u16::from_be_bytes([b[0], b[1]]) != 2 {
         return Err(Error::Malformed("ip discovery response"));
@@ -45,7 +40,6 @@ pub fn parse_discovery_response(b: &[u8]) -> Result<(String, u16)> {
     Ok((ip.to_string(), u16::from_be_bytes([b[72], b[73]])))
 }
 
-/// Connected UDP media socket.
 pub struct MediaSocket {
     socket: UdpSocket,
     cipher: Option<TransportCipher>,
@@ -59,7 +53,6 @@ impl MediaSocket {
         Ok(Self { socket, cipher: None })
     }
 
-    /// Run IP discovery (3 attempts, 1 s each).
     pub async fn discover(&self, ssrc: u32) -> Result<(String, u16)> {
         let req = discovery_request(ssrc);
         let mut buf = [0u8; 128];
@@ -79,7 +72,6 @@ impl MediaSocket {
         self.cipher = Some(c);
     }
 
-    /// Encrypt and send an RTP packet.
     pub async fn send_rtp(&mut self, packet: &[u8]) -> Result<()> {
         let c = self.cipher.as_mut().ok_or(Error::Protocol("no session description yet".into()))?;
         let enc = c.encrypt_rtp(packet)?;
@@ -94,7 +86,6 @@ impl MediaSocket {
         Ok(())
     }
 
-    /// Receive and decrypt one datagram.
     pub async fn recv(&self) -> Result<Incoming> {
         let mut buf = vec![0u8; 2048];
         let n = self.socket.recv(&mut buf).await?;
@@ -103,14 +94,12 @@ impl MediaSocket {
     }
 }
 
-/// A received, decrypted datagram.
 #[derive(Debug)]
 pub enum Incoming {
     Rtp(Vec<u8>),
     Rtcp(Vec<u8>),
 }
 
-/// RTP vs RTCP demux by payload type (RFC 5761: 192..=223 is RTCP).
 pub fn classify_and_decrypt(cipher: Option<&TransportCipher>, buf: &[u8]) -> Result<Incoming> {
     let c = cipher.ok_or(Error::Protocol("no session description yet".into()))?;
     if buf.len() < 2 || buf[0] >> 6 != 2 {

@@ -1,8 +1,3 @@
-//! Offscreen renders (mock data) of the keyboard-shortcut UI at the live dump's
-//! 1536x840 viewport: `cargo run -p phoenix-app --example shortcuts_shot -- out.png <scene>`
-//! scene: modal (Ctrl+/ combos) | focus (keyboard-focused message) | thread ("Nouveau fil" sidebar)
-//! | mention / emoji / channel (composer autocomplete) | long (character counter) | multiline | slowmode | blocked | upload (attachment tray)
-
 use std::{sync::Arc, time::Duration};
 
 use std::{cell::RefCell, rc::Rc};
@@ -20,7 +15,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -32,7 +26,6 @@ fn main() -> anyhow::Result<()> {
     .iter()
     .filter_map(|p| std::fs::read(p).ok().map(Into::into))
     .collect();
-    // PHOENIX_SHOT_NET=1 loads remote art (Discord media hosts only) like the app.
     let _rt = std::env::var_os("PHOENIX_SHOT_NET").map(|_| tokio::runtime::Runtime::new().expect("runtime"));
     if let Some(rt) = &_rt {
         let http = phoenix_app::discord_backend::http::CdnHttpClient::new(rt.handle().clone(), "Mozilla/5.0");
@@ -71,7 +64,6 @@ fn main() -> anyhow::Result<()> {
             "focus" => {
                 app.focus_last_message(window, cx);
             }
-            // Composer states (docs/parity/composer.md).
             "mention" | "emoji" | "channel" | "long" | "multiline" => {
                 let text = match scene.as_str() {
                     "mention" => "@".to_string(),
@@ -102,7 +94,6 @@ fn main() -> anyhow::Result<()> {
                 let icon = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icon.png"));
                 app.add_paths(vec![icon], cx);
                 if scene == "spoiler" {
-                    // add_paths reads off-thread: toggle once the file is in.
                     cx.spawn(async move |this, cx| {
                         cx.background_executor().timer(Duration::from_millis(200)).await;
                         let _ = this.update(cx, |a, cx| a.toggle_upload_spoiler(0, cx));
@@ -124,7 +115,6 @@ fn main() -> anyhow::Result<()> {
     pump(&mut cx, 8);
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;

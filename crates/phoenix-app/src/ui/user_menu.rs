@@ -1,13 +1,3 @@
-//! Right-click menu on a user (member list row, DM row, message author).
-//!
-//! Item order from the vanilla client (vanilla-menu-member-* dumps,
-//! 2026-11-23): Profile, Mention, Message, Call (friend), Add Note ("Only
-//! visible to you" subtext), Add Friend Nickname (friend) | Change Nickname
-//! (Manage Nicknames) or Edit Per-server Profile (self), Apps >, Invite to
-//! Server >, Remove Friend / Add Friend, Ignore, Block | Roles > (Manage
-//! Roles) | voice / moderation items | Copy User ID (developer mode).
-//! Bots get neither Invite to Server nor Add Friend.
-
 use std::{cell::RefCell, rc::Rc};
 
 use gpui::{AnyElement, App, ClickEvent, Context, Pixels, Point, Window};
@@ -37,7 +27,6 @@ thread_local! {
     static OPEN: RefCell<Option<Open>> = const { RefCell::new(None) };
 }
 
-/// Open the user menu at `pos` (call from a right-click handler).
 pub fn open(user: Id, guild: Option<Id>, pos: Point<Pixels>, window: &mut Window) {
     OPEN.with(|o| *o.borrow_mut() = Some(Open { user, guild, pos }));
     window.refresh();
@@ -78,7 +67,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     if !me && friend {
         items.push(act(crate::t!("menu.call"), Rc::new(move |a, _, _, cx| a.open_call_ui(u, cx))));
     }
-    // vanilla-menu-member-1 (own user): no note row; member-5: "Edit Note" once one exists.
     if !me {
         items.push(
             act(crate::t!(crate::actions::user::note_label(app, u)), Rc::new(move |a, ev, w, cx| a.open_profile(u, g, ev.position(), w, cx)))
@@ -126,7 +114,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             move |_, _, cx: &mut App| e.update(cx, |a, cx| a.relationship_action(u, RelAction::Block, cx))
         }));
     }
-    // "Roles >" (Manage Roles): every role of the guild as a checkbox.
     if let Some(gid) = g.filter(|gid| crate::ui::inbox::has_perm(app.backend.guild_permissions(*gid), MANAGE_ROLES)) {
         let has: Vec<crate::model::Id> =
             app.members.get(&gid).and_then(|m| m.iter().find(|m| m.user == u)).map(|m| m.roles.clone()).unwrap_or_default();
@@ -158,15 +145,12 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         items.push(MenuItem::Separator);
         items.extend(crate::ui::voice_panel::user_menu_items(app, u, cx));
     }
-    // vanilla-menu-member: ‖ Open in Mod View, Server Mute, Server Deafen,
-    // Disconnect, then Timeout / Kick / Ban. No "Report" row on members.
     let mut moderation = crate::ui::inbox::moderation_items(app, u, g, &e);
     if !voice.mods.is_empty() {
         let at = if moderation.is_empty() {
             moderation.push(MenuItem::Separator);
             1
         } else {
-            // after the separator (+ Mod View when present)
             let has_mod_view = moderation.get(1).is_some_and(|m| matches!(m, MenuItem::Action { danger: false, .. }));
             1 + has_mod_view as usize
         };

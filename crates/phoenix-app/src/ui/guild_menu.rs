@@ -1,6 +1,3 @@
-//! Dropdown under the guild header (click the server name): the client's
-//! `guild-header-popout` menu, drawn with the shared context menu panel.
-
 use crate::theme::z;
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, div, prelude::*, px};
 
@@ -24,7 +21,6 @@ pub fn render(app: &PhoenixApp, guild: Id, top: f32, cx: &mut Context<PhoenixApp
             cx.notify();
         }))
         .child(
-            // menu_M3qk4j: 220 wide, 8px in from the sidebar edge, under the header.
             div()
                 .absolute()
                 .top(px(top))

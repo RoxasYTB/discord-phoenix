@@ -1,7 +1,3 @@
-//! Local channel pins ("Pin Channel to Top", "Pin" on DMs), favorites and the
-//! per-guild "Show All Channels" toggle, saved in
-//! `~/.config/discord-phoenix/menu-pins.txt`.
-
 use std::{cell::RefCell, collections::BTreeSet};
 
 use crate::{
@@ -109,14 +105,11 @@ pub fn toggle_show_all(guild: Id) {
     toggle(|p| &mut p.show_all, guild)
 }
 
-/// Move pinned channel / DM rows to the top, keeping their relative order
-/// (`sidebar::build_rows` hook).
 pub fn apply(rows: &mut Vec<SidebarRow>) {
     let pinned = |r: &SidebarRow| matches!(r, SidebarRow::Channel(id) if is_pinned(*id));
     if !rows.iter().any(pinned) {
         return;
     }
-    // A pinned channel carries its thread / voice user rows along.
     let (mut top, mut rest) = (Vec::new(), Vec::new());
     let mut lifting = false;
     for r in rows.drain(..) {

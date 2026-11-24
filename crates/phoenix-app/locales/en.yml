@@ -1,4 +1,3 @@
-# Discord Phoenix UI strings (en). Flat `key: "value"`; {name} = placeholder.
 time.today_at: "Today at {time}"
 time.yesterday_at: "Yesterday at {time}"
 time.now: "now"
@@ -901,7 +900,6 @@ settings.appearance.density: "UI Density"
 settings.density.compact: "Compact"
 settings.density.default: "Default"
 settings.density.cozy: "Spacious"
-# settings pages (live 2026 client)
 settings.page.content_social: "Content & Social"
 settings.page.system: "System"
 settings.page.activity: "Activity Privacy"
@@ -1249,7 +1247,6 @@ sp.pf.server_notice: "You can customise the styles, nickname, pronouns and bio f
 sp.pf.main: "Main Profile"
 sp.vo.t1: "Voice"
 sp.vo.t2: "Camera"
-# Inbox, pins, threads, search and friends rows (rebuilt from the live client)
 inbox.tab_unreads: "Unreads"
 inbox.tab_mentions: "Mentions"
 inbox.tab_saved: "Saved"
@@ -1308,7 +1305,6 @@ search.v_channel: "channel"
 search.v_has: "link, embed or file"
 search.v_more: "dates, author type and more"
 friends.section: "{label} — {n}"
-# Context menus and settings pages from the vanilla client (2026-11-23 dumps)
 menu.expand_category: "Expand Category"
 menu.collapse_category: "Collapse Category"
 menu.collapse_all: "Collapse All Categories"
@@ -1406,7 +1402,6 @@ guild.boost_goal.title: "Boost Goal"
 guild.boost_goal.count: "{n}/{max} Boosts"
 guild.boost_goal.count_done: "{n} Boosts"
 guild.top.boosts: "Server Boosts"
-# Context menu actions (crate::actions, ui::modals)
 common.save: "Save"
 common.done: "Done"
 menu.unpin_dm: "Unpin"
@@ -1490,10 +1485,8 @@ gs.id: "Server ID"
 gs.loaded_members: "Loaded members"
 gs.features: "Features"
 gs.readonly: "This section is read-only in Phoenix."
-# Account popout (vanilla-account-popout dump)
 status.badges: "Badges"
 status.switch_accounts: "Switch Accounts"
-# Voice & Video, lower half (vanilla-settings-07b/c)
 sp.vo.profile: "Input Profile"
 sp.vo.iso: "Voice Isolation"
 sp.vo.iso_d: "Just your beautiful voice: let Discord cut through the noise"
@@ -1891,7 +1884,6 @@ channels.unread_bar: "New Unreads"
 channels.mention_bar_one: "1 New Mention"
 channels.mention_bar: "{count} New Mentions"
 
-# Keyboard shortcuts modal (Ctrl+/)
 shortcuts.title: "Keyboard Combos"
 shortcuts.group.navigation: "Navigation"
 shortcuts.group.voice: "Voice and Video"
@@ -2102,7 +2094,6 @@ attach.schedule: "Schedule Message"
 attach.voice: "Record Voice Message"
 attach.more: "More message options"
 chat.upload_processing: "Processing…"
-# Voice & Video > Sounds (client strings MKWyKc, ji1uNt, 0JYT98, fRvixS and the aJ list)
 sp.vo.sounds: "Sounds"
 sp.snd.show: "Show {n} more sounds"
 sp.snd.hide: "Hide {n} sounds"

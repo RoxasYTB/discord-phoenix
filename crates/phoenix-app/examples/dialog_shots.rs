@@ -1,7 +1,3 @@
-//! Offscreen renders of dialogs and settings pages at the live client's
-//! 1280x700 viewport. `cargo run -p phoenix-app --example dialog_shots -- out.png <scene>`
-//! scene: settings:<page> | leave | delete | status
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -18,7 +14,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -30,7 +25,6 @@ fn main() -> anyhow::Result<()> {
     .iter()
     .filter_map(|p| std::fs::read(p).ok().map(Into::into))
     .collect();
-    // PHOENIX_SHOT_NET=1 loads remote art (Discord media hosts only) like the app.
     let _rt = std::env::var_os("PHOENIX_SHOT_NET").map(|_| tokio::runtime::Runtime::new().expect("runtime"));
     if let Some(rt) = &_rt {
         let http = phoenix_app::discord_backend::http::CdnHttpClient::new(rt.handle().clone(), "Mozilla/5.0");
@@ -42,7 +36,6 @@ fn main() -> anyhow::Result<()> {
     });
     let view: Rc<RefCell<Option<Entity<PhoenixApp>>>> = Rc::default();
     let v2 = view.clone();
-    // PHOENIX_SHOT_W/H match other dump viewports (vanilla dumps are 1920x1050).
     let env = |k: &str, d: f32| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
     let win = cx.open_window(size(px(env("PHOENIX_SHOT_W", 1280.)), px(env("PHOENIX_SHOT_H", 700.))), move |window, cx| {
         let v = cx.new(|cx| PhoenixApp::new(Arc::new(MockBackend::new()), window, cx));
@@ -69,7 +62,6 @@ fn main() -> anyhow::Result<()> {
         cx.update_window(win.into(), |_, window, cx| {
             v.update(cx, |app, cx| {
                 use phoenix_app::ui::settings::Page;
-                // PHOENIX_SHOT_THEME=onyx matches the user's midnight dumps.
                 if let Ok(t) = std::env::var("PHOENIX_SHOT_THEME") {
                     use phoenix_app::ui::settings::AppTheme;
                     app.prefs.synced.theme = match t.as_str() {
@@ -122,7 +114,6 @@ fn main() -> anyhow::Result<()> {
             });
         })?;
         pump(&mut cx, 10);
-        // settings:<page>:<query> types <query> into the sidebar search
         if let Some(q) = scene.strip_prefix("settings:").and_then(|p| p.split_once(':')).map(|(_, q)| q.to_owned()) {
             cx.update_window(win.into(), |_, window, cx| {
                 v.update(cx, |app, cx| {
@@ -133,7 +124,6 @@ fn main() -> anyhow::Result<()> {
             })?;
             pump(&mut cx, 6);
         }
-        // PHOENIX_SHOT_SCROLL=<px> scrolls the settings content like a scrolled dump.
         if let Some(y) = std::env::var("PHOENIX_SHOT_SCROLL").ok().and_then(|v| v.parse::<f32>().ok()) {
             cx.update_window(win.into(), |_, window, cx| {
                 window.refresh();
@@ -150,12 +140,10 @@ fn main() -> anyhow::Result<()> {
     pump(&mut cx, if _rt.is_some() { 80 } else { 8 });
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 4);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

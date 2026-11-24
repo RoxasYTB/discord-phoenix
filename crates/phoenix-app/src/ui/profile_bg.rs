@@ -1,14 +1,3 @@
-//! Full-profile backdrop: the banner painted faintly behind the whole modal.
-//!
-//! Live client (`db()` in the modal-v2 bundle, `backgroundImage_s3DB6Y`): when the
-//! profile has a banner, a layer `inset 0` shows its static preview at
-//! `background-size: 100%`, `filter: saturate(.5)`, `opacity: .3`, masked with
-//! `linear-gradient(180deg, #000 0, transparent 280px)`, and an `::after` with
-//! `backdrop-filter: blur(15px)`. GPUI has neither filters nor masks, so the
-//! layer is baked on the CPU once per banner and modal width: a small
-//! desaturated, blurred copy whose alpha carries the opacity and the mask; the
-//! GPU stretches it over the modal width.
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,28 +5,21 @@ use std::sync::Arc;
 use futures::AsyncReadExt;
 use gpui::{App, RenderImage};
 
-/// Baked width in pixels (the blur makes the upscale invisible).
 const BAKE_W: u32 = 128;
-/// Mask end (`transparent 280px`), CSS px.
 const MASK_H: f32 = 280.;
 
-/// (static banner URL, modal width) -> baked layer (`None` = loading or failed).
 type Cache = HashMap<(String, u32), Option<Arc<RenderImage>>>;
 
 thread_local! {
-    /// (static banner URL, modal width) -> baked layer (`None` = loading or failed).
     static CACHE: RefCell<Cache> = RefCell::new(HashMap::new());
 }
 
-/// `getPreviewBanner(…, animated = false)`: the still PNG of the banner.
 fn still_url(banner: &str) -> String {
     let (base, _) = banner.split_once('?').unwrap_or((banner, ""));
     let stem = base.rsplit_once('.').map_or(base, |(s, _)| s);
     format!("{stem}.png?size=480")
 }
 
-/// The baked backdrop for `banner` at modal width `w` (CSS px), with its height
-/// in CSS px; starts loading it on first use (windows refresh when ready).
 pub fn get(banner: &str, w: f32, cx: &mut App) -> Option<(Arc<RenderImage>, f32)> {
     let url = still_url(banner);
     let key = (url.clone(), w.round() as u32);
@@ -69,7 +51,6 @@ pub fn get(banner: &str, w: f32, cx: &mut App) -> Option<(Arc<RenderImage>, f32)
     None
 }
 
-/// CSS `saturate(s)` matrix on one pixel.
 fn saturate([r, g, b]: [f32; 3], s: f32) -> [f32; 3] {
     [
         (0.213 + 0.787 * s) * r + (0.715 - 0.715 * s) * g + (0.072 - 0.072 * s) * b,
@@ -78,7 +59,6 @@ fn saturate([r, g, b]: [f32; 3], s: f32) -> [f32; 3] {
     ]
 }
 
-/// Opacity .3 times the 280px mask at CSS row `y`.
 fn alpha_at(y: f32) -> f32 {
     0.3 * (1. - y / MASK_H).clamp(0., 1.)
 }
@@ -90,18 +70,15 @@ fn bake(bytes: &[u8], w_css: f32) -> Option<RenderImage> {
     }
     let h = ((src.height() as u64 * BAKE_W as u64) / src.width() as u64).max(1) as u32;
     let mut buf = image::imageops::resize(&src, BAKE_W, h, image::imageops::FilterType::Triangle);
-    // blur(15px) at the baked scale
     let sigma = 15. * BAKE_W as f32 / w_css;
     buf = image::imageops::blur(&buf, sigma.max(0.5));
     let css_per_px = w_css / BAKE_W as f32;
-    // Rows past the mask end are fully transparent: drop them.
     let rows = ((MASK_H / css_per_px).ceil() as u32 + 1).min(buf.height());
     let mut out = image::RgbaImage::new(BAKE_W, rows);
     for (x, y, p) in out.enumerate_pixels_mut() {
         let q = buf.get_pixel(x, y).0;
         let [r, g, b] = saturate([q[0] as f32, q[1] as f32, q[2] as f32], 0.5);
         let a = alpha_at((y as f32 + 0.5) * css_per_px) * q[3] as f32 / 255.;
-        // GPUI textures are BGRA.
         *p = image::Rgba([b.clamp(0., 255.) as u8, g.clamp(0., 255.) as u8, r.clamp(0., 255.) as u8, (a * 255.).round() as u8]);
     }
     Some(RenderImage::new(vec![image::Frame::new(out)]))

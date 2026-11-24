@@ -37,12 +37,10 @@ pub struct Role {
     pub flags: u64,
     #[serde(default)]
     pub tags: Option<RoleTags>,
-    /// `role.colors`: gradient / holographic role colours.
     #[serde(default)]
     pub colors: Option<RoleColors>,
 }
 
-/// `role.colors` (`primary_color`, `secondary_color`, `tertiary_color`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RoleColors {
     #[serde(default, deserialize_with = "null_default")]

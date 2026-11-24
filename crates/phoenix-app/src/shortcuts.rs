@@ -1,12 +1,3 @@
-//! Global keyboard shortcuts of the official client.
-//!
-//! The list and the bindings come from the live 2026 client's keyboard
-//! shortcuts modal (Ctrl+/) and its keybind table (`binds:[...]` entries in
-//! the local web bundles); see docs/parity/shortcuts.md. Navigation follows the
-//! client's behaviour: Alt+Up/Down cycle through the sidebar's channels with
-//! wrap-around, Alt+Shift skips to unread channels, Ctrl+Shift+Alt to channels
-//! with mentions, Ctrl+Alt+Up/Down cycle through the server rail (Home first).
-
 use std::cell::RefCell;
 
 use gpui::{
@@ -67,11 +58,8 @@ actions!(
     ]
 );
 
-/// The client's zoom steps (`ZOOM_SCALES` in the 2026 web bundle), in percent.
 pub const ZOOM_SCALES: [u32; 11] = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
 
-/// Next zoom step from `cur` in `dir` (+1 in, -1 out), clamped to the ends. An
-/// off-grid value goes to the nearest step in that direction.
 pub fn zoom_step(cur: u32, dir: i32) -> u32 {
     if dir > 0 {
         ZOOM_SCALES.iter().copied().find(|&z| z > cur).unwrap_or(ZOOM_SCALES[ZOOM_SCALES.len() - 1])
@@ -80,8 +68,6 @@ pub fn zoom_step(cur: u32, dir: i32) -> u32 {
     }
 }
 
-/// One row of the shortcuts modal: GPUI keystrokes, the client's group and
-/// the i18n key of its description.
 pub struct Shortcut {
     pub keys: &'static [&'static str],
     pub group: Group,
@@ -113,7 +99,6 @@ macro_rules! sc {
     };
 }
 
-/// Implemented shortcuts, in the order of the client's modal.
 pub const SHORTCUTS: &[Shortcut] = &[
     sc!(Navigation, "shortcuts.guilds", ["ctrl-alt-up", "ctrl-alt-down"]),
     sc!(Navigation, "shortcuts.channels", ["alt-up", "alt-down"]),
@@ -160,7 +145,6 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-shift-down", NextUnread, ctx),
         KeyBinding::new("ctrl-shift-alt-up", PrevMention, ctx),
         KeyBinding::new("ctrl-shift-alt-down", NextMention, ctx),
-        // Client: ["mod+alt+up","mod+shift+[","ctrl+shift+tab"] and the mirror.
         KeyBinding::new("ctrl-alt-up", PrevGuild, ctx),
         KeyBinding::new("ctrl-shift-[", PrevGuild, ctx),
         KeyBinding::new("ctrl-shift-tab", PrevGuild, ctx),
@@ -196,8 +180,6 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-alt-n", CreateThread, ctx),
         KeyBinding::new("alt-r", RecordVoiceMessage, ctx),
         KeyBinding::new("ctrl-shift-b", ToggleSoundboard, ctx),
-        // Zoom like the desktop client. `=` is unshifted on AZERTY, `+` needs Shift on
-        // QWERTY; reset is Ctrl+0, which on AZERTY is the unshifted `à` key.
         KeyBinding::new("ctrl-=", ZoomIn, ctx),
         KeyBinding::new("ctrl-+", ZoomIn, ctx),
         KeyBinding::new("ctrl-shift-=", ZoomIn, ctx),
@@ -210,10 +192,6 @@ pub fn bind_keys(cx: &mut App) {
     ]);
 }
 
-// ------------------------------------------------------------ pure helpers
-
-/// Item `step` places away from `cur` in `list`, wrapping around; the first
-/// (or last, going up) item when `cur` is not in the list.
 pub fn cycle<T: Copy + PartialEq>(list: &[T], cur: Option<T>, step: i32) -> Option<T> {
     if list.is_empty() {
         return None;
@@ -227,8 +205,6 @@ pub fn cycle<T: Copy + PartialEq>(list: &[T], cur: Option<T>, step: i32) -> Opti
     Some(list[i as usize])
 }
 
-/// Next item after `cur` (in `step` direction, wrapping, never `cur` itself)
-/// that satisfies `pred`.
 pub fn seek<T: Copy + PartialEq>(list: &[T], cur: Option<T>, step: i32, pred: impl Fn(T) -> bool) -> Option<T> {
     let n = list.len() as i32;
     let start = cur.and_then(|c| list.iter().position(|x| *x == c)).map(|i| i as i32);
@@ -242,7 +218,6 @@ pub fn seek<T: Copy + PartialEq>(list: &[T], cur: Option<T>, step: i32, pred: im
         .find(|x| Some(*x) != cur && pred(*x))
 }
 
-/// Server rail order: Home, guilds outside folders, then folder contents.
 pub fn rail_order(guilds: &[Id], folders: &[Vec<Id>]) -> Vec<Option<Id>> {
     let in_folder = |g: &Id| folders.iter().any(|f| f.contains(g));
     let mut out = vec![None];
@@ -253,7 +228,6 @@ pub fn rail_order(guilds: &[Id], folders: &[Vec<Id>]) -> Vec<Option<Id>> {
     out
 }
 
-/// Back/forward stack of visited channels (the client's route history).
 #[derive(Default, Debug)]
 pub struct History {
     pub past: Vec<Id>,
@@ -262,7 +236,6 @@ pub struct History {
 }
 
 impl History {
-    /// Records a navigation to `ch` (no-op when it is already current).
     pub fn visit(&mut self, ch: Id) {
         if self.current == Some(ch) {
             return;
@@ -309,7 +282,6 @@ fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
     STATE.with(|s| f(&mut s.borrow_mut()))
 }
 
-/// Opens the Ctrl+/ modal (offscreen renders).
 pub fn open_help() {
     with(|s| s.help_open = true);
 }
@@ -318,20 +290,15 @@ pub fn help_open() -> bool {
     with(|s| s.help_open)
 }
 
-/// Escape closes the modal first. True when consumed.
 pub fn on_escape() -> bool {
     with(|s| std::mem::take(&mut s.help_open))
 }
-
-// ------------------------------------------------------------ app glue
 
 fn texty(kind: ChannelKind) -> bool {
     !matches!(kind, ChannelKind::Voice | ChannelKind::Stage | ChannelKind::Category)
 }
 
 impl PhoenixApp {
-    /// Channels Alt+Up/Down walk through: the sidebar's text channels and
-    /// threads (plus the joined voice channel), or the DM list at Home.
     fn shortcut_channels(&self) -> Vec<Id> {
         let Some(g) = self.selected_guild else { return self.dms.clone() };
         let ok = |id: &Id| {
@@ -355,7 +322,6 @@ impl PhoenixApp {
         rail_order(&guilds, &folders)
     }
 
-    /// Every navigable channel across the rail, current guild's order first.
     fn shortcut_all_channels(&self) -> Vec<Id> {
         let mut out = Vec::new();
         for g in self.shortcut_rail() {
@@ -371,7 +337,6 @@ impl PhoenixApp {
     }
 
     fn goto_channel(&mut self, id: Id, cx: &mut Context<Self>) {
-        // Showing the chat only: never joins voice (the client routes, it doesn't connect).
         self.open_channel_chat(id, cx);
         cx.notify();
     }
@@ -432,7 +397,6 @@ impl PhoenixApp {
     }
 }
 
-/// Registers every shortcut handler on the root element and records history.
 pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<PhoenixApp>) -> Stateful<gpui::Div> {
     if let Some(ch) = app.selected_channel {
         with(|s| s.history.visit(ch));
@@ -517,9 +481,7 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
     .on_action(cx.listener(|a, _: &ZoomIn, _, cx| ui::settings::update_local(a, |p| p.zoom = zoom_step(p.zoom, 1), cx)))
     .on_action(cx.listener(|a, _: &ZoomOut, _, cx| ui::settings::update_local(a, |p| p.zoom = zoom_step(p.zoom, -1), cx)))
     .on_action(cx.listener(|a, _: &ZoomReset, _, cx| ui::settings::update_local(a, |p| p.zoom = 100, cx)))
-    // UI-only placeholders (the same stub the voice panel's buttons open): nothing is recorded or sent.
     .on_action(cx.listener(|a, _: &RecordVoiceMessage, _, cx| a.stub(&crate::t!("shortcuts.voice_message"), cx)))
-    // The live client ignores Ctrl+Shift+B outside a voice connection (checked over CDP, 2026-11-24).
     .on_action(cx.listener(|a, _: &ToggleSoundboard, w, cx| {
         if a.voice_channel.is_some() {
             crate::ui::pickers::soundboard::toggle(a, w, cx);
@@ -528,12 +490,6 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
     .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url("https://support.discord.com")))
 }
 
-// ------------------------------------------------------------ Ctrl+/ modal
-//
-// Layout and values from the live modal (ref-cache shortcuts-modal-default.json,
-// `keyboardShortcutsModal_jCEr5v` and friends in the 2026 CSS).
-
-/// Focused-message combos (handled per keystroke in `message.rs`, not keymap bindings).
 pub const MESSAGE_SHORTCUTS: &[(&str, &str)] = &[
     ("e", "shortcuts.msg.edit"),
     ("backspace", "shortcuts.msg.delete"),
@@ -547,7 +503,6 @@ pub const MESSAGE_SHORTCUTS: &[(&str, &str)] = &[
     ("escape", "shortcuts.msg.composer"),
 ];
 
-/// "ctrl-shift-u" -> ["CTRL", "MAJ", "U"] (combo_ text-transform: uppercase; localized caps).
 pub fn key_caps(keys: &str) -> Vec<SharedString> {
     if keys == "+" {
         return vec!["+".into()];
@@ -571,64 +526,61 @@ pub fn key_caps(keys: &str) -> Vec<SharedString> {
         .collect()
 }
 
-/// `combo_dMUH0f`: 23px row of `key_dMUH0f` caps, 3px apart.
 fn combo(keys: &str) -> gpui::Div {
     let caps = key_caps(keys);
     let n = caps.len();
     div()
         .flex()
-        .h(z(23.)) // combo_ height 23px
+        .h(z(23.))
         .children(caps.into_iter().enumerate().map(move |(i, k)| {
             div()
-                .h(z(23.)) // key_ height 23px
-                .min_w(z(14.)) // key_ min-width 14px
-                .pt(z(3.)) // key_ padding 3px 6px 4px
+                .h(z(23.))
+                .min_w(z(14.))
+                .pt(z(3.))
                 .px(z(6.))
                 .pb(z(4.))
-                .when(i + 1 < n, |d| d.mr(z(3.))) // key_:not(:last-child) margin-inline-end 3px
-                .rounded(z(4.)) // key_ border-radius 4px
+                .when(i + 1 < n, |d| d.mr(z(3.)))
+                .rounded(z(4.))
                 .border_1()
-                .border_color(c(tok(idx::BORDER_SUBTLE))) // key_ border --border-subtle
-                .bg(c(tok(idx::BACKGROUND_MOD_MUTED))) // key_ --background-mod-muted
-                .text_size(z(12.)) // combo_ 12px / 12px semibold
+                .border_color(c(tok(idx::BORDER_SUBTLE)))
+                .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
+                .text_size(z(12.))
                 .line_height(z(12.))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE))) // key_ color --interactive-text-active
+                .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
                 .flex()
                 .justify_center()
                 .child(k)
         }))
 }
 
-/// `keybindGroup_jCEr5v`: label then the combos (each `keybindKey_` 8px below).
 fn keybind_card(label: SharedString, keys: &[&str], width: Pixels) -> impl IntoElement {
-    let mut combos = div().flex().flex_wrap().mb(z(8.)); // keybindKey_ margin-bottom 8px
+    let mut combos = div().flex().flex_wrap().mb(z(8.));
     for (i, k) in keys.iter().enumerate() {
-        combos = combos.child(combo(k).when(i > 0, |d| d.ml(z(8.)))); // combo + combo margin-left 8px
+        combos = combos.child(combo(k).when(i > 0, |d| d.ml(z(8.))));
     }
     div()
-        .w(width) // its grid column's width (minmax(180px, max-content))
-        .p(z(12.)) // keybindGroup_ padding 12px
-        .rounded(z(8.)) // keybindGroup_ border-radius 8px
-        .bg(c(tok(idx::BACKGROUND_MOD_MUTED))) // --background-mod-muted
+        .w(width)
+        .p(z(12.))
+        .rounded(z(8.))
+        .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
         .flex()
         .flex_col()
-        .gap(z(8.)) // keybindGroup_ gap 8px
-        .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(label)) // body-sm/normal
+        .gap(z(8.))
+        .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(label))
         .child(combos)
 }
 
-/// `keyboardShortcutSection_jCEr5v`: heading, optional description, wrapped cards.
 fn section(title: SharedString, desc: Option<SharedString>, rows: Vec<gpui::AnyElement>) -> impl IntoElement {
     div()
-        .ml(z(16.)) // margin-inline-start 16px
-        .px(z(8.)) // padding 24px 8px
+        .ml(z(16.))
+        .px(z(8.))
         .py(z(24.))
         .border_b_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE))) // border-bottom 1px --border-subtle
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
         .child(
             div()
-                .text_size(z(20.)) // heading-lg/semibold 20/24
+                .text_size(z(20.))
                 .line_height(z(24.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(c(tok(idx::TEXT_STRONG)))
@@ -637,13 +589,9 @@ fn section(title: SharedString, desc: Option<SharedString>, rows: Vec<gpui::AnyE
         .when_some(desc, |d, t| {
             d.child(div().mt(z(8.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(t))
         })
-        // keyboardShortcutListGroup_: margin-top 8, padding 8px 0, gap 24.
         .child(div().mt(z(8.)).py(z(8.)).flex().flex_col().gap(z(24.)).children(rows))
 }
 
-/// CSS grid `repeat(auto-fill, minmax(min, max-content))` with `gap`: the column
-/// count comes from the min track size, then each column is as wide as its
-/// widest item (never below `min`). Returns the column widths.
 pub fn grid_columns(content: &[f32], avail: f32, min: f32, gap: f32) -> Vec<f32> {
     let n = (((avail + gap) / (min + gap)).floor() as usize).max(1);
     let mut cols = vec![min; n.min(content.len().max(1))];
@@ -652,8 +600,6 @@ pub fn grid_columns(content: &[f32], avail: f32, min: f32, gap: f32) -> Vec<f32>
         let c = &mut limits[i % n];
         *c = c.max(*w);
     }
-    // "Maximize tracks": grow every track from its base toward its max-content
-    // limit, sharing the free space equally (text wraps in capped tracks).
     let mut free = avail - gap * (cols.len() as f32 - 1.) - cols.iter().sum::<f32>();
     while free > 0.5 {
         let growing: Vec<usize> = (0..cols.len()).filter(|&i| limits[i] - cols[i] > 0.01).collect();
@@ -677,14 +623,12 @@ fn text_width(window: &gpui::Window, text: &str, size: Pixels, weight: FontWeigh
     f32::from(window.text_system().layout_line(text, size, &[run], None).width)
 }
 
-/// max-content width of a keybind card: max(label, combos) + 2 x 12px padding.
 fn card_content_width(window: &gpui::Window, label: &str, keys: &[&str]) -> f32 {
     let label_w = text_width(window, label, z(14.), FontWeight::NORMAL);
     let combos: f32 = keys
         .iter()
         .map(|k| {
             let caps = key_caps(k);
-            // key_: padding-inline 6+6, border 1+1, 3px between caps.
             caps.iter().map(|c| text_width(window, c, z(12.), FontWeight::SEMIBOLD).max(2.) + 14.).sum::<f32>() + 3. * (caps.len() as f32 - 1.)
         })
         .sum::<f32>()
@@ -699,7 +643,7 @@ fn grid_rows(window: &gpui::Window, items: Vec<(SharedString, &[&str])>, avail: 
     let mut rows = Vec::new();
     let mut it = items.into_iter().enumerate().peekable();
     while it.peek().is_some() {
-        let mut row = div().flex().gap(z(24.)); // grid gap 24px; rows stretch to the tallest card
+        let mut row = div().flex().gap(z(24.));
         for _ in 0..n {
             let Some((i, (label, keys))) = it.next() else { break };
             row = row.child(keybind_card(label, keys, px(cols[i % n])));
@@ -709,12 +653,9 @@ fn grid_rows(window: &gpui::Window, items: Vec<(SharedString, &[&str])>, avail: 
     rows
 }
 
-/// The modal's card (without backdrop), sized for the window's viewport.
 pub fn help_card(window: &gpui::Window) -> gpui::AnyElement {
     let vp = window.viewport_size();
-    // keyboardShortcutsModal_: width 80vw, min 800, max 950; max-height 80vh.
     let w = (vp.width * 0.8).clamp(px(800.), px(950.));
-    // Grid width: card - list padding-right 16 - section margin 16 - section padding 2x8.
     let avail = f32::from(w) - 48.;
     let mut list = div().id("shortcuts-list").flex_1().min_h_0().overflow_y_scroll().pr(z(16.));
     let msg: Vec<(SharedString, &[&str])> = MESSAGE_SHORTCUTS.iter().map(|(k, l)| (crate::t!(l), std::slice::from_ref(k))).collect();
@@ -724,7 +665,7 @@ pub fn help_card(window: &gpui::Window) -> gpui::AnyElement {
         list = list.child(section(g.title(), None, grid_rows(window, items, avail)));
     }
     div()
-        .rounded(z(12.)) // root_ border-radius 12px, 1px border, 0 4px 8px rgba(0,0,0,.16)
+        .rounded(z(12.))
         .border_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
         .shadow(vec![gpui::BoxShadow {
@@ -739,13 +680,12 @@ pub fn help_card(window: &gpui::Window) -> gpui::AnyElement {
                 .w(w)
                 .max_h(vp.height * 0.8)
                 .relative()
-                .rounded(z(4.)) // keyboardShortcutsModal_ border-radius 4px
+                .rounded(z(4.))
                 .overflow_hidden()
-                .bg(c(tok(idx::BACKGROUND_BASE_LOWER))) // --background-base-lower
+                .bg(c(tok(idx::BACKGROUND_BASE_LOWER)))
                 .flex()
                 .flex_col()
                 .child(
-                    // modalTitle_: 26/34, --text-strong, padding 20px 40px 0, margin-bottom 5px.
                     div()
                         .flex()
                         .items_center()
@@ -759,7 +699,6 @@ pub fn help_card(window: &gpui::Window) -> gpui::AnyElement {
                         .child(combo("ctrl-/").ml(z(20.))),
                 )
                 .child(
-                    // modalSubtitle_: 16/20, padding 0 40px 20px.
                     div()
                         .px(z(40.))
                         .pb(z(20.))
@@ -874,11 +813,9 @@ mod tests {
 
     #[test]
     fn grid_columns_follow_auto_fill_max_content() {
-        // Live modal: 902px track area -> 4 columns of 180 / 245 / 180 / 180.
         let cols = grid_columns(&[150., 245., 120., 180., 90., 100., 170., 160.], 902., 180., 24.);
         assert_eq!(cols, vec![180., 245., 180., 180.]);
         assert_eq!(grid_columns(&[300.], 902., 180., 24.), vec![300.]);
-        // Too wide for the row: tracks share the free space and stay in the box.
         let cols = grid_columns(&[220., 220., 400., 400.], 902., 180., 24.);
         assert!((cols.iter().sum::<f32>() + 72. - 902.).abs() < 1., "{cols:?}");
         assert!(cols.iter().all(|c| *c >= 180. && *c <= 400.), "{cols:?}");

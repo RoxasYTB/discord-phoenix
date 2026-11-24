@@ -1,15 +1,5 @@
-//! Codec policy.
-//!
-//! Hard rules:
-//! - H.265 is **never** offered for encoding nor selected for sending. It may be
-//!   advertised as decode-only (receiving from other clients is harmless).
-//! - Preference for sending: AV1 (only with a hardware encoder) > H.264 > VP8.
-//! - H.264 is always 4:2:0 8-bit constrained-baseline (`42e01f`) or main
-//!   (`4d001f`): profiles Apple VideoToolbox decodes on macOS and iOS.
-
 use serde::{Deserialize, Serialize};
 
-/// Video/audio codecs known to the voice protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Codec {
     #[serde(rename = "opus")]
@@ -27,7 +17,6 @@ pub enum Codec {
 }
 
 impl Codec {
-    /// Protocol name.
     pub fn name(self) -> &'static str {
         match self {
             Codec::Opus => "opus",
@@ -39,7 +28,6 @@ impl Codec {
         }
     }
 
-    /// Parse a protocol name (case-insensitive).
     pub fn from_name(s: &str) -> Option<Codec> {
         Some(match s.to_ascii_uppercase().as_str() {
             "OPUS" => Codec::Opus,
@@ -52,7 +40,6 @@ impl Codec {
         })
     }
 
-    /// True for codecs this client may ever *send*. H.265 and VP9 are excluded.
     pub fn sendable(self) -> bool {
         matches!(self, Codec::Av1 | Codec::H264 | Codec::Vp8)
     }
@@ -61,7 +48,6 @@ impl Codec {
         !matches!(self, Codec::Opus)
     }
 
-    /// Static RTP payload types used by this client (`rtx` = payload + 1).
     pub fn payload_type(self) -> u8 {
         match self {
             Codec::Opus => 120,
@@ -78,12 +64,9 @@ impl Codec {
     }
 }
 
-/// H.264 profiles we are allowed to emit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum H264Profile {
-    /// `42e01f`: constrained baseline, level 3.1.
     ConstrainedBaseline,
-    /// `4d001f`: main, level 3.1.
     Main,
 }
 
@@ -95,25 +78,19 @@ impl H264Profile {
         }
     }
 
-    /// Validate an SPS-derived `profile_idc`/`constraint`/`level_idc` triple
-    /// against what Apple decoders accept (baseline/constrained-baseline/main,
-    /// level <= 5.1, which implies 8-bit 4:2:0).
     pub fn apple_safe(profile_idc: u8, level_idc: u8) -> bool {
         matches!(profile_idc, 66 | 77) && level_idc <= 51
     }
 }
 
-/// Local encoder/decoder capabilities, typically probed at startup.
 #[derive(Debug, Clone, Default)]
 pub struct LocalCapabilities {
     pub hw_av1_encoder: bool,
     pub h264_encoder: bool,
     pub vp8_encoder: bool,
-    /// Decoders available (used for the `decode` flag in the offer).
     pub decoders: Vec<Codec>,
 }
 
-/// One codec entry as sent in Select Protocol (`codecs` array).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodecOffer {
     pub name: String,
@@ -130,7 +107,6 @@ pub struct CodecOffer {
 }
 
 impl LocalCapabilities {
-    /// Ordered list of codecs this client can send, best first. Never contains H.265.
     pub fn send_preference(&self) -> Vec<Codec> {
         let mut v = Vec::new();
         if self.hw_av1_encoder {
@@ -145,7 +121,6 @@ impl LocalCapabilities {
         v
     }
 
-    /// Build the `codecs` array for Select Protocol.
     pub fn offer(&self) -> Vec<CodecOffer> {
         let mut out = vec![CodecOffer {
             name: "opus".into(),
@@ -179,8 +154,6 @@ impl LocalCapabilities {
     }
 }
 
-/// Pick the send codec given what the server/peers accept (by name, any order).
-/// Returns `None` when no sendable codec is common. H.265 can never be returned.
 pub fn select_send_codec(local: &LocalCapabilities, remote_accepts: &[Codec]) -> Option<Codec> {
     local
         .send_preference()
@@ -188,7 +161,6 @@ pub fn select_send_codec(local: &LocalCapabilities, remote_accepts: &[Codec]) ->
         .find(|c| c.sendable() && remote_accepts.contains(c))
 }
 
-/// Fallback chain for a stream starting at `current` (exclusive).
 pub fn fallback_after(local: &LocalCapabilities, remote_accepts: &[Codec], current: Codec) -> Option<Codec> {
     let pref = local.send_preference();
     let pos = pref.iter().position(|c| *c == current)?;
@@ -197,7 +169,6 @@ pub fn fallback_after(local: &LocalCapabilities, remote_accepts: &[Codec], curre
         .find(|c| c.sendable() && remote_accepts.contains(c))
 }
 
-/// Encoder configuration derived from codec policy.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VideoEncoderConfig {
     pub codec: Codec,
@@ -205,23 +176,17 @@ pub struct VideoEncoderConfig {
     pub height: u32,
     pub fps: u32,
     pub bitrate_bps: u32,
-    /// For H.264 only.
     pub h264_profile: Option<H264Profile>,
-    /// Keyframe interval in frames (0 = only on demand).
     pub keyframe_interval: u32,
 }
 
 impl VideoEncoderConfig {
-    /// Apple-safe config. Screen share prefers Main (better text), camera uses
-    /// constrained baseline (lowest latency, universally decodable).
     pub fn new(codec: Codec, width: u32, height: u32, fps: u32, bitrate_bps: u32, screen: bool) -> Self {
         let h264_profile = (codec == Codec::H264).then_some(if screen {
             H264Profile::Main
         } else {
             H264Profile::ConstrainedBaseline
         });
-        // Level 3.1 caps at 1280x720@30; larger frames still decode on Apple
-        // with the same profile but the level is bumped by the encoder.
         VideoEncoderConfig {
             codec,
             width: width & !1,
@@ -234,8 +199,6 @@ impl VideoEncoderConfig {
     }
 }
 
-/// Split a total upstream video budget between concurrently active streams.
-/// Screen share gets 2/3 when both are active.
 pub fn split_bitrate(total_bps: u32, camera_active: bool, screen_active: bool) -> (u32, u32) {
     match (camera_active, screen_active) {
         (true, true) => {
@@ -248,7 +211,6 @@ pub fn split_bitrate(total_bps: u32, camera_active: bool, screen_active: bool) -
     }
 }
 
-/// Parse an SPS NAL (without start code) and return `(profile_idc, level_idc)`.
 pub fn sps_profile_level(sps: &[u8]) -> Option<(u8, u8)> {
     if sps.len() < 4 || sps[0] & 0x1f != 7 {
         return None;
@@ -309,8 +271,8 @@ mod tests {
         assert_eq!(scr.h264_profile.map(|p| p.profile_level_id()), Some("4d001f"));
         assert!(H264Profile::apple_safe(0x42, 0x1f));
         assert!(H264Profile::apple_safe(0x4d, 0x1f));
-        assert!(!H264Profile::apple_safe(100, 0x1f)); // High: not emitted
-        assert!(!H264Profile::apple_safe(110, 0x1f)); // High10: not decodable everywhere
+        assert!(!H264Profile::apple_safe(100, 0x1f));
+        assert!(!H264Profile::apple_safe(110, 0x1f));
         assert_eq!(sps_profile_level(&[0x67, 0x42, 0xe0, 0x1f]), Some((0x42, 0x1f)));
     }
 

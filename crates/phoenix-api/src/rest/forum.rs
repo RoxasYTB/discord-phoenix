@@ -1,5 +1,3 @@
-//! Forum / media channels, thread search, polls and stage instances.
-
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -8,7 +6,6 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{Channel, ChannelId, Message, MessageId, Snowflake, null_default};
 
-/// Sort for `GET /channels/{id}/threads/search`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ThreadSort {
     #[default]
@@ -40,7 +37,6 @@ pub struct ThreadSearch {
     pub total_results: u32,
 }
 
-/// Body for `POST /channels/{forum}/threads` (new forum post).
 pub fn forum_post_body(title: &str, content: &str, tags: &[Snowflake]) -> Value {
     json!({
         "name": title,
@@ -50,7 +46,6 @@ pub fn forum_post_body(title: &str, content: &str, tags: &[Snowflake]) -> Value 
     })
 }
 
-/// Parsed `poll` object of a message.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Poll {
     #[serde(default)]
@@ -100,7 +95,6 @@ impl Poll {
     pub fn from_value(v: &Value) -> Option<Self> {
         serde_json::from_value(v.clone()).ok()
     }
-    /// `(count, me_voted)` for an answer.
     pub fn count(&self, answer: u32) -> (u32, bool) {
         self.results
             .as_ref()
@@ -118,12 +112,10 @@ impl RestClient {
         self.call(Method::GET, &threads_search_path(forum, sort, tags, offset, archived), Body::None).await
     }
 
-    /// Create a forum/media post. Returns the thread channel.
     pub async fn create_forum_post(&self, forum: ChannelId, title: &str, content: &str, tags: &[Snowflake]) -> Result<Channel> {
         self.call(Method::POST, &format!("/channels/{forum}/threads"), Body::Json(forum_post_body(title, content, tags))).await
     }
 
-    /// Vote (replaces previous votes); an empty list removes the vote.
     pub async fn vote_poll(&self, channel: ChannelId, message: MessageId, answers: &[u32]) -> Result<()> {
         self.call_empty(
             Method::PUT,
@@ -133,23 +125,18 @@ impl RestClient {
         .await
     }
 
-    /// Post a poll (`POST /channels/{c}/messages` with `poll`), like the client's
-    /// "Créer le sondage" modal: `answers` are (text, optional (emoji id, emoji name)).
     pub async fn create_poll(&self, channel: ChannelId, question: &str, answers: &[PollAnswerInput], hours: u32, multi: bool) -> Result<Message> {
         self.call(Method::POST, &format!("/channels/{channel}/messages"), Body::Json(poll_body(question, answers, hours, multi))).await
     }
 
-    /// End a poll now (`POST /channels/{c}/polls/{m}/expire`, POLL_EXPIRE in the client).
     pub async fn end_poll(&self, channel: ChannelId, message: MessageId) -> Result<Message> {
         self.call(Method::POST, &format!("/channels/{channel}/polls/{message}/expire"), Body::None).await
     }
 
-    /// `GET /stage-instances/{channel}` (null body if no stage is live).
     pub async fn get_stage_instance(&self, channel: ChannelId) -> Result<Value> {
         self.request_json(Method::GET, &format!("/stage-instances/{channel}"), None).await
     }
 
-    /// Raise or lower a hand in a stage (`request_to_speak_timestamp`).
     pub async fn stage_request_to_speak(&self, guild: Snowflake, channel: ChannelId, raise: bool, now_rfc3339: &str) -> Result<()> {
         let ts = if raise { json!(now_rfc3339) } else { Value::Null };
         self.call_empty(
@@ -161,11 +148,8 @@ impl RestClient {
     }
 }
 
-/// A poll answer to post: text and optional emoji (custom emoji id, name).
 pub type PollAnswerInput = (String, Option<(Option<Snowflake>, String)>);
 
-/// Body of a poll message: `poll {question {text}, answers [{poll_media {text, emoji}}],
-/// duration (hours), allow_multiselect, layout_type 1}`, empty content, fresh nonce.
 pub fn poll_body(question: &str, answers: &[PollAnswerInput], hours: u32, multi: bool) -> Value {
     let answers: Vec<Value> = answers
         .iter()

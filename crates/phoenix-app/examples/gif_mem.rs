@@ -1,7 +1,3 @@
-//! Memory bench for chat gifs: decodes every `<prefix>*.gif` in a directory
-//! the way GPUI does (every frame kept as a full RGBA canvas), holds them all
-//! like 20 gifs on screen would, and prints decoded bytes + process PSS.
-//! usage: gif_mem <dir> <prefix>   (see scripts/bench/gifs.sh)
 use image::AnimationDecoder;
 
 fn pss_kib() -> u64 {

@@ -1,17 +1,3 @@
-//! "Server Guide" page (sidebar row of guilds with COMMUNITY + GUILD_SERVER_GUIDE +
-//! GUILD_ONBOARDING; client route `/channels/{g}/@home`). Read-only: loaded with
-//! `GET /guilds/{g}/new-member-welcome` and `GET /guilds/{g}/profile`.
-//!
-//! Values from the live client (dump vanilla-server-guide, 2026-11-24, 1536x788):
-//! header bar like the other pages (container_ybUK7Z, 32/20 SignPostIcon,
-//! body-md/medium title); scroller homeContainer_ padding 32, gap 32;
-//! header_lqGeMc margin-top -16 with the home header art 16px wider on each side
-//! (headerArtWrapper_), 25% of its width tall, radius 16; the 100px guild icon
-//! (4px --background-base-low border, outer radius 30) at margin -50 0 16; the
-//! name row (heading-xxl/semibold 32/40, gap 8, discovery badge 24) with the md
-//! secondary "Invite" button pushed right; homeContent_ margin-top 12, gap 24:
-//! the main column and the 300px sidebar card.
-
 use gpui::{AnyElement, App, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
 use crate::{
@@ -31,24 +17,18 @@ impl gpui::Global for Slot {}
 #[derive(Clone)]
 struct Page {
     guild: Id,
-    /// Channel selected when the page opened: selecting another one closes it.
     from: Option<Id>,
     data: Option<GuildGuide>,
     error: Option<SharedString>,
-    /// Resource channel → text and first image of its oldest message, shown when
-    /// the resource has no description / no custom icon.
     previews: std::collections::HashMap<Id, Preview>,
 }
 
 #[derive(Clone, Default)]
 struct Preview {
     text: Option<String>,
-    /// (url, width, height) of the first image.
     media: Option<(SharedString, u32, u32)>,
 }
 
-/// Like the client: the message content, else the first embed description; the
-/// first image attachment, else the first embed image or thumbnail.
 fn preview_of(msgs: &[crate::model::Message]) -> Preview {
     let Some(m) = msgs.first() else { return Preview::default() };
     let text = Some(m.content.to_string())
@@ -67,12 +47,10 @@ fn t(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// The client shows the "Server Guide" row for these guilds only.
 pub fn has_guide(features: &[String]) -> bool {
     ["COMMUNITY", "GUILD_SERVER_GUIDE", "GUILD_ONBOARDING"].iter().all(|f| features.iter().any(|x| x == f))
 }
 
-/// The page is shown for the selected guild.
 pub fn is_open(app: &PhoenixApp, cx: &App) -> bool {
     cx.try_global::<Slot>().and_then(|s| s.0.as_ref()).is_some_and(|p| Some(p.guild) == app.selected_guild && p.from == app.selected_channel)
 }
@@ -88,8 +66,6 @@ pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
         let Some(mut page) = cx.try_global::<Slot>().and_then(|s| s.0.clone()).filter(|p| p.guild == guild) else { return };
         match r {
             Ok(ParityReply::Guide(g)) => {
-                // The client loads the oldest messages of a resource channel without a
-                // description or icon (`GET /channels/{c}/messages?after={c}&limit=5`).
                 for r in g.resources.iter().filter(|r| r.description.is_empty() || r.icon.is_none()) {
                     load_preview(a, guild, r.channel, cx);
                 }
@@ -121,7 +97,6 @@ fn load_preview(app: &PhoenixApp, guild: Id, channel: Id, cx: &mut Context<Phoen
     .detach();
 }
 
-/// "1 393" (narrow no-break space) in French, "1,393" in English.
 fn grouped(n: u64) -> String {
     let sep = if crate::i18n::locale().starts_with("fr") { "\u{202f}" } else { "," };
     let s = n.to_string();
@@ -135,7 +110,6 @@ fn grouped(n: u64) -> String {
     out
 }
 
-/// "nov. 2024": creation month of the guild, from its snowflake.
 fn established(guild: Id) -> SharedString {
     use chrono::Datelike;
     let ms = (guild.0 >> 22) as i64 + 1_420_070_400_000;
@@ -148,7 +122,6 @@ fn cdn(path: String) -> SharedString {
     SharedString::from(format!("https://cdn.discordapp.com/{path}"))
 }
 
-/// Discovery badge (ExperimentalWebBadgeIcon, two tones) at `size`.
 fn discovery_badge(size: f32) -> gpui::Div {
     div()
         .relative()
@@ -158,7 +131,6 @@ fn discovery_badge(size: f32) -> gpui::Div {
         .child(gpui::svg().path(crate::icons::path("discovery-badge-fg")).absolute().size(z(size)).text_color(t(idx::BADGE_INVERTED_TEXT)))
 }
 
-/// Guild icon image (or initials) inside a rounded square.
 fn icon(g: &Guild, size: f32, radius: f32) -> AnyElement {
     match &g.icon {
         crate::model::ImageRef::Url(u) => gpui::img(gpui::ImageSource::from(u.clone())).size(z(size)).rounded(z(radius)).into_any_element(),
@@ -177,11 +149,9 @@ fn icon(g: &Guild, size: f32, radius: f32) -> AnyElement {
     }
 }
 
-/// Header: art, icon, name, badge and "Invite".
 fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
     let gid = g.id;
     let art = app.backend.guild_home_header(gid);
-    // headerArt_: background-size cover, padding-top 25% (gpui: aspect ratio 4:1).
     let art = div()
         .ml(z(-16.))
         .mr(z(-16.))
@@ -189,7 +159,6 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
         .rounded(z(16.))
         .overflow_hidden()
         .bg(t(idx::BACKGROUND_SURFACE_HIGH))
-        // Stretched by the column, 16px wider on each side through the negative margins.
         .child(div().w_full().pt(gpui::relative(0.25)))
         .when_some(art, |d, h| {
             d.child(
@@ -208,7 +177,6 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
         .flex_col()
         .child(art)
         .child(
-            // headerIcon_: 100 + 4px border in --background-base-low, radius 30.
             div()
                 .mt(z(-50.))
                 .mb(z(16.))
@@ -239,17 +207,11 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
         )
 }
 
-/// One "Resources" row (row_Qo6EL-): padding 16, radius 8, 1px --border-subtle,
-/// --background-surface-high (hover --background-surface-higher); title
-/// body-md/semibold 16/20 + 8, description body-sm 14/18 --text-default on at most
-/// 3 lines (the oldest message of the channel when the description is empty); the
-/// custom icon (72x72) or the message's first image (72 on its long side) on the right.
 fn resource(i: usize, r: &GuideEntry, preview: Option<&Preview>, cx: &Context<PhoenixApp>) -> AnyElement {
     let ch = r.channel;
     let text = Some(r.description.clone()).filter(|d| !d.is_empty()).or_else(|| preview.and_then(|p| p.text.clone()));
     let thumb: Option<AnyElement> = match (&r.icon, preview.and_then(|p| p.media.clone())) {
         (Some(h), _) => Some(
-            // CDN `resource-channels/{channel}/{hash}` (128px), not seen on a real guild yet.
             gpui::img(cdn(format!("resource-channels/{}/{h}.jpg?size=128", ch.0)))
                 .size(z(72.))
                 .rounded(z(8.))
@@ -302,8 +264,6 @@ fn resource(i: usize, r: &GuideEntry, preview: Option<&Preview>, cx: &Context<Ph
         .into_any_element()
 }
 
-/// How many trait chips fit on one 266px row (`items_rw6y68`, vanilla-server-guide #1097)
-/// before collapsing the rest into `+ N en plus` (`overflowMeasurement_rw6y68`, 85px).
 fn fit_traits(traits: &[crate::commands::guide::GuideTrait], max_w: f32) -> (usize, usize) {
     if traits.is_empty() {
         return (0, 0);
@@ -334,11 +294,6 @@ fn fit_traits(traits: &[crate::commands::guide::GuideTrait], max_w: f32) -> (usi
     (shown, traits.len() - shown)
 }
 
-/// Sidebar card (container_Xweo-z): 300 wide, radius 16, 1px --border-subtle,
-/// --background-surface-highest; 120px discovery splash; 70px icon frame at
-/// margin -34 inside padding 16; name heading-sm/semibold + badge + tag chiplet;
-/// online / member counts (8px dots, body-sm --text-muted, gap 0 8); creation
-/// month; description body-sm and single-row trait chips with `+ N en plus` overflow.
 fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
     let gid = g.id;
     let muted = |s: SharedString| div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_MUTED)).child(s);
@@ -385,7 +340,6 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
         );
     }
     let tag = p.tag.clone().map(|tag| {
-        // chipletContainerInner_ (as after usernames): 14px badge + body-xs/semibold.
         div()
             .flex_none()
             .h(z(16.))
@@ -420,8 +374,6 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
             }),
         )
         .child(
-            // avatarWrapper_: 70px frame in the card colour around the 64px icon
-            // (clan-icon squircle mask, measured ~22 / 19px corners on the capture).
             div().mt(z(-34.)).px(z(16.)).child(
                 div().size(z(70.)).rounded(z(22.)).bg(t(idx::BACKGROUND_SURFACE_HIGHEST)).flex().items_center().justify_center().child(icon(g, 64., 19.)),
             ),
@@ -472,7 +424,6 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
         )
 }
 
-/// One "Getting Started" (`new_member_actions`) row.
 fn action_row(i: usize, a: &GuideEntry, cx: &Context<PhoenixApp>) -> AnyElement {
     let ch = a.channel;
     div()
@@ -583,7 +534,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 main = main.child(col);
             }
             if !d.resources.is_empty() {
-                // container_Qo6EL-: margin-top 16, gap 8; heading-lg/semibold 20/24.
                 let mut col = div().mt(z(16.)).flex().flex_col().gap(z(8.)).child(
                     div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("guide.resources")),
                 );
@@ -598,7 +548,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         }
     }
     let side = page.data.as_ref().and_then(|d| d.profile.as_ref()).map(|p| card(&g, p));
-    // The scroller keeps a 16px scrollbar gutter (scrollbarGutterStable_): content 1103 of 1119.
     let body = div()
         .p(z(32.))
         .pr(z(48.))

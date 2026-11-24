@@ -1,5 +1,3 @@
-//! Voice gateway v8 wire format: opcodes and payloads.
-
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -35,21 +33,17 @@ pub mod op {
     pub const DAVE_MLS_INVALID_COMMIT_WELCOME: u8 = 31;
 }
 
-/// Plain connection inputs (no dependency on the REST/gateway crate).
 #[derive(Debug, Clone)]
 pub struct VoiceConnectInfo {
-    /// Endpoint from VOICE_SERVER_UPDATE, e.g. `c-cdg01-abcd.discord.media:443`.
     pub endpoint: String,
     pub server_id: String,
     pub user_id: String,
     pub session_id: String,
     pub token: String,
-    /// 0 disables DAVE (transport encryption only).
     pub max_dave_protocol_version: u16,
 }
 
 impl VoiceConnectInfo {
-    /// `wss://{endpoint}/?v=8`.
     pub fn url(&self) -> String {
         let host = self.endpoint.trim_start_matches("wss://").trim_end_matches('/');
         format!("wss://{host}/?v=8")
@@ -64,7 +58,6 @@ pub struct Resolution {
     pub height: u32,
 }
 
-/// Stream descriptor used in Identify, Ready and op 12.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StreamDescriptor {
     #[serde(rename = "type")]
@@ -86,7 +79,6 @@ pub struct StreamDescriptor {
     pub max_resolution: Option<Resolution>,
 }
 
-/// op 12 payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct VideoPayload {
     #[serde(default)]
@@ -120,27 +112,23 @@ pub struct SessionDescription {
     pub video_codec: Option<String>,
 }
 
-/// Speaking flags.
 pub mod speaking {
     pub const MICROPHONE: u32 = 1 << 0;
     pub const SOUNDSHARE: u32 = 1 << 1;
     pub const PRIORITY: u32 = 1 << 2;
 }
 
-/// DAVE messages from the server.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DaveServerMessage {
     PrepareTransition { transition_id: u16, protocol_version: u16 },
     ExecuteTransition { transition_id: u16 },
     PrepareEpoch { epoch: u64, protocol_version: u16 },
     ExternalSender(Vec<u8>),
-    /// First byte is the operation type (0 = append, 1 = revoke).
     Proposals(Vec<u8>),
     AnnounceCommit { transition_id: u16, commit: Vec<u8> },
     Welcome { transition_id: u16, welcome: Vec<u8> },
 }
 
-/// Parsed server message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServerMessage {
     Hello { heartbeat_interval_ms: f64 },
@@ -156,7 +144,6 @@ pub enum ServerMessage {
     Other { op: u8, d: Value },
 }
 
-/// A decoded frame plus its sequence number (if the server sent one).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Decoded {
     pub seq: Option<u64>,
@@ -167,7 +154,6 @@ fn u16_field(d: &Value, k: &str) -> u16 {
     d.get(k).and_then(Value::as_u64).unwrap_or(0) as u16
 }
 
-/// Decode a JSON text frame.
 pub fn decode_text(text: &str) -> Result<Decoded> {
     let v: Value = serde_json::from_str(text)?;
     let opn = v.get("op").and_then(Value::as_u64).ok_or(Error::Protocol("missing op".into()))?;
@@ -212,7 +198,6 @@ pub fn decode_text(text: &str) -> Result<Decoded> {
     Ok(Decoded { seq, msg })
 }
 
-/// Decode a binary frame: `[seq u16 BE][opcode u8][payload]`.
 pub fn decode_binary(b: &[u8]) -> Result<Decoded> {
     if b.len() < 3 {
         return Err(Error::Malformed("binary frame too short"));
@@ -242,7 +227,6 @@ pub fn decode_binary(b: &[u8]) -> Result<Decoded> {
     Ok(Decoded { seq: Some(seq), msg: ServerMessage::Dave(msg) })
 }
 
-/// Client → server binary frame: `[opcode u8][payload]`.
 pub fn encode_binary(opcode: u8, payload: &[u8]) -> Vec<u8> {
     let mut v = Vec::with_capacity(payload.len() + 1);
     v.push(opcode);
@@ -315,7 +299,6 @@ pub fn dave_invalid_commit_welcome(transition_id: u16) -> String {
     text(op::DAVE_MLS_INVALID_COMMIT_WELCOME, json!({ "transition_id": transition_id }))
 }
 
-/// Close codes after which resuming is pointless.
 pub fn close_code_resumable(code: u16) -> bool {
     !matches!(code, 1000 | 4003 | 4004 | 4005 | 4006 | 4009 | 4011 | 4012 | 4014 | 4016 | 4021 | 4022)
 }

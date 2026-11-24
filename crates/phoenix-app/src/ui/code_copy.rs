@@ -1,16 +1,9 @@
-//! Copy button of message code blocks. Client markup: `pre > codeContainer_`
-//! (position relative) holding `codeActions_` (absolute, top 8px,
-//! inset-inline-end 4px, `display:none` until the container is hovered) with a
-//! clickable CopyIcon `xs` (16px, currentColor) that turns into
-//! CheckmarkLargeIcon once the text is on the clipboard.
-
 use std::time::Duration;
 
 use gpui::{App, ClipboardItem, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, prelude::*, svg};
 
 use crate::theme::z;
 
-/// Group name of the hovered code container.
 pub const GROUP: &str = "phx-code-block";
 
 #[derive(IntoElement)]
@@ -36,8 +29,8 @@ impl RenderOnce for CodeCopy {
         div()
             .id(key)
             .absolute()
-            .top(z(8.)) // codeActions_ top 8px
-            .right(z(4.)) // inset-inline-end 4px
+            .top(z(8.))
+            .right(z(4.))
             .invisible()
             .group_hover(GROUP, |s| s.visible())
             .cursor_pointer()

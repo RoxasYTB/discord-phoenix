@@ -1,14 +1,3 @@
-//! Incoming call popup (client `IncomingCallModal`, `root_dcNks8`): shown
-//! while a CALL_CREATE / CALL_UPDATE lists us in `ringing`. Ctrl+Enter joins
-//! the call, Esc (or the X button) stops our ringing, like the client's
-//! keydown handler (`ESCAPE` → `stopRinging`).
-//!
-//! CSS (`*_dcNks8`): root min-width 232, padding 16, radius 8,
-//! --background-surface-high, --shadow-border + --shadow-high, column,
-//! centred; mainChannelInfo icon margin 16 0 (80px avatar), title
-//! body-lg/semibold --text-strong margin-bottom 2, subtitle body-md/normal
-//! --text-default margin-bottom 24; actions_dcNks8 flex gap 8.
-
 use crate::ui::tooltip::Tipped as _;
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
@@ -18,26 +7,22 @@ use crate::{
     theme::{c, generated::idx, tok, z},
 };
 
-/// Ringing channel, if any.
 pub fn ringing(app: &PhoenixApp) -> Option<Id> {
     app.parity.incoming_call
 }
 
-/// Ctrl+Enter: answer (join the call's voice channel).
 pub fn answer(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let Some(ch) = app.parity.incoming_call.take() else { return };
     app.join_voice(Some(ch), cx);
     cx.notify();
 }
 
-/// Esc / X: stop ringing for us only (POST call/stop-ringing).
 pub fn decline(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let Some(ch) = app.parity.incoming_call.take() else { return };
     crate::ui::pickers::detach(app.backend.stop_ringing(ch), cx);
     cx.notify();
 }
 
-/// CALL_CREATE / CALL_UPDATE / CALL_DELETE: track whether we're rung.
 pub fn on_call(app: &mut PhoenixApp, channel: Id, ringing: &[Id]) {
     crate::sounds::watch::on_call(channel, ringing, app.me.id);
     if ringing.contains(&app.me.id) {
@@ -47,7 +32,6 @@ pub fn on_call(app: &mut PhoenixApp, channel: Id, ringing: &[Id]) {
     }
 }
 
-/// Key handling for [`crate::shortcuts`]: true when consumed.
 pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<PhoenixApp>) -> bool {
     if app.parity.incoming_call.is_none() {
         return false;
@@ -61,11 +45,10 @@ pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<Phoen
     true
 }
 
-/// 56px round call action (centerButton): red X to decline, green phone to join.
 fn action(id: &'static str, icon: &'static str, bg: usize, hover: usize, tip: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
-        .line_height(z(0.)) // actionButton_dcNks8
+        .line_height(z(0.))
         .size(z(56.))
         .rounded_full()
         .flex()
@@ -91,8 +74,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         .rounded(z(8.))
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
         .border_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE))) // --shadow-border
-        .shadow_lg() // --shadow-high
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .shadow_lg()
         .flex()
         .flex_col()
         .items_center()
@@ -142,6 +125,5 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                     .on_click(cx.listener(|a, _, _, cx| answer(a, cx))),
                 ),
         );
-    // wrapper_dcNks8: draggable popup; initial position centred near the top.
     Some(div().absolute().top_0().left_0().size_full().flex().items_start().justify_center().pt(z(96.)).child(card).into_any_element())
 }

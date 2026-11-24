@@ -1,13 +1,3 @@
-//! Full-profile Board tab data and game widget cards.
-//!
-//! Live modal (dump vanilla-profile-modal-board): `container_FNEkcu` cards
-//! (padding 12 16 16, gap 8, --radius-lg 16, --user-profile-overlay-background),
-//! `headerRow_ltNcM4` 24 high with a heading-xs/medium 14/18 title; game
-//! covers `cover_JeyAv-` 88x117 radius 8 in `grid_W5z7fj` (gap 16, wrapping);
-//! the favourite game is `card_2y0Mhw` (gap 16): the cover, then
-//! `details_2y0Mhw` (padding-inline-start 7, gap 4) with the name 14/18 500,
-//! vertically centred.
-
 use std::collections::HashMap;
 
 use gpui::{div, img, prelude::*, Context, Div, FontWeight, Global, Hsla, SharedString};
@@ -40,7 +30,6 @@ impl Board {
 struct Store(HashMap<Id, Board>);
 impl Global for Store {}
 
-/// The user's Board data; fetched once (three read-only requests) on first use.
 pub fn get(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) -> Board {
     let s = cx.default_global::<Store>();
     if let Some(b) = s.0.get(&user) {
@@ -79,7 +68,6 @@ fn title(k: Kind) -> SharedString {
 }
 
 fn cover(g: &crate::ui::profile_games::Game, col: &Colors) -> Div {
-    // cover_JeyAv- 88x117, radius 8
     div()
         .w(z(88.))
         .h(z(117.))
@@ -91,13 +79,9 @@ fn cover(g: &crate::ui::profile_games::Game, col: &Colors) -> Div {
 }
 
 thread_local! {
-    /// Open widget "More" menu position.
     static MENU: std::cell::Cell<Option<gpui::Point<gpui::Pixels>>> = const { std::cell::Cell::new(None) };
 }
 
-/// The widget "More" menu: one red "Report Widget" row (live menu, 168px, ref-cache
-/// profile-widget-menu.json). Reporting is not wired (it would send a report): the
-/// row only closes the menu.
 pub fn menu() -> Option<gpui::AnyElement> {
     let pos = MENU.with(|m| m.get())?;
     let close: crate::ui::context_menu::Dismiss = std::rc::Rc::new(|w: &mut gpui::Window, _: &mut gpui::App| {
@@ -109,8 +93,6 @@ pub fn menu() -> Option<gpui::AnyElement> {
     Some(crate::ui::context_menu::render(pos, items, close))
 }
 
-/// `actions_ltNcM4` (gap 8) `button_rOupvJ`: 24px "More" button at the end of a
-/// widget header (MoreHorizontalIcon).
 pub fn more_button(color: Hsla) -> gpui::Stateful<Div> {
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -129,7 +111,6 @@ pub fn more_button(color: Hsla) -> gpui::Stateful<Div> {
         .child(gpui::svg().path(crate::icons::path("more-horizontal")).size(z(20.)).text_color(color))
 }
 
-/// One game widget card.
 pub fn card(w: &GameWidget, col: &Colors) -> Option<Div> {
     if w.games.is_empty() {
         return None;

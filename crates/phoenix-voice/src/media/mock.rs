@@ -1,5 +1,3 @@
-//! Deterministic mock encoder, used by tests and for UI development.
-
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -7,8 +5,6 @@ use super::{EncodedVideo, VideoEncoder, VideoEncoderFactory, VideoFrame};
 use crate::codec::{Codec, VideoEncoderConfig};
 use crate::{Error, Result};
 
-/// Mock encoder emitting syntactically valid frames for each codec.
-/// `fail_after` makes `encode` return `Err` after N successful frames.
 pub struct MockEncoder {
     codec: Codec,
     frames: usize,
@@ -70,11 +66,9 @@ impl VideoEncoder for MockEncoder {
     }
 }
 
-/// Factory where each codec may be configured to fail at creation or mid-stream.
 #[derive(Default, Clone)]
 pub struct MockEncoderFactory {
     pub unavailable: Vec<Codec>,
-    /// (codec, fail after N frames)
     pub fail_after: Vec<(Codec, usize)>,
     pub created: Arc<AtomicUsize>,
 }

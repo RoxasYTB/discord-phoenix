@@ -33,9 +33,6 @@ impl Emoji {
     }
 }
 
-/// Guild metadata. In the user-account READY payload these fields are
-/// nested under `properties`; elsewhere they are top-level. [`Guild`]
-/// accepts both.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct GuildProperties {
     #[serde(default, deserialize_with = "null_default")]
@@ -78,11 +75,8 @@ pub struct GuildProperties {
     pub vanity_url_code: Option<String>,
     #[serde(default)]
     pub max_members: Option<u32>,
-    /// Server default notification level (0 all, 1 mentions): what the
-    /// client's UserGuildSettingsStore uses when no settings entry exists.
     #[serde(default)]
     pub default_message_notifications: Option<u8>,
-    /// Server Guide header art (`home-headers/{g}/{hash}`).
     #[serde(default)]
     pub home_header: Option<String>,
 }
@@ -122,7 +116,6 @@ struct RawGuild {
     data_mode: Option<String>,
 }
 
-/// A guild, as delivered by GUILD_CREATE or the READY `guilds` array.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(from = "RawGuild")]
 pub struct Guild {
@@ -140,13 +133,11 @@ pub struct Guild {
     pub lazy: bool,
     pub unavailable: bool,
     pub joined_at: Option<String>,
-    /// "full", "partial" or "unavailable" for the user READY shape.
     pub data_mode: Option<String>,
 }
 
 impl From<RawGuild> for Guild {
     fn from(r: RawGuild) -> Self {
-        // User READY nests `properties` but keeps the boost count at the top level.
         let boosts = r.top.premium_subscription_count;
         let mut properties = r.properties.unwrap_or(r.top);
         properties.premium_subscription_count = properties.premium_subscription_count.or(boosts);
@@ -195,7 +186,6 @@ impl Guild {
     }
 }
 
-/// Entry from `GET /users/@me/guilds`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PartialGuild {
     pub id: GuildId,

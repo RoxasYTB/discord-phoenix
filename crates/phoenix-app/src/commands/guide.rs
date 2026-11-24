@@ -1,15 +1,7 @@
-//! Server Guide data (client route `/channels/{g}/@home`). The client loads it with
-//! two read-only GETs, seen in the live Network log and the local web bundle on
-//! 2026-11-24: `GET /guilds/{g}/new-member-welcome` (its `GUILD_HOME_SETTINGS`
-//! route: welcome message, new member actions, resource channels) and
-//! `GET /guilds/{g}/profile` (the sidebar card: counts, tag, traits, splash).
-
 use serde_json::Value;
 
 use crate::model::Id;
 
-/// Custom emoji id, or a unicode emoji name (`emoji_name` may be a shortcode like
-/// `computer` in profile traits, or the character itself in home settings).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuideEmoji {
     pub id: Option<Id>,
@@ -18,11 +10,9 @@ pub struct GuideEmoji {
 }
 
 impl GuideEmoji {
-    /// Token understood by `media::emoji::emoji_element`.
     pub fn token(&self) -> Option<String> {
         match (self.id, self.name.as_deref()) {
             (Some(id), n) => Some(format!("<{}:{}:{}>", if self.animated { "a" } else { "" }, n.unwrap_or("e"), id.0)),
-            // A shortcode resolves to its glyph; an unknown ASCII name shows no emoji.
             (None, Some(n)) if n.is_ascii() => crate::ui::pickers::emoji::by_shortcode(n).map(|i| crate::ui::pickers::emoji::glyph(i).to_owned()),
             (None, Some(n)) if !n.is_empty() => Some(n.to_owned()),
             _ => None,
@@ -30,27 +20,22 @@ impl GuideEmoji {
     }
 }
 
-/// A resource channel or a new member action.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuideEntry {
     pub channel: Id,
     pub title: String,
     pub description: String,
     pub emoji: GuideEmoji,
-    /// Custom icon hash, if the moderators uploaded one.
     pub icon: Option<String>,
-    /// New member actions: 0 view the channel, 1 chat in it.
     pub action_type: u8,
 }
 
-/// One profile trait chip ("💻 Developpement").
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuideTrait {
     pub label: String,
     pub emoji: GuideEmoji,
 }
 
-/// `GET /guilds/{g}/profile`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuildProfile {
     pub member_count: u64,
@@ -59,7 +44,6 @@ pub struct GuildProfile {
     pub tag: Option<String>,
     pub badge_hash: Option<String>,
     pub traits: Vec<GuideTrait>,
-    /// `discovery-splashes/{g}/{hash}.jpg` banner of the card.
     pub custom_banner_hash: Option<String>,
     pub premium_tier: u8,
     pub premium_subscription_count: u32,
@@ -113,7 +97,6 @@ fn entries(v: &Value, k: &str) -> Vec<GuideEntry> {
         .unwrap_or_default()
 }
 
-/// `GET /guilds/{g}/new-member-welcome`.
 pub fn parse_home_settings(v: &Value) -> GuildGuide {
     let welcome = v.get("welcome_message");
     GuildGuide {
@@ -130,7 +113,6 @@ pub fn parse_home_settings(v: &Value) -> GuildGuide {
     }
 }
 
-/// `GET /guilds/{g}/profile`.
 pub fn parse_profile(v: &Value) -> GuildProfile {
     let n = |k: &str| v.get(k).and_then(|x| x.as_u64()).unwrap_or(0);
     let opt = |k: &str| v.get(k).and_then(|x| x.as_str()).filter(|x| !x.is_empty()).map(str::to_owned);

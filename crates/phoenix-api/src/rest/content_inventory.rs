@@ -1,8 +1,3 @@
-//! Read-only feeds of the live client: scheduled messages
-//! (`GET /users/@me/scheduled-messages`, Inbox > Scheduled) and the content
-//! inventory (`GET /content-inventory/users/@me`, member list Activity cards
-//! with their "New player" / "Resurrection" traits).
-
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::Value;
@@ -11,50 +6,37 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{ChannelId, Snowflake, null_default};
 
-/// One entry of `GET /users/@me/scheduled-messages`.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ScheduledMessage {
     pub id: Snowflake,
     pub channel_id: ChannelId,
     #[serde(default, deserialize_with = "null_default")]
     pub content: String,
-    /// ISO 8601 send time.
     #[serde(default, deserialize_with = "null_default")]
     pub scheduled_timestamp: String,
 }
 
-/// Content inventory trait types (`TraitType` enum of the client).
 pub const TRAIT_FIRST_TIME: u64 = 1;
 pub const TRAIT_DURATION: u64 = 2;
 pub const TRAIT_IS_LIVE: u64 = 3;
 pub const TRAIT_RESURRECTED: u64 = 5;
 pub const TRAIT_STREAK: u64 = 8;
 pub const TRAIT_TRENDING: u64 = 9;
-/// `ContentInventoryEntryType.PLAYED_GAME` (the only type seen in guild feeds).
 pub const CONTENT_PLAYED_GAME: u64 = 1;
 
-/// What the activity card badges need from one content inventory entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct InventoryEntry {
-    /// Entry id (snowflake; the card's "2d ago" is measured from it).
     pub id: u64,
     pub author_id: u64,
     pub content_type: u64,
-    /// `traits[type=9].trending` -> "Trending".
     pub trending: bool,
-    /// `traits[type=8].streak_count_days`.
     pub streak_days: Option<u64>,
     pub application_id: Option<u64>,
     pub game_name: Option<String>,
-    /// `traits[type=1].first_time` -> "New player".
     pub first_time: bool,
-    /// `traits[type=5].resurrected_last_played` -> "Resurrection".
     pub resurrected: bool,
-    /// `traits[type=3].is_live`: the session is still running (the card shows a timer).
     pub live: bool,
-    /// ISO 8601 session start (`started_at`); the live timer counts from it.
     pub started_at: Option<String>,
-    /// ISO 8601 `expires_at` of a live entry (the server extends it while the game runs).
     pub expires_at: Option<String>,
 }
 
@@ -62,9 +44,6 @@ fn id_of(v: &Value) -> Option<u64> {
     v.as_str().and_then(|s| s.parse().ok()).or_else(|| v.as_u64())
 }
 
-/// Parses `{ "entries": [{ author_id, extra: { application_id, game_name }, traits: [...] }] }`.
-/// The client's feed store keeps each entry under `content` (`feed.entries.map(e => e.content)`),
-/// so a wrapped entry is unwrapped first.
 pub fn parse_inventory(v: &Value) -> Vec<InventoryEntry> {
     let Some(entries) = v.get("entries").and_then(Value::as_array) else { return Vec::new() };
     entries
@@ -82,7 +61,6 @@ pub fn parse_inventory(v: &Value) -> Vec<InventoryEntry> {
                 trending: tr(TRAIT_TRENDING).is_some_and(|t| t.get("trending").is_some_and(|x| !x.is_null() && x != &Value::Bool(false))),
                 streak_days: tr(TRAIT_STREAK).and_then(|t| t.get("streak_count_days")?.as_u64()),
                 application_id: extra.and_then(|x| x.get("application_id")).and_then(id_of),
-                // PLAYED_GAME / TOP_GAME `game_name`; LAUNCHED_ACTIVITY (8) `activity_name`.
                 game_name: extra
                     .and_then(|x| x.get("game_name").or_else(|| x.get("activity_name")))
                     .and_then(Value::as_str)
@@ -102,7 +80,6 @@ impl RestClient {
         self.call(Method::GET, "/users/@me/scheduled-messages", Body::None).await
     }
 
-    /// The global activity feed (`MY_CONTENT_INVENTORY`), parsed.
     pub async fn get_content_inventory(&self) -> Result<Vec<InventoryEntry>> {
         let v: Value = self.call(Method::GET, "/content-inventory/users/@me", Body::None).await?;
         Ok(parse_inventory(&v))

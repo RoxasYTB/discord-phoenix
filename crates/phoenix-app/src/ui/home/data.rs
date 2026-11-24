@@ -1,8 +1,3 @@
-//! Navigation data that lives beside the core model: relationships, guild
-//! folders, threads, per-channel decorations, invites. Delivered by the
-//! backend as [`NavEvent`]s inside `AppEvent::Nav`, so the shared model and
-//! `ReadyData` stay untouched.
-
 use std::collections::{HashMap, HashSet};
 
 use gpui::SharedString;
@@ -11,7 +6,6 @@ use crate::model::{Channel, Id, ImageRef};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RelationshipKind {
-    /// Type 0 / 5 (none / implicit): kept when `user_ignored` is true.
     None,
     Friend,
     Blocked,
@@ -24,14 +18,10 @@ pub struct Relationship {
     pub user: Id,
     pub kind: RelationshipKind,
     pub nickname: Option<SharedString>,
-    /// Unix seconds the relationship started (`since`).
     pub since: Option<i64>,
-    /// `user_ignored`: the client hides their messages like blocked ones.
     pub ignored: bool,
 }
 
-/// One entry of `guild_folders`. `id == None` means a lone guild that is not
-/// really a folder (Discord stores every top-level guild that way).
 #[derive(Clone, Debug, Default)]
 pub struct GuildFolder {
     pub id: Option<u64>,
@@ -40,30 +30,20 @@ pub struct GuildFolder {
     pub guilds: Vec<Id>,
 }
 
-/// Decorations the core `Channel` struct doesn't carry.
 #[derive(Clone, Debug, Default)]
 pub struct ChannelExtra {
     pub nsfw: bool,
-    /// Private channel: @everyone can't see it (lock badge on the icon).
     pub locked: bool,
-    /// Group DM only: custom icon and recipient count.
     pub group_icon: Option<ImageRef>,
     pub recipients: usize,
-    /// Group DM name built from recipients when Discord sent none.
     pub group_name: Option<SharedString>,
-    /// Group DM only: recipient ids (without us); the group or thread owner.
     pub members: Vec<Id>,
     pub owner: Option<Id>,
-    /// `rate_limit_per_user` seconds (0 = off).
     pub slowmode: u32,
-    /// BYPASS_SLOWMODE: slowmode doesn't apply.
     pub bypass_slowmode: bool,
-    /// Guild channel where we lack SEND_MESSAGES (SEND_MESSAGES_IN_THREADS in threads).
     pub send_blocked: bool,
-    /// Thread `thread_metadata.archived` / `.locked` (chatHeaderBar_ banners).
     pub thread_archived: bool,
     pub thread_locked: bool,
-    /// `MANAGE_THREADS`: shows Open / Unlock buttons on archived / locked threads.
     pub can_manage_threads: bool,
 }
 
@@ -81,7 +61,6 @@ pub struct InvitePreview {
 
 #[derive(Debug)]
 pub enum NavEvent {
-    /// Full state after login: replaces everything.
     Snapshot {
         relationships: Vec<Relationship>,
         folders: Vec<GuildFolder>,
@@ -91,24 +70,19 @@ pub enum NavEvent {
     },
     RelationshipUpsert(Relationship),
     RelationshipRemove(Id),
-    /// Friend activity line ("Playing X") for the Active Now column.
     Activity { user: Id, activity: Option<SharedString> },
     ThreadUpsert(Channel),
     ThreadDelete(Id),
     Extras(Vec<(Id, ChannelExtra)>),
-    /// Guild banner hashes (`None` = no banner).
     Banners(Vec<(Id, Option<String>)>),
-    /// Guild folders / rail order changed from another client.
     Folders(Vec<GuildFolder>),
 }
 
 #[derive(Clone, Debug)]
 pub enum RelAction {
     Accept,
-    /// Ignore an incoming request, cancel an outgoing one, unfriend, unblock.
     Remove,
     Block,
-    /// Send a friend request by username.
     AddByName(String),
 }
 
@@ -116,21 +90,14 @@ pub enum RelAction {
 pub enum NavRequest {
     FetchInvite(String),
     AcceptInvite(String),
-    /// Create a 7 day invite for a channel; reply is `Text(url)`.
     CreateInvite(Id),
     LeaveGuild(Id),
     Relationship { user: Id, action: RelAction },
-    /// Open (or create) the DM with a user; reply is `Channel`.
     OpenDm(Id),
     CloseDm(Id),
-    /// Mark a channel read up to its latest message.
     AckChannel(Id),
-    /// Mark every channel of a guild read.
     AckGuild(Id),
-    /// Mute a guild (`channel: None`) or a channel; `secs` None = until unmuted,
-    /// `muted: false` unmutes. DMs use `guild: None`.
     Mute { guild: Option<Id>, channel: Option<Id>, muted: bool, secs: Option<u32> },
-    /// Notification level: 0 all, 1 mentions, 2 nothing, 3 inherit (channels).
     NotifyLevel { guild: Option<Id>, channel: Option<Id>, level: u8 },
 }
 
@@ -157,15 +124,11 @@ pub enum HomeView {
     #[default]
     Friends,
     MessageRequests,
-    /// A DM is open in the chat pane.
     Dm,
-    /// Shop page (`/shop`).
     Shop,
-    /// "Ton Nitro" page (/store).
     Nitro,
 }
 
-/// Modal / popout currently shown above the main layout.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Overlay {
     JoinServer,
@@ -180,7 +143,6 @@ pub struct NavState {
     pub relationships: Vec<Relationship>,
     pub folders: Vec<GuildFolder>,
     pub expanded_folders: HashSet<u64>,
-    /// Active threads by parent channel.
     pub threads: HashMap<Id, Vec<Channel>>,
     pub extras: HashMap<Id, ChannelExtra>,
     pub activities: HashMap<Id, SharedString>,
@@ -192,13 +154,11 @@ pub struct NavState {
     pub overlay: Option<Overlay>,
     pub invite_input: Option<gpui::Entity<gpui_component::input::InputState>>,
     pub add_friend_input: Option<gpui::Entity<gpui_component::input::InputState>>,
-    /// Friends list search field (searchBar_wVFOQW).
     pub friends_search: Option<gpui::Entity<gpui_component::input::InputState>>,
     pub invite_preview: Option<Result<InvitePreview, SharedString>>,
     pub invite_code: Option<String>,
     pub add_friend_result: Option<Result<SharedString, SharedString>>,
     pub busy: bool,
-    /// Guild being dragged in the rail (reorder stub).
     pub dragging: Option<Id>,
     pub prefs_loaded: bool,
     pub subs: Vec<gpui::Subscription>,
@@ -210,12 +170,10 @@ impl NavState {
         self.relationships.iter().find(|r| r.user == user)
     }
 
-    /// RelationshipStore.isBlocked: relationship type 2.
     pub fn is_blocked(&self, user: Id) -> bool {
         self.relationship(user).is_some_and(|r| r.kind == RelationshipKind::Blocked)
     }
 
-    /// RelationshipStore.isIgnored: `user_ignored` and not blocked.
     pub fn is_ignored(&self, user: Id) -> bool {
         self.relationship(user).is_some_and(|r| r.ignored && r.kind != RelationshipKind::Blocked)
     }
@@ -292,11 +250,6 @@ impl NavState {
     }
 }
 
-// ------------------------------------------------------------ persistence
-
-/// Locally persisted navigation prefs (last channel per guild, collapsed
-/// categories, open folders). Plain text, one `key value...` per line, so no
-/// serde derive is needed in the app crate.
 #[derive(Debug, Default, PartialEq)]
 pub struct NavPrefs {
     pub last_channel: Vec<(Option<u64>, u64)>,
@@ -355,8 +308,6 @@ impl NavPrefs {
     }
 }
 
-/// Pull a `discord.gg/xyz`, `discord.com/invite/xyz` or bare code out of
-/// pasted text.
 pub fn invite_code(input: &str) -> Option<String> {
     let s = input.trim().trim_end_matches('/');
     if s.is_empty() {

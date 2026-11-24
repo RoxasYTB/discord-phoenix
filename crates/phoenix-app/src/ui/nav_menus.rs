@@ -1,18 +1,3 @@
-//! Right-click menus on the navigation: channel rows, DM rows and guild icons.
-//!
-//! Item order observed in the official client:
-//! - text channel: Mark As Read | Invite People, Copy Link | Mute Channel >,
-//!   Notification Settings > | Copy Channel ID (developer mode)
-//! - DM (live 2026 dump): Mark As Read | Pin, Favorite > | Profile, Call,
-//!   Add Note, Add Friend Nickname, Close DM | Apps >, Invite to Server >,
-//!   Remove Friend, Ignore, Block | Mute @user > | Copy Channel ID
-//! - guild: Mark As Read | Invite People | Mute Server >, Notification
-//!   Settings >, Hide Muted Channels | Privacy Settings | Leave Server |
-//!   Copy Server ID
-//!
-//! Mute durations: 15 minutes, 1 hour, 3 hours, 8 hours, 24 hours, until
-//! turned back on.
-
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -33,12 +18,9 @@ use crate::{
 #[derive(Clone, Copy, PartialEq)]
 pub enum Target {
     Channel(Id),
-    /// Header bell notification menu for the open channel.
     ChannelBell(Id),
-    /// Right-click menu on a sidebar thread row.
     Thread(Id),
     Guild(Id),
-    /// Guild folder (`guild_folders` id).
     Folder(u64),
 }
 
@@ -46,8 +28,6 @@ type Scope = (Option<Id>, Option<Id>);
 
 thread_local! {
     static OPEN: RefCell<Option<(Target, Point<Pixels>)>> = const { RefCell::new(None) };
-    /// Mutes and levels set from these menus this session (the READY copy
-    /// lives in the backend), so radios and labels reflect the last choice.
     static MUTED_GUILDS: RefCell<HashMap<Id, bool>> = RefCell::new(HashMap::new());
     static LEVELS: RefCell<HashMap<Scope, u8>> = RefCell::new(HashMap::new());
 }
@@ -57,7 +37,6 @@ pub fn open(target: Target, pos: Point<Pixels>, window: &mut Window) {
     window.refresh();
 }
 
-/// Toggle the channel header bell notification menu.
 pub fn toggle_bell(channel: Id, pos: Point<Pixels>, window: &mut Window) {
     OPEN.with(|o| {
         let mut cur = o.borrow_mut();
@@ -70,7 +49,6 @@ pub fn toggle_bell(channel: Id, pos: Point<Pixels>, window: &mut Window) {
     window.refresh();
 }
 
-/// Close the header bell menu if open; returns true when it was open.
 pub fn close_bell() -> bool {
     OPEN.with(|o| {
         let mut cur = o.borrow_mut();
@@ -107,7 +85,6 @@ fn copy(label: gpui::SharedString, text: String) -> MenuItem {
     MenuItem::action(label, None, move |_, _, cx: &mut App| cx.write_to_clipboard(ClipboardItem::new_string(text.clone())))
 }
 
-/// "Mute X >" submenu, or a plain "Unmute X" row when already muted.
 fn mute_item(e: &Ent, label: gpui::SharedString, unmute: gpui::SharedString, muted: bool, guild: Option<Id>, channel: Option<Id>) -> MenuItem {
     if muted {
         let e = e.clone();
@@ -135,8 +112,6 @@ fn level_code(l: crate::notifications::Level) -> u8 {
     }
 }
 
-/// The account's stored level for this scope (`user_guild_settings`); a
-/// guild without an entry reads its server default, like the client's `W(e)`.
 fn stored_level(app: &PhoenixApp, guild: Option<Id>, channel: Option<Id>) -> Option<u8> {
     let p = app.backend.notify_prefs()?;
     let g = guild.map(|g| g.0);
@@ -159,13 +134,10 @@ fn notify_radios(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<I
         .or_else(|| stored_level(app, guild, channel))
         .unwrap_or(default);
     let mut opts: Vec<(&str, u8)> = vec![("menu.notify.all", 0), ("menu.notify.mentions", 1), ("menu.notify.nothing", 2)];
-    // vanilla-menu-channel-notify: "Use Category Default" when the channel sits
-    // in a category, else "Use Server Default"; its subtext is the inherited level.
     if let Some(ch) = channel {
         let in_category = app.channels.get(&ch).and_then(|c| c.parent).is_some();
         opts.insert(0, (if in_category { "menu.notify.default_category" } else { "menu.notify.default" }, 3));
     }
-    // "Use Category Default" shows what the category resolves to.
     let parent = channel.and_then(|c| app.channels.get(&c)).and_then(|c| c.parent);
     let inherited = level_label(app, guild, parent);
     opts.into_iter()
@@ -184,9 +156,6 @@ fn notify_item(app: &PhoenixApp, e: &Ent, guild: Option<Id>, channel: Option<Id>
     MenuItem::submenu(crate::t!("menu.notify_settings"), notify_radios(app, e, guild, channel))
 }
 
-/// Label of the level a scope resolves to (the "Notification Settings" subtext):
-/// `resolvedMessageNotifications`, channel then parent category then server,
-/// with the levels picked in this session first.
 fn level_label(app: &PhoenixApp, guild: Option<Id>, channel: Option<Id>) -> gpui::SharedString {
     let level = |c: Option<Id>| LEVELS.with(|l| l.borrow().get(&(guild, c)).copied()).or_else(|| stored_level(app, guild, c));
     let parent = channel.and_then(|c| app.channels.get(&c)).and_then(|c| c.parent);
@@ -204,7 +173,6 @@ fn level_label(app: &PhoenixApp, guild: Option<Id>, channel: Option<Id>) -> gpui
     })
 }
 
-// Permission bits used to show the admin groups like the client does.
 const MANAGE_CHANNELS: u64 = 1 << 4;
 const MANAGE_GUILD: u64 = 1 << 5;
 const MANAGE_EVENTS: u64 = 1 << 33;
@@ -213,11 +181,6 @@ fn perms(app: &PhoenixApp, g: Id, bit: u64) -> bool {
     crate::ui::inbox::has_perm(app.backend.guild_permissions(g), bit)
 }
 
-/// Dropdown under the guild header (live `guild-header-popout`, 2026-11-24):
-/// Server Boost | Invite to Server, Server Settings, Server Analytics, Create
-/// Channel, Create Category, Create Event, Active Threads, App Directory | Show All
-/// Channels, Notification Settings, Privacy Settings | Edit Per-server Profile,
-/// Hide Muted Channels | Security Actions, Report Raid | Leave Server | Copy ID.
 pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> Vec<MenuItem> {
     let e = cx.entity();
     let mut items = Vec::new();
@@ -241,8 +204,6 @@ pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> 
     items.push(stub(&e, "menu.gs.app_directory"));
     items.push(MenuItem::Separator);
     items.extend(crate::actions::channel::show_all_item(app, &e, g));
-    // A plain row that opens the notification settings modal (no submenu caret,
-    // which ellipsized the label in the 220px menu).
     items.push(act(&e, crate::t!("menu.notify_settings"), move |a, _, cx| {
         let st = crate::ui::modals::guild_notify::State::new(a, g);
         crate::actions::open_modal(crate::ui::modals::Modal::GuildNotify(st), None);
@@ -289,12 +250,10 @@ pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> 
     items
 }
 
-/// Stub row: the client action exists but Phoenix doesn't back it yet.
 fn stub(e: &Ent, key: &'static str) -> MenuItem {
     act(e, crate::t!(key), move |a, _, cx| a.stub(&crate::t!(key), cx))
 }
 
-/// "Move To…" > [Category|Folder] > | First | Last (vanilla `*-context-move-to`).
 fn move_to(e: &Ent, folder: bool) -> MenuItem {
     let (to, first, last) = if folder {
         ("menu.move_folder", "menu.move_first_folder", "menu.move_last_folder")
@@ -316,7 +275,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         Target::Channel(id) => {
             let ch = app.channels.get(&id)?;
             let (guild, muted) = (ch.guild, ch.muted);
-            // Live channel-context: "Mark As Read" is disabled_M3qk4j when nothing is unread.
             if ch.unread || ch.mentions > 0 {
                 items.push(act(&e, crate::t!("menu.mark_read"), move |a, _, cx| a.mark_nav_read(Target::Channel(id), cx)));
             } else {
@@ -324,16 +282,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             }
             items.push(MenuItem::Separator);
             if let Some(g) = guild {
-                // Live "channel-context" (text channel) and category menus, 2026-11-23:
-                // Mark As Read | Add to Favorites > | Invite to Channel, Pin Channel
-                // to Top, Copy Link | Mute Channel >, Notification Settings > |
-                // Move To… > | Edit, Clone, Create Text Channel, Delete | Copy ID.
-                // Category: Mark As Read | Collapse Category, Collapse All | Mute
-                // Category >, Notification Settings > | Move To… > | Edit, Delete | Copy ID.
                 let cat = ch.kind == ChannelKind::Category;
-                // Live voice-channel menu (dumps/voice-channel-context-menu, 2026-11-24):
-                // same as text but "Invite to Voice Channel", then | Open Chat, Hide
-                // Names (checkbox) |, no Notification Settings, "Create Voice Channel".
                 let voice = ch.kind == ChannelKind::Voice;
                 let manage = perms(app, g, MANAGE_CHANNELS);
                 if cat {
@@ -421,12 +370,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                     items.push(copy(crate::t!(key), id.0.to_string()).with_icon("id"));
                 }
             } else {
-                // Live DM row menu ("user-context", 2026-11-23): Mark As Read |
-                // Pin, Add to Favorites > | Profile, Call, Add Note (subtext), Add
-                // Friend Nickname, Close DM | Apps >, Invite to Server >, Remove
-                // Friend, Ignore, Block | Mute @user > | Copy User ID, Copy Channel ID.
-                // Group DM ("gdm-context"): Mark As Read | Pin, Add to Favorites > |
-                // Invites, Edit Group | Mute Conversation > | Leave Group | Copy Channel ID.
                 let peer = ch.voice_users.first().copied();
                 let is_group = app.nav.extras.get(&id).is_some_and(|x| x.recipients > 1);
                 items.push(crate::actions::channel::pin_item(&e, id, true).with_icon("pin"));
@@ -495,12 +438,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             }
         }
         Target::Guild(g) => {
-            // Live "guild-context" (2026-11-23): Mark As Read | Invite to Server |
-            // Mute Server >, Notification Settings >, Hide Muted Channels, Show All
-            // Channels | Server Settings > (Manage Server), Privacy Settings, Edit
-            // Per-server Profile | Create Channel, Create Category, Create Event
-            // (permissions) | Move To… > | Security Actions (Manage Server), Leave
-            // Server (not for the owner) | Copy Server ID.
             let muted = guild_muted(app, g);
             let hide = app.nav.hide_muted.contains(&g);
             let owner = app.guilds.iter().find(|x| x.id == g).and_then(|x| x.owner) == Some(app.me.id);
@@ -613,8 +550,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             }
         }
         Target::Folder(f) => {
-            // Live folder menu: Mark Folder As Read | Move To… > | Folder
-            // Settings, Close All Folders.
             items.push(act(&e, crate::t!("menu.mark_folder_read"), move |a, _, cx| {
                 let gs: Vec<Id> = a.nav.folders.iter().filter(|x| x.id == Some(f)).flat_map(|x| x.guilds.clone()).collect();
                 for g in gs {

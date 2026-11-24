@@ -1,13 +1,3 @@
-//! Offscreen render of the full-screen profile editor to a PNG.
-//! `cargo run -p phoenix-app --example profile_editor -- out.png [dirty]`
-//! (`dirty` types into the pronouns field to show the unsaved-changes bar).
-//!
-//! `PHX_REAL=1` renders the user's REAL account instead of the mock (token from
-//! the keyring, strictly read-only: every write the backend could do is refused,
-//! so nothing is ever saved). `PHX_TAB=0|1|2` picks Board / Activity / Wishlist,
-//! `PHX_SWITCHER=1` opens the profile switcher, `PHX_NO_PREMIUM=1` (mock) shows
-//! the Nitro locks. `PHX_WAIT` seconds to wait for the profile and images (default 12).
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -26,7 +16,6 @@ use phoenix_app::{
     model::{Id, Message, Presence, Reaction},
 };
 
-/// Keyring store that can load but never save or delete.
 struct LoadOnlyStore;
 
 impl TokenStore for LoadOnlyStore {
@@ -45,12 +34,10 @@ fn denied<T: Send + 'static>() -> BoxFuture<T> {
     Box::pin(async { Err(BackendError("read-only capture".into())) })
 }
 
-/// Delegates reads to the real backend; every write is refused.
 struct ReadOnly(DiscordBackend);
 
 impl Backend for ReadOnly {
     fn set_event_sink(&self, sink: EventSink) {
-        // Drop events that would make the app answer with a write (none today, but keep the hook).
         self.0.set_event_sink(Arc::new(move |e: AppEvent| sink(e)));
     }
     fn login(&self, _: Credentials) -> BoxFuture<ReadyData> {
@@ -63,7 +50,7 @@ impl Backend for ReadOnly {
         self.0.select_guild(guild)
     }
     fn select_channel(&self, channel: Id) -> BoxFuture<()> {
-        self.0.select_channel(channel) // acks disabled via NO_ACKS
+        self.0.select_channel(channel)
     }
     fn load_messages(
         &self,
@@ -120,7 +107,6 @@ impl Backend for ReadOnly {
     fn logout(&self) -> BoxFuture<()> {
         denied()
     }
-    // Reads.
     fn notify_prefs(&self) -> Option<phoenix_app::notifications::NotifyPrefs> {
         self.0.notify_prefs()
     }
@@ -136,7 +122,6 @@ impl Backend for ReadOnly {
     fn has_premium(&self) -> bool {
         self.0.has_premium()
     }
-    /// Read-only `GET /users/{id}/profile` (DM profile panel, popouts).
     fn user_profile(&self, u: Id, g: Option<Id>) -> BoxFuture<phoenix_app::presence::Profile> {
         self.0.user_profile(u, g)
     }
@@ -146,14 +131,12 @@ impl Backend for ReadOnly {
     fn owned_collectibles(&self) -> BoxFuture<Vec<phoenix_app::ui::settings::collectibles::Collectible>> {
         self.0.owned_collectibles()
     }
-    /// Read-only `GET /collectibles-categories/v2`.
     fn collectibles_shop(&self) -> BoxFuture<phoenix_app::ui::settings::collectibles::ShopCatalog> {
         self.0.collectibles_shop()
     }
     fn collectible_product(&self, sku: u64) -> BoxFuture<Option<phoenix_app::ui::settings::collectibles::Collectible>> {
         self.0.collectible_product(sku)
     }
-    /// Read-only GETs (profile, application identities, widget configs).
     fn profile_widgets(&self, u: Id) -> BoxFuture<Vec<phoenix_app::ui::settings::profile_widgets::AppWidget>> {
         self.0.profile_widgets(u)
     }
@@ -175,8 +158,6 @@ impl Backend for ReadOnly {
     fn forum_tags(&self, f: Id) -> Vec<phoenix_app::commands::ForumTag> {
         self.0.forum_tags(f)
     }
-    // nav / parity / open_dm / notes / stickers / voice_control keep the
-    // trait defaults (offline errors or no-ops): they may write.
 }
 
 fn main() -> anyhow::Result<()> {
@@ -185,7 +166,6 @@ fn main() -> anyhow::Result<()> {
     let login_only = false;
     let dirty = args.next().as_deref() == Some("dirty");
     let real = std::env::var_os("PHX_REAL").is_some();
-    // `PHX_GET=/path`: print one read-only GET response (endpoint shape probe), then exit.
     if let Ok(path) = std::env::var("PHX_GET") {
         let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
         let token = KeyringStore.load().map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token"))?;
@@ -210,7 +190,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -288,11 +267,9 @@ fn main() -> anyhow::Result<()> {
             v.update(cx, |app, cx| {
                 if let Some(e) = app.settings.as_mut().and_then(|s| s.profile.as_mut()) {
                     e.tab = tab;
-                    // `PHX_SWITCHER=1` opens the profile switcher popout.
                     e.switcher_open = std::env::var_os("PHX_SWITCHER").is_some();
                 }
                 use phoenix_app::ui::settings::collectibles::Kind;
-                // `PHX_PICKER=decoration|effect|frame|nameplate` opens that picker.
                 let kind = match std::env::var("PHX_PICKER").as_deref() {
                     Ok("decoration") => Some(Kind::Decoration),
                     Ok("effect") => Some(Kind::Effect),
@@ -325,12 +302,10 @@ fn main() -> anyhow::Result<()> {
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

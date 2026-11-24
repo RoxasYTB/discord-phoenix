@@ -1,6 +1,3 @@
-//! Emoji tab: sectioned grid (frequently used, guild emoji, unicode
-//! categories), category sidebar, skin tone selector and preview bar.
-
 use crate::ui::tooltip::Tipped as _;
 use gpui::{
     AnyElement, App, Context, FontWeight, ListOffset, ParentElement, SharedString, Styled, div,
@@ -15,17 +12,12 @@ use crate::{
 };
 
 pub const COLS: usize = 9;
-/// emojiItemMedium_6OcK5D: 48px cell = 4px padding
-/// (--custom-emoji-picker-constants-emoji-container-padding-*) around a 40px emoji
-/// (--custom-emoji-picker-constants-emoji-size-medium).
 const CELL: f32 = 48.;
 const EMOJI_PX: f32 = 40.;
-// Frequently used: the dump's section holds 42 emoji (4 rows of 9 + 6).
 const FREQUENT: usize = 42;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum PickItem {
-    /// Index into [`emoji::EMOJI`].
     Unicode(usize),
     Custom(GuildEmoji),
 }
@@ -64,15 +56,12 @@ pub struct Grid {
     pub items: Vec<PickItem>,
     pub rows: Vec<Row>,
     pub sections: Vec<Section>,
-    /// Guild name of custom emoji, for the preview bar.
     pub guild_names: Vec<(crate::model::Id, SharedString)>,
-    /// Nitro: custom emoji from other servers are usable.
     pub premium: bool,
     pub current_guild: Option<crate::model::Id>,
 }
 
 impl Grid {
-    /// Custom emoji the user can't use here (no Nitro, or the guild lost the slot).
     pub fn locked(&self, item: &PickItem) -> bool {
         match item {
             PickItem::Unicode(_) => false,
@@ -80,7 +69,6 @@ impl Grid {
         }
     }
 
-    /// Whether guild section `si` only holds locked emoji.
     pub fn section_locked(&self, si: usize) -> bool {
         let Some(SectionIcon::Guild(..)) = self.sections.get(si).map(|s| &s.icon) else { return false };
         let first = self.sections[si].first_row;
@@ -112,7 +100,6 @@ impl Grid {
         self.rows.iter().position(|r| matches!(r, Row::Cells { start, end } if (*start..*end).contains(&item)))
     }
 
-    /// Item above/below `item`, keeping the column when possible.
     pub fn vertical(&self, item: usize, down: bool) -> usize {
         let Some(r) = self.row_of(item) else { return item };
         let Row::Cells { start, .. } = self.rows[r] else { return item };
@@ -141,7 +128,6 @@ impl Grid {
     }
 }
 
-/// Build the grid for `query` from the app's guilds and the frequency data.
 pub fn build(app: &PhoenixApp, query: &str, cx: &App) -> Grid {
     let mut guilds: Vec<&Guild> = app.guilds.iter().collect();
     if let Some(sel) = app.selected_guild {
@@ -161,7 +147,6 @@ pub fn build(app: &PhoenixApp, query: &str, cx: &App) -> Grid {
     let q = query.trim().trim_matches(':').to_lowercase();
     if q.is_empty() {
         let now = chrono::Utc::now().timestamp();
-        // Account frecency first (what the official client shows), then local picks.
         let mut freq: Vec<PickItem> = Vec::new();
         if let Some(f) = cx.try_global::<Pickers>().and_then(|p| p.frecency.as_ref()) {
             for key in &f.emojis {
@@ -210,8 +195,6 @@ pub fn build(app: &PhoenixApp, query: &str, cx: &App) -> Grid {
     grid
 }
 
-// ------------------------------------------------------------------ render
-
 use super::{idx, section_header, tk};
 
 pub fn item_element(item: &PickItem, tone: u8, size: f32) -> AnyElement {
@@ -221,8 +204,6 @@ pub fn item_element(item: &PickItem, tone: u8, size: f32) -> AnyElement {
     }
 }
 
-/// Picker grid tile: the client renders it with `shouldAnimate: false`, so
-/// animated custom emoji only play while hovered.
 pub fn item_element_hover(item: &PickItem, tone: u8, size: f32) -> AnyElement {
     match item {
         PickItem::Unicode(ix) => emoji_element(&emoji::toned(*ix, tone), size),
@@ -244,8 +225,6 @@ fn render_row(ix: usize, cx: &mut App) -> AnyElement {
     let p = cx.global::<Pickers>();
     let Some(op) = p.open.as_ref() else { return div().into_any_element() };
     let tone = p.prefs.tone;
-    // categorySection_6c9R7U: padding-bottom 12px
-    // (--custom-emoji-picker-constants-emoji-section-margin-bottom).
     let last_of_section = !matches!(op.grid.rows.get(ix + 1), Some(Row::Cells { .. }));
     match op.grid.rows.get(ix).copied() {
         Some(Row::Header(si)) => {
@@ -254,8 +233,6 @@ fn render_row(ix: usize, cx: &mut App) -> AnyElement {
         }
         Some(Row::Cells { start, end }) => {
             let selected = op.selected;
-            // emojiListRow_6OcK5D: padding-left 8px
-            // (--custom-emoji-picker-constants-emoji-list-padding-left).
             let mut row = div().flex().pl(px(8.)).when(last_of_section, |d| d.pb(px(12.)));
             for i in start..end {
                 let item = op.grid.items[i].clone();
@@ -272,8 +249,6 @@ fn render_row(ix: usize, cx: &mut App) -> AnyElement {
                         .justify_center()
                         .rounded(px(4.))
                         .cursor_pointer()
-                        // emojiItemSelected_6OcK5D: --interactive-background-selected; Light:
-                        // --background-base-low with an inset 1px --border-subtle.
                         .when(is_sel, |d| {
                             if crate::theme::is_light() {
                                 d.bg(tk(idx::BACKGROUND_BASE_LOW)).border_1().border_color(tk(idx::BORDER_SUBTLE))
@@ -314,8 +289,6 @@ fn render_row(ix: usize, cx: &mut App) -> AnyElement {
     }
 }
 
-/// emojiLockIconContainer_JBR6wp: --opacity-black-60, radius 2px, centered;
-/// emojiLockIcon_JBR6wp: --icon-strong.
 fn lock_badge() -> impl IntoElement {
     div().absolute().inset_0().flex().items_center().justify_center().child(
         div()
@@ -329,8 +302,6 @@ fn lock_badge() -> impl IntoElement {
     )
 }
 
-/// Category rail (wrapper_6AvvhR): 48px wide, --background-base-lower, radius 0 0 0 8px;
-/// list padding 8px (--custom-stickers-constants-sticker-category-list-padding).
 pub(crate) fn rail() -> gpui::Stateful<gpui::Div> {
     div()
         .id("picker-rail")
@@ -345,8 +316,6 @@ pub(crate) fn rail() -> gpui::Stateful<gpui::Div> {
         .pt(px(8.))
 }
 
-/// Category rail shell with the 48px bottom shortcut (unicodeShortcut_ufks4w /
-/// standardStickerShortcut_40yGEf: border-top 1px --border-normal, --interactive-text-default).
 pub(crate) fn rail_shell(list: impl IntoElement, shortcut: impl IntoElement) -> gpui::Div {
     div()
         .w(px(48.))
@@ -354,7 +323,6 @@ pub(crate) fn rail_shell(list: impl IntoElement, shortcut: impl IntoElement) -> 
         .h_full()
         .rounded_bl(px(8.))
         .bg(tk(idx::BACKGROUND_BASE_LOWER))
-        // `.high-contrast-mode .wrapper_6AvvhR`: border-inline-end 1px --border-subtle.
         .when(crate::theme::high_contrast(), |d| d.border_r_1().border_color(tk(idx::BORDER_SUBTLE)))
         .flex()
         .flex_col()
@@ -373,8 +341,6 @@ pub(crate) fn rail_shell(list: impl IntoElement, shortcut: impl IntoElement) -> 
         )
 }
 
-/// Selection pill on the rail's left edge (wrapper__o8_Xq small: item 8px wide,
-/// `.small__o8_Xq .item__o8_Xq.selected__o8_Xq` height 24px, radius 0 round round 0).
 pub(crate) fn rail_pill(active: bool) -> impl IntoElement {
     div()
         .absolute()
@@ -387,10 +353,6 @@ pub(crate) fn rail_pill(active: bool) -> impl IntoElement {
         .when(active, |d| d.child(div().w(px(4.)).h(px(24.)).rounded_r(px(12.)).bg(tk(idx::INTERACTIVE_TEXT_ACTIVE))))
 }
 
-/// Default-category rail item (categoryItemDefaultCategory_ufks4w): 24px icon + 4px
-/// padding, radius 4px, margin-bottom 2px; hover --interactive-background-hover;
-/// selected --background-base-low with --interactive-text-active.
-/// Guild items (categoryItemGuildCategory_ufks4w): 32px, margin-bottom 8px.
 pub(crate) fn rail_item(id: (&'static str, usize), guild: bool, active: bool, mb: f32) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -405,11 +367,9 @@ pub(crate) fn rail_item(id: (&'static str, usize), guild: bool, active: bool, mb
         .cursor_pointer()
         .when(!guild && active, |d| d.bg(tk(idx::BACKGROUND_BASE_LOW)))
         .when(!guild && !active, |d| d.hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER))))
-        // Default categories get the pill too (recent: categoryPill_ufks4w in the dump).
         .child(rail_pill(active))
 }
 
-/// Guild icon in the rail (32px squircle; fallback guildIcon_WScet3 on --background-base-low).
 pub(crate) fn rail_guild_icon(icon: &ImageRef, acronym: &SharedString) -> AnyElement {
     match icon {
         ImageRef::Url(u) => img(u.clone()).size(px(32.)).rounded(px(8.)).into_any_element(),
@@ -428,8 +388,6 @@ pub(crate) fn rail_guild_icon(icon: &ImageRef, acronym: &SharedString) -> AnyEle
     }
 }
 
-/// categoryItemLockIconContainer_WScet3: 16px circle at the bottom-right corner,
-/// --background-base-low with a 1px --background-base-lowest border.
 fn rail_lock() -> impl IntoElement {
     div()
         .absolute()
@@ -446,11 +404,6 @@ fn rail_lock() -> impl IntoElement {
         .child(crate::ui::icon(crate::assets::Icon::Lock, 10., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
 }
 
-/// Inspector bar (inspector_1bDrGE): height 48
-/// (--custom-expression-picker-constants-expression-picker-inspector-bar-height),
-/// padding 0 16px, --background-base-lower, border-top 1px --border-normal; 28px graphic,
-/// text margin-left 8px: titlePrimary body-md/semibold (16/20) + titleSecondary
-/// body-xs (12/16, --interactive-text-default) with the source in semibold.
 pub(crate) fn inspector(graphic: Option<AnyElement>, title: Option<SharedString>, from: Option<SharedString>, trailing: Option<AnyElement>) -> gpui::Div {
     let mut text = div().ml(px(8.)).flex_1().min_w_0().flex().flex_col();
     if let Some(t) = title {
@@ -512,9 +465,6 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
     let mut list_el = rail();
     let mut first_unicode = None;
     if !searching && !op.grid.premium {
-        // Non-Nitro: "Voir les émojis Nitro" upsell row on top (row_3MXiRB: border-bottom
-        // --custom-emoji-picker-constants-category-separator-size --border-subtle,
-        // padding-bottom/margin-bottom --custom-emoji-picker-constants-guild-category-icon-margin-verical = 8px).
         list_el = list_el.child(
             div().flex_none().flex().justify_center().pb(px(8.)).mb(px(8.)).border_b_1().border_color(tk(idx::BORDER_SUBTLE)).child(
                 rail_item(("emoji-nitro", 0), false, false, 0.)
@@ -549,8 +499,6 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
                 }
                 SectionIcon::Guild(icon, acr) => (true, rail_guild_icon(icon, acr)),
             };
-            // Separator before the unicode categories
-            // (--custom-emoji-picker-constants-category-separator-*: 1px, 12px margin).
             if matches!(s.icon, SectionIcon::Category(0)) && si > 0 {
                 list_el = list_el.child(div().flex_none().w(px(32.)).h(px(1.)).mt(px(4.)).mb(px(12.)).bg(tk(idx::BORDER_SUBTLE)));
             }
@@ -617,10 +565,6 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
         .into_any_element()
 }
 
-/// Skin tone selector (diversitySelector_eHzdRB): 38px button = 24px emoji
-/// (--custom-emoji-picker-constants-diversity-emoji-size) + 7px padding; options in
-/// diversitySelectorOptions_eHzdRB (--background-surface-higher, 1px --border-subtle,
-/// radius 4px, top/right -1px).
 pub fn tone_button(cx: &mut Context<PhoenixApp>) -> AnyElement {
     let p = cx.global::<Pickers>();
     let tone = p.prefs.tone;
@@ -654,7 +598,6 @@ pub fn tone_button(cx: &mut Context<PhoenixApp>) -> AnyElement {
             .border_color(tk(idx::BORDER_SUBTLE))
             .flex()
             .flex_col();
-        // The current tone first, like the live client.
         let order = std::iter::once(tone).chain((0..=5u8).filter(move |t| *t != tone));
         for t in order {
             menu = menu.child(
@@ -701,12 +644,11 @@ mod tests {
     #[test]
     fn rows_and_navigation() {
         let g = grid_of(&[11, 4]);
-        // header, 9, 2, header, 4
         assert_eq!(g.rows.len(), 5);
         assert_eq!(g.row_of(10), Some(2));
-        assert_eq!(g.vertical(1, true), 10); // col 1 -> second row has 2 items
-        assert_eq!(g.vertical(8, true), 10); // clamped to the row end
-        assert_eq!(g.vertical(10, true), 12); // crosses the header
+        assert_eq!(g.vertical(1, true), 10);
+        assert_eq!(g.vertical(8, true), 10);
+        assert_eq!(g.vertical(10, true), 12);
         assert_eq!(g.vertical(12, false), 10);
         assert_eq!(g.vertical(0, false), 0);
         assert_eq!(g.section_at_row(3), 1);

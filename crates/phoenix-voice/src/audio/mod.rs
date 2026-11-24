@@ -1,12 +1,3 @@
-//! Voice audio pipeline.
-//!
-//! - [`dsp`]: level meter, noise gate / VAD, resampler, mixing helpers.
-//! - [`AudioControl`]: lock-free knobs shared with the UI (mute, deafen,
-//!   volumes, input sensitivity) and the live input level.
-//! - `mixer` (feature `opus`): per-user jitter buffer + Opus decode + mix.
-//! - `device` (feature `audio`): cpal capture/playback threads.
-//! - `effects` (feature `audio`): UI sound effects on the default output.
-
 pub mod dsp;
 #[cfg(feature = "opus")]
 pub mod mixer;
@@ -22,7 +13,6 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use std::sync::{Mutex, MutexGuard};
 
-/// Lock ignoring poisoning (audio threads must never take the app down).
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -35,7 +25,6 @@ fn store_f32(a: &AtomicU32, v: f32) {
     a.store(v.to_bits(), Ordering::Relaxed);
 }
 
-/// Shared audio settings and meters.
 pub struct AudioControl {
     muted: AtomicBool,
     deafened: AtomicBool,
@@ -51,7 +40,6 @@ pub struct AudioControl {
     push_to_talk: AtomicBool,
     ptt_pressed: AtomicBool,
     ptt_release_ms: AtomicU32,
-    /// Whether the last captured frame passed the gate (or PTT).
     transmitting: AtomicBool,
 }
 
@@ -90,7 +78,6 @@ impl AudioControl {
     pub fn set_deafened(&self, v: bool) {
         self.deafened.store(v, Ordering::Relaxed);
     }
-    /// Linear input gain (1.0 = unchanged, up to 2.0).
     pub fn input_gain(&self) -> f32 {
         load_f32(&self.input_gain)
     }
@@ -109,14 +96,12 @@ impl AudioControl {
     pub fn gate_threshold_db(&self) -> f32 {
         load_f32(&self.gate_threshold_db)
     }
-    /// `None` = automatic sensitivity, `Some(db)` = fixed threshold.
     pub fn set_gate(&self, threshold_db: Option<f32>) {
         self.gate_automatic.store(threshold_db.is_none(), Ordering::Relaxed);
         if let Some(t) = threshold_db {
             store_f32(&self.gate_threshold_db, t.clamp(-100.0, 0.0));
         }
     }
-    /// Last captured frame level in dBFS (for the sensitivity meter).
     pub fn input_level_db(&self) -> f32 {
         load_f32(&self.input_level_db)
     }
@@ -135,21 +120,18 @@ impl AudioControl {
     pub fn set_noise_suppression(&self, v: bool) {
         self.noise_suppression.store(v, Ordering::Relaxed);
     }
-    /// Automatic gain control.
     pub fn agc(&self) -> bool {
         self.agc.load(Ordering::Relaxed)
     }
     pub fn set_agc(&self, v: bool) {
         self.agc.store(v, Ordering::Relaxed);
     }
-    /// Stored for the settings page; there is no echo canceller yet.
     pub fn echo_cancellation(&self) -> bool {
         self.echo_cancellation.load(Ordering::Relaxed)
     }
     pub fn set_echo_cancellation(&self, v: bool) {
         self.echo_cancellation.store(v, Ordering::Relaxed);
     }
-    /// Push-to-talk mode (instead of voice activity).
     pub fn push_to_talk(&self) -> bool {
         self.push_to_talk.load(Ordering::Relaxed)
     }
@@ -162,7 +144,6 @@ impl AudioControl {
     pub fn set_ptt_pressed(&self, v: bool) {
         self.ptt_pressed.store(v, Ordering::Relaxed);
     }
-    /// Push-to-talk release delay (Discord: 0..=2000 ms, default 20).
     pub fn ptt_release_ms(&self) -> u32 {
         self.ptt_release_ms.load(Ordering::Relaxed)
     }

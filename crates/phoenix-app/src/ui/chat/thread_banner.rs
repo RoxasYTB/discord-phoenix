@@ -1,8 +1,3 @@
-//! Locked / archived thread banner over the message list (client ChannelChatNotice):
-//! archived + locked → "closed and locked" (rEeodK), locked → "locked" (V/JF2N).
-//! With `MANAGE_THREADS`, shows the secondary sm Open (0dvvEi) / Unlock (zA9d1J)
-//! button; clicking shows a read-only notice so no write happens outside the sandbox.
-
 use gpui::{Context, IntoElement, ParentElement, Styled, div, prelude::*};
 
 use crate::app::PhoenixApp;
@@ -29,8 +24,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::An
             app.stub(&stub_label, cx);
         }))
     });
-    // chatHeaderBar_By_-nl: flex, center, space-between, gap 16px, padding 8px 16px,
-    // --background-mod-normal; chatHeaderBarText_ flex 1, body-sm/normal (14px / 18px, 400), text-default.
     Some(
         div()
             .flex_none()

@@ -1,12 +1,3 @@
-//! Runtime icon provider.
-//!
-//! The UI asks for icons by stable name ([`path`]). At startup we look for a
-//! local Discord install, extract the icon SVGs the official client ships in
-//! its cached JS bundles into `~/.cache/discord-phoenix/icons/<name>.svg`
-//! (re-extracted when the cached bundle set changes, i.e. on a Discord
-//! update), and [`crate::assets::Assets`] serves those first, falling back
-//! to our hand-drawn icons. Nothing extracted is ever stored in the repo.
-
 pub mod art;
 pub(crate) mod cache;
 mod extract;
@@ -22,7 +13,6 @@ use parking_lot::RwLock;
 
 pub use names::MAP as NAMES;
 
-/// Asset path for icon `name` (e.g. `"hash"`, `"chat/edit"`).
 pub fn path(name: &str) -> SharedString {
     format!("icons/{name}.svg").into()
 }
@@ -32,7 +22,6 @@ fn store() -> &'static RwLock<HashMap<String, Arc<[u8]>>> {
     S.get_or_init(Default::default)
 }
 
-/// Extracted SVG for asset path `icons/<name>.svg`, if any.
 pub fn lookup(asset_path: &str) -> Option<Arc<[u8]>> {
     let name = asset_path.strip_prefix("icons/")?.strip_suffix(".svg")?;
     store().read().get(name).cloned()
@@ -42,8 +31,6 @@ pub fn extracted_names() -> Vec<String> {
     store().read().keys().cloned().collect()
 }
 
-/// Output directory: `$XDG_CACHE_HOME|~/.cache/discord-phoenix/icons`
-/// (`%LOCALAPPDATA%` on Windows).
 pub fn out_dir() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
@@ -52,7 +39,6 @@ pub fn out_dir() -> Option<PathBuf> {
     Some(base.join("discord-phoenix").join("icons"))
 }
 
-/// Candidate `Cache/Cache_Data` dirs of installed Discord clients.
 pub fn discord_caches() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(h) = std::env::var_os("HOME").map(PathBuf::from) {
@@ -89,8 +75,6 @@ fn load_dir(dir: &Path) {
     *store().write() = map;
 }
 
-/// Loads previously extracted icons now, then refreshes them in a background
-/// thread if the local Discord's cached build changed.
 pub fn init() {
     let Some(dir) = out_dir() else { return };
     load_dir(&dir);
@@ -105,8 +89,6 @@ pub fn init() {
         .ok();
 }
 
-/// Re-extracts into `dir` if the bundle fingerprint changed. Returns whether
-/// anything was rewritten.
 pub fn refresh(dir: &Path) -> bool {
     let caches = discord_caches();
     let entries: Vec<_> = caches.iter().flat_map(|c| cache::js_entries(c)).collect();
@@ -116,7 +98,7 @@ pub fn refresh(dir: &Path) -> bool {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     entries.iter().for_each(|(k, _)| k.hash(&mut h));
     NAMES.hash(&mut h);
-    2u8.hash(&mut h); // extractor revision (secondary-colour backdrops dropped)
+    2u8.hash(&mut h);
     let stamp = format!("{:016x}", h.finish());
     let stamp_file = dir.join(".build");
     if std::fs::read_to_string(&stamp_file).is_ok_and(|s| s.trim() == stamp) {
@@ -135,10 +117,6 @@ pub fn refresh(dir: &Path) -> bool {
     true
 }
 
-/// Decodes and scans bundles on a few worker threads. Entries come largest
-/// first; for each name the earliest entry that defines it wins, so the
-/// result does not depend on thread timing, and workers stop once every
-/// name is found in an earlier entry than the one they would open next.
 fn extract_all(entries: &[(String, PathBuf)]) -> HashMap<&'static str, String> {
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -178,7 +156,6 @@ fn extract_all(entries: &[(String, PathBuf)]) -> HashMap<&'static str, String> {
 
 #[cfg(test)]
 mod tests {
-    /// Manual: `cargo test -p phoenix-app --lib icons::tests::extract_local -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn extract_local() {
@@ -193,8 +170,6 @@ mod tests {
         eprintln!("{} icons in {:?}; missing: {missing:?}", got.len(), t.elapsed());
     }
 
-    /// Every named icon has a hand-made fallback, so nothing renders empty
-    /// without a local Discord install.
     #[test]
     fn every_name_has_fallback() {
         for (name, _) in super::NAMES {
@@ -203,7 +178,6 @@ mod tests {
         assert!(crate::assets::fallback_svg("icons/send.svg").is_some(), "no fallback for send");
     }
 
-    /// Extracted Discord SVGs must never end up in the repository.
     #[test]
     fn no_extracted_icons_in_repo() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

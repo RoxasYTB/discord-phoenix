@@ -1,8 +1,3 @@
-//! Non-image attachments: generic file card, audio player and video player chrome.
-//! Values come from the 2026 client CSS (`fileWrapper_-9z-XO`, `file_-9z-XO`, `hoverButtonGroup_n2rO26`,
-//! `wrapperAudio_FJ99sr`, `audioControls_FJ99sr`, `videoControls_FJ99sr`) and the live file card
-//! in the vanilla thread-channel dump (node fileWrapper_ 432x73, icon 30x40, name 16/20, size 12/16).
-
 use gpui::{AnyElement, App, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, img, prelude::*, svg};
 
 use crate::{
@@ -11,7 +6,6 @@ use crate::{
     theme::{FONT_MONO, c, generated::{global, idx}, tok, z},
 };
 
-/// Media the chat can load: remote https, or `local/<abs path>` (offscreen mock renders).
 pub fn loadable(url: &str) -> bool {
     url.starts_with("https://") || url.starts_with("local/")
 }
@@ -20,7 +14,6 @@ fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// `1.23 MB` / `12.34 KB` / `512 bytes`, like the client's file size label.
 pub fn human_size(n: u64) -> SharedString {
     if n >= 1 << 20 {
         format!("{:.2} MB", n as f64 / (1 << 20) as f64).into()
@@ -35,10 +28,6 @@ fn named_icon(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
     svg().path(crate::icons::path(name)).flex_none().size(z(size)).text_color(color)
 }
 
-/// Download button that appears on hover at the card's top-right corner
-/// (`hoverButtonGroup_ nonMediaMosaicItem_`: --background-base-low, radius 5, inset -8/-8,
-/// outline 1px --background-base-lower; `hoverButton_` padding 6, 20px icon,
-/// --interactive-text-default → hover --interactive-background-hover / --interactive-text-hover).
 fn hover_download(group: SharedString, url: SharedString) -> AnyElement {
     div()
         .absolute()
@@ -66,8 +55,6 @@ fn hover_download(group: SharedString, url: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// Generic file card (`fileWrapper_` 432px / `file_`: --background-surface-high, 1px --border-subtle,
-/// radius 8, --shadow-low, padding 16, row, centered).
 pub fn file_card(a: &Attachment) -> AnyElement {
     let url = a.url.clone();
     let group: SharedString = format!("file-{}", a.url).into();
@@ -89,16 +76,13 @@ pub fn file_card(a: &Attachment) -> AnyElement {
                 .shadow(crate::ui::inbox::low_shadow())
                 .flex()
                 .items_center()
-                // icon_: 30x40, margin-inline-end 8px
                 .child(named_icon("file", 40., tk(idx::TEXT_LINK)).w(z(30.)).h(z(40.)).mr(z(8.)))
                 .child(
-                    // fileInner_: flex 1, overflow hidden
                     div()
                         .flex_1()
                         .min_w_0()
                         .overflow_hidden()
                         .child(
-                            // filenameLinkWrapper_: --text-link, 16px / 1.25; fileNameLink_:hover underline
                             div()
                                 .id(gpui::ElementId::Name(format!("fname-{url}").into()))
                                 .text_size(z(16.))
@@ -110,7 +94,6 @@ pub fn file_card(a: &Attachment) -> AnyElement {
                                 .child(a.filename.clone())
                                 .when(remote, |d| d.on_click(move |_, _, cx| cx.open_url(&link))),
                         )
-                        // metadata: body-xs/normal (12/16) --text-muted
                         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(human_size(a.size))),
                 ),
         )
@@ -119,8 +102,6 @@ pub fn file_card(a: &Attachment) -> AnyElement {
 }
 
 fn control_icon(id: String, name: &str) -> gpui::Stateful<gpui::Div> {
-    // controlIcon_: 24x24 border-box with padding 4 (a 16px glyph), --interactive-text-active,
-    // hover --white, active translateY(1px).
     let group = SharedString::from(id);
     div()
         .id(gpui::ElementId::Name(group.clone()))
@@ -133,9 +114,7 @@ fn control_icon(id: String, name: &str) -> gpui::Stateful<gpui::Div> {
         .child(named_icon(name, 16., tk(idx::INTERACTIVE_TEXT_ACTIVE)).group_hover(group, |s| s.text_color(gpui::white())))
 }
 
-/// Seek track (`mediaBarWrapper_`: 6px, hsl(--primary-300) / .3; `mediaBarProgress_` --brand-500).
 fn track(progress: f32) -> gpui::Div {
-    // mediaBarInteraction_: flex 1, margin 0 7px; fakeEdges_ 3px rounded caps on both ends.
     div()
         .flex_1()
         .h(z(24.))
@@ -154,7 +133,6 @@ fn track(progress: f32) -> gpui::Div {
 }
 
 fn duration_label() -> gpui::Div {
-    // durationTimeWrapper_ margin 4; durationTimeDisplay_ --font-code 12px/12px medium
     div()
         .flex_none()
         .m(z(4.))
@@ -170,9 +148,6 @@ fn duration_label() -> gpui::Div {
         .child("0:00")
 }
 
-/// Audio attachment card (`wrapperAudio_ newMosaicStyle_`: --background-base-lower, 1px --border-subtle,
-/// radius 8, padding 16, width 432; `audioMetadata_` file icon 24x40 + name/size; `audioControls_`
-/// --opacity-black-28 bg, --radius-sm, margin-top 4).
 pub fn audio_card(a: &Attachment) -> AnyElement {
     let url = a.url.clone();
     let open = if a.original.is_empty() { a.url.clone() } else { a.original.clone() };
@@ -191,10 +166,8 @@ pub fn audio_card(a: &Attachment) -> AnyElement {
         .child(
             div()
                 .flex()
-                // audioMetadata_:before 24x40 file glyph at 60% opacity
                 .child(named_icon("file", 40., tk(idx::TEXT_LINK)).w(z(24.)).h(z(40.)).opacity(0.6))
                 .child(
-                    // metadataContent_ padding 0 8px; name ellipsis; size --text-muted, opacity .7
                     div()
                         .flex_1()
                         .min_w_0()
@@ -215,7 +188,6 @@ pub fn audio_card(a: &Attachment) -> AnyElement {
                         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_MUTED)).opacity(0.7).child(human_size(a.size))),
                 )
                 .child(
-                    // metadataDownload_ 24px, --interactive-text-default → hover --interactive-text-hover
                     div()
                         .id(gpui::ElementId::Name(format!("adl-{url}").into()))
                         .flex_none()
@@ -241,9 +213,6 @@ pub fn audio_card(a: &Attachment) -> AnyElement {
         .into_any_element()
 }
 
-/// Video attachment: poster with the centred play button (`playPausePop_`: --opacity-black-60, round,
-/// 24px icon + 12px padding) and the controls bar (`videoControls_`: --opacity-black-60, 32px tall)
-/// shown on hover. `wrapper_` radius 3, --background-base-lower.
 pub fn video_card(a: &Attachment, (w, h): (f32, f32), _cx: &App) -> AnyElement {
     let poster = media::video_poster(&a.url, (w * 2.) as u32, (h * 2.) as u32);
     let original = if a.original.is_empty() { a.url.clone() } else { a.original.clone() };
@@ -284,7 +253,6 @@ pub fn video_card(a: &Attachment, (w, h): (f32, f32), _cx: &App) -> AnyElement {
                 .child(control_icon(format!("vplay-{}", a.url), "play"))
                 .child(duration_label())
                 .child(track(0.))
-                // videoButton_: margin-inline-end 8, none on the last one.
                 .child(control_icon(format!("vvol-{}", a.url), "speaker").mr(z(8.)))
                 .child(control_icon(format!("vfs-{}", a.url), "call/fullscreen")),
         )
@@ -292,9 +260,6 @@ pub fn video_card(a: &Attachment, (w, h): (f32, f32), _cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// Play / open-externally pill over a video embed's thumbnail (`embedVideoActions_` centred;
-/// `wrapper_lj7V-K`: --opacity-black-60, radius 24, height 48, padding 12; `iconWrapper_` opacity .6,
-/// hover 1, 24px icons; `iconExternalMargins_` margin-inline 2px 4px).
 pub fn video_embed_actions(url: SharedString) -> AnyElement {
     let open = url.clone();
     div()
@@ -336,11 +301,6 @@ pub fn video_embed_actions(url: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// Upload in flight under its optimistic message, like the client's message
-/// list upload row (`fileWrapper_`/`file_` card; `filenameWrapper_`: name, then
-/// "— size" while bytes go out; `progressContainer_` 16px row with the bar,
-/// "Processing…" once everything is sent; X cancel button, `--interactive-text-default`,
-/// hover `--interactive-text-hover`). The bar's own look is not measured live yet.
 pub fn upload_progress_card(
     app: &crate::app::PhoenixApp,
     entity: &gpui::Entity<crate::app::PhoenixApp>,

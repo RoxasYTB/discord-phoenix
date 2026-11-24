@@ -1,18 +1,3 @@
-//! Profile "Activity" tab: recent activity cards.
-//!
-//! Data: `GET /content-inventory/users/{id}/outbox` → `entries[]` with
-//! `extra.type == "played_game_extra"` (`game_name`, `application_id`),
-//! `ended_at` and `traits[]` (1 FIRST_TIME "New player", 8 streak
-//! `streak_count_days`); icons from `GET /applications/public?application_ids=`.
-//!
-//! Layout from dump `vanilla-settings-profile-editor-activity` #4567-#4665:
-//! tabPanelScroller_ gap 24 between section_NcvRRg (gap 8): h3 body-xs/medium
-//! 12/16 + body-xs description; cards_5rJzHy gap 8; card_Bu4Al8 padding 12,
-//! radius 12, --user-profile-overlay-background; content gap 12: 60px image
-//! r8, details (margin-right 24, gap 4): heading-xs/semibold 14/18 name,
-//! badgesContainer_ (gap 0 8, wrap) of 12px icon + body-xs label (gap 4);
-//! 16px "more" glyph top-right (12, 12).
-
 use gpui::{Div, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, div, img};
 use serde_json::Value;
 
@@ -23,9 +8,7 @@ pub struct RecentGame {
     pub app_id: u64,
     pub name: SharedString,
     pub icon: Option<SharedString>,
-    /// Unix seconds.
     pub ended_at: i64,
-    /// Unix seconds of the entry id (snowflake).
     pub created: i64,
     pub first_time: bool,
     pub streak_days: Option<u64>,
@@ -59,7 +42,6 @@ pub fn parse_outbox(v: &Value) -> Vec<RecentGame> {
         .collect()
 }
 
-/// Fill icons from `/applications/public` (`[{id, icon}]`).
 pub fn apply_icons(games: &mut [RecentGame], apps: &Value) {
     for a in apps.as_array().into_iter().flatten() {
         let (Some(id), Some(icon)) = (a.get("id").and_then(Value::as_str).and_then(|s| s.parse::<u64>().ok()), a.get("icon").and_then(Value::as_str)) else {
@@ -71,10 +53,6 @@ pub fn apply_icons(games: &mut [RecentGame], apps: &Value) {
     }
 }
 
-/// "Il y a 1j" style relative age, the client's content-inventory formatter
-/// (module 583846 `aJ`, short format set): measured from the entry id's
-/// snowflake time, < 1 min seconds, < 1 h rounded minutes, < 12 h rounded
-/// hours, < 9 days rounded days, < 4 weeks rounded weeks, else 30-day months.
 pub fn ago(created: i64, now: i64) -> SharedString {
     let d = now - created;
     let a = d.abs();
@@ -116,7 +94,6 @@ fn card(g: &RecentGame, now: i64, col: &Colors) -> Div {
     if g.first_time {
         badges.push(badge("medal", crate::t!("pa.new_player"), col));
     }
-    // Streak badge: >= 3 days and an entry less than 48 h old (client rule).
     if let Some(d) = g.streak_days.filter(|_| now - g.created < 48 * 3600) {
         badges.push(badge("streak", crate::t!("pa.streak", n = d), col));
     }
@@ -198,7 +175,6 @@ mod tests {
         apply_icons(&mut g, &json!([{"id": "5", "icon": "abc"}]));
         assert_eq!(g[0].icon.as_deref(), Some("https://cdn.discordapp.com/app-icons/5/abc.png?size=128"));
         assert_eq!(ago(0, 2 * 86_400 + 5), crate::t!("time.days_ago_short", n = 2));
-        // 19 h is past the 12 h hour limit: rounds to 1 day ("Il y a 1j").
         assert_eq!(ago(0, 19 * 3600), crate::t!("time.days_ago_short", n = 1));
         assert_eq!(ago(0, 11 * 3600 + 1900), crate::t!("time.hours_ago_short", n = 12));
         assert_eq!(ago(0, 10 * 86_400), crate::t!("time.weeks_ago_short", n = 1));

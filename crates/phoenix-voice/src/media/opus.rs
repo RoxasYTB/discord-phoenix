@@ -1,12 +1,10 @@
-//! Opus encoder/decoder via `audiopus` (feature `opus`).
-
 use audiopus::coder::{Decoder, Encoder};
 use audiopus::{Application, Bitrate, Channels, SampleRate};
 
 use super::{AudioDecoder, AudioEncoder};
 use crate::{Error, Result};
 
-pub const FRAME_SAMPLES: usize = 960; // 20 ms @ 48 kHz
+pub const FRAME_SAMPLES: usize = 960;
 
 fn err(e: audiopus::Error) -> Error {
     Error::Encoder(format!("opus: {e}"))
@@ -55,10 +53,7 @@ impl OpusDecoder {
 }
 
 impl AudioDecoder for OpusDecoder {
-    /// `None` = packet loss concealment.
     fn decode(&mut self, packet: Option<&[u8]>) -> Result<Vec<i16>> {
-        // With no packet libopus conceals exactly as many samples as the buffer
-        // holds, so limit loss concealment to one 20 ms frame.
         let per_ch = if packet.is_some() { FRAME_SAMPLES * 6 } else { FRAME_SAMPLES };
         let mut out = vec![0i16; per_ch * self.channels];
         let n = self.inner.decode(packet, &mut out, false).map_err(err)?;

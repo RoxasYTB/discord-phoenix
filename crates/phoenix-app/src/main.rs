@@ -4,7 +4,6 @@ use phoenix_app::{assets::Assets, backend::Backend, discord_backend::DiscordBack
 
 fn main() {
     phoenix_app::perf::start();
-    // PHOENIX_MOCK=1 runs on offline fake data (no network, no keyring).
     let mock = std::env::var("PHOENIX_MOCK").is_ok_and(|v| !v.is_empty() && v != "0");
     gpui_platform::application()
         .with_assets(Assets)
@@ -25,9 +24,6 @@ fn main() {
         });
 }
 
-/// PHOENIX_BENCH=1 prints the wall-clock time (epoch ms) of the first painted
-/// frame on stderr; PHOENIX_BENCH_EXIT_MS=N quits N ms after start. Used by
-/// scripts/bench to time cold start without touching the window.
 fn bench_hooks(cx: &mut gpui::App) {
     if (std::env::var_os("PHOENIX_BENCH").is_some() || phoenix_app::perf::enabled())
         && let Some(win) = cx.windows().first().copied()

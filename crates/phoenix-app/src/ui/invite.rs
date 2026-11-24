@@ -1,7 +1,3 @@
-//! Join a server from a pasted invite (live preview card + Join), the
-//! "Invite People" link dialog, leave-server confirmation and placeholder
-//! dialogs for screens that don't exist yet.
-
 use crate::theme::z;
 use gpui::{
     AnyElement, Context, FontWeight, ImageSource, IntoElement, ParentElement, SharedString, Styled, Window, div,
@@ -43,7 +39,6 @@ impl PhoenixApp {
             return;
         };
         self.nav_request(NavRequest::FetchInvite(code.clone()), cx, move |this, res, _| {
-            // Ignore stale answers for a code the user already edited away.
             if this.nav.invite_code.as_deref() != Some(code.as_str()) {
                 return;
             }
@@ -61,7 +56,6 @@ impl PhoenixApp {
             cx.notify();
             return;
         };
-        // Already a member: just go there.
         if let Some(Ok(p)) = &self.nav.invite_preview
             && let Some(g) = p.guild
             && self.guilds.iter().any(|x| x.id == g)
@@ -77,7 +71,6 @@ impl PhoenixApp {
                 Ok(_) => {
                     let g = this.nav.invite_preview.as_ref().and_then(|p| p.as_ref().ok()).and_then(|p| p.guild);
                     this.close_overlay(cx);
-                    // GUILD_CREATE usually lands right after the join.
                     if let Some(g) = g.filter(|g| this.guilds.iter().any(|x| x.id == *g)) {
                         this.select_guild(Some(g), cx);
                     }
@@ -117,7 +110,6 @@ impl PhoenixApp {
         self.close_overlay(cx);
         self.nav_request(NavRequest::LeaveGuild(guild), cx, move |this, res, cx| {
             if res.is_ok() && this.guilds.iter().any(|g| g.id == guild) {
-                // GUILD_DELETE will follow; don't wait for it.
                 this.handle_event(crate::backend::AppEvent::GuildDelete(guild), cx);
             }
         });
@@ -145,7 +137,6 @@ fn modal(id: &'static str, cx: &mut Context<PhoenixApp>, inner: gpui::Div) -> An
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .relative()
                 .child(inner)
-                // Close button (top right, like the client's modals).
                 .child(
                     div()
                         .id("modal-close")
@@ -168,7 +159,6 @@ fn modal(id: &'static str, cx: &mut Context<PhoenixApp>, inner: gpui::Div) -> An
 
 fn title(t: impl Into<SharedString>) -> gpui::Div {
     div()
-        // Clear of the top-right close button on both sides (stays centred).
         .px(z(28.))
         .text_size(z(24.))
         .font_weight(FontWeight::BOLD)
@@ -375,8 +365,6 @@ pub fn render(app: &PhoenixApp, ov: &Overlay, _window: &mut Window, cx: &mut Con
             modal("invite-modal", cx, inner)
         }
         Overlay::LeaveGuild(g) => {
-            // Live leave-server alertdialog: size-sm confirm, subtitle only,
-            // Cancel + critical "Leave Server".
             let g = *g;
             let name = app.guilds.iter().find(|x| x.id == g).map(|x| x.name.clone()).unwrap_or_default();
             let (e1, e2) = (cx.entity(), cx.entity());

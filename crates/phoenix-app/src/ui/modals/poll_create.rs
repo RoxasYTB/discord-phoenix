@@ -1,15 +1,3 @@
-//! "Crée un sondage" modal (composer "+" › "Créer le sondage"), measured live 2026-11-24 in
-//! the sandbox channel at 1280×800: mana modal size-md (480 wide, padding-size-sm: header
-//! 16 24 8, body spacer 16, footer 16 24 8), title heading-lg/semibold "Crée un sondage"
-//! (GD/8X8). Body (content_mCABKp): "Question" label body-md/medium 16/20 + 8, a 48px
-//! textarea (padding 12 10, max 300, placeholder "Quelle question veux-tu poser ?") with the
-//! "0 / 300" counter body-xs under it (helperTextContainer_ margin-top 4); 26 below,
-//! "Réponses" + 40px answer fields 4 apart (emoji button, "Entre ta réponse" max 55, delete
-//! button), "Ajouter une autre réponse" secondary button right-aligned 4 below (up to 10
-//! answers); 18 below, "Durée" + select (1 h, 4 h, 8 h, 24 h default, 3 j, 1 sem, 2 sem).
-//! Footer: "Autoriser plusieurs réponses" checkbox left, "Programmer un sondage" icon button
-//! and "Post" (primary, 100 wide) right. Post sends `POST /channels/{c}/messages` with `poll`.
-
 use gpui::{AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use gpui_component::input::{Input, InputState};
 
@@ -26,7 +14,6 @@ use super::Modal;
 pub const MAX_QUESTION: usize = 300;
 pub const MAX_ANSWER: usize = 55;
 pub const MAX_ANSWERS: usize = 10;
-/// Duration options (hours) of the client's select; 24 h is the default.
 pub const DURATIONS: [u32; 7] = [1, 4, 8, 24, 72, 168, 336];
 
 pub struct State {
@@ -45,7 +32,6 @@ impl State {
     }
 }
 
-/// Inputs need a window: created on the first frame (see `super::prepare`).
 pub fn prepare(s: &mut State, mk: &mut impl FnMut(SharedString, &str, bool) -> Entity<InputState>) {
     if s.question.is_none() {
         s.question = Some(mk(crate::t!("poll.question_ph"), "", true));
@@ -55,7 +41,6 @@ pub fn prepare(s: &mut State, mk: &mut impl FnMut(SharedString, &str, bool) -> E
     }
 }
 
-/// "1 heure" … "2 semaines" (label of a duration option).
 pub fn duration_label(hours: u32) -> SharedString {
     let n = |k: &str, v: u32| crate::t!(k, n = v);
     match hours {
@@ -76,12 +61,10 @@ fn update(f: impl FnOnce(&mut State)) {
 }
 
 fn label(t: SharedString) -> gpui::Div {
-    // label_VhFsFg: body-md/medium 16/20 --text-strong, labelContainer_ margin-bottom 8
     div().mb(z(8.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(t)
 }
 
 fn field_box() -> gpui::Div {
-    // wrapper_UcGqzv: radius 8, 1px --input-border-default, --input-background-default
     div()
         .rounded(z(8.))
         .border_1()
@@ -120,7 +103,6 @@ pub fn render(_app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> Any
                 .h(z(40.))
                 .px(z(4.))
                 .gap(z(4.))
-                // expressionPickerButton_ 38×18: the emoji of the answer (picker not wired yet)
                 .child(div().w(z(38.)).h(z(18.)).flex().items_center().justify_center().child(
                     gpui::svg().path(crate::icons::path("emoji")).size(z(18.)).text_color(c(tok(idx::INTERACTIVE_ICON_DEFAULT))),
                 ))
@@ -279,7 +261,6 @@ mod tests {
 
     #[test]
     fn durations_match_the_client_list() {
-        // Live list 2026-11-24: 1 heure, 4 heures, 8 heures, 24 heures, 3 jours, 1 semaine, 2 semaines.
         assert_eq!(DURATIONS[State::new(Id(1)).duration], 24);
         let labels: Vec<String> = DURATIONS.iter().map(|h| duration_label(*h).to_string()).collect();
         assert_eq!(labels.len(), 7);

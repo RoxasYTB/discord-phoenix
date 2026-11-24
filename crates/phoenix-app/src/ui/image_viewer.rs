@@ -1,9 +1,3 @@
-//! Full-window media viewer opened by clicking an attachment or embed image.
-//! Layout of the 2026 client (`scrim_ lightbox_` → `carouselModal_`: `topBar_` with the
-//! author, the `actionButtons_` pill and the close button, then `mediaArea_`), measured on
-//! the vanilla-lightbox dump. Click the backdrop (or press Escape via
-//! `media::close_viewer`) to close.
-
 use crate::theme::z;
 use gpui::{AnyElement, App, FontWeight, ParentElement, Styled, Window, div, img, prelude::*, px};
 
@@ -13,8 +7,6 @@ use crate::{
     ui::chat::tk,
 };
 
-/// `actionButtons_` button: button_ sm icon-only, 32px, radius 8px, 16px icon in
-/// --interactive-text-default; :hover --interactive-background-hover / --interactive-text-hover.
 fn action(id: &'static str, icon: &str) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -36,12 +28,9 @@ fn action(id: &'static str, icon: &str) -> gpui::Stateful<gpui::Div> {
         )
 }
 
-/// Overlay element, or `None` when no image is open.
 pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
     let v = cx.try_global::<MediaState>()?.viewer.clone()?;
     let vp = window.viewport_size();
-    // carouselModal_: 24px from the sides, 36px from top and bottom (layer_ padding 24px 0
-    // + 12px); topBar_ 40px + gap 12px above mediaArea_.
     let area_w = f32::from(vp.width) - 2. * f32::from(z(24.));
     let area_h = f32::from(vp.height) - 2. * f32::from(z(36.)) - f32::from(z(52.));
     let (w, h) = media::fit(v.width, v.height, area_w.max(1.), area_h.max(1.));
@@ -52,15 +41,14 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
         div()
             .flex()
             .items_center()
-            .gap(z(12.)) // topBar_ gap 12px
+            .gap(z(12.))
             .min_w_0()
-            .child(crate::ui::avatar(a.user.as_ref(), 40.)) // authorAvatar_ 40px
+            .child(crate::ui::avatar(a.user.as_ref(), 40.))
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .min_w_0()
-                    // username_ 16px / 22px, weight 500, role colour
                     .child(
                         div()
                             .text_size(z(16.))
@@ -70,7 +58,6 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
                             .whitespace_nowrap()
                             .child(a.name),
                     )
-                    // timestamp_QGyCSa 12px / 16px, weight 500, --text-muted
                     .child(
                         div()
                             .text_size(z(12.))
@@ -86,14 +73,13 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
         .id("viewer-actions")
         .flex()
         .items_center()
-        .gap(z(4.)) // actionButtons_ gap 4px
-        .p(z(3.)) // padding 3px
+        .gap(z(4.))
+        .p(z(3.))
         .rounded(z(12.))
         .bg(tk(idx::BACKGROUND_SURFACE_HIGHEST))
         .border_1()
         .border_color(tk(idx::BORDER_SUBTLE))
         .on_click(|_, _, cx| cx.stop_propagation())
-        // Order of the dump: Zoomer, Transférer, Enregistrer l'image, Ouvrir dans le navigateur, Plus.
         .child(action("viewer-zoom", "viewer/zoom"))
         .child(action("viewer-forward", "nav/forward"))
         .child(action("viewer-save", "download").on_click(move |_, _, cx| {
@@ -106,8 +92,6 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
         }))
         .child(action("viewer-more", "more-horizontal"));
 
-    // closeButton_QGyCSa: 40px, radius 12px, --background-surface-highest, 1px border,
-    // 20px close icon in --interactive-text-default.
     let close = div()
         .id("viewer-close")
         .absolute()
@@ -137,7 +121,7 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
         .flex()
         .items_center()
         .gap(z(12.))
-        .pr(z(52.)) // topBar_ padding-right 52px (close button 40 + gap 12)
+        .pr(z(52.))
         .children(author)
         .child(div().flex_1())
         .child(actions)
@@ -148,13 +132,12 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
             .id("image-viewer")
             .absolute()
             .inset_0()
-            // scrim_ lightbox_: black at 92%
             .bg(gpui::hsla(0., 0., 0., 0.92))
             .px(z(24.))
             .py(z(36.))
             .flex()
             .flex_col()
-            .gap(z(12.)) // carouselModal_ gap 12px
+            .gap(z(12.))
             .occlude()
             .on_click(|_, _, cx| {
                 media::close_viewer(cx);

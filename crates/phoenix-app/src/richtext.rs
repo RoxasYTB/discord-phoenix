@@ -1,6 +1,3 @@
-//! Converts parsed markdown into cached GPUI text runs. Built once per
-//! message (or on spoiler reveal), never in the render path.
-
 use std::ops::Range;
 
 pub mod highlight;
@@ -16,7 +13,6 @@ use crate::{
     theme::{FONT_MONO, FONT_UI, Palette, c, ca, generated::idx, tok},
 };
 
-/// Pseudo emoji token: draw the text-channel icon inside a channel mention pill.
 pub const CHANNEL_ICON_TOKEN: &str = "\u{1}channel-icon";
 
 #[derive(Clone, Debug)]
@@ -32,8 +28,6 @@ pub struct RichText {
     pub runs: Vec<TextRun>,
     pub click_ranges: Vec<Range<usize>>,
     pub click_targets: Vec<ClickTarget>,
-    /// Inline emoji to draw as images: byte range in `text` + token
-    /// (`<:name:id>` or the Unicode sequence).
     pub emoji: Vec<(Range<usize>, SharedString)>,
 }
 
@@ -57,7 +51,6 @@ impl RBlock {
     }
 }
 
-/// Syntax-coloured monospace runs for a code block.
 pub fn code_runs(code: &str, lang: Option<&str>) -> Vec<TextRun> {
     highlight::highlight(code, lang)
         .into_iter()
@@ -87,8 +80,6 @@ fn run_for(len: usize, style: Style, revealed: bool, base: Hsla) -> TextRun {
     let mut color = base;
     let mut background_color = None;
     if style.has(Style::CODE) {
-        // markup_ code: --background-code (the 1px --border-normal and 85% size
-        // can't be expressed on a text run).
         background_color = Some(c(tok(idx::BACKGROUND_CODE)));
     }
     if style.has(Style::MENTION) {
@@ -97,21 +88,16 @@ fn run_for(len: usize, style: Style, revealed: bool, base: Hsla) -> TextRun {
         f.weight = FontWeight::MEDIUM;
     }
     if style.has(Style::SOUNDBOARD) {
-        // Provisional inline chip treatment; the dedicated Soundboard mention CSS
-        // is not present in the local CSS cache.
         color = c(Palette::MENTION_FG);
         background_color = Some(ca(Palette::MENTION_BG));
         f.weight = FontWeight::MEDIUM;
     }
     if style.has(Style::TIMESTAMP) {
-        // markup_ .timestamp_: --background-mod-normal.
         background_color = Some(c(tok(idx::BACKGROUND_MOD_NORMAL)));
     }
     if style.has(Style::LINK) {
-        // anchor_: --text-link
         color = c(tok(idx::TEXT_LINK));
     }
-    // Accessibility "Always underline links" (anchorUnderlineOnHover_ off).
     let link_ul = style.has(Style::LINK) && crate::ui::settings::effects::underline_links();
     let underline = (style.has(Style::UNDERLINE) || link_ul).then(|| UnderlineStyle {
         thickness: px(1.),
@@ -120,10 +106,8 @@ fn run_for(len: usize, style: Style, revealed: bool, base: Hsla) -> TextRun {
     });
     if style.has(Style::SPOILER) {
         if revealed {
-            // spoilerContent_: --__spoiler-background-color--revealed = --spoiler-revealed-background
             background_color = Some(c(tok(idx::SPOILER_REVEALED_BACKGROUND)));
         } else {
-            // .hidden_: text and background --spoiler-hidden-background
             color = c(tok(idx::SPOILER_HIDDEN_BACKGROUND));
             background_color = Some(c(tok(idx::SPOILER_HIDDEN_BACKGROUND)));
         }
@@ -161,13 +145,11 @@ pub fn rich_inline(inline: &Inline, revealed: &dyn Fn(usize) -> bool, base: Hsla
             click_targets.push(ClickTarget::Mention(m.clone()));
         }
     }
-    // Code spans keep emoji as text.
     let in_code = |r: &Range<usize>| {
         inline.spans.iter().any(|s| s.style.has(Style::CODE) && s.range.start <= r.start && r.end <= s.range.end)
     };
     let mut emoji: Vec<(Range<usize>, SharedString)> =
         emoji_ranges(&inline.text).into_iter().filter(|(r, _)| !in_code(r)).collect();
-    // Channel mentions draw the channel icon (icon__RYHZ5, 1em) in place of the "#".
     for s in &inline.spans {
         if matches!(s.mention, Some(Mention::Channel(_))) && inline.text[s.range.clone()].starts_with('#') {
             emoji.push((s.range.start..s.range.start + 1, CHANNEL_ICON_TOKEN.into()));
@@ -192,7 +174,6 @@ pub fn render_blocks(
         .iter()
         .map(|b| match b {
             Block::Paragraph(i) => RBlock::Text(rich_inline(i, revealed, base)),
-            // markup_ blockquote color --text-subtle.
             Block::Quote(i) => RBlock::Quote(rich_inline(i, revealed, c(tok(idx::TEXT_SUBTLE)))),
             Block::Code { lang, code } => RBlock::Code {
                 lang: lang.clone().map(Into::into),
@@ -206,7 +187,6 @@ pub fn render_blocks(
                 }
                 RBlock::Heading(*l, t)
             }
-            // markup_ small:not(.inlineFormat_) color --text-subtle.
             Block::Subtext(i) => RBlock::Subtext(rich_inline(i, revealed, c(tok(idx::TEXT_SUBTLE)))),
             Block::ListItem { ordered, depth, inline } => RBlock::ListItem {
                 ordered: *ordered,
@@ -217,7 +197,6 @@ pub fn render_blocks(
         .collect()
 }
 
-/// Everything needed to draw one message row without further work.
 #[derive(Clone)]
 pub struct RenderedMessage {
     pub group_start: bool,
@@ -226,7 +205,6 @@ pub struct RenderedMessage {
     pub time_short: SharedString,
     pub blocks: Vec<RBlock>,
     pub mentions_me: bool,
-    /// One-line preview used when other messages reply to this one.
     pub preview: SharedString,
     pub parsed: Vec<Block>,
 }
@@ -251,9 +229,6 @@ pub fn build(
     (parsed, blocks, mentions_me, preview.into())
 }
 
-/// One-line reply preview of `parsed` (blocks joined by spaces, newlines folded, at
-/// most 120 chars) and the byte ranges of its mentions, which the client's
-/// `repliedTextContent_` still draws with the mention colours.
 pub fn preview_with_mentions(parsed: &[Block]) -> (String, Vec<Range<usize>>) {
     let mut text = String::new();
     let mut mentions = Vec::new();
@@ -278,9 +253,6 @@ pub fn preview_with_mentions(parsed: &[Block]) -> (String, Vec<Range<usize>>) {
     (text[..cut].to_string(), mentions)
 }
 
-/// Role mentions take the role color: text in the color, background at 10% alpha
-/// (live client: inline `color` + `background-color` on `.roleMention_`). `rich_inline`
-/// emits one run per span, so span `i` is run `i`.
 fn color_role_mentions(parsed: &[Block], blocks: &mut [RBlock], r: &dyn MentionResolver) {
     for (b, rb) in parsed.iter().zip(blocks.iter_mut()) {
         let (Some(inl), Some(t)) = (b.inline(), rich_text_mut(rb)) else { continue };
@@ -304,11 +276,6 @@ fn rich_text_mut(b: &mut RBlock) -> Option<&mut RichText> {
     }
 }
 
-/// Search highlights over rendered markdown (`span.highlight` of the client's
-/// search results): every block but code blocks, every text run including the
-/// "@name" / channel name of mentions (their parse rules give them a text
-/// content), but not timestamps, sound mentions or emoji (nodes without a string
-/// content in the client's markdown tree). Runs are split at the ranges.
 pub fn apply_highlights(parsed: &[Block], blocks: &mut [RBlock], hl: &crate::search_highlight::Highlighter) {
     if hl.is_empty() {
         return;
@@ -334,7 +301,6 @@ pub fn apply_highlights(parsed: &[Block], blocks: &mut [RBlock], hl: &crate::sea
     }
 }
 
-/// `runs` cut at the edges of `ranges`, the pieces inside a range given `bg`.
 pub fn split_runs(runs: &[TextRun], ranges: &[Range<usize>], bg: Hsla) -> Vec<TextRun> {
     let total: usize = runs.iter().map(|r| r.len).sum();
     let mut cuts: Vec<usize> = Vec::with_capacity(runs.len() + ranges.len() * 2 + 1);
@@ -369,9 +335,6 @@ pub fn split_runs(runs: &[TextRun], ranges: &[Range<usize>], bg: Hsla) -> Vec<Te
     out
 }
 
-/// Custom emoji tokens and Unicode emoji sequences in `text`, in order.
-/// Unicode emoji are the client's set (`media::emoji::unicode_emoji_at`),
-/// longest sequence first, so arrows, stars or math symbols stay text.
 pub fn emoji_ranges(text: &str) -> Vec<(Range<usize>, SharedString)> {
     let custom = crate::media::emoji::find_custom(text);
     let mut out: Vec<(Range<usize>, SharedString)> = Vec::new();
@@ -397,10 +360,6 @@ pub fn emoji_ranges(text: &str) -> Vec<(Range<usize>, SharedString)> {
     out
 }
 
-/// Emoji-only message (whitespace aside, at most 30 emoji): Discord draws
-/// them "jumbo" (48px). Client markup rule: only text, emoji and custom emoji
-/// top-level nodes, non-blank text disqualifies, and more than 30 emoji keeps
-/// them inline; a heading is another node type, so it never jumbos.
 pub fn is_jumbo(blocks: &[RBlock]) -> bool {
     let mut n = 0;
     for b in blocks {
@@ -451,7 +410,6 @@ mod emoji_tests {
             assert_eq!(at, t.text.len());
             out
         };
-        // Bold, the mention's "@Serveur", link and inline code are highlighted; the emoji is not.
         assert_eq!(lit(&blocks[0]), ["serveur", "Serveur", "serveur", "serveur"]);
         assert!(matches!(blocks.last(), Some(RBlock::Code { .. })));
     }
@@ -469,9 +427,7 @@ mod emoji_tests {
         let t = "hi 👍🏽 <:blob:12> 👨\u{200D}👩\u{200D}👧 🇫🇷 ok 1";
         let e: Vec<String> = emoji_ranges(t).into_iter().map(|(_, s)| s.to_string()).collect();
         assert_eq!(e, vec!["👍🏽", "<:blob:12>", "👨\u{200D}👩\u{200D}👧", "🇫🇷"]);
-        // Text symbols are no emoji (they used to become broken images, and a lone "→"
-        // went jumbo); Emoji 16.0, unqualified forms and keycaps are.
-        assert_eq!(emoji_ranges("a → b ★ ∞ ✓ ■ ♡ ↗ x").len(), 1); // only ↗ (north_east_arrow)
+        assert_eq!(emoji_ranges("a → b ★ ∞ ✓ ■ ♡ ↗ x").len(), 1);
         let e: Vec<String> = emoji_ranges("\u{1FAE9} ☺ 1\u{20E3} 🙂\u{200D}↔\u{FE0F} ❤\u{FE0F}\u{200D}🔥").into_iter().map(|(_, s)| s.to_string()).collect();
         assert_eq!(e, vec!["\u{1FAE9}", "☺", "1\u{20E3}", "🙂\u{200D}↔\u{FE0F}", "❤\u{FE0F}\u{200D}🔥"]);
     }

@@ -1,17 +1,3 @@
-//! [`MlsSession`] implemented with `openmls`, following the public DAVE
-//! protocol description (github.com/discord/dave-protocol):
-//!
-//! - ciphersuite 2 (`MLS_128_DHKEMP256_AES128GCM_SHA256_P256`), basic
-//!   credentials carrying the big-endian 64-bit user id;
-//! - group id = big-endian channel id, the voice server is the single
-//!   external sender (group context `external_senders` extension);
-//! - handshake messages are plaintext (`PublicMessage`), welcomes carry the
-//!   ratchet tree inline;
-//! - before joining, the client keeps a one-member "pending" group so it can
-//!   commit the server's proposals itself when it is the group creator;
-//! - proposals only come from the external sender, and an Add is accepted
-//!   only for a user the voice gateway announced as connected.
-
 use openmls::prelude::tls_codec::{Deserialize as _, Serialize as _};
 use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
@@ -26,14 +12,12 @@ fn mls<E: std::fmt::Display>(ctx: &'static str) -> impl Fn(E) -> Error {
     move |e| Error::Mls(format!("{ctx}: {e}"))
 }
 
-/// Decode a basic credential identity (big-endian u64 user id).
 pub fn credential_user_id(c: &Credential) -> Option<u64> {
     let b = BasicCredential::try_from(c.clone()).ok()?;
     let id: [u8; 8] = b.identity().try_into().ok()?;
     Some(u64::from_be_bytes(id))
 }
 
-/// Read an MLS variable-length vector (`<V>`) and return its content.
 fn read_vl(bytes: &[u8]) -> Result<&[u8]> {
     let first = *bytes.first().ok_or(Error::Malformed("empty vector"))?;
     let (len, hdr) = match first >> 6 {
@@ -52,16 +36,12 @@ pub struct OpenMlsSession {
     group_id: u64,
     credential: CredentialWithKey,
     external_sender: Option<ExternalSender>,
-    /// One-member group used when this client creates the group.
     pending: Option<MlsGroup>,
-    /// Established group (after a merged commit or a welcome).
     group: Option<MlsGroup>,
-    /// Serialized commit we sent with op 28, to recognize it in op 29.
     our_commit: Option<Vec<u8>>,
 }
 
 impl OpenMlsSession {
-    /// `group_id` is the voice channel id.
     pub fn new(user_id: u64, group_id: u64) -> Result<Self> {
         let provider = OpenMlsRustCrypto::default();
         let signer = SignatureKeyPair::new(CIPHERSUITE.signature_algorithm()).map_err(mls("signature key"))?;
@@ -154,7 +134,6 @@ impl MlsSession for OpenMlsSession {
         let body = read_vl(rest)?;
         let mut recognized = recognized_user_ids.to_vec();
         recognized.push(self.user_id);
-        // Parse and validate everything before touching group state.
         let mut msgs = Vec::new();
         let mut refs = Vec::new();
         let mut r = body;
@@ -171,7 +150,6 @@ impl MlsSession for OpenMlsSession {
             (Some(g), _) => g,
             (None, Some(p)) => p,
             (None, None) => {
-                // No external sender yet: nothing sensible to commit to.
                 return Err(Error::Mls("proposals before external sender".into()));
             }
         };
@@ -227,7 +205,6 @@ impl MlsSession for OpenMlsSession {
             return Ok(());
         }
         let Some(g) = self.group.as_mut() else {
-            // Not a member yet: the welcome (op 30) will bring us in.
             return Err(Error::Mls("commit received before joining".into()));
         };
         if g.pending_commit().is_some() {
@@ -255,7 +232,6 @@ impl MlsSession for OpenMlsSession {
             Some(w) => w,
             None => Welcome::tls_deserialize_exact(welcome).map_err(mls("welcome"))?,
         };
-        // The pending group shares the group id; drop it so storage doesn't collide.
         self.drop_groups();
         let staged = StagedWelcome::new_from_welcome(&self.provider, &Self::join_config(), w, None).map_err(mls("stage welcome"))?;
         if let Some(es) = &self.external_sender {
@@ -301,7 +277,6 @@ impl MlsSession for OpenMlsSession {
 mod tests {
     use super::*;
 
-    /// Minimal stand-in for the voice server acting as MLS external sender.
     struct Server {
         provider: OpenMlsRustCrypto,
         signer: SignatureKeyPair,
@@ -374,10 +349,8 @@ mod tests {
         let kb = b.key_package().unwrap();
         let kc = c.key_package().unwrap();
 
-        // Epoch 0 -> 1: A creates the group by committing the add of B.
         let p = proposals(0, &[server.add(&kb, 0)]);
         let cw = a.process_proposals(&p, &[ub]).unwrap().unwrap();
-        // An unrecognized user is refused.
         assert!(b.process_proposals(&proposals(0, &[server.add(&kc, 0)]), &[]).is_err());
         a.process_commit(1, &cw.commit).unwrap();
         b.reset();
@@ -387,7 +360,6 @@ mod tests {
         ids.sort();
         assert_eq!(ids, vec![ua, ub]);
 
-        // Epoch 1 -> 2: both commit the add of C, server picks B's commit.
         let p = proposals(0, &[server.add(&kc, 1)]);
         let _cwa = a.process_proposals(&p, &[ub, uc]).unwrap().unwrap();
         let cwb = b.process_proposals(&p, &[ua, uc]).unwrap().unwrap();

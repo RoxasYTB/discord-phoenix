@@ -1,6 +1,3 @@
-//! Offscreen render of the threads browser with archived ("older") threads.
-//! `cargo run -p phoenix-app --example threads_shots -- out.png`
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -17,7 +14,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -73,7 +69,6 @@ fn main() -> anyhow::Result<()> {
                         first_message: None,
                         owner,
                         last_message: Some(Id(id)),
-                        // vanilla-threads-lrer #1392: 3 preview avatars; second row none.
                         member_ids_preview: if id == 1_250_000_000_000_000_000 { app.users.keys().take(3).copied().collect() } else { vec![] },
                         member_count: if id == 1_250_000_000_000_000_000 { 3 } else { 0 },
                         pinned: false,
@@ -90,12 +85,10 @@ fn main() -> anyhow::Result<()> {
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

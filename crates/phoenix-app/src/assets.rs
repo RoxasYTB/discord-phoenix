@@ -1,6 +1,3 @@
-//! Embedded assets: hand-drawn monochrome SVG icons (tinted at render time
-//! via `text_color`) and the app icon PNG.
-
 use std::borrow::Cow;
 
 use gpui::{AssetSource, SharedString};
@@ -109,7 +106,6 @@ impl Icon {
     }
 }
 
-/// Our own hand-drawn icon for `path` (used when no real icon was extracted).
 pub fn fallback_svg(path: &str) -> Option<&'static str> {
     svg_for(path)
 }
@@ -125,12 +121,10 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/chevron.svg" => s!(r#"<path d="m6 9 6 6 6-6"/>"#),
         "icons/invite.svg" => s!(r#"<circle cx="10" cy="8" r="4"/><path d="M3 20a7 7 0 0 1 12-4.9M19 14v6m-3-3h6"/>"#),
         "icons/nav/back.svg" => s!(r#"<path d="M20 12H5m6-7-7 7 7 7"/>"#),
-        // Left-pointing cap of the red "NEW" pill (unreadPillCap_: 8x13, drawn here, not Discord's).
         "icons/chat/unread-cap.svg" => concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 13" fill="black">"#, r#"<path d="M8 0v13H5L0 6.5 5 0z"/>"#, "</svg>"),
         "icons/chat-check.svg" => s!(r#"<path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>"#),
         "icons/chat/eye-slash.svg" => s!(r#"<path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6a12.6 12.6 0 0 1-2.9 3.6M6.3 7.6C4.4 8.8 3.1 10.5 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.8-.3 4-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/>"#),
         "icons/chat/forwarded.svg" => s!(r#"<path d="M20 8h-7a8 8 0 0 0-8 8v4M15 3l5 5-5 5"/>"#),
-        // Context menu row icons (our own drawings; the real ones come from the icon provider).
         "icons/menu/view-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>"#),
         "icons/menu/remove-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8"/>"#),
         "icons/menu/remove-all-reactions.svg" => s!(r#"<circle cx="11" cy="11" r="8"/><path d="M15 19h6"/>"#),
@@ -154,7 +148,6 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/channel-browse.svg" => s!(r#"<path d="M4 6h12M4 12h7M4 18h5"/><circle cx="17" cy="16" r="3"/><path d="m19.5 18.5 2 2"/>"#),
         "icons/boost.svg" => s!(r#"<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><path d="m12 7-3 5h6l-3 5"/>"#),
         "icons/chevron-right.svg" => s!(r#"<path d="m9 6 6 6-6 6"/>"#),
-        // Settings sidebar fallbacks (our own drawings).
         "icons/user.svg" => s!(r#"<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>"#),
         "icons/shield-lock.svg" => s!(r#"<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10 11V9a2 2 0 0 1 4 0v2"/>"#),
         "icons/chat-shield.svg" => s!(r#"<path d="M20 11a8 8 0 1 0-15 4l-1 5 5-1a8 8 0 0 0 3 .6"/><path d="M18 13l-3 1.5v2c0 1.8 1.3 3 3 3.5 1.7-.5 3-1.7 3-3.5v-2z"/>"#),
@@ -169,14 +162,12 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/folder.svg" => f!(r#"<path d="M3 6a2 2 0 0 1 2-2h4.5l2 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>"#),
         "icons/door-exit.svg" => s!(r#"<path d="M14 4H5v16h9M10 12h11m-3-3 3 3-3 3"/>"#),
         "icons/discord-logo.svg" => f!(r#"<path d="M19.7 5.4a17 17 0 0 0-4.3-1.3l-.5 1.1a15.7 15.7 0 0 0-4.8 0l-.5-1.1a17 17 0 0 0-4.3 1.3C2.6 9.5 1.9 13.5 2.2 17.4a17.2 17.2 0 0 0 5.3 2.7l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.3 12.3 0 0 0 10.4 0l.4.3a11 11 0 0 1-1.7.8l1.1 1.8a17.1 17.1 0 0 0 5.3-2.7c.4-4.5-.8-8.5-3.1-12zM8.7 15c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z"/>"#),
-        // Activity type glyphs on member rows (our own drawings): a note, a screen.
         "icons/music.svg" => f!(r#"<path d="M20 3v12.5a3.5 3.5 0 1 1-2-3.2V7.3l-8 1.6v8.6A3.5 3.5 0 1 1 8 14.3V5.4z"/>"#),
         "icons/tv.svg" => s!(r#"<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>"#),
         "icons/game-controller.svg" => f!(r#"<path d="M7 7h10a5 5 0 0 1 5 5v1a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-1a5 5 0 0 1 5-5zm0 3v2H5v2h2v2h2v-2h2v-2H9v-2zm9 1a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>"#),
         "icons/more-horizontal.svg" => f!(r#"<path d="M4 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>"#),
         "icons/medal.svg" => f!(r#"<path d="M7 2h4l1 4 1-4h4l-3 7a6 6 0 1 1-4 0zM12 11a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>"#),
         "icons/streak.svg" => f!(r#"<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>"#),
-        // Hand-drawn flame (Trending badge of the member list Activity cards).
         "icons/fire.svg" => f!(r#"<path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2.3 1.2-3.9 2.5-5 .2 1.8 1 3 2.5 3.5-.8-3.2.2-6.3 0-9.5z"/>"#),
         "icons/shop.svg" => f!(r#"<path d="M4 4h16l-1.5 6H5.5zM5 11h14v9H5zM9 14h6v6H9z"/>"#),
         "icons/flag.svg" => f!(r#"<path d="M5 3h1.5v18H5zM7.5 4h10.2l-2.2 4 2.2 4H7.5z"/>"#),
@@ -218,7 +209,6 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/plus-circle.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm-1 5v4H7v2h4v4h2v-4h4v-2h-4V7z"/>"#),
         "icons/compass.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm4.5 5.5-6.4 2.6-2.6 6.4 6.4-2.6zM12 10.7a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z"/>"#),
         "icons/download.svg" => s!(r#"<path d="M12 3v12m-5-5 5 5 5-5M4 21h16"/>"#),
-        // Window close glyph (winButtonClose_ svg #52: 12×12 box, 10×10 cross, ~0.8px arms), drawn here.
         "icons/window/close.svg" => concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">"#, r#"<path d="M1.3 1.3 10.7 10.7M10.7 1.3 1.3 10.7" stroke="black" stroke-width="0.82"/>"#, "</svg>"),
         "icons/close.svg" => s!(r#"<path d="M6 6l12 12M18 6 6 18"/>"#),
         "icons/threads.svg" => s!(r#"<path d="M5 4h14v10H11l-4 3v-3H5zM9 8h6M9 11h4"/>"#),
@@ -237,7 +227,6 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/discovery-badge.svg" => f!(r#"<circle cx="12" cy="12" r="11"/>"#),
         "icons/discovery-badge-fg.svg" => f!(r#"<path d="M12 6.5 13.6 10.4 17.5 12 13.6 13.6 12 17.5 10.4 13.6 6.5 12 10.4 10.4z"/>"#),
         "icons/lock.svg" | "icons/text-lock.svg" | "icons/forum-lock.svg" | "icons/announcement-lock.svg" | "icons/stage-lock.svg" => f!(r#"<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/>"#),
-        // Hand-drawn stand-ins (the real glyphs come from the local client at runtime).
         "icons/quests.svg" => s!(r#"<path d="M5 4h14v6a7 7 0 0 1-14 0zM9 21h6M12 17v4M8 9h8"/>"#),
         "icons/note.svg" => s!(r#"<path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7M7 8h6M7 12h8M7 16h4M19 14v8M15 18h8"/>"#),
         "icons/user-check.svg" => s!(r#"<circle cx="11" cy="7" r="4"/><path d="M3 21a8 8 0 0 1 11-7.4M15 18l2 2 4-4"/>"#),
@@ -267,7 +256,6 @@ impl AssetSource for Assets {
         if path == "icon.png" {
             return Ok(Some(Cow::Borrowed(APP_ICON_PNG)));
         }
-        // `local/<abs path>` (no scheme, so GPUI asks the asset source): a file on disk (offscreen mock renders, e.g. PHX_MOCK_DECO).
         if let Some(p) = path.strip_prefix("local/") {
             return Ok(std::fs::read(p).ok().map(Cow::Owned));
         }
@@ -276,7 +264,6 @@ impl AssetSource for Assets {
         }
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(crate::icons::init);
-        // Real icons extracted from the local Discord install win over ours.
         if let Some(b) = crate::icons::lookup(path) {
             return Ok(Some(Cow::Owned(b.to_vec())));
         }

@@ -1,10 +1,3 @@
-//! Standalone threads (no starter message), as the client's "Create Thread"
-//! sidebar does: `POST /channels/{id}/threads` with
-//! `{name, type, auto_archive_duration, location}`. Type is PRIVATE_THREAD
-//! (12) when "Private Thread" is ticked, ANNOUNCEMENT_THREAD (10) under an
-//! announcement channel, PUBLIC_THREAD (11) otherwise. Threads created from a
-//! message live in `message_actions::create_thread_from_message`.
-
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -16,7 +9,6 @@ pub const ANNOUNCEMENT_THREAD: u8 = 10;
 pub const PUBLIC_THREAD: u8 = 11;
 pub const PRIVATE_THREAD: u8 = 12;
 
-/// Channel type of a new standalone thread.
 pub fn thread_type(private: bool, parent_is_announcement: bool) -> u8 {
     match (private, parent_is_announcement) {
         (true, _) => PRIVATE_THREAD,
@@ -25,9 +17,6 @@ pub fn thread_type(private: bool, parent_is_announcement: bool) -> u8 {
     }
 }
 
-/// Body of `POST /channels/{id}/threads`. Names are trimmed and capped at
-/// 100 characters; `auto_archive_duration` is in minutes (the parent's
-/// default, 4320 = 3 days when unset).
 pub fn standalone_thread_body(name: &str, kind: u8, auto_archive_minutes: u32) -> Value {
     let name: String = name.trim().chars().take(100).collect();
     json!({
@@ -39,7 +28,6 @@ pub fn standalone_thread_body(name: &str, kind: u8, auto_archive_minutes: u32) -
 }
 
 impl RestClient {
-    /// Create a thread without a starter message.
     pub async fn create_standalone_thread(&self, channel: ChannelId, name: &str, kind: u8, auto_archive_minutes: u32) -> Result<Channel> {
         self.call(
             Method::POST,
@@ -73,8 +61,6 @@ mod tests {
         assert_eq!(standalone_thread_body(&"x".repeat(150), 11, 60)["name"].as_str().unwrap().len(), 100);
     }
 
-    /// Against a local mock server: checks method, path and JSON body, and
-    /// parses the returned thread channel. Never touches discord.com.
     #[tokio::test]
     async fn posts_to_the_threads_endpoint() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

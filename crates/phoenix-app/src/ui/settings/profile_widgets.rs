@@ -1,34 +1,8 @@
-//! Profile "Board" application widgets (profile editor and full profile).
-//!
-//! Data flow, as the 2026 client does it:
-//! - `GET /users/{id}/profile` → `widgets[]` with `data.type == "application"`
-//!   and `data.application_id` (order = board order);
-//! - `GET /users/{id}/application-identities?with_profiles=true` → per app
-//!   `profile.data.dynamic[] {name, value}` (the values the app pushed);
-//! - `GET /applications/{app}/widget-configs` → `surfaces.widget_top`
-//!   (`title` / `subtitle_1` / `hero_image`) and `surfaces.widget_bottom`
-//!   (`item_N` {name, description, image}), fields typed `data` (key into the
-//!   dynamic values), `custom_string`, or `application_asset` (key into
-//!   `resolved_assets` → `cdn/app-assets/{app}/{asset_id}`).
-//!
-//! Layout from dump `vanilla-settings-profile-editor` #3498-#3539:
-//! container_FNEkcu widgetContainer_zEJODa (radius --radius-lg 16, 1px
-//! --border-muted, --user-profile-overlay-background, padding 0);
-//! root_BQi7pE grid 2 cols, padding 12 16 0, column gap 4: header 24 high
-//! (16px app icon r2 + body-sm/medium name, gap 4), content_rafRmG padding
-//! 32 0 gap 2 (title 20/24 500, subtitle body-sm 14/18); hero image in the
-//! right column, offset -12 top / -16 right, top-right radius 16, faded to
-//! the left (imageFadeToLeftMask_). divider_ZaYWLb 1px --border-subtle.
-//! root_xc-26D grid 2x2 gap 16, padding 24 16 16; collectionItem_ gap 12,
-//! 48px image r8 --background-mod-subtle, content gap 4 margin-block auto
-//! (name body-sm/medium 14/18, value body-xs/medium 12/16).
-
 use gpui::{Div, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, div, img, prelude::*};
 use serde_json::Value;
 
 use crate::theme::{c, generated::idx, tok, z};
 
-/// imageFadeToLeftMask_sIDBpr stops: (position, mask alpha).
 const FADE_MASK: [(f32, f32); 17] = [
     (0., 0.), (0.047, 0.013), (0.092, 0.049), (0.136, 0.104), (0.18, 0.175), (0.226, 0.259),
     (0.274, 0.352), (0.326, 0.45), (0.383, 0.55), (0.445, 0.648), (0.514, 0.741), (0.591, 0.825),
@@ -51,16 +25,12 @@ pub struct AppWidget {
     pub subtitle: SharedString,
     pub hero: Option<SharedString>,
     pub items: Vec<WidgetItem>,
-    /// `widget_top.contained_image`: a 152px contained square (no fade) instead of the hero.
     pub contained: bool,
-    /// `widget_bottom` progress layout: (`progress.current` 0..=100, `objective`).
     pub progress: Option<(f32, WidgetItem)>,
-    /// `mini_profile` (popout card): `stat.text` and `hero_image.image`.
     pub mini_stat: SharedString,
     pub mini_hero: Option<SharedString>,
 }
 
-/// Application ids of the profile's application widgets, in board order.
 pub fn app_ids(profile_widgets: &[Value]) -> Vec<u64> {
     profile_widgets
         .iter()
@@ -72,7 +42,6 @@ pub fn app_ids(profile_widgets: &[Value]) -> Vec<u64> {
         .collect()
 }
 
-/// `profile.data.dynamic` of the identity for `app` (name → value).
 pub fn identity_data(identities: &Value, app: u64) -> Vec<(String, String)> {
     let id = app.to_string();
     identities
@@ -100,8 +69,6 @@ fn asset_url(app: u64, cfg: &Value, key: &str, size: u32) -> Option<SharedString
     Some(format!("https://cdn.discordapp.com/app-assets/{app}/{id}.png?size={size}").into())
 }
 
-/// CDN sizes must be powers of two (408 → HTTP 400).
-/// One field (`{value_type, presentation_type, value, fallback?}`).
 fn resolve(app: u64, cfg: &Value, data: &[(String, String)], f: Option<&Value>, size: u32) -> Option<SharedString> {
     let f = f?;
     let v = f.get("value").and_then(Value::as_str);
@@ -114,7 +81,6 @@ fn resolve(app: u64, cfg: &Value, data: &[(String, String)], f: Option<&Value>, 
     out.or_else(|| resolve(app, cfg, data, f.get("fallback"), size))
 }
 
-/// Build the board card for `app` from its first published widget config.
 pub fn build(app: u64, configs: &Value, data: &[(String, String)]) -> Option<AppWidget> {
     let cfgs = configs.as_array()?;
     let cfg = cfgs.iter().find(|c| c.get("status").and_then(Value::as_str) == Some("published")).or(cfgs.first())?;
@@ -158,7 +124,6 @@ pub fn build(app: u64, configs: &Value, data: &[(String, String)]) -> Option<App
         hero: field("widget_top", "hero_image", "image", 512).or_else(|| field("widget_top", "contained_image", "image", 512)),
         contained: cfg.pointer("/surfaces/widget_top/components/contained_image").is_some(),
         progress: cfg.pointer("/surfaces/widget_bottom/components/progress").map(|_| {
-            // `current` is a 0..1 fraction (live: 0.7 → "70%"); accept percentages too.
             let v = field("widget_bottom", "progress", "current", 0).and_then(|v| v.trim_end_matches('%').trim().parse::<f32>().ok()).unwrap_or(0.);
             let pct = if v <= 1. { v * 100. } else { v };
             (
@@ -176,20 +141,17 @@ pub fn build(app: u64, configs: &Value, data: &[(String, String)]) -> Option<App
     })
 }
 
-/// Text colours of a themed / plain profile (strong, muted).
 pub struct WidgetColors {
     pub strong: Hsla,
     pub muted: Hsla,
     pub card: Hsla,
-    /// Colour the hero image fades into on its left (what is behind the card).
     pub fade: Hsla,
-    /// Draw the header "More" button (full profile; not in the editor preview).
     pub more: bool,
 }
 
 pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
     let header = div()
-        .h(z(24.)) // --custom-widget-header-height
+        .h(z(24.))
         .flex()
         .items_center()
         .gap(z(4.))
@@ -205,7 +167,6 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
         .w(z(188.))
         .child(div().mb(z(4.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::MEDIUM).text_color(col.strong).child(w.title.clone()))
         .when(!w.subtitle.is_empty(), |d| d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(col.muted).child(w.subtitle.clone())));
-    // image_jlRl3z (contained): 152px square at (264, 49), radius 12, --background-mod-subtle, contain.
     let contained = w.contained.then(|| w.hero.clone()).flatten().map(|u| {
         div()
             .absolute()
@@ -227,9 +188,6 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
             .rounded_tr(z(16.))
             .overflow_hidden()
             .child(img(u).w(z(204.)).h(z(151.)).object_fit(gpui::ObjectFit::Cover))
-            // imageFadeToLeftMask_sIDBpr: eased 90deg alpha ramp (16 stops);
-            // GPUI has no masks, so paint the fade colour at 1 - alpha per
-            // segment (2-stop gradients only).
             .children(FADE_MASK.windows(2).map(|w| {
                 let (x0, a0) = w[0];
                 let (x1, a1) = w[1];
@@ -246,7 +204,6 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
                     ))
             }))
     });
-    // root_jlRl3z with a contained image: 216 tall (content_rafRmG 180 = 152 + 2 * 14).
     let content = if w.contained { content.min_h(z(180.)) } else { content };
     let top = div().relative().pt(z(12.)).px(z(16.)).children(hero).children(contained).child(header).child(content);
     let item = |i: &WidgetItem| {
@@ -279,7 +236,7 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
         .children(w.items.iter().map(item));
     div()
         .relative()
-        .rounded(z(16.)) // --custom-application-widget-card-radius = --radius-lg
+        .rounded(z(16.))
         .border_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
         .bg(col.card)
@@ -291,11 +248,6 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
         .when_some(w.progress.clone(), |d, p| d.child(div().h(z(2.)).bg(c(tok(idx::BORDER_SUBTLE)))).child(progress_row(&p, col)))
 }
 
-/// `root_2E0EiK` progress layout (live modal, ref-cache profile-modal-app-widget.json):
-/// padding 24 16 16, gap 12; 50px image radius 8 on --background-mod-subtle;
-/// content gap 4: 6px bar (radius 12, track rgba(151,151,159,.32), fill the
-/// themed primary control colour), then name 14/18 500 + description 12/16 500
-/// (--text-subtle) and the percentage 14/18 500 at the end.
 fn progress_row((pct, it): &(f32, WidgetItem), col: &WidgetColors) -> Div {
     div()
         .pt(z(24.))
@@ -336,12 +288,6 @@ fn progress_row((pct, it): &(f32, WidgetItem), col: &WidgetColors) -> Div {
         )
 }
 
-/// Compact card in the profile popout (live popout, ref-cache
-/// profile-popout-app-widget.json): `overlay_P1YEjQ` radius 8, 1px border,
-/// --user-profile-overlay-background; `root_CPqUlz` row, gap 4; `body_CPqUlz`
-/// padding 8, gap 8: 16px header (16px icon r2, gap 4, name 12/16 500), then
-/// `content_CPqUlz` (padding 2 0): title 14/18 600, subtitle 12/16 muted;
-/// `heroImage__9KZT7` 79px square at the end, faded to the left.
 pub fn render_compact(w: &AppWidget, col: &WidgetColors) -> Div {
     let header = div()
         .h(z(16.))
@@ -356,7 +302,6 @@ pub fn render_compact(w: &AppWidget, col: &WidgetColors) -> Div {
         .flex_col()
         .gap(z(2.))
         .child(div().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(col.strong).child(if w.mini_stat.is_empty() { w.title.clone() } else { w.mini_stat.clone() }))
-        // textButton_nJgowo: the client's own "View All Stats" link (English in every locale).
         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT))).child("View All Stats"));
     let hero = w.mini_hero.clone().or_else(|| w.hero.clone()).map(|u| {
         let s = 79.;

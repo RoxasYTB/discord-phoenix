@@ -1,16 +1,9 @@
-//! Offscreen render of the main window to a PNG (no on-screen window).
-//! `cargo run -p phoenix-app --example screenshot -- out.png [login]`
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
 use gpui_component::Root;
 use phoenix_app::{app::PhoenixApp, assets::Assets, mock::MockBackend};
 
-/// `PHX_FRAMES=1`: frame times per interaction (examples/frames.rs), no allocation counts.
-/// `PHX_COMPACT=1` selects compact messages; `PHX_COMPACT_AVATARS=0|1` overrides
-/// the compact avatar preference in memory for screenshot comparisons.
-/// `PHX_LAUNCHER=1` opens the composer's app launcher.
 #[path = "common/frames_impl.rs"]
 mod frames_impl;
 
@@ -21,7 +14,6 @@ fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let out = args.next().unwrap_or_else(|| "phoenix.png".into());
     let login_only = args.next().as_deref() == Some("login");
-    // PHOENIX_CSD=1: draw the window buttons like the frameless desktop window.
     if std::env::var_os("PHOENIX_CSD").is_some() {
         phoenix_app::ui::title_bar::FORCE_CLIENT_DECORATIONS.store(true, std::sync::atomic::Ordering::Relaxed);
     }
@@ -30,7 +22,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -53,7 +44,6 @@ fn main() -> anyhow::Result<()> {
         *v2.borrow_mut() = Some(v.clone());
         cx.new(|cx| Root::new(v, window, cx))
     })?;
-    // PHX_SCALE: device scale (default: the platform's). 1.25 matches the user's client.
     if let Some(scale) = std::env::var("PHX_SCALE").ok().and_then(|v| v.parse::<f32>().ok()).filter(|s| *s > 0.) {
         cx.update_window(win.into(), |_, window, _| window.set_scale_factor(scale))?;
     }
@@ -97,7 +87,6 @@ fn main() -> anyhow::Result<()> {
         })?;
         pump(&mut cx, 2);
     }
-    // PHX_LAUNCHER=1: open the composer's app launcher (mock collections).
     if std::env::var_os("PHX_LAUNCHER").is_some() {
         cx.update_window(win.into(), |_, window, _| window.refresh())?;
         pump(&mut cx, 2);
@@ -109,12 +98,10 @@ fn main() -> anyhow::Result<()> {
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

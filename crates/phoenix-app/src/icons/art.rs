@@ -1,49 +1,27 @@
-//! Multi-colour illustrations of the official client (not single-colour
-//! icons). Like the icons, they are read at runtime from the local Discord
-//! cache and written under the icon cache dir as SVG files, which `gpui::img`
-//! renders in colour. Nothing extracted is stored in the repo.
-
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use super::cache;
 
-/// Upload drop modal (865429 `icons_`): the client's default `icons` prop is
-/// `[1, 0, 2]` = document, image, code for `one`, `two`, `three`. Each art is
-/// the `background-image` of `.document_` / `.image_` / `.code_` (same module
-/// hash as `uploadDropModal_`), centred in the 100x130 `icon_` box.
 const UPLOAD: [&str; 3] = ["document", "image", "code"];
 
-/// Width of the posed canvas: the 100px `icon_` box plus 10px each side so a
-/// 36° rotation (the fly-in overshoot) of the 72x96 art isn't clipped.
 pub const UPLOAD_CANVAS_W: f32 = 120.;
 pub const UPLOAD_CANVAS_H: f32 = 130.;
-/// Extra room around the middle icon's 100x130 box for its glow
-/// (`drop-shadow(rgba(88,101,242,.5) 0 0 48px)` measured on the live client).
 pub const UPLOAD_GLOW_PAD: f32 = 60.;
-/// Largest tilt reached by the side icons during the fly-in (measured: -35.9°
-/// at 250ms), so one file per whole degree in `0..=UPLOAD_MAX_TILT`.
 pub const UPLOAD_MAX_TILT: usize = 36;
 
-/// Posed drop-modal art: the side icons at every whole degree of tilt, and
-/// the middle one with its glow baked in.
 pub struct UploadArt {
-    /// `one[d]`: document rotated by `-d` degrees.
     pub one: Vec<PathBuf>,
     pub two: PathBuf,
-    /// `three[d]`: code rotated by `+d` degrees.
     pub three: Vec<PathBuf>,
 }
 
 static UPLOAD_ICONS: OnceLock<Option<UploadArt>> = OnceLock::new();
 
-/// Posed drop-modal icons, once extracted.
 pub fn upload_icons() -> Option<&'static UploadArt> {
     UPLOAD_ICONS.get().and_then(|o| o.as_ref())
 }
 
-/// Builds the art files in `<dir>/art` (kept across runs). Runs on the
-/// extraction thread.
 pub(super) fn init(dir: &Path) {
     let _ = UPLOAD_ICONS.set(upload(&dir.join("art")));
 }
@@ -74,14 +52,12 @@ fn upload(out: &Path) -> Option<UploadArt> {
     Some(art)
 }
 
-/// Class hash following `prefix` (e.g. `TLgD1o` in `.uploadDropModal_TLgD1o{`).
 fn module_hash<'a>(css: &'a str, prefix: &str) -> Option<&'a str> {
     let rest = &css[css.find(prefix)? + prefix.len()..];
     let end = rest.find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'))?;
     (end > 0).then_some(&rest[..end])
 }
 
-/// Asset file of `<selector>{background-image:url("/assets/<file>.svg")`.
 fn art_url(css: &str, selector: &str) -> Option<String> {
     let pat = format!("{selector}{{background-image:url(\"/assets/");
     let rest = &css[css.find(&pat)? + pat.len()..];
@@ -89,7 +65,6 @@ fn art_url(css: &str, selector: &str) -> Option<String> {
     (name.ends_with(".svg") && !name.contains('/')).then(|| name.to_owned())
 }
 
-/// Pixel size from the root `<svg width=".." height="..">`.
 fn root_size(svg: &str) -> Option<(f32, f32)> {
     let open = &svg[svg.find("<svg")?..];
     let open = &open[..open.find('>')?];
@@ -101,9 +76,6 @@ fn root_size(svg: &str) -> Option<(f32, f32)> {
     Some((attr("width")?, attr("height")?))
 }
 
-/// The art centred in the `icon_` box (on the wider canvas) and rotated by
-/// `deg` around the box centre (`uploadIconAnimateInLeft/Right_` tilt; the
-/// translation is done by the layout).
 fn pose(svg: &str, deg: f32) -> Option<String> {
     let (w, h) = root_size(svg)?;
     let doc = &svg[svg.find("<svg")?..];
@@ -115,9 +87,6 @@ fn pose(svg: &str, deg: f32) -> Option<String> {
     ))
 }
 
-/// The art centred in the `icon_` box, on a canvas [`UPLOAD_GLOW_PAD`] wider
-/// on every side, with the measured `drop-shadow(rgba(88,101,242,.5) 0 0 48px)`
-/// (a CSS blur radius of 48px is a Gaussian deviation of 24).
 fn glow(svg: &str) -> Option<String> {
     let (w, h) = root_size(svg)?;
     let doc = &svg[svg.find("<svg")?..];

@@ -1,14 +1,3 @@
-//! Expression pickers (emoji, GIF, sticker popover), plus the shared
-//! keyboard routing for the composer autocomplete, quick switcher and
-//! message search.
-//!
-//! State lives in the [`Pickers`] global so the root view only needs three
-//! hooks: [`install`] (in `PhoenixApp::new`), [`render_overlays`] (in
-//! `render`) and the composer buttons calling [`toggle`].
-//!
-//! Other views open the emoji picker for reactions with
-//! [`open_emoji_picker`]`(app, EmojiTarget::Reaction { .. }, window, cx)`.
-
 pub mod emoji;
 #[rustfmt::skip]
 pub mod emoji_data;
@@ -39,12 +28,9 @@ pub use grid::{Grid, PickItem};
 pub use prefs::Prefs;
 use types::{GifHome, GifItem, StickerPackData};
 
-/// What a picked emoji is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmojiTarget {
-    /// Insert into the message composer.
     Composer,
-    /// Add a reaction to a message.
     Reaction { channel: Id, message: Id },
 }
 
@@ -61,11 +47,9 @@ pub struct OpenPicker {
     pub input: Entity<InputState>,
     pub grid: Grid,
     pub list: ListState,
-    /// Keyboard selection (index into `grid.items`).
     pub selected: usize,
     pub hovered: Option<usize>,
     pub tone_open: bool,
-    /// Where to anchor the popover (reactions); `None` = above the composer.
     pub anchor: Option<Point<Pixels>>,
     _sub: Subscription,
 }
@@ -74,7 +58,6 @@ pub struct OpenPicker {
 pub struct GifState {
     pub home: Option<GifHome>,
     pub home_loading: bool,
-    /// Query whose results are in `results` ("" = trending GIFs).
     pub shown: Option<String>,
     pub results: Vec<GifItem>,
     pub loading: bool,
@@ -86,7 +69,6 @@ pub struct GifState {
 pub struct StickerState {
     pub packs: Option<Vec<StickerPackData>>,
     pub loading: bool,
-    /// Sticker under the mouse (inspector bar), with its section title.
     pub inspected: Option<(types::StickerData, SharedString)>,
 }
 
@@ -97,15 +79,12 @@ pub struct Pickers {
     pub gifs: GifState,
     pub stickers: StickerState,
     pub soundboard: soundboard::SoundboardState,
-    /// Account frecency (settings-proto/2): "Frequently used" + favorite GIFs.
     pub frecency: Option<types::Frecency>,
     pub frecency_loading: bool,
 }
 
 impl gpui::Global for Pickers {}
 
-/// Register the picker state, the keystroke interceptor and the composer
-/// autocomplete. Call once from `PhoenixApp::new`.
 pub fn install(composer: &Entity<gpui_component::input::TextareaState>, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Vec<Subscription> {
     let weak = cx.entity().downgrade();
     cx.set_global(Pickers {
@@ -134,7 +113,6 @@ pub fn install(composer: &Entity<gpui_component::input::TextareaState>, window: 
     vec![keys, ac]
 }
 
-/// Keyboard handling for every popup we own. Returns true when consumed.
 fn route_key(app: &mut PhoenixApp, ks: &Keystroke, window: &mut Window, cx: &mut Context<PhoenixApp>) -> bool {
     let m = &ks.modifiers;
     let plain = !m.control && !m.alt && !m.platform;
@@ -170,12 +148,10 @@ pub fn open_tab(cx: &App) -> Option<(Tab, EmojiTarget)> {
     cx.try_global::<Pickers>()?.open.as_ref().map(|o| (o.tab, o.target))
 }
 
-/// Open the emoji picker, e.g. for a reaction (anchored at the mouse).
 pub fn open_emoji_picker(app: &mut PhoenixApp, target: EmojiTarget, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     open(app, Tab::Emoji, target, window, cx);
 }
 
-/// Composer buttons: open `tab`, switch to it, or close when already shown.
 pub fn toggle(app: &mut PhoenixApp, tab: Tab, target: EmojiTarget, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     match open_tab(cx) {
         Some((t, tg)) if t == tab && tg == target => close(app, window, cx),
@@ -271,7 +247,6 @@ fn on_query(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     cx.notify();
 }
 
-/// Fetch the account frecency once; rebuild the open emoji grid when it lands.
 pub fn load_frecency(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let p = cx.global_mut::<Pickers>();
     if p.frecency.is_some() || p.frecency_loading {
@@ -346,7 +321,6 @@ fn pick_selected(app: &mut PhoenixApp, keep_open: bool, window: &mut Window, cx:
     }
 }
 
-/// Use an emoji: insert it in the composer or react with it.
 pub fn pick(app: &mut PhoenixApp, item: PickItem, keep_open: bool, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     let Some((_, target)) = open_tab(cx) else { return };
     let tone = cx.global::<Pickers>().prefs.tone;
@@ -363,7 +337,6 @@ pub fn pick(app: &mut PhoenixApp, item: PickItem, keep_open: bool, window: &mut 
             }
         }
         EmojiTarget::Reaction { channel, message } => {
-            // The chat view owns reactions (optimistic update + error banner).
             let (emoji, id) = match &item {
                 PickItem::Unicode(ix) => (emoji::toned(*ix, tone), None),
                 PickItem::Custom(e) => (e.token(), Some(e.id)),
@@ -380,7 +353,6 @@ pub fn pick(app: &mut PhoenixApp, item: PickItem, keep_open: bool, window: &mut 
     cx.notify();
 }
 
-/// Fire-and-forget a backend call.
 pub(crate) fn detach<T: Send + 'static>(fut: crate::backend::BoxFuture<T>, cx: &mut App) {
     cx.background_spawn(async move {
         let _ = fut.await;
@@ -388,7 +360,6 @@ pub(crate) fn detach<T: Send + 'static>(fut: crate::backend::BoxFuture<T>, cx: &
     .detach();
 }
 
-/// Run `f` on the app from a plain element callback.
 pub(crate) fn with_app(cx: &mut App, window: &mut Window, f: impl FnOnce(&mut PhoenixApp, &mut Window, &mut Context<PhoenixApp>)) {
     let Some(app) = cx.try_global::<Pickers>().and_then(|p| p.app.upgrade()) else { return };
     app.update(cx, |a, cx| f(a, window, cx));
@@ -402,12 +373,8 @@ pub(crate) fn debounce(cx: &mut Context<PhoenixApp>, ms: u64, f: impl FnOnce(&mu
     .detach();
 }
 
-// ------------------------------------------------------------------ render
-
-/// Popups drawn above the whole window, in stacking order.
 pub fn render_overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement> {
     let mut out = Vec::new();
-    // The chat view requests the picker through `ChatState::emoji_target`.
     if let Some(t) = app.chat.emoji_target
         && !is_open(cx)
     {
@@ -429,15 +396,10 @@ pub fn render_overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<P
     out
 }
 
-// Sizes from the live client dump `picker-emoji` (positionLayer_58b0l2 subtree).
-/// --custom-emoji-picker-constants-min-emoji-picker-width
 pub const PICKER_W: f32 = 498.;
-/// contentWrapper_58b0l2 box height with the tab nav (16 + 30 + 12 + 427 + border).
 pub const PICKER_H: f32 = 486.;
-/// --custom-emoji-picker-constants-emoji-picker-height (reaction picker, no nav).
 pub const PICKER_H_NO_TABS: f32 = 440.;
 
-/// Theme token by CSS variable name.
 pub(crate) fn tk(i: usize) -> gpui::Hsla {
     c(crate::theme::tok(i))
 }
@@ -457,9 +419,6 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
             (x, y)
         }
         None => {
-            // positionLayer: right edge 24px left of the composer's right side.
-            // The right panel shown next to the chat: guild / group DM member list
-            // (--custom-member-list-width) or the DM profile panel (aside 320).
             let side = if !app.show_members {
                 0.
             } else if crate::ui::dm_profile_panel::peer(app).is_some() {
@@ -475,7 +434,6 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
             ((vw - right - PICKER_W).max(8.), (vh - 75. - ph).max(8.))
         }
     };
-    // nav_58b0l2: padding 0 16px, height 30, navItem + navItem margin-inline-start 8px
     let nav = has_tabs.then(|| {
         div()
             .flex_none()
@@ -487,8 +445,6 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
             .child(tab_button(crate::t!("picker.stickers"), Tab::Sticker, tab, cx))
             .child(tab_button(crate::t!("picker.emoji"), Tab::Emoji, tab, cx))
     });
-    // header_-sZhZn / header_rfDq2B / header_WSRqCO: padding 0 16px 12px
-    // (--custom-gif-picker-gutter-size), gap 12px, border-bottom 1px --border-subtle.
     let mut header = div()
         .flex_none()
         .px(px(16.))
@@ -518,8 +474,6 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
             .occlude()
             .on_mouse_down(gpui::MouseButton::Left, cx.listener(|a, _, w, cx| close(a, w, cx)))
             .child(
-                // contentWrapper_58b0l2: --background-surface-high, 1px --border-subtle,
-                // --radius-sm (8px), padding-top 16px, row gap 12px, --shadow-high.
                 div()
                     .id("picker")
                     .absolute()
@@ -530,8 +484,6 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
                     .rounded(px(8.))
                     .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
                     .border_1()
-                    // Without tabs (reaction picker) the shell is the bare wrapper_-sZhZn, which
-                    // `.high-contrast-mode` outlines with 1px --border-normal.
                     .border_color(tk(if nav.is_none() && crate::theme::high_contrast() {
                         idx::BORDER_NORMAL
                     } else {
@@ -565,9 +517,6 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
     )
 }
 
-/// Search field (container_0PLWhS md): height 40, --radius-sm, padding-left 4px, gap 4px,
-/// --input-background-default, 1px border (focused: --border-focus); 30px icon box with
-/// a 16px magnifier; input 16px/20px with padding-right 12px.
 pub(crate) fn search_box(input: &Entity<InputState>) -> gpui::Div {
     div()
         .flex_1()
@@ -588,8 +537,6 @@ pub(crate) fn search_box(input: &Entity<InputState>) -> gpui::Div {
         .child(div().flex_1().min_w_0().child(Input::new(input).appearance(false).bordered(false)))
 }
 
-/// "Add Emoji" (button_F7qvhY md secondary): --control-secondary-background-default,
-/// 1px --control-secondary-border-default, --radius-sm, padding 7px 15px, 16px medium.
 fn add_emoji_button() -> impl IntoElement {
     div()
         .id("picker-add-emoji")
@@ -611,8 +558,6 @@ fn add_emoji_button() -> impl IntoElement {
         .child(crate::t!("picker.add_emoji"))
 }
 
-/// navButton_58b0l2: padding 8px 12px, --radius-sm, 14px/14px weight 600, --text-default;
-/// active: --background-mod-normal + --text-strong; hover: --control-secondary-background-hover.
 fn tab_button(label: SharedString, tab: Tab, current: Tab, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let active = tab == current;
     div()
@@ -628,8 +573,6 @@ fn tab_button(label: SharedString, tab: Tab, current: Tab, cx: &mut Context<Phoe
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(tk(if active { idx::TEXT_STRONG } else { idx::TEXT_DEFAULT }))
         .when(active, |d| d.bg(tk(idx::BACKGROUND_MOD_NORMAL)).hover(|s| s.bg(tk(idx::BACKGROUND_MOD_STRONG))))
-        // `.high-contrast-mode .navButton_58b0l2` 1px --border-subtle, `.navButtonActive_58b0l2`
-        // 1px --border-normal (box-sizing border-box).
         .when(crate::theme::high_contrast(), |d| {
             d.border_1().border_color(tk(if active { idx::BORDER_NORMAL } else { idx::BORDER_SUBTLE }))
         })
@@ -640,10 +583,6 @@ fn tab_button(label: SharedString, tab: Tab, current: Tab, cx: &mut Context<Phoe
         .child(label)
 }
 
-/// Section header (wrapper_kSdzCr): height 32
-/// (--custom-expression-picker-constants-expression-picker-list-section-heading-height),
-/// padding-inline 8px 4px, --background-surface-high; optional 16px icon, label
-/// body-sm/semibold (14px/18px, --text-default) with 4px margins, 16px collapse chevron.
 pub(crate) fn section_header(lead: Option<AnyElement>, title: SharedString) -> gpui::Div {
     let fg = tk(idx::TEXT_DEFAULT);
     div()
@@ -683,7 +622,6 @@ pub(crate) fn empty_state(text: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// Hand-made fallbacks for the `picker/*` icon names (used without a local Discord).
 pub fn svg_asset(path: &str) -> Option<&'static str> {
     macro_rules! sv {
         ($b:literal) => {

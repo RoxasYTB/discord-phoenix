@@ -16,7 +16,6 @@ REPO = Path(__file__).resolve().parents[2]
 OUT_ROOT = Path("/mnt/windata/project-phoenix/compare")
 BIN = Path(os.environ.get("PHX_REAL_SHOTS", "/home/yohan/discord-phoenix/target/debug/examples/real_shots"))
 
-# Discord DOM boxes (CSS px) used to define the regions; read live through CDP.
 BOXES_JS = r"""(()=>{const q=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();
 return b.width&&b.height?[b.x,b.y,b.width,b.height].map(Math.round):null};
 return {vw:innerWidth,vh:innerHeight,dpr:devicePixelRatio,path:location.pathname,
@@ -49,19 +48,16 @@ def release_lock(env):
     subprocess.run(["node", str(CDP), "release"], capture_output=True, text=True, env=env)
 
 
-# Open profile overlay in Discord: kind, box and the user id (from React props).
 OVERLAY_JS = r"""(()=>{const o=document.querySelector('.user-profile-modal-v2')||document.querySelector('.user-profile-popout');
 if(!o)return null;const b=o.getBoundingClientRect();let id=null;
 for(const e of o.querySelectorAll('*')){const k=Object.keys(e).find(k=>k.startsWith('__reactFiber'));let f=k&&e[k];
 for(let i=0;i<8&&f&&!id;i++,f=f.return){const p=f.memoizedProps;if(p&&p.user&&p.user.id)id=p.user.id;else if(p&&p.userId)id=p.userId}if(id)break}
 return {kind:o.classList.contains('user-profile-modal-v2')?'modal':'popout',box:[b.x,b.y,b.width,b.height].map(Math.round),user:id}})()"""
 
-# Click the n-th visible member row (opens its popout); optional click on its avatar (full profile).
 OPEN_MEMBER_JS = r"""(n=>{const l=[...document.querySelectorAll('div[class^=member_]')].filter(e=>{const b=e.getBoundingClientRect();return b.y>0&&b.y<innerHeight});
 if(!l[n])return false;l[n].dataset.phxcmp=1;return true})(%d)"""
 
 
-# Transient style (removed after the capture): hide the animated profile effect layers.
 HIDE_FX_JS = r"""(()=>{const s=document.createElement('style');s.id='phx-nofx';s.textContent='[class*=profileEffects_]{visibility:hidden!important}';document.head.appendChild(s);return true})()"""
 SHOW_FX_JS = r"""(()=>{document.getElementById('phx-nofx')?.remove();return true})()"""
 
@@ -107,9 +103,7 @@ def regions_from(b):
     if mem:
         r["member list"] = [mem[0], hdr[1] + hdr[3], mem[2], H - hdr[1] - hdr[3]]
     elif dmp:
-        # 1:1 DM profile side panel (`aside_HbUF2J` in the 2026 client)
         r["dm profile panel"] = dmp
-    # Extra named regions (e.g. Friends tabs / inbox popout for PHX_VIEW captures).
     r.update(b.get("extra") or {})
     return {k: v for k, v in r.items() if v and v[2] > 0 and v[3] > 0}
 
@@ -174,7 +168,7 @@ def run(a):
         subprocess.run([str(BIN), str(p_path)], check=True, cwd=out, env=env)
 
     W, H = boxes["vw"], boxes["vh"]
-    s = float(boxes.get("dpr") or 2)  # compare at the device scale: real_shots renders at Discord's devicePixelRatio
+    s = float(boxes.get("dpr") or 2)
     size = (round(W * s), round(H * s))
     d = Image.open(d_path).convert("RGB").resize(size, Image.LANCZOS)
     p = Image.open(p_path).convert("RGB").resize(size, Image.LANCZOS)
@@ -184,7 +178,6 @@ def run(a):
     side.save(out / "side_by_side.png")
 
     diff = ImageChops.difference(d, p).convert("L")
-    # Heatmap: black = equal, yellow/red = different; region boxes drawn on top.
     lut = [min(255, v * 3) for v in range(256)]
     hot = diff.point(lut).filter(ImageFilter.BoxBlur(2))
     heat = Image.merge("RGB", (hot, hot.point(lambda v: max(0, v - 128) * 2), Image.new("L", size, 0)))

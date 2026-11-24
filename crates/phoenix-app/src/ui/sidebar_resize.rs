@@ -1,12 +1,3 @@
-//! Drag-to-resize for the channel list (`sidebarResizeHandle_pog62O`).
-//!
-//! Live vanilla client: the handle is `role=separator aria-label="Resize Sidebar"`
-//! with `aria-valuemin=264 aria-valuemax=432`, measured on `sidebar_pog62O`, which
-//! contains the guild rail (80px box). So the channel list itself spans
-//! 264-80 = 184 .. 432-80 = 352px, default `--custom-guild-sidebar-width` 268px.
-//! The width is persisted locally in `~/.config/discord-phoenix/sidebar_width`.
-//! `PHX_SIDEBAR_W` overrides it (used by `real_shots` to match the live DOM).
-
 use std::cell::Cell;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -18,9 +9,7 @@ use gpui::{
 use crate::app::PhoenixApp;
 use crate::theme::{Palette, c, m, z, zoom};
 
-/// aria-valuemin 264 minus the 80px rail.
 pub const MIN_W: f32 = 184.;
-/// aria-valuemax 432 minus the 80px rail.
 pub const MAX_W: f32 = 352.;
 
 static WIDTH: AtomicU32 = AtomicU32::new(0);
@@ -50,7 +39,6 @@ fn load() -> f32 {
         .unwrap_or(m::SIDEBAR_W)
 }
 
-/// Current channel list width (unzoomed px).
 pub fn width() -> f32 {
     let v = WIDTH.load(Ordering::Relaxed);
     if v != 0 {
@@ -73,7 +61,6 @@ pub fn set(w: f32, persist: bool) {
     }
 }
 
-/// The 4px handle on the list's right edge, plus the probe recording its left x.
 pub fn handle(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let weak = cx.entity().downgrade();
     let probe = canvas(
@@ -113,8 +100,6 @@ pub fn handle(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .size_full()
         .child(probe)
         .child(
-            // sidebarResizeHandle_: absolute, inset-inline-end 0, width 4px, margin-top 12px,
-            // z-index 101, cursor ew-resize; :hover/:active background --background-mod-strong.
             div()
                 .id("sidebar-resize")
                 .absolute()

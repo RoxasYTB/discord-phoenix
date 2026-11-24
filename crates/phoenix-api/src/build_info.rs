@@ -1,16 +1,3 @@
-//! Version numbers of the locally installed Discord desktop client, so the
-//! super properties follow the official client instead of going stale.
-//!
-//! Two tiers keep startup cheap:
-//! - [`BuildInfo::detect_fast`] reads only small files: the install's
-//!   `resources/build_info.json` (client version, channel), `Preferences`
-//!   (Chrome version) and our own cache file of the last slow scan.
-//! - [`BuildInfo::refresh_cache`] does the slow part (web build number from the
-//!   HTTP cache's JS bundles, Electron version from the binary) and writes the
-//!   cache file; run it on a background thread, it is used on the next start.
-//!
-//! Anything not found falls back to the constants in [`crate::props`].
-
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -40,7 +27,6 @@ impl Default for BuildInfo {
     }
 }
 
-/// Discord config dirs (native, Flatpak, Snap), stable channel only.
 pub fn discord_config_dirs() -> Vec<PathBuf> {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return Vec::new() };
     let xdg = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
@@ -60,7 +46,6 @@ fn cache_file() -> Option<PathBuf> {
     Some(base.join("discord-phoenix/build_info.json"))
 }
 
-/// Compare dotted versions numerically ("1.0.170" > "1.0.99").
 fn version_key(v: &str) -> Vec<u64> {
     v.split('.').map(|p| p.parse().unwrap_or(0)).collect()
 }
@@ -69,8 +54,6 @@ fn valid_version(v: &str) -> bool {
     !v.is_empty() && v.len() < 32 && v.split('.').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// Newest `app-X.Y.Z` install dir under a config dir (self-updating installs);
-/// otherwise the config dir itself when it holds `resources/` (tarball-style).
 fn install_dir(config: &Path) -> Option<PathBuf> {
     let best = std::fs::read_dir(config)
         .ok()?
@@ -85,7 +68,6 @@ fn install_dir(config: &Path) -> Option<PathBuf> {
     best.or_else(|| config.join("resources/build_info.json").is_file().then(|| config.to_path_buf()))
 }
 
-/// `(version, releaseChannel)` from `resources/build_info.json`.
 pub fn parse_build_info_json(s: &str) -> Option<(String, Option<String>)> {
     let v: serde_json::Value = serde_json::from_str(s).ok()?;
     let ver = v.get("version")?.as_str()?.to_string();
@@ -94,7 +76,6 @@ pub fn parse_build_info_json(s: &str) -> Option<(String, Option<String>)> {
     Some((ver, ch))
 }
 
-/// First `Chrome/<version>` in a text (Chromium's `Preferences` keeps the UA).
 pub fn find_chrome_version(s: &[u8]) -> Option<String> {
     find_version_after(s, b"Chrome/")
 }
@@ -113,8 +94,6 @@ fn find_version_after(s: &[u8], needle: &[u8]) -> Option<String> {
     None
 }
 
-/// Web build number from a JS bundle: `build_number:"679055"` (also the
-/// camelCase spelling some bundles use).
 pub fn find_build_number(js: &[u8]) -> Option<u64> {
     for needle in [&b"build_number:\""[..], b"buildNumber:\""] {
         let mut from = 0;
@@ -141,7 +120,6 @@ fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
 }
 
 impl BuildInfo {
-    /// Cheap detection for startup (small files only, no network).
     pub fn detect_fast() -> Self {
         let mut b = Self::default();
         if let Some(cached) = cache_file().and_then(|p| std::fs::read(p).ok()).and_then(|s| serde_json::from_slice::<BuildInfo>(&s).ok()) {
@@ -152,9 +130,6 @@ impl BuildInfo {
                 .and_then(|d| std::fs::read_to_string(d.join("resources/build_info.json")).ok())
                 .and_then(|s| parse_build_info_json(&s))
             {
-                // A client update invalidates the cached Electron/build values
-                // only if they were scanned for an older version; keep them as
-                // the best guess until the background refresh rewrites them.
                 b.client_version = ver;
                 if let Some(ch) = ch {
                     b.release_channel = ch;
@@ -168,8 +143,6 @@ impl BuildInfo {
         b
     }
 
-    /// Slow scan (hundreds of MB of HTTP cache): run off the UI thread. Writes
-    /// the result to the cache file read by [`Self::detect_fast`].
     pub fn refresh_cache() -> Self {
         let mut b = Self::detect_fast();
         for dir in discord_config_dirs() {
@@ -192,7 +165,6 @@ impl BuildInfo {
     }
 }
 
-/// Build number of the most recently cached web bundle that carries one.
 fn newest_build_number(cache: &Path) -> Option<u64> {
     let mut entries: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(cache)
         .ok()?
@@ -204,7 +176,6 @@ fn newest_build_number(cache: &Path) -> Option<u64> {
         .collect();
     entries.sort_by_key(|e| std::cmp::Reverse(e.0));
     entries.into_iter().find_map(|(_, p)| {
-        // Only Discord's own JS assets (the cache key URL is in the header).
         let mut head = [0u8; 512];
         let n = std::io::Read::read(&mut std::fs::File::open(&p).ok()?, &mut head).ok()?;
         find(&head[..n], b"/assets/", 0)?;
@@ -262,7 +233,6 @@ mod tests {
 
 #[cfg(test)]
 mod measure {
-    /// `cargo test -p phoenix-api --lib build_info::measure -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn on_this_machine() {

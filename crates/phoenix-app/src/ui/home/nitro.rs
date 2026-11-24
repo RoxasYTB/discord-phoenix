@@ -1,12 +1,3 @@
-//! "Ton Nitro" home page (/store), from the live dump nitro-home (2026-11-24,
-//! 1536x840 viewport). Structure: `navBarContent_jHfUxk` (49px, padding 0 16:
-//! NITRO wordmark, heart + "Offrir Nitro" sm overlay-secondary buttons), then
-//! the scroller (`container_IRnLy8`, content inset 32): "BONJOUR," +
-//! avatar/name, then card sections (`section_KD8RnX`: nitro-sm 24px title,
-//! 3 columns of 330x380 `card_ualTdV` cards, gap 24 / 20, radius 16,
-//! --background-surface-high, text padding 20). Discord's artwork is not
-//! reproduced: the card art area shows our Nitro glyph.
-
 use gpui::{AnyElement, Context, FontWeight, ParentElement, SharedString, Styled, Window, div, prelude::*};
 
 use crate::{
@@ -16,8 +7,6 @@ use crate::{
     ui::{avatar, icon},
 };
 
-/// (title, description) of the perk cards ("Découvre les nouveautés" and
-/// the following rows of the dump).
 const PERKS: [(&str, &str); 6] = [
     ("nitro.p_upload", "nitro.p_upload_d"),
     ("nitro.p_name_styles", "nitro.p_name_styles_d"),
@@ -27,7 +16,6 @@ const PERKS: [(&str, &str); 6] = [
     ("nitro.p_emoji", "nitro.p_emoji_d"),
 ];
 
-/// `nitro-sm_RAOoio`: 24px Ginto Nord (we use the UI font), heavy italic, uppercase.
 fn section_title(t: SharedString) -> gpui::Div {
     div()
         .mb(z(24.))
@@ -39,9 +27,6 @@ fn section_title(t: SharedString) -> gpui::Div {
         .child(SharedString::from(t.to_uppercase()))
 }
 
-/// `card_ualTdV`: 330x380, radius 16, --background-surface-high; art on top,
-/// `textContent_ualTdV` padding 20: heading-lg/semibold 20/24 --text-strong,
-/// description body-sm/normal 14/18 --text-default (margin-top 4).
 fn card(ix: usize, pill: Option<SharedString>, title: SharedString, desc: SharedString) -> AnyElement {
     div()
         .id(("nitro-card", ix))
@@ -65,7 +50,6 @@ fn card(ix: usize, pill: Option<SharedString>, title: SharedString, desc: Shared
                 .justify_center()
                 .child(icon(Icon::Nitro, 96., c(tok(idx::TEXT_BRAND)))),
         )
-        // pill_ualTdV: body-xs/semibold 12/16, top/left 24, padding 2 8, radius round, white bg.
         .children(pill.map(|p| {
             div()
                 .absolute()
@@ -94,8 +78,6 @@ fn card(ix: usize, pill: Option<SharedString>, title: SharedString, desc: Shared
 
 pub fn render(app: &mut PhoenixApp, _window: &mut Window, _cx: &mut Context<PhoenixApp>) -> AnyElement {
     let me = app.me.clone();
-    // navBarActions_jHfUxk: gap 8; sm buttons 32px, overlay-secondary
-    // (rgba(0,0,0,.56), 1px rgba(151,151,159,.16), radius 8, padding 3 11).
     let overlay_btn = |id: &'static str| {
         div()
             .id(id)
@@ -141,7 +123,6 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, _cx: &mut Context<Phoe
         .flex()
         .flex_col()
         .gap(z(12.))
-        // nitro-md_RAOoio: 32px heavy italic uppercase.
         .child(div().text_size(z(32.)).line_height(z(34.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(gpui::white()).child(SharedString::from(crate::t!("nitro.hello").to_uppercase())))
         .child(
             div()
@@ -162,8 +143,6 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, _cx: &mut Context<Phoe
         .size_full()
         .flex()
         .flex_col()
-        // mainPageScroller: black, the hero has a brand-to-black gradient covering
-        // both the navbar and the greeting (vanilla-nitro-home.png).
         .bg(gpui::black())
         .child(
             div()

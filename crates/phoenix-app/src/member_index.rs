@@ -1,15 +1,7 @@
-//! O(1) member lookup by user in a guild's member `Vec` (the UI looked them up
-//! with a linear scan several times per message row and frame).
-//!
-//! UI-thread cache keyed by guild, rebuilt when the list's length or ends
-//! change; every hit is checked against the list, so a stale index never
-//! returns the wrong member (it rebuilds and answers from the fresh one).
-
 use std::{cell::RefCell, collections::HashMap};
 
 use crate::model::{Id, Member};
 
-/// Below this a scan is as fast as hashing.
 const SCAN: usize = 48;
 
 #[derive(Default)]
@@ -32,7 +24,6 @@ fn rebuild(ix: &mut Index, ms: &[Member]) {
     ix.pos.extend(ms.iter().enumerate().map(|(i, m)| (m.user.0, i)));
 }
 
-/// `ms.iter().find(|m| m.user == user)`, in O(1) for big lists.
 pub fn find(ms: &[Member], guild: Id, user: Id) -> Option<&Member> {
     if ms.len() < SCAN {
         return ms.iter().find(|m| m.user == user);
@@ -44,7 +35,6 @@ pub fn find(ms: &[Member], guild: Id, user: Id) -> Option<&Member> {
         }
         match ix.pos.get(&user.0).map(|&i| ms.get(i)) {
             Some(Some(m)) if m.user == user => Some(m),
-            // Moved inside a same-size list: rebuild once.
             Some(_) => {
                 rebuild(ix, ms);
                 ix.pos.get(&user.0).and_then(|&i| ms.get(i)).filter(|m| m.user == user)

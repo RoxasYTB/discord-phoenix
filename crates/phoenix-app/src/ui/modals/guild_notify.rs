@@ -1,10 +1,3 @@
-//! Guild "Notification Settings" modal of the server header menu, laid out
-//! like the 2026 client (dump vanilla-guild-notifications-modal, 480px
-//! `container_dvN-MP`): mute switch, server level radios, community activity
-//! alerts, suppress switches and the channel override table.
-//! Mute and level are saved (`NavRequest::Mute` / `NotifyLevel`); the other
-//! switches keep their state for the session.
-
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
 use super::{Modal, card, close_action};
@@ -19,7 +12,6 @@ use crate::{
     },
 };
 
-/// Switches after the level radios, in the client's order.
 pub const FLAGS: [(&str, &str); 7] = [
     ("gn.in_app", "gn.in_app_desc"),
     ("gn.push", "gn.push_desc"),
@@ -33,7 +25,6 @@ pub const FLAGS: [(&str, &str); 7] = [
 pub struct State {
     pub guild: Id,
     pub muted: bool,
-    /// 0 all, 1 mentions, 2 nothing.
     pub level: u8,
     pub flags: [bool; 7],
 }
@@ -47,8 +38,6 @@ impl State {
             Mentions | Inherit => 1,
             Nothing => 2,
         };
-        // in-app alerts, push, suppress @everyone, suppress roles, highlights,
-        // mute new events, mobile push (client defaults for the unstored ones).
         let flags = [true, true, p.suppress_everyone, p.suppress_roles, false, false, true];
         Self { guild, muted: p.muted, level, flags }
     }
@@ -62,8 +51,6 @@ fn with_state(f: impl FnOnce(&mut State)) {
     });
 }
 
-/// `container_VhFsFg` switch row: label body-md/medium --text-strong,
-/// description body-sm --text-muted (gap 4), switch top-aligned, gap 24.
 fn row(id: impl Into<gpui::ElementId>, title: SharedString, desc: Option<SharedString>, on: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id.into())
@@ -72,7 +59,6 @@ fn row(id: impl Into<gpui::ElementId>, title: SharedString, desc: Option<SharedS
         .gap(z(24.))
         .cursor_pointer()
         .child(
-            // min_w_0: long descriptions wrap instead of pushing the switch out of the modal.
             div()
                 .flex_1()
                 .min_w_0()
@@ -90,7 +76,6 @@ fn label(s: SharedString) -> gpui::Div {
     div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(s)
 }
 
-/// `divider_` between groups: 1px --border-subtle, 24px around.
 fn divider() -> gpui::Div {
     div().my(z(24.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))
 }
@@ -107,7 +92,6 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         a.nav_request(NavRequest::Mute { guild: Some(guild), channel: None, muted: now, secs: None }, cx, |_, _, _| {});
         cx.notify();
     }));
-    // Server level: radioGroup_ options 36 apart.
     let radios = div().flex().flex_col().gap(z(16.)).child(label(crate::t!("gn.server_level")));
     let mut opts = div().flex().flex_col().gap(z(16.));
     for (n, k) in ["menu.notify.all", "gn.mentions", "gn.nothing"].into_iter().enumerate() {
@@ -170,14 +154,6 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
     card(480., crate::t!("menu.notify_settings"), None, body.into_any_element(), Some(footer.into_any_element()), cx)
 }
 
-/// Channel override table (vanilla-guild-notifications-modal #3142..):
-/// `channelNotificationHeaders_Onug95` (44 tall; 122px name cell with 8px
-/// margin, four 75px option cells, body-sm/medium headers), then one
-/// `override_Onug95` card per override: card_qCN-Ri primary outline (1px
-/// --border-subtle, --radius-sm, transparent), padding 10 0 10 10, 8 apart;
-/// 24x20 channel glyph at .6, name body-md/semibold --text-strong over a
-/// body-xs category byline at .6 (container padding 0 10); a 300px
-/// justify-around strip of 20px checkboxes (all / mentions / nothing / mute).
 fn override_table(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
     use crate::notifications::Level;
     let prefs = app.backend.notify_prefs().map(|p| p.guild(Some(s.guild.0))).unwrap_or_default();
@@ -244,7 +220,7 @@ fn override_table(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> 
                 .flex()
                 .pl(z(10.))
                 .py(z(10.))
-                .rounded(z(8.)) // --radius-sm
+                .rounded(z(8.))
                 .border_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .child(

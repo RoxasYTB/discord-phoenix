@@ -1,9 +1,3 @@
-//! Full-window settings layout shared by Server Settings and Channel Settings
-//! (the client's `standardSidebarView`): a sidebar column ending at the
-//! center (218px items, 6px 10px rows, 16/20 medium, header 12px bold), the
-//! content column (max 740, 60px top padding), the 36px ESC close button, and
-//! the "Careful — you have unsaved changes!" notice bar.
-
 use std::rc::Rc;
 
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, deferred, div, prelude::*};
@@ -125,8 +119,6 @@ pub fn overlay(id: &'static str, side_items: Vec<SideItem>, selected: usize, pic
 
 pub type Act = Rc<dyn Fn(&mut PhoenixApp, &mut Window, &mut Context<PhoenixApp>)>;
 
-/// The unsaved changes notice (`container_` of the settings notice): text,
-/// "Reset" link button and green "Save Changes".
 pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyElement {
     div()
         .p(z(10.))
@@ -166,17 +158,14 @@ pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyEl
         .into_any_element()
 }
 
-/// Uppercase 12px section label (`title_` eyebrow) with 8px below.
 pub fn eyebrow(t: SharedString) -> gpui::Div {
     div().pb(z(8.)).text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_SUBTLE))).child(t.to_uppercase())
 }
 
-/// Thin row divider.
 pub fn divider() -> gpui::Div {
     div().my(z(20.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))
 }
 
-/// Small text link-style button.
 pub fn link_btn(id: impl Into<gpui::ElementId>, t: SharedString, danger: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id.into())
@@ -190,4 +179,3 @@ pub fn link_btn(id: impl Into<gpui::ElementId>, t: SharedString, danger: bool) -
         .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
         .child(t)
 }
-

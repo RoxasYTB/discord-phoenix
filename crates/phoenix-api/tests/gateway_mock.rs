@@ -1,5 +1,4 @@
-//! Gateway state machine against a local mock websocket server.
-#![allow(clippy::result_large_err)] // tungstenite handshake callback signature
+#![allow(clippy::result_large_err)]
 
 use std::time::Duration;
 
@@ -34,7 +33,6 @@ impl Conn {
         Conn { ws, z: ZlibEncoder::new(), query }
     }
 
-    /// Send compressed (zlib-stream), split over two frames to exercise buffering.
     async fn send(&mut self, v: Value) {
         let data = self.z.encode(v.to_string().as_bytes());
         let (a, b) = data.split_at(data.len() / 2);
@@ -46,7 +44,6 @@ impl Conn {
         self.send(json!({"op": 10, "d": {"heartbeat_interval": interval_ms}, "s": null, "t": null})).await;
     }
 
-    /// Next client payload; heartbeats are skipped (and ACKed when `ack`).
     async fn recv_non_heartbeat(&mut self, ack: bool) -> Value {
         loop {
             let v = self.recv_any().await.expect("connection closed");
@@ -70,7 +67,6 @@ impl Conn {
         }
     }
 
-    /// Wait for a close frame, returning its code.
     async fn recv_close(&mut self) -> Option<u16> {
         loop {
             match timeout(Duration::from_secs(10), self.ws.next()).await.expect("close timeout") {
@@ -103,7 +99,6 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     cfg.invalid_session_delay = Duration::from_millis(5);
     let (handle, mut rx) = Gateway::spawn(cfg);
 
-    // ---- connection 1: identify + ready + heartbeat, then op 7 ----
     let mut c = Conn::accept(&listener).await;
     assert!(c.query.contains("v=10") && c.query.contains("compress=zlib-stream"), "{}", c.query);
     c.hello(150).await;
@@ -124,7 +119,6 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     let GatewayEvent::Ready(r) = wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await else { unreachable!() };
     assert_eq!(r.session_id, "sess-1");
 
-    // Heartbeat carries the last sequence number.
     loop {
         let hb = c.recv_any().await.unwrap();
         assert_eq!(hb["op"], 1);
@@ -145,7 +139,6 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     let GatewayEvent::Reconnecting { resume, .. } = wait_for(&mut rx, |e| matches!(e, GatewayEvent::Reconnecting { .. })).await else { unreachable!() };
     assert!(resume);
 
-    // ---- connection 2: resume, commands, then zombie (no ACKs) ----
     let mut c = Conn::accept(&listener).await;
     c.hello(300).await;
     let resume = c.recv_non_heartbeat(false).await;
@@ -158,16 +151,13 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     assert_eq!(vs["op"], 4);
     assert_eq!(vs["d"], json!({"guild_id": "1", "channel_id": "2", "self_mute": true, "self_deaf": false, "self_video": false}));
 
-    // Server requests an immediate heartbeat (op 1).
     c.send(json!({"op": 1, "d": null})).await;
     assert_eq!(c.recv_any().await.unwrap()["op"], 1);
 
-    // Never ACK: the client must detect the zombie connection and reconnect.
     let code = c.recv_close().await;
     assert_ne!(code, Some(1000));
     wait_for(&mut rx, |e| matches!(e, GatewayEvent::Disconnected { reason, .. } if reason.contains("ACK"))).await;
 
-    // ---- connection 3: resume again; invalid session (not resumable) ----
     let mut c = Conn::accept(&listener).await;
     c.hello(1000).await;
     let resume = c.recv_non_heartbeat(true).await;
@@ -176,13 +166,11 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     c.send(json!({"op": 9, "d": false})).await;
     c.recv_close().await;
 
-    // ---- connection 4: must re-identify from scratch ----
     let mut c = Conn::accept(&listener).await;
     c.hello(1000).await;
     let ident = c.recv_non_heartbeat(true).await;
     assert_eq!(ident["op"], 2);
 
-    // Shutdown closes with 1000 and ends the event stream.
     handle.shutdown();
     assert_eq!(c.recv_close().await, Some(1000));
     timeout(Duration::from_secs(5), async {

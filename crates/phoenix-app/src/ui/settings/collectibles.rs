@@ -1,11 +1,3 @@
-//! Owned collectibles for the profile editor pickers (avatar decoration,
-//! profile effect, nameplate, profile frame), from the endpoint the client
-//! calls: `GET /users/@me/collectibles-purchases?variants_return_style=2`.
-//! Each purchase has `items[]` typed 0 avatar decoration (`asset` →
-//! `cdn/avatar-decoration-presets/{asset}.png`), 1 profile effect
-//! (`thumbnailPreviewSrc` / `staticFrameSrc`), 2 nameplate (`asset` path →
-//! `cdn/assets/collectibles/{asset}static.png`), 3 profile frame.
-
 use gpui::SharedString;
 use serde_json::Value;
 
@@ -35,24 +27,13 @@ pub struct Collectible {
     pub kind: Kind,
     pub name: SharedString,
     pub preview: Option<SharedString>,
-    /// Profile effects: the full-card still (`reducedMotionSrc`) drawn over
-    /// the picker's preview card.
     pub full: Option<SharedString>,
-    /// Profile effects: the animated layers (`effects[]`).
     pub effects: Vec<EffectLayer>,
-    /// Profile frames: layers and geometry.
     pub frame: Option<FrameSpec>,
-    /// Profile effects: `animationType == ANIMATION_TYPE_PERSISTENT` (1).
     pub persistent: bool,
-    /// Profile effects: `staticFrameSrc`, shown in place of the first layer of
-    /// a persistent effect while it is not ticking (before the intro, after
-    /// the play-through).
     pub static_frame: Option<SharedString>,
 }
 
-/// One `effects[]` layer of a profile effect: an APNG drawn over the whole
-/// card from `start` ms, for `duration` ms, then (when `looping`) again after
-/// `loop_delay` ms. Higher `z` on top.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EffectLayer {
     pub src: SharedString,
@@ -61,12 +42,10 @@ pub struct EffectLayer {
     pub duration: u64,
     pub loop_delay: u64,
     pub z: i64,
-    /// `position {x, y}` in CSS px: the layer's `left` / `top`.
     pub x: f32,
     pub y: f32,
 }
 
-/// Where a frame layer sits on the card (`layers[].type` / `anchor`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Anchor {
     Top,
@@ -74,18 +53,13 @@ pub enum Anchor {
     Bottom,
 }
 
-/// A profile frame: images laid around the card. `inner_width` image px map
-/// to the card width; the art overflows by `overflow_*` image px.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FrameSpec {
-    /// (static image URL, anchor, drawn in front of the card content).
     pub layers: Vec<(SharedString, Anchor, bool)>,
     pub inner_width: f32,
     pub overflow_top: f32,
     pub overflow_bottom: f32,
     pub overflow_horizontal: f32,
-    /// Per layer: a `staple` (natural-height art sticking out by `overflow_top`
-    /// / `overflow_bottom`); otherwise a rail/border filling the card height.
     pub staple: Vec<bool>,
 }
 
@@ -122,8 +96,6 @@ fn frame(kind: Kind, item: &Value) -> Option<FrameSpec> {
         return None;
     }
     let sku = item.get("sku_id")?.as_str()?;
-    // The API spells the geometry in snake_case or camelCase (live store:
-    // innerWidth 1200, overflowTop 304, overflowHorizontal 56).
     let f = |k: &str| {
         let camel: String = k.split('_').enumerate().map(|(i, w)| if i == 0 { w.to_owned() } else { w[..1].to_uppercase() + &w[1..] }).collect();
         item.get(k).or_else(|| item.get(&camel)).and_then(Value::as_f64).unwrap_or(0.) as f32
@@ -163,7 +135,6 @@ fn item(kind: Kind, sku: u64, name: SharedString, it: &Value) -> Collectible {
         static_frame: (kind == Kind::Effect).then(|| it.get("staticFrameSrc").and_then(Value::as_str).map(|s| s.to_owned().into())).flatten() }
 }
 
-/// A `GET /collectibles-products/{sku}` reply: its first item.
 pub fn parse_product(v: &Value) -> Option<Collectible> {
     let it = v.get("items")?.as_array()?.first()?;
     let kind = Kind::from_type(it.get("type")?.as_u64()?)?;
@@ -171,14 +142,11 @@ pub fn parse_product(v: &Value) -> Option<Collectible> {
     Some(item(kind, sku, v.get("name").and_then(Value::as_str).unwrap_or_default().to_owned().into(), it))
 }
 
-/// Applied effect / frame SKUs of a profile (`user_profile.collectibles`,
-/// type 1 effect, 3 frame).
 pub fn applied_skus(c: &[Value]) -> (Option<u64>, Option<u64>) {
     let find = |t: u64| c.iter().find(|x| x.get("type").and_then(Value::as_u64) == Some(t)).and_then(|x| x.get("sku_id")?.as_str()?.parse().ok());
     (find(1), find(3))
 }
 
-/// Shop page card art: the preview of a product's first item (any kind).
 pub fn product_preview(p: &Value) -> Option<SharedString> {
     let it = p.get("items")?.as_array()?.first()?;
     preview(Kind::from_type(it.get("type")?.as_u64()?)?, it)
@@ -192,7 +160,6 @@ fn preview(kind: Kind, item: &Value) -> Option<SharedString> {
     let s = |k: &str| item.get(k).and_then(Value::as_str);
     let url = match kind {
         Kind::Decoration => format!("https://cdn.discordapp.com/avatar-decoration-presets/{}.png?size=96&passthrough=false", s("asset")?),
-        // Tiles load the thumbnail at `?width=100&height=195` (client `Rc`).
         Kind::Effect => match s("thumbnailPreviewSrc") {
             Some(t) => format!("{t}?width=100&height=195"),
             None => s("staticFrameSrc")?.to_owned(),
@@ -206,9 +173,6 @@ fn preview(kind: Kind, item: &Value) -> Option<SharedString> {
     Some(url.into())
 }
 
-/// Profile frames carry `layers[]`; the client loads each one from
-/// `media/v1/collectibles-shop/{sku}/{layer_id}/static`
-/// (`getCollectiblesItemAssetUrl`). The tile shows the first front staple.
 fn frame_layer(item: &Value) -> Option<String> {
     let sku = item.get("sku_id")?.as_str()?;
     let layers = item.get("layers")?.as_array()?;
@@ -217,13 +181,9 @@ fn frame_layer(item: &Value) -> Option<String> {
     Some(format!("https://cdn.discordapp.com/media/v1/collectibles-shop/{sku}/{}/static", l.get("id")?.as_str()?))
 }
 
-/// Picker sections fed by the shop catalogue
-/// (`GET /collectibles-categories/v2`, see `phoenix_api::rest::collectibles`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ShopCatalog {
-    /// "Nitro exclusive": products with `premium_type` 2.
     pub nitro: Vec<Collectible>,
-    /// "Check out the Shop": every other single-item product.
     pub shop: Vec<Collectible>,
 }
 
@@ -231,7 +191,6 @@ pub fn parse_shop(v: &Value) -> ShopCatalog {
     let mut out = ShopCatalog::default();
     let mut seen = std::collections::HashSet::new();
     for p in phoenix_api::rest::collectibles::products(v) {
-        // Bundles (1000) and variant groups (2000) are not picker tiles.
         let Some(kind) = p.get("type").and_then(Value::as_u64).and_then(Kind::from_type) else { continue };
         let Some(it) = p.get("items").and_then(Value::as_array).and_then(|i| i.first()) else { continue };
         let Some(sku) = it.get("sku_id").and_then(Value::as_str).and_then(|s| s.parse().ok()) else { continue };
@@ -248,8 +207,6 @@ pub fn parse_shop(v: &Value) -> ShopCatalog {
     out
 }
 
-/// Moves the items whose SKU is in `rec` to the front, in `rec` order; the
-/// rest keep their catalogue order.
 pub fn promote(items: &mut Vec<Collectible>, rec: &[u64]) {
     let mut front = Vec::new();
     for sku in rec {

@@ -1,5 +1,3 @@
-//! Runs [`ParityRequest`]s against the Discord REST API.
-
 use phoenix_api::{
     RestClient,
     rest::{
@@ -29,7 +27,6 @@ fn ids(v: &[Id]) -> Vec<phoenix_api::models::Snowflake> {
     v.iter().copied().map(sf).collect()
 }
 
-/// Chat-input commands of both indexes, deduplicated, sorted by name.
 pub fn merge_commands(indexes: &[CommandIndex]) -> Vec<SlashCommand> {
     let mut out: Vec<SlashCommand> = Vec::new();
     for idx in indexes {
@@ -55,7 +52,6 @@ pub fn merge_commands(indexes: &[CommandIndex]) -> Vec<SlashCommand> {
     out
 }
 
-/// Authors of fetched messages go to the UI first so rows show names.
 fn emit_users(emit: &EventSink, msgs: &[&phoenix_api::models::Message]) {
     let mut users = Vec::new();
     for m in msgs {
@@ -66,7 +62,6 @@ fn emit_users(emit: &EventSink, msgs: &[&phoenix_api::models::Message]) {
     }
 }
 
-/// Legacy JSON `guild_folders` (Discord replaces the whole list).
 pub fn folders_json(folders: &[FolderSync]) -> Value {
     let list: Vec<Value> = folders
         .iter()
@@ -88,7 +83,6 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
         ParityRequest::Commands { guild, channel } => {
             let scope = guild.map(|g| CommandScope::Guild(sf(g))).unwrap_or(CommandScope::Channel(sf(channel)));
             let (a, b) = tokio::join!(rest.get_command_index(scope), rest.get_command_index(CommandScope::Me));
-            // A DM without bots answers 403/404: just no commands.
             let list: Vec<_> = [a, b].into_iter().filter_map(Result::ok).collect();
             ParityReply::Commands(merge_commands(&list))
         }
@@ -171,7 +165,6 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
                     expires_ms: x.expires_at.as_deref().and_then(iso_ms),
                 })
                 .collect();
-            // Card thumbnails: `app-icons/{id}/{icon}.png?size=240` (read-only lookup).
             let mut ids: Vec<u64> = out.iter().filter_map(|x| x.app.map(|a| a.0)).collect();
             ids.sort_unstable();
             ids.dedup();
@@ -288,7 +281,6 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
         ParityRequest::ServerGuide { guild } => {
             let raw = rest.guild_home_settings(sf(guild)).await.map_err(e)?;
             let mut g = super::guide::parse_home_settings(&raw);
-            // The card is optional: the page still shows without it.
             g.profile = rest.guild_profile(sf(guild)).await.ok().map(|p| super::guide::parse_profile(&p));
             ParityReply::Guide(Box::new(g))
         }
@@ -299,7 +291,6 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
         ParityRequest::ArchivedThreads { channel } => {
             use phoenix_api::rest::threads::{ArchiveKind, merge_archived};
             let public = rest.archived_threads(sf(channel), ArchiveKind::Public, None).await.map_err(e)?;
-            // Missing permission on private threads is not an error for the browser.
             let private = rest.archived_threads(sf(channel), ArchiveKind::JoinedPrivate, None).await.unwrap_or_default();
             let has_more = public.has_more || private.has_more;
             let posts = merge_archived(public.threads, private.threads)
@@ -324,7 +315,6 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
     })
 }
 
-/// ISO 8601 / RFC 3339 timestamp to unix milliseconds.
 fn iso_ms(s: &str) -> Option<i64> {
     chrono::DateTime::parse_from_rfc3339(s).ok().map(|d| d.timestamp_millis())
 }

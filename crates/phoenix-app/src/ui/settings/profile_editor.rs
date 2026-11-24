@@ -1,31 +1,3 @@
-//! Full-screen profile editor (Settings > "Edit Profiles").
-//!
-//! Structure and values from the live vanilla dump
-//! `vanilla-settings-profile-editor` (2026-11-23, CSS px):
-//! - layer_C_WHpX padding 24 0 over the app, root 1184 wide centred
-//!   (48px each side), layoutContainer_s3DB6Y grid.
-//! - aside panel_BfN7RR editingPanel_: 242 wide, padding-top 32,
-//!   --background-base-lowest, 1px --border-subtle left/right.
-//!   header_cuaHiV: padding 4 8, gap 4, border-bottom; selectButton_VrghH6
-//!   padding 8 4 4 8 radius 8, body-md/medium 16/20 label + chevron.
-//!   content_UqVm6V: padding 16, gap 24 between group_Z5MObs (grid gap 8,
-//!   h3 body-sm/medium 14/18 --text-strong). tile_HhFoZE: radius 8,
-//!   --background-mod-subtle, bar 208x42, square 100x100, 8 apart.
-//! - outer_P1YEjQ: inner padding 80 32 0 48 over a --background-scrim.
-//!   main profile_s3DB6Y 400 wide, radius 16 16 0 0, shadow 0 4 8 .16;
-//!   banner 140, avatar 120 at (32, 80) with a 31px overlay edit button.
-//!   profileBody_: padding 4 24 32 32, gap 24; name heading-xl/semibold
-//!   24/32; username body-sm 14/18 + 4px dot + pronouns; section headings
-//!   body-xs/medium 12/16.
-//! - tabs container_y4ZEM5: padding 20 4 0; tabBarItem_ padding-bottom 16,
-//!   30 apart; panel padding 20 8 16 32, "Your widgets" body-sm/semibold.
-//! - modalHeaderButtons_: 31px secondary close button, 8px from the right,
-//!   top 40.
-//!
-//! The unsaved-changes notice sits in profileCardToastContainer_ (top of
-//! the card column, 400 wide); its contents could not be dumped (it needs
-//! a real edit), so it follows the settings notice styles.
-
 use std::path::PathBuf;
 
 use gpui::{
@@ -48,13 +20,11 @@ use crate::{
 
 type Cx<'a> = Context<'a, PhoenixApp>;
 
-/// What a save sends. `None` = unchanged.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProfilePatch {
     pub display_name: Option<String>,
     pub pronouns: Option<String>,
     pub bio: Option<String>,
-    /// data URI of the new image, or `Some(None)` to remove it.
     pub avatar: Option<Option<String>>,
     pub banner: Option<Option<String>>,
     pub theme_colors: Option<(u32, u32)>,
@@ -66,7 +36,6 @@ impl ProfilePatch {
     }
 }
 
-/// Editable text/colour values of one profile.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Draft {
     pub name: String,
@@ -75,7 +44,6 @@ pub struct Draft {
     pub theme: Option<(u32, u32)>,
 }
 
-/// Fields that differ between `orig` and `cur`, plus picked images.
 pub fn diff(orig: &Draft, cur: &Draft, avatar: Option<&str>, banner: Option<&str>) -> ProfilePatch {
     let ch = |a: &String, b: &String| (a != b).then(|| b.clone());
     ProfilePatch {
@@ -88,20 +56,16 @@ pub fn diff(orig: &Draft, cur: &Draft, avatar: Option<&str>, banner: Option<&str
     }
 }
 
-/// Preset swatches for the theme colour popover (Nitro).
 const SWATCHES: [u32; 10] = [0x00A7FF, 0x00FBFF, 0x5865F2, 0xEB459E, 0xED4245, 0xFEE75C, 0x57F287, 0x1ABC9C, 0x9B59B6, 0x23272A];
 
 pub struct EditorState {
-    /// None = main profile, Some(guild) = per-server profile.
     pub scope: Option<Id>,
     pub switcher_open: bool,
-    /// Per-server notice (`perServerNotice_cuaHiV`) dismissed.
     pub notice_hidden: bool,
     pub tab: usize,
     pub profile: Option<Profile>,
     pub original: Draft,
     pub theme: Option<(u32, u32)>,
-    /// Which theme swatch's palette is open (0 primary, 1 accent).
     pub palette: Option<u8>,
     pub name: Option<Entity<InputState>>,
     pub pronouns: Option<Entity<InputState>>,
@@ -111,21 +75,13 @@ pub struct EditorState {
     pub banner: Option<PathBuf>,
     pub saving: bool,
     pub error: Option<SharedString>,
-    /// Inputs must be rebuilt with fresh values (scope switch, reset, load).
     pub rebuild: bool,
-    /// Bumped on scope switch so stale profile fetches are dropped.
     pub generation: u32,
-    /// Board tab application widgets (`profile_widgets`).
     pub widgets: Vec<super::profile_widgets::AppWidget>,
-    /// Open collectible picker (decoration / effect / frame / nameplate).
     pub picker: Option<super::collectible_picker::PickerState>,
-    /// Owned collectibles, loaded when a picker first opens.
     pub collectibles: Option<Vec<super::collectibles::Collectible>>,
-    /// Shop catalogue ("Nitro exclusive" / "Shop" picker sections).
     pub shop: Option<super::collectibles::ShopCatalog>,
-    /// Picker choices (editor preview only, never sent).
     pub equipped: super::collectible_picker::Equipped,
-    /// Activity tab: recent played games.
     pub recent: Vec<super::profile_activity::RecentGame>,
 }
 
@@ -177,7 +133,6 @@ impl EditorState {
     }
 }
 
-/// Esc inside the editor: close the switcher / palette, else leave the editor.
 pub fn on_escape(s: &mut super::SettingsState) {
     if let Some(e) = s.profile.as_mut()
         && (e.switcher_open || e.palette.is_some() || e.picker.is_some())
@@ -269,7 +224,6 @@ fn switch_scope(app: &mut PhoenixApp, scope: Option<Id>, cx: &mut Cx) {
     cx.notify();
 }
 
-/// "Edit Per-server Profile" (guild menu): the editor opened on `guild`.
 pub fn open_scoped(app: &mut PhoenixApp, guild: Id, cx: &mut Cx) {
     let orig = original_for(app, Some(guild), None);
     let Some(s) = app.settings.as_mut() else { return };
@@ -368,7 +322,6 @@ fn pick_image(banner: bool, cx: &mut Cx) {
     .detach();
 }
 
-/// Build the inputs from the original values (needs the window).
 fn ensure_inputs(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) {
     let Some(e) = app.settings.as_ref().and_then(|s| s.profile.as_ref()) else { return };
     if !e.rebuild {
@@ -395,21 +348,15 @@ fn ensure_inputs(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) {
     });
 }
 
-/// sRGB channel mix `a*(1-t) + b*t`.
 pub(super) fn mix(a: u32, b: u32, t: f32) -> u32 {
     let ch = |v: u32, s: u32| ((v >> s) & 0xFF) as f32;
     [16, 8, 0].iter().fold(0, |acc, &s| acc | ((ch(a, s) * (1. - t) + ch(b, s) * t).round() as u32) << s)
 }
 
-/// White at an alpha: the custom-theme text colours (`rgba(255,255,255,.96)`
-/// strong, `.88` headings/tabs, `.76` add-connection; dump #3386/#3439/#3459).
 pub(super) fn white(a: f32) -> gpui::Hsla {
     gpui::hsla(0., 0., 1., a)
 }
 
-/// `--profile-gradient-modal-background-color` (outer_P1YEjQ background,
-/// dump #3324: rgb(0,40,51) for theme 00A6FF/00FBFF). Discord computes it in
-/// JS; 20% of the primary/secondary average reproduces the dumped value.
 fn modal_bg((a, b): (u32, u32)) -> u32 {
     mix(mix(a, b, 0.5), 0, 0.8)
 }
@@ -418,7 +365,6 @@ pub(super) fn hex(v: u32) -> gpui::Hsla {
     c(v & 0xFFFFFF)
 }
 
-/// Section heading of the styles panel (h3 body-sm/medium) + Nitro badge.
 fn group_label(key: &str, nitro: bool) -> Div {
     div()
         .flex()
@@ -432,7 +378,6 @@ fn group_label(key: &str, nitro: bool) -> Div {
         .when(nitro, |d| d.child(gpui::svg().path(crate::icons::path("nitro")).size(z(16.)).text_color(c(tok(idx::TEXT_STRONG)))))
 }
 
-/// tile_HhFoZE + tileInner_: radius 8, --background-mod-subtle.
 fn tile(id: &str, w: f32, h: f32, locked: bool) -> Stateful<Div> {
     div()
         .id(SharedString::from(format!("pe-tile-{id}")))
@@ -448,11 +393,8 @@ fn tile(id: &str, w: f32, h: f32, locked: bool) -> Stateful<Div> {
         .justify_center()
         .cursor_pointer()
         .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
-        // tileInner_HhFoZE:after inset 1px --border-muted ring.
         .border_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
-        // disabled_HhFoZE: opacity .5 (no lock badge in the client CSS; the
-        // Nitro glyph sits on the group label instead).
         .when(locked, |d| d.opacity(0.5))
 }
 
@@ -460,7 +402,6 @@ fn plus_icon(size: f32) -> gpui::Svg {
     gpui::svg().path(crate::icons::path("plus-circle")).size(z(size)).text_color(c(tok(idx::ICON_STRONG)))
 }
 
-/// sm overlay button (31px, rgba(0,0,0,.56), radius 8) with a 16px glyph.
 fn overlay_button(id: &str, icon: &str) -> Stateful<Div> {
     div()
         .id(SharedString::from(format!("pe-ov-{id}")))
@@ -514,7 +455,6 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                     .line_height(z(20.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(tok(idx::TEXT_STRONG)))
-                    // selectButton_VrghH6 > guildIcon_VrghH6 (20px, --radius-xs) before the name.
                     .children(e.scope.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| {
                         div().flex_none().rounded(z(4.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 20.))
                     }))
@@ -543,7 +483,6 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
     let banner_bg = e.theme.map(|t| t.0).or(e.profile.as_ref().and_then(|p| p.accent)).unwrap_or(0x5865F2);
     let banner_tile: AnyElement = match (&e.banner, e.profile.as_ref().and_then(|p| p.banner.clone())) {
         (Some(p), _) => img(p.clone()).size_full().into_any_element(),
-        // bannerImage_xC0IIt (#3293): object-fit cover in the 100x100 tile.
         (None, Some(url)) => img(url).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
         (None, None) => plus_icon(24.).into_any_element(),
     };
@@ -606,7 +545,6 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 }))
         }))
     });
-    // nameplatePreview_PaSpLC (dump #3203, 208x48): the applied plate behind the row.
     let plate = nameplate_url(app, e).map(|u| {
         div().absolute().top_0().left_0().size_full().rounded(z(8.)).overflow_hidden().child(img(u).absolute().top_0().right_0().h_full().w(z(48. * 213. / 40.)).opacity(0.6))
     });
@@ -626,7 +564,6 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 .gap(z(8.))
                 .child(tile("avatar", 100., 100., false).child(avatar_preview).on_click(cx.listener(|_, _, _, cx| pick_image(false, cx))))
                 .child(tile("decoration", 100., 100., false).map(|t| match decoration_url(e) {
-                    // decorationPreview: the avatar (72, #3249) wearing the chosen decoration.
                     Some(d) => t.child(div().relative().size(z(72.)).child(avatar(Some(me), 72.)).child(img(d).absolute().size(z(86.4)).left(z(-7.2)).top(z(-7.2)))),
                     None => t.child(plus_icon(24.)),
                 }).on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Decoration, cx))))
@@ -635,7 +572,6 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
         .child(group(
             group_label("sp.pf.name_style", true),
             tile("name-style", 208., 42., locked)
-                // displayNamePreview_ewY9mf (#3265): dnsFont_ + the style's font.
                 .child(crate::fonts::styled_name(div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))), Some(me), true).child(crate::fonts::name_text(me.display_name.clone(), Some(me), 24.)))
                 .into_any_element(),
         ))
@@ -678,10 +614,6 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
         .border_color(c(tok(idx::BORDER_SUBTLE)))
         .child(header)
         .child(div().id("pe-styles").flex_1().min_h_0().overflow_y_scroll().children((e.scope.is_some() && !e.notice_hidden).then(|| {
-            // perServerNotice_cuaHiV (vanilla-server-profile #1867): first child of the
-            // styles column; --background-feedback-mod-info, 1px --icon-feedback-info,
-            // --radius-sm, --space-8 padding; body-sm/normal 14/18 --text-default;
-            // dismiss 24px, margin -2 -2 0 auto, --icon-subtle.
             let notice = div()
                 .flex()
                 .p(z(8.))
@@ -720,19 +652,15 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 );
             div().px(z(16.)).pt(z(16.)).child(notice)
         })).child(content));
-    // The switcher popout is painted by `render` so it can overflow the panel.
     aside
 }
 
-/// Profile switcher popout: main profile + one row per server.
 fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
     let row = |id: SharedString, icon: AnyElement, name: SharedString, sub: Option<SharedString>, sel: bool| {
         div()
             .id(id)
             .flex()
             .items_center()
-            // listBoxItem_b5PEJH: r --radius-xs, hover --background-mod-normal;
-            // guildOptionRow_VrghH6: min-h --select-option-height 40, p 4 4 4 8.
             .flex_none()
             .min_h(z(40.))
             .p(z(4.))
@@ -740,7 +668,6 @@ fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
             .rounded(z(4.))
             .cursor_pointer()
             .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
-            // guildOptionLeading_VrghH6: 32x32, p 4, margin-inline-start -8.
             .child(div().flex_none().size(z(32.)).ml(z(-8.)).flex().items_center().justify_center().child(icon))
             .child(
                 div()
@@ -751,7 +678,6 @@ fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                     .child(div().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(name))
                     .children(sub.map(|s| div().truncate().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(s))),
             )
-            // selectedIcon_b5PEJH: 20px glyph, 4px inline padding.
             .when(sel, |d| d.child(div().flex_none().px(z(4.)).child(gpui::svg().path(crate::icons::path("check")).size(z(20.)).text_color(c(tok(idx::ICON_STRONG))))))
     };
     let main = row(
@@ -775,9 +701,6 @@ fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
     });
     div()
         .absolute()
-        // -switcher dump #3188 selectDropdown_vWC4bk: 264x221 at panel (9,80),
-        // --background-surface-higher, 1px --border-subtle, --radius-sm,
-        // shadow 0 2px 8px --opacity-black-16; listBox_b5PEJH padding 4.
         .top(z(80.))
         .left(z(9.))
         .w(z(264.))
@@ -800,7 +723,6 @@ fn section(key: &str, color: gpui::Hsla, body: impl IntoElement) -> Div {
         .child(body)
 }
 
-/// Inline edit box (container_CJLDJI): radius 8, hover/focus fill.
 fn inline_field(child: AnyElement) -> Div {
     div().rounded(z(8.)).px(z(7.)).ml(z(-7.)).hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))).child(child)
 }
@@ -813,7 +735,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
         (None, Some(url)) => img(url).w_full().h(z(140.)).into_any_element(),
         _ => div().w_full().h(z(140.)).bg(hex(banner_col)).into_any_element(),
     };
-    // Avatar cut-out ring = the card colour behind it (primary under the overlay).
     let ring = match e.theme {
         Some(t) => hex(mix(t.0, 0, 0.6)),
         None => c(tok(idx::BACKGROUND_SURFACE_HIGH)),
@@ -823,9 +744,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
         None => crate::ui::avatar_with_status(Some(me), 112., app.presence_of(me.id), ring).into_any_element(),
     };
     let themed = e.theme.is_some();
-    // .custom-user-profile-theme .profile_s3DB6Y: linear-gradient(primary,
-    // primary --custom-user-profile-banner-height (140), secondary); its :before
-    // = --profile-gradient-overlay-color (dark theme: black/.6) on top.
     let card_layers: Vec<Div> = match e.theme {
         Some(t) => vec![
             div().absolute().top_0().left_0().right_0().h(z(140.)).bg(hex(t.0)),
@@ -847,12 +765,9 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
         None => SharedString::from(e.original.name.clone()).into_any_element(),
     };
     let pronouns: AnyElement = match &e.pronouns {
-        // container_IEutSJ compact_ (#3399): 134 wide, no inline offset.
         Some(i) => div().w(z(134.)).child(Input::new(i).appearance(false).bordered(false)).into_any_element(),
         None => SharedString::from(e.original.pronouns.clone()).into_any_element(),
     };
-    // Unfocused, the client shows the rendered bio (markup_ku1OHH bio_qjJ3Wv,
-    // links in --text-link, dump #3447) over the editable box (#3443).
     let bio_text: SharedString = e.bio.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_else(|| e.original.bio.clone()).into();
     let bio: AnyElement = match &e.bio {
         Some(i) if bio_focused || bio_text.is_empty() => Textarea::new(i).appearance(false).bordered(false).into_any_element(),
@@ -892,7 +807,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .flex()
                 .flex_col()
                 .child(inline_field(
-                    // dnsFont_OAgVZM + font class (dump #3387): the name style font and first colour.
                     crate::fonts::styled_name(div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(strong), Some(me), true)
                         .child(name)
                         .into_any_element(),
@@ -903,12 +817,12 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                         .items_center()
                         .gap(z(6.))
                         .h(z(32.))
-                        .mt(z(4.)) // usernameAndPronounsRow_ at body+44 (#3395)
+                        .mt(z(4.))
                         .text_size(z(14.))
                         .line_height(z(18.))
                         .text_color(strong)
                         .child(me.name.clone())
-                        .child(div().size(z(4.)).mx(z(1.)).rounded_full().bg(strong)) // dotSpacer_C2XpHA
+                        .child(div().size(z(4.)).mx(z(1.)).rounded_full().bg(strong))
                         .child(div().flex_none().rounded(z(8.)).hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))).italic().child(pronouns))
                         .when_some(me.tag.clone(), |d, t| d.child(tag_select(t, strong)))
                         .when_some(badges_row(e.profile.as_ref()), |d, b| d.child(b)),
@@ -919,9 +833,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .flex()
                 .gap(z(8.))
                 .child(
-                    // Own profile: the button is disabled (opacity .5, dump #3421);
-                    // themed it takes --profile-gradient-button-color (JS-computed,
-                    // approximated as 40% of the primary).
                     controls::button_icon("pe-msg", "chat", crate::t!("pe.send_message"), BtnKind::Primary)
                         .h(z(31.))
                         .min_w(z(0.))
@@ -931,11 +842,9 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                         .opacity(0.5)
                         .when_some(e.theme, |b, t| b.bg(hex(gradient_button_color(t.0)))),
                 )
-                .child(sec_btn("shop", "shop")) // "Boutique" (dump #3427))
+                .child(sec_btn("shop", "shop"))
                 .child(sec_btn("more", "more-vertical")),
         )
-        // editable_IEutSJ (#3443) starts right under the heading (-8 of the
-        // section gap), markup at +5/+7 (#3444).
         .child(section("pe.bio", heading, inline_field(div().mt(z(-8.)).pt(z(5.)).pb(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(strong).child(bio).into_any_element())))
         .child(section(
             "pe.member_since",
@@ -956,8 +865,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .child(gpui::svg().path(crate::icons::path("plus")).size(z(18.)).text_color(if themed { white(0.76) } else { c(tok(idx::TEXT_MUTED)) }))
                 .child(crate::t!("pe.add_connection")),
         ))
-        // Note section (#3462-#3475): container_IEutSJ note_nr7Zul margin -4 -7 0,
-        // notePreview_zt0NuP body-sm 14/18, placeholder when empty.
         .child(section(
             "pe.note",
             heading,
@@ -974,7 +881,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                     None => d.text_color(if themed { white(0.6) } else { c(tok(idx::TEXT_MUTED)) }).child(crate::t!("profile.note_placeholder")),
                 }),
         ));
-    // Applied effect / frame (picker choice or the profile's own), see `ui::profile_fx`.
     let effect = applied(app, e, super::collectibles::Kind::Effect, cx).and_then(|c| crate::ui::profile_fx::effect(&c, 400., cx));
     let frame = applied(app, e, super::collectibles::Kind::Frame, cx).and_then(|c| c.frame);
     let inner = div()
@@ -995,7 +901,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .h(z(220.))
                 .flex_none()
                 .child(div().id("pe-banner").group("pe-banner").relative().child(banner).child(
-                    // editButton_Pi_vdk: opacity 0 until hover (dump #3336).
                     div().absolute().top(z(8.)).right(z(8.)).opacity(0.).group_hover("pe-banner", |s| s.opacity(1.)).child(overlay_button("banner", "pen")),
                 ))
                 .child(
@@ -1011,17 +916,13 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                         .items_center()
                         .justify_center()
                         .child(av)
-                        // Avatar decorations are drawn at 1.2x the avatar, centred.
                         .children(decoration_url(e).map(|d| img(d).absolute().size(z(134.4)).left(z(-7.2)).top(z(-7.2))))
                         .child(
-                            // editButton_2IR9L0: opacity 0 until hover (dump #3344).
                             div().absolute().top(z(44.)).left(z(44.)).opacity(0.).group_hover("pe-avatar", |s| s.opacity(1.)).child(overlay_button("avatar", "pen")),
                         ),
                 ),
         )
         .when_some(app.people.custom_status.clone(), |d, t| {
-            // container_rmCN9_ editable (dump #3358-#3362): at card (172, 132),
-            // radius 16, padding 8 12, body-sm 14/18, 2 lines max, shadow 0 1 4 .14.
             d.child(
                 div()
                     .absolute()
@@ -1041,9 +942,7 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
             )
         })
         .child(div().id("pe-card-body").flex_1().min_h_0().overflow_y_scroll().child(body))
-        // profileEffects_ZjcCyW: z-index 2, above the card content.
         .children(effect);
-    // The frame art overflows the card, so it lives on an unclipped wrapper.
     div()
         .relative()
         .w(z(400.))
@@ -1055,8 +954,6 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
         .children(frame.as_ref().and_then(|f| crate::ui::profile_fx::frame(f, 400., true, cx)))
 }
 
-/// Applied effect / frame / nameplate: the picker choice ("Apply", preview
-/// only), else what the profile has applied (resolved by SKU).
 fn applied(app: &PhoenixApp, e: &EditorState, kind: super::collectibles::Kind, cx: &mut Cx) -> Option<super::collectibles::Collectible> {
     use super::collectibles::Kind;
     let sku = match e.equipped.get(kind) {
@@ -1070,7 +967,6 @@ fn applied(app: &PhoenixApp, e: &EditorState, kind: super::collectibles::Kind, c
     applied_item(e, kind, sku).cloned().or_else(|| crate::ui::profile_fx::product(app, sku, cx))
 }
 
-/// Nameplate image in the editor: picker choice, else the user's own.
 fn nameplate_url(app: &PhoenixApp, e: &EditorState) -> Option<SharedString> {
     use super::collectibles::Kind;
     match e.equipped.get(Kind::Nameplate) {
@@ -1080,15 +976,11 @@ fn nameplate_url(app: &PhoenixApp, e: &EditorState) -> Option<SharedString> {
     }
 }
 
-/// The applied collectible: owned, or a shop / Nitro item applied for
-/// preview (the client previews any applied item, owned or not).
 fn applied_item(e: &EditorState, kind: super::collectibles::Kind, sku: u64) -> Option<&super::collectibles::Collectible> {
     let shop = e.shop.as_ref().into_iter().flat_map(|s| s.nitro.iter().chain(&s.shop));
     e.collectibles.iter().flatten().chain(shop).find(|c| c.sku == sku && c.kind == kind)
 }
 
-/// Decoration shown in the editor: the picker choice ("Apply", preview
-/// only) or the profile's current one.
 fn decoration_url(e: &EditorState) -> Option<SharedString> {
     use super::collectibles::Kind;
     match e.equipped.get(Kind::Decoration) {
@@ -1098,7 +990,6 @@ fn decoration_url(e: &EditorState) -> Option<SharedString> {
     }
 }
 
-/// Bio rendered like the client's preview: bare http(s) links in --text-link.
 pub(super) fn bio_markup(t: SharedString) -> gpui::StyledText {
     let link = gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() };
     let mut hl = Vec::new();
@@ -1117,9 +1008,6 @@ pub(super) fn bio_markup(t: SharedString) -> gpui::StyledText {
     gpui::StyledText::new(t).with_highlights(hl)
 }
 
-/// Server tag select (selectButtonPill_C3qxaU, dump #3408-#3411): 24 high,
-/// padding 0 6 0 8, r8, --background-mod-normal + 1px --border-subtle; content
-/// body-xs 12/16 gap 2, badge 14, chevron 16 with margin-left 2.
 fn tag_select((t, badge): (SharedString, Option<SharedString>), color: gpui::Hsla) -> Div {
     div()
         .flex_none()
@@ -1147,8 +1035,6 @@ fn tag_select((t, badge): (SharedString, Option<SharedString>), color: gpui::Hsl
         .child(gpui::svg().path(crate::icons::path("chevron")).size(z(16.)).ml(z(2.)).text_color(color))
 }
 
-/// Profile badges (container_IqWmhA managed_ customizable_, dump #3412):
-/// padding 1 3, margin 1 0, gap 2, r8, 20px badges.
 pub(super) fn badges_row(p: Option<&Profile>) -> Option<Div> {
     let b = p.map(|p| p.badges.as_slice()).unwrap_or_default();
     (!b.is_empty()).then(|| {
@@ -1168,7 +1054,6 @@ pub(super) fn badges_row(p: Option<&Profile>) -> Option<Div> {
     })
 }
 
-/// sRGB channel to linear.
 fn lin(v: f32) -> f32 {
     if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
 }
@@ -1182,7 +1067,6 @@ fn luminance(rgb: u32) -> f32 {
     0.2126 * ch(16) + 0.7152 * ch(8) + 0.0722 * ch(0)
 }
 
-/// Lab (D65) lightness shift by `d`, like chroma.js darken/brighten (18 per step).
 fn lab_shift(rgb: u32, d: f32) -> u32 {
     let ch = |s: u32| lin(((rgb >> s) & 0xff) as f32 / 255.);
     let (r, g, b) = (ch(16), ch(8), ch(0));
@@ -1202,9 +1086,6 @@ fn lab_shift(rgb: u32, d: f32) -> u32 {
     (q(r) << 16) | (q(g) << 8) | q(b)
 }
 
-/// --profile-gradient-button-color: the client walks the primary colour in Lab
-/// steps until its contrast with white is in [7, 10] (HighContrastText 7,
-/// tolerance 3, at most 100 steps).
 pub(super) fn gradient_button_color(primary: u32) -> u32 {
     let contrast = |c: u32| 1.05 / (luminance(c) + 0.05);
     let mut c = primary;
@@ -1234,7 +1115,7 @@ fn tabs(e: &EditorState, cx: &mut Cx) -> Div {
             .border_b_2()
             .border_color(if sel { c(tok(idx::TEXT_STRONG)) } else { gpui::transparent_black() })
             .text_size(z(16.))
-            .line_height(z(14.)) // item_6zZYhF line-height 14px, padding-bottom 16
+            .line_height(z(14.))
             .font_weight(FontWeight::MEDIUM)
             .text_color(if sel { strong } else { dim })
             .cursor_pointer()
@@ -1249,7 +1130,6 @@ fn tabs(e: &EditorState, cx: &mut Cx) -> Div {
     let wcol = super::profile_widgets::WidgetColors {
         strong,
         muted: dim,
-        // --user-profile-overlay-background (themed: rgba(151,151,159,.16), dump #3498).
         card: if themed { gpui::hsla(240. / 360., 0.04, 0.61, 0.16) } else { c(tok(idx::BACKGROUND_MOD_SUBTLE)) },
         fade: match e.theme {
             Some(t) => hex(mix(modal_bg(t), 0, 0.3)),
@@ -1277,21 +1157,12 @@ fn tabs(e: &EditorState, cx: &mut Cx) -> Div {
         .min_w_0()
         .flex()
         .flex_col()
-        // container_y4ZEM5 padding 20 4 0 / margin 0 -4; tabListScroller_ margin
-        // -4 -4 -14 28 + padding 4 20 4 4 → tabs at x+32, y+20 (dump #3476-#3479);
-        // tabPanelScroller_ padding-top 20 → panel 48px below the tab text.
         .pt(z(20.))
         .child(div().pl(z(32.)).pr(z(16.)).child(bar))
         .child(div().pt(z(17.)).pl(z(32.)).pr(z(16.)).flex().flex_col().gap(z(12.)).child(panel).children(board))
 }
 
-/// Unsaved-changes notice over the card column.
 fn unsaved_bar(e: &EditorState, cx: &mut Cx) -> Div {
-    // profileCardToastContainer_s3DB6Y: left --custom-modal-v2-padding (48),
-    // top padding + 0 (no system bar / private banner) + --space-8 = 56,
-    // width --custom-modal-v2-profile-width (400), z 7. Toast container_aTnRjo:
-    // --background-surface-highest, 1px --border-subtle, --radius-sm,
-    // padding-block 10, inline 16 10; actions_aTnRjo gap 10.
     div()
         .absolute()
         .top(z(56.))
@@ -1315,7 +1186,6 @@ fn unsaved_bar(e: &EditorState, cx: &mut Cx) -> Div {
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .font_weight(FontWeight::MEDIUM)
-                // message_aTnRjo: --text-default, ellipsis
                 .truncate()
                 .text_color(c(tok(idx::TEXT_DEFAULT)))
                 .child(e.error.clone().unwrap_or_else(|| crate::t!("pe.unsaved"))),
@@ -1377,12 +1247,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
             }
             cx.notify();
         }));
-    // Themed backdrop (dump #3324-#3328): outer_P1YEjQ = modal background
-    // colour; inner_P1YEjQ gradient mix(overlay black/.6, modal) 80% → 20% at
-    // 300px (= black .48 → .12 over the modal colour); backgroundImage_s3DB6Y =
-    // banner (size=1536, background-size 100%) at opacity .3, saturate .5,
-    // masked out by 280px (blur 15px not reproducible: GPUI has no backdrop
-    // filter); scrim_cNDDnH opacity 0.
     let backdrop: Vec<AnyElement> = match e.theme {
         Some(t) => {
             let m = hex(modal_bg(t));
@@ -1465,8 +1329,6 @@ mod tests {
 
     #[test]
     fn button_color_matches_client() {
-        // Dump #3421: theme primary #00A7FF gives rgb(0, 77, 154).
-        // chroma.js rounds Lab slightly differently: allow 1/255 per channel.
         let got = gradient_button_color(0x00A7FF);
         for sh in [16, 8, 0] {
             assert!((((got >> sh) & 0xff) as i32 - ((0x004D9A >> sh) & 0xff)).abs() <= 1, "{got:06x}");

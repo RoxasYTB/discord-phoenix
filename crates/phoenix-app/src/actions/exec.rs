@@ -1,5 +1,3 @@
-//! Runs [`ActionRequest`]s against the Discord REST API (real backend).
-
 use phoenix_api::{
     RestClient,
     models as api,

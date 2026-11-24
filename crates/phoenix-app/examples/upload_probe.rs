@@ -1,14 +1,3 @@
-//! Real upload check, hard-locked to the two channels the user allowed test
-//! sends in: #général and the #phoenix sandbox of the "Aperture Sciences" test
-//! server. Uses the same REST flow as the app (upload slots, chunked PUT to
-//! Cloud Storage, JSON message). Prints the steps and the progress, never the
-//! token or the signed URLs.
-//!
-//! ```sh
-//! PROBE_CHANNEL=phoenix|general PROBE_CHUNK_KIB=4096 \
-//!   cargo run -p phoenix-app --example upload_probe -- "<what is tested>" <file>[:spoiler][:alt=text] ...
-//! ```
-
 use std::sync::Arc;
 
 use phoenix_api::{
@@ -19,7 +8,6 @@ use phoenix_api::{
 use phoenix_app::discord_backend::store::{KeyringStore, TokenStore};
 
 const TEST_GUILD: u64 = 1369382919948210248;
-/// The only channels this probe may ever post to, with a part of their name.
 const GENERAL: (u64, &str) = (1403447573389381652, "général");
 const SANDBOX: (u64, &str) = (1574797385463496724, "phoenix");
 
@@ -63,7 +51,6 @@ fn main() -> anyhow::Result<()> {
             .map_err(anyhow::Error::msg)?
             .ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
         let rest = RestClient::new(token.expose(), ClientProperties::linux_desktop());
-        // Guard: guild and channel names checked by GET before anything is sent.
         let ch = rest.get_channel(Snowflake(channel)).await?;
         let guild = rest.request_json(reqwest::Method::GET, &format!("/guilds/{TEST_GUILD}"), None).await?;
         let gname = guild["name"].as_str().unwrap_or_default();

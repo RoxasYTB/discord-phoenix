@@ -1,10 +1,3 @@
-//! "Nouveaux messages non lus" / "N nouvelle(s) mention(s)" bars over the
-//! channel list, shown when unread or mentioned channels are scrolled out of
-//! view. Behaviour observed from the live client's `ChannelListUnreadsStore`
-//! (only COMMUNITY guilds; a mention bar wins over an unread bar; at most one
-//! unread bar). Layout: `unreadTop_ysO7Gy` / `unreadBottom_ysO7Gy` (padding 8,
-//! inset-inline 0) holding a `bar_oJAkDB` (dump vanilla-threads-lrer #614/#615).
-
 use gpui::{FontWeight, IntoElement, ParentElement, Styled, div, prelude::*, px};
 
 use crate::app::{PhoenixApp, SidebarRow};
@@ -16,7 +9,6 @@ enum Mode {
     Mentions(u32),
 }
 
-/// What one side of the list hides: first target row (list index) + mode.
 #[derive(Default)]
 struct Side {
     unread: Option<usize>,
@@ -24,7 +16,6 @@ struct Side {
     mentions: u32,
 }
 
-/// The top and bottom bars to draw (list item index to scroll to, mode).
 type Bar = Option<(usize, Mode)>;
 
 fn bars(app: &PhoenixApp) -> (Bar, Bar) {
@@ -42,7 +33,7 @@ fn bars(app: &PhoenixApp) -> (Bar, Bar) {
         if !unread && ch.mentions == 0 {
             continue;
         }
-        let ix = r + 1; // item 0 is the top spacer / banner
+        let ix = r + 1;
         let (side, is_above) = match (list.item_is_above_viewport(ix), list.item_is_below_viewport(ix)) {
             (Some(true), _) => (&mut above, true),
             (_, Some(true)) => (&mut below, false),
@@ -51,10 +42,9 @@ fn bars(app: &PhoenixApp) -> (Bar, Bar) {
                 mention_visible |= ch.mentions > 0;
                 continue;
             }
-            _ => continue, // not laid out yet
+            _ => continue,
         };
         if unread {
-            // Above: the nearest one is the last; below: the first.
             if is_above || side.unread.is_none() {
                 side.unread = Some(ix);
             }
@@ -80,7 +70,6 @@ fn bars(app: &PhoenixApp) -> (Bar, Bar) {
     (top.filter(|_| show_top), bottom.filter(|_| show_bottom))
 }
 
-/// Overlays for the channel list area (an absolutely positioned parent).
 pub fn render(app: &PhoenixApp) -> Vec<gpui::AnyElement> {
     let (top, bottom) = bars(app);
     let mut out = Vec::new();
@@ -104,14 +93,14 @@ fn bar_el(app: &PhoenixApp, ix: usize, mode: Mode, top: bool) -> gpui::AnyElemen
         .absolute()
         .left_0()
         .right_0()
-        .p(z(8.)) // `unread_ysO7Gy container_oJAkDB` padding 8px
+        .p(z(8.))
         .when(top, |d| d.top_0())
         .when(!top, |d| d.bottom_0())
         .child(
             div()
                 .id(if top { "channels-unread-top" } else { "channels-unread-bottom" })
-                .h(z(24.)) // bar_oJAkDB height 24px
-                .rounded(z(12.)) // bar_oJAkDB border-radius 12px
+                .h(z(24.))
+                .rounded(z(12.))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -120,12 +109,10 @@ fn bar_el(app: &PhoenixApp, ix: usize, mode: Mode, top: bool) -> gpui::AnyElemen
                 .border_1()
                 .map(|d| {
                     if mention {
-                        // mention_oJAkDB
                         d.bg(c(tok(idx::BACKGROUND_FEEDBACK_NOTIFICATION)))
                             .border_color(c(tok(idx::BORDER_SUBTLE)))
                             .shadow(crate::ui::inbox::shadow_medium())
                     } else {
-                        // unread_oJAkDB + bar_oJAkDB box-shadow 0 2px 6px --opacity-black-24
                         d.bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST))).border_color(c(tok(idx::BORDER_NORMAL))).shadow(vec![
                             gpui::BoxShadow {
                                 color: c(tok(idx::OPACITY_BLACK_24)),
@@ -137,7 +124,6 @@ fn bar_el(app: &PhoenixApp, ix: usize, mode: Mode, top: bool) -> gpui::AnyElemen
                         ])
                     }
                 })
-                // body-xs/semibold, uppercase (bar_oJAkDB text-transform)
                 .text_size(z(12.))
                 .line_height(z(16.))
                 .font_weight(FontWeight::SEMIBOLD)

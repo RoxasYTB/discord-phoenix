@@ -1,7 +1,3 @@
-//! Channel sidebar (268px, `--custom-guild-sidebar-width`): guild header,
-//! channel tree / DM list, and the floating panels card (voice + user).
-
-/// `--radius-sm`: channel and DM rows in the refreshed client.
 const ROW_RADIUS: f32 = 8.;
 
 use crate::ui::tooltip::Tipped as _;
@@ -19,7 +15,6 @@ use crate::{
     ui::{badge, icon},
 };
 
-/// Colour of a generated CSS token.
 fn t(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
@@ -34,12 +29,7 @@ pub fn channel_icon(kind: ChannelKind) -> Icon {
     }
 }
 
-/// Sidebar rows for the current selection: DMs, or the guild channel tree
-/// with collapsed categories (persisted), hidden muted channels, threads
-/// under their parent and live voice members.
 pub fn build_rows(app: &mut PhoenixApp) {
-    // Keep the scroll position anchored on the same row across rebuilds (unread,
-    // voice or typing updates), like the live client; item 0 is the banner/spacer.
     let anchor = app.sidebar_list.logical_scroll_top();
     let anchor_row = anchor.item_ix.checked_sub(1).and_then(|i| app.sidebar_rows.get(i).copied());
     let old_guild = app.sidebar_rows_guild;
@@ -69,7 +59,6 @@ pub fn build_rows(app: &mut PhoenixApp) {
                 let selected = Some(id) == app.selected_channel
                     || app.selected_channel.and_then(|s| app.nav.thread_parent(s)) == Some(id);
                 let collapsed = current_cat.is_some_and(|c| app.collapsed.contains(&c));
-                // Collapsed categories still show the selected / unread channels.
                 if collapsed && !selected && !(ch.unread && !ch.muted) && ch.voice_users.is_empty() {
                     continue;
                 }
@@ -82,9 +71,6 @@ pub fn build_rows(app: &mut PhoenixApp) {
                         rows.push(SidebarRow::Thread(t.id));
                     }
                 }
-                // Live client (channel list, 2026-11-23): voice users are listed by their
-                // shown name (guild nick, else display name), case-insensitively.
-                // Stage: only speakers get rows; `suppress` users go to the audience strip.
                 let stage = ch.kind == ChannelKind::Stage;
                 let mut vu: Vec<(String, Id)> = ch
                     .voice_users
@@ -93,14 +79,12 @@ pub fn build_rows(app: &mut PhoenixApp) {
                     .map(|u| (voice_user_name(app, *u).to_lowercase(), *u))
                     .collect();
                 vu.sort();
-                // "Hide Names": one row holding the avatar strip (rendered by the first user).
                 let take = if crate::ui::voice_row::names_hidden(id) { 1 } else { usize::MAX };
                 rows.extend(vu.into_iter().take(take).map(|(_, u)| SidebarRow::VoiceUser { user: u }));
                 if stage && ch.voice_users.iter().any(|u| crate::ui::voice_panel::flags(*u).suppress) {
                     rows.push(SidebarRow::StageAudience(id));
                 }
             }
-            // Drop (expanded) categories left empty by hidden muted channels.
             if hide_muted {
                 let keep: Vec<SidebarRow> = rows
                     .iter()
@@ -131,7 +115,6 @@ pub fn build_rows(app: &mut PhoenixApp) {
     }
 }
 
-/// Name a voice user row shows: guild nick, else display name.
 pub fn voice_user_name(app: &PhoenixApp, user: Id) -> SharedString {
     app.member_nick(user)
         .or_else(|| app.users.get(&user).map(|u| u.display_name.clone()))
@@ -140,7 +123,6 @@ pub fn voice_user_name(app: &PhoenixApp, user: Id) -> SharedString {
 
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let entity = cx.entity();
-    // Re-render while the top of the list is in view so the banner follows the scroll.
     let weak = entity.downgrade();
     app.sidebar_list.set_scroll_handler(move |ev: &gpui::ListScrollEvent, _w, cx: &mut App| {
         if ev.visible_range.start <= 1 {
@@ -153,7 +135,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .h_full()
         .flex()
         .flex_col()
-        .bg(c(Palette::BG_TERTIARY)) // the client's sidebar_ is transparent over bg_ (the rail colour) in every theme (CDP 2026-11-24)
+        .bg(c(Palette::BG_TERTIARY))
         .rounded_tl(z(m::FRAME_RADIUS))
         .overflow_hidden()
         .relative()
@@ -171,8 +153,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .when_some(app.selected_guild.filter(|_| app.nav.guild_menu), |d, g| {
             d.child(crate::ui::guild_menu::render(app, g, m::HEADER_H + 4., cx))
         })
-        // Frame border drawn over the content, not as layout border: the live rows sit
-        // at sidebarList_.x + 10 (the 1px border does not push them right).
         .child(
             div()
                 .absolute()
@@ -188,7 +168,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
 fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
     match app.selected_guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)) {
         None => div()
-            .h(px(m::HEADER_H + 1.)) // + the frame border, now drawn over the content
+            .h(px(m::HEADER_H + 1.))
             .flex_none()
             .px(z(10.))
             .flex()
@@ -196,9 +176,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
             .border_b_1()
             .border_color(t(idx::BORDER_SUBTLE))
             .child(
-                // dump -channels-me+ #588: `button_F7qvhY sm secondary fullWidth`: ~31px,
-                // radius 8, `--control-secondary-background-default`, 1px `--border-muted`,
-                // centered `body-sm/medium` (14/18) `--text-strong`.
                 div()
                     .w_full()
                     .h(z(31.))
@@ -222,10 +199,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
             .into_any_element(),
         Some(g) => {
             let hash = app.nav.banners.get(&g.id).cloned();
-            // The refreshed client only shows a banner when the guild has one.
             let full_h = ((crate::ui::sidebar_resize::width() + m::sidebar_extra_w()) * 9. / 21.).round();
-            // Live client (`animatedContainer_XH4OpX`, 2026-11-23): the banner scrolls up with
-            // the list and is gone (opacity 0) once only the header bar is left.
             let top = app.sidebar_list.logical_scroll_top();
             let scrolled = if top.item_ix > 0 { f32::MAX } else { f32::from(top.offset_in_item) };
             let banner_h = full_h - scrolled.min(full_h);
@@ -249,8 +223,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                 format!("https://cdn.discordapp.com/banners/{gid}/{hash}.{ext}?size=480").into()
                             };
                             let animated = hash.starts_with("a_");
-                            // Explicit width: with only left/right, taffy sizes the image from its aspect
-                            // ratio (16:9 at 144 px tall = 256 px), leaving the right of the banner empty.
                             d.child(gpui::img(url("png")).absolute().bottom_0().left_0().right_0().w_full().h(px(full_h)).object_fit(gpui::ObjectFit::Cover))
                                 .when(animated, |d| {
                                     d.child(
@@ -279,11 +251,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         )
                 })
                 .child({
-                    // `header_XH4OpX` (dump -channels-N-N+ #588): `--custom-channel-header-height`,
-                    // padding `--space-xs` (10px cozy), 1px `--border-subtle` bottom.
-                    // `guildDropdown_XH4OpX` (#590): 32px, padding 0 10, radius 8, gap 2;
-                    // name `body-md/semibold` (16/20) + 16px chevron. `inviteButton_XH4OpX`
-                    // (#609): 32px, radius 8, 20px glyph.
                     let fg = if banner.is_some() { gpui::white() } else { t(idx::TEXT_STRONG) };
                     div()
                         .absolute()
@@ -315,8 +282,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                     cx.notify();
                                 }))
                                 .child(
-                                    // vanilla-guild-text #616 guildBadgeAndName_: gap 10; #617/#619
-                                    // guildIconV2Container_ 20px holding an 18px guildBadge_ (Discovery).
                                     div()
                                         .min_w_0()
                                         .flex()
@@ -324,8 +289,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                         .gap(z(10.))
                                         .when(g.discoverable, |d| {
                                             d.child(
-                                                // GuildBadge DISCOVERABLE → ExperimentalWebBadgeIcon 18px,
-                                                // two tones: --badge-inverted-background / --badge-inverted-text.
                                                 div().w(z(20.)).flex_none().flex().justify_center().child(
                                                     div()
                                                         .relative()
@@ -392,7 +355,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
 fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     let app = entity.read(cx);
     if ix == 0 {
-        // Top spacer / DM header rows.
         return if app.selected_guild.is_none() {
             dm_top(entity, cx).into_any_element()
         } else {
@@ -404,23 +366,14 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     };
     match r {
         SidebarRow::Category(id) => {
-            // `containerDefault_yOdhm_` padding-top `--custom-category-channel-space-before-category`;
-            // `wrapperCommon_yOdhm_`: 24px, padding-inline `--space-md` / `--space-md - --space-xs`,
-            // `--channels-default` (hover `--interactive-text-hover`); name then a 12px
-            // chevron (`mainContent` gap 4px, rotated -90deg when collapsed); 16px add
-            // button shown on hover only (`addButton_yOdhm_`).
             let ch = &app.channels[&id];
             let collapsed = app.collapsed.contains(&id);
             let e = entity.clone();
             div()
                 .id(("cat", id.0))
                 .group("cat")
-                // dump -channels-N-N+ #655/#656: li padding-top 16, row 24px,
-                // `.enlarge-target-size .wrapper_yOdhm_` padding-inline 20 / 6 (cozy).
                 .pt(z(space::category_before()))
                 .pl(z(20.))
-                // padding-inline-end 6 + the scroller's 8px stable gutter (live
-                // `wrapper_yOdhm_` 327px wide in a 335px scroller, like the channel rows).
                 .pr(z(6. + 8.))
                 .h(z(24. + space::category_before()))
                 .w_full()
@@ -460,8 +413,6 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
                         ),
                 )
                 .child(
-                    // `addButton_yOdhm_ forceVisible_yOdhm_` (dump #662): 24px box, padding 4,
-                    // 16px glyph, always shown.
                     div()
                         .size(z(24.))
                         .flex_none()
@@ -469,8 +420,6 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
                         .id(("cat-add", id.0))
                         .tooltip(crate::ui::tooltip::tip(crate::t!("menu.create_channel")))
                         .group("cat-add")
-                        // `addButtonIcon_yOdhm_:hover` --interactive-text-hover;
-                        // `:active` --interactive-text-active + translateY(.5px).
                         .active(|s| s.pt(z(4.5)))
                         .child(
                             icon(Icon::Plus, 16. * crate::theme::zoom(), t(idx::CHANNELS_DEFAULT))
@@ -483,8 +432,6 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
         SidebarRow::Thread(id) => thread_row(app, entity, id),
         SidebarRow::StageAudience(id) => crate::ui::voice_row::stage_audience(app, id),
         SidebarRow::VoiceUser { user } => {
-            // `list_YUoOxm listDefault_YUoOxm` (live channel list): padding-bottom 10 after
-            // a channel's last voice user.
             let hidden = app.channels.values().find(|c| c.voice_users.contains(&user) && crate::ui::voice_row::names_hidden(c.id));
             if let Some(ch) = hidden {
                 let mut vu: Vec<(String, Id)> =
@@ -495,7 +442,6 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
             }
             let last = !matches!(app.sidebar_rows.get(ix), Some(SidebarRow::VoiceUser { .. } | SidebarRow::StageAudience(_)));
             let row = crate::ui::voice_panel::voice_user_row(app, entity, user);
-            // Stretch the row so its mute/deafen icons sit at the right edge (`icons_YUoOxm`).
             div().w_full().flex().flex_col().when(last, |d| d.pb(z(10.))).child(row).into_any_element()
         }
     }
@@ -510,10 +456,6 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
         let selected = view.is_some_and(|v| v == home);
         let e = entity.clone();
         let stub = label.clone();
-        // dump -channels-me+ #597..#609: `channel_zln_tS` li 40px (padding 1/0, margin-left 8),
-        // `interactive_zln_tS` 38px radius 8, `link_zln_tS` padding 8 16 8 10; 20px glyph
-        // + 12px margin; `body-md/medium` label. Idle `--text-muted`, selected
-        // `--background-mod-strong` + `--text-default`.
         div().w_full().pl(z(8.)).pr(z(8.)).py(z(1.)).child(
             div()
                 .id(id)
@@ -531,12 +473,9 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                 .text_color(t(if selected { idx::TEXT_DEFAULT } else { idx::TEXT_MUTED }))
                 .when(selected, |d| d.bg(t(idx::BACKGROUND_MOD_STRONG)))
                 .when(!selected, |d| {
-                    // Quests row `withGradient_hjotnx.withQuestHomeHeroContent_hjotnx:hover a`:
-                    // `--text-strong` (vanilla-friends-online #646). Its hero image
-                    // (#657 `questHomeHeroBackgroundImage_`) is opacity 0 at rest.
                     let hover_fg = if id == "quests" { idx::TEXT_STRONG } else { idx::INTERACTIVE_TEXT_HOVER };
                     d.hover(move |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(hover_fg)))
-                        .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE))) // wrapper_TNyK-N:active
+                        .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
                 .on_click(move |_, _, cx| {
                     e.update(cx, |a, cx| match view {
@@ -551,28 +490,19 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
     };
     let e = entity.clone();
     div()
-        .pt(z(8.)) // dump -channels-me+ #595: 8px spacer
-        .w_full() // full sidebar width so the divider and the header "+" reach the right edge (vanilla-dm #648/#649)
+        .pt(z(8.))
+        .w_full()
         .flex()
         .flex_col()
         .child(nav("friends", Icon::Friends, crate::t!("friends.title"), Some(HomeView::Friends), pending))
-        // vanilla (dump vanilla-friends-online): Friends, Nitro, Shop, Quests.
-        // "Message Requests" only shows while requests are pending.
         .when(requests > 0, |d| {
             d.child(nav("msg-requests", Icon::Inbox, crate::t!("friends.message_requests"), Some(HomeView::MessageRequests), requests))
         })
         .child(nav("nitro", Icon::Nitro, crate::t!("dm.nitro"), Some(HomeView::Nitro), 0))
         .child(nav("shop", Icon::Gift, crate::t!("dm.shop"), Some(HomeView::Shop), 0))
-        // Quests (`/quest-home`): QuestsIcon (vanilla-friends-online #653).
         .child(nav("quests", Icon::Quests, crate::t!("dm.quests"), None, 0))
-        // `sectionDivider_u88IQl` (#648): 1px, margin 12/8, `--border-subtle`.
         .child(div().mx(z(8.)).my(z(12.)).h(z(1.)).bg(t(idx::BORDER_SUBTLE)))
         .child(
-            // `privateChannelsHeaderContainer_Bce46W` (vanilla-home-friends #652): 24px, padding
-            // 0 6 4 20, `body-sm/medium` 14/18 `--channels-default`, :hover `--interactive-text-hover`.
-            // `headerActions_` (#654) gap 4: `moreButton_` (opacity 0 until the header is
-            // hovered) then "Create DM"; `iconWrapper_ybUK7Z clickable_` 24px (padding 4) with a
-            // 16px glyph, `--icon-muted`, :hover `--icon-subtle`.
             div()
                 .id("dm-header")
                 .group("dm-header")
@@ -588,7 +518,6 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t(idx::CHANNELS_DEFAULT))
                 .hover(|s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
-                // headerText_Bce46W margin-right 10
                 .child(div().flex_1().min_w_0().mr(z(10.)).text_ellipsis().child(crate::t!("dm.header")))
                 .child({
                     let btn = |id: &'static str, glyph: gpui::Svg| {
@@ -621,7 +550,6 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
         )
 }
 
-/// Icon-provider name of the *LockIcon variant for `kind`.
 pub(crate) fn lock_icon_name(kind: ChannelKind) -> Option<&'static str> {
     Some(match kind {
         ChannelKind::Text => "text-lock",
@@ -633,10 +561,6 @@ pub(crate) fn lock_icon_name(kind: ChannelKind) -> Option<&'static str> {
     })
 }
 
-/// Channel glyph with Discord's small corner badges (lock for private
-/// channels, "!" for age-restricted ones).
-/// `hover`: row group whose hover turns the glyph `--interactive-text-hover` (live
-/// ref-cache/voice-channel-row-hover.json: `icon_TNyK-N` oklab(.895) like the name).
 fn decorated_icon(kind: ChannelKind, color: gpui::Hsla, locked: bool, nsfw: bool, bg: gpui::Hsla, hover: Option<SharedString>) -> AnyElement {
     let hov = move |g: gpui::Svg| match hover.clone() {
         Some(h) => g.group_hover(h, |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))),
@@ -646,8 +570,6 @@ fn decorated_icon(kind: ChannelKind, color: gpui::Hsla, locked: bool, nsfw: bool
         .relative()
         .size(z(20.))
         .flex_none()
-        // Vanilla icon picker: NSFW wins over lock; locked channels swap to the
-        // dedicated *LockIcon glyph (live aria "Salon privé (verrouillé)").
         .map(|d| match lock_icon_name(kind).filter(|_| locked && !nsfw) {
             Some(name) => d.child(hov(gpui::svg().path(crate::icons::path(name)).size(z(20.)).flex_none().text_color(color))),
             None => d.child(hov(icon(channel_icon(kind), 20., color))),
@@ -673,7 +595,6 @@ fn decorated_icon(kind: ChannelKind, color: gpui::Hsla, locked: bool, nsfw: bool
         .into_any_element()
 }
 
-/// "00 │ 06" user-limit pill of a limited voice channel (`wrapper_QQRrAh`).
 fn user_limit_pill(users: u32, limit: u32) -> AnyElement {
     let cell = |txt: String| {
         div()
@@ -690,8 +611,6 @@ fn user_limit_pill(users: u32, limit: u32) -> AnyElement {
     let slant = gpui::canvas(
         |_, _, _| {},
         |b, _, window, _| {
-            // total_:after: border-top 20px transparent + border-inline-end 6px
-            // --background-mod-strong → a right triangle left of `total_`.
             let (x, y, h) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.height));
             let w = f32::from(b.size.width);
             let mut pb = gpui::PathBuilder::fill();
@@ -722,7 +641,6 @@ fn user_limit_pill(users: u32, limit: u32) -> AnyElement {
                 .border_1()
                 .border_color(t(idx::BORDER_NORMAL))
                 .bg(t(idx::BACKGROUND_BASE_LOW))
-                // `users_QQRrAh` width 28; `.extraLong_` (3+ digits) width auto.
                 .child(cell(format!("{users:02}")).when(users < 100 && limit < 100, |d| d.w(z(28.))).px(z(4.)))
                 .child(
                     cell(format!("{limit:02}"))
@@ -730,7 +648,6 @@ fn user_limit_pill(users: u32, limit: u32) -> AnyElement {
                         .min_w(z(20.))
                         .pl(z(2.))
                         .pr(z(4.))
-                        // GPUI's overflow_hidden doesn't clip to the parent's radius.
                         .rounded_r(z(crate::theme::generated::global::RADIUS_MD - 1.))
                         .bg(t(idx::BACKGROUND_MOD_STRONG))
                         .child(slant),
@@ -748,13 +665,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     let is_group = extra.is_some_and(|e| e.recipients > 1 || e.group_icon.is_some());
     let unread = ch.unread && !ch.muted;
     let guild_dim = !is_dm && ch.muted && !selected;
-    // `--channels-default` at rest, `--interactive-text-active` when selected
-    // or unread, `--interactive-muted` when muted.
-    // `name_TNyK-N`: `--channels-default`; `modeSelected`/`modeUnreadImportant`:
-    // `--interactive-text-active`; `modeMuted`: `--text-muted` at 50 % opacity.
-    // `modeConnected_TNyK-N .name_`: `--interactive-text-active` too.
     let fg = if (selected || connected) && !is_dm {
-        // `.modeConnected_/.modeSelected_ .name_TNyK-N {color: var(--text-strong)}`
         tok(idx::TEXT_STRONG)
     } else if selected || connected || (ch.unread && !ch.muted) {
         tok(idx::INTERACTIVE_TEXT_ACTIVE)
@@ -770,7 +681,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             Some(crate::model::ImageRef::Url(u)) => {
                 gpui::img(u).size(z(32.)).rounded_full().flex_none().into_any_element()
             }
-            // vanilla-group-dm #800: generated diagonal face pile, 32px.
             _ if !ex.members.is_empty() => crate::ui::group_dm::group_avatar(
                 app,
                 id,
@@ -791,7 +701,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     } else if is_dm {
         let u = ch.voice_users.first().and_then(|u| app.users.get(u));
         let p = ch.voice_users.first().map(|u| app.presence_of(*u)).unwrap_or_default();
-        // the status cut shows the row's hover / selected background like the mask
         let g = SharedString::from(format!("chrow{}", id.0));
         let deco = crate::ui::avatar_deco::source(u, None);
         crate::ui::avatar_with_status_deco(
@@ -810,14 +719,9 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         )
         .into_any_element()
     } else {
-        // `icon_TNyK-N` `--channel-icon`; muted `--icon-muted`; unread `--icon-subtle`.
-        // `iconLive_Wx6SnQ`: the channel we're connected to tints its icon
-        // --text-feedback-positive (live: oklab(.633 -.114 .059), same as the timer).
         let col = t(if app.voice_channel == Some(id) {
             idx::TEXT_FEEDBACK_POSITIVE
         } else if selected {
-            // `.modeConnected_/.modeSelected_ .icon_TNyK-N {color: var(--icon-strong)}`
-            // (f4b2f93f8f92b799.css, after the `--channel-icon` rule, so it wins).
             idx::ICON_STRONG
         } else if ch.muted {
             idx::ICON_MUTED
@@ -842,13 +746,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         .then(|| ch.voice_users.first().and_then(|u| app.users.get(u)).and_then(|u| u.tag.clone()))
         .flatten();
     let group = SharedString::from(format!("chrow{}", id.0));
-    // `iconsContainer_zln_tS` (vanilla-home-friends #680/#695): padding-inline-start 4,
-    // min-width 32 when nameplated. `closeButton_zln_tS` is display:none until the row is
-    // hovered, then 24px (padding 3, margin-right 6), opacity .7 (1 on its own hover or
-    // when plated); `innerCloseButton_` padding 1, radius 50%, 16px `closeIcon_`.
-    // Plated: `--custom-nameplate-neutral` / `--custom-nameplate-neutral-hovered`
-    // (web bundle module 351952 `e3c95a79030889c3.js`: dark rgba(0,0,0,.22/.33),
-    // light rgba(255,255,255,.22/.33)) and a white .9 glyph (#681..#683).
     let plated = is_dm
         && !is_group
         && ch.voice_users.first().and_then(|u| app.users.get(u)).is_some_and(|u| u.nameplate.is_some());
@@ -876,7 +773,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     .p(z(3.))
                     .mr(z(6.))
                     .when(!plated, |d| d.opacity(0.7).hover(|s| s.opacity(1.)))
-                    // aria-label "Close DM" / "Leave Group" (#681 / #806)
                     .tip(if is_group { crate::t!("menu.leave_group") } else { crate::t!("menu.close_dm") })
                     .on_click(move |_, _, cx| {
                         cx.stop_propagation();
@@ -891,19 +787,12 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     ),
             )
     });
-    // `children_TNyK-N` (vanilla-guild-text #691): margin -4 -4 -4 0, then 24px
-    // `iconItem_Wx6SnQ` boxes (padding 4, 16px `actionIcon`): "Invite" and, with
-    // Manage Channels, "Edit Channel". Shown on hover and on the selected row.
     let can_edit = ch.guild.is_some_and(|g| {
-        crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4) // MANAGE_CHANNELS
+        crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4)
     });
     let action = |i: Icon, path: Option<&'static str>| {
-        // Live CDP: on the selected channel row, action icons (invite, edit) use --interactive-text-active
-        // (~rgb(220,220,223)) rather than --interactive-text-default (~rgb(150,151,158)).
         let col = t(if selected { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT });
-        // iconItem_Wx6SnQ:hover .actionIcon_Wx6SnQ color --interactive-text-hover
         let hov = |s: gpui::StyleRefinement| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER));
-        // actionIcon_Wx6SnQ:active color --interactive-text-active, translateY(.5px)
         let act = |s: gpui::StyleRefinement| s.text_color(t(idx::INTERACTIVE_TEXT_ACTIVE)).mt(z(0.5));
         div().id(gpui::ElementId::Name(format!("ch-act-{}", path.unwrap_or("gear")).into())).size(z(24.)).p(z(4.)).flex_none().group("ch-action").child(match path {
             Some(p) => gpui::svg().path(crate::icons::path(p)).size(z(16.)).text_color(col).group_hover("ch-action", hov).id("g").group_active("ch-action", act).into_any_element(),
@@ -911,8 +800,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         })
     };
     let is_voice = matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage);
-    // Voice rows (vanilla-voice-sidebar #885/#889): "Ouvrir la discussion" (ChatIcon)
-    // then "Inviter dans le salon vocal", same 24px `iconItem_` boxes.
     let chat_entity = entity.clone();
     let invite_hover = (!is_dm).then(|| {
         div()
@@ -920,7 +807,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             .flex_none()
             .my(z(-4.))
             .mr(z(-4.))
-            // Hidden icons take no room (live: the voice timer / name keep the full width).
             .when(!selected, |d| d.hidden().group_hover(group.clone(), |s| s.flex()))
             .when(is_voice, |d| {
                 d.child(
@@ -938,9 +824,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             .child(action(Icon::Members, Some("invite")).tooltip(crate::ui::tooltip::tip(crate::t!("perm.create_invite"))))
             .when(can_edit, |d| d.child(action(Icon::Gear, None).tooltip(crate::ui::tooltip::tip(crate::t!("menu.edit_channel")))))
     });
-    // `channelInfo_Wx6SnQ` (vanilla-voice-sidebar #1003..#1006): margin-inline-start 12,
-    // padding-inline-end --space-4; `tabularNumbers_` `body-xs/normal` `fontCode_` 12/16,
-    // `--text-feedback-positive`: time since the channel's `voice_start_time`.
     let timer = (matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage) && !ch.voice_users.is_empty())
         .then(|| crate::voice::start_time::get(id.0))
         .flatten()
@@ -955,11 +838,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                 .text_color(t(idx::TEXT_FEEDBACK_POSITIVE))
                 .child(crate::voice::start_time::format(crate::voice::start_time::now_s() - st))
         });
-    // `wrapper_QQRrAh` user-limit pill (live "Travaux Groupe #1": "00 │ 06"), shown on
-    // limited voice channels in place of the timer: h 20, 1px --border-normal,
-    // --radius-md, --background-base-low; `users_` 28px padding 0 --space-4,
-    // `total_` 20px padding-inline 2 4 --background-mod-strong with a 6px slanted
-    // left edge (`total_:after` border triangle); body-xs/medium 12/16 tabular.
     let limit_pill = (timer.is_none() && ch.kind == ChannelKind::Voice)
         .then(|| app.backend.channel_user_limit(id))
         .flatten()
@@ -967,14 +845,10 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     div()
         .id(("ch", id.0))
         .relative()
-        // `wrapper_TNyK-N` margin-inline-start `--space-xs` (10px cozy, dump -channels-N-N+
-        // #628); DM `channel_zln_tS` margin 8 (dump -channels-me+ #656). Right: scrollbar gutter.
         .pl(z(if is_dm { 8. } else { 10. }))
         .pr(z(8.))
         .py(z(1.))
         .child(
-            // `unread_TNyK-N`: 4x8, `0 --radius-xs --radius-xs 0`, inset
-            // `-(--space-xs) + 1px` from the link, vertically centred.
             div()
                 .absolute()
                 .left(z(1.))
@@ -988,15 +862,13 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             div()
                 .id(("chrow", id.0))
                 .group(group)
-                // `link_TNyK-N` 36px, padding 4/10 (dump #629); DM `link_zln_tS` 48px, pl 10 (me #658).
-                // Connected voice row: `link_` 52px (linkTop 28 + linkBottom 16 + padding 4/4).
                 .h(z(if is_dm { 48. } else if connected { space::channels_name_lh() + 24. } else { space::channels_name_lh() + 8. }))
                 .pl(z(10.))
-                .pr(z(if is_dm { 0. } else { 10. })) // DM `link_zln_tS` padding 0 0 0 10 (#663)
+                .pr(z(if is_dm { 0. } else { 10. }))
                 .rounded(z(ROW_RADIUS))
                 .flex()
                 .items_center()
-                .gap(z(if is_dm { 12. } else { 10. })) // linkTop_TNyK-N gap --space-xs (10 cozy); DM avatar margin 12
+                .gap(z(if is_dm { 12. } else { 10. }))
                 .cursor_pointer()
                 .text_color(c(fg))
                 .when(is_dm && ch.muted && !selected, |d| d.opacity(0.5))
@@ -1006,10 +878,8 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         let s = s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(idx::INTERACTIVE_TEXT_HOVER));
                         if is_dm { s.opacity(1.) } else { s }
                     })
-                    // wrapper_TNyK-N:active .link_TNyK-N background
                     .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
-                // Hover warms the message cache so the click paints at once (docs/perf.md).
                 .on_hover({
                     let e = e.clone();
                     move |hovered: &bool, _, cx| {
@@ -1022,17 +892,11 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                 .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
                     crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
                 })
-                // DM `interactive_zln_tS` > `container_AFi54G` (vanilla-home-friends #661):
-                // nameplate of the 1:1 recipient behind the row, `.channel` opacity.
                 .relative()
                 .when_some(
                     (is_dm && !is_group)
                         .then(|| ch.voice_users.first().and_then(|u| app.users.get(u)))
                         .flatten()
-                        // Only the selected row and the hovered one draw it (vanilla-home-friends:
-                        // no `container_AFi54G` under idle rows); hovered `.channel_.hover_` opacity .4.
-                        // Mask start (module 351952, `content: ti` = the `layout_TBNqol` ref):
-                        // its width - 5, i.e. avatar 32 + margin 12 + name/tag width - 5.
                         .and_then(|u| {
                             let fade = crate::ui::nameplate::Fade::Measured {
                                 place: crate::ui::nameplate::Place::Channel,
@@ -1055,8 +919,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     },
                 )
                 .child(
-                    // `.modeMuted_TNyK-N .icon_/.name_ {opacity:.5}`: only the icon and the name
-                    // dim (also on hover); the row background stays opaque.
                     if guild_dim {
                         div().flex_none().opacity(0.5).child(top_line(lead, connected)).into_any_element()
                     } else {
@@ -1073,21 +935,17 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         .child(
                             div()
                                 .text_size(z(16.))
-                                .line_height(z(if is_dm { 20. } else { space::channels_name_lh() })) // --channels-name-line-height
-                                .font_weight(FontWeight::MEDIUM) // --font-weight-semibold-1x-light-theme (500)
+                                .line_height(z(if is_dm { 20. } else { space::channels_name_lh() }))
+                                .font_weight(FontWeight::MEDIUM)
                                 .flex()
                                 .items_center()
                                 .child(
-                                    // Name + tag, as wide as their content: the DM nameplate
-                                    // mask reads this width (`content_TBNqol`).
                                     div()
                                         .relative()
                                         .min_w_0()
                                         .flex()
                                         .items_center()
                                         .child(
-                                            // 1:1 DM: `withDisplayNameStyles_zln_tS` > `container_or4Hj- dnsFont_`
-                                            // (vanilla-dm #675/#734): the recipient's name style font.
                                             crate::fonts::styled_name(
                                                 div().min_w_0().text_ellipsis(),
                                                 (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u))).flatten(),
@@ -1095,8 +953,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                             )
                                             .child(crate::ui::emoji_text::label(name, 16.)),
                                         )
-                                        // 1:1 DM: server tag chiplet after the name, chipletContainerInner_ margin-left 4px
-                                        // (vanilla-dm #677).
                                         .when_some(dm_tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
                                         .when(plated, |d| {
                                             d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Channel, id.0))
@@ -1104,9 +960,6 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                 ),
                         )
                         .when(connected, |d| {
-                            // `linkBottom_TNyK-N` (live connected voice row): margin-left 30 from
-                            // the icon (so under the name), `subtitle_` body-xs/medium 12/16
-                            // `--channels-default` "Set a channel status" + 12px pencil, margin 4.
                             d.child(
                                 div()
                                     .flex()
@@ -1141,14 +994,11 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                 .children(timer.map(|t| top_line(t, connected)))
                 .children(limit_pill)
                 .children(close)
-                // Tab focus ring (3d994642c869c81b.js FocusRing offset:{top:2,bottom:2,right:4}).
                 .map(|d| crate::ui::focus_ring::ring_inset_edges(d, crate::ui::states::key(("chrow", id.0)), ROW_RADIUS, 0., 2., 4., 2.)),
         )
         .into_any_element()
 }
 
-/// Connected voice row: `linkTop_TNyK-N` (28px, 4px below the link's top) holds the
-/// icon, name, hover actions and timer, with the status line under it.
 fn top_line(e: impl IntoElement, connected: bool) -> AnyElement {
     if connected {
         div().self_start().mt(z(4.)).h(z(space::channels_name_lh())).flex().items_center().flex_none().child(e).into_any_element()
@@ -1157,7 +1007,6 @@ fn top_line(e: impl IntoElement, connected: bool) -> AnyElement {
     }
 }
 
-/// Thread sub-row: curved connector from the parent channel, then the name.
 fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElement {
     let Some(th) = app.nav.find_thread(id) else { return div().into_any_element() };
     let selected = app.selected_channel == Some(id);
@@ -1168,11 +1017,10 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
     div()
         .id(("thread", id.0))
         .relative()
-        .pl(z(space::xs())) // --space-xs
+        .pl(z(space::xs()))
         .pr(z(8.))
-        .py(z(1.)) // `wrapper_TNyK-N` padding 1px 0 (live thread row 38px)
+        .py(z(1.))
         .child(
-            // `unread_TNyK-N`: 4x8 pill on the left edge when the thread has unread messages.
             div()
                 .absolute()
                 .left(z(1.))
@@ -1184,10 +1032,8 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
         )
         .child(
             div()
-                // `spine_reDhww`: `--channels-spine-offset-left`, top 0, `--spine-default`;
-                // live box 10x20 at the row's top, curving into the row's middle.
                 .absolute()
-                .left(z(space::spine_left())) // --channels-spine-offset-left
+                .left(z(space::spine_left()))
                 .top_0()
                 .w(z(10.))
                 .h(z(19.))
@@ -1199,8 +1045,6 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
         .child(
             div()
                 .id(("threadrow", id.0))
-                // `typeThread_TNyK-N.wrapper`: margin `28px + --space-xs` from the list
-                // (8px of it is the row inset); link padding 4px / `--space-xs`.
                 .ml(z(space::spine_left()))
                 .h(z(space::channels_name_lh() + 8.))
                 .px(z(10.))
@@ -1208,14 +1052,14 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
                 .flex()
                 .items_center()
                 .cursor_pointer()
-                .text_size(z(14.)) // `typeThread_ .name_` body-sm/medium (live 14px)
-                .line_height(z(space::channels_name_lh())) // --channels-name-line-height
+                .text_size(z(14.))
+                .line_height(z(space::channels_name_lh()))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t(if selected || unread { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::CHANNELS_DEFAULT }))
                 .when(selected, |d| d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED)))
                 .when(!selected, |d| {
                     d.hover(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
-                        .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE))) // wrapper_TNyK-N:active
+                        .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_thread(id, cx)))
                 .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
@@ -1227,18 +1071,10 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
         .into_any_element()
 }
 
-/// The bottom-left area under both the guild rail and the channel list (as in
-/// the refreshed client): the rail and sidebar backgrounds continue behind a
-/// floating panels card (`--background-base-low`, 1px border, 8px radius, 8px
-/// from the edges) holding the voice panel (when connected) above the user row.
 pub fn panels(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     div()
         .flex_none()
-        // Rail + channel list width, so a long custom status ellipsizes instead
-        // of widening the card past the sidebar.
         .w(z(m::SERVER_BAR_W + crate::ui::sidebar_resize::width()))
-        // The live scrollers (`sidebarList_`, `guilds_`) run down to the card's top edge,
-        // behind its 10px margin: overlap them by that margin and leave it transparent.
         .mt(z(-10.))
         .relative()
         .child(div().absolute().top(z(10.)).bottom_0().left_0().w(z(m::server_bar_w())).bg(c(Palette::BG_TERTIARY)))
@@ -1259,10 +1095,10 @@ pub fn panels(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
 fn panels_card(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     div()
         .flex_none()
-        .m(z(10.)) // dump -channels-N-N+ #976 `panels_pog62O` at x=10 / bottom 10 (cozy --space-xs)
+        .m(z(10.))
         .rounded(z(8.))
         .border_1()
-        .border_color(t(idx::BORDER_MUTED)) // panels_pog62O
+        .border_color(t(idx::BORDER_MUTED))
         .bg(t(idx::BACKGROUND_BASE_LOW))
         .overflow_hidden()
         .flex()
@@ -1280,8 +1116,6 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         crate::model::Presence::Offline => crate::t!("status.invisible"),
     };
     let muted = app.mic_muted || app.deafened;
-    // `container_g6VwXp` (dump -channels-N-N+ #979): 56px, padding 14px, gap
-    // `--space-xs` (10px cozy).
     div()
         .relative()
         .overflow_hidden()
@@ -1296,13 +1130,11 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
             |d, l| d.child(l),
         )
         .child(
-            // `accountPopoutButtonWrapper_g6VwXp`: -4px inline-start margin,
-            // 5px 4px padding, `--radius-xs`, 8px gap, hover `--background-mod-normal`.
             div()
                 .id("me")
                 .flex_1()
                 .min_w(z(112.))
-                .ml(z(-6.)) // dump #980: margin-inline-start -6, padding 5/6
+                .ml(z(-6.))
                 .py(z(5.))
                 .px(z(6.))
                 .flex()
@@ -1313,7 +1145,6 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .group("user-panel-avatar")
                 .hover(|s| s.bg(t(idx::BACKGROUND_MOD_NORMAL)))
                 .on_click(cx.listener(|a, _, w, cx| a.toggle_status_picker(w, cx)))
-                // The decoration plays while the panel is hovered (ui::avatar_deco).
                 .on_hover(cx.listener(|_, h: &bool, _, cx| {
                     if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(3, 0), *h) {
                         cx.notify();
@@ -1337,15 +1168,13 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                         .flex_col()
                         .child(
                             div()
-                                .mt(z(-1.)) // panelTitleContainer_g6VwXp
+                                .mt(z(-1.))
                                 .mb(z(2.))
-                                // dump #985 `body-md/medium` 16/22, `--text-strong`
                                 .text_size(z(16.))
                                 .line_height(z(22.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(t(idx::TEXT_STRONG))
                                 .text_ellipsis()
-                                // vanilla-guild-text #997 `container_or4Hj- dnsFont_`: own name style font.
                                 .child(
                                     crate::fonts::styled_name(div().text_ellipsis(), Some(&app.me), false)
                                         .child(crate::ui::emoji_text::label(app.me.display_name.clone(), 14.)),
@@ -1353,15 +1182,12 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                         )
                         .child(
                             div()
-                                // dump #989 `body-xs/medium` 12/13, `--interactive-text-default`
                                 .text_size(z(12.))
                                 .line_height(z(13.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(t(idx::INTERACTIVE_TEXT_DEFAULT))
                                 .text_ellipsis()
                                 .child(crate::ui::emoji_text::status_label(
-                                    // vanilla-guild-text user panel: the custom status replaces "Online".
-                                    // Emoji + text from the own custom-status activity while it matches.
                                     {
                                         let act = app.people.activities.get(&app.me.id).and_then(|v| {
                                             v.iter().find(|a| a.kind == crate::presence::ActivityKind::Custom)
@@ -1379,7 +1205,6 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 ),
         )
         .child(
-            // `buttons_g6VwXp`: `--space-8` gap.
             div()
                 .flex()
                 .flex_none()
@@ -1416,13 +1241,6 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         )
 }
 
-/// `maxBoostCount` of `GuildPowerupsProgressBarUI` (client module 616740 `tg`): the
-/// tier-3 threshold `M2T[TIER_3]` = 14 (0 when the guild has `PREMIUM_TIER_3_OVERRIDE`)
-/// plus `boostPrice` of every power-up with no `includedInLevel` that is enabled
-/// (constants module 568065 `sy`/`YV`, static, not fetched): GUILD_TAGS 3,
-/// ENHANCED_ROLE_COLORS 3, badge packs PETS 3 / FLEX 5 / PLANT 3 / CREEPY_CRAWLIES 2,
-/// GAME_SERVERS 3 (experiment, on for the user); GUILD_THEME is disabled.
-/// Live check: vanilla-guild-text #661 "18/36 Boosts" = 14 + 22.
 fn boost_goal_max(features: &[String]) -> u32 {
     const TIER_3: u32 = 14;
     const PERKS: u32 = 3 + 3 + 3 + 5 + 3 + 2 + 3;
@@ -1430,8 +1248,6 @@ fn boost_goal_max(features: &[String]) -> u32 {
     base + PERKS
 }
 
-/// Boost goal bar (`GUILD_PREMIUM_PROGRESS_BAR` action row, vanilla-guild-text
-/// #653..#662), shown when `premiumProgressBarEnabled && premiumSubscriberCount > 0`.
 fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
     if !enabled || count == 0 {
         return None;
@@ -1439,7 +1255,6 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
     let pct = (count as f32 / max as f32).min(1.);
     let pink = t(idx::GUILD_BOOSTING_PINK_REFRESH);
     let text = |s: SharedString| {
-        // `text_BFMMcK` `body-xs/semibold` 12/16 600 `--text-default`, ellipsis.
         div()
             .text_size(z(12.))
             .line_height(z(16.))
@@ -1454,9 +1269,6 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
         crate::t!("guild.boost_goal.count", n = count, max = max)
     };
     Some(
-        // `container_BFMMcK` + `containerWithMargin_`: margin 0 0 12 8, padding
-        // --space-xxs --space-xxs --space-sm (4 4 16), border-bottom 1px --border-subtle.
-        // Right: the scroller's 8px stable gutter (live box 88..407 in a 416px list).
         div().w_full().pl(z(8.)).pr(z(8.)).mb(z(12.)).child(
         div()
             .id("boost-goal")
@@ -1469,17 +1281,12 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
             .border_color(t(idx::BORDER_SUBTLE))
             .cursor_pointer()
             .child(
-                // `contentContainer_` > `progressContainer_`: 26px, --radius-round,
-                // `--background-gradient-highest, --background-base-low`.
                 div()
                     .relative()
                     .h(z(26.))
                     .rounded_full()
                     .bg(t(idx::BACKGROUND_BASE_LOW))
                     .child(
-                        // `progress_BFMMcK`: absolute inset 2px, width `calc(d% - 4px)`,
-                        // linear-gradient(270deg, pink 40% → pink 10%), --shadow-low +
-                        // inset 0 0 4.6px pink 20%.
                         div().absolute().top_0().bottom_0().left_0().w(gpui::relative(pct)).p(z(2.)).child(
                         div()
                             .size_full()
@@ -1490,7 +1297,6 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
                                 gpui::linear_color_stop(pink.opacity(0.1), 1.),
                             ))
                             .group_hover("boost-goal", |s| {
-                                // `container_:hover .progress_`: 70 % → 25 %.
                                 s.bg(gpui::linear_gradient(
                                     270.,
                                     gpui::linear_color_stop(pink.opacity(0.7), 0.),
@@ -1501,8 +1307,6 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
                         ),
                     )
                     .child(
-                        // `textContainer_`: absolute, inset 0 --space-8, row,
-                        // space-between, gap --space-8; `textContentContainer_` gap 2.
                         div()
                             .absolute()
                             .top_0()
@@ -1523,7 +1327,6 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
                                     .when(count >= max, |d| d.child(text("\u{1F389}".into()))),
                             )
                             .child(
-                                // `boostCountText_`: opacity .7, 1 on container hover.
                                 div()
                                     .flex()
                                     .items_center()
@@ -1547,15 +1350,10 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
     )
 }
 
-/// Rows above the first channel of a guild (vanilla-guild-text #663..#680): the
-/// same `wrapper_TNyK-N`/`link_TNyK-N` rows as channels (36px, padding 4 10, gap 10,
-/// 20px `icon_TNyK-N`, 16/28 medium `--channels-default`) for "Events", "Members"
-/// (with moderation rights) and "Server Boosts", then `sectionDivider_ysO7Gy`
-/// (1px `--border-subtle`, inset 20 / 11) and a 12px gap.
 fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
     let ev_entity = entity.clone();
     let perms = app.selected_guild.map(|g| app.backend.guild_permissions(g)).unwrap_or(0);
-    let mods = crate::ui::inbox::has_perm(perms, (1 << 1) | (1 << 2) | (1 << 5)); // KICK | BAN | MANAGE_GUILD
+    let mods = crate::ui::inbox::has_perm(perms, (1 << 1) | (1 << 2) | (1 << 5));
     let features = app.selected_guild.map(|g| app.backend.guild_features(g)).unwrap_or_default();
     let has = |f: &str| features.iter().any(|x| x == f);
     let browse: Option<SharedString> = if has("GUILD_ONBOARDING") {
@@ -1567,8 +1365,6 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
     };
     let guide = has("COMMUNITY") && crate::ui::guide::has_guide(&features);
     let (guide_on, page_on) = (crate::ui::guide::is_open(app, cx), crate::ui::community::is_open(app, cx));
-    // vanilla-server-guide #644: modeSelected_ row = --interactive-background-selected,
-    // name and icon --interactive-text-active.
     let item = |id: &'static str, glyph: &'static str, label: SharedString, on: bool| {
         div().pl(z(10.)).pr(z(8.)).py(z(1.)).child(
             div()
@@ -1598,7 +1394,6 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
     };
     div()
         .w_full()
-        // vanilla-inbox-0 #623: 12px spacer div above the first row.
         .pt(z(12.))
         .flex()
         .flex_col()
@@ -1606,7 +1401,6 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
             let (n, on) = app.backend.guild_boosts(g)?;
             boost_goal(n, on, boost_goal_max(&app.backend.guild_features(g)))
         }))
-        // vanilla-server-guide #643: "Server Guide" (SignPostIcon) first.
         .when(guide, |d| {
             let ent = entity.clone();
             d.child(
@@ -1634,8 +1428,6 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
                 })
                 .child(item("g-events", "calendar", crate::t!("guild.top.events"), false)),
         )
-        // vanilla-inbox-0 #629..#633: "Channels & Roles" row (ChannelListMagnifyingGlassIcon)
-        // for onboarding guilds, "Browse Channels" for other community guilds.
         .when_some(browse, |d, label| {
             let ent = entity.clone();
             d.child(
@@ -1653,7 +1445,6 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
         })
         .when(mods, |d| d.child(item("g-members", "members", crate::t!("guild.top.members"), false)))
         .child(item("g-boosts", "boost", crate::t!("guild.top.boosts"), false))
-        // vanilla-inbox-0 #645 sectionDivider_: margin-top 15, inline 20 / 11, 1px.
-        .child(div().mt(z(15.)).ml(z(20.)).mr(z(20.)).h(z(1.)).bg(t(idx::BORDER_SUBTLE))) // sectionDivider_ysO7Gy 100..396 (11 + the 9px gutter from the list edge)
+        .child(div().mt(z(15.)).ml(z(20.)).mr(z(20.)).h(z(1.)).bg(t(idx::BORDER_SUBTLE)))
         .child(div().h(z(12.)))
 }

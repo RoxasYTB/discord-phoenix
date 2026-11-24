@@ -4,8 +4,6 @@ use super::{Snowflake, UserId, null_default};
 
 pub const CDN_BASE: &str = "https://cdn.discordapp.com";
 
-/// A Discord user. Fields only present for the current user (email, mfa...)
-/// are optional.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct User {
     pub id: UserId,
@@ -29,16 +27,12 @@ pub struct User {
     pub public_flags: Option<u64>,
     #[serde(default)]
     pub avatar_decoration_data: Option<serde_json::Value>,
-    /// Server tag the user chose to display ("GLAD"), if any.
     #[serde(default)]
     pub primary_guild: Option<Box<PrimaryGuild>>,
-    /// Profile collectibles (`{"nameplate": {"asset", "palette", ...}}`).
     #[serde(default)]
     pub collectibles: Option<Box<serde_json::Value>>,
-    /// Display name style (font, effect, colors) chosen by the user.
     #[serde(default)]
     pub display_name_styles: Option<Box<DisplayNameStyles>>,
-    // Current-user only:
     #[serde(default)]
     pub email: Option<String>,
     #[serde(default)]
@@ -49,7 +43,6 @@ pub struct User {
     pub premium_type: Option<u8>,
     #[serde(default)]
     pub phone: Option<String>,
-    /// Adult age group (Account Standing > Age group).
     #[serde(default)]
     pub nsfw_allowed: Option<bool>,
     #[serde(default)]
@@ -72,16 +65,11 @@ pub(crate) fn nameplate_from_collectibles(collectibles: Option<&serde_json::Valu
 }
 
 impl User {
-    /// Static image of the nameplate shown behind the name in the DM list
-    /// and member list (`collectibles.nameplate.asset`), with its palette.
     pub fn nameplate(&self) -> Option<(String, Option<String>)> {
         nameplate_from_collectibles(self.collectibles.as_deref())
     }
 }
 
-/// `user.display_name_styles`: `font_id` (`DisplayNameFont`), `effect_id`
-/// (`DisplayNameEffect`: 1 solid, 2 gradient, 3 neon, 4 toon, 5 pop, 6 glow,
-/// 7 prism, 8 gummy) and up to two 0xRRGGBB colors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct DisplayNameStyles {
     #[serde(default)]
@@ -92,7 +80,6 @@ pub struct DisplayNameStyles {
     pub colors: Vec<u32>,
 }
 
-/// `user.primary_guild`: the server tag shown next to a user's name.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PrimaryGuild {
     #[serde(default)]
@@ -106,13 +93,11 @@ pub struct PrimaryGuild {
 }
 
 impl PrimaryGuild {
-    /// The tag to show, if it is enabled.
     pub fn shown_tag(&self) -> Option<&str> {
         (self.identity_enabled != Some(false)).then_some(())?;
         self.tag.as_deref().filter(|t| !t.is_empty())
     }
 
-    /// CDN URL of the tag badge.
     pub fn badge_url(&self) -> Option<String> {
         let (g, b) = (self.identity_guild_id?, self.badge.as_ref()?);
         Some(format!("{CDN_BASE}/guild-tag-badges/{g}/{b}.png?size=16"))
@@ -120,7 +105,6 @@ impl PrimaryGuild {
 }
 
 impl User {
-    /// Name to display: global name, falling back to username.
     pub fn display_name(&self) -> &str {
         self.global_name
             .as_deref()
@@ -128,7 +112,6 @@ impl User {
             .unwrap_or(&self.username)
     }
 
-    /// `username` or legacy `username#1234`.
     pub fn tag(&self) -> String {
         if self.discriminator.is_empty() || self.discriminator == "0" {
             self.username.clone()
@@ -137,7 +120,6 @@ impl User {
         }
     }
 
-    /// Avatar URL (or the default embed avatar when none is set).
     pub fn avatar_url(&self, size: u32) -> String {
         match &self.avatar {
             Some(hash) => {
@@ -167,23 +149,19 @@ int_enum! {
     }
 }
 
-/// An entry in the user's relationship list (friends, blocks, requests).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Relationship {
     pub id: Snowflake,
     #[serde(rename = "type")]
     pub kind: RelationshipType,
-    /// Present unless the READY payload deduplicated users.
     #[serde(default)]
     pub user: Option<User>,
     #[serde(default)]
     pub user_id: Option<UserId>,
     #[serde(default)]
     pub nickname: Option<String>,
-    /// ISO timestamp the relationship started (friends: "Friends Since").
     #[serde(default)]
     pub since: Option<String>,
-    /// "Ignore" (the client's RelationshipStore ignored set).
     #[serde(default)]
     pub user_ignored: bool,
 }

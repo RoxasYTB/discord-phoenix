@@ -1,6 +1,3 @@
-//! Account features of the real backend: MFA methods, QR (remote auth)
-//! login, synced settings and desktop notifications.
-
 use phoenix_api::{
     remote_auth::{self, RemoteAuthEvent},
     rest::settings::{self as api_settings, PreloadedUserSettings, SettingChange, Theme},
@@ -13,7 +10,6 @@ use crate::{
     ui::settings::{AppTheme, SettingsPatch, SyncedSettings},
 };
 
-/// Password login answered with an MFA ticket.
 pub(super) fn mfa_required(inner: &Inner, ticket: String, totp: bool, sms: bool, backup: bool) -> Result<ReadyData, BackendError> {
     if !totp && !sms && !backup {
         return Err(err(
@@ -104,7 +100,6 @@ impl DiscordBackend {
                 }
             };
             s.rest.set_locale(&out.locale);
-            // Consents and e-mail preferences live on their own routes (best effort).
             let consent = s.rest.get_consent().await.ok();
             let email = s.rest.get_email_settings().await.ok();
             out.rest = crate::ui::settings::synced_map::read_rest(consent.as_ref(), email.as_ref());
@@ -121,7 +116,6 @@ impl DiscordBackend {
                     Some(Rest::Email(k)) => s.rest.patch_email_setting(k, *v).await.map(|_| ()).map_err(api_err)?,
                     None => return Err(err(format!("unknown setting {id}"))),
                 }
-                // The caller replaces its whole copy: return the full synced state.
                 let raw = s.rest.get_settings_proto_raw().await.map_err(api_err)?;
                 let mut out = synced_raw(&raw)?;
                 out.rest.insert(*id, *v);
@@ -163,7 +157,6 @@ fn theme_to_api(t: AppTheme) -> Theme {
     }
 }
 
-/// [`synced`] plus every [`crate::ui::settings::synced_map`] entry.
 fn synced_raw(raw: &[u8]) -> Result<SyncedSettings, crate::backend::BackendError> {
     let p = PreloadedUserSettings::decode_raw(raw).map_err(api_err)?;
     let mut s = synced(&p);
@@ -191,7 +184,6 @@ pub fn synced(p: &PreloadedUserSettings) -> SyncedSettings {
     }
 }
 
-/// `UIDensity` proto enum (client: UNSET 0, COMPACT 1, COZY 2, RESPONSIVE 3, DEFAULT 4).
 fn density_from_proto(v: i32) -> Option<Density> {
     match v {
         1 => Some(Density::Compact),
@@ -209,7 +201,6 @@ fn density_to_proto(d: Density) -> i32 {
     }
 }
 
-/// Gateway hook (pump): desktop notifications + notification settings updates.
 pub(super) fn on_gateway(s: &Session, ev: &GatewayEvent) {
     match ev {
         GatewayEvent::MessageCreate(m) => {
@@ -219,7 +210,6 @@ pub(super) fn on_gateway(s: &Session, ev: &GatewayEvent) {
             crate::sounds::on_message(&s.notify.lock(), &s.cache, me, m);
         }
         GatewayEvent::Unknown { name, data } if name == "USER_GUILD_SETTINGS_UPDATE" => s.notify.lock().update(data),
-        // Server default level, used where no settings entry overrides it.
         GatewayEvent::GuildCreate(g) | GatewayEvent::GuildUpdate(g) => {
             if let Some(d) = g.properties.default_message_notifications {
                 s.notify.lock().set_default(g.id.0, crate::notifications::Level::from_default(Some(d)));
@@ -230,7 +220,6 @@ pub(super) fn on_gateway(s: &Session, ev: &GatewayEvent) {
 }
 
 impl DiscordBackend {
-    /// `GET /auth/sessions`: number of logged-in devices (Settings > Account).
     pub(super) fn session_count_impl(&self) -> BoxFuture<Option<usize>> {
         self.with_session(move |_, s| async move {
             let v = s.rest.request_json(reqwest::Method::GET, "/auth/sessions", None).await.map_err(api_err)?;
@@ -240,7 +229,6 @@ impl DiscordBackend {
 }
 
 impl DiscordBackend {
-    /// Settings > Billing: three read-only GETs.
     pub(super) fn billing_impl(&self) -> BoxFuture<Option<crate::ui::settings::billing::Billing>> {
         use crate::ui::settings::billing as b;
         self.with_session(move |_, s| async move {
@@ -259,7 +247,6 @@ impl DiscordBackend {
         })
     }
 
-    /// Settings > Subscriptions, the client's read-only routes (see `ui::settings::subscriptions`).
     pub(super) fn subscriptions_impl(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
         use crate::ui::settings::subscriptions as sub;
         self.with_session(move |_, s| async move {
@@ -285,7 +272,6 @@ impl DiscordBackend {
 }
 
 impl DiscordBackend {
-    /// Settings > Connections: `GET /oauth2/tokens` (read-only).
     pub(super) fn authorized_apps_impl(&self) -> BoxFuture<Option<Vec<crate::ui::settings::authorized_apps::AuthorizedApp>>> {
         self.with_session(move |_, s| async move {
             let v = s.rest.request_json(reqwest::Method::GET, "/oauth2/tokens", None).await.map_err(api_err)?;

@@ -1,11 +1,3 @@
-//! H.264 RTP payload format (RFC 6184), packetization-mode 1:
-//! single NAL, STAP-A (24) aggregation and FU-A (28) fragmentation.
-//!
-//! The packetizer takes Annex-B access units. It caches the latest SPS/PPS and
-//! re-inserts them in front of every IDR that does not carry them, so receivers
-//! joining mid-stream (notably Apple VideoToolbox, which needs parameter sets to
-//! build a format description) can always decode keyframes.
-
 use super::{Depacketizer, Packetizer};
 use crate::{Error, Result};
 
@@ -18,7 +10,6 @@ pub const NAL_AUD: u8 = 9;
 const STAP_A: u8 = 24;
 const FU_A: u8 = 28;
 
-/// Split an Annex-B byte stream into NAL units (without start codes).
 pub fn split_annex_b(data: &[u8]) -> Vec<&[u8]> {
     let mut starts = Vec::new();
     let mut i = 0;
@@ -33,7 +24,6 @@ pub fn split_annex_b(data: &[u8]) -> Vec<&[u8]> {
     let mut out = Vec::with_capacity(starts.len());
     for (k, &s) in starts.iter().enumerate() {
         let mut e = starts.get(k + 1).map(|n| n - 3).unwrap_or(data.len());
-        // trim trailing zero (4-byte start code of next NAL / trailing_zero_8bits)
         while e > s && data[e - 1] == 0 {
             e -= 1;
         }
@@ -44,12 +34,10 @@ pub fn split_annex_b(data: &[u8]) -> Vec<&[u8]> {
     out
 }
 
-/// Nal type helper.
 pub fn nal_type(nal: &[u8]) -> u8 {
     nal.first().map(|b| b & 0x1f).unwrap_or(0)
 }
 
-/// True if an Annex-B access unit contains an IDR slice.
 pub fn is_keyframe(au: &[u8]) -> bool {
     split_annex_b(au).iter().any(|n| nal_type(n) == NAL_IDR)
 }
@@ -65,7 +53,6 @@ impl H264Packetizer {
         Self::default()
     }
 
-    /// NAL list to send for this AU, with SPS/PPS repetition on keyframes.
     pub fn prepare_nals<'a>(&mut self, au: &'a [u8]) -> Vec<std::borrow::Cow<'a, [u8]>> {
         use std::borrow::Cow;
         let nals: Vec<&[u8]> = split_annex_b(au).into_iter().filter(|n| nal_type(n) != NAL_AUD).collect();
@@ -100,9 +87,6 @@ impl H264Packetizer {
 }
 
 impl H264Packetizer {
-    /// Rewrite an access unit with 4-byte start codes, AUDs removed and
-    /// SPS/PPS injected before IDRs. Must run *before* DAVE encryption so
-    /// that the encrypted frame is not altered afterwards.
     pub fn prepare_access_unit(&mut self, au: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(au.len() + 64);
         for n in self.prepare_nals(au) {
@@ -112,7 +96,6 @@ impl H264Packetizer {
         out
     }
 
-    /// Packetize an access unit verbatim (no parameter-set injection).
     pub fn packetize_prepared(&self, au: &[u8], max_payload: usize) -> Result<Vec<Vec<u8>>> {
         let nals: Vec<std::borrow::Cow<'_, [u8]>> =
             split_annex_b(au).into_iter().map(std::borrow::Cow::Borrowed).collect();
@@ -140,7 +123,6 @@ fn packetize_nals(nals: &[std::borrow::Cow<'_, [u8]>], max_payload: usize) -> Re
         while i < nals.len() {
             let n = &nals[i];
             if n.len() > max_payload {
-                // FU-A
                 let hdr = n[0];
                 let ind = (hdr & 0xe0) | FU_A;
                 let body = &n[1..];
@@ -163,7 +145,6 @@ fn packetize_nals(nals: &[std::borrow::Cow<'_, [u8]>], max_payload: usize) -> Re
                 i += 1;
                 continue;
             }
-            // Try STAP-A aggregation of following small NALs.
             let mut j = i;
             let mut size = 1;
             while j < nals.len() && size + 2 + nals[j].len() <= max_payload {
@@ -189,7 +170,6 @@ fn packetize_nals(nals: &[std::borrow::Cow<'_, [u8]>], max_payload: usize) -> Re
     }
 }
 
-/// Reassembles RTP payloads into an Annex-B access unit.
 #[derive(Default)]
 pub struct H264Depacketizer {
     au: Vec<u8>,
@@ -273,7 +253,6 @@ mod tests {
         let mut pk = H264Packetizer::new();
         let out = roundtrip(&input, &mut pk, 1100);
         assert_eq!(out, input);
-        // first packet is STAP-A(SPS,PPS)
         let pl = pk.packetize(&input, 1100).unwrap();
         assert_eq!(pl[0][0] & 0x1f, STAP_A);
         assert_eq!(pl[1][0] & 0x1f, FU_A);
@@ -286,10 +265,8 @@ mod tests {
         let idr = vec![0x65, 1, 2, 3];
         let mut pk = H264Packetizer::new();
         roundtrip(&au(&[sps.clone(), pps.clone(), idr.clone()]), &mut pk, 1100);
-        // P frame: no parameter sets injected
         let p = au(&[vec![0x41, 9, 9]]);
         assert_eq!(roundtrip(&p, &mut pk, 1100), p);
-        // Bare IDR: SPS/PPS injected
         let out = roundtrip(&au(std::slice::from_ref(&idr)), &mut pk, 1100);
         assert_eq!(out, au(&[sps, pps, idr]));
     }

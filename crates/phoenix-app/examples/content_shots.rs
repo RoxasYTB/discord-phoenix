@@ -1,7 +1,3 @@
-//! Offscreen render of the mock #showcase channel (every kind of message content).
-//! `content_shots out.png [dark|light|ash|onyx]`; PHOENIX_SHOT_H sets the window height.
-//! (scene arg unused) Scenes of views.rs: friends-all, friends-pending, inbox, pins, threads, search, profile, profile-modal, appearance, account, status, switcher, emoji, gif, sticker, friends, forum, dm-menu, dm-submenu.
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -20,7 +16,6 @@ fn main() -> anyhow::Result<()> {
     let scene = args.next().unwrap_or_else(|| "appearance".into());
     let login_only = false;
 
-    // Mock media generated here (gradients), never Discord assets: offscreen renders have no network.
     let dir = std::env::temp_dir().join("phoenix-mock-media");
     std::fs::create_dir_all(&dir)?;
     for (i, (name, w, h)) in [("photo", 1280, 720), ("one", 800, 600), ("two", 800, 600), ("three", 800, 600), ("clip", 1280, 720), ("thumb", 400, 400), ("video", 1280, 720), ("SPOILER_photo", 1280, 720)].into_iter().enumerate() {
@@ -39,7 +34,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -57,7 +51,6 @@ fn main() -> anyhow::Result<()> {
     });
     let view: Rc<RefCell<Option<Entity<PhoenixApp>>>> = Rc::default();
     let v2 = view.clone();
-    // PHOENIX_SHOT_H=700 matches the live client dumps (1280x700 viewport).
     let h: f32 = std::env::var("PHOENIX_SHOT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(800.);
     let w: f32 = std::env::var("PHOENIX_SHOT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1280.);
     let win = cx.open_window(size(px(w), px(h)), move |window, cx| {
@@ -97,8 +90,6 @@ fn main() -> anyhow::Result<()> {
         })?;
         pump(&mut cx, 4);
     }
-    // Images (avatars, decorations) load over several frames: with
-    // PHX_MOCK_DECO or PHX_WAIT_IMAGES, keep painting ~2 s before capturing.
     let frames = 10;
     for _ in 0..frames {
         cx.update_window(win.into(), |_, window, _| window.refresh())?;

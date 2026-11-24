@@ -1,6 +1,3 @@
-//! Profile Board application widgets (read-only GETs), see
-//! `ui::settings::profile_widgets` for the data flow.
-
 use reqwest::Method;
 use serde_json::Value;
 
@@ -32,7 +29,6 @@ impl DiscordBackend {
                     continue;
                 };
                 if std::env::var_os("PHX_DEBUG_WIDGETS").is_some() {
-                    // Config shape only (keys / types), for parity work on new component kinds.
                     eprintln!("widget config shape {}", crate::discord_backend::profile_games::shape_of(&cfg));
                 }
                 if let Some(card) = w::build(app, &cfg, &w::identity_data(&ident, app)) {

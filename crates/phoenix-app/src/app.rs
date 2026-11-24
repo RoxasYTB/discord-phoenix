@@ -1,5 +1,3 @@
-//! Root view: owns UI state, talks to the `Backend`, applies `AppEvent`s.
-
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -49,10 +47,8 @@ pub enum Screen {
 pub enum SidebarRow {
     Category(Id),
     Channel(Id),
-    /// Active thread under its parent channel.
     Thread(Id),
     VoiceUser { user: Id },
-    /// Stage channel audience strip under its speakers.
     StageAudience(Id),
 }
 
@@ -69,13 +65,10 @@ pub struct ChannelMessages {
     pub loading: bool,
     pub loaded_once: bool,
     pub reached_start: bool,
-    /// Showing a page around a jumped-to message, not the latest (history_detached).
     pub detached: bool,
 }
 
 impl ChannelMessages {
-    /// Position of message `id`. History is in snowflake order, so this is a
-    /// binary search; out-of-order entries fall back to a reverse scan.
     pub fn index_of(&self, id: Id) -> Option<usize> {
         match self.msgs.binary_search_by_key(&id.0, |m| m.id.0) {
             Ok(i) if self.msgs[i].id == id => Some(i),
@@ -91,18 +84,15 @@ pub struct PhoenixApp {
     pub screen: Screen,
     pub focus: FocusHandle,
 
-    // Login
     pub login_email: Entity<InputState>,
     pub login_password: Entity<InputState>,
     pub login_token: Entity<InputState>,
     pub login_with_token: bool,
-    /// TOTP code input, shown after a password login asked for 2FA.
     pub login_mfa: Entity<InputState>,
     pub login_mfa_step: bool,
     pub login_error: Option<SharedString>,
     pub logging_in: bool,
 
-    // Data
     pub me: User,
     pub users: HashMap<Id, User>,
     pub guilds: Vec<Guild>,
@@ -111,42 +101,32 @@ pub struct PhoenixApp {
     pub dms: Vec<Id>,
     pub roles: HashMap<Id, Vec<Role>>,
     pub members: HashMap<Id, Vec<Member>>,
-    /// Voice states (user -> channel) received before their channel exists (READY_SUPPLEMENTAL
-    /// racing ReadyData on first login); applied by `apply_ready`.
     pub pending_voice: HashMap<Id, Id>,
-    /// Presence of users outside the open guild's member list (DMs, friends).
     pub presences: HashMap<Id, Presence>,
     pub messages: HashMap<Id, ChannelMessages>,
 
-    // Selection
     pub selected_guild: Option<Id>,
     pub selected_channel: Option<Id>,
     pub last_channel: HashMap<Option<Id>, Id>,
     pub collapsed: HashSet<Id>,
     pub nav: crate::ui::home::data::NavState,
 
-    // Derived rows (rebuilt on change, not per frame)
     pub sidebar_rows: Vec<SidebarRow>,
-    /// Guild the current `sidebar_rows` were built for (scroll anchoring).
     pub sidebar_rows_guild: Option<Id>,
     pub member_rows: Vec<MemberRow>,
 
-    // Virtualized list states
     pub guild_list: ListState,
     pub sidebar_list: ListState,
     pub message_list: ListState,
     pub member_list: ListState,
 
-    // Composer
     pub composer: Entity<gpui_component::input::TextareaState>,
     pub replying_to: Option<Id>,
     pub editing: Option<Id>,
     pub typing: HashMap<Id, Vec<(Id, Instant)>>,
     pub typing_label: Option<SharedString>,
-    /// Server nick sent with TYPING_START, keyed by (channel, user).
     pub typing_nicks: HashMap<(Id, Id), SharedString>,
 
-    // Self state
     pub presence: Presence,
     pub mic_muted: bool,
     pub deafened: bool,
@@ -173,8 +153,6 @@ pub(crate) struct Resolver<'a> {
     members: &'a HashMap<Id, Vec<Member>>,
     soundboard_sounds: &'a [crate::model::SoundboardSound],
     me: Id,
-    /// Guild of the message: `@user` shows the member's nick there (live sandbox
-    /// 2026-11-24: "@Yohan", the server nick, not the global name).
     guild: Option<Id>,
 }
 impl Resolver<'_> {
@@ -244,8 +222,6 @@ impl PhoenixApp {
         let login_password = cx.new(|cx| InputState::new(window, cx).masked(true));
         let login_token = cx.new(|cx| InputState::new(window, cx).masked(true));
         let login_mfa = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("login.six_digit")));
-        // scrollableContainer_: grows with the text up to --custom-channel-textarea-text-area-max-height
-        // (50vh), then scrolls; Enter sends, Shift+Enter inserts a newline. 22px lines.
         let max_rows = ((f32::from(window.viewport_size().height) * 0.5 / 22.).floor() as usize).max(2);
         let composer = cx.new(|cx| gpui_component::input::TextareaState::new(window, cx).auto_grow(1, max_rows).submit_on_enter(true));
 
@@ -266,7 +242,6 @@ impl PhoenixApp {
             }));
         }
 
-        // Gateway event pump: backend threads -> channel -> UI thread.
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<AppEvent>();
         let sink: EventSink = Arc::new(move |ev| {
             let _ = tx.unbounded_send(ev);
@@ -274,7 +249,6 @@ impl PhoenixApp {
         backend.set_event_sink(sink);
         cx.spawn(async move |this, cx| {
             while let Some(ev) = rx.next().await {
-                // Handle every queued event in one update (one redraw per batch, not per event).
                 let mut batch = vec![ev];
                 while let Ok(ev) = rx.try_recv() {
                     batch.push(ev);
@@ -286,7 +260,6 @@ impl PhoenixApp {
         })
         .detach();
 
-        // Typing indicator expiry tick.
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
@@ -307,10 +280,8 @@ impl PhoenixApp {
             let _ = weak.update(cx, |this, cx| this.chat_on_scroll(ev, cx));
         });
 
-        // Auto-login from the stored session (keyring), if any.
         let restore = backend.restore_session();
         let logging_in = restore.is_some();
-        // Draw the last session from disk while the gateway connects (docs/perf.md).
         if let Some(fut) = restore.is_some().then(|| backend.restore_cached()).flatten() {
             cx.spawn(async move |this, cx| {
                 if let Ok(ready) = fut.await {
@@ -331,7 +302,6 @@ impl PhoenixApp {
                 let _ = this.update(cx, |this, cx| {
                     this.logging_in = false;
                     match res {
-                        // Already showing the disk snapshot: rebuild in place, keep the selection.
                         Ok(ready) if this.screen == Screen::Main => {
                             crate::commands::on_resync(this, crate::commands::Resync(ready), cx)
                         }
@@ -341,7 +311,6 @@ impl PhoenixApp {
                                 this.clear_session();
                                 this.screen = Screen::Login;
                             }
-                            // Empty message = nothing stored: stay quietly on the login screen.
                             if !e.0.is_empty() {
                                 this.login_error = Some(e.0.into());
                             }
@@ -355,8 +324,6 @@ impl PhoenixApp {
         }
 
         let utc_offset = Local::now().offset().local_minus_utc() as i64;
-        // One lock: two `prefs().lock()` temporaries in the same struct
-        // literal deadlock (both guards live until the end of the statement).
         let (self_mute, self_deaf) = {
             let p = crate::voice::prefs::prefs().lock();
             (p.self_mute, p.self_deaf)
@@ -432,8 +399,6 @@ impl PhoenixApp {
         }
     }
 
-    // ---------------------------------------------------------------- login
-
     pub fn submit_login(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.logging_in {
             return;
@@ -475,7 +440,6 @@ impl PhoenixApp {
         .detach();
     }
 
-    /// Drop everything tied to the logged-in account.
     fn clear_session(&mut self) {
         self.users.clear();
         self.guilds.clear();
@@ -519,11 +483,7 @@ impl PhoenixApp {
     }
 
     pub fn apply_ready(&mut self, r: ReadyData, cx: &mut Context<Self>) {
-        // Own activities are emitted during login, before this runs (convert::self_activities).
         let mine = self.people.activities.remove(&r.me.id);
-        // READY_SUPPLEMENTAL voice states can land before this ReadyData, on the
-        // channels of the disk snapshot (resync) or of a previous session, and
-        // `clear_session` drops those channels: keep their voice users.
         let old_voice: HashMap<Id, Vec<Id>> = self
             .channels
             .values()
@@ -546,8 +506,6 @@ impl PhoenixApp {
             if let Some(g) = ch.guild {
                 self.guild_channels.entry(g).or_default().push(ch.id);
             }
-            // READY_SUPPLEMENTAL (guild voice_states) can be delivered before this ReadyData:
-            // keep the voice users it already put on the channel.
             if ch.voice_users.is_empty()
                 && ch.guild.is_some()
                 && let Some(old) = old_voice.get(&ch.id)
@@ -566,9 +524,6 @@ impl PhoenixApp {
         for list in self.guild_channels.values_mut() {
             list.sort_by_key(|id| self.channels[id].position);
         }
-        // Our own voice state can arrive (READY_SUPPLEMENTAL) before this
-        // ReadyData, while `me` was still unknown, so the event never set
-        // `voice_channel`: recover it from the queued voice users.
         let me = self.me.id;
         self.voice_channel = self.pending_voice.get(&me).copied().or_else(|| {
             self.channels.values().find(|c| c.guild.is_some() && c.voice_users.contains(&me)).map(|c| c.id)
@@ -577,7 +532,6 @@ impl PhoenixApp {
             self.dms.push(ch.id);
             self.channels.insert(ch.id, ch);
         }
-        // Home + separator + guilds + separator + add + discover
         self.guild_list.reset(self.guilds.len() + 5);
         self.screen = Screen::Main;
         self.nav_after_ready();
@@ -586,11 +540,8 @@ impl PhoenixApp {
         ui::settings::on_ready(self, cx);
     }
 
-    // ----------------------------------------------------------- selection
-
     pub fn select_guild(&mut self, guild: Option<Id>, cx: &mut Context<Self>) {
         self.selected_guild = guild;
-        // Selecting a guild clears nothing: its badge is the sum of its channels' mentions.
         self.rebuild_sidebar();
         self.rebuild_members();
         self.backend.select_guild(guild).detach_ok();
@@ -608,13 +559,11 @@ impl PhoenixApp {
         });
         self.nav_home_target(guild, target.is_some());
         if let Some(t) = target {
-            // Restoring the remembered chat (may be a voice channel's text chat): never joins.
             self.open_channel_chat(t, cx);
         }
         cx.notify();
     }
 
-    /// Guild badge = sum of its channels' mentions (the client's GuildReadStateStore).
     fn refresh_guild_mentions(&mut self, guild: Option<Id>) {
         let Some(g) = guild else { return };
         let n = self.guild_channels.get(&g).map_or(0, |l| l.iter().filter_map(|c| self.channels.get(c)).map(|c| c.mentions).sum());
@@ -634,8 +583,6 @@ impl PhoenixApp {
         self.open_channel_chat(id, cx);
     }
 
-    /// Show a channel's text chat without any side effect on voice: for voice/stage
-    /// channels this is the vanilla "Ouvrir la discussion" (voice channel text chat).
     pub fn open_channel_chat(&mut self, id: Id, cx: &mut Context<Self>) {
         crate::commands::state::remember_read_mark(self, id);
         let Some(ch) = self.channels.get_mut(&id) else { return };
@@ -664,7 +611,6 @@ impl PhoenixApp {
         }
         if !entry.loaded_once && !entry.loading {
             entry.loading = true;
-            // Rows are laid out on the background executor (docs/perf.md).
             crate::history_ui::load_first_page(self, id, cx);
         }
         cx.notify();
@@ -701,7 +647,6 @@ impl PhoenixApp {
         let revealed = |i: usize| self.revealed.contains(&(m.id, i));
         let (parsed, mut blocks, mentions_me, preview) =
             richtext::build(&m.content, &self.resolver_with_sounds(&m.soundboard_sounds, m.channel), self.me.id, &revealed);
-        // messageContent_.isFailed_: the whole text in --text-feedback-critical.
         if m.send_state == crate::model::SendState::Failed {
             blocks = richtext::render_blocks(&parsed, &revealed, ui::chat::tk(crate::theme::generated::idx::TEXT_FEEDBACK_CRITICAL));
         }
@@ -733,7 +678,6 @@ impl PhoenixApp {
         if older {
             all.extend(std::mem::take(&mut entry.msgs));
         }
-        // Re-render only the new rows plus the first old row (its grouping may change).
         let rendered: Vec<RenderedMessage> = if older {
             let mut r: Vec<_> = (0..n.min(all.len()))
                 .map(|i| self.render_msg(&all[i], i.checked_sub(1).map(|p| &all[p])))
@@ -759,7 +703,6 @@ impl PhoenixApp {
             if older {
                 self.message_list.splice(1..1, n);
                 if n < len {
-                    // The previously-first message may have changed grouping.
                     self.message_list.splice(n + 1..n + 2, 1);
                 }
             } else {
@@ -770,18 +713,15 @@ impl PhoenixApp {
     }
 
     pub(crate) fn append_message(&mut self, m: Message, cx: &mut Context<Self>) {
-        // Our own echo replaces its optimistic copy in place (ui::chat::pending).
         if self.take_echo(&m, cx) {
             return;
         }
         let ch = m.channel;
         let selected = self.selected_channel == Some(ch);
-        // Blocked authors never ping (the client skips their mentions).
         let mention = m.content.contains(&format!("<@{}>", self.me.id.0)) && !self.nav.is_blocked(m.author);
         if let Some(t) = self.typing.get_mut(&ch) {
             t.retain(|(u, _)| *u != m.author);
         }
-        // Detached page on screen: appending would leave a gap; count it instead.
         if self.messages.get(&ch).is_some_and(|e| e.detached) {
             if selected {
                 self.chat_note_incoming(false, m.timestamp);
@@ -798,7 +738,6 @@ impl PhoenixApp {
             }
             return;
         };
-        // New messages are almost always newer than the tail: skip the scan then.
         if entry.msgs.last().is_some_and(|l| l.id.0 >= m.id.0) && entry.index_of(m.id).is_some() {
             self.messages.insert(ch, entry);
             return;
@@ -845,8 +784,6 @@ impl PhoenixApp {
         }
     }
 
-    // ------------------------------------------------------------- events
-
     pub fn handle_event(&mut self, ev: AppEvent, cx: &mut Context<Self>) {
         match ev {
             AppEvent::Ready => {}
@@ -862,7 +799,6 @@ impl PhoenixApp {
                         if selected {
                             self.message_list.splice(ix + 1..ix + 2, 0);
                         }
-                        // The next message may now start a group / day (deleted group head).
                         if ix < e.msgs.len() {
                             e.rendered[ix] = self.render_msg(&e.msgs[ix], ix.checked_sub(1).map(|p| &e.msgs[p]));
                             if selected {
@@ -887,10 +823,10 @@ impl PhoenixApp {
             }
             AppEvent::PresenceUpdate { user, presence } => {
                 if user == self.me.id {
-                    self.presence = presence; // status changed from another client
+                    self.presence = presence;
                 }
                 if user == self.me.id {
-                    self.presence = presence; // own status dot in the user panel
+                    self.presence = presence;
                 }
                 self.people.on_presence(user, presence);
                 self.presences.insert(user, presence);
@@ -905,7 +841,6 @@ impl PhoenixApp {
                 self.members.insert(guild, members);
                 if self.selected_guild == Some(guild) {
                     self.rebuild_members();
-                    // Voice user rows are sorted by server nick.
                     self.rebuild_sidebar();
                 }
             }
@@ -918,7 +853,6 @@ impl PhoenixApp {
             }
             AppEvent::VoiceFlags { user, flags } => crate::ui::voice_panel::set_flags(user, flags),
             AppEvent::VoiceStateUpdate { channel, user } => {
-                // DMs keep their recipient in `voice_users` (avatar): skip them.
                 for ch in self.channels.values_mut().filter(|c| c.guild.is_some()) {
                     ch.voice_users.retain(|u| *u != user);
                 }
@@ -1008,7 +942,6 @@ impl PhoenixApp {
             AppEvent::SettingsChanged => ui::settings::on_ready(self, cx),
             AppEvent::SoundboardSounds { guild, sounds } => ui::pickers::soundboard::on_sounds(guild, sounds, cx),
             ev @ (AppEvent::MemberListRows { .. } | AppEvent::Activities { .. }) => {
-                // Own custom status changed from another client (SESSIONS_REPLACE).
                 if let AppEvent::Activities { user, activities } = &ev
                     && *user == self.me.id
                 {
@@ -1029,7 +962,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Replace a guild's channel list (already in display order).
     fn set_guild_channels(&mut self, guild: Id, channels: Vec<crate::model::Channel>) {
         if let Some(old) = self.guild_channels.remove(&guild) {
             for id in old {
@@ -1038,7 +970,6 @@ impl PhoenixApp {
         }
         let mut ids = Vec::with_capacity(channels.len());
         for mut ch in channels {
-            // The open channel is read by definition.
             if self.selected_channel == Some(ch.id) {
                 ch.unread = false;
                 ch.mentions = 0;
@@ -1076,10 +1007,7 @@ impl PhoenixApp {
         }
     }
 
-    /// Name the client shows for a typer (`getName(guild, channel, user)`):
-    /// member nick, then global display name, then username.
     pub fn typing_name(&self, channel: Id, user: Id) -> Option<SharedString> {
-        // TypingUsers rejects RelationshipStore.isBlockedOrIgnored.
         if self.nav.is_blocked(user) || self.nav.is_ignored(user) {
             return None;
         }
@@ -1104,8 +1032,6 @@ impl PhoenixApp {
             _ => Some(crate::t!("chat.typing_many")),
         };
     }
-
-    // ---------------------------------------------------------- composer
 
     fn on_composer_change(&mut self, cx: &mut Context<Self>) {
         if let Some(ch) = self.selected_channel
@@ -1153,7 +1079,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Up arrow in an empty composer: edit own last message.
     pub fn edit_last(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if !self.composer.read(cx).value().is_empty() {
             return false;
@@ -1183,8 +1108,6 @@ impl PhoenixApp {
         crate::voice::on_join_clicked(self, ch);
         cx.notify();
     }
-
-    // -------------------------------------------------------- derived rows
 
     pub fn toggle_category(&mut self, id: Id, cx: &mut Context<Self>) {
         if !self.collapsed.remove(&id) {
@@ -1247,18 +1170,16 @@ impl PhoenixApp {
                 .push(MemberRow::Header(format!("{title} — {}", b.len()).into()));
             self.member_rows.extend(b.into_iter().map(MemberRow::Member));
         }
-        self.member_list.reset(self.member_rows.len() + 1); // + Activity header item (ui/members.rs)
+        self.member_list.reset(self.member_rows.len() + 1);
     }
 
     pub fn member_color(&self, guild: Id, m: &Member) -> Option<u32> {
-        // Accessibility "Role colors": only "Show in names" (0) tints names.
         if self.prefs.local.pick("roles", 0) != 0 {
             return None;
         }
         self.member_role_color(guild, m)
     }
 
-    /// Highest coloured role of `m`, ignoring the Role colors setting.
     pub fn member_role_color(&self, guild: Id, m: &Member) -> Option<u32> {
         let roles = self.roles.get(&guild)?;
         roles
@@ -1268,24 +1189,19 @@ impl PhoenixApp {
             .and_then(|r| r.color)
     }
 
-    /// Guild owning `channel` (regular channels and cached threads).
     pub fn channel_guild(&self, channel: Id) -> Option<Id> {
         self.channels.get(&channel).or_else(|| self.nav.find_thread(channel)).and_then(|c| c.guild)
     }
 
-    /// Guild nickname of `user` in `guild`, from the member cache.
     pub fn member_nick_in(&self, guild: Option<Id>, user: Id) -> Option<SharedString> {
         let g = guild?;
         crate::member_index::find(self.members.get(&g)?, g, user)?.nick.clone()
     }
 
-    /// Guild nickname of `user` in the selected guild, from the member cache.
     pub fn member_nick(&self, user: Id) -> Option<SharedString> {
         self.member_nick_in(self.selected_guild, user)
     }
 
-    /// `user` as shown in guild `g`: the per-guild avatar, decoration and
-    /// nameplate of its member replace the global ones.
     pub fn member_user(&self, g: Option<Id>, user: Id) -> Option<std::borrow::Cow<'_, crate::model::User>> {
         let u = self.users.get(&user)?;
         let m = g.and_then(|g| crate::member_index::find(self.members.get(&g)?, g, user));
@@ -1307,7 +1223,6 @@ impl PhoenixApp {
         }
     }
 
-    /// Role dot of Accessibility "Role colors: Show next to names" in `guild`.
     pub fn author_role_dot_in(&self, guild: Option<Id>, user: Id) -> Option<u32> {
         if self.prefs.local.pick("roles", 0) != 1 {
             return None;
@@ -1317,7 +1232,6 @@ impl PhoenixApp {
         self.member_role_color(g, m)
     }
 
-    /// Role dot of Accessibility "Role colors: Show next to names".
     pub fn author_role_dot(&self, user: Id) -> Option<u32> {
         self.author_role_dot_in(self.selected_guild, user)
     }
@@ -1332,7 +1246,6 @@ impl PhoenixApp {
         self.author_color_in(self.selected_guild, user)
     }
 
-    /// Gradient stops of `user`'s top coloured role in `guild` (when role colours show in names).
     pub fn author_role_gradient_in(&self, guild: Option<Id>, user: Id) -> Option<[u32; 3]> {
         if self.prefs.local.pick("roles", 0) != 0 {
             return None;
@@ -1342,21 +1255,16 @@ impl PhoenixApp {
         crate::ui::role_gradient::for_member(self, g, m)
     }
 
-    /// Icon of the highest role of `user` that has one, in `guild`.
     pub fn author_role_icon_in(&self, guild: Option<Id>, user: Id) -> Option<SharedString> {
         let g = guild?;
         let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
         self.roles.get(&g)?.iter().filter(|r| m.roles.contains(&r.id) && r.icon.is_some()).max_by_key(|r| r.position)?.icon.clone()
     }
 
-    /// Icon of the highest role of `user` that has one, in the selected guild.
     pub fn author_role_icon(&self, user: Id) -> Option<SharedString> {
         self.author_role_icon_in(self.selected_guild, user)
     }
 
-    /// Client rule for the "New member" badge (module `HU`, maxDaysOld 7): the
-    /// member joined under 7 days ago, did not rejoin, is not a bot, and the
-    /// guild itself is older than 7 days.
     pub fn is_new_member(&self, user: Id) -> bool {
         const WEEK_MS: i64 = 7 * 86_400_000;
         let Some(g) = self.selected_guild else { return false };
@@ -1379,8 +1287,6 @@ impl PhoenixApp {
             .or(known)
             .unwrap_or(Presence::Offline)
     }
-
-    // ------------------------------------------------------ quick switcher
 
     pub fn open_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         ui::switcher::open(self, window, cx);
@@ -1408,7 +1314,6 @@ impl PhoenixApp {
             self.people.close_overlays();
             cx.notify();
         } else if self.escape_header_popouts(cx) {
-            // Inbox / threads / pins: Esc closes them and never marks read.
         } else if self.switcher.is_some() {
             self.close_switcher(window, cx);
         } else if self.chat_escape(window, cx) {
@@ -1416,7 +1321,6 @@ impl PhoenixApp {
             self.composer.update(cx, |s, cx| s.set_value("", window, cx));
         } else if self.replying_to.take().is_none() {
             self.message_list.scroll_to_end();
-            // Client: Esc = mark channel as read (MARK_CHANNEL_READ).
             self.mark_channel_read(cx);
         }
         cx.notify();
@@ -1428,8 +1332,6 @@ trait DetachOk {
 }
 impl<T: Send + 'static> DetachOk for crate::backend::BoxFuture<T> {
     fn detach_ok(self) {
-        // Fire-and-forget; executed on a helper thread so we don't need a
-        // context. Real adapters can return immediately-ready futures.
         std::thread::spawn(move || {
             let _ = futures::executor::block_on(self);
         });
@@ -1452,7 +1354,6 @@ impl Render for PhoenixApp {
         crate::ui::settings::effects::sync(self);
         self.chat_sync_style();
         if ui::focus_ring::sync(window, cx) {
-            // Controls asked for focus handles last frame: render once more to track them.
             cx.notify();
         }
         let body = match self.screen {
@@ -1482,7 +1383,6 @@ impl Render for PhoenixApp {
                 .child(ui::home::main_pane(self, window, cx)))
                 .into_any_element(),
         };
-        // SHAKE_APP moves the whole app layer (slowmode refusal).
         let (sx, sy) = ui::shake::offset(window, self.prefs.local.reduced_motion || cx.reduce_motion()).unwrap_or((0., 0.));
         let body = div().size_full().relative().left(px(sx)).top(px(sy)).child(body).into_any_element();
         div()
@@ -1494,7 +1394,6 @@ impl Render for PhoenixApp {
             .on_action(cx.listener(ui::settings::open_action))
             .capture_key_down(cx.listener(|this, ev, _, cx| crate::voice::ptt::on_key_down(this, ev, cx)))
             .capture_key_up(cx.listener(|this, ev, _, cx| crate::voice::ptt::on_key_up(this, ev, cx)))
-            // Bubble phase: Tab only moves focus when the composer, a picker or a menu did not take it.
             .on_key_down(cx.listener(|_, ev, w, cx| {
                 if ui::focus_ring::on_key_down(ev, w, cx) {
                     cx.stop_propagation();
@@ -1509,14 +1408,12 @@ impl Render for PhoenixApp {
             .relative()
             .font_family(FONT_UI())
             .map(|mut el| {
-                // Per-glyph fallback for characters missing from gg sans (see fonts::ui_fallbacks).
                 el.text_style().font_fallbacks = Some(crate::fonts::ui_fallbacks());
                 el
             })
             .text_color(c(Palette::TEXT_NORMAL))
             .bg(c(Palette::BG_TERTIARY))
             .child({
-                // `SHAKE_APP` from the Raging Demon easter egg.
                 let (dx, dy) = ui::easter::shake_offset(window);
                 div().size_full().relative().left(gpui::px(dx)).top(gpui::px(dy)).child(body)
             })

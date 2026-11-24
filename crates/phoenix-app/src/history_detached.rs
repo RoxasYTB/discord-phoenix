@@ -1,9 +1,3 @@
-//! Detached history, like the client's "jump to message": the open channel shows
-//! the page around a message instead of the latest one. Live messages aren't
-//! appended (they'd leave a gap); the "You're viewing older messages" bar is up
-//! until the user scrolls down to the present or clicks "Jump To Present".
-//! Read-only: only GET /messages?around= / ?after=.
-
 use gpui::{Context, ListScrollEvent};
 
 use crate::{
@@ -12,16 +6,13 @@ use crate::{
     model::{Id, Message},
 };
 
-/// Page size, as the client (`MAX_MESSAGES_PER_CHANNEL` fetch limit 50).
 const PAGE: u32 = 50;
 
-/// Whether the open channel is showing a detached page.
 pub fn is_detached(app: &PhoenixApp) -> bool {
     app.selected_channel.and_then(|c| app.messages.get(&c)).is_some_and(|e| e.detached)
 }
 
 impl PhoenixApp {
-    /// Replace the open channel's history with the page around `id`, then reveal and flash it.
     pub fn jump_around(&mut self, channel: Id, id: Id, cx: &mut Context<Self>) {
         let Some(e) = self.messages.get_mut(&channel) else { return };
         if e.loading {
@@ -54,7 +45,7 @@ impl PhoenixApp {
         let rendered = (0..page.len()).map(|i| self.render_msg(&page[i], i.checked_sub(1).map(|p| &page[p]))).collect();
         let mut e = self.messages.remove(&channel).unwrap_or_default();
         e.loaded_once = true;
-        e.reached_start = false; // paging up from here works as usual
+        e.reached_start = false;
         e.detached = true;
         e.msgs = page;
         e.rendered = rendered;
@@ -65,8 +56,6 @@ impl PhoenixApp {
         self.message_list.reset(len + 1);
     }
 
-    /// "Jump To Present" from a detached page: drop it and load the latest page.
-    /// True when it handled the jump.
     pub fn leave_detached(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(ch) = self.selected_channel else { return false };
         if !self.messages.get(&ch).is_some_and(|e| e.detached) {
@@ -80,8 +69,6 @@ impl PhoenixApp {
         true
     }
 
-    /// Scroll handler: at the bottom of a detached page, load the next newer page;
-    /// a short page means we caught up with the present.
     pub fn detached_on_scroll(&mut self, ev: &ListScrollEvent, cx: &mut Context<Self>) {
         let Some(ch) = self.selected_channel else { return };
         let Some(e) = self.messages.get_mut(&ch) else { return };

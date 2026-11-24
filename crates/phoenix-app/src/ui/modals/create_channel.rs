@@ -1,8 +1,3 @@
-//! "Create Channel" / "Create Category" modal of the guild and category
-//! menus: channel type cards (text, voice, forum, announcement, stage), the
-//! name input with the type glyph, the "Private Channel" switch and
-//! Cancel / Create.
-
 use gpui::{AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use gpui_component::input::{Input, InputState};
 
@@ -29,7 +24,6 @@ impl State {
     }
 }
 
-/// (kind, title key, description key, icon) in the client's order.
 pub const KINDS: [(ChannelKind, &str, &str, &str); 5] = [
     (ChannelKind::Text, "admin.kind_text", "admin.kind_text_desc", "hash"),
     (ChannelKind::Voice, "admin.kind_voice", "admin.kind_voice_desc", "speaker"),

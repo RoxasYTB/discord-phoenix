@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{ChannelId, GuildId, Member, UserId, null_default};
 
-/// VOICE_STATE_UPDATE payload / guild voice state entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct VoiceState {
     #[serde(default)]
@@ -30,22 +29,17 @@ pub struct VoiceState {
     pub suppress: bool,
     #[serde(default)]
     pub request_to_speak_timestamp: Option<String>,
-    /// `false` when the user hides their voice activity: the client then leaves them out of
-    /// the member list / profile activity (`getDiscoverableVoiceState`). Absent = `true`.
     #[serde(default)]
     pub discoverable: Option<bool>,
 }
 
-/// VOICE_SERVER_UPDATE payload: what the voice crate needs to connect.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VoiceServerUpdate {
     pub token: String,
-    /// Guild id, absent for DM/group calls (then `channel_id` is set).
     #[serde(default)]
     pub guild_id: Option<GuildId>,
     #[serde(default)]
     pub channel_id: Option<ChannelId>,
-    /// `None` means the voice server went away; wait for another update.
     #[serde(default)]
     pub endpoint: Option<String>,
 }

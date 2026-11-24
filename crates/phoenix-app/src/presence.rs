@@ -1,9 +1,3 @@
-//! Rich presence (activities, custom status), the server-side lazy member
-//! list rows, user profiles and the UI state for popouts / status picker.
-//!
-//! Parsing is pure (no GPUI) so it is unit tested here; the views live in
-//! `ui::members`, `ui::profile` and `ui::status_picker`.
-
 use std::{cell::Cell, collections::HashMap};
 
 use gpui::{Entity, Pixels, Point, SharedString};
@@ -29,16 +23,11 @@ pub struct Activity {
     pub name: SharedString,
     pub details: Option<SharedString>,
     pub state: Option<SharedString>,
-    /// Unicode emoji (custom status) when present.
     pub emoji: Option<SharedString>,
     pub url: Option<SharedString>,
-    /// `status_display_type`: which field the status line shows (0 name, 1 state, 2 details).
     pub display_type: Option<u8>,
-    /// Large asset image URL (Spotify album art, game art) when resolvable.
     pub image: Option<SharedString>,
-    /// Unix milliseconds the activity started.
     pub start: Option<i64>,
-    /// `application_id`: the member list counts two activities of one application once.
     pub application_id: Option<SharedString>,
 }
 
@@ -47,7 +36,6 @@ impl Activity {
         self.kind == ActivityKind::Listening && self.name.as_ref() == "Spotify"
     }
 
-    /// "Playing Foo", "Listening to Spotify", custom status text...
     pub fn headline(&self) -> SharedString {
         let n = &self.name;
         match self.kind {
@@ -77,7 +65,6 @@ fn s(v: &Value, k: &str) -> Option<SharedString> {
     v.get(k).and_then(Value::as_str).filter(|x| !x.trim().is_empty()).map(|x| SharedString::from(x.to_owned()))
 }
 
-/// Resolve an activity asset key ("spotify:abc", "mp:external/..", app asset id).
 fn asset_url(a: &Value) -> Option<SharedString> {
     let key = a.get("assets")?.get("large_image")?.as_str()?;
     if let Some(id) = key.strip_prefix("spotify:") {
@@ -91,7 +78,6 @@ fn asset_url(a: &Value) -> Option<SharedString> {
 }
 
 pub fn parse_activity(a: &Value) -> Option<Activity> {
-    // HANG_STATUS (6) is never an activity line in the client (filtered with CUSTOM_STATUS).
     if a.get("type").and_then(Value::as_u64) == Some(6) {
         return None;
     }
@@ -103,7 +89,6 @@ pub fn parse_activity(a: &Value) -> Option<Activity> {
         5 => ActivityKind::Competing,
         _ => ActivityKind::Playing,
     };
-    // Custom emoji become a `<a:name:id>` / `<:name:id>` token so labels draw (and play) them.
     let emoji = a.get("emoji").and_then(|e| match e.get("id").and_then(|i| i.as_str().map(str::to_owned).or_else(|| i.as_u64().map(|n| n.to_string()))) {
         Some(id) => {
             let anim = if e.get("animated").and_then(Value::as_bool).unwrap_or(false) { "a" } else { "" };
@@ -135,7 +120,6 @@ pub fn parse_activities(list: &[Value]) -> Vec<Activity> {
     list.iter().filter_map(parse_activity).collect()
 }
 
-/// One line under a member name: custom status wins, else the first activity.
 pub fn summary(acts: &[Activity]) -> Option<SharedString> {
     acts.iter()
         .find(|a| a.kind == ActivityKind::Custom)
@@ -144,7 +128,6 @@ pub fn summary(acts: &[Activity]) -> Option<SharedString> {
         .filter(|t| !t.trim().is_empty())
 }
 
-/// Gateway status string for op 3 / settings.
 pub fn status_str(p: Presence) -> &'static str {
     match p {
         Presence::Online => "online",
@@ -163,21 +146,13 @@ pub fn status_label(p: Presence) -> SharedString {
     }
 }
 
-// ------------------------------------------------------- lazy member list
-
-/// Row of the server-ordered member list (GUILD_MEMBER_LIST_UPDATE).
 #[derive(Clone, Debug)]
 pub enum ListEntry {
-    /// "online", "offline" or a hoisted role id.
     Group { id: SharedString, count: u32 },
-    /// Member + guild nickname.
     Member(Member, Option<SharedString>),
-    /// Index known to exist but not synced (outside the subscribed ranges).
     Loading,
 }
 
-/// Flatten the gateway list items (with holes) into UI rows, and collect
-/// each member's activities.
 pub fn list_rows<'a>(items: impl Iterator<Item = &'a Option<MemberListItem>>) -> (Vec<ListEntry>, Vec<(Id, Vec<Activity>)>) {
     let (mut rows, mut acts) = (Vec::new(), Vec::new());
     for it in items {
@@ -215,9 +190,6 @@ pub fn list_rows<'a>(items: impl Iterator<Item = &'a Option<MemberListItem>>) ->
     (rows, acts)
 }
 
-/// Ranges to subscribe for a list scrolled so that `first_visible` is at the
-/// top: always the first 100, plus the chunk in view and the next one
-/// (what the official client does).
 pub fn ranges_for(first_visible: usize) -> Vec<[u32; 2]> {
     let chunk = (first_visible / 100) as u32;
     let mut v = vec![[0, 99]];
@@ -229,8 +201,6 @@ pub fn ranges_for(first_visible: usize) -> Vec<[u32; 2]> {
     v
 }
 
-// ---------------------------------------------------------------- profiles
-
 #[derive(Clone, Debug, Default)]
 pub struct Profile {
     pub user: Id,
@@ -239,26 +209,17 @@ pub struct Profile {
     pub decoration: Option<SharedString>,
     pub pronouns: SharedString,
     pub bio: SharedString,
-    /// Guild role ids (when fetched for a guild).
     pub roles: Vec<Id>,
     pub nick: Option<SharedString>,
-    /// Unix seconds: account creation (from the snowflake).
     pub created: i64,
-    /// Unix seconds: joined the guild.
     pub joined: Option<i64>,
     pub note: SharedString,
     pub mutual_guilds: usize,
     pub mutual_friends_count: usize,
-    /// Mutual friends (full profile "Mutual Friends" tab).
     pub mutual_friends: Vec<crate::model::User>,
-    /// Mutual guild ids (full profile "Mutual Servers" tab).
     pub mutual_guild_ids: Vec<Id>,
-    /// Profile badges: (description, icon URL).
     pub badges: Vec<(SharedString, SharedString)>,
-    /// Nitro profile theme (primary, secondary) colours, `theme_colors`.
     pub theme: Option<(u32, u32)>,
-    /// Applied profile effect / frame SKUs (`user_profile.collectibles`);
-    /// assets resolved by `ui::profile_fx`.
     pub effect_sku: Option<u64>,
     pub frame_sku: Option<u64>,
 }
@@ -274,7 +235,6 @@ pub(crate) fn iso_to_unix(s: &str) -> Option<i64> {
 pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: String) -> Profile {
     let u = &p.user;
     if std::env::var_os("PHX_DEBUG_PROFILE").is_some() {
-        // Diagnostics for the real-data captures: badge / widget payloads only.
         eprintln!(
             "profile {}: badges={} widgets={} extra_keys={:?}",
             u.id,
@@ -283,7 +243,6 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
             p.extra.keys().collect::<Vec<_>>()
         );
     }
-    // Per-guild banner first: CDN `guilds/{guild}/users/{user}/banners/{hash}`.
     let ext = |h: &str| if h.starts_with("a_") { "gif" } else { "png" };
     let guild_banner = p.guild_member_profile.as_ref().and_then(|g| Some((g.guild_id?, g.banner.clone()?))).map(|(g, h)| {
         SharedString::from(format!("https://cdn.discordapp.com/guilds/{}/users/{}/banners/{h}.{}?size=600", g.0, u.id, ext(&h)))
@@ -305,7 +264,6 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
         .and_then(|x| x.theme_colors.as_ref().and_then(|t| t.first().copied()).or(x.accent_color))
         .or(u.accent_color);
     let gm = p.guild_member.as_ref();
-    // Guild profile collectibles override the global ones (client `profileEffect`).
     let fx = [p.guild_member_profile.as_ref(), p.user_profile.as_ref()]
         .into_iter()
         .flatten()
@@ -343,12 +301,9 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
     }
 }
 
-/// "Nov 23, 2026"
 pub fn format_date(ts: i64) -> SharedString {
     chrono::DateTime::from_timestamp(ts, 0).map(|d| crate::i18n::medium_date(d.date_naive())).unwrap_or_default().into()
 }
-
-// ---------------------------------------------------------------- UI state
 
 pub struct Popout {
     pub user: Id,
@@ -358,28 +313,20 @@ pub struct Popout {
     pub _sub: gpui::Subscription,
 }
 
-/// Everything member/presence/profile related the views need. One field on
-/// `PhoenixApp` (`people`).
 #[derive(Default)]
 pub struct People {
-    /// Server-ordered member list per guild.
     pub lists: HashMap<Id, Vec<ListEntry>>,
     pub activities: HashMap<Id, Vec<Activity>>,
     pub profiles: HashMap<Id, Profile>,
     pub popout: Option<Popout>,
-    /// Full profile modal for this user.
     pub modal: Option<Id>,
     pub status_picker: bool,
     pub custom_input: Option<Entity<InputState>>,
     pub custom_sub: Option<gpui::Subscription>,
     pub custom_status: Option<SharedString>,
-    /// Last (guild, first chunk) whose ranges were requested.
     pub requested: Cell<(Id, usize)>,
-    /// Thread member lists (`thread-members`), grouped like the guild list.
     pub thread_lists: HashMap<Id, Vec<ListEntry>>,
-    /// Threads whose member list was already requested.
     pub thread_requested: std::cell::RefCell<std::collections::HashSet<Id>>,
-    /// (guild, user) feed authors already requested with op 8 (member list Activity).
     pub feed_requested: std::cell::RefCell<std::collections::HashSet<(Id, Id)>>,
 }
 
@@ -388,7 +335,6 @@ impl People {
         *self = Self::default();
     }
 
-    /// Keep list rows in sync with a presence change.
     pub fn on_presence(&mut self, user: Id, p: Presence) {
         for rows in self.lists.values_mut() {
             for r in rows.iter_mut() {
@@ -498,7 +444,6 @@ mod tests {
 
     #[test]
     fn dates() {
-        // Discord epoch.
         assert_eq!(snowflake_time(0), 1_420_070_400);
         assert_eq!(format_date(1_420_070_400).as_ref(), "Jan 1, 2015");
     }

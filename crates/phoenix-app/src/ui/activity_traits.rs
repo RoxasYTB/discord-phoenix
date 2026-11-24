@@ -1,8 +1,3 @@
-//! "New player" / "Resurrection" badges of the member list Activity cards.
-//! The live client reads them from the content inventory feed
-//! (`GET /content-inventory/users/@me`, traits FIRST_TIME = 1 and
-//! RESURRECTED = 5) and refetches it every 15 minutes (`g = 15 * MINUTE`).
-
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
@@ -18,12 +13,10 @@ thread_local! {
 
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 
-/// True when the feed should be (re)fetched.
 pub fn stale() -> bool {
     FEED.with(|f| f.borrow().0.is_none_or(|t| t.elapsed() > REFRESH))
 }
 
-/// Fetches the feed (read-only) if stale.
 pub fn ensure(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     if !stale() {
         return;
@@ -37,17 +30,14 @@ pub fn ensure(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     });
 }
 
-/// The feed entries (GLOBAL_FEED ranked order), empty until fetched.
 pub fn entries() -> Vec<Entry> {
     FEED.with(|f| f.borrow().1.clone())
 }
 
-/// True once the feed answered and `user` authored an entry.
 pub fn in_feed(user: Id) -> bool {
     FEED.with(|f| f.borrow().1.iter().any(|e| e.author == user))
 }
 
-/// (first time, resurrected) for `user` playing `game`.
 pub fn traits(user: Id, game: &str) -> (bool, bool) {
     FEED.with(|f| {
         f.borrow()
@@ -58,7 +48,6 @@ pub fn traits(user: Id, game: &str) -> (bool, bool) {
     })
 }
 
-/// Seed the feed (offscreen mock renders only; never used with a real account).
 #[doc(hidden)]
 pub fn seed(v: Vec<Entry>) {
     FEED.with(|f| *f.borrow_mut() = (Some(Instant::now()), v));

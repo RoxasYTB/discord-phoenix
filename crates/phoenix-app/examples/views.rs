@@ -1,7 +1,3 @@
-//! Offscreen render of one non-chat view in a given theme.
-//! `cargo run -p phoenix-app --example views -- out.png [dark|light|ash|onyx] <scene>`
-//! Scenes: friends-all, friends-pending, inbox, pins, threads, search, profile, profile-modal, appearance, account, status, switcher, emoji, gif, sticker, friends, forum, post, events, browse, guide, dm-menu, dm-submenu.
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -24,7 +20,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -42,7 +37,6 @@ fn main() -> anyhow::Result<()> {
     });
     let view: Rc<RefCell<Option<Entity<PhoenixApp>>>> = Rc::default();
     let v2 = view.clone();
-    // PHOENIX_SHOT_H=700 matches the live client dumps (1280x700 viewport).
     let h: f32 = std::env::var("PHOENIX_SHOT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(800.);
     let w: f32 = std::env::var("PHOENIX_SHOT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1280.);
     let win = cx.open_window(size(px(w), px(h)), move |window, cx| {
@@ -114,7 +108,6 @@ fn main() -> anyhow::Result<()> {
                             app.select_channel(id, cx);
                         }
                     }
-                    // DM row context menu, at the spot of the live dump (x 232, y 88).
                     "dm-menu" | "dm-submenu" => {
                         app.select_guild(None, cx);
                         let dm = app.channels.values().filter(|c| c.guild.is_none() && !c.voice_users.is_empty()).map(|c| c.id).min_by_key(|i| i.0);
@@ -125,7 +118,6 @@ fn main() -> anyhow::Result<()> {
                             }
                         }
                     }
-                    // Guild icon / text channel / member menus (vanilla-menu-* dumps).
                     "guild-menu" => {
                         if let Some(g) = app.guilds.first().map(|g| g.id) {
                             phoenix_app::ui::nav_menus::open(phoenix_app::ui::nav_menus::Target::Guild(g), gpui::point(px(40.), px(120.)), window);
@@ -174,7 +166,6 @@ fn main() -> anyhow::Result<()> {
                                     mutual_friends: app.users.values().filter(|u| u.id != uid && u.id != app.me.id).take(2).cloned().collect(),
                                     mutual_guild_ids: app.guilds.iter().take(3).map(|g| g.id).collect(),
                                     badges: Vec::new(),
-                                    // PHX_PROFILE_THEME=RRGGBB,RRGGBB renders a Nitro-themed profile.
                                     theme: std::env::var("PHX_PROFILE_THEME").ok().and_then(|v| {
                                         let (a, b) = v.split_once(',')?;
                                         Some((u32::from_str_radix(a, 16).ok()?, u32::from_str_radix(b, 16).ok()?))
@@ -203,7 +194,6 @@ fn main() -> anyhow::Result<()> {
                             app.select_channel(id, cx);
                         }
                     }
-                    // Server Events modal, Channels & Roles Browse tab, Server Guide (mock data).
                     "events" | "browse" | "guide" => {
                         let g = app.guilds.first().map(|g| g.id);
                         app.select_guild(g, cx);
@@ -215,7 +205,6 @@ fn main() -> anyhow::Result<()> {
                             }
                         }
                     }
-                    // Forum post sidebar: the forum first, its first post once the list loaded.
                     "forum" | "post" => {
                         let id = app.channels.values().find(|c| c.kind == phoenix_app::model::ChannelKind::Forum).map(|c| c.id);
                         if let Some(id) = id {
@@ -244,19 +233,15 @@ fn main() -> anyhow::Result<()> {
             pump(&mut cx, 4);
         }
     }
-    // Images (avatars, decorations) load over several frames: with
-    // PHX_MOCK_DECO or PHX_WAIT_IMAGES, keep painting ~2 s before capturing.
     let frames = if std::env::var_os("PHX_MOCK_DECO").is_some() || std::env::var_os("PHX_WAIT_IMAGES").is_some() { 20 } else { 1 };
     for _ in 0..frames {
         cx.update_window(win.into(), |_, window, _| window.refresh())?;
         pump(&mut cx, 2);
     }
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

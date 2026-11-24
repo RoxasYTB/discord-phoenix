@@ -1,7 +1,3 @@
-//! Inbox > Unreads candidates from the session cache: read states, guild
-//! settings, permissions and joined threads, walked in the client's order
-//! (see `ui::inbox_unreads`). Read-only: no request, no ack.
-
 use phoenix_api::{Cache, models as api};
 use serde_json::Value;
 
@@ -12,14 +8,11 @@ use crate::{
     ui::inbox_unreads::{self as iu, Candidate, Entry, Kind, Notify},
 };
 
-/// Channel override flags.
 const FAVORITED: u64 = 2048;
 const CH_UNREADS_ALL: u64 = 1024;
 const CH_UNREADS_MENTIONS: u64 = 512;
-/// Guild flags.
 const G_UNREADS_ALL: u64 = 2048;
 const G_UNREADS_MENTIONS: u64 = 4096;
-/// Thread member flags (ALL_MESSAGES 2, ONLY_MENTIONS 4, NO_MESSAGES 8).
 const TH_ALL: u64 = 2;
 const TH_NONE: u64 = 8;
 
@@ -27,7 +20,6 @@ pub struct Ctx<'a> {
     pub cache: &'a Cache,
     pub prefs: &'a Prefs,
     pub notify: &'a NotifyPrefs,
-    /// READY `notification_settings.flags & 16` (USE_NEW_NOTIFICATIONS).
     pub new_notifications: bool,
 }
 
@@ -40,8 +32,6 @@ impl Ctx<'_> {
         self.notify.guilds.get(&g).and_then(|p| p.channels.get(&c)).copied()
     }
 
-    /// `getChannelMessageNotifications` (the channel's own override), else the
-    /// server level (`W(e)`: entry, else the server default).
     fn notify_of(&self, g: u64, c: u64) -> Notify {
         let lvl = match self.channel_pref(g, c).map(|p| p.level) {
             Some(Level::Inherit) | None => self.notify.guild(Some(g)).level,
@@ -54,7 +44,6 @@ impl Ctx<'_> {
         }
     }
 
-    /// `resolveUnreadSetting(channel) === ALL_MESSAGES`.
     fn unreads_all(&self, g: u64, c: &api::Channel) -> bool {
         if c.kind.is_thread() || !self.new_notifications {
             return true;
@@ -97,7 +86,6 @@ impl Ctx<'_> {
         let member = c.member.as_ref();
         let muted = match g {
             Some(_) if thread => member.is_some_and(crate::notifications::mute_now),
-            // DMs read the `guild_id: null` entry's override.
             _ => self.notify.is_guild_or_category_or_channel_muted(g, c.id.0, c.parent_id.map(|p| p.0)),
         };
         let notify = match (g, thread) {
@@ -133,8 +121,6 @@ impl Ctx<'_> {
         }
     }
 
-    /// DMs, then each guild of `guild_order`: channel list order, each channel
-    /// followed by its joined active threads (oldest first).
     pub fn entries(&self, guild_order: &[Id], now_ms: u64) -> Vec<Entry> {
         let mut cands = Vec::new();
         for c in self.cache.private_channels() {

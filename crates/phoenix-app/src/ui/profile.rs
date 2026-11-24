@@ -1,6 +1,3 @@
-//! User profile popout (click on a member / author), full profile modal and
-//! the overlay host that also shows the status picker.
-
 use crate::theme::{generated::idx, tok, z};
 use gpui::{
     AnyElement, Context, Div, FontWeight, IntoElement, ParentElement, Pixels, Point, SharedString, Styled,
@@ -16,18 +13,12 @@ use crate::{
     ui::{members::bot_tag_px, status_picker},
 };
 
-// 253781 `:root` --custom-user-profile-popout-width
 const POPOUT_W: f32 = 300.;
-// Estimated popout height, only used to keep it on screen
-// (253781 `outer_P1YEjQ.user-profile-popout` max-height: 100vh - 20px).
 const POPOUT_H: f32 = 540.;
-// f4f30b `root_ZhNJfE` --custom-modal-v2-width (min-width 929px)
 const MODAL_W: f32 = 962.;
-// f4f30b `root_ZhNJfE` --custom-modal-v2-height: min(800px, 100vh - 2*--space-48)
 const MODAL_H: f32 = 800.;
 
 impl PhoenixApp {
-    /// Open the profile popout for `user` next to `at` and fetch the profile.
     pub fn open_profile(
         &mut self,
         user: Id,
@@ -69,15 +60,13 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Popout -> full profile modal.
     pub fn open_profile_modal(&mut self, user: Id, cx: &mut Context<Self>) {
         self.people.popout = None;
-        set_modal_tab(TAB_BOARD); // falls back to Activity when the Board is empty
+        set_modal_tab(TAB_BOARD);
         self.people.modal = Some(user);
         cx.notify();
     }
 
-    /// crate::t!("profile.message") button: open the DM and switch to it.
     pub fn message_user(&mut self, user: Id, cx: &mut Context<Self>) {
         self.people.close_overlays();
         let fut = self.backend.open_dm(user);
@@ -90,10 +79,8 @@ impl PhoenixApp {
     }
 }
 
-/// Everything floating owned by this module, appended to the root.
 pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement> {
     let mut out: Vec<AnyElement> = crate::ui::user_menu::render(app, cx).into_iter().collect();
-    // Drawn after the profile overlays below (menu over the modal).
     let widget_menu = crate::ui::profile_board::menu();
     out.extend(crate::ui::nav_menus::render(app, cx));
     out.extend(crate::ui::thread_menu::render(app, cx));
@@ -106,7 +93,6 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
             .id("people-backdrop")
             .absolute()
             .inset_0()
-            // modal layer backdrop: --background-scrim
             .when(dim, |d| d.bg(c(tok(idx::BACKGROUND_SCRIM))))
             .on_mouse_down(
                 gpui::MouseButton::Left,
@@ -127,9 +113,7 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
                 .absolute()
                 .left(x)
                 .top(y)
-                // themed: width + 2 * --custom-user-profile-theme-padding (live 304px)
                 .w(px(POPOUT_W + if app.people.profiles.get(&p.user).is_some_and(|x| x.theme.is_some()) { 4. } else { 0. }))
-                // outer_P1YEjQ.user-profile-popout max-height: calc(100vh - 20px)
                 .max_h(vp.height - y - px(10.))
                 .flex()
                 .flex_col()
@@ -139,8 +123,6 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         );
     }
     if let Some(u) = app.people.modal {
-        // root_ZhNJfE: width min(962px, 100vw - 2*--space-48),
-        // height min(800px, 100vh - 2*--space-48)
         let w = px(MODAL_W).min(vp.width - px(96.));
         let h = px(MODAL_H).min(vp.height - px(96.));
         out.push(
@@ -163,7 +145,6 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
     out
 }
 
-/// Section heading inside a profile card (Text heading-sm/semibold, 12px/16px).
 pub(crate) fn section_title(t: SharedString) -> Div {
     div()
         .text_size(z(12.))
@@ -174,10 +155,6 @@ pub(crate) fn section_title(t: SharedString) -> Div {
         .child(t)
 }
 
-/// Activity card (`card_Bu4Al8` inside `overlay_P1YEjQ`): popout padding 8px,
-/// full profile --space-12 with --radius-md; header `headerText_Bu4Al8`
-/// (body-xs/medium), body `content_Bu4Al8` (gap 8px / 12px), title
-/// heading-xs/semibold 14/18, lines body-xs 12/16.
 fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
     let title = match a.kind {
         ActivityKind::Custom => return None,
@@ -202,7 +179,6 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
         let mins = (chrono::Utc::now().timestamp_millis() - start).max(0) / 60_000;
         lines.push(if mins >= 60 { format!("{}:{:02}:00", mins / 60, mins % 60) } else { format!("{mins}:00") }.into());
     }
-    // imagePosition_1AI0dL: 60px (full profile), --radius-sm
     let s = if big { 60. } else { 48. };
     let art: AnyElement = match &a.image {
         Some(u) => img(u.clone()).size(z(s)).rounded(z(8.)).flex_none().into_any_element(),
@@ -212,15 +188,15 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
         div()
             .flex()
             .flex_col()
-            .gap(z(8.)) // card_Bu4Al8 gap
-            .p(z(if big { 12. } else { 8. })) // --custom-activity-card-padding
-            .rounded(z(if big { 12. } else { 8. })) // --radius-md / overlay --radius-sm
-            .bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND_HOVER))) // card_Bu4Al8 background
+            .gap(z(8.))
+            .p(z(if big { 12. } else { 8. }))
+            .rounded(z(if big { 12. } else { 8. }))
+            .bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND_HOVER)))
             .border_1()
             .border_color(c(tok(idx::BORDER_SUBTLE)))
             .child(
                 div()
-                    .text_size(z(12.)) // body-xs/medium
+                    .text_size(z(12.))
                     .line_height(z(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(tok(idx::TEXT_DEFAULT)))
@@ -230,7 +206,7 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
             .child(
                 div()
                     .flex()
-                    .gap(z(if big { 12. } else { 8. })) // content_Bu4Al8 gap
+                    .gap(z(if big { 12. } else { 8. }))
                     .items_center()
                     .child(art)
                     .child(
@@ -238,11 +214,11 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .gap(z(4.)) // details_Bu4Al8 gap
+                            .gap(z(4.))
                             .when_some(line1, |d, l| {
                                 d.child(
                                     div()
-                                        .text_size(z(14.)) // heading-xs/semibold
+                                        .text_size(z(14.))
                                         .line_height(z(18.))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(c(tok(idx::TEXT_STRONG)))
@@ -252,7 +228,7 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
                             })
                             .children(lines.into_iter().map(|l| {
                                 div()
-                                    .text_size(z(12.)) // body-xs/normal
+                                    .text_size(z(12.))
                                     .line_height(z(16.))
                                     .text_color(c(tok(idx::TEXT_DEFAULT)))
                                     .text_ellipsis()
@@ -264,7 +240,6 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
     )
 }
 
-/// Full profile section heading (`header_NcvRRg` h2 body-xs/medium, 12/16).
 fn section_heading(t: SharedString) -> Div {
     div()
         .text_size(z(12.))
@@ -274,9 +249,7 @@ fn section_heading(t: SharedString) -> Div {
         .child(t)
 }
 
-/// Everything both layouts need about one user.
 pub(crate) struct Info<'a> {
-    /// Per-guild avatar/decoration applied (`PhoenixApp::member_user`).
     pub(crate) user: Option<std::borrow::Cow<'a, crate::model::User>>,
     pub(crate) prof: Option<&'a Profile>,
     pub(crate) presence: crate::model::Presence,
@@ -311,8 +284,6 @@ pub(crate) fn info<'a>(app: &'a PhoenixApp, uid: Id, guild: Option<Id>) -> Info<
         Some(ImageRef::Default(i)) => DEFAULT_AVATAR[*i as usize % DEFAULT_AVATAR.len()],
         _ => Palette::BLURPLE,
     };
-    // No banner and no accent colour: the client paints the avatar's dominant
-    // colour (vanilla-dm-profile-panel #1562 `fill_vNEdYY`), see avatar_color.
     let avatar_colour = match user.map(|u| &u.avatar) {
         Some(ImageRef::Url(u)) if prof.is_none_or(|p| p.banner.is_none()) => crate::ui::avatar_color::get(u),
         _ => None,
@@ -328,15 +299,11 @@ pub(crate) fn info<'a>(app: &'a PhoenixApp, uid: Id, guild: Option<Id>) -> Info<
     Info { user: user_cow, prof, presence, acts, custom, display, username, accent, roles }
 }
 
-/// Banner: 58495 `banner_s9bWOi` (radius --radius-sm/--radius-lg top, 1px
-/// --border-muted bottom line), height --custom-user-profile-banner-height.
 pub(crate) fn banner(i: &Info, h: f32, radius: f32) -> Div {
     div()
         .h(z(h))
         .w_full()
         .flex_none()
-        // Themed, banner_vNEdYY is transparent (live: background none) and the
-        // card's primary colour shows through.
         .when(i.prof.is_none_or(|p| p.theme.is_none()), |d| d.bg(c(i.accent)))
         .rounded_t(z(radius))
         .overflow_hidden()
@@ -345,15 +312,11 @@ pub(crate) fn banner(i: &Info, h: f32, radius: f32) -> Div {
         .when_some(i.prof.and_then(|p| p.banner.clone()), |d, b| d.child(img(b).w_full().h(z(h))))
 }
 
-/// Avatar with its cut-out ring and decoration. 875762 `avatar_WRLIGC`
-/// positions it; the ring is the card background (6px at 80px, 7px at 120px).
 pub(crate) fn avatar_block(i: &Info, size: f32, ring: f32, ring_color: u32) -> Div {
     div()
         .p(z(ring))
         .rounded_full()
         .bg(c(ring_color))
-        // Decoration at 1.2x the avatar, centred, under the status cut-out and glyph.
-        // Popouts, the full profile and the DM panel play it (animated WebP).
         .child(crate::ui::avatar_with_status_deco(
             i.user.as_deref(),
             size,
@@ -364,8 +327,6 @@ pub(crate) fn avatar_block(i: &Info, size: f32, ring: f32, ring_color: u32) -> D
         ))
 }
 
-/// Badges row (`container_IqWmhA`: inline in the username row, gap 2px,
-/// margin 1px 0; `badge_IqWmhA` 20px).
 fn badges(i: &Info) -> Option<Div> {
     let b = i.prof.map(|p| p.badges.as_slice()).unwrap_or_default();
     (!b.is_empty()).then(|| {
@@ -375,8 +336,6 @@ fn badges(i: &Info) -> Option<Div> {
             .items_center()
             .gap(z(2.))
             .my(z(1.))
-            // managed_IqWmhA: padding 1px 3px, --radius-sm; :before --background-mod-subtle,
-            // 1px --border-muted (dump vanilla-dm-profile-panel #1580)
             .px(z(3.))
             .py(z(1.))
             .rounded(z(8.))
@@ -384,7 +343,6 @@ fn badges(i: &Info) -> Option<Div> {
             .border_1()
             .border_color(c(tok(idx::BORDER_MUTED)))
             .children({
-                // UserProfileBadgeListRows: first 6 + overflowSlot "+N" (ui::profile_bio).
                 let (shown, hidden) = crate::ui::profile_bio::split_badges(b, i.user.as_deref().is_some_and(|u| u.bot));
                 shown
                     .iter()
@@ -395,28 +353,24 @@ fn badges(i: &Info) -> Option<Div> {
     })
 }
 
-/// Custom status thought bubble (82171 `outer_rmCN9_` / `inner_rmCN9_`).
 fn status_bubble(t: SharedString) -> Div {
     div()
-        .max_w(z(181.)) // outer_rmCN9_ max-width
+        .max_w(z(181.))
         .min_w(z(42.))
-        .px(z(12.)) // inner_rmCN9_ padding 8px 12px
+        .px(z(12.))
         .py(z(8.))
-        .rounded(z(16.)) // --radius-lg
-        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST))) // --custom-status-bubble-background-color
+        .rounded(z(16.))
+        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST)))
         .border_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
-        .shadow_sm() // --shadow-low
+        .shadow_sm()
         .text_size(z(14.))
         .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_DEFAULT))) // content_rmCN9_
+        .text_color(c(tok(idx::TEXT_DEFAULT)))
         .line_clamp(2)
         .child(crate::ui::emoji_text::status_wrapped(t, 14. * crate::theme::zoom()))
 }
 
-/// Name block (866212 `displayNameRow_C2XpHA`, `usernameAndPronounsRow_`):
-/// display name heading-lg/semibold 20/24 (modal heading-xl/semibold 24/32),
-/// then username, pronouns, server tag and badges (gap 2px 6px).
 pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> Div {
     let tag = i.user.as_deref().and_then(|u| u.tag.clone());
     let pronouns = i.prof.map(|p| p.pronouns.clone()).filter(|p| !p.is_empty());
@@ -430,7 +384,7 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
                 .group(crate::ui::profile_note::NAME_ROW_GROUP)
                 .flex()
                 .items_center()
-                .gap(z(4.)) // displayNameRow gap --space-4
+                .gap(z(4.))
                 .child(
                     crate::fonts::styled_name(div(), i.user.as_deref(), true)
                         .text_size(z(if big { 24. } else { 20. }))
@@ -441,7 +395,6 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
                         .child(crate::fonts::name_text(i.display.clone(), i.user.as_deref(), if big { 24. } else { 20. })),
                 )
                 .when(bot, |d| d.child(bot_tag_px(verified)))
-                // displayNameTrailing_C2XpHA: the note button (popout / DM panel)
                 .children(trailing),
         )
         .child(
@@ -449,14 +402,13 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
                 .flex()
                 .flex_wrap()
                 .items_center()
-                .when(bot, |d| d.mt(z(8.))) // usernameAndPronounsRow_.isBot margin-top
+                .when(bot, |d| d.mt(z(8.)))
                 .gap_x(z(6.))
                 .gap_y(z(if big { 4. } else { 2. }))
-                .text_size(z(14.)) // body-sm/normal
+                .text_size(z(14.))
                 .line_height(z(18.))
                 .child(div().h(z(24.)).flex().items_center().text_color(c(tok(idx::TEXT_STRONG))).child(i.username.clone()))
                 .when_some(pronouns, |d, p| {
-                    // dotSpacer_C2XpHA: 4px round, margin-inline 1px
                     d.child(div().size(z(4.)).mx(z(1.)).rounded_full().bg(c(tok(idx::TEXT_DEFAULT))))
                         .child(div().mr(z(2.)).text_ellipsis().text_color(c(tok(idx::TEXT_DEFAULT))).child(p))
                 })
@@ -465,9 +417,6 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
         )
 }
 
-/// `chipletContainerInner_k8jyN7.chipletContainerInline_`: 24px, padding 0 8px,
-/// --radius-sm, --background-mod-normal; text body-xs/normal 12/16, badge
-/// 14px with margin-inline-end 2px.
 fn guild_tag_pill(t: SharedString, badge: Option<SharedString>) -> impl IntoElement {
     div()
         .id(SharedString::from(format!("guild-tag-{t}")))
@@ -485,9 +434,6 @@ fn guild_tag_pill(t: SharedString, badge: Option<SharedString>) -> impl IntoElem
         .child(t)
 }
 
-/// Role pills (`roleListContainer_xL50-d` gap 4px, margin-top 2px; `role_xL50-d`
-/// min-height 24px, 1px --user-profile-border, --radius-sm, padding 0 8px 0 2px;
-/// `roleCircle_7RsUnm` 12px margin 0 4px; `roleName_` body-xs/normal).
 fn roles_block(roles: Vec<crate::model::Role>) -> Div {
     div().mt(z(2.)).flex().flex_wrap().gap(z(4.)).children(roles.into_iter().map(|r| {
         div()
@@ -507,9 +453,6 @@ fn roles_block(roles: Vec<crate::model::Role>) -> Div {
     }))
 }
 
-/// Bio (`section_NcvRRg` gap 8px; `bioText_qjJ3Wv` body-sm 14/18). The popout
-/// clamps it to 3 lines (`descriptionClamp_BcddaK`, max-height 55px) with a
-/// "View Full Bio" text button (`viewFullBio_` margin-top 8px, body-xs).
 fn bio_block(bio: SharedString, clamp: bool) -> Div {
     let long = clamp && crate::ui::profile_bio::bio_is_long(&bio);
     div()
@@ -523,8 +466,6 @@ fn bio_block(bio: SharedString, clamp: bool) -> Div {
         )
         .when(long, |d| {
             d.child(
-                // section_NcvRRg gap 8 + viewFullBio_ margin-top 8, then the text button
-                // sits 2px down its 17.33px line box (live vanilla-dm: clamp 454 → text 471).
                 div()
                     .mt(z(18.))
                     .text_size(z(12.))
@@ -535,9 +476,6 @@ fn bio_block(bio: SharedString, clamp: bool) -> Div {
         })
 }
 
-/// `mutuals_PXYMZ1` (gap 2px 6px): stacked 16px friend avatars
-/// (`avatar_NbMTpy` margin-inline-end -3px) + "N Mutual Friends",
-/// `spacer_` dot 4px --interactive-text-default, "N Mutual Servers".
 pub(crate) fn mutuals_row(p: &Profile) -> Option<Div> {
     let friends = p.mutual_friends_count;
     let servers = p.mutual_guilds;
@@ -545,7 +483,6 @@ pub(crate) fn mutuals_row(p: &Profile) -> Option<Div> {
         return None;
     }
     let both = friends > 0 && servers > 0;
-    // body-xs when both sections are shown, body-sm otherwise.
     let (fs, lh) = if both { (12., 16.) } else { (14., 18.) };
     let text = move |t: SharedString| {
         div().text_size(z(fs)).line_height(z(lh)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).child(t)
@@ -569,8 +506,6 @@ pub(crate) fn mutuals_row(p: &Profile) -> Option<Div> {
     )
 }
 
-/// Mana button (384209 `button_F7qvhY`): --radius-sm, 1px border; `sm`
-/// 30px inner + border = 32px with padding 4px 12px, `md` 40px with 8px 16px.
 pub fn mana_button(id: impl Into<gpui::ElementId>, label: impl Into<SharedString>, primary: bool, md: bool) -> gpui::Stateful<Div> {
     let (bg, hover, fg, border) = if primary {
         (
@@ -594,7 +529,7 @@ pub fn mana_button(id: impl Into<gpui::ElementId>, label: impl Into<SharedString
         .items_center()
         .justify_center()
         .h(z(if md { 40. } else { 32. }))
-        .min_w(z(if md { 100. } else { 60. })) // --__button-min-width
+        .min_w(z(if md { 100. } else { 60. }))
         .px(z(if md { 16. } else { 12. }))
         .rounded(z(8.))
         .border_1()
@@ -610,9 +545,6 @@ pub fn mana_button(id: impl Into<gpui::ElementId>, label: impl Into<SharedString
         .child(label.into())
 }
 
-/// Round banner button (`bannerButton_C4gRrZ`: --custom-button-button-sm-height
-/// 32px, 50%, --control-overlay-secondary-background-default, 1px
-/// --opacity-white-8, icon 16px --white).
 pub(crate) fn banner_button(id: impl Into<gpui::ElementId>, icon: &str) -> gpui::Stateful<Div> {
     div()
         .id(id)
@@ -629,20 +561,10 @@ pub(crate) fn banner_button(id: impl Into<gpui::ElementId>, icon: &str) -> gpui:
         .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).text_color(c(tok(idx::WHITE))))
 }
 
-/// Nitro theme backdrop for `outer_P1YEjQ.custom-user-profile-theme`:
-/// `linear-gradient(primary, primary --custom-user-profile-banner-height (105px),
-/// secondary)` (sRGB interpolation). Two absolute layers so the 105px stop is
-/// exact whatever the card height; the content above lays the uniform
-/// `inner_P1YEjQ` overlay (--profile-gradient-overlay-color) on top.
-/// `footer` is --custom-user-profile-footer-height: the gradient ends at
-/// `calc(100% - footer)` and the secondary colour fills the rest (72px in
-/// `.user-profile-sidebar.user-profile-sidebar-redesign`, 0 by default).
 pub(crate) fn theme_backdrop(t: (u32, u32), footer: f32) -> [Div; 3] {
     theme_backdrop_at(t, 105., footer)
 }
 
-/// [`theme_backdrop`] with the primary colour held for `banner` px
-/// (modal-v2 `profile_s3DB6Y`: --custom-user-profile-banner-height 140px).
 pub(crate) fn theme_backdrop_at((primary, secondary): (u32, u32), banner: f32, footer: f32) -> [Div; 3] {
     [
         div().absolute().top_0().left_0().right_0().h(z(banner)).bg(c(primary)),
@@ -655,7 +577,6 @@ pub(crate) fn theme_backdrop_at((primary, secondary): (u32, u32), banner: f32, f
     ]
 }
 
-/// Kick off the avatar dominant-colour extraction for a banner-less user.
 pub(crate) fn ensure_avatar_colour(app: &PhoenixApp, uid: Id, cx: &mut gpui::App) {
     let prof = app.people.profiles.get(&uid);
     if prof.is_some_and(|p| p.banner.is_some() || p.accent.is_some()) {
@@ -666,11 +587,6 @@ pub(crate) fn ensure_avatar_colour(app: &PhoenixApp, uid: Id, cx: &mut gpui::App
     }
 }
 
-/// Banner buttons (`wrapper_xpwejc`, gap 8; vanilla-profile-popout #2008,
-/// vanilla-dm-profile-panel #1551): "Friend" (UserCheckIcon) for a friend,
-/// "Add Friend" (UserPlusIcon) when there is no relationship, then "More"
-/// (MoreHorizontalIcon) opening the user context menu. "Open in mod view"
-/// (ModerationIcon) only exists for moderators and is not reproduced.
 pub(crate) fn banner_buttons(app: &PhoenixApp, uid: Id, guild: Option<Id>, end: f32, cx: &mut Context<PhoenixApp>) -> Div {
     use crate::ui::home::data::{NavRequest, RelAction, RelationshipKind};
     let rel = app.nav.relationship(uid).map(|r| r.kind);
@@ -700,7 +616,6 @@ fn popout_card(
     cx: &mut Context<PhoenixApp>,
 ) -> Div {
     let theme = app.people.profiles.get(&uid).and_then(|p| p.theme);
-    // `.custom-user-profile-theme` re-declares the text/control tokens on the card.
     crate::ui::profile_theme::scoped(theme, || popout_card_inner(app, uid, guild, note, cx))
 }
 
@@ -714,18 +629,13 @@ fn popout_card_inner(
     ensure_avatar_colour(app, uid, cx);
     let i = info(app, uid, guild);
     let theme = i.prof.and_then(|p| p.theme);
-    // outer_P1YEjQ background; themed, the avatar ring is the overlay over the primary colour.
     let bg = theme.map(|t| crate::ui::profile_theme::composite(t, t.0)).unwrap_or(tok(idx::BACKGROUND_SURFACE_HIGH));
     let e = cx.entity();
     let e_full = e.clone();
-    // header_NOlkhE: banner (105) + 35px; avatar_WRLIGC popout at
-    // inset-inline-start 16px, top 61px (6px ring around the 80px avatar).
-    // Clicking the avatar or the name opens the full profile.
     let header = div()
         .relative()
         .flex_none()
         .min_h(z(105. + 35.))
-        // themed: inner_P1YEjQ radius --radius-sm - --custom-user-profile-theme-padding (2px)
         .child(banner(&i, 105., if theme.is_some() { 6. } else { 8. }))
         .child(
             div()
@@ -737,12 +647,9 @@ fn popout_card_inner(
                 .on_click(move |_, _, cx| e_full.update(cx, |a, cx| a.open_profile_modal(uid, cx)))
                 .child(avatar_block(&i, 80., 6., bg)),
         )
-        // wrapper_xpwejc: inset-inline-end 12px, top --space-8, gap 8px
         .children((uid != app.me.id).then(|| banner_buttons(app, uid, guild, 12., cx)))
-        // container_rmCN9_ popout: inset-inline-start 105px, top banner - 7px
         .when_some(i.custom.clone(), |d, t| d.child(div().absolute().left(z(105.)).top(z(98.)).child(status_bubble(t))));
 
-    // body_NOlkhE: column, gap 12px, padding 4px 8px 8px 16px (scrollbar gutter)
     let e_name = e.clone();
     let mut body = div()
         .id(("profile-body", uid.0))
@@ -779,14 +686,11 @@ fn popout_card_inner(
             }
         }
     }
-    // The first Board app widget, as a compact card under the bio (live popout).
     if let Some(w) = crate::ui::profile_board::get(app, uid, cx).widgets.first() {
         let col = crate::ui::settings::profile_widgets::WidgetColors {
             strong: c(tok(idx::TEXT_STRONG)),
             muted: c(tok(idx::TEXT_MUTED)),
             card: c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)),
-            // What shows behind the card: the themed gradient near the secondary
-            // colour under the overlay (the card sits low in the popout).
             fade: match theme {
                 Some(t) => {
                     let mix = |sh: u32| ((((t.0 >> sh) & 0xFF) as f32 * 0.3 + ((t.1 >> sh) & 0xFF) as f32 * 0.7) as u32) << sh;
@@ -798,10 +702,6 @@ fn popout_card_inner(
         };
         body = body.child(crate::ui::settings::profile_widgets::render_compact(w, &col));
     }
-    // container_M2WrKU (padding-bottom 8px): activity cards
-    // Client rule (activity cards hook): nothing for an offline / invisible user;
-    // live activities first, then the voice card, which needs a voice state the
-    // viewer can discover in the popout's guild (any guild outside one).
     let offline = matches!(i.presence, crate::model::Presence::Offline);
     let voice_here = guild.is_none_or(|g| app.channels.values().any(|c| c.guild == Some(g) && c.voice_users.contains(&uid)));
     for a in i.acts.iter().filter(|_| !offline) {
@@ -816,10 +716,6 @@ fn popout_card_inner(
         body = body.child(roles_block(i.roles.clone()));
     }
 
-    // footer_NOlkhE: column, padding 0 16px 12px. The "Message @user" box is
-    // an inline chat input (`inlineContainer_2x8-Qn`: --input-background-default,
-    // --input-border-default, --radius-sm; 44px; inner padding-inline-start 15px;
-    // placeholder 14/22; 32px emoji button).
     let footer = (uid != app.me.id).then(|| {
         div().flex().flex_col().px(z(16.)).pb(z(12.)).child(
             div()
@@ -831,8 +727,6 @@ fn popout_card_inner(
                 .flex()
                 .items_center()
                 .cursor_text()
-                // Live themed light card: the input stays on the app theme's
-                // --input-background-default (black / .08 on dark), not the card's.
                 .bg(c(crate::ui::profile_theme::scoped(None, || tok(idx::INPUT_BACKGROUND_DEFAULT))))
                 .border_1()
                 .border_color(c(crate::ui::profile_theme::scoped(None, || tok(idx::INPUT_BORDER_DEFAULT))))
@@ -859,12 +753,9 @@ fn popout_card_inner(
         )
     });
 
-    // Applied profile effect / frame (`ui::profile_fx`); the popout is 300 wide.
     let (fx_sku, frame_sku) = i.prof.map(|p| (p.effect_sku, p.frame_sku)).unwrap_or_default();
     let effect = fx_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| crate::ui::profile_fx::effect(&c, 300., cx));
     let frame = frame_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| c.frame);
-    // outer_P1YEjQ.user-profile-popout: --background-surface-high, --radius-sm,
-    // --shadow-border + --shadow-high. inner_P1YEjQ: gap 8px, padding-bottom 4px.
     let inner = div().flex().flex_col().gap(z(8.)).pb(z(4.)).min_h_0().child(header).child(body).children(footer);
     let card = div()
         .relative()
@@ -879,19 +770,14 @@ fn popout_card_inner(
         .overflow_hidden();
     let card = match theme {
         None => card.bg(c(bg)).child(inner),
-        // :where(.outer_P1YEjQ).custom-user-profile-theme: padding 2px over the
-        // primary (105px) -> secondary gradient; inner_P1YEjQ radius 6px with
-        // the uniform --profile-gradient-overlay on top.
         Some(t) => card.p(z(2.)).children(theme_backdrop(t, 0.)).child(
             inner.relative().rounded(z(6.)).overflow_hidden().bg(crate::ui::profile_theme::overlay(t)),
         ),
     }
-    // profileEffects_ZjcCyW: inset by the theme padding (live: 2px, 300 wide).
     .children(effect.map(|e| {
         let pad = if theme.is_some() { 2. } else { 0. };
         div().absolute().top(z(pad)).left(z(pad)).right(z(pad)).bottom(z(pad)).child(e)
     }));
-    // profileFrameContainer_v8co33 spans the whole outer card (304px when themed).
     let frame_w = if theme.is_some() { 304. } else { 300. };
     match frame {
         None => card,
@@ -907,27 +793,19 @@ fn popout_card_inner(
     }
 }
 
-/// Full-profile tabs (live order: Board, Activity, Wishlist, mutual friends, mutual servers).
 pub const TAB_BOARD: u8 = 3;
 pub const TAB_WISHLIST: u8 = 4;
 
 thread_local! {
-    /// Full-profile right column scroller (drives its thin scrollbar).
     static PANEL_SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
-    /// Selected full-profile tab: 0 Activity, 1 Mutual Friends, 2 Mutual Servers, 3 Board, 4 Wishlist.
     static MODAL_TAB: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
 }
 
-/// Select a full profile tab (also used by the offscreen screenshots).
 pub fn set_modal_tab(t: u8) {
     MODAL_TAB.with(|c| c.set(t));
-    // each tab panel (and each newly opened profile) starts at the top
     PANEL_SCROLL.with(|h| h.set_offset(gpui::Point::default()));
 }
 
-/// Row of the Mutual Friends / Mutual Servers panels (`row_wt-YD5`: padding
-/// 4px, margin 1px 0 1px 12px, --radius-xs; 40px icon with margin-inline-end
-/// 10px; name 16/20 medium; subline body-xs/medium).
 fn mutual_row(id: impl Into<gpui::ElementId>, icon: AnyElement, name: SharedString, sub: Option<SharedString>) -> gpui::Stateful<Div> {
     div()
         .id(id)
@@ -968,8 +846,6 @@ fn mutual_row(id: impl Into<gpui::ElementId>, icon: AnyElement, name: SharedStri
         )
 }
 
-/// Full profile, modal v2 (`root_ZhNJfE`, `profileContentInner_s3DB6Y`):
-/// profile card column on the left, tab panel on the right.
 fn modal_card(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size<Pixels>, cx: &mut Context<PhoenixApp>) -> Div {
     let theme = app.people.profiles.get(&uid).and_then(|p| p.theme);
     crate::ui::profile_theme::scoped(theme, || modal_card_inner(app, uid, guild, vp, cx))
@@ -980,24 +856,16 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
     let i = info(app, uid, guild);
     let e = cx.entity();
     let theme = i.prof.and_then(|p| p.theme);
-    // profile_s3DB6Y background; themed, the avatar ring is the overlay over the primary.
     let card_bg = theme.map(|t| crate::ui::profile_theme::composite(t, t.0)).unwrap_or(tok(idx::BACKGROUND_SURFACE_HIGH));
-    // --custom-modal-v2-profile-width: min(max(300px, 45.5vw - 0.91*--space-48), 400px)
     let pw = (f32::from(vw) * 0.455 - 48. * 0.91).clamp(300., 400.);
-    // --custom-modal-v2-padding (--space-48 from 1025px, else --space-32)
     let pad = if f32::from(vw) >= 1025. { 48. } else { 32. };
-    // --custom-modal-v2-system-bar-padding: the app top bar height (32px), but 0px
-    // from a 785px-high viewport (`@media (min-height:785px)` on .platform-* .root_ZhNJfE).
     let system_bar: f32 = if f32::from(vp.height) >= 785. { 0. } else { 32. };
-    const GUTTER: f32 = 32.; // --custom-modal-v2-gutter
-    const CARD_PAD: f32 = 32.; // --custom-modal-v2-profile-card-padding
-    const BANNER: f32 = 140.; // .user-profile-modal-v2 --custom-user-profile-banner-height
-    const AV: f32 = 120.; // .user-profile-modal-v2 --custom-user-profile-avatar-size
+    const GUTTER: f32 = 32.;
+    const CARD_PAD: f32 = 32.;
+    const BANNER: f32 = 140.;
+    const AV: f32 = 120.;
     const RING: f32 = 7.;
 
-    // profileButtons_s3DB6Y: gap 8px; sm buttons (32px): primary ChatIcon + "Send Message"
-    // (buttonChildren gap 4px, 16px icon), then icon-only secondaries: Friend
-    // (UserCheckIcon, friends only) and More.
     let e2 = e.clone();
     let icon_btn = |id: (&'static str, u64), icon: &str| {
         div()
@@ -1036,7 +904,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
             .child(more)
     });
 
-    // profileBody_s3DB6Y: gap --space-24, padding 4px 24px 32px 32px, margin-top -4px.
     let mut pbody = div()
         .flex()
         .flex_col()
@@ -1056,8 +923,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
             if !p.bio.is_empty() {
                 pbody = pbody.child(bio_block(p.bio.clone(), false));
             }
-            // memberSinceWrapper_EhAvF-: gap 8px; memberSince_ gap 4px with a 16px
-            // guild icon before the join date; divider_ 4px dot.
             let since = div()
                 .flex()
                 .items_center()
@@ -1065,7 +930,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .text_color(c(tok(idx::TEXT_DEFAULT)))
-                // memberSince_ gap 4px: 16px ClydeIcon (discordIcon_EhAvF-, --text-subtle) + date
                 .child(
                     div()
                         .flex()
@@ -1082,7 +946,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                         .child(div().flex().items_center().gap(z(4.)).children(gicon).child(format_date(j)))
                 });
             pbody = pbody.child(div().flex().flex_col().gap(z(8.)).child(section_heading(crate::t!("profile.member_since"))).child(since));
-            // "Friends Since" (wlTO8v): same section, the relationship's `since` date.
             if let Some(t) = app.nav.relationship(uid).filter(|r| r.kind == crate::ui::home::data::RelationshipKind::Friend).and_then(|r| r.since) {
                 pbody = pbody.child(
                     div()
@@ -1096,7 +959,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         }
     }
     if guild.is_some() && !i.roles.is_empty() {
-        // profileRolesSection_s3DB6Y: gap 4px
         pbody = pbody.child(
             div()
                 .flex()
@@ -1116,31 +978,22 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .flex_col()
         .overflow_y_scroll()
         .when(theme.is_none(), |d| d.bg(c(card_bg)))
-        // themed: linear-gradient(primary, primary 140px, secondary) with the
-        // ::before --profile-gradient-overlay-color layer on top.
         .when_some(theme, |d, t| {
             d.children(theme_backdrop_at(t, BANNER, 0.))
                 .child(div().absolute().top_0().left_0().right_0().bottom_0().bg(crate::ui::profile_theme::overlay(t)))
         })
-        .rounded_t(z(16.)) // --radius-lg --radius-lg 0 0
+        .rounded_t(z(16.))
         .border_1()
-        .border_color(c(tok(idx::BORDER_MUTED))) // outline 1px --border-muted
-        .shadow_md() // --shadow-medium
+        .border_color(c(tok(idx::BORDER_MUTED)))
+        .shadow_md()
         .child(banner(&i, BANNER, 16.))
-        // avatar_WRLIGC modal-v2: top banner - avatar/2, start card padding
         .child(div().absolute().left(z(CARD_PAD - RING)).top(z(BANNER - AV / 2. - RING)).child(avatar_block(&i, AV, RING, card_bg)))
-        // container_rmCN9_ modal-v2: top banner - --space-8, start card padding + avatar + --space-20
         .when_some(i.custom.clone(), |d, t| {
             d.child(div().absolute().left(z(CARD_PAD + AV + 20.)).top(z(BANNER - 8.)).child(status_bubble(t)))
         })
-        // profileHeader_s3DB6Y: 220px tall (banner + avatar overhang + 20px)
         .child(div().h(z(220. - BANNER)).flex_none())
         .child(pbody);
 
-    // Right column (`container_y4ZEM5`: padding-top 20px). Tab bar `top_6zZYhF`:
-    // 1px --border-subtle bottom; items body-sm/semibold 14/14, padding-bottom
-    // 16px, margin-inline-start 16px (first 0), --text-subtle, selected
-    // --text-strong with a 2px underline.
     let mutual_f = i.prof.map(|p| p.mutual_friends_count).unwrap_or(0);
     let mutual_s = i.prof.map(|p| p.mutual_guilds).unwrap_or(0);
     let board = crate::ui::profile_board::get(app, uid, cx);
@@ -1153,8 +1006,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         div()
             .id(("profile-modal-tab", n as u64))
             .relative()
-            // The last tab (mutual servers) shrinks with an ellipsis when the bar is
-            // full (live: "9 s…"); the others keep their width.
             .map(|d| if n == 2 { d.flex_shrink(1.).min_w_0().overflow_hidden().text_ellipsis() } else { d.flex_none() })
             .whitespace_nowrap()
             .when(n != first, |d| d.ml(z(16.)))
@@ -1175,12 +1026,10 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 d.child(div().absolute().left_0().right_0().bottom_0().h(z(2.)).rounded_t(z(2.)).bg(c(tok(idx::TEXT_STRONG))))
             })
     };
-    // tabPanelScroller_y4ZEM5: padding 20px 8px 16px 0, gap 12px (24px for activity)
     let mut panel = div().flex().flex_col().pt(z(20.)).pr(z(8.)).pb(z(16.));
     let empty = |t: SharedString| div().ml(z(12.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_MUTED))).child(t);
     match sel {
         TAB_BOARD => {
-            // tabPanel: cards gap 12 (container_FNEkcu margin)
             panel = panel.gap(z(12.));
             let wcol = crate::ui::settings::profile_widgets::WidgetColors {
                 strong: c(tok(idx::TEXT_STRONG)),
@@ -1199,10 +1048,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 .children(board.games.iter().filter_map(|w| crate::ui::profile_board::card(w, &gcol)));
         }
         TAB_WISHLIST => {
-            // headerRow_AI9GeR (32 high): "{n} Items" body-xs/semibold --text-subtle and a
-            // secondary sm "Browse the Shop" button; grid_wsmVvi (padding 12 0, gap 16) of
-            // 133px tiles (card_D1PiH5 radius 12, --user-profile-overlay-background).
-            // Live: ref-cache profile-modal-wishlist.json.
             let items = &board.wishlist;
             if items.is_empty() {
                 panel = panel.child(empty(crate::t!("profile.empty_wishlist")));
@@ -1258,7 +1103,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 let Some(g) = app.guilds.iter().find(|g| g.id == *gid) else { continue };
                 let gid = g.id;
                 let e3 = e.clone();
-                // icon_wt-YD5 iconSizeMedium: 40px, --radius-md
                 let icon = crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 40.);
                 panel = panel.child(mutual_row(("mutual-guild", gid.0), icon, g.name.clone(), None).on_click(move |_, _, cx| {
                     e3.update(cx, |a, cx| {
@@ -1291,7 +1135,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 .ml(z(GUTTER))
                 .mr(z(16.))
                 .mt(z(4.))
-                // tabs that do not fit are clipped at the bar's end (live: "9 s…")
                 .overflow_hidden()
                 .border_b_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
@@ -1301,10 +1144,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 .child(tab(1, crate::t!("profile.mutual_friends", n = mutual_f)))
                 .child(tab(2, crate::t!("profile.mutual_servers", n = mutual_s))),
         )
-        // tabBarPanel_y4ZEM5: padding-inline-start gutter (scroller margin -12px)
-        // tabPanelScroller_y4ZEM5 is a `thin_ fade_ scrollbarGutterStable_` scroller: an
-        // 8px gutter always reserved on the right, the thumb (--scrollbar-thin-thumb,
-        // 2px transparent border, radius 4, min 40) shown only while hovered.
         .child({
             let h = PANEL_SCROLL.with(|h| h.clone());
             let vh = f32::from(h.bounds().size.height);
@@ -1334,8 +1173,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                         .id("profile-modal-panel")
                         .flex_1()
                         .min_h_0()
-                        // Board / Activity / Wishlist cards line up with the tab bar (live: both at
-                        // the gutter); the mutual lists bleed 12px left for their row hover.
                         .pl(z(if matches!(sel, 1 | 2) { GUTTER - 12. } else { GUTTER }))
                         .pr(z(8.))
                         .overflow_y_scroll()
@@ -1348,11 +1185,10 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
     let mw = (f32::from(vp.width) - 96.).min(MODAL_W);
     let backdrop = i.prof.and_then(|p| p.banner.clone()).and_then(|b| crate::ui::profile_bg::get(&b, mw, cx));
     let e3 = e.clone();
-    // modalHeaderButtons_ZhNJfE: top --space-8 (header-button-top), end --space-8
     let close = div()
         .id("profile-modal-close")
         .absolute()
-        .top(z(8. + system_bar)) // --custom-modal-v2-header-button-top
+        .top(z(8. + system_bar))
         .right(z(8.))
         .size(z(32.))
         .rounded(z(8.))
@@ -1360,7 +1196,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .items_center()
         .justify_center()
         .cursor_pointer()
-        // live: a secondary sm Mana button (1px border, --control-secondary-*, 16px icon)
         .border_1()
         .border_color(c(tok(idx::CONTROL_SECONDARY_BORDER_DEFAULT)))
         .bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT)))
@@ -1373,9 +1208,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         })
         .child(gpui::svg().path(crate::icons::path("close")).size(z(16.)).text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))));
 
-    // root/outer: --background-base-lower, 1px --border-normal, --radius-lg.
-    // profileContentInner_s3DB6Y: padding-top --custom-modal-v2-padding +
-    // system bar, inline --custom-modal-v2-padding, bottom 0.
     div()
         .relative()
         .size_full()
@@ -1385,8 +1217,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .border_1()
         .border_color(c(tok(idx::BORDER_NORMAL)))
         .when(theme.is_none(), |d| d.bg(c(tok(idx::BACKGROUND_BASE_LOWER))))
-        // themed modal-v2: outer --profile-gradient-modal-background-color, inner
-        // linear-gradient(mix(overlay 80%, modal bg), mix(overlay 20%, modal bg) 300px).
         .when_some(theme, |d, t| {
             use crate::ui::profile_theme::{modal_background, modal_inner};
             d.bg(modal_background(t))
@@ -1397,14 +1227,11 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 )))
                 .child(div().absolute().top(z(300.)).left_0().right_0().bottom_0().bg(modal_inner(t, 0.2)))
         })
-        // backgroundImage_s3DB6Y: the banner, faint and blurred, fading out by 280px
         .children(backdrop.map(|(a, h)| img(gpui::ImageSource::Render(a)).absolute().top_0().left_0().w(z(mw)).h(z(h))))
         .shadow_lg()
         .pt(z(pad + system_bar))
         .pl(z(pad))
         .pr(z(32.))
-        // The applied profile frame wraps the profile card (same layers as the popout,
-        // card width pw).
         .child({
             let frame = i
                 .prof

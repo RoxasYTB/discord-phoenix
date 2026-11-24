@@ -1,24 +1,13 @@
-//! Key ratchet: derives per-generation AES-128 keys from a sender base secret.
-//!
-//! Implements the MLS (RFC 9420) secret-tree style hash ratchet with
-//! ciphersuite 2 parameters (SHA-256, Nk = 16):
-//! `key_g = ExpandWithLabel(secret_g, "key", u32be(g), 16)`,
-//! `secret_{g+1} = ExpandWithLabel(secret_g, "secret", u32be(g), 32)`.
-//! The base secret comes from `MLS-Exporter("Discord Secure Frames v0", le64(user_id), 16)`.
-
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 use crate::{Error, Result};
 
-/// Source of frame keys for a given ratchet generation.
 pub trait KeyRatchet: Send {
     fn key_for_generation(&mut self, generation: u32) -> Result<[u8; 16]>;
-    /// Drop cached state older than `generation` (forward secrecy).
     fn erase_before(&mut self, _generation: u32) {}
 }
 
-/// MLS `ExpandWithLabel` over HKDF-SHA256.
 pub fn expand_with_label(secret: &[u8], label: &str, context: &[u8], len: usize) -> Result<Vec<u8>> {
     let full = format!("MLS 1.0 {label}");
     let mut info = Vec::with_capacity(4 + full.len() + context.len());
@@ -28,8 +17,6 @@ pub fn expand_with_label(secret: &[u8], label: &str, context: &[u8], len: usize)
     hkdf_expand(secret, &info, len)
 }
 
-/// RFC 5869 HKDF-Expand with HMAC-SHA256. Implemented directly because the
-/// ratchet's PRK may be shorter than the hash length (16-byte exporter output).
 pub fn hkdf_expand(prk: &[u8], info: &[u8], len: usize) -> Result<Vec<u8>> {
     if len > 255 * 32 {
         return Err(Error::Crypto("hkdf length"));
@@ -50,7 +37,6 @@ pub fn hkdf_expand(prk: &[u8], info: &[u8], len: usize) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// RFC 9420 variable-length vector (QUIC-style varint length prefix).
 fn write_varint_vec(out: &mut Vec<u8>, data: &[u8]) -> Result<()> {
     let l = data.len();
     if l < 64 {
@@ -66,7 +52,6 @@ fn write_varint_vec(out: &mut Vec<u8>, data: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Hash ratchet with a small window of cached past generations (for reordering).
 pub struct HashRatchet {
     next_generation: u32,
     next_secret: Vec<u8>,
@@ -75,7 +60,6 @@ pub struct HashRatchet {
 }
 
 impl HashRatchet {
-    /// `base_secret` is the 16-byte MLS exporter output, used as generation-0 secret.
     pub fn new(base_secret: &[u8]) -> Self {
         Self { next_generation: 0, next_secret: base_secret.to_vec(), cache: Default::default(), max_cached: 8 }
     }
@@ -115,7 +99,6 @@ impl KeyRatchet for HashRatchet {
     }
 }
 
-/// Fixed key for every generation (tests, passthrough debugging).
 pub struct StaticRatchet(pub [u8; 16]);
 
 impl KeyRatchet for StaticRatchet {

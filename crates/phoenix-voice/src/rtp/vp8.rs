@@ -1,5 +1,3 @@
-//! VP8 RTP payload format (RFC 7741) with a 15-bit PictureID.
-
 use super::{Depacketizer, Packetizer};
 use crate::{Error, Result};
 
@@ -23,9 +21,9 @@ impl Packetizer for Vp8Packetizer {
             .enumerate()
             .map(|(i, c)| {
                 let mut p = Vec::with_capacity(c.len() + 4);
-                p.push(0x80 | if i == 0 { 0x10 } else { 0 }); // X, S
-                p.push(0x80); // I
-                p.push(0x80 | (pid >> 8) as u8); // M + high bits
+                p.push(0x80 | if i == 0 { 0x10 } else { 0 });
+                p.push(0x80);
+                p.push(0x80 | (pid >> 8) as u8);
                 p.push(pid as u8);
                 p.extend_from_slice(c);
                 p
@@ -34,7 +32,6 @@ impl Packetizer for Vp8Packetizer {
     }
 }
 
-/// Length of a VP8 payload descriptor.
 pub fn descriptor_len(p: &[u8]) -> Result<usize> {
     let b0 = *p.first().ok_or(Error::Malformed("vp8"))?;
     let mut n = 1;
@@ -58,7 +55,6 @@ pub fn descriptor_len(p: &[u8]) -> Result<usize> {
     Ok(n)
 }
 
-/// True if the VP8 frame (bitstream, no descriptor) is a keyframe.
 pub fn is_keyframe(frame: &[u8]) -> bool {
     frame.first().is_some_and(|b| b & 1 == 0)
 }
@@ -97,6 +93,6 @@ mod tests {
             out = d.push(p, i + 1 == pl.len()).unwrap();
         }
         assert_eq!(out.unwrap(), f);
-        assert_eq!(pk.picture_id, 0x8000); // wraps through mask
+        assert_eq!(pk.picture_id, 0x8000);
     }
 }

@@ -1,8 +1,3 @@
-//! Shop page (`/shop`, sidebar "Boutique"), from the live dump vanilla-shop:
-//! `headerBar_ViLURN` (home link, navigation tabs, search, wishlist), then the
-//! product cards (`productCardContainer_UGbKo5`). Read-only: the buy and gift
-//! buttons only show a notice, nothing is ever purchased.
-
 use std::cell::{Cell, RefCell};
 
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, img, prelude::*};
@@ -17,10 +12,8 @@ use crate::{
 pub struct ShopCard {
     pub sku: u64,
     pub name: SharedString,
-    /// Items in a bundle (`type` 1000), shown as "N articles" before the name.
     pub items: usize,
     pub preview: Option<SharedString>,
-    /// Minor units: price without Nitro (`prices["0"]`) and with it (`prices["2"]`).
     pub base: Option<(i64, u32, String)>,
     pub nitro: Option<(i64, u32, String)>,
 }
@@ -38,7 +31,6 @@ fn price(p: &Value, tier: &str) -> Option<(i64, u32, String)> {
     Some((x.get("amount")?.as_i64()?, x.get("exponent").and_then(Value::as_u64).unwrap_or(2) as u32, x.get("currency")?.as_str()?.to_owned()))
 }
 
-/// Cards of a `GET /collectibles-categories/v2` reply, catalogue order, one per SKU.
 pub fn parse(v: &Value) -> Vec<ShopCard> {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
@@ -60,7 +52,6 @@ pub fn parse(v: &Value) -> Vec<ShopCard> {
     out
 }
 
-/// "12,99 €" (fr) / "€12.99" (en) like the client's price formatter.
 pub fn format_price(amount: i64, exponent: u32, currency: &str) -> String {
     let div = 10i64.pow(exponent);
     let (whole, frac) = (amount / div, amount % div);
@@ -77,7 +68,6 @@ pub fn format_price(amount: i64, exponent: u32, currency: &str) -> String {
     }
 }
 
-/// Discount in percent when our price is below the base one.
 pub fn discount(base: i64, mine: i64) -> Option<u32> {
     (base > 0 && mine < base).then(|| ((base - mine) * 100 + base / 2) as u32 / base as u32).filter(|p| *p > 0)
 }
@@ -112,7 +102,6 @@ fn glyph(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
     gpui::svg().path(crate::icons::path(name)).size(z(size)).flex_none().text_color(color)
 }
 
-/// `headerBar_ViLURN container_ybUK7Z themed_`: 48px + 1px bottom border, padding 0 14 0 20.
 fn search_input(window: &mut Window, cx: &mut Context<PhoenixApp>) -> gpui::Entity<gpui_component::input::InputState> {
     if let Some(i) = SEARCH.with(|s| s.borrow().clone()) {
         return i;
@@ -133,10 +122,8 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
     let tabs = [crate::t!("shop.tab_now"), crate::t!("shop.tab_browse"), crate::t!("shop.tab_orbs"), crate::t!("shop.tab_more")];
     let carets = [false, true, false, true];
     let sel = TAB.with(Cell::get);
-    let mut nav = div().flex().items_center().gap(z(32.)).ml(z(44.)); // 437+24 → 505: 44px
+    let mut nav = div().flex().items_center().gap(z(32.)).ml(z(44.));
     for (i, (label, caret)) in tabs.into_iter().zip(carets).enumerate() {
-        // navigationMenuButton_: 48px, padding-top 2, 2px bottom border (selected --text-strong);
-        // label body-md/medium --text-default, caret 18px.
         nav = nav.child(
             div()
                 .id(("shop-tab", i))
@@ -162,7 +149,6 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
         );
     }
     let pill = |id: &'static str| {
-        // wishlistButton_ViLURN / orbs container_0XT54_: 32px, radius 8, --background-mod-subtle.
         div()
             .id(id)
             .h(z(32.))
@@ -184,11 +170,9 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
         .bg(tk(idx::BACKGROUND_BASE_LOWEST))
         .flex()
         .items_center()
-        .child(glyph("shop", 24., tk(idx::TEXT_DEFAULT))) // shopHomeLink_ 24px
+        .child(glyph("shop", 24., tk(idx::TEXT_DEFAULT)))
         .child(nav)
         .child(div().flex_1())
-        // toolbar_ybUK7Z padding-left 10: searchBar_ 256x32 (sm input, radius 8, 22px icon) then
-        // wishlist 32px, gap 10.
         .child(
             div()
                 .pl(z(10.))
@@ -217,7 +201,6 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
                         ),
                 )
                 .child(pill("shop-wishlist").w(z(32.)).child(glyph("heart", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
-                // container_0XT54_ padding 8 12: orb 20px, balance body-md/semibold --text-strong (2px after).
                 .child(
                     pill("shop-orbs")
                         .px(z(12.))
@@ -247,8 +230,6 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
     let name = k.name.clone();
     let stub = crate::t!("shop.preview_only");
     let stub2 = stub.clone();
-    // productCardContainer_: 246px, --background-base-low, 2px --border-muted (hovered
-    // --border-subtle, .2s), radius 8, overflow hidden.
     div()
         .id(("shop-card", k.sku))
         .group(group.clone())
@@ -262,7 +243,6 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
         .hover(|s| s.border_color(tk(idx::BORDER_SUBTLE)))
         .bg(tk(idx::BACKGROUND_BASE_LOW))
         .cursor_pointer()
-        // productPreviewContainer_ padding 0 8 56; preview lifts 6px on hover.
         .children(k.preview.clone().map(|u| {
             div()
                 .absolute()
@@ -275,7 +255,6 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                 .justify_center()
                 .child(img(u.to_string()).size(z(150.)).object_fit(gpui::ObjectFit::Contain))
         }))
-        // footerGradient_: bottom 146px, --background-base-lowest → transparent.
         .child(
             div().absolute().left_0().right_0().bottom_0().h(z(146.)).bg(gpui::linear_gradient(
                 0.,
@@ -283,7 +262,6 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                 gpui::linear_color_stop(tk(idx::BACKGROUND_BASE_LOWEST).opacity(0.), 1.),
             )),
         )
-        // headerContainer_ padding 12: badge body-xs/semibold, white pill, padding 0 8, 12px tag icon.
         .children(off.map(|p| {
             div().absolute().top(z(12.)).left(z(12.)).child(
                 div()
@@ -302,7 +280,6 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                     .child(crate::t!("shop.discount", n = p)),
             )
         }))
-        // footerContainer_: padding 12 at the bottom; name heading-sm/medium --text-strong.
         .child(
             div()
                 .absolute()
@@ -329,8 +306,6 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                         })
                         .child(div().min_w_0().overflow_hidden().text_ellipsis().child(name)),
                 )
-                // footerInfoShrinkOnHover_ (padding-top 4) and footerButtonContainer_ (padding-top 6)
-                // swap on hover (.25s).
                 .child(
                     div()
                         .relative()
@@ -396,15 +371,12 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
 
 pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     ensure_loaded(app, cx);
-    // AnyElement ends the header's borrow of `cx` (2024 `impl Trait` captures).
     let head = header(window, cx).into_any_element();
-    // Local name filter over the loaded catalogue (the client also queries /shop/search).
     let q = SEARCH.with(|s| s.borrow().clone()).map(|i| i.read(cx).value().to_lowercase()).unwrap_or_default();
     let cards = CARDS.with(|c| c.borrow().clone());
     let body: AnyElement = match cards {
         None => div().p(z(32.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")).into_any_element(),
         Some(v) => {
-            // Card rows: 246px cards, 30px apart (vanilla-shop 449 → 725), 32px page inset.
             let mut grid = div().p(z(32.)).flex().flex_wrap().gap(z(30.));
             for k in v.iter().filter(|k| q.is_empty() || k.name.to_lowercase().contains(q.trim())) {
                 grid = grid.child(card(app, k, cx));
@@ -412,7 +384,6 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
             grid.into_any_element()
         }
     };
-    // shop_Mqg79R: --background-base-lowest page.
     div()
         .size_full()
         .flex()

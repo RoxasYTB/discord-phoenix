@@ -1,5 +1,3 @@
-//! Profile Board game widgets (read-only GETs), see `ui::profile_games`.
-
 use reqwest::Method;
 use serde_json::Value;
 
@@ -21,7 +19,6 @@ impl DiscordBackend {
                 for id in ids {
                     let Ok(v) = s.rest.request_json(Method::GET, &format!("/games/{id}"), None).await else { continue };
                     if std::env::var_os("PHX_DEBUG_GAMES").is_some() {
-                        // Payload shape only (keys and value types), never ids or user data.
                         let shape: Vec<String> = v
                             .as_object()
                             .map(|o| o.iter().map(|(k, x)| format!("{k}:{}", shape_of(x))).collect())

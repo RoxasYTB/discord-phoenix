@@ -1,6 +1,3 @@
-//! Member and relationship edits from the user menu: roles, nicknames,
-//! friend nicknames, ignore, and voice moderation.
-
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -8,12 +5,10 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{ChannelId, GuildId, Snowflake, UserId};
 
-/// Voice moderation patch on a guild member.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VoiceMod {
     Mute(bool),
     Deafen(bool),
-    /// Move into a voice channel; `None` disconnects.
     Move(Option<ChannelId>),
 }
 
@@ -25,13 +20,11 @@ pub fn voice_mod_body(m: VoiceMod) -> Value {
     }
 }
 
-/// Nickname patch: empty clears it (`null`).
 pub fn nick_body(nick: &str) -> Value {
     let n = nick.trim();
     if n.is_empty() { json!({ "nick": null }) } else { json!({ "nick": n.chars().take(32).collect::<String>() }) }
 }
 
-/// Path of the member patch: our own uses `@me`.
 pub fn member_path(guild: GuildId, user: Option<UserId>) -> String {
     match user {
         Some(u) => format!("/guilds/{guild}/members/{u}"),
@@ -53,7 +46,6 @@ impl RestClient {
         self.call_empty(Method::DELETE, &format!("/guilds/{guild}/members/{user}/roles/{role}"), Body::None).await
     }
 
-    /// Change a member's nickname (`user: None` = our own, `/members/@me`).
     pub async fn set_member_nick(&self, guild: GuildId, user: Option<UserId>, nick: &str) -> Result<()> {
         self.call_empty(Method::PATCH, &member_path(guild, user), Body::Json(nick_body(nick))).await
     }
@@ -62,7 +54,6 @@ impl RestClient {
         self.call_empty(Method::PATCH, &format!("/users/@me/relationships/{user}"), Body::Json(friend_nick_body(nick))).await
     }
 
-    /// Ignore (`PUT`) or stop ignoring (`DELETE`) a user.
     pub async fn set_ignored(&self, user: UserId, ignored: bool) -> Result<()> {
         let m = if ignored { Method::PUT } else { Method::DELETE };
         self.call_empty(m, &format!("/users/@me/relationships/{user}/ignore"), Body::None).await

@@ -1,20 +1,3 @@
-//! Profile effects and profile frames drawn over / around a profile card
-//! (editor preview, popout, full profile).
-//!
-//! Structure from the vanilla profile popout dump: `profileEffects_ZjcCyW`
-//! is `position: absolute`, at the card origin, the card's width,
-//! `z-index: 2` (above the card content), `pointer-events: none`; its
-//! `inner_ZjcCyW` clips, and each layer is an `img.effect_ZjcCyW` at
-//! `top: 0`, `width: 100%` (height from the APNG's aspect ratio, 300x587 for
-//! a 300 px card). The client plays each `effects[]` layer from `start` for
-//! `duration` ms, looping layers again after `loopDelay`; when reduced motion
-//! is on it shows `reducedMotionSrc` instead.
-//!
-//! GPUI only animates GIF / WebP, so the APNG layers are decoded here into a
-//! multi-frame `RenderImage`. Playback is driven by paint: nothing is
-//! scheduled while the card is not on screen, and a card that reappears
-//! restarts the effect (the client re-mounts it).
-
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -27,31 +10,20 @@ use gpui::{
 
 use crate::{app::PhoenixApp, ui::settings::collectibles::{Anchor, Collectible, FrameSpec}};
 
-/// Decoded APNG width: the popout card width (`user-profile-popout` 300 px)
-/// at 2x would be 600; the layers are 450 wide, so keep them as is but cap
-/// memory by scaling anything wider down to this.
 const MAX_W: u32 = 450;
-/// Decoded layers kept in memory (one effect has 1-3 layers).
 const MAX_ANIMS: usize = 4;
-/// Intro delay before the first layer (`delayIntro` default: clock at -500 ms).
 const INTRO_MS: u64 = 500;
 
 #[derive(Default)]
 struct Store {
-    /// SKU -> product (None while fetching or when it failed).
     products: HashMap<u64, Option<Collectible>>,
-    /// Layer URL -> decoded frames (None while loading / failed).
     anims: HashMap<SharedString, (Option<Arc<RenderImage>>, Instant)>,
-    /// Playback clock per effect SKU: (start, last paint).
     clocks: HashMap<u64, (Instant, Instant)>,
-    /// Frame art URL -> natural (width, height) (None while loading / failed).
     sizes: HashMap<SharedString, Option<(f32, f32)>>,
 }
 
 impl Global for Store {}
 
-/// Resolves a collectible SKU (`GET /collectibles-products/{sku}`), fetching
-/// it once; re-renders the app when it arrives.
 pub fn product(app: &PhoenixApp, sku: u64, cx: &mut Context<PhoenixApp>) -> Option<Collectible> {
     let s = cx.default_global::<Store>();
     if let Some(p) = s.products.get(&sku) {
@@ -70,12 +42,6 @@ pub fn product(app: &PhoenixApp, sku: u64, cx: &mut Context<PhoenixApp>) -> Opti
     None
 }
 
-/// Decodes a PNG / APNG into BGRA frames (the `image` APNG decoder composes
-/// each frame with its dispose / blend ops onto the canvas, so every frame is
-/// a full image). `still`: one frame only. An APNG used as a still (the
-/// `reducedMotionSrc`) keeps its most opaque frame: the default image of an
-/// effect APNG is often the empty intro frame, while the browser shows the
-/// composed animation.
 fn decode(bytes: &[u8], still: bool) -> anyhow::Result<RenderImage> {
     use image::{AnimationDecoder, codecs::png::PngDecoder};
     let dec = PngDecoder::new(std::io::Cursor::new(bytes))?;
@@ -99,7 +65,6 @@ fn decode(bytes: &[u8], still: bool) -> anyhow::Result<RenderImage> {
                 let h = (buf.height() as u64 * MAX_W as u64 / buf.width() as u64) as u32;
                 buf = image::imageops::resize(&buf, MAX_W, h.max(1), image::imageops::FilterType::Triangle);
             }
-            // GPUI textures are BGRA.
             for p in buf.chunks_exact_mut(4) {
                 p.swap(0, 2);
             }
@@ -144,9 +109,6 @@ fn anim(src: &SharedString, still: bool, cx: &mut Context<PhoenixApp>) -> Option
     None
 }
 
-/// Natural size of a frame layer, read from its PNG header once. GPUI sizes
-/// an `img` without a height to its box and centres it (object-fit contain),
-/// while the client lays the art at 100% width, natural height, from the top.
 fn art_size(url: &SharedString, cx: &mut Context<PhoenixApp>) -> Option<(f32, f32)> {
     let s = cx.default_global::<Store>();
     if let Some(v) = s.sizes.get(url) {
@@ -175,8 +137,6 @@ fn art_size(url: &SharedString, cx: &mut Context<PhoenixApp>) -> Option<(f32, f3
     None
 }
 
-/// Elapsed playback time of an effect. A gap of more than a second without a
-/// paint means the card was hidden: restart, like the client re-mounting.
 fn clock(sku: u64, cx: &mut App) -> Duration {
     let now = Instant::now();
     let s = cx.default_global::<Store>();
@@ -188,8 +148,6 @@ fn clock(sku: u64, cx: &mut App) -> Duration {
     now.duration_since(e.0)
 }
 
-/// The effect overlay: put last inside a `relative` card of width `w`.
-/// Hides profile effects (offscreen compares mask them on both sides).
 pub static DISABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub fn effect(c: &Collectible, w: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -199,18 +157,9 @@ pub fn effect(c: &Collectible, w: f32, cx: &mut Context<PhoenixApp>) -> Option<A
     effect_adjusted(c, w, 0., cx)
 }
 
-/// [`effect`] with the client's `bannerAdjustment` (px the card's banner is
-/// shorter than the one the effect was drawn for): every layer sits at
-/// `top: position.y - bannerAdjustment`, `left: position.x`; the reduced
-/// motion still at `top: -bannerAdjustment`. The persistent effect's
-/// `staticFrameSrc` keeps the client's `position.y ?? 0 - bannerAdjustment`.
 pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let sku = c.sku;
     let z = crate::theme::z;
-    // `img.effect_` is `width: 100%` with the height from the image's aspect
-    // ratio; GPUI's `img` with only a width keeps the natural height and
-    // letterboxes (object-fit contain), pushing the art down. Size it from
-    // the decoded frame instead.
     let layer = |a: Arc<RenderImage>, id: Option<SharedString>, left: f32, top: f32| {
         let sz = a.size(0);
         let h = if sz.width.0 > 0 { w * sz.height.0 as f32 / sz.width.0 as f32 } else { w };
@@ -222,39 +171,28 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
     };
     let mut layers: Vec<AnyElement> = Vec::new();
     if c.effects.is_empty() || cx.reduce_motion() {
-        // A persistent effect at rest (not ticking) is its `staticFrameSrc` at
-        // the first layer's position; that is what the live client shows once
-        // it stops, so stills match it (the `reducedMotionSrc` of persistent
-        // effects is often only the faint sparkle layer).
         let rest = c.persistent.then(|| c.static_frame.clone().zip(c.effects.first())).flatten();
         if let Some((src, l0)) = rest {
             if let Some(a) = anim(&src, true, cx) {
                 layers.push(layer(a, None, l0.x, if l0.y != 0. { l0.y } else { -banner_adj }));
             }
-        // Reduced motion: one `img` with `reducedMotionSrc` at `top: 0 - bannerAdjustment`.
         } else if let Some(src) = c.full.clone().or(c.preview.clone())
             && let Some(a) = anim(&src, true, cx)
         {
             layers.push(layer(a, None, 0., -banner_adj));
         }
     } else {
-        // The client starts its clock at -500 ms (`delayIntro`).
         let el = clock(sku, cx).as_millis() as u64;
         let t = el.saturating_sub(INTRO_MS);
-        // Play-through end (`loopEnd`: latest start + duration); a persistent
-        // effect without looping layers stops there.
         let loop_end = c.effects.iter().map(|l| l.start + l.duration).max().unwrap_or(0);
         let stopped = !c.effects.iter().any(|l| l.looping) && t >= loop_end;
         for (i, l) in c.effects.iter().enumerate() {
-            // Not ticking yet (intro) or stopped: a persistent effect's first
-            // layer is its `staticFrameSrc`.
             if i == 0
                 && c.persistent
                 && (el < INTRO_MS || stopped)
                 && let Some(src) = &c.static_frame
             {
                 if let Some(a) = anim(src, true, cx) {
-                    // `top: e.position?.y ?? 0 - t` (`??` binds looser than `-`).
                     layers.push(layer(a, None, l.x, if l.y != 0. { l.y } else { -banner_adj }));
                 }
                 continue;
@@ -273,7 +211,6 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
             if !active {
                 continue;
             }
-            // A fresh id per cycle restarts the APNG from its first frame.
             layers.push(layer(a, Some(SharedString::from(format!("pfx-{sku}-{i}-{cycle}"))), l.x, l.y - banner_adj));
         }
     }
@@ -285,21 +222,11 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
             .size_full()
             .overflow_hidden()
             .children(layers)
-            // Keep painting while visible so the layer schedule advances
-            // (idle frames between loops); stops as soon as the card is gone.
             .child(canvas(|_, _, _| {}, |_, _, window, _| window.request_animation_frame()).absolute().size_0())
             .into_any_element(),
     )
 }
 
-/// The frame art around a card of width `w` (live popout, ref-cache
-/// profile-popout-frame-*.json): `profileFrame_v8co33` spans the card height
-/// (inset 0) and overflows each side by `overflow_horizontal` (scaled by
-/// `w / inner_width`). Rail/border layers fill that box with the art at 100%
-/// width, `background-position: 50% 0` (top) / centre / bottom; `staple`
-/// layers are natural-height images starting `overflow_top` above the card
-/// (or ending `overflow_bottom` below it). Put inside a `relative` wrapper
-/// that does NOT clip.
 pub fn frame(f: &FrameSpec, w: f32, front: bool, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let k = w / f.inner_width;
     let z = crate::theme::z;
@@ -310,7 +237,6 @@ pub fn frame(f: &FrameSpec, w: f32, front: bool, cx: &mut Context<PhoenixApp>) -
     let box_w = w + 2. * f.overflow_horizontal * k;
     let mut d = div().absolute().top_0().bottom_0().left(z(-f.overflow_horizontal * k)).w(z(box_w));
     for (i, (url, anchor, _)) in layers {
-        // 100% width, natural aspect; nothing until the size is known.
         let Some((iw, ih)) = art_size(url, cx) else { continue };
         let art = img(url.clone()).w_full().h(z(box_w * ih / iw.max(1.))).flex_none();
         if f.staple.get(i).copied().unwrap_or(false) {
@@ -335,8 +261,6 @@ pub fn frame(f: &FrameSpec, w: f32, front: bool, cx: &mut Context<PhoenixApp>) -
 
 #[cfg(test)]
 mod tests {
-    /// 4x4 APNG: an empty default (intro) frame, then a 2x2 red patch blended
-    /// over it, then a blue 1x1 patch blended over that.
     fn apng() -> Vec<u8> {
         let mut out = Vec::new();
         {
@@ -363,7 +287,6 @@ mod tests {
         let b = apng();
         let anim = super::decode(&b, false).unwrap();
         assert_eq!(anim.frame_count(), 3);
-        // Frame 3 keeps frame 2's red patch (dispose none) plus the blue pixel (BGRA).
         let f = anim.as_bytes(2).unwrap();
         assert_eq!(&f[0..4], &[0, 0, 255, 255]);
         assert_eq!(&f[60..64], &[255, 0, 0, 255]);

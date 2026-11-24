@@ -1,34 +1,12 @@
-//! Per-glyph fallback for characters missing from gg sans ("・", "〢", CJK,
-//! symbols, math alphanumerics in fancy names), matching what Chromium picks
-//! for the official client on the same machine.
-//!
-//! `--font-primary` is `"gg sans","Noto Sans","Helvetica Neue",Helvetica,Arial,sans-serif`
-//! (base theme). Chromium walks it per glyph:
-//! - "Noto Sans" is Discord's own `@font-face` webfont (not the system one),
-//! - Helvetica Neue/Helvetica are absent and Chromium only accepts metric-compatible
-//!   fontconfig substitutes (Arial -> Arimo/Liberation Sans, not Helvetica -> Nimbus Sans),
-//! - then the system fallback, i.e. fontconfig's sorted `sans-serif` list
-//!   (`fc-match -s sans-serif`): DejaVu Sans, IPAGothic, FreeSans, FreeSerif, ..., Noto Sans CJK JP.
-//!
-//! GPUI's cosmic-text backend checks a fallback family's coverage on its FIRST
-//! face only (often Bold/Italic, which lack most symbols in FreeSerif/FreeSans/
-//! DejaVu), so the regular and bold faces of each family are re-registered
-//! under a private name ("Phx <family>"), regular first.
-
 use std::{path::PathBuf, sync::OnceLock};
 
 const PREFIX: &str = "Phx ";
-/// The system color emoji font (`fc-match emoji`), which Chromium uses for
-/// emoji-presentation characters before walking the font stack.
 pub const EMOJI_FAMILY: &str = "Noto Color Emoji";
-/// `--font-primary` after "gg sans".
 const STACK: [&str; 4] = ["Noto Sans", "Helvetica Neue", "Helvetica", "Arial"];
-/// How many families of the fontconfig sort get private single-name copies.
 const RENAMED: usize = 12;
 
 static CHAIN: OnceLock<gpui::FontFallbacks> = OnceLock::new();
 
-/// The fallback chain set on the app root's text style.
 pub fn ui_fallbacks() -> gpui::FontFallbacks {
     CHAIN.get_or_init(|| gpui::FontFallbacks::from_fonts(plain_chain())).clone()
 }
@@ -40,12 +18,10 @@ fn fc(args: &[&str], format: &str) -> Vec<String> {
     String::from_utf8_lossy(&out.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()
 }
 
-/// Families in Chromium's order (system names), deduplicated.
 fn plain_chain() -> Vec<String> {
     let sorted = fc(&["-s", "sans-serif"], "%{family[0]}\n");
     let mut chain: Vec<String> = Vec::new();
     for name in STACK {
-        // Chromium only takes metric-compatible fontconfig substitutes.
         let metric_ok = |f: &str| f == name || (name == "Arial" && matches!(f, "Arimo" | "Liberation Sans"));
         if let Some(f) = fc(&[name], "%{family[0]}\n").into_iter().next()
             && metric_ok(&f)
@@ -69,23 +45,20 @@ fn web_dir() -> Option<PathBuf> {
     Some(super::out_dir()?.join("fallback"))
 }
 
-/// Registers the private copies and fixes the chain. Call before the first frame.
 pub fn register(cx: &mut gpui::App) {
     if CHAIN.get().is_some() {
         return;
     }
-    // `PHX_NO_FONT_FALLBACK=1`: cosmic-text's own fallback (before/after compares).
     if std::env::var_os("PHX_NO_FONT_FALLBACK").is_some() {
         let _ = CHAIN.set(gpui::FontFallbacks::from_fonts(Vec::new()));
         return;
     }
     let mut chain = plain_chain();
     let mut blobs: Vec<std::borrow::Cow<'static, [u8]>> = Vec::new();
-    // Discord's Noto Sans webfont, cached from an earlier run.
     let web: Vec<Vec<u8>> = web_dir()
         .and_then(|d| {
             let mut files: Vec<_> = std::fs::read_dir(d).ok()?.flatten().map(|e| e.path()).collect();
-            files.sort(); // Noto_Sans-400 first
+            files.sort();
             Some(files.into_iter().filter_map(|p| std::fs::read(p).ok()).collect())
         })
         .unwrap_or_default();
@@ -112,7 +85,6 @@ pub fn register(cx: &mut gpui::App) {
             if seen.contains(&file) || !(file.ends_with(".ttf") || file.ends_with(".otf")) {
                 continue;
             }
-            // fc-match may substitute another family: keep only real faces of `fam`.
             let Ok(bytes) = std::fs::read(&file) else { continue };
             if super::ttf_family(&bytes).as_deref() != Some(fam.as_str()) {
                 continue;
@@ -127,7 +99,6 @@ pub fn register(cx: &mut gpui::App) {
             chain[i] = new;
         }
     }
-    // The color emoji font, loaded as is so `EMOJI_FAMILY` resolves (ui::emoji_text).
     if let Some(file) = fc(&["emoji"], "%{file}").into_iter().next()
         && let Ok(bytes) = std::fs::read(&file)
     {
@@ -142,8 +113,6 @@ pub fn register(cx: &mut gpui::App) {
     let _ = CHAIN.set(gpui::FontFallbacks::from_fonts(chain));
 }
 
-/// Fetches Discord's Noto Sans `@font-face` files (assets named in the cached
-/// client CSS) into the fallback dir, for the next start.
 fn download_web_noto() {
     let Some(dir) = web_dir() else { return };
     let mut assets = Vec::new();
@@ -185,7 +154,6 @@ fn download_web_noto() {
     });
 }
 
-/// Copy of an sfnt font whose family/full/PostScript names are `family`.
 pub fn rename(font: &[u8], family: &str) -> Option<Vec<u8>> {
     let be16 = |o: usize| font.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
     let be32 = |o: usize| font.get(o..o + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
@@ -229,12 +197,10 @@ pub fn rename(font: &[u8], family: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// `name` table with every family-like record replaced by `family`.
 fn rename_table(t: &[u8], family: &str) -> Option<Vec<u8>> {
     let be16 = |o: usize| t.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
     let count = be16(2)? as usize;
     let storage = be16(4)? as usize;
-    // (platform, encoding, language, name id, bytes)
     let mut recs: Vec<(u16, u16, u16, u16, Vec<u8>)> = Vec::new();
     for i in 0..count {
         let r = 6 + i * 12;
@@ -251,7 +217,6 @@ fn rename_table(t: &[u8], family: &str) -> Option<Vec<u8>> {
         recs.push((3, 1, 0x409, nid, utf16.clone()));
     }
     recs.push((3, 1, 0x409, 6, ps));
-    // Records must be sorted by platform, encoding, language, name id.
     recs.sort_by_key(|r| (r.0, r.1, r.2, r.3));
     let mut out = Vec::new();
     let header = 6 + recs.len() * 12;

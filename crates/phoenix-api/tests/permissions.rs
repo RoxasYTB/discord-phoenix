@@ -45,15 +45,12 @@ fn base_permissions() {
 fn overwrite_order() {
     let r = roles();
     let ows = vec![
-        // @everyone cannot send...
         ow(G, OverwriteType::Role, Permissions::empty(), Permissions::SEND_MESSAGES),
-        // ...helpers can, muted role denies it: role allows win over role denies.
         ow(HELPER, OverwriteType::Role, Permissions::SEND_MESSAGES, Permissions::empty()),
         ow(MUTED, OverwriteType::Role, Permissions::empty(), Permissions::SEND_MESSAGES),
     ];
     let p = compute_channel_permissions(G, None, ME, &[], &r, &ows);
     assert!(!p.contains(Permissions::SEND_MESSAGES));
-    // Implicit: attach/embed dropped without send.
     assert!(!p.contains(Permissions::ATTACH_FILES));
     assert!(p.contains(Permissions::VIEW_CHANNEL));
 
@@ -61,7 +58,6 @@ fn overwrite_order() {
     assert!(p.contains(Permissions::SEND_MESSAGES));
     assert!(p.contains(Permissions::ATTACH_FILES));
 
-    // Member overwrite beats roles.
     let mut ows2 = ows.clone();
     ows2.push(ow(ME, OverwriteType::Member, Permissions::empty(), Permissions::SEND_MESSAGES));
     let p = compute_channel_permissions(G, None, ME, &[HELPER], &r, &ows2);
@@ -81,7 +77,6 @@ fn permission_serde() {
     let p: Permissions = serde_json::from_str("\"1071698660929\"").unwrap();
     assert_eq!(p.bits(), 1071698660929);
     assert_eq!(serde_json::to_string(&p).unwrap(), "\"1071698660929\"");
-    // Unknown high bits are preserved.
     let p: Permissions = serde_json::from_str("\"9223372036854775808\"").unwrap();
     assert_eq!(p.bits(), 1 << 63);
 }

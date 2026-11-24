@@ -1,5 +1,3 @@
-//! Extra auth endpoints: SMS / backup-code MFA and remote-auth (QR) login.
-
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::json;
@@ -13,7 +11,6 @@ struct TokenBody {
 }
 
 impl RestClient {
-    /// `POST /auth/mfa/sms/send`: texts a code, returns the redacted phone.
     pub async fn login_mfa_sms_send(&self, ticket: &str) -> Result<String> {
         #[derive(Deserialize)]
         struct P {
@@ -24,7 +21,6 @@ impl RestClient {
         Ok(p.phone)
     }
 
-    /// `POST /auth/mfa/sms`
     pub async fn login_mfa_sms(&self, ticket: &str, code: &str) -> Result<String> {
         let t: TokenBody = self
             .call(
@@ -36,14 +32,11 @@ impl RestClient {
         Ok(t.token)
     }
 
-    /// Backup codes go through the TOTP endpoint (8 characters, no dash).
     pub async fn login_mfa_backup(&self, ticket: &str, code: &str) -> Result<String> {
         let code: String = code.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
         self.login_mfa_totp(ticket, &code).await
     }
 
-    /// `POST /users/@me/remote-auth/login`: exchange a remote-auth ticket for
-    /// the RSA-encrypted token (base64).
     pub async fn remote_auth_login(&self, ticket: &str) -> Result<String> {
         #[derive(Deserialize)]
         struct E {

@@ -1,15 +1,3 @@
-//! Sound devices through cpal (ALSA, which PipeWire/PulseAudio expose).
-//!
-//! [`AudioEngine::start`] spawns:
-//! - an I/O thread owning the cpal streams (they are not `Send`);
-//! - an encoder thread: capture -> 48 kHz mono -> gain -> noise gate ->
-//!   Opus 20 ms -> [`AudioOut`] for the connection;
-//! - a mixer thread: every 20 ms pulls one frame from the [`Mixer`], adapts
-//!   it to the output device and queues it for the output callback.
-//!
-//! Missing devices are not fatal: without a microphone nothing is sent,
-//! without speakers nothing is played, and the connection keeps working.
-
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc as std_mpsc};
@@ -29,11 +17,8 @@ use crate::media::opus::OpusEncoder;
 use crate::{Error, FRAME_SAMPLES, Result};
 
 const RATE: u32 = 48_000;
-/// Output queue cap (device samples), ~120 ms.
 const MAX_OUT_MS: usize = 120;
 
-/// Names of the available input devices (default first): Pulse/PipeWire
-/// descriptions like the official client, else the ALSA names.
 pub fn input_devices() -> Vec<String> {
     if let Some(v) = super::pulse::devices(true).filter(|v| !v.is_empty()) {
         return v.into_iter().map(|d| d.description).collect();
@@ -47,7 +32,6 @@ pub fn input_devices() -> Vec<String> {
     v
 }
 
-/// Names of the available output devices (default first), see [`input_devices`].
 pub fn output_devices() -> Vec<String> {
     if let Some(v) = super::pulse::devices(false).filter(|v| !v.is_empty()) {
         return v.into_iter().map(|d| d.description).collect();
@@ -69,8 +53,6 @@ fn find_device(input: bool, name: Option<&str>) -> Option<Device> {
         if found.is_some() {
             return found;
         }
-        // A Pulse/PipeWire description: open the default device, then move
-        // the stream onto that node.
         if let Some(node) = super::pulse::node_for(input, name) {
             super::pulse::route_own_streams(input, node);
             return if input { host.default_input_device() } else { host.default_output_device() };
@@ -80,7 +62,6 @@ fn find_device(input: bool, name: Option<&str>) -> Option<Device> {
     if input { host.default_input_device() } else { host.default_output_device() }
 }
 
-/// Prefer 48 kHz f32/i16; otherwise the device default.
 fn pick_config(dev: &Device, input: bool) -> Option<SupportedStreamConfig> {
     let ranges: Vec<_> = if input {
         dev.supported_input_configs().ok()?.collect()
@@ -104,7 +85,6 @@ fn pick_config(dev: &Device, input: bool) -> Option<SupportedStreamConfig> {
     ok_fmt(d.sample_format()).then_some(d)
 }
 
-/// Queue the receive side writes into.
 #[derive(Clone)]
 pub struct PlaybackSink {
     mixer: Arc<Mutex<Mixer>>,
@@ -127,7 +107,6 @@ pub struct AudioEngine {
 }
 
 impl AudioEngine {
-    /// Open the devices (`None` = system default) and start the pipeline.
     pub fn start(
         control: Arc<AudioControl>,
         input: Option<String>,
@@ -275,8 +254,6 @@ fn open_output(name: Option<&str>, q: Arc<Mutex<VecDeque<f32>>>) -> Option<(Stre
     Some((stream, (cfg.sample_rate.0, ch)))
 }
 
-/// Capture processing shared by calls and the mic test:
-/// high-pass + noise suppression -> input gain -> meter -> gate / PTT -> AGC.
 pub struct Processor {
     hp: HighPass,
     ns: NoiseSuppressor,
@@ -292,8 +269,6 @@ impl Default for Processor {
 }
 
 impl Processor {
-    /// Process one 20 ms 48 kHz mono frame in place. Returns (level dBFS,
-    /// whether to transmit).
     pub fn process(&mut self, control: &AudioControl, frame: &mut [f32]) -> (f32, bool) {
         if control.noise_suppression() {
             self.hp.process(frame);
@@ -366,8 +341,6 @@ fn encode_loop(
     control.set_transmitting(false);
 }
 
-/// Settings page "Let's Check": capture with the call's processing, show the
-/// level and play the processed voice back on the output device.
 pub struct MicTest {
     stop: Arc<AtomicBool>,
     io_stop: Option<std_mpsc::Sender<()>>,
@@ -446,12 +419,10 @@ impl MicTest {
         Ok(Self { stop, io_stop: Some(io_stop_tx), threads, level, open })
     }
 
-    /// Current input level in dBFS.
     pub fn level_db(&self) -> f32 {
         f32::from_bits(self.level.load(Ordering::Relaxed))
     }
 
-    /// Whether the gate / push-to-talk would transmit right now.
     pub fn gate_open(&self) -> bool {
         self.open.load(Ordering::Relaxed)
     }

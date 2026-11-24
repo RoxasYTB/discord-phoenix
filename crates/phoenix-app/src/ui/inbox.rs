@@ -1,14 +1,3 @@
-//! Header popouts and small dialogs of the parity work:
-//! - Inbox (title-bar button): Unreads, Mentions (with filters), Saved,
-//!   Reminders, Scheduled — the five tabs of the live client.
-//! - Threads browser and pinned messages of the open channel (header buttons).
-//! - Moderation entries of the user menu (Timeout / Kick / Ban, shown only
-//!   with the matching permission) and their dialogs.
-//! - crate::t!("groupdm.select") group DM picker (DM list "+").
-//! - Guild folder / order sync after a drag in the guild rail.
-//!
-//! Layout and styles come from the live client dumps (see docs/parity/popouts.md).
-
 use crate::theme::z;
 use gpui::{AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Window, div, prelude::*};
 use gpui_component::input::{Input, InputState};
@@ -33,11 +22,9 @@ pub const BAN_MEMBERS: u64 = 1 << 2;
 pub const ADMINISTRATOR: u64 = 1 << 3;
 pub const MODERATE_MEMBERS: u64 = 1 << 40;
 
-/// Timeout choices of the official dialog (label, seconds).
 pub const TIMEOUTS: [(&str, u64); 6] =
     [("mod.timeout.60s", 60), ("mod.timeout.5m", 300), ("mod.timeout.10m", 600), ("mod.timeout.1h", 3600), ("mod.timeout.1d", 86_400), ("mod.timeout.1w", 604_800)];
 
-/// "Delete Message History" choices of the ban dialog.
 pub const BAN_HISTORY: [(&str, u32); 7] = [
     ("mod.ban.none", 0),
     ("mod.ban.1h", 3600),
@@ -51,8 +38,6 @@ pub const BAN_HISTORY: [(&str, u32); 7] = [
 pub fn has_perm(perms: u64, bit: u64) -> bool {
     perms & ADMINISTRATOR != 0 || perms & bit != 0
 }
-
-// ------------------------------------------------------------ app actions
 
 impl PhoenixApp {
     pub fn toggle_inbox(&mut self, cx: &mut Context<Self>) {
@@ -80,8 +65,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Inbox, threads browser, pins and header bell menu: the header popouts.
-    /// Closes them all; true when one was open (Esc, a click outside, a channel switch).
     pub fn close_header_popouts(&mut self, cx: &mut Context<Self>) -> bool {
         let open = self.header_popout_open();
         self.parity.inbox.open = false;
@@ -99,7 +82,6 @@ impl PhoenixApp {
         self.parity.inbox.open || self.parity.threads_open || self.chat.pins.is_some() || crate::ui::nav_menus::is_bell_open()
     }
 
-    /// Esc: the Mentions filter menu first, then the popout itself.
     pub fn escape_header_popouts(&mut self, cx: &mut Context<Self>) -> bool {
         if self.parity.inbox.open && self.parity.inbox.filter_menu {
             self.parity.inbox.filter_menu = false;
@@ -109,8 +91,6 @@ impl PhoenixApp {
         self.close_header_popouts(cx)
     }
 
-    /// Inbox > Unreads: the client's channel list (`ui::inbox_unreads`), built
-    /// from the read states the backend holds; no request, no ack.
     fn load_unreads(&mut self, cx: &mut Context<Self>) {
         use crate::ui::inbox_unreads::Kind;
         let order = crate::ui::server_bar::flat_guild_order(self);
@@ -126,9 +106,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Loads the next card: `GET messages?around=<ack>&limit=30` (read-only).
-    /// A card with nothing to show is dropped; the client acks it
-    /// (`ACK_INBOX_CHANNEL_NO_MESSAGES`), Phoenix does not.
     pub(crate) fn load_next_unread(&mut self, cx: &mut Context<Self>) {
         use crate::ui::inbox_unreads::{FETCH_LIMIT, Kind, shown_messages};
         let i = &mut self.parity.inbox;
@@ -164,7 +141,6 @@ impl PhoenixApp {
         .detach();
     }
 
-    /// The check button of a card (and Ctrl+Shift+E on the top one): ack it.
     pub fn mark_unread_card_read(&mut self, channel: Id, cx: &mut Context<Self>) {
         self.parity.inbox.unreads.retain(|c| c.entry.channel != channel);
         self.mark_nav_read(crate::ui::nav_menus::Target::Channel(channel), cx);
@@ -213,8 +189,6 @@ impl PhoenixApp {
                 Ok(ParityReply::Messages(msgs)) => match tab {
                     InboxTab::Mentions => {
                         i.reached_end = msgs.len() < 25;
-                        // The endpoint applies the filters (`everyone`, `roles`,
-                        // `guild_id`), like the client's fetchRecentMentions.
                         i.mentions.extend(msgs);
                     }
                     InboxTab::Scheduled => {
@@ -241,7 +215,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// "Save Message" from the message menu (chat agent can call this).
     pub fn save_message(&mut self, channel: Id, id: Id, cx: &mut Context<Self>) {
         self.parity_request(ParityRequest::SetSaved { channel, message: id, saved: true }, cx, |a, r, cx| {
             if r.is_ok() {
@@ -308,7 +281,6 @@ impl PhoenixApp {
             a.parity.group_dm = None;
             match r {
                 Ok(ParityReply::Channel(ch)) if a.channels.contains_key(&ch) => a.select_channel(ch, cx),
-                // The DM arrives through CHANNEL_CREATE; select it then.
                 Ok(ParityReply::Channel(ch)) => {
                     cx.spawn(async move |this, cx| {
                         cx.background_executor().timer(std::time::Duration::from_millis(800)).await;
@@ -323,7 +295,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Persist the rail order + folders (call after a drag-reorder).
     pub fn sync_guild_folders(&mut self, cx: &mut Context<Self>) {
         let folders = folder_sync(self);
         self.parity_request(ParityRequest::GuildFolders(folders), cx, |a, r, cx| {
@@ -334,9 +305,6 @@ impl PhoenixApp {
     }
 }
 
-/// Rail order as `guild_folders`: guilds outside folders first (one lone
-/// entry each), then the folders; a lone entry that got several guilds by a
-/// drag is split again.
 pub fn folder_sync(app: &PhoenixApp) -> Vec<FolderSync> {
     let in_folders: std::collections::HashSet<Id> = app.nav.folders.iter().flat_map(|f| f.guilds.iter().copied()).collect();
     let lone = |g: Id| FolderSync { id: None, name: None, color: None, guilds: vec![g] };
@@ -355,11 +323,7 @@ pub fn folder_sync(app: &PhoenixApp) -> Vec<FolderSync> {
     out
 }
 
-/// Moderation rows for the user context menu (empty without permissions).
 pub fn moderation_items(app: &PhoenixApp, user: Id, guild: Option<Id>, entity: &Entity<PhoenixApp>) -> Vec<MenuItem> {
-    // Vanilla member menu (vanilla-menu-member-* dumps): separator, "Open in
-    // Mod View" (Moderate Members, also on yourself), then Timeout, Kick, Ban
-    // for other members, all red.
     let Some(g) = guild else { return Vec::new() };
     let perms = app.backend.guild_permissions(g);
     let name = app.users.get(&user).map(|u| u.name.to_string()).unwrap_or_else(|| crate::t!("common.user").to_string());
@@ -391,17 +355,10 @@ pub fn moderation_items(app: &PhoenixApp, user: Id, guild: Option<Id>, entity: &
     items
 }
 
-// ------------------------------------------------------------- rendering
-//
-// Rebuilt from the live client dumps (inbox-unreads / -mentions / -saved /
-// -reminders / -scheduled, threads, threads-lrer, pins, pins-list-hover).
-// Every value names its CSS source (hashed class prefix + property or token).
-
 fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// A generated `--shadow-*` token for the active theme.
 fn shadow_tok(t: &[&[Shadow]; 4]) -> Vec<gpui::BoxShadow> {
     let ix = match crate::theme::active() {
         crate::ui::settings::AppTheme::Dark => 0,
@@ -421,22 +378,18 @@ fn shadow_tok(t: &[&[Shadow]; 4]) -> Vec<gpui::BoxShadow> {
         .collect()
 }
 
-/// `box-shadow: var(--shadow-low)` (cards, e.g. Active Now `itemCard_`).
 pub fn low_shadow() -> Vec<gpui::BoxShadow> {
     shadow_tok(&shadow::SHADOW_LOW)
 }
 
-/// `box-shadow: var(--shadow-medium)`.
 pub fn shadow_medium() -> Vec<gpui::BoxShadow> {
     shadow_tok(&shadow::SHADOW_MEDIUM)
 }
 
-/// `box-shadow: var(--shadow-high)` (toasts `wrapper_O41c2-`).
 pub fn shadow_high() -> Vec<gpui::BoxShadow> {
     shadow_tok(&shadow::SHADOW_HIGH)
 }
 
-/// `box-shadow: var(--shadow-border), var(--shadow-high)` (popout containers).
 pub fn popout_shadow() -> Vec<gpui::BoxShadow> {
     let mut v = shadow_tok(&shadow::SHADOW_BORDER);
     v.extend(shadow_tok(&shadow::SHADOW_HIGH));
@@ -447,9 +400,6 @@ fn named(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
     gpui::svg().path(crate::icons::path(name)).size(z(size)).flex_none().text_color(color)
 }
 
-/// `button_F7qvhY sm_ secondary_` icon-only: 32px, radius 8, 1px
-/// --control-secondary-border-default, --control-secondary-background-default,
-/// 16px glyph --control-secondary-text-default.
 fn sm_icon_button(id: impl Into<gpui::ElementId>, glyph: &str) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -460,7 +410,6 @@ fn sm_icon_button(id: impl Into<gpui::ElementId>, glyph: &str) -> gpui::Stateful
         .border_color(tk(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
         .bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
         .hover(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)).border_color(tk(idx::CONTROL_SECONDARY_BORDER_HOVER)))
-        // secondary_F7qvhY:active
         .active(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE)).border_color(tk(idx::CONTROL_SECONDARY_BORDER_ACTIVE)))
         .flex()
         .items_center()
@@ -469,8 +418,6 @@ fn sm_icon_button(id: impl Into<gpui::ElementId>, glyph: &str) -> gpui::Stateful
         .child(named(glyph, 16., tk(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
 }
 
-/// `button_F7qvhY sm_` with text: 32px, padding 3px 11px (+1px border), radius 8,
-/// label body-sm/medium 14/18.
 pub fn sm_text_button(id: impl Into<gpui::ElementId>, label: SharedString, primary: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -480,7 +427,6 @@ pub fn sm_text_button(id: impl Into<gpui::ElementId>, label: SharedString, prima
         .rounded(z(8.))
         .border_1()
         .when(primary, |d| {
-            // primary_F7qvhY: --control-primary-background-default / -border- / -text-default.
             d.bg(tk(idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT))
                 .border_color(tk(idx::CONTROL_PRIMARY_BORDER_DEFAULT))
                 .text_color(tk(idx::CONTROL_PRIMARY_TEXT_DEFAULT))
@@ -513,14 +459,9 @@ const TABS: [(InboxTab, &str, &str); 5] = [
     (InboxTab::Scheduled, "inbox-tab-scheduled", "inbox.tab_scheduled"),
 ];
 
-/// `tabBar_LSviKk top_6zZYhF`: margin-top 16, border-bottom 1px --border-subtle;
-/// `tab_LSviKk item_6zZYhF brand_`: flex 1, padding 0 8 16, margin-start --space-xs,
-/// body-sm/semibold 14px, --text-subtle; selected --text-brand with the 2px
-/// `:after` bar (radius 2 2 0 0); hover --text-strong.
 fn tab_bar(sel: InboxTab, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let mut bar = div()
         .mt(z(16.))
-        // headerTabs_LSviKk margin 0 -16px inside the 20px header padding.
         .mx(z(-16.))
         .flex()
         .border_b_1()
@@ -555,10 +496,6 @@ fn tab_bar(sel: InboxTab, cx: &mut Context<PhoenixApp>) -> AnyElement {
     bar.into_any_element()
 }
 
-/// `container_FgrH4y` (Unreads / Mentions empty): min-height 360, padding 0 16,
-/// centred; 80px `icon_` circle (--background-base-low, 22px padding, glyph
-/// --text-muted), heading-xl/semibold 24/32 --text-strong mb 8, body-xs 12/16
-/// --text-default with the `protip_` (14px medium, --text-feedback-positive).
 fn caught_up(tip: Option<SharedString>) -> AnyElement {
     div()
         .min_h(z(360.))
@@ -605,7 +542,6 @@ fn caught_up(tip: Option<SharedString>) -> AnyElement {
         .into_any_element()
 }
 
-/// Body text with one bold span (`body-sm/medium` 14/18 --text-subtle, `strong` 600).
 fn bold_middle(a: SharedString, b: SharedString, c2: SharedString) -> gpui::StyledText {
     let start = a.len();
     let end = start + b.len();
@@ -613,8 +549,6 @@ fn bold_middle(a: SharedString, b: SharedString, c2: SharedString) -> gpui::Styl
         .with_highlights([(start..end, gpui::HighlightStyle { font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() })])
 }
 
-/// A row of the demo menus (`menuRow_jMz1Ee`): padding 6 8, gap 8, radius 4,
-/// 16px glyph, body-sm/medium label; highlighted: --background-mod-normal.
 fn demo_menu_row(glyph: &str, label: SharedString, hi: bool) -> gpui::Div {
     div()
         .px(z(8.))
@@ -628,8 +562,6 @@ fn demo_menu_row(glyph: &str, label: SharedString, hi: bool) -> gpui::Div {
         .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(label))
 }
 
-/// `menu_jMz1Ee`: --background-surface-highest, 1px --border-subtle, radius 8,
-/// padding 4, --shadow-high.
 fn demo_menu(rows: Vec<gpui::Div>) -> gpui::Div {
     div()
         .p(z(4.))
@@ -643,10 +575,6 @@ fn demo_menu(rows: Vec<gpui::Div>) -> gpui::Div {
         .children(rows)
 }
 
-/// The Wumpus demo of `messages_jMz1Ee`: --background-base-lowest, 1px
-/// --border-normal, radius 12, margin 16 0, padding 8 0; cozy rows padding
-/// 2 30 2 80, 40px avatar at 20px, 16/22 text; the menu sits at inset-start 300,
-/// margin-top -7 under the first line.
 fn wumpus_demo(hi_second: bool) -> AnyElement {
     let line = |t: SharedString| {
         div().pl(z(80.)).pr(z(30.)).py(z(2.)).text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().child(t)
@@ -673,7 +601,6 @@ fn wumpus_demo(hi_second: bool) -> AnyElement {
                         .flex()
                         .items_baseline()
                         .child(div().mr(z(4.)).text_size(z(16.)).line_height(z(22.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child("Wumpus"))
-                        // timestamp_2i8Bfm: --chat-text-muted 12px medium, margin-start 4.
                         .child(div().ml(z(4.)).text_size(z(12.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::CHAT_TEXT_MUTED)).child(time)),
                 )
                 .child(div().text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().child(crate::t!("inbox.demo_1"))),
@@ -689,9 +616,6 @@ fn wumpus_demo(hi_second: bool) -> AnyElement {
         .into_any_element()
 }
 
-/// `container_jMz1Ee` / `container_XzStbz` upsells (Saved, Reminders, Scheduled):
-/// height 480, padding 16, centred; 140×93 image mb 24; heading-xl/semibold
-/// 24/32 --text-default mb 8; body-sm/medium 14/18 --text-subtle mb 16; demo.
 fn upsell(glyph: &str, title: SharedString, body: gpui::StyledText, demo: AnyElement) -> AnyElement {
     div()
         .h(z(480.))
@@ -701,7 +625,6 @@ fn upsell(glyph: &str, title: SharedString, body: gpui::StyledText, demo: AnyEle
         .justify_center()
         .items_center()
         .child(
-            // The illustration is a CDN asset: drawn as the matching icon in its 140×93 box.
             div().mb(z(24.)).w(z(140.)).h(z(93.)).flex().items_center().justify_center().child(named(glyph, 72., tk(idx::TEXT_BRAND))),
         )
         .child(
@@ -729,9 +652,6 @@ fn upsell(glyph: &str, title: SharedString, body: gpui::StyledText, demo: AnyEle
         .into_any_element()
 }
 
-/// Scheduled demo (`demo_XzStbz` margin-top 16): attach menu (margin 0 0 -5 12)
-/// over a `chatInput_` (padding 8 12, gap 8, radius 8, --background-base-lowest,
-/// 1px --border-subtle) with the 24px `plusButton_` (--background-mod-strong).
 fn scheduled_demo() -> AnyElement {
     div()
         .mt(z(16.))
@@ -760,12 +680,9 @@ fn scheduled_demo() -> AnyElement {
 }
 
 fn channel_label(app: &PhoenixApp, ch: Id) -> (SharedString, Option<SharedString>) {
-    // Threads (Inbox > Unreads lists joined ones) live in the nav thread cache.
     let c = app.channels.get(&ch).or_else(|| app.nav.find_thread(ch));
     let name = c.map(|c| c.name.to_string()).unwrap_or_else(|| crate::t!("common.unknown_channel").to_string());
     let guild = c.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.clone());
-    // `guildName_8ZcKCk` (vanilla-inbox-1 #2666): "<guild> › <category>" when the
-    // channel sits in a category.
     let category = c.and_then(|c| c.parent).and_then(|p| app.channels.get(&p)).filter(|p| p.kind == crate::model::ChannelKind::Category);
     let guild = match (guild, category) {
         (Some(g), Some(cat)) => Some(format!("{g} \u{203a} {}", cat.name).into()),
@@ -774,10 +691,6 @@ fn channel_label(app: &PhoenixApp, ch: Id) -> (SharedString, Option<SharedString
     (name.into(), guild)
 }
 
-/// `box_0JZW4Z` channel card head (`channelHeader_8ZcKCk`): padding 12, gap 8,
-/// --background-surface-higher, border-bottom 1px --border-subtle; 32px guild
-/// icon (radius 8), 12px chevron, name body-md/semibold 16/20 --text-default with
-/// a 12px type glyph, guild line body-xs 12/16; trailing `buttonGroup_` gap 8.
 fn channel_head(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>>) -> gpui::Div {
     let (name, guild_name) = channel_label(app, ch);
     let channel = app.channels.get(&ch).or_else(|| app.nav.find_thread(ch));
@@ -826,9 +739,6 @@ fn channel_head(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>
         .child(div().flex().gap(z(8.)).children(buttons))
 }
 
-/// Cozy message of the inbox cards (`singleMessage_0JZW4Z wrapper_2i8Bfm cozy_`):
-/// padding 2 20 2 80, 40px avatar at 20px, username 16/22 500 --text-strong,
-/// timestamp 12px 500 --chat-text-muted (margin-start 4), content 16/22 --text-default.
 fn cozy_message(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<PhoenixApp>) -> gpui::Div {
     let guild = app.channel_guild(m.channel);
     let author_cow = app.member_user(guild, m.author);
@@ -877,12 +787,8 @@ fn cozy_message(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<PhoenixA
         .child(div().text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::ui::components::markdown_in(app, &m.content, &cx.entity(), m.id)))
 }
 
-/// `box_0JZW4Z`: --background-surface-higher, 1px --border-subtle, radius
-/// --radius-md, margin-bottom 16.
 fn inbox_box() -> gpui::Div {
     div()
-        // Never shrink inside the scroller's flex column: with more entries than
-        // fit, flex-shrink squashed every box to 0 (blank list over real data).
         .flex_none()
         .mb(z(16.))
         .rounded(z(12.))
@@ -915,10 +821,6 @@ fn message_entry(
         .into_any_element()
 }
 
-/// One Inbox > Unreads card (client `n5` header + `n3` messages): the channel
-/// head with its mark-read button, then up to 25 unread messages, grouped like
-/// the chat (same author within 7 minutes), with day dividers unless the first
-/// one is from today, and "View all" when more are unread.
 fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let ch = card.entry.channel;
     if card.entry.kind == crate::ui::inbox_unreads::Kind::GuildEvents {
@@ -998,7 +900,6 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
                 .text_color(tk(idx::TEXT_DEFAULT))
                 .child(crate::ui::components::markdown_in(app, &m.content, &cx.entity(), m.id))
         };
-        // Hover "Jump" pill (`jumpButton_`), top-end of the message.
         let group: SharedString = format!("inbox-unread-msg-{}", id.0).into();
         body = body.child(
             div().relative().group(group.clone()).child(row).child(
@@ -1030,7 +931,6 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
     inbox_box().child(head).child(body).into_any_element()
 }
 
-/// Day divider of the unread cards (`divider_` with the "LL" date).
 fn day_divider(label: SharedString) -> gpui::Div {
     let line = || div().flex_1().h(z(1.)).bg(tk(idx::BORDER_SUBTLE));
     div()
@@ -1044,7 +944,6 @@ fn day_divider(label: SharedString) -> gpui::Div {
         .child(line())
 }
 
-/// Filter dropdown of the Mentions tab (a `menu_M3qk4j` with checkbox rows).
 fn filter_menu(i: &crate::commands::state::InboxState, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let toggle = |f: fn(&mut crate::commands::state::InboxState)| {
         cx.listener(move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _: &mut Window, cx: &mut Context<PhoenixApp>| {
@@ -1109,12 +1008,9 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
         return None;
     }
     let pending = app.nav.count(RelationshipKind::Incoming);
-    // controls_LSviKk: gap 8, margin-inline-start auto. Unreads: "Mark All Read";
-    // Mentions: "Filter"; every tab: friend requests (`friendRequestsButton_QwUPp6`).
     let mut controls = div().ml_auto().flex().items_center().gap(z(8.));
     match i.tab {
         InboxTab::Unreads => {
-            // markAllRead: acks the listed channels only (user action).
             controls = controls.child(sm_icon_button("inbox-read-all", "inbox/read-all").on_click(cx.listener(|a, _, _, cx| {
                 let ids: Vec<Id> = a.parity.inbox.unreads.iter().map(|c| c.entry.channel).collect();
                 for id in ids {
@@ -1144,8 +1040,6 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 cx.notify();
             })),
     );
-    // header_LSviKk: padding --space-md --space-md 0; headerTitle_: 20px
-    // --icon-strong glyph (margin-end 8), body-lg/semibold 20/24 --text-strong.
     let header = div()
         .flex_none()
         .pt(z(space::md()))
@@ -1160,7 +1054,6 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
         )
         .child(tab_bar(i.tab, cx));
 
-    // scroller_0JZW4Z: padding 16 16 0.
     let mut list = div().id("inbox-list").flex_1().min_h_0().overflow_y_scroll().track_scroll(&INBOX_SCROLL.with(|h| h.clone())).flex().flex_col();
     let scroller = |l: gpui::Stateful<gpui::Div>| l.pt(z(16.)).px(z(16.));
     match i.tab {
@@ -1217,7 +1110,6 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
             ));
         }
         InboxTab::Scheduled if !i.scheduled.is_empty() => {
-            // Read-only: the list the client shows; cancelling is not wired.
             list = scroller(list);
             for m in &i.scheduled {
                 list = list.child(
@@ -1236,8 +1128,6 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
             ));
         }
         InboxTab::Unreads => {
-            // Cards render once loaded (`hasLoadedAnything`), in list order; a
-            // loaded card with nothing to show is dropped.
             if i.unreads.is_empty() {
                 list = list.child(caught_up(Some(crate::t!("inbox.unreads_tip"))));
             } else {
@@ -1255,9 +1145,6 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
         list = list.child(div().p(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")));
     }
     let filter = (i.filter_menu && i.tab == InboxTab::Mentions).then(|| filter_menu(i, cx));
-    // container_uTMZTY: 560 wide (480–750), max-height 70vh, radius 8,
-    // --background-surface-high, --shadow-border + --shadow-high; anchored under
-    // the title-bar inbox button (right edges aligned, dump box x 483..1043, y 36).
     Some(
         gpui::deferred(
             div()
@@ -1265,10 +1152,9 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 .debug_selector(|| "inbox-popout".into())
                 .map(|d| close_on_press_outside(d, cx))
                 .absolute()
-                .top(z(m::TITLE_BAR_H + 4.)) // container_uTMZTY y 36 (vanilla-inbox-1 #2620)
-                .right(z(crate::ui::title_bar::inbox_right_inset())) // right edge = inbox button's
+                .top(z(m::TITLE_BAR_H + 4.))
+                .right(z(crate::ui::title_bar::inbox_right_inset()))
                 .w(z(560.))
-                // max-height 70vh; @media (max-height: 800px) 80vh, (max-height: 700px) 85vh
                 .max_h(gpui::relative(match crate::ui::title_bar::viewport_h_css() {
                     h if h > 0. && h <= 700. => 0.85,
                     h if h > 0. && h <= 800. => 0.8,
@@ -1289,12 +1175,6 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     )
 }
 
-/// Threads browser (`browser_l-3BKx container_c0tu5x`): 480×400, radius 8,
-/// --background-surface-high, popout shadow; `header_c0tu5x` 48px, padding 0 16,
-/// border-bottom --border-subtle: 24px thread glyph --interactive-text-default
-/// (margin-end 8), heading-sm/semibold "Threads" (margin-end 16), 1×24 divider
-/// (margin-end 16), sm search field, primary "Create". Right edge under the
-/// header's threads button (dump x 408..888 of 1280, y 81).
 fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if !app.parity.threads_open {
         return None;
@@ -1320,8 +1200,6 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
         .child(div().mr(z(16.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("threads.title")))
         .child(div().mr(z(16.)).w(z(1.)).h(z(24.)).bg(tk(idx::BORDER_SUBTLE)))
         .child(
-            // input sm_0PLWhS: 32px, padding-start 4, gap 4, radius 8,
-            // --input-background-default; 22px icon box.
             div()
                 .w(z(248.))
                 .h(z(32.))
@@ -1329,7 +1207,7 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
                 .gap(z(4.))
                 .rounded(z(8.))
                 .border_1()
-                .border_color(tk(idx::INPUT_BORDER_ACTIVE)) // autofocused on open (vanilla-threads-lrer #1357 border = --input-border-active)
+                .border_color(tk(idx::INPUT_BORDER_ACTIVE))
                 .bg(tk(idx::INPUT_BACKGROUND_DEFAULT))
                 .flex()
                 .items_center()
@@ -1342,12 +1220,8 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
                 a.open_create_thread(ch, w, cx);
             }
         }))));
-    // list_6_wQXw: padding 0 16.
     let mut list = div().id("threads-list").flex_1().min_h_0().overflow_y_scroll().px(z(16.)).flex().flex_col();
     if list_src.is_empty() && archived.is_empty() {
-        // container_0FCMV2: min-height 400, padding 32, centred; 256×144
-        // illustration mb 12; heading-xl/semibold 24/32 --text-strong mb 8;
-        // body-md/normal 16/20 --text-default; cta margin-top 24 (md primary).
         list = list.child(
             div()
                 .flex_1()
@@ -1371,9 +1245,6 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
                 ),
         );
     } else if !list_src.is_empty() {
-        // sectionHeader_6_wQXw (threads-lrer #1432): 24px, margin 8 0, 14/18.67
-        // 500 --text-default, no uppercase: "N fils rejoints" (the gateway's
-        // active threads are the joined ones; "anciens fils" needs the archive).
         list = list.child(
             div()
                 .flex_none()
@@ -1393,10 +1264,6 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
         let r = crate::model::ThreadRef { id: t.id, name: t.name.clone(), message_count: 0 };
         let created = ((t.id.0 >> 22) / 1000 + 1_420_070_400) as i64;
         let sub = format!("{} • {}", crate::t!("threads.no_recent"), crate::ui::forum::ago(now, created));
-        // container_yRVHqK: 72px, padding 15, radius 8, 1px --border-subtle,
-        // --background-surface-higher, margin-bottom 8; hover --background-surface-highest
-        // + --border-normal. threadName_ heading-sm/semibold 16/20 --text-default,
-        // subtext_ body-sm 14/18 --text-default; 24px facepile margin-start 16.
         list = list.child(
             div()
                 .id(("thread-row", t.id.0))
@@ -1434,7 +1301,6 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
         );
     }
     if !archived.is_empty() {
-        // threads-lrer #1442: same sectionHeader_6_wQXw as the joined group.
         list = list.child(section_header(crate::t!("threads.older").to_string()));
     }
     for p in archived {
@@ -1466,18 +1332,11 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
     )
 }
 
-/// Distance from the window's right edge to the right edge of a channel-header
-/// button: toolbar padding-right 8 + search (244 + margin 4) + n × (32 + gap 10).
 const fn hdr_right(buttons_after: f32) -> f32 {
     8. + 248. + buttons_after * 42.
 }
 const HDR_RIGHT_THREADS: f32 = hdr_right(3.);
 
-/// Pinned messages popout (`messagesPopoutWrap_6bgemo`): 420 wide, min-height
-/// 200, max 80vh, radius 8, --background-surface-high, popout shadow. Header
-/// padding 16, border-bottom --border-subtle, 24px pin glyph + body-lg/semibold
-/// 20/24 --text-strong (gap 8). Scroller padding 8 0 0 8. Right edge under the
-/// header pin button (dump x 552..972 of 1280, y 81).
 pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let p = app.chat.pins.as_ref()?;
     let ch = p.channel;
@@ -1487,8 +1346,6 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
     if p.loading {
         list = list.child(div().p(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")));
     } else if p.msgs.is_empty() {
-        // emptyPlaceholder_: margin 8 0 32, centred; 120px image; body_ margin-top
-        // 20, body-md/medium 16/20 --text-default, centred (white-space: pre).
         list = list.child(
             div()
                 .mt(z(8.))
@@ -1500,9 +1357,6 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                 .child(div().mt(z(20.)).text_center().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("pins.empty_line1")))
                 .child(div().text_center().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("pins.empty_line2"))),
         );
-        // footer_6bgemo: padding 16, --background-mod-subtle, centred; protip
-        // block padding 10 0: body-sm/semibold --text-feedback-positive, then
-        // body-sm/normal 14/16 --text-default.
         footer = Some(
             div()
                 .flex_none()
@@ -1519,10 +1373,6 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
     }
     for m in &p.msgs {
         let id = m.id;
-        // messageGroupWrapper_6bgemo: --background-surface-higher, 1px
-        // --border-subtle, radius 8, margin 0 4 8 0; messageGroupCozy_ padding
-        // 16 20 16 80 (margin-start -4). actionButtons_ on hover: top/right 8, sm
-        // secondary "Jump".
         list = list.child(
             div()
                 .id(("pin", id.0))
@@ -1555,7 +1405,6 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
         );
     }
     let right = if is_dm { hdr_right(2.) } else { hdr_right(1.) };
-    // Deferred: drawn over the chat like the inbox.
     Some(gpui::deferred(
         div()
             .id("pins-popout")
@@ -1597,13 +1446,8 @@ thread_local! {
     static INBOX_SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
 }
 
-/// The client puts header popouts in a `clickTrapContainer_ trapClicks_`
-/// layer: a press anywhere outside closes the popout and goes no further (the
-/// trigger button included, so pressing it again closes). Done here on the
-/// popout itself, in the capture phase, from the bounds it was painted at.
 fn close_on_press_outside(el: gpui::Stateful<gpui::Div>, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let app = cx.entity().downgrade();
-    // A canvas covering the popout: its paint bounds are the popout's drawn box.
     el.child(
         gpui::canvas(
             |_, _, _| {},
@@ -1613,7 +1457,6 @@ fn close_on_press_outside(el: gpui::Stateful<gpui::Div>, cx: &mut Context<Phoeni
                         return;
                     }
                     let Some(app) = app.upgrade() else { return };
-                    // A profile popout or menu opened over the popout handles its own presses.
                     let closed = app.update(cx, |a, cx| !a.people.any_overlay() && a.close_header_popouts(cx));
                     if closed {
                         cx.stop_propagation();
@@ -1633,8 +1476,6 @@ pub fn popouts(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement
     out
 }
 
-/// Our own fallbacks for the icons above, used when no local Discord install
-/// provides the real ones (hand-drawn, 24×24, tinted through `text_color`).
 pub fn svg_asset(path: &str) -> Option<&'static str> {
     macro_rules! st {
         ($b:expr) => {
@@ -1658,10 +1499,7 @@ pub fn svg_asset(path: &str) -> Option<&'static str> {
     })
 }
 
-/// Build the inputs that need a `Window` (group DM search).
 pub fn prepare(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) {
-    // Unreads loads the next card while the list end is within 2000px of the
-    // viewport bottom (client `maybeLoadMore`).
     let i = &app.parity.inbox;
     if i.open && i.tab == InboxTab::Unreads && !i.unreads_loading && i.unreads.iter().any(|c| !c.loaded) {
         let near = INBOX_SCROLL.with(|h| h.max_offset().y + h.offset().y < gpui::px(2000.));
@@ -1791,7 +1629,6 @@ fn moderation_dialog(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
     }))
 }
 
-/// Max other people in a group DM (10 members including us).
 pub const GROUP_DM_MAX: usize = 9;
 
 fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -1817,9 +1654,6 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
         let on = p.picked.contains(&u);
         let user = app.users.get(&u);
         list = list.child(
-            // friend_45OTue: 48px, padding 8, --radius-sm, gap 8, --text-muted;
-            // friendSelected_ (mouse/keyboard highlight): --background-mod-subtle +
-            // --text-strong, background-color .2s ease.
             crate::ui::states::track(div().id(("gdm-friend", u.0)), crate::ui::states::key(("gdm-friend", u.0)))
                 .relative()
                 .child(crate::ui::states::fade_layer(
@@ -1855,7 +1689,6 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
                         .flex()
                         .gap(z(6.))
                         .items_baseline()
-                        // nickname_ inherits the row colour; discordTag_ --text-muted.
                         .child(div().text_size(z(16.)).child(user.map(|u| u.display_name.clone()).unwrap_or_default()))
                         .child(div().text_size(z(14.)).text_color(tk(idx::TEXT_MUTED)).child(user.map(|u| u.name.clone()).unwrap_or_default())),
                 )
@@ -1943,8 +1776,6 @@ pub fn dialogs(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement
     out
 }
 
-/// sectionHeader_6_wQXw (threads-lrer #1432/#1442): 24px, margin 8 0,
-/// 14/18.67 500 --text-default, no text-transform.
 fn section_header(label: String) -> gpui::Div {
     div()
         .flex_none()
@@ -1959,10 +1790,6 @@ fn section_header(label: String) -> gpui::Div {
         .child(label)
 }
 
-/// Archived thread row (threads-lrer #1443): container_yRVHqK 72px like the
-/// joined rows; subtext_yRVHqK = 16px avatar_yRVHqK (margin-end 8) +
-/// "Started by" + startedByName_ (margin-start 4) + bullet_yRVHqK (20px box)
-/// + "Last activity: <long date>".
 fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let r = crate::model::ThreadRef { id: p.thread, name: p.title.clone().into(), message_count: p.message_count };
     let last = p.last_message.unwrap_or(p.thread);
@@ -2019,11 +1846,8 @@ fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Contex
         .when_some(thread_facepile(app, &p.member_ids_preview, p.member_count), |d, f| d.child(f))
 }
 
-/// What the threads-browser facepile shows: every preview user (max 50 so
-/// all fit) then a pill — "50+" when count >= max, "+N" when the member
-/// count exceeds the preview (Facepile renderUsers / renderMoreUsers).
 fn facepile_more(preview: usize, count: u32) -> Option<String> {
-    const MAX: u32 = 50; // ThreadBrowser row: Facepile max 50
+    const MAX: u32 = 50;
     if count >= MAX {
         Some(format!("{MAX}+"))
     } else if count as usize > preview {
@@ -2033,12 +1857,6 @@ fn facepile_more(preview: usize, count: u32) -> Option<String> {
     }
 }
 
-/// facepile_yRVHqK container_m-EqeQ size24_m-EqeQ (threads-lrer #1392):
-/// margin-start 16, flex center; avatarContainerMasked_ 24px with
-/// margin-inline-end −6 except the last avatar (avatarContainer_, no margin)
-/// when no pill follows. moreUsers_ size24: h 24, min-w 24, r 12, padding 0 8,
-/// 12px semibold, --background-base-lowest, --text-default. Unknown users get
-/// the default avatar (showDefaultAvatarsForNullUsers).
 fn thread_facepile(app: &PhoenixApp, ids: &[Id], count: u32) -> Option<gpui::Div> {
     if ids.is_empty() {
         return None;
@@ -2092,7 +1910,6 @@ mod tests {
 
     #[test]
     fn mention_filters_default_on() {
-        // Client RecentMentionsStore: {guildFilter: ALL_SERVERS, everyoneFilter: true, roleFilter: true}.
         let i = crate::commands::state::InboxState::default();
         assert!(i.everyone && i.roles && !i.this_server);
     }

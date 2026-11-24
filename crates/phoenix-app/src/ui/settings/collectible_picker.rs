@@ -1,30 +1,3 @@
-//! Profile editor collectible pickers: avatar decoration, profile effect,
-//! profile frame and nameplate. Opening one loads the owned items
-//! (`owned_collectibles`); "Apply" only changes the editor preview — nothing
-//! is sent (equipping collectibles is not part of the profile save).
-//!
-//! Dumps `vanilla-profile-picker-{decoration,effect,frame,nameplate}`
-//! (2026-11-23, vanilla client):
-//! - modal_UlS6S9 root__KoJTP medium: 603 wide (effect/frame 666),
-//!   radius 12, 1px --border-subtle, --background-base-lowest, shadow 0 4 8 .16;
-//!   header padding 16 24 0, h1 heading-lg/semibold 20/24, 24px close.
-//! - content padding 8 24 0: list (sections h2 heading-sm/semibold 16/20,
-//!   gap 4 to the grid) + modalPreview_ (margin-top 24, gap 12).
-//! - decorationGridItem_: 75x80 (effect/frame 83x80), radius 4, 12 apart,
-//!   selected = 2px inset --brand-500 ring; "Aucun"/"Boutique" = 24px icon
-//!   and a body-xs 12/16 label; preset images 64px. Nameplate: 2 tiles 105x80,
-//!   then 224x48 rows.
-//! - effect/frame: preview = the full profile card (`profile_card`), tiles
-//!   composed over a skeleton mini profile (`sample_profile`).
-//! - decorationPreview_ 208x208 r4 with the 120px avatar centred; small
-//!   previews column 56 wide (40/32/40/32 avatars, 16 apart).
-//! - sections "Exclusivité Nitro" (catalogue `premium_type` 2) and "Va jeter
-//!   un œil à la Boutique" (other products of the kind), 16px apart, from
-//!   `GET /collectibles-categories/v2`. Shop items preview only; Apply stays
-//!   disabled for items you don't own (never buys).
-//! - footer padding 16 24, gap 8, reverse: Apply (md primary, .5 opacity
-//!   until something changes) + Cancel (md secondary).
-
 use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, img, prelude::*};
 
 use super::collectibles::{Collectible, Kind};
@@ -36,18 +9,14 @@ use crate::{
 
 type Cx<'a> = Context<'a, PhoenixApp>;
 
-/// Max tiles per shop section.
 const SHOP_CAP: usize = 60;
 
-/// Open picker state (inside the profile editor).
 #[derive(Clone, Debug)]
 pub struct PickerState {
     pub kind: Kind,
-    /// Highlighted item: None = "None" tile.
     pub sel: Option<u64>,
 }
 
-/// Collectibles chosen with "Apply" (preview only).
 #[derive(Clone, Debug, Default)]
 pub struct Equipped {
     pub decoration: Option<Option<u64>>,
@@ -84,7 +53,6 @@ fn keys(k: Kind) -> (&'static str, &'static str) {
     }
 }
 
-/// Tile box (w, h) per kind (decorationGridItem_ in each dump).
 fn tile_size(k: Kind) -> (f32, f32) {
     match k {
         Kind::Decoration => (75., 80.),
@@ -93,8 +61,6 @@ fn tile_size(k: Kind) -> (f32, f32) {
     }
 }
 
-/// Open the picker for `kind`, loading owned collectibles and the shop
-/// catalogue the first time.
 pub fn open(app: &mut PhoenixApp, kind: Kind, cx: &mut Cx) {
     let Some(e) = app.settings.as_mut().and_then(|s| s.profile.as_mut()) else { return };
     let (need, need_shop) = (e.collectibles.is_none(), e.shop.is_none());
@@ -162,11 +128,6 @@ fn icon_tile(id: &str, size: (f32, f32), icon: &str, label: SharedString, select
         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_STRONG))).child(label))
 }
 
-/// Skeleton mini profile drawn under effect thumbnails and frames (the
-/// client's static `presetEffectBackground_` image, which we may not ship):
-/// grey banner, avatar with ring and status cut-out, four text bars. Geometry
-/// and colours measured on the 83x80 tiles of `vanilla-profile-picker-effect`
-/// (#4845), scaled to `(w, h)`.
 fn sample_profile(w: f32, h: f32) -> Div {
     let (sx, sy) = (w / 83., h / 80.);
     let bar = |x: f32, y: f32, bw: f32| div().absolute().left(z(x * sx)).top(z(y * sy)).w(z(bw * sx)).h(z(3.5 * sy)).rounded_full().bg(c(0x232326));
@@ -186,15 +147,6 @@ fn sample_profile(w: f32, h: f32) -> Div {
         .child(bar(6., 75., 61.))
 }
 
-/// Picker preview card (previewContainer_-JS7Po, dumps
-/// `vanilla-profile-picker-{effect,frame}` #4980-#5021): 304x333 at +10 in the
-/// preview column. outer_P1YEjQ: padding 2, r8, linear-gradient(primary 105px,
-/// secondary), shadow 0 0 0 1 white/.08 + 0 12 24 black/.24; inner_ r6 with
-/// the --profile-gradient-overlay-color (black/.6), padding-bottom 4, gap 8.
-/// header_ 140: banner_ 105 + avatar_ 80 at (14, 59); body_NOlkhE padding
-/// 4 8 8 16 gap 12: name heading-lg/semibold 20/24, username body-sm 14/18 +
-/// tag chiplet 24 (padding 0 8, body-xs) + badges, bio body-sm 3 lines;
-/// footer_ padding 0 16 12: sm primary "Example button" 268x31.
 fn profile_card(app: &PhoenixApp, e: &super::profile_editor::EditorState, overlay: Option<SharedString>) -> Div {
     use super::profile_editor::{badges_row, bio_markup, gradient_button_color, hex, mix, white};
     let me = &app.me;
@@ -215,8 +167,6 @@ fn profile_card(app: &PhoenixApp, e: &super::profile_editor::EditorState, overla
     };
     let bio: SharedString = e.original.bio.clone().into();
     let tag = me.tag.clone().map(|(t, badge)| {
-        // chipletContainerInner_k8jyN7: 24 high, padding 0 8, r8, 1px border;
-        // badge_ 14, tagText_ body-xs 12/16, gap 2.
         div()
             .flex_none()
             .h(z(24.))
@@ -265,7 +215,7 @@ fn profile_card(app: &PhoenixApp, e: &super::profile_editor::EditorState, overla
     let button_bg = theme.map(|t| hex(gradient_button_color(t.0)));
     div()
         .relative()
-        .mt(z(6.)) // previewContainer_w__gu5 at content + 14 (padding-top 8 already applied)
+        .mt(z(6.))
         .ml(z(10.))
         .w(z(304.))
         .h(z(333.))
@@ -341,7 +291,6 @@ fn preview(app: &PhoenixApp, e: &super::profile_editor::EditorState, kind: Kind,
                     .items_center()
                     .justify_center()
                     .child(av)
-                    // Decoration art is 1.2x the avatar (avatarDecoration_ size).
                     .children(overlay.clone().map(|u| div().absolute().top(z(32.)).left(z(32.)).size(z(144.)).child(img(u).size(z(144.))))),
             )
             .when(kind == Kind::Decoration, |d| {
@@ -398,15 +347,12 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
     let size = tile_size(kind);
     let owned: Vec<&Collectible> = e.collectibles.iter().flatten().filter(|c| c.kind == kind).collect();
     let shop = e.shop.as_ref();
-    // The client virtualises these grids; we cap them to keep image loads bounded.
     fn of_kind<'a>(v: Option<&'a Vec<Collectible>>, kind: Kind, owned: &[&Collectible]) -> Vec<&'a Collectible> {
         v.into_iter().flatten().filter(|c| c.kind == kind && !owned.iter().any(|o| o.sku == c.sku)).take(SHOP_CAP).collect()
     }
     let nitro = of_kind(shop.map(|s| &s.nitro), kind, &owned);
     let store = of_kind(shop.map(|s| &s.shop), kind, &owned);
     let chosen = owned.iter().chain(&nitro).chain(&store).copied().find(|c| Some(c.sku) == p.sel);
-    // Nitro members can use the "Nitro exclusive" items (no lock badge,
-    // client `canUsePremiumCollectibles`).
     let premium = app.backend.has_premium();
     let owns_sel = p.sel.is_none_or(|s| owned.iter().any(|o| o.sku == s) || (premium && nitro.iter().any(|o| o.sku == s)));
     let changed = e.equipped.get(kind).flatten() != p.sel && owns_sel;
@@ -424,18 +370,10 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
             .iter()
             .map(|it| {
                 let sz = if row { (224., 48.) } else { size };
-                // Effect/frame thumbnails fill the 83x80 tile; decorations are 64px.
                 let full = row || matches!(kind, Kind::Effect | Kind::Frame);
                 tile(SharedString::from(format!("pk-item-{}", it.sku)), sz, p.sel == Some(it.sku))
                     .relative()
-                    // Effect tiles (#4844): presetEffectBackground_ + presetEffectImg_,
-                    // both absolute 83x80 cover r4. Frame tiles (#4847,
-                    // framePresetItem_ padding 6 14): sampleProfile_ small 52x56
-                    // (1px --border-strong) under the frame layer (55 wide).
                     .when(kind == Kind::Effect, |d| d.child(sample_profile(sz.0 - 4., sz.1 - 4.)))
-                    // With the frame's layers known, draw the whole layered frame
-                    // (back layers, sample profile, front layers) the way the
-                    // profile card does; else the single static layer below.
                     .when(kind == Kind::Frame, |d| {
                         let sample = div().absolute().left(z(13.)).top(z(10.)).w(z(52.)).h(z(56.)).rounded(z(4.)).border_1().border_color(c(tok(idx::BORDER_STRONG)));
                         match &it.frame {
@@ -449,8 +387,6 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
                         }
                     })
                     .children(it.preview.clone().filter(|_| !(kind == Kind::Frame && it.frame.is_some())).map(|u| match kind {
-                        // The 100x195 thumbnail fills the tile width from the top
-                        // (what the dump shows for presetEffectImg_).
                         Kind::Effect => {
                             let (w, h) = (sz.0 - 4., (sz.0 - 4.) * 1.95);
                             div()
@@ -466,7 +402,6 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
                         _ => img(u).size(z(64.)).into_any_element(),
                     }))
                     .when(locked, |d| {
-                        // iconBadge_: 20x20 circle, black, 12px white lock, top -6 right -4.
                         d.child(
                             div()
                                 .absolute()
@@ -497,8 +432,6 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
     };
     let nitro_tiles = item_tiles(&nitro, !premium, cx);
     let store_tiles = item_tiles(&store, true, cx);
-    // Section heading: h2 heading-sm/semibold 16/20 (nameplate: body-md/medium),
-    // grid 4px below (effect/frame 8px: tiles at top 28 in section_cR4ic2), 12px gaps.
     let gap_below = if matches!(kind, Kind::Effect | Kind::Frame) { 8. } else { 4. };
     let heading = |key: &'static str| {
         div()

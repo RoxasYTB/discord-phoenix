@@ -1,9 +1,3 @@
-//! Offscreen renders of hover / pressed states (docs/parity/states.md).
-//! `cargo run -p phoenix-app --example states_shots -- out_dir x,y[,down] ...`
-//! writes one PNG per point with the mouse moved there (left-pressed with `,down`,
-//! right-clicked with `,right`; a later point can then hover the open menu).
-//! Env: `PHX_SETTINGS=1` opens settings; `PHX_OPEN=pins|inbox|threads|groupdm|privacy|server_profile|search[:query]` a popout.
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{
@@ -22,7 +16,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -62,8 +55,6 @@ fn main() -> anyhow::Result<()> {
             });
         })?;
         pump(&mut cx, 30);
-        // `PHX_SETTINGS=1`: start on the settings modal (nav rows).
-        // `PHX_OPEN=pins|inbox|threads|groupdm|search[:query]`: start with that popout open.
         if let Ok(what) = std::env::var("PHX_OPEN") {
             cx.update_window(win.into(), |_, window, cx| {
                 v.update(cx, |app, cx| match what.split_once(':').map_or(what.as_str(), |w| w.0) {
@@ -71,7 +62,6 @@ fn main() -> anyhow::Result<()> {
                     "inbox" => app.toggle_inbox(cx),
                     "threads" => app.toggle_threads_popout(cx),
                     "groupdm" => app.open_group_dm_picker(cx),
-                    // Guild menu entries any member sees (first mock guild).
                     "privacy" => {
                         if let Some(g) = app.guilds.first().map(|g| g.id) {
                             app.open_privacy_settings(g, cx)
@@ -94,7 +84,6 @@ fn main() -> anyhow::Result<()> {
             })?;
             pump(&mut cx, 20);
         }
-        // `PHX_TYPING=n`: n mock users typing in the open channel (the first one with a server nick).
         if let Some(n) = std::env::var("PHX_TYPING").ok().and_then(|n| n.parse::<usize>().ok()) {
             cx.update_window(win.into(), |_, _, cx| {
                 v.update(cx, |app, cx| {
@@ -144,11 +133,9 @@ fn main() -> anyhow::Result<()> {
             }
             window.refresh();
         })?;
-        // Past every 200ms fade.
         pump(&mut cx, 6);
         cx.update_window(win.into(), |_, window, _| window.refresh())?;
         pump(&mut cx, 2);
-        // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
         cx.advance_clock(std::time::Duration::from_secs(2));
         let img = cx.capture_screenshot(win.into())?;
         let path = format!("{out}/state-{n:02}.png");

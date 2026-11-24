@@ -1,7 +1,3 @@
-//! Basic Server Settings overlay: the 21 sections of the guild menu's
-//! "Server Settings >" submenu in a settings-style sidebar, with read-only
-//! content (what the cache knows) where Phoenix has no editor yet.
-
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, deferred, div, prelude::*};
 
 use crate::{
@@ -13,7 +9,6 @@ use crate::{
 
 use super::Modal;
 
-/// Same keys and order as `nav_menus::GUILD_SETTINGS`.
 pub const SECTIONS: [&str; 21] = [
     "menu.gs.profile",
     "menu.gs.tag",
@@ -99,8 +94,6 @@ fn content(app: &PhoenixApp, guild: Id, section: usize) -> gpui::Div {
 
 pub fn render(app: &PhoenixApp, guild: Id, section: usize, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let name = app.guilds.iter().find(|x| x.id == guild).map(|g| g.name.clone()).unwrap_or_default();
-    // Settings layout: sidebar (218px items, 6px 10px rows, 16/20 medium),
-    // content column max 740 with 60px top padding.
     let mut side = div().w(z(218.)).flex().flex_col().gap(z(2.)).pt(z(60.)).pb(z(20.)).px(z(6.)).child(
         div().px(z(10.)).pb(z(6.)).text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_SUBTLE))).truncate().child(name.to_uppercase()),
     );
@@ -142,7 +135,6 @@ pub fn render(app: &PhoenixApp, guild: Id, section: usize, cx: &mut Context<Phoe
         .child(content(app, guild, section));
     let close = div()
         .id("gs-close")
-        // Never shrunk or pushed past the window edge by a wide section (roles list).
         .flex_none()
         .mr(z(20.))
         .mt(z(60.))

@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-/// Discord JSON error body (`{"code": 50013, "message": "...", "errors": {...}}`).
 #[derive(Debug, Clone, serde::Deserialize, Default)]
 pub struct ApiErrorBody {
     #[serde(default)]
@@ -9,7 +8,6 @@ pub struct ApiErrorBody {
     pub message: String,
     #[serde(default)]
     pub errors: Option<serde_json::Value>,
-    /// Present when hCaptcha is required (login, some sends).
     #[serde(default)]
     pub captcha_key: Option<Vec<String>>,
     #[serde(default)]
@@ -41,7 +39,6 @@ pub enum Error {
 }
 
 impl Error {
-    /// HTTP 401: token invalid / revoked.
     pub fn is_unauthorized(&self) -> bool {
         matches!(self, Error::Api { status: 401, .. })
     }

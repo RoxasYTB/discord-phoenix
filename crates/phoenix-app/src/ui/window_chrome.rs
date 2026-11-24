@@ -1,9 +1,3 @@
-//! Frameless window chrome (client-side decorations), like the desktop client's
-//! frameless Electron window on Linux: the app top bar is the drag region
-//! (`bar_3zSH5d` `-webkit-app-region: drag`, buttons `no-drag`), a double click
-//! on it toggles maximize, and thin invisible strips along the edges resize the
-//! window through the compositor (snapping/tiling is the compositor's job).
-
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
@@ -11,22 +5,12 @@ use gpui::{
     prelude::*, px,
 };
 
-/// Width of the resize strips inside the window edge. Chromium's frameless Linux
-/// windows use a 5px inner resize border (Electron `frame: false`).
 const EDGE: f32 = 5.;
-/// Corner hit squares (diagonal cursors) are larger so corners are easy to grab.
 const CORNER: f32 = 16.;
-/// Window buttons block in the top-right corner (`winButtonsWithDivider_3zSH5d`
-/// #46: 117×32). Electron keeps the buttons `no-drag` and clickable to the very
-/// edge, so no resize strip covers them.
 const WIN_BUTTONS_W: f32 = 117.;
 
-/// Set on a primary press in the drag region; the move starts on the first drag
-/// motion so a double click still reaches the click handler (toggle maximize).
 static PRESSED: AtomicBool = AtomicBool::new(false);
 
-/// Makes `el` a window drag region: press-and-drag moves the window, double
-/// click toggles maximize. Interactive children must `.occlude()`.
 pub fn drag_region<E: InteractiveElement>(el: E) -> E {
     el.on_mouse_down(MouseButton::Left, |ev, w, _| {
         if ev.click_count >= 2 {
@@ -56,8 +40,6 @@ fn strip(id: &'static str, edge: ResizeEdge, cursor: CursorStyle) -> gpui::State
         })
 }
 
-/// Invisible resize strips and corners, drawn above everything. Only with
-/// client-side decorations, and not on tiled/maximized/fullscreen edges.
 pub fn resize_handles(window: &Window) -> Option<impl IntoElement> {
     let tiling = match window.window_decorations() {
         Decorations::Client { tiling } => tiling,
@@ -80,12 +62,10 @@ pub fn resize_handles(window: &Window) -> Option<impl IntoElement> {
             .when(b, |d| d.child(strip("rs-bottom", ResizeEdge::Bottom, CursorStyle::ResizeUpDown).bottom_0().left(k).right(k).h(e)))
             .when(l, |d| d.child(strip("rs-left", ResizeEdge::Left, CursorStyle::ResizeLeftRight).left_0().top(k).bottom(k).w(e)))
             .when(r, |d| d.child(strip("rs-right", ResizeEdge::Right, CursorStyle::ResizeLeftRight).right_0().top(bar_h).bottom(k).w(e)))
-            // Corners: an L of EDGE-thick bars CORNER long.
             .when(t && l, |d| {
                 d.child(strip("rs-tl-h", ResizeEdge::TopLeft, CursorStyle::ResizeUpLeftDownRight).top_0().left_0().w(k).h(e))
                     .child(strip("rs-tl-v", ResizeEdge::TopLeft, CursorStyle::ResizeUpLeftDownRight).top_0().left_0().w(e).h(k))
             })
-            // No top-right corner: the close button owns it.
             .when(b && l, |d| {
                 d.child(strip("rs-bl-h", ResizeEdge::BottomLeft, CursorStyle::ResizeUpRightDownLeft).bottom_0().left_0().w(k).h(e))
                     .child(strip("rs-bl-v", ResizeEdge::BottomLeft, CursorStyle::ResizeUpRightDownLeft).bottom_0().left_0().w(e).h(k))

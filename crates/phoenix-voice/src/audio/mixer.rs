@@ -1,6 +1,3 @@
-//! Receive side: one jitter buffer + Opus decoder per remote user, mixed into
-//! 20 ms stereo frames at 48 kHz.
-
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -12,11 +9,8 @@ use crate::media::AudioDecoder;
 use crate::media::opus::OpusDecoder;
 use crate::rtp::jitter::{JitterBuffer, JitterOutput, JitterPacket};
 
-/// Packets buffered before a talker starts playing (2 x 20 ms).
 const PREBUFFER: usize = 2;
-/// Above this many queued packets, drop the oldest to cut latency.
 const MAX_QUEUE: usize = 10;
-/// Consecutive concealed frames before a track rebuffers.
 const MAX_PLC: u32 = 3;
 const IDLE_DROP: Duration = Duration::from_secs(10);
 
@@ -92,14 +86,12 @@ impl Mixer {
         self.tracks.remove(&user);
     }
 
-    /// Produce the next 20 ms of interleaved stereo f32 audio.
     pub fn mix_frame(&mut self, control: &AudioControl) -> Vec<f32> {
         let mut acc = vec![0f32; FRAME_SAMPLES * 2];
         let now = Instant::now();
         self.tracks.retain(|_, t| now.duration_since(t.last_push) < IDLE_DROP);
         let deaf = control.deafened();
         for (uid, t) in self.tracks.iter_mut() {
-            // Always drain so a deafened user doesn't build up latency.
             if let Some(pcm) = t.next_frame()
                 && !deaf
             {

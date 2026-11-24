@@ -1,5 +1,3 @@
-//! Network side of voice calls (runs on the backend's tokio runtime).
-
 use std::sync::{Arc, OnceLock};
 
 use parking_lot::Mutex;
@@ -33,10 +31,8 @@ struct Running {
 struct State {
     target: Option<Target>,
     session_id: Option<String>,
-    /// (endpoint, voice token) from VOICE_SERVER_UPDATE.
     server: Option<(String, String)>,
     running: Option<Running>,
-    /// Bumped on every join/leave so stale connection tasks stay quiet.
     generation: u64,
     input: Option<String>,
     output: Option<String>,
@@ -52,7 +48,6 @@ pub struct VoiceManager {
     control: Arc<AudioControl>,
 }
 
-/// Process-wide voice manager (one call at a time, like the official client).
 pub fn manager() -> &'static VoiceManager {
     static M: OnceLock<VoiceManager> = OnceLock::new();
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -66,7 +61,6 @@ pub fn manager() -> &'static VoiceManager {
     m
 }
 
-/// Global push-to-talk binding state for the settings page.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum PortalState {
     #[default]
@@ -89,7 +83,6 @@ fn stop(st: &mut State) {
     if let Some(r) = st.running.take() {
         r.conn.close();
         if let Some(e) = r.engine {
-            // Joining cpal threads can block briefly; keep it off the runtime.
             std::thread::spawn(move || e.stop());
         }
     }
@@ -110,7 +103,6 @@ impl VoiceManager {
         &self.control
     }
 
-    /// Join `channel` (or leave with `None`).
     pub fn join(&self, emit: &Emit, gw: &GatewayHandle, cache: &Cache, channel: Option<u64>) -> Result<(), String> {
         let mut st = self.state.lock();
         stop(&mut st);
@@ -131,14 +123,12 @@ impl VoiceManager {
         Ok(())
     }
 
-    /// Feed main gateway events (our voice state, voice server updates).
     pub fn on_gateway(&self, emit: &Emit, me: u64, ev: &GatewayEvent) {
         let mut st = self.state.lock();
         let Some(target) = st.target else { return };
         match ev {
             GatewayEvent::VoiceStateUpdate(v) if v.user_id.0 == me => match v.channel_id {
                 None => {
-                    // Disconnected by a moderator or from another client.
                     stop(&mut st);
                     st.target = None;
                     st.generation += 1;
@@ -146,8 +136,6 @@ impl VoiceManager {
                 }
                 Some(c) => {
                     if c.0 != target.channel {
-                        // Moved to another channel: follow it. The DAVE group
-                        // is per channel, so the media session restarts.
                         st.target = Some(Target { guild: target.guild, channel: c.0 });
                         stop(&mut st);
                         st.generation += 1;
@@ -176,7 +164,6 @@ impl VoiceManager {
                             self.try_start(&mut st, emit, me);
                         }
                     }
-                    // Voice server going away: a new update follows.
                     None => {
                         stop(&mut st);
                         st.server = None;
@@ -338,7 +325,6 @@ impl VoiceManager {
     fn bind_portal(&self, _st: &mut State, _key: Option<String>) {}
 }
 
-/// Available (input, output) device names, default first.
 pub fn devices() -> (Vec<String>, Vec<String>) {
     (phoenix_voice::audio::device::input_devices(), phoenix_voice::audio::device::output_devices())
 }

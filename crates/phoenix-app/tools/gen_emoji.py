@@ -1,8 +1,6 @@
 import sys, re
 src, out = sys.argv[1], sys.argv[2]
-# Optional third argument: the sequence table used to find emoji in text.
 seqs_out = sys.argv[3] if len(sys.argv) > 3 else None
-# Twemoji 16.0.1 (the set the client bundles) covers Emoji 16.0.
 MAX = (16, 0)
 seqs = []
 CAT = {"Smileys & Emotion":0,"People & Body":0,"Animals & Nature":1,"Food & Drink":2,"Activities":3,"Travel & Places":4,"Objects":5,"Symbols":6,"Flags":7}

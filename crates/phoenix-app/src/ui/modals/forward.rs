@@ -1,6 +1,3 @@
-//! "Forward To" modal: search, destination checklist (DMs and text channels,
-//! up to 5), optional comment, Send.
-
 use gpui::{AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use gpui_component::input::InputState;
 
@@ -13,7 +10,6 @@ use crate::{
     ui::controls::{BtnKind, button},
 };
 
-/// The client caps a forward at 5 destinations.
 pub const MAX_DESTINATIONS: usize = 5;
 
 pub struct Forward {
@@ -31,8 +27,6 @@ impl Forward {
     }
 }
 
-/// (channel, label, sublabel) of every destination matching `q`: DMs first,
-/// then text / announcement channels of each guild.
 pub fn destinations(app: &PhoenixApp, q: &str) -> Vec<(Id, SharedString, Option<SharedString>)> {
     let q = q.to_lowercase();
     let mut out = Vec::new();

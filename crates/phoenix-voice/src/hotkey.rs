@@ -1,9 +1,3 @@
-//! Global push-to-talk via the XDG desktop portal `GlobalShortcuts`
-//! interface (KDE Plasma 6, GNOME 48+, Hyprland). The compositor owns the
-//! actual key binding: we only suggest a trigger, and the desktop may ask the
-//! user to confirm or change it. Press/release toggle
-//! [`AudioControl::set_ptt_pressed`].
-
 use std::sync::Arc;
 
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
@@ -13,18 +7,14 @@ use tokio::sync::oneshot;
 use crate::audio::AudioControl;
 
 pub const SHORTCUT_ID: &str = "push-to-talk";
-/// Reverse-DNS id registered with the portal for this unsandboxed app.
 pub const APP_ID: &str = "io.github.roxasytb.DiscordPhoenix";
 
-/// What happened to the portal binding (shown on the settings page).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PortalStatus {
-    /// Bound; the text describes the trigger as the desktop shows it.
     Bound(String),
     Unavailable(String),
 }
 
-/// Running portal session; dropping it releases the shortcut.
 pub struct GlobalPtt {
     stop: Option<oneshot::Sender<()>>,
 }
@@ -37,8 +27,6 @@ impl Drop for GlobalPtt {
     }
 }
 
-/// Convert a GPUI-style keystroke (`ctrl-shift-a`, `f13`) to the XDG
-/// shortcuts trigger syntax (`CTRL+SHIFT+a`).
 pub fn xdg_trigger(keystroke: &str) -> String {
     keystroke
         .split('-')
@@ -55,7 +43,6 @@ pub fn xdg_trigger(keystroke: &str) -> String {
         .join("+")
 }
 
-/// Bind `keystroke` globally. `status` is called once with the outcome.
 pub fn start(
     control: Arc<AudioControl>,
     keystroke: &str,
@@ -85,7 +72,6 @@ async fn run(
 ) -> ashpd::Result<()> {
     let conn = ashpd::zbus::Connection::session().await?;
     if let Ok(id) = APP_ID.parse() {
-        // Older portals have no Registry; binding may still work.
         if let Err(e) = ashpd::register_host_app_with_connection(conn.clone(), id).await {
             tracing::debug!(error = %e, "portal registry");
         }

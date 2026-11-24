@@ -1,16 +1,3 @@
-//! Gateway v10 session: JSON encoding, zlib-stream transport compression,
-//! heartbeating with zombie detection, identify/resume, reconnect with backoff.
-//!
-//! ```no_run
-//! # async fn f() {
-//! use phoenix_api::{Gateway, GatewayConfig, GatewayEvent};
-//! let (handle, mut events) = Gateway::spawn(GatewayConfig::new("token"));
-//! while let Some(ev) = events.recv().await {
-//!     if let GatewayEvent::Ready(r) = ev { println!("logged in as {}", r.user.username); }
-//! }
-//! # drop(handle); }
-//! ```
-
 pub mod events;
 pub mod zlib;
 
@@ -35,7 +22,6 @@ use zlib::ZlibStream;
 
 pub const GATEWAY_URL: &str = "wss://gateway.discord.gg";
 
-/// Capability bits sent in Identify (user accounts).
 pub mod capabilities {
     pub const LAZY_USER_NOTES: u64 = 1 << 0;
     pub const NO_AFFINE_USER_IDS: u64 = 1 << 1;
@@ -53,10 +39,6 @@ pub mod capabilities {
     pub const DEBOUNCE_MESSAGE_REACTIONS: u64 = 1 << 13;
     pub const PASSIVE_GUILD_UPDATE_V2: u64 = 1 << 14;
 
-    /// The set this crate's models are written against.
-    /// PRIORITIZED_READY_PAYLOAD is what makes Discord send READY_SUPPLEMENTAL
-    /// (friend / guild presences and voice states at login); without it a
-    /// user session gets no presences until each one changes.
     pub const DEFAULT: u64 = LAZY_USER_NOTES
         | NO_AFFINE_USER_IDS
         | PRIORITIZED_READY_PAYLOAD
@@ -88,32 +70,21 @@ mod op {
 #[derive(Clone)]
 pub struct GatewayConfig {
     pub token: String,
-    /// Base URL without query (e.g. `wss://gateway.discord.gg`).
     pub url: String,
     pub properties: ClientProperties,
     pub capabilities: u64,
-    /// Use `compress=zlib-stream`.
     pub compress: bool,
-    /// Initial presence (Identify).
     pub presence: Value,
     pub initial_backoff: Duration,
     pub max_backoff: Duration,
-    /// Base wait after a non-resumable INVALID_SESSION (randomised 1x..5x).
     pub invalid_session_delay: Duration,
-    /// Max wait for HELLO after connecting.
     pub hello_timeout: Duration,
-    /// Called with (event name, raw `d` JSON) for every dispatch before it is
-    /// parsed, e.g. to persist READY for an instant next start.
     pub raw_dispatch: Option<RawDispatchHook>,
-    /// Session saved by a previous run: the first connect sends RESUME
-    /// instead of IDENTIFY (falls back to IDENTIFY on INVALID_SESSION).
     pub resume: Option<ResumeState>,
 }
 
-/// See [`GatewayConfig::raw_dispatch`]: (event name, raw `d`, sequence number).
 pub type RawDispatchHook = std::sync::Arc<dyn Fn(&str, &str, Option<u64>) + Send + Sync>;
 
-/// See [`GatewayConfig::resume`].
 #[derive(Clone)]
 pub struct ResumeState {
     pub session_id: String,
@@ -160,7 +131,6 @@ impl GatewayConfig {
     }
 }
 
-/// Commands accepted by the gateway task.
 #[derive(Debug, Clone)]
 pub enum GatewayCommand {
     UpdateVoiceState(UpdateVoiceState),
@@ -169,14 +139,10 @@ pub enum GatewayCommand {
     RequestSoundboardSounds(RequestSoundboardSounds),
     LazyRequest(LazyGuildRequest),
     GuildSubscriptionsBulk(std::collections::BTreeMap<GuildId, GuildSubscription>),
-    /// Send an arbitrary opcode.
     Raw { op: u8, d: Value },
-    /// Close the session for good (the session is invalidated).
     Shutdown,
 }
 
-/// Handle to a running gateway task. Cheap to clone. Commands issued while
-/// reconnecting are queued and sent once the session is back.
 #[derive(Debug, Clone)]
 pub struct GatewayHandle {
     tx: mpsc::UnboundedSender<GatewayCommand>,
@@ -187,7 +153,6 @@ impl GatewayHandle {
         self.tx.send(cmd).map_err(|_| crate::Error::Closed)
     }
 
-    /// Join (`Some(channel)`) or leave (`None`) a voice channel. For DM calls pass `guild: None`.
     pub fn update_voice_state(
         &self,
         guild: Option<GuildId>,
@@ -213,14 +178,12 @@ impl GatewayHandle {
         }))
     }
 
-    /// Op 37: subscribe to one guild (typing/activities/threads + member list ranges).
     pub fn subscribe_guild(&self, guild: GuildId, sub: GuildSubscription) -> crate::Result<()> {
         let mut m = std::collections::BTreeMap::new();
         m.insert(guild, sub);
         self.send(GatewayCommand::GuildSubscriptionsBulk(m))
     }
 
-    /// Op 14 (legacy lazy request).
     pub fn lazy_request(&self, req: LazyGuildRequest) -> crate::Result<()> {
         self.send(GatewayCommand::LazyRequest(req))
     }
@@ -229,7 +192,6 @@ impl GatewayHandle {
         self.send(GatewayCommand::RequestGuildMembers(req))
     }
 
-    /// Op 31: request custom Soundboard sounds for the given guilds.
     pub fn request_soundboard_sounds(&self, guild_ids: Vec<GuildId>) -> crate::Result<()> {
         self.send(GatewayCommand::RequestSoundboardSounds(RequestSoundboardSounds { guild_ids }))
     }
@@ -242,7 +204,6 @@ impl GatewayHandle {
 pub struct Gateway;
 
 impl Gateway {
-    /// Spawn the gateway task on the current tokio runtime.
     pub fn spawn(config: GatewayConfig) -> (GatewayHandle, mpsc::UnboundedReceiver<GatewayEvent>) {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (ev_tx, ev_rx) = mpsc::unbounded_channel();
@@ -287,7 +248,6 @@ struct Runner {
     ev_tx: mpsc::UnboundedSender<GatewayEvent>,
     pending: VecDeque<GatewayCommand>,
     session: Session,
-    /// Set once READY/RESUMED arrives; resets backoff.
     healthy: bool,
 }
 
@@ -337,7 +297,6 @@ async fn run(
         };
         attempt = attempt.saturating_add(1);
         let _ = r.ev_tx.send(GatewayEvent::Reconnecting { attempt, delay, resume: r.session.resumable() });
-        // Wait, but stay responsive to shutdown.
         let deadline = Instant::now() + delay;
         loop {
             tokio::select! {
@@ -431,11 +390,9 @@ impl Runner {
         let _ = timeout(Duration::from_secs(2), ws.close(Some(frame))).await;
     }
 
-    /// Run one websocket connection until it ends.
     async fn connection(&mut self, mut ws: Ws) -> Outcome {
         let mut z = ZlibStream::new();
 
-        // ---- HELLO ----
         let hello_deadline = Instant::now() + self.config.hello_timeout;
         let interval = loop {
             let msg = match timeout_at(hello_deadline, ws.next()).await {
@@ -468,7 +425,6 @@ impl Runner {
         };
         self.emit(GatewayEvent::Connected { heartbeat_interval: interval });
 
-        // ---- IDENTIFY / RESUME ----
         let first = if let (Some(sid), true) = (&self.session.session_id, self.session.resumable()) {
             json!({ "op": op::RESUME, "d": { "token": self.config.token, "session_id": sid, "seq": self.session.seq } })
         } else {
@@ -483,7 +439,6 @@ impl Runner {
         let mut beat_sent_at: Option<Instant> = None;
 
         loop {
-            // Flush queued commands once the session is established.
             if self.healthy {
                 while let Some(cmd) = self.pending.pop_front() {
                     if let Some(p) = Self::command_payload(&cmd)
@@ -597,7 +552,6 @@ impl Runner {
             if fatal_close(c) {
                 return Outcome::Fatal { code: c, reason };
             }
-            // Invalid seq / session timed out: must re-identify.
             if matches!(c, 4007 | 4009) {
                 self.session.clear();
             }

@@ -1,5 +1,3 @@
-//! Rate-limited REST client authenticated with a *user* token.
-
 pub mod auth;
 pub mod profile;
 pub mod settings;
@@ -38,7 +36,6 @@ use ratelimit::{RateLimitInfo, RateLimiter, major_param, route_key};
 
 pub const API_BASE: &str = "https://discord.com/api/v10";
 
-/// File to upload with a message.
 #[derive(Debug, Clone)]
 pub struct FileUpload {
     pub filename: String,
@@ -48,14 +45,11 @@ pub struct FileUpload {
     pub spoiler: bool,
 }
 
-/// Pagination for `GET /channels/{id}/messages`. Only one of
-/// before/after/around is honored by Discord.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MessageQuery {
     pub before: Option<MessageId>,
     pub after: Option<MessageId>,
     pub around: Option<MessageId>,
-    /// 1..=100, default 50.
     pub limit: Option<u8>,
 }
 
@@ -86,12 +80,9 @@ impl MessageQuery {
     }
 }
 
-/// Body for sending a message.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct CreateMessage {
     pub content: String,
-    /// Filled automatically with a time-based snowflake if `None`; keep it to
-    /// match the echoed MESSAGE_CREATE against the optimistic local message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -106,7 +97,6 @@ pub struct CreateMessage {
     pub allowed_mentions: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enforce_nonce: Option<bool>,
-    /// Cloud-uploaded files (`uploads::message_attachments`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<Value>,
 }
@@ -131,12 +121,9 @@ impl CreateMessage {
     }
 }
 
-/// Result of `POST /auth/login`.
 #[derive(Clone)]
 pub enum LoginResponse {
-    /// Logged in; store this token.
     Token { user_id: Option<UserId>, token: String },
-    /// Second factor required. Pass `ticket` to [`RestClient::login_mfa_totp`].
     MfaRequired { user_id: Option<UserId>, ticket: String, totp: bool, sms: bool, backup: bool, webauthn: bool },
 }
 
@@ -193,14 +180,10 @@ struct Inner {
     super_props: String,
     limiter: RateLimiter,
     max_retries: u32,
-    /// Discord locale code of the account (`fr`, `en-US`…), sent as
-    /// `X-Discord-Locale` / `Accept-Language` like the official client.
     locale: parking_lot::RwLock<String>,
-    /// IANA zone sent as `X-Discord-Timezone`.
     timezone: Option<String>,
 }
 
-/// Cheaply cloneable REST client.
 #[derive(Clone)]
 pub struct RestClient {
     inner: Arc<Inner>,
@@ -213,17 +196,14 @@ impl std::fmt::Debug for RestClient {
 }
 
 impl RestClient {
-    /// Client authenticated with a user token (sent as-is, no `Bot ` prefix).
     pub fn new(token: impl Into<String>, props: ClientProperties) -> Self {
         Self::build(Some(token.into()), props, API_BASE.to_owned())
     }
 
-    /// Client without a token, for [`Self::login`].
     pub fn unauthenticated(props: ClientProperties) -> Self {
         Self::build(None, props, API_BASE.to_owned())
     }
 
-    /// Override the API base URL (tests / proxies).
     pub fn with_base(token: Option<String>, props: ClientProperties, base: impl Into<String>) -> Self {
         Self::build(token, props, base.into())
     }
@@ -251,8 +231,6 @@ impl RestClient {
         &self.inner.props
     }
 
-    /// Account locale (user settings), used for the locale headers so that
-    /// server-side strings (billing products, errors…) come back translated.
     pub fn set_locale(&self, locale: &str) {
         if !locale.is_empty() {
             *self.inner.locale.write() = locale.to_owned();
@@ -359,48 +337,36 @@ impl RestClient {
         self.raw(method, path, body).await.map(|_| ())
     }
 
-    // ---- users -------------------------------------------------------------
-
-    /// `GET /users/@me`
     pub async fn get_me(&self) -> Result<User> {
         self.call(Method::GET, "/users/@me", Body::None).await
     }
 
-    /// `GET /users/{id}`
     pub async fn get_user(&self, id: UserId) -> Result<User> {
         self.call(Method::GET, &format!("/users/{id}"), Body::None).await
     }
 
-    /// `GET /users/@me/guilds`
     pub async fn get_guilds(&self) -> Result<Vec<PartialGuild>> {
         self.call(Method::GET, "/users/@me/guilds?with_counts=true", Body::None).await
     }
 
-    /// `GET /users/@me/channels` (DMs and group DMs)
     pub async fn get_private_channels(&self) -> Result<Vec<Channel>> {
         self.call(Method::GET, "/users/@me/channels", Body::None).await
     }
 
-    /// Open (or fetch) a DM with a user.
     pub async fn create_dm(&self, recipient: UserId) -> Result<Channel> {
         self.call(Method::POST, "/users/@me/channels", Body::Json(json!({ "recipients": [recipient] })))
             .await
     }
 
-    /// Create a group DM with several users.
     pub async fn create_group_dm(&self, recipients: &[UserId]) -> Result<Channel> {
         self.call(Method::POST, "/users/@me/channels", Body::Json(json!({ "recipients": recipients })))
             .await
     }
 
-    /// `GET /users/@me/relationships`
     pub async fn get_relationships(&self) -> Result<Vec<Relationship>> {
         self.call(Method::GET, "/users/@me/relationships", Body::None).await
     }
 
-    /// Raw JSON call for endpoints without a typed wrapper (invites,
-    /// relationship actions, leaving a guild...). `body` is sent as JSON when
-    /// present; an empty response body comes back as `Value::Null`.
     pub async fn request_json(&self, method: Method, path: &str, body: Option<Value>) -> Result<Value> {
         let body = body.map(Body::Json).unwrap_or(Body::None);
         let (_, bytes) = self.raw(method, path, body).await?;
@@ -409,8 +375,6 @@ impl RestClient {
         }
         Ok(serde_json::from_slice(&bytes)?)
     }
-
-    // ---- guilds / channels -------------------------------------------------
 
     pub async fn get_guild(&self, id: GuildId) -> Result<Guild> {
         self.call(Method::GET, &format!("/guilds/{id}"), Body::None).await
@@ -428,8 +392,6 @@ impl RestClient {
         self.call(Method::GET, &format!("/channels/{id}"), Body::None).await
     }
 
-    // ---- messages ----------------------------------------------------------
-
     pub async fn get_messages(&self, channel: ChannelId, q: MessageQuery) -> Result<Vec<Message>> {
         self.call(Method::GET, &format!("/channels/{channel}/messages?{}", q.to_query()), Body::None)
             .await
@@ -439,16 +401,12 @@ impl RestClient {
         self.call(Method::GET, &format!("/channels/{channel}/pins"), Body::None).await
     }
 
-    /// Send a message. A nonce is generated when absent.
     pub async fn send_message(&self, channel: ChannelId, mut msg: CreateMessage) -> Result<Message> {
         fill_nonce(&mut msg);
         let body = serde_json::to_value(&msg)?;
         self.call(Method::POST, &format!("/channels/{channel}/messages"), Body::Json(body)).await
     }
 
-    /// Send a message with attachments (multipart `payload_json` + `files[n]`).
-    /// Legacy: the client now uploads to the cloud first, see
-    /// [`Self::send_message_with_uploads`].
     pub async fn send_message_with_files(
         &self,
         channel: ChannelId,
@@ -491,7 +449,6 @@ impl RestClient {
             .await
     }
 
-    /// Mark a message as read (user-account endpoint).
     pub async fn ack_message(&self, channel: ChannelId, message: MessageId) -> Result<()> {
         self.call_empty(
             Method::POST,
@@ -501,8 +458,6 @@ impl RestClient {
         .await
     }
 
-    /// Move the read marker back: everything after `message` becomes unread
-    /// ("Mark Unread"). `message` is the last message still considered read.
     pub async fn ack_message_manual(&self, channel: ChannelId, message: MessageId, mention_count: u32) -> Result<()> {
         self.call_empty(
             Method::POST,
@@ -512,22 +467,17 @@ impl RestClient {
         .await
     }
 
-    /// `PUT /channels/{id}/pins/{message}`
     pub async fn pin_message(&self, channel: ChannelId, message: MessageId) -> Result<()> {
         self.call_empty(Method::PUT, &format!("/channels/{channel}/pins/{message}"), Body::None).await
     }
 
-    /// `DELETE /channels/{id}/pins/{message}`
     pub async fn unpin_message(&self, channel: ChannelId, message: MessageId) -> Result<()> {
         self.call_empty(Method::DELETE, &format!("/channels/{channel}/pins/{message}"), Body::None).await
     }
 
-    /// `POST /channels/{id}/typing` (lasts ~10 s).
     pub async fn trigger_typing(&self, channel: ChannelId) -> Result<()> {
         self.call_empty(Method::POST, &format!("/channels/{channel}/typing"), Body::None).await
     }
-
-    // ---- reactions ---------------------------------------------------------
 
     fn reaction_path(channel: ChannelId, message: MessageId, emoji: &ReactionEmoji) -> String {
         let e: String = url::form_urlencoded::byte_serialize(emoji.route_form().as_bytes()).collect();
@@ -566,9 +516,6 @@ impl RestClient {
         self.call(Method::GET, &p, Body::None).await
     }
 
-    // ---- misc --------------------------------------------------------------
-
-    /// `GET /gateway` -> websocket URL.
     pub async fn get_gateway_url(&self) -> Result<String> {
         #[derive(Deserialize)]
         struct G {
@@ -578,10 +525,6 @@ impl RestClient {
         Ok(g.url)
     }
 
-    // ---- auth --------------------------------------------------------------
-
-    /// Email/phone + password login. May return [`LoginResponse::MfaRequired`]
-    /// or [`Error::CaptchaRequired`] (captcha solving is not implemented).
     pub async fn login(&self, login: &str, password: &str) -> Result<LoginResponse> {
         let raw: RawLogin = self
             .call(
@@ -599,7 +542,6 @@ impl RestClient {
         parse_login(raw)
     }
 
-    /// Complete an MFA login with a TOTP (authenticator app) code.
     pub async fn login_mfa_totp(&self, ticket: &str, code: &str) -> Result<String> {
         #[derive(Deserialize)]
         struct T {

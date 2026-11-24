@@ -1,10 +1,3 @@
-//! AV1 RTP payload format (AOMedia "RTP Payload Format For AV1").
-//!
-//! Input/output frames are in low-overhead bitstream format (OBUs with
-//! `obu_has_size_field = 1`). On the wire OBU elements are length-prefixed
-//! (W = 0) with the size field removed; temporal delimiters, tile lists and
-//! padding OBUs are dropped as the spec requires.
-
 use super::{Depacketizer, Packetizer};
 use crate::{leb128, Error, Result};
 
@@ -13,7 +6,6 @@ pub const OBU_TEMPORAL_DELIMITER: u8 = 2;
 pub const OBU_TILE_LIST: u8 = 8;
 pub const OBU_PADDING: u8 = 15;
 
-/// One OBU: header bytes (1 or 2, size flag cleared) and payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Obu<'a> {
     pub header: Vec<u8>,
@@ -26,7 +18,6 @@ impl Obu<'_> {
     }
 }
 
-/// Parse a low-overhead bitstream into OBUs.
 pub fn parse_obus(data: &[u8]) -> Result<Vec<Obu<'_>>> {
     let mut out = Vec::new();
     let mut o = 0;
@@ -53,10 +44,6 @@ pub fn parse_obus(data: &[u8]) -> Result<Vec<Obu<'_>>> {
     Ok(out)
 }
 
-/// Remove the `obu_size` field of the last OBU (it then extends to the end of
-/// the frame). Applied before DAVE encryption on send, and on received frames
-/// before DAVE decryption, so both sides see the same byte layout. OBUs the
-/// packetizer would drop (temporal delimiter, tile list, padding) are removed too.
 pub fn strip_last_obu_size(frame: &[u8]) -> Result<Vec<u8>> {
     let obus: Vec<Obu<'_>> = parse_obus(frame)?
         .into_iter()
@@ -101,8 +88,8 @@ impl Packetizer for Av1Packetizer {
         let new_sequence = obus.iter().any(|o| o.obu_type() == OBU_SEQUENCE_HEADER);
 
         let mut packets: Vec<Vec<u8>> = Vec::new();
-        let mut cur = vec![0u8]; // aggregation header placeholder
-        let mut z = false; // current packet starts with continuation
+        let mut cur = vec![0u8];
+        let mut z = false;
         for el in &elements {
             let mut rest: &[u8] = el;
             loop {
@@ -113,7 +100,6 @@ impl Packetizer for Av1Packetizer {
                     cur.extend_from_slice(rest);
                     break;
                 }
-                // Fragment: fill remaining space (need >=1 byte of data + length).
                 if space >= 3 {
                     let mut take = space - leb128::encoded_len(space as u64);
                     take = take.min(rest.len());
@@ -184,7 +170,7 @@ impl Depacketizer for Av1Depacketizer {
             o += len;
         }
         if !z && !self.partial.is_empty() {
-            self.partial.clear(); // lost continuation
+            self.partial.clear();
         }
         let n = elements.len();
         for (i, el) in elements.into_iter().enumerate() {

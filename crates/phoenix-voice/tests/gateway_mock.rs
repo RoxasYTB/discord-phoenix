@@ -1,5 +1,3 @@
-//! Voice gateway client against a local mock websocket server.
-
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -26,7 +24,6 @@ async fn identify_heartbeat_dave_binary_resume() {
     let addr = listener.local_addr().unwrap();
 
     let server = tokio::spawn(async move {
-        // --- connection 1: identify ---
         let (s, _) = listener.accept().await.unwrap();
         let mut ws = tokio_tungstenite::accept_async(s).await.unwrap();
         ws.send(Message::Text(r#"{"op":8,"d":{"heartbeat_interval":100}}"#.into())).await.unwrap();
@@ -35,9 +32,7 @@ async fn identify_heartbeat_dave_binary_resume() {
         assert_eq!(d["session_id"], "sess");
         assert_eq!(d["max_dave_protocol_version"], 1);
         ws.send(Message::Text(r#"{"op":2,"seq":1,"d":{"ssrc":11,"ip":"127.0.0.1","port":4000,"modes":["aead_aes256_gcm_rtpsize"],"streams":[]}}"#.into())).await.unwrap();
-        // binary DAVE external sender with seq 2
         ws.send(Message::Binary(vec![0, 2, 25, 0xde, 0xad].into())).await.unwrap();
-        // Expect a heartbeat with seq_ack 2, then the key package and op 12.
         let mut got_hb = false;
         let mut got_kp = false;
         let mut got_video = false;
@@ -69,7 +64,6 @@ async fn identify_heartbeat_dave_binary_resume() {
         ws.close(Some(CloseFrame { code: CloseCode::Library(4015), reason: "server crashed".into() })).await.unwrap();
         drop(ws);
 
-        // --- connection 2: resume ---
         let (s, _) = listener.accept().await.unwrap();
         let mut ws = tokio_tungstenite::accept_async(s).await.unwrap();
         ws.send(Message::Text(r#"{"op":8,"d":{"heartbeat_interval":100}}"#.into())).await.unwrap();
@@ -78,7 +72,6 @@ async fn identify_heartbeat_dave_binary_resume() {
         assert_eq!(d["seq_ack"], 2);
         assert_eq!(d["token"], "tok");
         ws.send(Message::Text(r#"{"op":9,"d":null}"#.into())).await.unwrap();
-        // Wait for client close.
         while let Some(Ok(m)) = ws.next().await {
             if let Message::Close(_) = m {
                 break;

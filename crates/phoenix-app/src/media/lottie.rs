@@ -1,36 +1,15 @@
-//! Lottie stickers (`format_type` 3: Discord's own packs, "Wave", ...).
-//!
-//! The CDN only serves these as Bodymovin JSON (`/stickers/{id}.json`, no PNG
-//! rendition), and the client plays them with a Lottie player. Here each frame
-//! is turned into an SVG document and rasterized with GPUI's own SVG renderer
-//! (resvg), then the frames are packed into one multi-frame `RenderImage`, which
-//! `img()` plays like a GIF.
-//!
-//! Supported (what Discord's sticker files use): precomps with time offset /
-//! stretch and clipping, shape / solid / null layers, parenting, keyframed
-//! transforms with bezier easing and hold frames, split positions, groups,
-//! paths, ellipses, rectangles, fills, strokes, additive layer masks and alpha /
-//! luma track mattes. Ignored: trim paths, merge paths, repeaters, effects,
-//! gradients.
-
 use std::{collections::HashMap, fmt::Write as _, sync::Arc, time::Instant};
 
 use gpui::{App, AppContext as _, Global, ImageCacheError, RenderImage, SharedString, SvgRenderer};
 use serde_json::Value;
 
-/// Highest playback rate kept (the files are 60 fps; 30 halves the memory).
 const MAX_FPS: f64 = 30.;
-/// Frames kept per animation at most.
 const MAX_FRAMES: usize = 180;
-/// Decoded animations kept in memory.
 const MAX_ANIMS: usize = 8;
 
-/// CDN URL of a Lottie sticker's JSON.
 pub fn url(id: u64) -> SharedString {
     format!("https://cdn.discordapp.com/stickers/{id}.json").into()
 }
-
-// ------------------------------------------------------------ values
 
 type M = [f64; 6];
 const IDENT: M = [1., 0., 0., 1., 0., 0.];
@@ -50,7 +29,6 @@ fn jnum(x: f64) -> Value {
     serde_json::Number::from_f64(x).map(Value::Number).unwrap_or(Value::Null)
 }
 
-/// First number of a number or array value.
 fn num_of(v: &Value, d: f64) -> f64 {
     match v {
         Value::Array(a) => a.first().map_or(d, |x| num_of(x, d)),
@@ -70,7 +48,6 @@ fn vec2(v: &Value, d: [f64; 2]) -> [f64; 2] {
     }
 }
 
-/// Path keyframes wrap the path object in a one-element array.
 fn unwrap(v: &Value) -> &Value {
     match v {
         Value::Array(a) if a.len() == 1 && a[0].is_object() => &a[0],
@@ -102,7 +79,6 @@ fn cubic(p1: f64, p2: f64, u: f64) -> f64 {
     3. * (1. - u) * (1. - u) * u * p1 + 3. * (1. - u) * u * u * p2 + u * u * u
 }
 
-/// CSS-style cubic-bezier easing (x1, y1, x2, y2) at progress `t`.
 fn ease(x1: f64, y1: f64, x2: f64, y2: f64, t: f64) -> f64 {
     let (mut lo, mut hi, mut u) = (0., 1., t);
     for _ in 0..30 {
@@ -120,7 +96,6 @@ fn ease(x1: f64, y1: f64, x2: f64, y2: f64, t: f64) -> f64 {
     cubic(y1, y2, u)
 }
 
-/// Value of an animatable property at frame `f`.
 fn value(p: Option<&Value>, f: f64) -> Value {
     let Some(p) = p else { return Value::Null };
     if p.get("s").and_then(Value::as_bool) == Some(true) {
@@ -166,7 +141,6 @@ fn value(p: Option<&Value>, f: f64) -> Value {
     }
 }
 
-/// Transform (`ks` of a layer, `tr` of a group): matrix and opacity 0..1.
 fn transform(ks: Option<&Value>, f: f64) -> (M, f64) {
     let Some(ks) = ks else { return (IDENT, 1.) };
     let a = vec2(&value(ks.get("a"), f), [0., 0.]);
@@ -180,8 +154,6 @@ fn transform(ks: Option<&Value>, f: f64) -> (M, f64) {
     m = mul(&m, &[1., 0., 0., 1., -a[0], -a[1]]);
     (m, o)
 }
-
-// ------------------------------------------------------------ svg
 
 fn mstr(m: &M) -> String {
     format!("matrix({:.4} {:.4} {:.4} {:.4} {:.3} {:.3})", m[0], m[1], m[2], m[3], m[4], m[5])
@@ -269,7 +241,6 @@ fn items(v: Option<&Value>) -> &[Value] {
     v.and_then(Value::as_array).map(|a| a.as_slice()).unwrap_or(&[])
 }
 
-/// Path data of the geometry in `items`, each with the group transforms above it.
 fn geometry(items_: &[Value], f: f64, m: &M, out: &mut Vec<(String, M)>) {
     for it in items_ {
         if hidden(it) {
@@ -296,8 +267,6 @@ fn geometry(items_: &[Value], f: f64, m: &M, out: &mut Vec<(String, M)>) {
     }
 }
 
-/// Shape items, painted bottom-up: a fill or stroke paints the geometry listed
-/// before it in the same group (and its sub-groups).
 fn shapes(items_: &[Value], f: f64, out: &mut String) {
     for (j, it) in items_.iter().enumerate().rev() {
         if hidden(it) {
@@ -441,7 +410,6 @@ fn layers(cx: &mut Ctx, ls: &[Value], f: f64, clip: Option<(f64, f64)>, depth: u
     out
 }
 
-/// SVG document of `root` at frame `f`, `px` pixels wide.
 pub fn frame_svg(root: &Value, f: f64, px: u32) -> String {
     let mut cx = Ctx { assets: HashMap::new(), ids: 0 };
     for a in items(root.get("assets")) {
@@ -456,7 +424,6 @@ pub fn frame_svg(root: &Value, f: f64, px: u32) -> String {
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="{px}" height="{ph}" viewBox="0 0 {w} {h}">{body}</svg>"#)
 }
 
-/// Frames to draw: (first frame, step, count, delay ms), at most `MAX_FPS`.
 fn timeline(root: &Value) -> (f64, f64, usize, u32) {
     let fr = root.get("fr").and_then(Value::as_f64).filter(|v| *v > 0.).unwrap_or(30.);
     let ip = root.get("ip").and_then(Value::as_f64).unwrap_or(0.);
@@ -466,13 +433,11 @@ fn timeline(root: &Value) -> (f64, f64, usize, u32) {
     (ip, step, count, (step / fr * 1000.).round().max(1.) as u32)
 }
 
-/// Rasterizes the animation (`still`: its first frame only) at `px` device pixels.
 fn rasterize(bytes: &[u8], renderer: &SvgRenderer, px: u32, still: bool) -> Option<RenderImage> {
     let root: Value = serde_json::from_slice(bytes).ok()?;
     let (ip, step, count, delay) = timeline(&root);
     let mut frames = Vec::new();
     for n in 0..if still { 1 } else { count } {
-        // `render_single_frame` draws at twice the document size.
         let svg = frame_svg(&root, ip + n as f64 * step, (px / 2).max(1));
         let one = renderer.render_single_frame(svg.as_bytes(), 1.0).ok()?;
         let size = one.size(0);
@@ -482,8 +447,6 @@ fn rasterize(bytes: &[u8], renderer: &SvgRenderer, px: u32, still: bool) -> Opti
     }
     Some(RenderImage::new(frames))
 }
-
-// ------------------------------------------------------------ loading
 
 enum State {
     Loading,
@@ -540,8 +503,6 @@ fn load(url: &SharedString, px: u32, still: bool, cx: &mut App) -> Option<Result
     None
 }
 
-/// `img()` of a Lottie sticker drawn `px` device pixels wide; `still` keeps the
-/// first frame (pickers), otherwise it loops like the client.
 pub fn image(url: SharedString, px: u32, still: bool) -> gpui::Img {
     gpui::img(move |_: &mut gpui::Window, cx: &mut App| load(&url, px, still, cx))
 }

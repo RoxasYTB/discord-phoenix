@@ -1,5 +1,3 @@
-//! User profiles, notes and the legacy status settings.
-
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -8,10 +6,8 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{GuildId, Snowflake, User, UserId, null_default};
 
-/// Profile section of `GET /users/{id}/profile` (global or per guild).
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ProfileMetadata {
-    /// Set on `guild_member_profile` (per-guild profile).
     #[serde(default)]
     pub guild_id: Option<Snowflake>,
     #[serde(default, deserialize_with = "null_default")]
@@ -22,16 +18,12 @@ pub struct ProfileMetadata {
     pub banner: Option<String>,
     #[serde(default)]
     pub accent_color: Option<u32>,
-    /// `[primary, accent]` Nitro profile theme colours.
     #[serde(default)]
     pub theme_colors: Option<Vec<u32>>,
-    /// Applied profile collectibles: `[{sku_id, type, expires_at}]`, type 1
-    /// profile effect, 3 profile frame (client `collectibles` parser).
     #[serde(default, deserialize_with = "null_default")]
     pub collectibles: Vec<serde_json::Value>,
 }
 
-/// The guild member part of a profile (only when `guild_id` was given).
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ProfileGuildMember {
     #[serde(default)]
@@ -51,7 +43,6 @@ pub struct MutualGuild {
     pub nick: Option<String>,
 }
 
-/// Response of `GET /users/{id}/profile`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct UserProfile {
     pub user: User,
@@ -73,16 +64,13 @@ pub struct UserProfile {
     pub mutual_friends: Vec<User>,
     #[serde(default, deserialize_with = "null_default")]
     pub badges: Vec<Value>,
-    /// Profile widgets (`widgets`: game collection, application cards...).
     #[serde(default, deserialize_with = "null_default")]
     pub widgets: Vec<Value>,
-    /// Every other field, kept for diagnostics.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, Value>,
 }
 
 impl UserProfile {
-    /// Guild bio/pronouns override the global ones when set.
     pub fn bio(&self) -> &str {
         pick(self.guild_member_profile.as_ref().map(|p| p.bio.as_str()), self.user_profile.as_ref().map(|p| p.bio.as_str()))
     }
@@ -98,7 +86,6 @@ fn pick<'a>(guild: Option<&'a str>, global: Option<&'a str>) -> &'a str {
     guild.filter(|s| !s.trim().is_empty()).or(global).unwrap_or_default()
 }
 
-/// Custom status ("custom_status" in the legacy settings).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct CustomStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -107,14 +94,11 @@ pub struct CustomStatus {
     pub emoji_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emoji_id: Option<Snowflake>,
-    /// ISO 8601 expiry, `None` = never.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
 }
 
 pub(crate) fn profile_path(user: UserId, guild: Option<GuildId>) -> String {
-    // Same query as the client (`type` is always sent; with_mutual_friends_count
-    // only when the friends themselves are not requested).
     let mut p = format!("/users/{user}/profile?type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=false");
     if let Some(g) = guild {
         p.push_str(&format!("&guild_id={g}"));
@@ -143,12 +127,10 @@ struct Note {
 }
 
 impl RestClient {
-    /// `GET /users/{id}/profile` (with the guild member part when `guild` is set).
     pub async fn get_user_profile(&self, user: UserId, guild: Option<GuildId>) -> Result<UserProfile> {
         self.call(Method::GET, &profile_path(user, guild), Body::None).await
     }
 
-    /// `GET /users/@me/notes/{id}`. A missing note (404) is an empty string.
     pub async fn get_user_note(&self, user: UserId) -> Result<String> {
         match self.call::<Note>(Method::GET, &format!("/users/@me/notes/{user}"), Body::None).await {
             Ok(n) => Ok(n.note),
@@ -157,13 +139,10 @@ impl RestClient {
         }
     }
 
-    /// `PUT /users/@me/notes/{id}`
     pub async fn set_user_note(&self, user: UserId, note: &str) -> Result<()> {
         self.call_empty(Method::PUT, &format!("/users/@me/notes/{user}"), Body::Json(json!({ "note": note }))).await
     }
 
-    /// `PATCH /users/@me/settings`: `status` is "online"/"idle"/"dnd"/"invisible";
-    /// `custom` = `Some(None)` clears the custom status, `None` leaves it.
     pub async fn update_status_settings(
         &self,
         status: Option<&str>,

@@ -1,10 +1,3 @@
-//! Discord-style right-click menu: dark floating panel anchored at the
-//! cursor, 8px padding, 32px rows, blurple hover, red "danger" rows.
-//!
-//! The menu is rendered as a full-window overlay (transparent backdrop that
-//! dismisses on any click outside the panel). Keyboard: Up/Down move the
-//! highlight, Home/End jump to the ends, Enter/Space activate, Right/Left open/close a submenu, Esc closes.
-
 use crate::theme::z;
 use std::rc::Rc;
 
@@ -19,30 +12,17 @@ pub type Handler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 pub type Dismiss = Rc<dyn Fn(&mut Window, &mut App)>;
 
 pub enum MenuItem {
-    /// `icon` sits on the left (iconContainerLeft_M3qk4j); `subtext` is the
-    /// muted second line (subtext_M3qk4j), e.g. "Only visible to you".
     Action { label: SharedString, icon: Option<SharedString>, subtext: Option<SharedString>, danger: bool, on_click: Handler },
     Separator,
-    /// Arbitrary row (e.g. the quick-reaction strip).
     Custom(AnyElement),
-    /// Row with a chevron that opens a nested menu on hover.
-    /// `subtext`: muted second line under the label (e.g. the current input
-    /// device in the user panel's mic menu).
     Submenu { label: SharedString, items: Vec<MenuItem>, icon: Option<SharedString>, subtext: Option<SharedString> },
-    /// Checkbox (`radio: false`) or radio row; the menu stays open on click
-    /// for checkboxes, like Discord.
     Check { label: SharedString, checked: bool, radio: bool, subtext: Option<SharedString>, on_click: Handler },
-    /// `disabled_M3qk4j`: opacity .5, no hover, no click, skipped by the keyboard
-    /// (e.g. "Mark As Read" with nothing unread).
     Disabled { label: SharedString, icon: Option<SharedString> },
 }
 
 thread_local! {
-    /// Index of the submenu row currently open (menus are modal, one at a time).
     static OPEN_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
-    /// Highlighted row in the root menu (keyboard focus or mouse hover).
     static HL_ROOT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
-    /// Highlighted row inside the open submenu; `Some` means the keyboard is in it.
     static HL_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
 }
 
@@ -53,7 +33,6 @@ fn set_hl(depth: u8, v: Option<usize>, w: &mut Window) {
     }
 }
 
-/// Opens the submenu of row `ix` (offscreen screenshots only).
 #[doc(hidden)]
 pub fn debug_open_submenu(ix: usize) {
     OPEN_SUB.with(|c| c.set(Some(ix)));
@@ -66,7 +45,6 @@ fn reset_state() {
     HL_SUB.with(|c| c.set(None));
 }
 
-/// What the keyboard can do with each row.
 enum Nav {
     Skip,
     Act(Handler),
@@ -94,7 +72,6 @@ fn nav_of(items: &[MenuItem]) -> Vec<Nav> {
         .collect()
 }
 
-/// Next selectable index from `cur` in direction `dir` (wraps like Discord).
 fn step(ok: &[bool], cur: Option<usize>, dir: isize) -> Option<usize> {
     let n = ok.len() as isize;
     if n == 0 || !ok.iter().any(|b| *b) {
@@ -121,8 +98,6 @@ fn keyboard_click(pos: Point<Pixels>) -> ClickEvent {
     })
 }
 
-/// Arrows move, Enter/Space activate, Right/Left enter/leave a submenu,
-/// Escape closes the submenu then the menu.
 fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: &mut Window, cx: &mut App) -> bool {
     let root = HL_ROOT.with(|c| c.get());
     let sub = HL_SUB.with(|c| c.get());
@@ -145,7 +120,6 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
                 set_open_sub(None, w);
             }
         }
-        // Discord's list navigators: Home/End jump to the first/last enabled row.
         "home" | "end" => {
             let dir = if key == "home" { 1 } else { -1 };
             if in_sub {
@@ -242,7 +216,6 @@ impl MenuItem {
         Self::Check { label: label.into(), checked, radio: true, subtext: None, on_click: Rc::new(on_click) }
     }
 
-    /// Adds the muted second line under an action's label.
     pub fn with_subtext(mut self, text: impl Into<SharedString>) -> Self {
         if let Self::Action { subtext, .. } | Self::Submenu { subtext, .. } | Self::Check { subtext, .. } = &mut self {
             *subtext = Some(text.into());
@@ -250,7 +223,6 @@ impl MenuItem {
         self
     }
 
-    /// Left icon by icon-provider name (iconContainerLeft_M3qk4j).
     pub fn with_icon(mut self, name: &str) -> Self {
         if let Self::Action { icon, .. } | Self::Submenu { icon, .. } = &mut self {
             *icon = Some(crate::icons::path(name));
@@ -262,52 +234,24 @@ impl MenuItem {
         Self::Submenu { label: label.into(), items, icon: None, subtext: None }
     }
 
-    /// Submenu row with a left icon (e.g. "Add to Favorites" with a star).
     pub fn submenu_with_icon(label: impl Into<SharedString>, icon: &str, items: Vec<MenuItem>) -> Self {
         Self::Submenu { label: label.into(), items, icon: Some(crate::icons::path(icon)), subtext: None }
     }
 }
 
-// Values from menu_M3qk4j (476662.*.css) and the live DM/message/guild
-// context menus (dumps "user-context", "message", "guild-context"; see
-// docs/parity/popouts.md):
-// - .menu_ flexible_: content width, min --custom-menu-flexible-min-width
-//   (188) max 320; 1px (--menu-border-width) --border-subtle; radius 8;
-//   --background-surface-higher; --shadow-high; max-height viewport - 2*16.
-// - .scroller_: padding-block --menu-scroller-block-padding (8), inline 8
-//   (end 0 when the scrollbar shows: scrollerWithScrollbar_).
-// - .labelContainer_: min-height 32, padding 8; label body-sm/medium 14/18
-//   --text-strong; item color --interactive-text-default (icons);
-//   .subtext_ 12/16 margin-top 2 --text-muted. Rows measure 34 (text),
-//   36 (with a 20px icon/caret/checkbox), 52 (with subtext).
-// - .iconContainerLeft_ 20x20, margin-inline-end 8; caret 20px --text-muted.
-// - .focused_: radius 4, --interactive-background-hover, text --text-strong,
-//   caret/subtext white / --text-subtle; danger: --text-feedback-critical on
-//   --background-feedback-mod-critical. Plain :hover: --background-mod-subtle.
-// - .separator_: 1px --border-subtle, margin 8px 0.
-// - submenu (live): left = parent right - 4, top = row top - 9 (its scroller
-//   padding + border so the first row lines up), min width 188.
-// - checkboxIndicator_vTUVyc: 20px, radius 4, 1px --checkbox-border-default
-//   on --checkbox-background-default; selected uses the *-selected tokens.
 pub const MENU_W: f32 = 220.;
-const MENU_MIN_W: f32 = 188.; // --custom-menu-flexible-min-width
-const MENU_MAX_W: f32 = 320.; // flexible_M3qk4j max-width
-/// ReferencePositionLayer (web.*.js nudgeTopAlignment / calculateMaxHeight):
-/// menus are nudged 12px inside the window and capped at window - top - 12.
-/// (--custom-menu-viewport-padding 16 is only the CSS fallback, never used.)
+const MENU_MIN_W: f32 = 188.;
+const MENU_MAX_W: f32 = 320.;
 const VIEWPORT_PAD: f32 = 12.;
-/// Icon prefix that renders an emoji token instead of an SVG.
 pub const EMOJI_ICON: &str = "emoji:";
-const SUB_OVERLAP: f32 = 4.; // live: submenu x = parent right - 4
+const SUB_OVERLAP: f32 = 4.;
 const CHEVRON: &str = "chevron-right";
 const CHECK: &str = "check";
 
 thread_local! {
-    /// Window height seen on the last paint (menu max-height).
     static VIEW_H: std::cell::Cell<f32> = const { std::cell::Cell::new(700.) };
 }
 
-/// Height of one row, as laid out by the official client.
 fn row_h(item: &MenuItem) -> f32 {
     match item {
         MenuItem::Separator => 17.,
@@ -322,7 +266,6 @@ fn row_h(item: &MenuItem) -> f32 {
     }
 }
 
-/// Menu panel only (no backdrop), for embedding.
 pub fn panel(id: &'static str, items: Vec<MenuItem>, dismiss: Dismiss) -> gpui::Stateful<gpui::Div> {
     panel_at(id, 0, items, dismiss)
 }
@@ -345,7 +288,6 @@ fn row(id: (&'static str, usize), lit: bool, danger: bool) -> gpui::Stateful<gpu
             d.bg(c(tok(if danger { idx::BACKGROUND_FEEDBACK_MOD_CRITICAL } else { idx::INTERACTIVE_BACKGROUND_HOVER })))
         })
         .when(!lit, |d| d.hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))))
-        // colorDefault_:active → --background-mod-subtle; colorDanger_:active → critical mod.
         .active(move |s| s.bg(c(tok(if danger { idx::BACKGROUND_FEEDBACK_MOD_CRITICAL } else { idx::BACKGROUND_MOD_SUBTLE }))))
 }
 
@@ -399,7 +341,6 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                         d.child(svg().path(path).mr(z(8.)).size(z(20.)).flex_none().text_color(c(tok(fg))))
                     })
                     .child(div().flex_1().min_w_0().flex().flex_col().child(label_box(label)).when_some(subtext, |d, s| {
-                        // defaultColor_ subtext: 12/16 --text-muted, margin-top 2
                         d.child(
                             div()
                                 .mt(z(2.))
@@ -410,7 +351,6 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                                 .child(s),
                         )
                     }))
-                    // iconContainer_ margin-inline-start 8; caret_ --text-muted (white when focused)
                     .child(
                         svg()
                             .path(crate::icons::path(CHEVRON))
@@ -424,7 +364,6 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
             MenuItem::Check { label, checked, radio, subtext, on_click } => {
                 let dismiss = dismiss.clone();
                 let mark = if radio {
-                    // standaloneRadioIndicator_oJuRb (guild notification submenu dump)
                     crate::ui::controls::radio_indicator(checked)
                 } else {
                     let (bg, border) = if checked {
@@ -456,7 +395,6 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                         }
                     })
                     .child(div().flex_1().min_w_0().flex().flex_col().child(label_box(label)).when_some(subtext, |d, s| {
-                        // vanilla-menu-channel-notify default radio: subtext_ 12/16 --text-muted, mt 2
                         d.child(
                             div()
                                 .mt(z(2.))
@@ -485,7 +423,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                 .rounded(z(2.))
                 .flex()
                 .items_center()
-                .opacity(0.5) // disabled_M3qk4j opacity .5, pointer-events none
+                .opacity(0.5)
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .font_weight(FontWeight::MEDIUM)
@@ -517,7 +455,6 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                         }
                     })
                     .when_some(icon, |d, name| {
-                        // `emoji:<token>`: emojiIcon_M3qk4j, a 20px emoji image (Add Reaction submenu).
                         if let Some(token) = name.strip_prefix(EMOJI_ICON) {
                             return d.child(div().mr(z(8.)).size(z(20.)).flex_none().child(crate::media::emoji::emoji_element(token, 20.)));
                         }
@@ -555,7 +492,6 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
         .border_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
-        // --shadow-high: 0 12px 24px 0 rgb(0 0 0 / .24)
         .shadow(vec![gpui::BoxShadow {
             color: gpui::hsla(0., 0., 0., 0.24),
             offset: gpui::point(z(0.), z(12.)),
@@ -572,13 +508,10 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
         .children(sub_panel)
 }
 
-/// Full-window overlay with the menu anchored at `pos`.
 pub fn render(pos: Point<Pixels>, items: Vec<MenuItem>, dismiss: Dismiss) -> AnyElement {
     render_anchored(pos, gpui::Anchor::TopLeft, items, dismiss)
 }
 
-/// Like [`render`], with `corner` of the menu at `pos` (e.g. bottom-left for
-/// a menu that opens above its button).
 pub fn render_anchored(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<MenuItem>, dismiss: Dismiss) -> AnyElement {
     let inner = dismiss;
     let dismiss: Dismiss = Rc::new(move |w, cx| {

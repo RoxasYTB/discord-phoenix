@@ -1,19 +1,3 @@
-//! "Nouveau fil" sidebar: a thread without a starter message (threads popout
-//! "Créer", Ctrl+Shift+Alt+N with no focused message). Structure and values
-//! from the live client (ref-cache create-thread-sidebar-{frame,header,default}.json):
-//! chatLayerWrapper_ 480px panel with a 1px --border-subtle left edge and a
-//! 12px top-left radius; header container_ybUK7Z 49px, padding 8 8 8 20;
-//! bottom-aligned form: 64px icon disc, "Nom du fil" input, "Fil privé"
-//! checkbox; starter-message textarea at the bottom.
-//! Submitting posts `POST /channels/{id}/threads`, then the starter message.
-//!
-//! From a message ("Créer un fil" in the message menu, measured live 2026-11-24 in the
-//! sandbox channel): same sidebar, label "Nom du fil (facultatif)", the default name
-//! (web bundle module 971389 `V`) as the name placeholder, no "Fil privé" option, and the
-//! source message rendered under the field (messagePreview_UU236g: padding-bottom 24).
-//! Submitting posts `POST /channels/{c}/messages/{m}/threads` with the typed name, else the
-//! default name, else "Fil" (7Xm5QI), then the starter message in the new thread.
-
 use gpui::{AnyElement, ClickEvent, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Subscription, Window, div, prelude::*};
 use gpui_component::input::{Input, InputEvent, InputState};
 
@@ -29,15 +13,10 @@ pub struct CreateThread {
     pub name: Entity<InputState>,
     pub starter: Entity<InputState>,
     pub private: bool,
-    /// Starter message of a thread created from a message, and its default name.
     pub source: Option<(Id, String)>,
     _subs: Vec<Subscription>,
 }
 
-/// Default thread name of a message (module 971389 `V`): the first embed's title (40),
-/// else the poll question (80), else the first content line without leading " #-",
-/// grown token by token (separators kept) while it fits 40 UTF-16 units; `B` then cuts
-/// anything longer at 40 and appends "...".
 pub fn default_thread_name(content: &str, embed_title: Option<&str>, poll_question: Option<&str>) -> String {
     fn cut(s: &str, n: usize) -> String {
         if s.encode_utf16().count() > n { String::from_utf16_lossy(&s.encode_utf16().take(n).collect::<Vec<_>>()) + "..." } else { s.to_string() }
@@ -51,7 +30,6 @@ pub fn default_thread_name(content: &str, embed_title: Option<&str>, poll_questi
     }
     let first = content.split('\n').next().unwrap_or("");
     let line = first.trim_start_matches([' ', '#', '-']);
-    // Split into words and separator runs (whitespace or `!@#$%^&*()_-+={}[]:";'<>?,./`).
     let sep = |c: char| c.is_whitespace() || "!@#$%^&*()_-+={}[]:\";'<>?,./".contains(c);
     let mut parts: Vec<&str> = Vec::new();
     let mut start = 0;
@@ -65,7 +43,6 @@ pub fn default_thread_name(content: &str, embed_title: Option<&str>, poll_questi
         in_sep = Some(s);
     }
     parts.push(&line[start..]);
-    // The client's split always starts with a (possibly empty) word.
     if line.chars().next().is_some_and(sep) {
         parts.insert(0, "");
     }
@@ -96,7 +73,6 @@ fn icon(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
 }
 
 impl PhoenixApp {
-    /// Opens the sidebar for `channel` (a guild text/announcement channel).
     pub fn open_create_thread(&mut self, channel: Id, window: &mut Window, cx: &mut Context<Self>) {
         if !self.channels.get(&channel).is_some_and(|c| c.guild.is_some() && matches!(c.kind, ChannelKind::Text | ChannelKind::Announcement)) {
             return;
@@ -118,7 +94,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// "Créer un fil" on a message: the sidebar with the message preview.
     pub fn open_create_thread_from(&mut self, channel: Id, msg: Id, window: &mut Window, cx: &mut Context<Self>) {
         self.chat.menu = None;
         let Some(m) = self.messages.get(&channel).and_then(|x| x.msgs.iter().find(|m| m.id == msg)) else { return };
@@ -153,7 +128,6 @@ impl PhoenixApp {
             self.action(ActionRequest::CreateThread { channel, msg, name }, cx, move |a, r, cx| match r {
                 Ok(ActionReply::Channel(id)) => {
                     a.close_create_thread(cx);
-                    // Client: the new thread opens in the side panel (open_thread needs the window).
                     let (e, tname) = (cx.entity(), thread_name.clone());
                     cx.defer(move |cx| {
                         let _ = handle.update(cx, |_, w, cx| {
@@ -175,7 +149,6 @@ impl PhoenixApp {
             });
             return;
         }
-        // Client: an empty name falls back to the starter message's start.
         let name = if name.is_empty() { starter.chars().take(40).collect() } else { name };
         if name.is_empty() {
             return;
@@ -202,7 +175,6 @@ impl PhoenixApp {
     }
 }
 
-/// The sidebar, when open for the selected channel.
 pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let s = cx.try_global::<Slot>()?.0.as_ref()?;
     if app.selected_channel != Some(s.channel) {
@@ -211,7 +183,6 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
     let private = s.private;
     let (name, starter) = (s.name.clone(), s.starter.clone());
     let source = s.source.as_ref().map(|(m, _)| *m);
-    // messagePreview_UU236g (padding-bottom 24) under the form: the starter message.
     let preview = source.and_then(|mid| {
         let entry = app.messages.get(&s.channel)?;
         let i = entry.index_of(mid)?;
@@ -220,8 +191,8 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
     });
     let header = div()
         .flex_none()
-        .h(z(49.)) // container_ybUK7Z height 49
-        .pt(z(8.)) // padding 8px 8px 8px 20px
+        .h(z(49.))
+        .pt(z(8.))
         .pr(z(8.))
         .pb(z(8.))
         .pl(z(20.))
@@ -229,11 +200,11 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .border_color(t(idx::BORDER_SUBTLE))
         .flex()
         .items_center()
-        .child(div().size(z(32.)).flex().items_center().justify_center().child(icon("chat/thread", 20., t(idx::ICON_MUTED)))) // iconWrapper_ 32, svg 20
+        .child(div().size(z(32.)).flex().items_center().justify_center().child(icon("chat/thread", 20., t(idx::ICON_MUTED))))
         .child(
             div()
                 .flex_1()
-                .text_size(z(16.)) // body-md/medium 16/20 --text-strong
+                .text_size(z(16.))
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t(idx::TEXT_STRONG))
@@ -242,7 +213,7 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .child(
             div()
                 .id("create-thread-close")
-                .ml(z(10.)) // toolbar_ padding-left 10
+                .ml(z(10.))
                 .size(z(32.))
                 .flex()
                 .items_center()
@@ -253,15 +224,15 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         );
     let label = |text: SharedString| {
         div()
-            .mb(z(8.)) // labelContainer_ margin-bottom 8
-            .text_size(z(16.)) // body-md/medium 16/20 --text-strong
+            .mb(z(8.))
+            .text_size(z(16.))
             .line_height(z(20.))
             .font_weight(FontWeight::MEDIUM)
             .text_color(t(idx::TEXT_STRONG))
             .child(text)
     };
     let checkbox = div()
-        .size(z(20.)) // checkboxIndicator_ 20, radius 4, 1px border
+        .size(z(20.))
         .flex_none()
         .rounded(z(4.))
         .border_1()
@@ -272,13 +243,13 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .justify_center()
         .when(private, |d| d.child(icon("check", 14., t(idx::CHECKBOX_ICON_ACTIVE))));
     let form = div()
-        .mx(z(20.)) // container_w6h4R2 margin 20
+        .mx(z(20.))
         .mb(z(20.))
         .flex()
         .flex_col()
         .child(
             div()
-                .my(z(16.)) // iconWrapper_ 64px disc, margin 16px 0
+                .my(z(16.))
                 .size(z(64.))
                 .rounded_full()
                 .bg(t(idx::BACKGROUND_MOD_STRONG))
@@ -291,16 +262,16 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
             div()
                 .flex()
                 .flex_col()
-                .gap(z(24.)) // stack_ gap 24
+                .gap(z(24.))
                 .child(
                     div().flex().flex_col().child(label(if source.is_some() { crate::t!("thread.name_optional") } else { crate::t!("thread.name") })).child(
                         div()
-                            .h(z(40.)) // input wrapper md: 40px, radius 8, 1px --input-border-default
+                            .h(z(40.))
                             .rounded(z(8.))
                             .border_1()
                             .border_color(t(idx::INPUT_BORDER_DEFAULT))
                             .bg(t(idx::INPUT_BACKGROUND_DEFAULT))
-                            .px(z(12.)) // input_ padding 1px 12px
+                            .px(z(12.))
                             .flex()
                             .items_center()
                             .text_size(z(16.))
@@ -312,14 +283,14 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                         div()
                             .id("create-thread-private")
                             .flex()
-                            .gap(z(12.)) // checkboxOption_ gap 12
+                            .gap(z(12.))
                             .cursor_pointer()
                             .child(checkbox)
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .text_size(z(16.)) // body-md/normal 16/20
+                                    .text_size(z(16.))
                                     .line_height(z(20.))
                                     .text_color(t(idx::TEXT_STRONG))
                                     .child(crate::t!("thread.private_hint")),
@@ -335,29 +306,29 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         );
     let composer = div()
         .flex_none()
-        .mx(z(10.)) // channelTextArea_ inset 10px, radius 8, 1px --border-subtle
+        .mx(z(10.))
         .mb(z(10.))
         .min_h(z(58.))
         .rounded(z(8.))
         .border_1()
         .border_color(t(idx::BORDER_SUBTLE))
         .bg(t(idx::CHAT_BACKGROUND_DEFAULT))
-        .pl(z(10.)) // inner_ padding-left 10 (sansAttachButton)
+        .pl(z(10.))
         .pr(z(12.))
         .flex()
         .items_center()
-        .text_size(z(16.)) // textArea 16/22
+        .text_size(z(16.))
         .line_height(z(22.))
         .child(div().flex_1().child(Input::new(&starter).appearance(false).bordered(false)));
     Some(
         div()
             .id("create-thread")
-            .w(z(480.)) // chatLayerWrapper_ 480
+            .w(z(480.))
             .flex_none()
             .h_full()
             .border_l_1()
             .border_t_1()
-            .rounded_tl(z(12.)) // container_FrbQJp border-radius 12px 0 0
+            .rounded_tl(z(12.))
             .border_color(t(idx::BORDER_SUBTLE))
             .bg(t(idx::BACKGROUND_BASE_LOWER))
             .flex()
@@ -375,7 +346,6 @@ mod tests {
 
     #[test]
     fn default_name_matches_the_live_client() {
-        // Live sandbox 2026-11-24: placeholder "[Test Phoenix] envoyé depuis le client ".
         let c = "[Test Phoenix] envoyé depuis le client officiel — message source pour tester les fils";
         assert_eq!(default_thread_name(c, None, None), "[Test Phoenix] envoyé depuis le client ");
         assert_eq!(default_thread_name("## Titre\nsuite", None, None), "Titre");

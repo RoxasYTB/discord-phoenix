@@ -1,6 +1,3 @@
-//! GIF tab: Tenor categories / trending home, search, masonry results.
-//! Clicking a GIF sends its URL to the open channel (Discord embeds it).
-
 use gpui::{
     AnyElement, Context, FontWeight, ObjectFit, ParentElement, SharedString, Styled, StyledImage,
     div, img, prelude::*, px,
@@ -12,8 +9,6 @@ use crate::{
     theme::{c, generated::idx, tok},
 };
 
-// From the `picker-gif` dump (result_H8nOze grid): 12px outer padding, 11px column
-// gap, 12px row gap, 110px category tiles with radius 5px.
 const GAP: f32 = 12.;
 const COL_GAP: f32 = 11.;
 const PAD: f32 = 12.;
@@ -41,7 +36,6 @@ pub fn load_home(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-/// Search after the user stopped typing for a moment.
 pub fn search_debounced(_app: &mut PhoenixApp, q: String, cx: &mut Context<PhoenixApp>) {
     let g = &mut cx.global_mut::<Pickers>().gifs;
     g.seq += 1;
@@ -59,7 +53,6 @@ pub fn search_debounced(_app: &mut PhoenixApp, q: String, cx: &mut Context<Phoen
     });
 }
 
-/// Load results for `q` ("" = trending GIFs).
 pub fn run(app: &mut PhoenixApp, q: String, cx: &mut Context<PhoenixApp>) {
     let g = &mut cx.global_mut::<Pickers>().gifs;
     g.seq += 1;
@@ -90,7 +83,6 @@ pub fn run(app: &mut PhoenixApp, q: String, cx: &mut Context<PhoenixApp>) {
     cx.notify();
 }
 
-/// Favorites grid (no request: the list comes from the account frecency).
 fn show_favorites(cx: &mut Context<PhoenixApp>) {
     let p = cx.global_mut::<Pickers>();
     let favs = p.frecency.as_ref().map(|f| f.favorite_gifs.clone()).unwrap_or_default();
@@ -109,10 +101,6 @@ fn send(app: &mut PhoenixApp, gif: &GifItem, window: &mut gpui::Window, cx: &mut
     close(app, window, cx);
 }
 
-/// Category tile: image + categoryFade_d2GpC2 (--background-scrim, radius 4px; the
-/// Favorites tile uses categoryFadeBlurple: --background-brand at 80%) + centered
-/// categoryText (16px semibold white, optional 20px icon with 4px margin).
-/// `.high-contrast-mode .result_H8nOze`: 1px --border-strong around every tile and result.
 fn hc_outline<E: Styled>(d: E) -> E {
     d.border_1().border_color(c(tok(idx::BORDER_STRONG)))
 }
@@ -152,16 +140,13 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
     let p = cx.global::<Pickers>();
     let g = &p.gifs;
     let typed = p.open.as_ref().map(|o| !o.input.read(cx).value().trim().is_empty()).unwrap_or(false);
-    // Scroller is the picker minus its 1px borders; 8px is the thin scrollbar gutter.
     let col_w = (PICKER_W - 2. - 2. * PAD - COL_GAP) / 2.;
     let content: AnyElement = if g.shown.is_none() && !typed {
-        // Home: trending tile + categories.
         let favs = p.frecency.as_ref().map(|f| f.favorite_gifs.clone()).unwrap_or_default();
         let Some(home) = g.home.clone() else {
             return empty_state(if g.home_loading { crate::t!("picker.loading_gifs") } else { crate::t!("picker.gifs_unavailable") });
         };
         let mut tiles: Vec<AnyElement> = vec![
-            // Favorites tile shows the newest favorite behind the blurple fade (dump: img gif_H8nOze).
             tile(("gif-favorites", 0), crate::t!("picker.favorites"), favs.first().map(|g| g.preview.clone()), col_w, true, None)
                 .on_click(|_, w, cx| with_app(cx, w, |_, _, cx| show_favorites(cx)))
                 .into_any_element(),
@@ -178,7 +163,6 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
                         with_app(cx, w, move |a, w, cx| {
                             if let Some(op) = cx.global::<Pickers>().open.as_ref() {
                                 let input = op.input.clone();
-                                // Fills the box; the Change event runs the search.
                                 input.update(cx, |s, cx| s.set_value(name.to_string(), w, cx));
                             }
                             run(a, name.to_string(), cx);
@@ -193,7 +177,6 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
     } else if g.results.is_empty() {
         return empty_state(if g.error.is_some() { crate::t!("picker.gifs_unavailable") } else { crate::t!("picker.no_gifs") });
     } else {
-        // Two-column masonry: each GIF goes to the shorter column.
         let mut cols: [(f32, Vec<AnyElement>); 2] = [(0., Vec::new()), (0., Vec::new())];
         for (i, gif) in g.results.iter().enumerate() {
             let h = if gif.width > 0 { col_w * gif.height as f32 / gif.width as f32 } else { col_w * 0.75 };
@@ -211,7 +194,6 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
                     .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
                     .when(crate::theme::high_contrast(), hc_outline)
                     .cursor_pointer()
-                    // result_H8nOze[data-focused]: 2px --border-focus ring
                     .hover(|s| s.border_2().border_color(c(tok(idx::BORDER_FOCUS))))
                     .on_click(move |_, w, cx| {
                         let item = item.clone();

@@ -1,40 +1,26 @@
-//! Token overrides inside a Nitro-themed profile (`.custom-user-profile-theme`).
-//!
-//! The client re-declares a handful of variables on the themed card
-//! (`.custom-user-profile-theme.theme-dark{…}` and the control rule next to it).
-//! Elements resolve their colours while they are built, so the card body is
-//! built inside [`scoped`] and [`crate::theme::resolve`] consults [`lookup`].
-
 use std::cell::Cell;
 
 use crate::theme::generated::idx;
 
 thread_local! {
-    /// Colours of the themed card being built (None outside one).
     static ACTIVE: Cell<Option<(u32, u32)>> = const { Cell::new(None) };
 }
 
-/// `theme-dark` / `theme-light` class the client puts on a themed card.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Scheme {
     Dark,
     Light,
 }
 
-/// The client picks the card scheme from the primary colour: light when its
-/// perceived brightness (0.299 R + 0.587 G + 0.114 B) is above half
-/// (live: rgb(56,245,56) → theme-light, rgb(255,9,0) / black → theme-dark).
 pub fn scheme((primary, _): (u32, u32)) -> Scheme {
     let ch = |sh: u32| ((primary >> sh) & 0xFF) as f32;
     let y = (0.299 * ch(16) + 0.587 * ch(8) + 0.114 * ch(0)) / 255.;
     if y > 0.5 { Scheme::Light } else { Scheme::Dark }
 }
 
-/// `hsl(var(--opacity-*-hsl))` base: 240 4% 60.784% → #97979f.
 const OPACITY: u32 = 0x9797_9F00;
 const WHITE: u32 = 0xFFFF_FF00;
 
-/// Alpha byte of a CSS `/ a` fraction.
 const fn a(f: f32) -> u32 {
     (f * 255. + 0.5) as u32
 }
@@ -43,12 +29,9 @@ fn app_is_light() -> bool {
     crate::theme::active() == crate::ui::settings::AppTheme::Light
 }
 
-/// Override for a token index while a themed profile is being built.
 pub fn lookup(i: usize) -> Option<u32> {
     let t = ACTIVE.with(Cell::get)?;
     let s = scheme(t);
-    // `:root .custom-user-profile-theme.theme-*`: --control-primary-background-*
-    // = button colour, hover/active mixed 90/80% (srgb) with black (dark) or white (light).
     if matches!(i, idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT | idx::CONTROL_PRIMARY_BACKGROUND_HOVER | idx::CONTROL_PRIMARY_BACKGROUND_ACTIVE) {
         let k = match i {
             idx::CONTROL_PRIMARY_BACKGROUND_HOVER => 0.9,
@@ -60,11 +43,10 @@ pub fn lookup(i: usize) -> Option<u32> {
         return Some((join(c) << 8) | 0xFF);
     }
     let v = match s {
-        // `.custom-user-profile-theme.theme-dark{…}`
         Scheme::Dark => match i {
-            idx::TEXT_DEFAULT => Some(WHITE | a(0.960_784_3)), // --opacity-white-96
-            idx::TEXT_MUTED => Some(WHITE | a(0.760_784_3)),   // --opacity-white-76
-            idx::TEXT_SUBTLE => Some(WHITE | a(0.878_431_4)),  // --opacity-white-88
+            idx::TEXT_DEFAULT => Some(WHITE | a(0.960_784_3)),
+            idx::TEXT_MUTED => Some(WHITE | a(0.760_784_3)),
+            idx::TEXT_SUBTLE => Some(WHITE | a(0.878_431_4)),
             idx::USER_PROFILE_ACTIVITY_TOOLBAR_BACKGROUND => Some(OPACITY | a(0.239_215_7)),
             idx::USER_PROFILE_BACKGROUND_HOVER => Some(WHITE | a(0.039_215_7)),
             idx::USER_PROFILE_BORDER => Some(WHITE | a(0.078_431_4)),
@@ -78,10 +60,8 @@ pub fn lookup(i: usize) -> Option<u32> {
             idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE => Some(WHITE | a(0.12)),
             _ => None,
         },
-        // `.custom-user-profile-theme.theme-light{…}` (live modal, ref-cache
-        // profile-theme-light-tokens.json)
         Scheme::Light => match i {
-            idx::TEXT_DEFAULT => Some(a(0.960_784_3)), // black / .96
+            idx::TEXT_DEFAULT => Some(a(0.960_784_3)),
             idx::TEXT_MUTED => Some(a(0.760_784_3)),
             idx::TEXT_SUBTLE => Some(a(0.878_431_4)),
             idx::USER_PROFILE_ACTIVITY_TOOLBAR_BACKGROUND => Some(WHITE | a(0.478_431_4)),
@@ -98,7 +78,6 @@ pub fn lookup(i: usize) -> Option<u32> {
             _ => None,
         },
     };
-    // Every other token follows the card's own theme class.
     v.or_else(|| match (s, app_is_light()) {
         (Scheme::Light, false) => Some(crate::theme::generated::THEMES[1][i]),
         (Scheme::Dark, true) => Some(crate::theme::generated::THEMES[0][i]),
@@ -106,18 +85,14 @@ pub fn lookup(i: usize) -> Option<u32> {
     })
 }
 
-/// Scheme of the themed card being built, if any.
 pub fn active_scheme() -> Option<Scheme> {
     ACTIVE.with(Cell::get).map(scheme)
 }
 
-/// Whether the element being built sits on a light surface (the themed card's
-/// `theme-light` class, else the app theme).
 pub fn is_light() -> bool {
     active_scheme().map_or_else(app_is_light, |s| s == Scheme::Light)
 }
 
-/// Runs `f` with the overrides of a card themed `theme` (none when `None`).
 pub fn scoped<R>(theme: Option<(u32, u32)>, f: impl FnOnce() -> R) -> R {
     let prev = ACTIVE.with(|s| s.replace(theme));
     let r = f();
@@ -125,24 +100,20 @@ pub fn scoped<R>(theme: Option<(u32, u32)>, f: impl FnOnce() -> R) -> R {
     r
 }
 
-/// --profile-gradient-overlay-color: black / .6 on a dark card, white / .6 on a light one.
 fn overlay_rgb(s: Scheme) -> f32 {
     if s == Scheme::Light { 255. } else { 0. }
 }
 
-/// The overlay composited on `rgb` (opaque result, e.g. the avatar ring).
 pub fn composite(theme: (u32, u32), rgb: u32) -> u32 {
     let o = overlay_rgb(scheme(theme));
     let ch = |sh: u32| ((((rgb >> sh) & 0xFF) as f32) * 0.4 + o * 0.6).round() as u32;
     (ch(16) << 16) | (ch(8) << 8) | ch(0)
 }
 
-/// --profile-gradient-overlay-color as an Hsla.
 pub fn overlay(theme: (u32, u32)) -> gpui::Hsla {
     gpui::hsla(0., 0., overlay_rgb(scheme(theme)) / 255., 0.6)
 }
 
-/// CIE Lab (D65), as the client's colour library computes it.
 mod lab {
     const XN: f64 = 0.950_470;
     const YN: f64 = 1.;
@@ -173,7 +144,6 @@ mod lab {
         let l = 116. * y - 16.;
         [if l < 0. { 0. } else { l }, 500. * (x - y), 200. * (y - z)]
     }
-    /// Lab → sRGB, clipped to 0..255 (unrounded).
     pub fn to_rgb([l, a, b]: [f64; 3]) -> [f64; 3] {
         let y = (l + 16.) / 116.;
         let x = if a.is_nan() { y } else { y + a / 500. };
@@ -184,7 +154,6 @@ mod lab {
         let bl = delin(0.055_643_4 * x - 0.204_025_9 * y + 1.057_225_2 * z);
         [r, g, bl].map(|v| v.clamp(0., 255.))
     }
-    /// WCAG relative luminance.
     pub fn luminance(rgb: [f64; 3]) -> f64 {
         let [r, g, b] = rgb.map(lin);
         0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -210,9 +179,6 @@ fn hsl(rgb: u32) -> (f32, f32, f32) {
     (h.h, h.s, h.l)
 }
 
-/// --profile-gradient-modal-background-color, from the client bundle: mix
-/// primary and secondary 50% in Lab, round its HSL lightness to 2 decimals,
-/// clamp it to 0..0.1 (dark card) or 0.8..1 (light card), keep hue/saturation.
 pub fn modal_background(theme: (u32, u32)) -> gpui::Hsla {
     let (a, b) = (lab::from_rgb(split(theme.0)), lab::from_rgb(split(theme.1)));
     let mid = join(lab::to_rgb([0, 1, 2].map(|i| (a[i] + b[i]) / 2.)));
@@ -222,10 +188,6 @@ pub fn modal_background(theme: (u32, u32)) -> gpui::Hsla {
     gpui::hsla(h, s, l, 1.)
 }
 
-/// --profile-gradient-button-color (themed --control-primary-background-*),
-/// from the client bundle: starting at the primary colour, step Lab lightness
-/// by 18 (darken while the contrast against white is under 7, brighten while
-/// it is over 7 + 3), at most 100 steps.
 pub fn button_color(primary: u32) -> u32 {
     const WHITE: [f64; 3] = [255.; 3];
     let mut c = split(primary);
@@ -236,7 +198,6 @@ pub fn button_color(primary: u32) -> u32 {
             break;
         }
         let mut l = lab::from_rgb(c);
-        // never brighter than white, so: too low → darken, too high → brighten
         l[0] += if low { -18. } else { 18. };
         c = lab::to_rgb(l);
         k = lab::contrast(WHITE, c);
@@ -244,12 +205,10 @@ pub fn button_color(primary: u32) -> u32 {
     join(c)
 }
 
-/// `color-mix(in oklab, overlay p%, modal background)` for the modal-v2 inner
-/// gradient (80% at the top, 20% at 300px). Approximated in premultiplied sRGB.
 pub fn modal_inner(theme: (u32, u32), p: f32) -> gpui::Hsla {
     let m: gpui::Rgba = modal_background(theme).into();
     let o = overlay_rgb(scheme(theme)) / 255.;
-    let (wa, wb) = (0.6 * p, 1. - p); // premultiplied weights
+    let (wa, wb) = (0.6 * p, 1. - p);
     let al = wa + wb;
     let mix = |x: f32| (o * wa + x * wb) / al;
     gpui::Rgba { r: mix(m.r), g: mix(m.g), b: mix(m.b), a: al }.into()
@@ -287,7 +246,6 @@ mod tests {
     #[test]
     fn button_color_matches_live_samples() {
         let near = |a: u32, b: u32| [16, 8, 0].iter().all(|sh| (((a >> sh) & 0xFF) as i32 - ((b >> sh) & 0xFF) as i32).abs() <= 3);
-        // hsla(120,100%,18.8%) / (0,100%,27.1%) / (0,0%,33.3%)
         assert!(near(button_color(0x38_F5_38), 0x00_60_00), "{:06x}", button_color(0x38_F5_38));
         assert!(near(button_color(0xFF_09_00), 0x8A_00_00), "{:06x}", button_color(0xFF_09_00));
         assert!(near(button_color(0), 0x55_55_55), "{:06x}", button_color(0));

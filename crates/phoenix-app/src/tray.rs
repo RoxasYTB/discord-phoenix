@@ -1,9 +1,3 @@
-//! System tray icon (Linux: StatusNotifierItem + com.canonical.dbusmenu over the
-//! session bus, shown by KDE Plasma and other SNI hosts). Like the desktop
-//! client, a left click opens the window and the menu offers Open / Quit; with
-//! "Minimize to tray" on, the window's close button sends it here instead of
-//! quitting.
-
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicBool, Ordering},
@@ -12,7 +6,6 @@ use std::{
 use futures::{StreamExt, channel::mpsc};
 use gpui::App;
 
-/// True once an SNI host accepted our item (the close button may then hide).
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
 pub fn running() -> bool {
@@ -24,7 +17,6 @@ enum Cmd {
     Quit,
 }
 
-/// Starts the tray icon on a helper thread; menu clicks come back to the UI thread.
 pub fn spawn(cx: &mut App) {
     if !cfg!(target_os = "linux") || std::env::var_os("PHOENIX_NO_TRAY").is_some() {
         return;
@@ -61,7 +53,6 @@ pub fn spawn(cx: &mut App) {
     .detach();
 }
 
-/// App icon as SNI `IconPixmap` (ARGB32, network byte order).
 fn pixmap() -> Vec<(i32, i32, Vec<u8>)> {
     let Ok(img) = image::load_from_memory_with_format(crate::assets::APP_ICON_PNG, image::ImageFormat::Png) else {
         return Vec::new();

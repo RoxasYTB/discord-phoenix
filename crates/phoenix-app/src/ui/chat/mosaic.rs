@@ -1,10 +1,3 @@
-//! Media mosaic: several image/video attachments of one message laid out in the
-//! client's grids (`oneByTwoGrid_`, `twoByTwoGrid_`, `threeByThreeGrid_` …).
-//!
-//! Layouts per item count (vanilla pins-list dump + css `*_idVBIj`):
-//! 2 → 1×2, 3 → solo + 2×1 column, 4 → 2×2, 5 → 1×2 + 3, 6 → 3×3 (6),
-//! 7 → 1 + 3×3 (6), 8 → 1×2 + 3×3 (6), 9 → 3×3, 10 → 1 + 3×3 (9).
-
 use gpui::{AnyElement, App, IntoElement, ParentElement, Styled, div, img, prelude::*};
 
 use crate::{
@@ -13,16 +6,11 @@ use crate::{
     theme::{ca, z},
 };
 
-/// visualMediaItemContainer_ max-width 550px.
 const MAX_W: f32 = 550.;
-/// oneByTwoGrid_ / twoByTwoGrid_ / threeByThreeGrid_ grid-gap 4px.
 const GAP: f32 = 4.;
-/// visualMediaItemContainer_ border-radius 8px (outer corners).
 const OUTER_R: f32 = 8.;
-/// mosaicItemMediaMosaic_ border-radius 2px (inner corners).
 const INNER_R: f32 = 2.;
 
-/// Image or video attachment that takes part in the mosaic.
 pub fn is_visual(a: &Attachment) -> bool {
     matches!(a.kind, AttachmentKind::Image | AttachmentKind::Video) && super::attach::loadable(&a.url)
 }
@@ -42,7 +30,6 @@ fn radius(outer: bool) -> gpui::Pixels {
 fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
     let key = a.url.clone();
     let spoiler = a.is_spoiler() && !media::is_revealed(&key, cx);
-    // Proxy asked for the largest cell size at 2x (the cell is at most 550×350).
     let src = if a.kind == AttachmentKind::Video { media::video_poster(&a.url, 1100, 700) } else { media::resized(&a.url, 1100, 700) };
     let viewer = media::ViewerImage {
         url: media::resized(&a.url, a.width.min(2048), a.height.min(2048)),
@@ -60,7 +47,6 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
     if let Some(cache) = media::lru::chat() {
         im = im.image_cache(&cache);
     }
-    // The id keeps the frame index of GIF / animated WebP uploads (media::anim_id).
     let im = im.id("frames");
     div()
         .relative()
@@ -69,7 +55,6 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
         .rounded_tr(radius(k.tr))
         .rounded_bl(radius(k.bl))
         .rounded_br(radius(k.br))
-        // `imageContainer_` --background-mod-normal (base-lower = chat background, invisible).
         .bg(crate::ui::chat::tk(crate::theme::generated::idx::BACKGROUND_MOD_NORMAL))
         .child(
             div()
@@ -77,7 +62,6 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
                 .size_full()
                 .cursor_pointer()
                 .child(
-                    // lazyImg_ object-fit cover
                     im.size_full()
                         .rounded_tl(radius(k.tl))
                         .rounded_tr(radius(k.tr))
@@ -115,15 +99,10 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
         })
 }
 
-/// A full-width box `1 / ar` as tall as it is wide, capped at `max_h`, keeping its
-/// width (CSS `width: 100%; aspect-ratio; max-height`). Taffy narrows a box whose
-/// aspect-ratio height hits max-height (three squares came out 525 instead of 566
-/// wide), so the height comes from a percentage top padding instead.
 fn ratio_box(ar: f32, max_h: f32) -> gpui::Div {
     div().relative().w_full().max_h(z(max_h)).overflow_hidden().child(div().w_full().pt(gpui::relative(1. / ar.max(0.01))))
 }
 
-/// Width/height of the tallest item (min aspect), so a row is as tall as Discord's.
 fn row_aspect(items: &[&Attachment]) -> f32 {
     if items.iter().any(|a| a.width == 0 || a.height == 0) {
         return 1.;
@@ -131,7 +110,6 @@ fn row_aspect(items: &[&Attachment]) -> f32 {
     items.iter().map(|a| a.width as f32 / a.height as f32).fold(f32::INFINITY, f32::min).clamp(0.25, 4.)
 }
 
-/// Row shapes (top to bottom) for `n` items.
 fn rows(n: usize) -> Vec<Row> {
     use Row::*;
     match n {
@@ -150,15 +128,10 @@ fn rows(n: usize) -> Vec<Row> {
 
 #[derive(Clone, Copy, PartialEq)]
 enum Row {
-    /// oneByOneGridMosaic_: full width, max-height 280px.
     One,
-    /// oneByTwoGrid_: two oneByTwoGridItem_ (flex 1), max-height 280px.
     Two,
-    /// oneByTwoLayoutThreeGrid_: oneByTwoSoloItem_ (flex 2) + twoByOneGrid_ column, max-height 350px.
     Three,
-    /// twoByTwoGrid_: 2 columns × 2 rows, max-height 350px.
     Four,
-    /// threeByThreeGrid_: 3 columns, square cells (aspect-ratio 1/1).
     Grid(usize),
 }
 
@@ -174,14 +147,10 @@ impl Row {
     }
 }
 
-/// Mosaic for 2..=10 visual attachments (extra items beyond 10 are dropped, like the client's cap).
 pub fn render(items: &[&Attachment], cx: &App) -> AnyElement {
     grid(items, MAX_W, cx).mt(z(4.)).into_any_element()
 }
 
-/// The mosaic without its top margin, at most `max_w` wide: a Components V2 media
-/// gallery (`visualMediaItemContainer_.isInAppComponentsV2_` max-width 600px) is
-/// spaced by its container's gap.
 pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
     let items = &items[..items.len().min(10)];
     let shape = rows(items.len());
@@ -198,7 +167,6 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                 ratio_box(row_aspect(its), 280.).child(cell(its[0], k, cx).absolute().inset_0()).into_any_element()
             }
             Row::Two => {
-                // oneByTwoGrid_idVBIj: two square 1:1 cells (measured live 2026-11-24: 550x273, 273x273 per cell), max-height 280px.
                 ratio_box(2., 280.)
                     .child(
                         div()
@@ -215,11 +183,10 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
             Row::Three => ratio_box(row_aspect(&its[..1]) * 1.5, 350.)
                 .child(div().absolute().inset_0().flex().flex_row().gap(z(GAP)).child({
                     let mut solo = cell(its[0], Corners { tl: true, bl: true, ..Default::default() }, cx).flex_basis(gpui::relative(0.)).min_w_0().h_full();
-                    solo.style().flex_grow = Some(2.); // oneByTwoSoloItem_ flex 2
+                    solo.style().flex_grow = Some(2.);
                     solo
                 })
                 .child(
-                    // oneByTwoDuoItem_ > twoByOneGrid_: column, gap 4px, twoByOneGridItem_ flex 1.
                     div()
                         .flex_1()
                         .min_w_0()
@@ -238,7 +205,6 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                 .gap(z(GAP))
                 .children(its.iter().enumerate().map(|(i, a)| {
                     let k = Corners { tl: i == 0, tr: i == 1, bl: i == 2, br: i == 3 };
-                    // (350 - gap) / 2 per row
                     cell(a, k, cx).w_full().aspect_ratio(row_aspect(its)).max_h(z(173.))
                 }))
                 .into_any_element(),

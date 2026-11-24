@@ -24,7 +24,6 @@ fn ready_builds_guilds_and_dms() {
     assert_eq!(d.me.display_name.as_ref(), "Phoenix");
     assert!(d.guilds.iter().any(|g| g.name.as_ref() == "Rustaceans"));
     assert_eq!(d.dm_channels.len(), 2);
-    // Newest DM first.
     assert_eq!(d.dm_channels[0].id, Id(900000000000000001));
     assert!(d.dm_channels.iter().all(|c| c.guild.is_none() && !c.voice_users.is_empty()));
     let me = &d.users.iter().find(|u| u.id == d.me.id).unwrap().avatar;
@@ -40,7 +39,6 @@ fn message_create_maps() {
     let out = a.map(&cache, &e);
     let m = out.iter().find_map(|x| match x { AppEvent::MessageCreate(m) => Some(m), _ => None }).unwrap();
     assert_eq!(m.id, Id(700000000000000051));
-    // Sizing (?width=assert!(m.attachments[0].is_image && m.attachments[0].url.contains("width="));height=) is now applied at render time by `media`, so the stored URL is the raw proxy URL.
     assert!(m.attachments[0].is_image && !m.attachments[0].url.is_empty());
     assert!(out.iter().any(|x| matches!(x, AppEvent::Users(u) if u.iter().any(|u| u.name.as_ref() == "bob"))));
 }
@@ -53,7 +51,6 @@ fn member_list_update_maps() {
     cache.apply(&e);
     let out = a.map(&cache, &e);
     let ms = out.iter().find_map(|x| match x { AppEvent::GuildMembers { members, .. } => Some(members), _ => None }).unwrap();
-    // The synced member, plus my own member (READY merged_members) for my server nick.
     assert_eq!(ms[0].presence, model::Presence::Idle);
     assert!(ms.len() == 1 || (ms.len() == 2 && ms[1].user == Id(r.user.id.0)));
 }
@@ -63,7 +60,6 @@ fn read_state_and_proto_order() {
     let rs = serde_json::json!({"entries": [{"id": "5", "last_message_id": "10", "mention_count": 2}]});
     let m = parse_read_state(Some(&rs));
     assert_eq!(m[&5], ReadMark { last_read: 10, mentions: 2 });
-    // field 14 { field 1 (folder) { field 1 packed fixed64 [7, 3] } }
     let mut folder = vec![0x0a, 16];
     folder.extend(7u64.to_le_bytes());
     folder.extend(3u64.to_le_bytes());
@@ -84,11 +80,9 @@ fn guild_resource_channels_are_listed_but_not_unread() {
     );
     cache.apply(&parse_dispatch("CHANNEL_CREATE", &raw));
     let mut prefs = Prefs::from_ready(&r);
-    // Listed (client shows resource channels outside opt-in mode), never unread.
     let chs = guild_channels(&cache, g, &prefs.ctx());
     let c = chs.iter().find(|c| c.id == Id(700000000000000077)).expect("resource channel listed");
     assert!(!c.unread && c.mentions == 0);
-    // Opt-in "browse channels" mode hides them.
     prefs.mutes.opt_in.insert(g.0);
     let chs = guild_channels(&cache, g, &prefs.ctx());
     assert!(!chs.iter().any(|c| c.id == Id(700000000000000077)));
@@ -114,9 +108,6 @@ fn opt_in_channel_overrides_are_followed() {
     assert!(!m.opted_in.contains(&10));
 }
 
-/// Live 2026-11-24: Phoenix opened the guild's first channel (staff only), then the
-/// one the user had open; the first channel's SYNC landed last and the staff list
-/// (6 members) replaced the 44-member one. Lists now go by the channel's list id.
 #[test]
 fn late_sync_of_the_previous_channel_is_not_shown() {
     let (cache, r) = ready_cache();
@@ -143,21 +134,16 @@ fn late_sync_of_the_previous_channel_is_not_shown() {
             _ => None,
         })
     };
-    // Staff channel first, then the open one: its id is computed from the overwrites.
     a.show_list(&cache, api::Snowflake(700000000000000082));
     assert!(a.show_list(&cache, api::Snowflake(700000000000000081)).is_empty());
     let open = a.map(&cache, &sync("everyone", "200000000000000011"));
     assert_eq!(rows_of(&open), Some(vec![200000000000000011]));
-    // The staff list's SYNC arrives after: kept, not shown.
     let late = a.map(&cache, &sync("1834083668", "200000000000000012"));
     assert_eq!(rows_of(&late), None);
-    // Opening the staff channel again shows its list at once.
     let back = a.show_list(&cache, api::Snowflake(700000000000000082));
     assert_eq!(rows_of(&back), Some(vec![200000000000000012]));
 }
 
-/// The client now flags spoilers with IS_SPOILER (8) and keeps the name; old
-/// uploads use the SPOILER_ prefix. Both are hidden.
 #[test]
 fn attachment_spoilers_from_flag_or_prefix() {
     let m: phoenix_api::models::Message = serde_json::from_value(serde_json::json!({

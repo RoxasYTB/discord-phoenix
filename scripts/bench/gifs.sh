@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Decoded-memory bench for a channel of 20 Tenor gifs: full gif (AAAAC),
-# mediumgif (AAAAd) and tinygif (AAAAM). Downloads to a temp dir.
-# usage: scripts/bench/gifs.sh [dir-with-ids.txt]   (ids.txt lines: <11-char id>/<slug>.)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 dir=${1:-$(mktemp -d)}

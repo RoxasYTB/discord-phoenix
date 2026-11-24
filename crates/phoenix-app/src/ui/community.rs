@@ -1,13 +1,3 @@
-//! "Channels & Roles" page (sidebar row of onboarding guilds; client route
-//! `/channels/{g}/customize-community`). Values from the live client (dump
-//! vanilla-channels-roles): header container_ybUK7Z (icon 32/20, body-md/medium
-//! title); tabBar_xTP3zy margin 32 32 0, gap 24, items padding-bottom 16 with a
-//! --text-brand selected tab; scroller padding 32 32 0; pageBody_ padding-right
-//! 16; prompt_ cards (1px --border-subtle, radius 8, --background-surface-high,
-//! padding 16) with a 2-column promptOptions_ grid (gap 8) of optionButton_
-//! (radius 12, padding 12 16, 22px emoji + margin 12, body-md/medium title,
-//! body-xs/normal description). Read-only: options are shown, never answered.
-
 use gpui::{AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*, px};
 use gpui_component::input::{Input, InputEvent, InputState};
 
@@ -22,20 +12,15 @@ use crate::{
 struct Slot(Option<Page>);
 impl gpui::Global for Slot {}
 
-/// Browse Channels search field: (guild, input). Local filter only. The
-/// subscription (re-render on each keystroke) lives as long as the field.
 struct Search(Id, Entity<InputState>, #[allow(dead_code)] gpui::Subscription);
 impl gpui::Global for Search {}
 
 struct Page {
     guild: Id,
-    /// Channel selected when the page opened: selecting another one closes it.
     from: Option<Id>,
     prompts: Option<Vec<OnboardingPrompt>>,
     error: Option<SharedString>,
-    /// "Browse Channels" tab selected.
     browse: bool,
-    /// Its "Choose your channels" intro card was dismissed.
     intro_closed: bool,
 }
 
@@ -43,7 +28,6 @@ fn t(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// The page shown for the selected guild, if open.
 pub fn is_open(app: &PhoenixApp, cx: &App) -> bool {
     cx.try_global::<Slot>().and_then(|s| s.0.as_ref()).is_some_and(|p| Some(p.guild) == app.selected_guild && p.from == app.selected_channel)
 }
@@ -56,7 +40,6 @@ pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
     open_tab(app, guild, false, cx);
 }
 
-/// Opens the page on the Customize (`browse == false`) or the Browse Channels tab.
 pub fn open_tab(app: &mut PhoenixApp, guild: Id, browse: bool, cx: &mut Context<PhoenixApp>) {
     crate::ui::guide::close(cx);
     cx.set_global(Slot(Some(Page { guild, from: app.selected_channel, prompts: None, error: None, browse, intro_closed: false })));
@@ -85,8 +68,6 @@ fn emoji_token(o: &OnboardingOption) -> Option<String> {
 }
 
 fn option(o: &OnboardingOption) -> gpui::Div {
-    // optionButtonWrapper_87WSWY: 1px --border-subtle, radius 12, rgba(151,151,159,.08)
-    // (--control-secondary-background-default at 8%: --background-mod-subtle)
     div()
         .rounded(z(12.))
         .border_1()
@@ -94,7 +75,6 @@ fn option(o: &OnboardingOption) -> gpui::Div {
         .bg(t(idx::BACKGROUND_MOD_SUBTLE))
         .hover(|s| s.bg(t(idx::BACKGROUND_MOD_NORMAL)))
         .cursor_pointer()
-        // optionButton_87WSWY: padding 12 16
         .py(z(12.))
         .px(z(16.))
         .flex()
@@ -121,7 +101,6 @@ fn option(o: &OnboardingOption) -> gpui::Div {
 }
 
 fn prompt(p: &OnboardingPrompt) -> gpui::Div {
-    // promptOptions_pHGfKY: 2 equal columns, gap 8
     let mut grid = div().mt(z(16.)).flex().flex_col().gap(z(8.));
     for pair in p.options.chunks(2) {
         let mut row = div().flex().gap(z(8.));
@@ -166,16 +145,10 @@ fn update_page(cx: &mut App, f: impl FnOnce(&mut Page)) {
     }
 }
 
-/// Browse Channels groups in sidebar order: channels without a category first,
-/// then each category with its channels (`None` = no category header).
 fn browse_groups(app: &PhoenixApp, guild: Id) -> Vec<(Option<Id>, Vec<Id>)> {
     browse_groups_matching(app, guild, "")
 }
 
-/// [`browse_groups`] keeping the channels whose name contains `query`
-/// (case-insensitive; empty = all). Like the client (checked live 2026-11-24 with
-/// "general"), a category name alone matches nothing: its header shows only above
-/// matching channels.
 fn browse_groups_matching(app: &PhoenixApp, guild: Id, query: &str) -> Vec<(Option<Id>, Vec<Id>)> {
     let q = query.trim().to_lowercase();
     let hit = |id: Option<Id>| id.and_then(|id| app.channels.get(&id)).is_some_and(|c| c.name.to_lowercase().contains(&q));
@@ -202,15 +175,9 @@ fn browse_groups_matching(app: &PhoenixApp, guild: Id, query: &str) -> Vec<(Opti
     out
 }
 
-/// "Browse Channels" tab (dumps/vanilla-browse-channels, 2026-11-24). Read-only:
-/// the follow switches and checkboxes show the READY `OPT_IN_ENABLED` overrides and
-/// never change them.
 fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>, input: Option<Entity<InputState>>, cx: &Context<PhoenixApp>) -> AnyElement {
     let now = chrono::Utc::now().timestamp();
     let opted = |id: Id| app.backend.channel_opted_in(id);
-    // header_fTKmdS: margin 0 24 20 8 inside the 8px scroller padding; the search field
-    // (container_0PLWhS md) is 40 high, radius 8, 1px --input-border-default,
-    // --input-background-default, 30px magnifier box, body-md placeholder.
     let search = div()
         .mt(z(16.))
         .ml(z(16.))
@@ -226,14 +193,12 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
         .flex()
         .items_center()
         .gap(z(4.))
-        // icon_0PLWhS: 16px magnifier in a 30px box (vanilla-browse-channels-noresult #1030).
         .child(div().size(z(30.)).flex().items_center().justify_center().child(
             gpui::svg().path(crate::icons::path("search")).size(z(16.)).flex_none().text_color(t(idx::TEXT_DEFAULT)),
         ))
         .when_some(input.clone(), |d, i| {
             d.child(div().flex_1().min_w_0().child(Input::new(&i).appearance(false).bordered(false).pl(z(0.)).text_size(z(16.)).line_height(z(20.))))
         })
-        // clearButton_0PLWhS (#1033): 30px, 16px cross, shown while the field has text.
         .when_some(input.filter(|i| !i.read(cx).value().is_empty()), |d, i| {
             d.child(
                 div()
@@ -252,12 +217,8 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
                     })),
             )
         });
-    // browser_fTKmdS starts 8px in, its content_ adds 8 each side, then a 16px scrollbar gutter:
-    // rows span page-left + 16 to page-right - 32 like the search field.
     let mut list = div().pl(z(16.)).pr(z(8.)).pb(z(4.)).flex().flex_col();
     if !page.intro_closed {
-        // container_oQmK1h: padding 16, margin-bottom 24, radius 8, heading-lg/semibold
-        // title (mb 8), body-md text, tip with a semibold lead (mt 4), 24px close icon.
         list = list.child(
             div()
                 .mb(z(24.))
@@ -304,8 +265,6 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
     for (cat, ids) in groups {
         let followed = cat.and_then(opted).unwrap_or(false);
         if let Some(cat) = cat.and_then(|c| app.channels.get(&c)) {
-            // categoryRow_kU9idL: padding 20 0 10, body-lg/medium 20/24 --text-strong;
-            // "Follow Category" body-md/medium + 48x24 switch, 24px apart.
             list = list.child(
                 div()
                     .pt(z(20.))
@@ -334,14 +293,10 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
             }
             if let Some(topic) = ch.topic.clone() {
                 if last.is_some() {
-                    // subtitleSeparator: 4px dot, --border-subtle, margin 0 8
                     sub = sub.child(div().flex_none().mx(z(8.)).size(z(4.)).rounded(z(4.)).bg(t(idx::BORDER_SUBTLE)));
                 }
                 sub = sub.child(div().flex_1().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(topic.lines().next().unwrap_or("").to_owned().into(), 12.)));
             }
-            // channelRow_kU9idL: padding 10 16, 1px --border-subtle sides and top (bottom on the
-            // last), radius 8 8 0 0 / 0 0 8 8; name body-md/medium, --text-muted while the
-            // category is followed (row disabled_), icon 20 --channel-icon, gap 10.
             let mut row = div()
                 .py(z(10.))
                 .px(z(16.))
@@ -381,8 +336,6 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
                         )
                         .when(last.is_some() || ch.topic.is_some(), |d| d.child(sub)),
                 );
-            // A followed category locks its channels: the checkbox (checkboxOption_vTUVyc
-            // in a disabled_ row) drops to opacity .5 with a not-allowed cursor.
             row = row.child(checkbox(on).when(followed, |d| d.opacity(0.5).cursor(gpui::CursorStyle::OperationNotAllowed)));
             list = list.child(row);
         }
@@ -398,14 +351,6 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
         .into_any_element()
 }
 
-/// "My profile" column of the Customize tab (vanilla-channels-roles #1166–#1198):
-/// 288 wide beside the questions (scroller gap 16), padding-bottom 32;
-/// heading-sm/semibold title, body-xs --text-muted subtitle; profileCard_ margin-top
-/// 16, padding 16, radius 8 (black on onyx: a base background, ⚠ which one); 80px
-/// round avatar; display name body-lg/medium 20/24 --text-strong (margin 16 0 4);
-/// bio body-sm 14/18 --text-muted; separator 1px --border-subtle (margin 16 0);
-/// "Roles" 14/500 --text-muted + 8; role pills (padding 4 8, gap 4, radius 16,
-/// --background-mod-normal, 8px colour dot, body-xs/medium --text-strong), gap 4.
 fn profile_column(app: &PhoenixApp, guild: Id) -> gpui::Div {
     let me = app.me.id;
     let info = crate::ui::profile::info(app, me, Some(guild));
@@ -422,7 +367,6 @@ fn profile_column(app: &PhoenixApp, guild: Id) -> gpui::Div {
                 .items_center()
                 .gap(z(4.))
                 .min_w_0()
-                // Roles without a colour use the default role grey (#99aab5 in the dump).
                 .child(div().size(z(8.)).flex_none().rounded_full().bg(c(r.color.unwrap_or(0x99aab5))))
                 .child(
                     div()
@@ -472,7 +416,6 @@ fn profile_column(app: &PhoenixApp, guild: Id) -> gpui::Div {
         .child(card)
 }
 
-/// The guild profile of the current user (bio, nick, roles), fetched once per guild.
 fn ensure_my_profile(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
     thread_local!(static ASKED: std::cell::RefCell<std::collections::HashSet<Id>> = Default::default());
     let me = app.me.id;
@@ -490,8 +433,6 @@ fn ensure_my_profile(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) 
     .detach();
 }
 
-/// checkboxIndicator_vTUVyc (20px, radius 4, 1px border): selected
-/// --checkbox-background/border-selected-default with the white check.
 fn checkbox(on: bool) -> gpui::Div {
     let (bg, border) = if on {
         (idx::CHECKBOX_BACKGROUND_SELECTED_DEFAULT, idx::CHECKBOX_BORDER_SELECTED_DEFAULT)
@@ -508,11 +449,9 @@ fn checkbox(on: bool) -> gpui::Div {
         .flex()
         .items_center()
         .justify_center()
-        // checkmark_vTUVyc: 18px inside the 1px border.
         .when(on, |d| d.child(gpui::svg().path(crate::icons::path("check")).size(z(18.)).text_color(t(idx::CHECKBOX_ICON_ACTIVE))))
 }
 
-/// The Browse Channels search input of `guild`, created on first use.
 fn search_input(guild: Id, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Entity<InputState> {
     if let Some(s) = cx.try_global::<Search>().filter(|s| s.0 == guild) {
         return s.1.clone();
@@ -566,7 +505,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .child(crate::t!("guild.top.channels_roles")),
         );
     let browse = page.browse;
-    // The tab badge counts every channel; the list follows the search.
     let count: usize = browse_groups(app, page.guild).iter().map(|(_, v)| v.len()).sum();
     let channels = browse_groups_matching(app, page.guild, &query);
     let tab = |id: &'static str, label: SharedString, on: bool, to_browse: bool| {
@@ -597,8 +535,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .border_b_1()
         .border_color(t(idx::BORDER_SUBTLE))
         .child(tab("cr-tab-customize", crate::t!("community.customize"), !browse, false))
-        // numberBadge_xTP3zy (vanilla-browse-channels #1022): body-xs/semibold 12/16, round,
-        // --badge-secondary-background / -text, 22x16 for two digits.
         .child(tab("cr-tab-browse", crate::t!("community.browse"), browse, true).child(
             div()
                 .h(z(16.))
@@ -655,7 +591,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             .bg(t(idx::BACKGROUND_BASE_LOWER))
             .child(header)
             .child(tabs)
-            // scroller_pHGfKY: padding 32 32 0, gap 16; pageBody_ (727 + padding-right 16) then the 288px profile column.
             .child(
                 div()
                     .id("community-scroll")

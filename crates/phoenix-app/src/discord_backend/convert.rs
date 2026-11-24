@@ -1,8 +1,3 @@
-//! Pure conversion from `phoenix-api` objects/events to the UI model.
-//!
-//! Nothing here touches the network, so it is unit-tested with the gateway
-//! fixtures from `phoenix-api/tests/fixtures`.
-
 use std::collections::{HashMap, HashSet};
 
 use base64::Engine;
@@ -19,9 +14,7 @@ use crate::{
     model::{self, Id},
 };
 
-/// Avatar size requested from the CDN (largest avatar drawn is 40px, x2 for HiDPI).
 pub const AVATAR_SIZE: u32 = 128;
-/// Guild icons are drawn at 48px.
 pub const ICON_SIZE: u32 = 96;
 
 pub fn id(s: api::Snowflake) -> Id {
@@ -32,14 +25,12 @@ pub fn sf(i: Id) -> api::Snowflake {
     api::Snowflake(i.0)
 }
 
-// ------------------------------------------------------------------ users
-
 pub fn user(u: &api::User) -> model::User {
     let avatar = if u.avatar.is_some() {
         model::ImageRef::Url(u.avatar_url(AVATAR_SIZE).into())
     } else {
         let idx = if u.discriminator.is_empty() || u.discriminator == "0" {
-            (u.id.0 >> 22) % 6 // client: (id >> 22) % 6 for pomelo usernames
+            (u.id.0 >> 22) % 6
         } else {
             u.discriminator.parse::<u64>().unwrap_or(0) % 5
         };
@@ -59,25 +50,20 @@ pub fn user(u: &api::User) -> model::User {
     }
 }
 
-/// `avatar_decoration_data` → static collectibles-shop image (the client animates it only on hover).
-/// size=96 covers the 48px message and 38px member-list decoration at 2x.
 pub fn decoration_url(u: &api::User) -> Option<SharedString> {
     crate::ui::avatar_deco::url(u.avatar_decoration_data.as_ref()?)
 }
 
-/// Per-guild avatar (`member.avatar`): CDN `guilds/{g}/users/{u}/avatars/{hash}`.
 pub fn member_avatar_url(g: api::GuildId, u: api::UserId, m: &api::Member) -> Option<SharedString> {
     let h = m.avatar.as_deref().filter(|h| !h.is_empty())?;
     let ext = if h.starts_with("a_") { "gif" } else { "png" };
     Some(format!("https://cdn.discordapp.com/guilds/{}/users/{}/avatars/{h}.{ext}?size={AVATAR_SIZE}", g.0, u.0).into())
 }
 
-/// Per-guild avatar decoration (`member.avatar_decoration_data.asset`).
 pub fn member_decoration_url(m: &api::Member) -> Option<SharedString> {
     crate::ui::avatar_deco::url(m.avatar_decoration_data.as_ref()?)
 }
 
-/// Per-guild nameplate (`member.collectibles.nameplate`).
 pub fn member_nameplate(m: &api::Member) -> Option<(SharedString, Option<u32>)> {
     m.nameplate().map(|(url, pal)| (url.into(), pal.as_deref().and_then(crate::ui::nameplate::palette_dark)))
 }
@@ -91,10 +77,7 @@ pub fn presence(status: &str) -> model::Presence {
     }
 }
 
-/// Short activity line for the member list: custom status text, else
-/// "Playing X" style for the first activity.
 pub fn activity(activities: &[Value]) -> Option<SharedString> {
-    // HANG_STATUS (6) never shows as an activity line.
     let a = activities.iter().find(|a| a.get("type").and_then(Value::as_u64) != Some(6))?;
     let kind = a.get("type").and_then(Value::as_u64).unwrap_or(0);
     let name = a.get("name").and_then(Value::as_str).unwrap_or_default();
@@ -109,12 +92,6 @@ pub fn activity(activities: &[Value]) -> Option<SharedString> {
     (!text.trim().is_empty()).then(|| text.into())
 }
 
-// --------------------------------------------------------------- messages
-
-/// Embed media. Bots that upload the image with the message (`attachment://x.png`)
-/// often get no `width`/`height` on the embed: take them from the matching
-/// attachment, as the client sizes the box from it (a 750x225 banner was drawn in a
-/// 400x225 fallback box and cropped by `cover`).
 fn embed_media(m: &Option<api::EmbedMedia>, atts: &[api::Attachment]) -> Option<model::EmbedMedia> {
     let m = m.as_ref()?;
     let url = m.proxy_url.clone().filter(|u| u.starts_with("https://")).or_else(|| m.url.clone())?;
@@ -129,8 +106,6 @@ fn embed_media(m: &Option<api::EmbedMedia>, atts: &[api::Attachment]) -> Option<
     Some(model::EmbedMedia { url: url.into(), width: w, height: h })
 }
 
-/// A forward (`message_snapshots[0].message`) rendered as its snapshot: the outer message with
-/// the snapshot's content, attachments, embeds and edit time swapped in.
 fn forward_snapshot(m: &api::Message) -> Option<(api::Message, model::Forward)> {
     let snap = m.message_snapshots.as_ref()?.get(0)?.get("message")?;
     let mut v = serde_json::to_value(m).ok()?;
@@ -167,9 +142,6 @@ fn forward_snapshot(m: &api::Message) -> Option<(api::Message, model::Forward)> 
 }
 
 pub fn message(m: &api::Message) -> model::Message {
-    // THREAD_STARTER_MESSAGE (21): empty itself, the thread view shows the parent channel's
-    // message it references, as a normal message without its thread accessory (live
-    // sandbox thread, 2026-11-24: GET /channels/{thread}/messages starts with it).
     if m.kind == api::MessageType::ThreadStarterMessage
         && let Some(r) = &m.referenced_message
     {
@@ -269,8 +241,6 @@ pub fn message(m: &api::Message) -> model::Message {
                     size: a.size,
                     kind,
                     original: a.url.clone().into(),
-                    // IS_SPOILER (1 << 3): what the client sends now (`is_spoiler`), the
-                    // name keeps its spelling. Older uploads use the SPOILER_ prefix.
                     spoiler: a.flags & 8 != 0 || a.filename.starts_with("SPOILER_"),
                     description: a.description.clone().filter(|d| !d.is_empty()).map(Into::into),
                 }
@@ -368,7 +338,6 @@ fn message_kind(k: api::MessageType) -> model::MessageKind {
     }
 }
 
-/// Users referenced by a message (author, replied-to author, mentions).
 pub fn message_users(m: &api::Message, out: &mut Vec<model::User>) {
     if !m.author.username.is_empty() {
         out.push(user(&m.author));
@@ -379,9 +348,6 @@ pub fn message_users(m: &api::Message, out: &mut Vec<model::User>) {
     }
 }
 
-// ------------------------------------------------------------ read states
-
-/// Per-channel read marker from READY `read_state` (+ live acks).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ReadMark {
     pub last_read: u64,
@@ -407,7 +373,6 @@ pub fn parse_read_state(v: Option<&Value>) -> HashMap<u64, ReadMark> {
         _ => return out,
     };
     for e in entries {
-        // read_state_type 0 (or absent) = channel.
         if e.get("read_state_type").and_then(Value::as_u64).unwrap_or(0) != 0 {
             continue;
         }
@@ -419,25 +384,17 @@ pub fn parse_read_state(v: Option<&Value>) -> HashMap<u64, ReadMark> {
     out
 }
 
-/// Muted guilds and channels from READY `user_guild_settings`.
 #[derive(Default, Debug)]
 pub struct MuteSettings {
     pub guilds: HashSet<u64>,
     pub channels: HashSet<u64>,
-    /// Guilds with `suppress_everyone` / `suppress_roles` set: the client's
-    /// mention check (`isMentioned`) ignores @everyone / role pings there.
     pub suppress_everyone: HashSet<u64>,
     pub suppress_roles: HashSet<u64>,
-    /// Guilds with `flags & OPT_IN_CHANNELS_ON` (16384): "browse channels"
-    /// mode, where the client hides resource channels from the list.
     pub opt_in: HashSet<u64>,
-    /// Channels and categories whose override has `flags & OPT_IN_ENABLED`
-    /// (4096): followed in "Browse Channels".
     pub opted_in: HashSet<u64>,
 }
 
 impl MuteSettings {
-    /// Replace guild `g`'s settings with a live USER_GUILD_SETTINGS_UPDATE entry.
     pub fn apply_guild_entry(&mut self, g: u64, entry: &Value) {
         for set in [&mut self.guilds, &mut self.suppress_everyone, &mut self.suppress_roles, &mut self.opt_in] {
             set.remove(&g);
@@ -469,7 +426,6 @@ pub fn parse_mutes(v: Option<&Value>) -> MuteSettings {
         _ => return out,
     };
     for e in entries {
-        // Temporary mutes end at `mute_config.end_time` (client `tG`).
         let muted = crate::notifications::mute_now(e);
         if muted && let Some(g) = e.get("guild_id").and_then(snowflake_value) {
             out.guilds.insert(g);
@@ -500,9 +456,6 @@ pub fn parse_mutes(v: Option<&Value>) -> MuteSettings {
     out
 }
 
-// ------------------------------------------------------- guild folder order
-
-/// Minimal protobuf reader: enough to walk `PreloadedUserSettings`.
 struct Pb<'a>(&'a [u8]);
 
 impl<'a> Pb<'a> {
@@ -526,7 +479,6 @@ impl<'a> Pb<'a> {
         self.0 = b;
         Some(a)
     }
-    /// Next field as (number, wire type, payload for length-delimited / fixed64).
     fn field(&mut self) -> Option<(u64, u8, &'a [u8], u64)> {
         if self.0.is_empty() {
             return None;
@@ -560,8 +512,6 @@ fn fixed64s(wt: u8, payload: &[u8], scalar: u64, out: &mut Vec<u64>) {
     }
 }
 
-/// Guild ids in sidebar order from the base64 `user_settings_proto`
-/// (`PreloadedUserSettings.guild_folders` = field 14).
 pub fn guild_order_from_proto(b64: &str) -> Option<Vec<u64>> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(b64.trim()).ok()?;
     let mut top = Pb(&bytes);
@@ -591,7 +541,6 @@ pub fn guild_order_from_proto(b64: &str) -> Option<Vec<u64>> {
     None
 }
 
-/// Legacy JSON `user_settings.guild_folders` / `guild_positions`.
 pub fn guild_order_from_json(v: Option<&Value>) -> Option<Vec<u64>> {
     let v = v?;
     if let Some(Value::Array(folders)) = v.get("guild_folders") {
@@ -609,15 +558,11 @@ pub fn guild_order_from_json(v: Option<&Value>) -> Option<Vec<u64>> {
     (!ids.is_empty()).then_some(ids)
 }
 
-/// Order `guilds` like the user's sidebar. Guilds missing from the saved
-/// order (joined recently) go first, as in the official client.
 pub fn order_guilds(guilds: &mut [api::Snowflake], order: Option<&[u64]>) {
     let Some(order) = order else { return };
     let pos: HashMap<u64, usize> = order.iter().enumerate().map(|(i, g)| (*g, i + 1)).collect();
     guilds.sort_by_key(|g| pos.get(&g.0).copied().unwrap_or(0));
 }
-
-// ---------------------------------------------------------------- channels
 
 fn channel_kind(k: api::ChannelType) -> Option<model::ChannelKind> {
     use api::ChannelType as T;
@@ -632,7 +577,6 @@ fn channel_kind(k: api::ChannelType) -> Option<model::ChannelKind> {
     })
 }
 
-/// Everything needed to decorate channels with unread / mute state.
 pub struct ReadCtx<'a> {
     pub reads: &'a HashMap<u64, ReadMark>,
     pub mutes: &'a MuteSettings,
@@ -640,19 +584,13 @@ pub struct ReadCtx<'a> {
 
 impl ReadCtx<'_> {
     pub fn unread(&self, c: &api::Channel) -> (bool, u32) {
-        // GuildReadStateStore skips IS_GUILD_RESOURCE_CHANNEL for the guild's
-        // unread and mentions (the channel itself is still listed).
         if c.kind.is_voice() || c.kind == api::ChannelType::GuildCategory || c.is_guild_resource() {
             return (false, 0);
         }
         let last = c.last_message_id.map(|m| m.0).unwrap_or(0);
         match self.reads.get(&c.id.0) {
-            // `HAS_ONLY_SYSTEM_MESSAGES` (1 << 23) DMs (e.g. only "friend request
-            // accepted"): the official client shows no rail badge for them even
-            // with a server-side mention_count (live compare 2026-11-24).
             Some(r) if c.kind.is_private() && c.flags & (1 << 23) != 0 => (last > r.last_read, 0),
             Some(r) => (last > r.last_read, r.mentions),
-            // Never opened: only DMs count as unread.
             None => (c.kind.is_private() && last != 0, 0),
         }
     }
@@ -676,17 +614,11 @@ fn channel(c: &api::Channel, position: i32, rc: &ReadCtx, voice_users: Vec<Id>) 
     })
 }
 
-/// A guild's visible channels in sidebar order. `position` is rewritten to
-/// the display index so the UI can sort by it directly.
 pub fn guild_channels(cache: &Cache, guild: api::Snowflake, rc: &ReadCtx) -> Vec<model::Channel> {
-    // Without our own member object (roles) permissions can't be computed;
-    // show everything rather than nothing.
     let perms_known = cache.current_user().is_some_and(|me| cache.member(guild, me.id).is_some());
     let all: Vec<_> = cache
         .guild_channels(guild)
         .into_iter()
-        // Resource channels (flag 128) are listed unless the guild is in opt-in
-        // "browse channels" mode (client: optInEnabled && hideResourceChannels).
         .filter(|c| !c.kind.is_thread() && channel_kind(c.kind).is_some())
         .filter(|c| !c.is_guild_resource() || !rc.mutes.opt_in.contains(&guild.0))
         .filter(|c| !perms_known || cache.permissions_in(c.id).contains(api::Permissions::VIEW_CHANNEL))
@@ -708,13 +640,12 @@ pub fn guild_channels(cache: &Cache, guild: api::Snowflake, rc: &ReadCtx) -> Vec
     for cat in cats {
         let mut kids: Vec<_> = all.iter().filter(|c| c.parent_id == Some(cat.id) && c.kind != api::ChannelType::GuildCategory).collect();
         if kids.is_empty() {
-            continue; // Discord hides categories with no visible channel.
+            continue;
         }
         kids.sort_by_key(|c| key(c));
         ordered.push(cat);
         ordered.extend(kids.into_iter().map(|c| &**c));
     }
-    // Children of a category the user can't see: show them at the end.
     for c in &all {
         if let Some(p) = c.parent_id
             && c.kind != api::ChannelType::GuildCategory
@@ -731,8 +662,6 @@ pub fn guild_channels(cache: &Cache, guild: api::Snowflake, rc: &ReadCtx) -> Vec
         .collect()
 }
 
-/// DMs/group DMs, newest activity first. The UI shows the first entry of
-/// `voice_users` as the DM avatar, so the recipient goes there.
 pub fn dm_channel(c: &api::Channel, rc: &ReadCtx) -> Option<model::Channel> {
     let recip = c.recipient_user_ids().first().copied().map(id).into_iter().collect();
     let mut ch = channel(c, 0, rc, recip)?;
@@ -768,8 +697,6 @@ pub fn roles(g: &api::Guild) -> Vec<model::Role> {
         .collect()
 }
 
-/// `guild` plus the threads I joined: the client's GuildReadStateStore counts
-/// their unread / mentions too (unless the thread is muted).
 pub fn guild_with_threads(cache: &Cache, g: &api::Guild, channels: &[model::Channel], rc: &ReadCtx) -> model::Guild {
     let muted = rc.mutes.guilds.contains(&g.id.0);
     let mut out = guild(g, channels, muted);
@@ -787,8 +714,6 @@ pub fn guild_with_threads(cache: &Cache, g: &api::Guild, channels: &[model::Chan
 }
 
 pub fn guild(g: &api::Guild, channels: &[model::Channel], muted: bool) -> model::Guild {
-    // GuildReadStateStore: a channel counts for the guild's unread unless
-    // `isGuildOrCategoryOrChannelMuted` (its own mute or its category's).
     let muted_cats: HashSet<Id> = channels.iter().filter(|c| c.kind == model::ChannelKind::Category && c.muted).map(|c| c.id).collect();
     let visible = channels.iter().filter(|c| !c.muted && !c.parent.is_some_and(|p| muted_cats.contains(&p)));
     model::Guild {
@@ -810,13 +735,9 @@ pub fn guild(g: &api::Guild, channels: &[model::Channel], muted: bool) -> model:
     }
 }
 
-// -------------------------------------------------------------------- READY
-
 pub struct Prefs {
     pub reads: HashMap<u64, ReadMark>,
     pub mutes: MuteSettings,
-    /// Blocked users: the client never counts their mentions
-    /// (`isBlockedOrIgnoredForMessage`).
     pub blocked: HashSet<u64>,
 }
 
@@ -838,7 +759,6 @@ impl Prefs {
     }
 }
 
-/// Initial UI state. `cache` must already have applied `ready`.
 pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
     let rc = prefs.ctx();
     let me = cache.current_user().map(|u| user(&u)).unwrap_or_else(|| user(&ready.user));
@@ -851,7 +771,6 @@ pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
     ));
 
     let mut ids: Vec<api::Snowflake> = cache.guilds().iter().filter(|g| !g.unavailable).map(|g| g.id).collect();
-    // Keep READY order as the base (cache order is a HashMap).
     let ready_pos: HashMap<u64, usize> = ready.guilds.iter().enumerate().map(|(i, g)| (g.id.0, i)).collect();
     ids.sort_by_key(|g| ready_pos.get(&g.0).copied().unwrap_or(usize::MAX));
     let order = ready
@@ -894,10 +813,6 @@ pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
     }
 }
 
-// --------------------------------------------------------- live event map
-
-/// One lazy member list (op 37 / GUILD_MEMBER_LIST_UPDATE). A guild has one
-/// per set of channel view overwrites (see `member_list_id`).
 #[derive(Default)]
 struct MemberList {
     items: Vec<Option<MemberListItem>>,
@@ -978,20 +893,12 @@ impl MemberList {
     }
 }
 
-/// Stateful translation of gateway events (after they were applied to the
-/// cache) into UI events.
 pub struct Adapter {
     pub me: api::Snowflake,
     pub prefs: Prefs,
-    /// Lazy lists per guild, by list id.
     lists: HashMap<u64, HashMap<String, MemberList>>,
-    /// Per guild, the list id of the open channel: only that list reaches the UI.
-    /// A SYNC for the channel open before can land after the new one's.
     shown: HashMap<u64, String>,
-    /// Members fetched by op 8 (authors / reply targets outside the synced list range).
     chunked: HashMap<u64, Vec<api::Snowflake>>,
-    /// Last known status per user (PRESENCE_UPDATE, READY_SUPPLEMENTAL, op-8 chunk
-    /// presences) so members outside the synced list don't come out offline.
     statuses: HashMap<u64, model::Presence>,
 }
 
@@ -1000,9 +907,6 @@ impl Adapter {
         Self { me, prefs, lists: HashMap::new(), shown: HashMap::new(), chunked: HashMap::new(), statuses: HashMap::new() }
     }
 
-    /// Client `isMentioned` for `m`: a direct mention, @everyone unless the
-    /// guild suppresses it, or a role of mine unless the guild suppresses
-    /// roles; never for my own or a blocked author's messages.
     pub fn mentions_me(&self, cache: &Cache, m: &api::Message) -> bool {
         if m.author.id == self.me || self.prefs.blocked.contains(&m.author.id.0) {
             return false;
@@ -1016,14 +920,11 @@ impl Adapter {
                 && m.guild_id.and_then(|g| cache.member(g, self.me)).is_some_and(|me| m.mention_roles.iter().any(|r| me.roles.contains(r))))
     }
 
-    /// The client's read-state rebuild: once the latest page reaches back to
-    /// the last-read message, the mention count is recounted from the loaded
-    /// messages after it. Returns the guild's new badge state when it changed.
     pub fn recount_mentions(&mut self, cache: &Cache, channel: u64, latest_page: &[api::Message]) -> Option<AppEvent> {
         let last_read = self.prefs.reads.get(&channel).map(|r| r.last_read)?;
         let oldest = latest_page.iter().map(|m| m.id.0).min()?;
         if oldest > last_read {
-            return None; // unread messages beyond the page: keep the server count
+            return None;
         }
         let n = latest_page.iter().filter(|m| m.id.0 > last_read && self.mentions_me(cache, m)).count() as u32;
         let e = self.prefs.reads.entry(channel).or_default();
@@ -1038,7 +939,6 @@ impl Adapter {
         Some(AppEvent::GuildUnread { guild: mg.id, unread: mg.unread, mentions: mg.mentions })
     }
 
-    /// Mark a channel read up to `msg` (local state; the REST ack is separate).
     pub fn mark_read(&mut self, channel: u64, msg: u64) {
         let e = self.prefs.reads.entry(channel).or_default();
         e.last_read = e.last_read.max(msg);
@@ -1059,11 +959,10 @@ impl Adapter {
         let has_full_sync = l.ops.iter().any(|o| matches!(o, MemberListOp::Sync { range, .. } if range[0] == 0));
         let lists = self.lists.entry(l.guild_id.0).or_default();
         if !lists.contains_key(&l.id) && !has_full_sync {
-            return; // Update for a list we never synced.
+            return;
         }
         let list = lists.entry(l.id.clone()).or_default();
         list.apply(&l.ops);
-        // Group rows in ops may omit `count`; the top-level `groups` array is authoritative.
         for it in list.items.iter_mut().flatten() {
             if let MemberListItem::Group { id: gid, count } = it
                 && let Some(g) = l.groups.iter().find(|g| &g.id == gid)
@@ -1071,25 +970,21 @@ impl Adapter {
                 *count = g.count;
             }
         }
-        // Rows past the synced ranges are placeholders, so the sidebar can scroll to them.
         let total: usize = l.groups.iter().filter(|g| g.count > 0).map(|g| g.count as usize + 1).sum();
         if total > 0 {
             list.items.resize(total, None);
         }
         let shown = self.shown.entry(l.guild_id.0).or_insert_with(|| l.id.clone());
         if *shown != l.id {
-            return; // Another channel's list: kept for when it opens again.
+            return;
         }
         self.emit_list(cache, l.guild_id, out);
     }
 
-    /// The open channel's list changes to `channel`'s: show it at once when it is
-    /// already synced (the SYNC asked for by the new op 37 refreshes it).
     pub fn show_list(&mut self, cache: &Cache, channel: api::ChannelId) -> Vec<AppEvent> {
         let mut out = Vec::new();
         let Some(g) = cache.channel(channel).and_then(|c| c.guild_id) else { return out };
         let Some(list_id) = super::member_list_id::for_channel(cache, channel) else {
-            // Unknown overwrites (thread parent not cached): the next SYNC wins.
             self.shown.remove(&g.0);
             return out;
         };
@@ -1112,21 +1007,13 @@ impl Adapter {
         let Some(list) = self.shown_list(guild.0) else { return };
         let (rows, acts) = crate::presence::list_rows(list.items.iter());
         self.emit_members(cache, guild, out);
-        // Our own row comes with `activities: []` (observed 2026-11-24 while READY and
-        // SESSIONS_REPLACE carried the custom status): own activities come from the
-        // sessions only, else the user panel lost its custom status on every sync.
         let me = id(self.me);
         out.extend(acts.into_iter().filter(|(user, _)| *user != me).map(|(user, activities)| AppEvent::Activities { user, activities }));
         out.push(AppEvent::MemberListRows { guild: id(guild), rows });
     }
 
-    /// Synced list members + my own member + op-8 chunked members, as one `GuildMembers`.
     fn emit_members(&self, cache: &Cache, guild: api::GuildId, out: &mut Vec<AppEvent>) {
         let (mut members, users) = self.shown_list(guild.0).map(|l| l.members(guild)).unwrap_or_default();
-        // Own member (READY merged_members / GUILD_MEMBER_UPDATE) and members requested
-        // with op 8 so server nicks resolve in headers and reply previews even when the
-        // author is outside the synced list range.
-        // Voice users too: the channel list shows their server nick.
         let voice: Vec<api::Snowflake> = cache.voice_states(Some(guild)).iter().map(|v| v.user_id).collect();
         let extra = std::iter::once(self.me)
             .chain(self.chunked.get(&guild.0).into_iter().flatten().copied())
@@ -1166,8 +1053,6 @@ impl Adapter {
                 let mut users = Vec::new();
                 message_users(m, &mut users);
                 out.push(AppEvent::Users(users));
-                // Every DM message counts as a mention (client ReadStateStore:
-                // private channels bump mentionCount for each foreign message).
                 let mentioned = self.mentions_me(cache, m)
                     || (m.guild_id.is_none() && m.author.id != self.me && !self.prefs.blocked.contains(&m.author.id.0));
                 if m.author.id == self.me {
@@ -1176,8 +1061,6 @@ impl Adapter {
                     self.prefs.reads.entry(m.channel_id.0).or_default().mentions += 1;
                 }
                 out.push(AppEvent::MessageCreate(message(m)));
-                // The read state is authoritative (own messages from another client
-                // stay read, mentions include @everyone/roles): override the UI's guess.
                 if let Some(c) = cache.channel(m.channel_id)
                     && c.guild_id.is_some()
                 {
@@ -1194,7 +1077,6 @@ impl Adapter {
                     && let Some(c) = cache.channel(m.channel_id)
                     && let Some(dm) = dm_channel(&c, &self.prefs.ctx())
                 {
-                    // Moves the DM to the top of the list.
                     out.push(AppEvent::DmUpsert(dm));
                 }
             }
@@ -1243,7 +1125,6 @@ impl Adapter {
                 out.push(AppEvent::TypingStart { channel: id(t.channel_id), user: id(t.user_id), nick });
             }
             GatewayEvent::PresenceUpdate(p) => {
-                // Profile changed (avatar / names): the cache merged it.
                 if p.user.username.is_some()
                     && let Some(u) = cache.user(p.user.id)
                 {
@@ -1327,13 +1208,9 @@ impl Adapter {
                         roles: roles(&gg),
                     });
                 }
-                // GUILD_CREATE carries the voice states of a lazily sent guild:
-                // their rows need the mute / deafen flags too, not only the user.
                 out.extend(voice_flag_events(cache, Some(g.id)));
             }
             GatewayEvent::GuildUpdate(g) => {
-                // Name, icon, features, boosts: upsert the whole guild (the UI's
-                // GuildCreate replaces an existing entry in place).
                 if let Some(gg) = cache.guild(g.id) {
                     let chs = guild_channels(cache, g.id, &self.prefs.ctx());
                     out.push(AppEvent::GuildCreate {
@@ -1352,7 +1229,6 @@ impl Adapter {
                 if let Some(gg) = cache.guild(r.guild_id) {
                     out.push(AppEvent::GuildRoles { guild: id(r.guild_id), roles: roles(&gg) });
                 }
-                // Role changes can hide/show channels.
                 self.guild_state(cache, r.guild_id, &mut out);
             }
             GatewayEvent::GuildRoleDelete(r) => {
@@ -1367,7 +1243,6 @@ impl Adapter {
                 }
             }
             GatewayEvent::GuildMemberUpdate(m) => {
-                // Avatar / name changes of others reach us here (chat headers, voice rows).
                 if let Some(u) = &m.user {
                     out.push(AppEvent::Users(vec![user(u)]));
                 }
@@ -1397,8 +1272,6 @@ impl Adapter {
                 out.push(AppEvent::VoiceStateUpdate { channel: v.channel_id.map(id), user: id(v.user_id) });
                 out.push(AppEvent::VoiceFlags { user: id(v.user_id), flags: voice_flags(v) });
             }
-            // My sessions changed (status set from another client): the "all"
-            // pseudo-session holds the status every client shows for me.
             GatewayEvent::Unknown { name, data } if name == "SESSIONS_REPLACE" => {
                 let all = data.as_array().into_iter().flatten().find(|s| s.get("session_id").and_then(Value::as_str) == Some("all"));
                 if let Some(st) = all.and_then(|s| s.get("status")).and_then(Value::as_str) {
@@ -1406,12 +1279,10 @@ impl Adapter {
                     self.statuses.insert(self.me.0, p);
                     out.push(AppEvent::PresenceUpdate { user: id(self.me), presence: p });
                 }
-                // Custom status / games set elsewhere live in the same pseudo-session.
                 if let Some(acts) = all.and_then(|s| s.get("activities")).and_then(Value::as_array) {
                     out.push(AppEvent::Activities { user: id(self.me), activities: crate::presence::parse_activities(acts) });
                 }
             }
-            // Mute / suppress / opt-in changed from another client: one guild's entry.
             GatewayEvent::Unknown { name, data } if name == "USER_GUILD_SETTINGS_UPDATE" => {
                 if let Some(g) = data.get("guild_id").and_then(snowflake_value) {
                     self.prefs.mutes.apply_guild_entry(g, data);
@@ -1440,7 +1311,6 @@ mod tests;
 #[cfg(test)]
 mod live_tests;
 
-/// `available_tags` of a forum / media channel.
 pub fn forum_tags(c: &api::Channel) -> Vec<crate::commands::ForumTag> {
     c.available_tags
         .iter()
@@ -1457,9 +1327,6 @@ pub fn forum_tags(c: &api::Channel) -> Vec<crate::commands::ForumTag> {
         .collect()
 }
 
-/// `VoiceFlags` for every voice state the cache holds for `guild`: the
-/// channel list takes the users from the cache (`guild_channels`), and the
-/// flags store lives on the UI thread, so it is fed by events.
 pub fn voice_flag_events(cache: &Cache, guild: Option<api::Snowflake>) -> Vec<AppEvent> {
     cache
         .voice_states(guild)
@@ -1482,9 +1349,6 @@ fn voice_flags(v: &phoenix_api::models::VoiceState) -> crate::model::VoiceFlags 
     }
 }
 
-/// Own status (online/idle/dnd/invisible) for the user panel avatar dot:
-/// PreloadedUserSettings.status (11).status (1, StringValue .value 1), else
-/// the READY `sessions` "all" entry.
 pub fn self_status(r: &phoenix_api::gateway::events::Ready) -> Option<AppEvent> {
     let proto = r.user_settings_proto.as_deref().and_then(|b| base64::engine::general_purpose::STANDARD.decode(b.trim()).ok());
     let from_proto = proto.as_deref().and_then(|b| {
@@ -1501,25 +1365,18 @@ pub fn self_status(r: &phoenix_api::gateway::events::Ready) -> Option<AppEvent> 
     Some(AppEvent::PresenceUpdate { user: id(r.user.id), presence: presence(&status) })
 }
 
-/// Own activities (custom status, games) from READY `sessions`, which the
-/// gateway doesn't echo back as a PRESENCE_UPDATE: the user panel subtext
-/// shows the custom status from them (vanilla-guild-text user panel).
 pub fn self_activities(r: &phoenix_api::gateway::events::Ready) -> Option<AppEvent> {
-    // PreloadedUserSettings.status (11).custom_status (2).text (1).
     let proto = r.user_settings_proto.as_deref().and_then(|b| base64::engine::general_purpose::STANDARD.decode(b.trim()).ok());
     let from_proto = proto.as_deref().and_then(|b| {
         let st = super::nav::fields(b).into_iter().find(|f| f.0 == 11 && f.1 == 2)?.2;
         let cs = super::nav::fields(st).into_iter().find(|f| f.0 == 2 && f.1 == 2)?.2;
         let f = super::nav::fields(cs);
         let get = |n| f.iter().find(|x| x.0 == n && x.1 == 2).and_then(|x| std::str::from_utf8(x.2).ok()).filter(|t| !t.is_empty()).map(str::to_owned);
-        // CustomStatus: text (1), emoji_id (2), emoji_name (3).
         let (text, emoji) = (get(1), get(3));
         let emoji_id = f.iter().find(|x| x.0 == 2 && (x.1 == 1 || x.1 == 0)).map(|x| x.3).filter(|v| *v != 0);
         (text.is_some() || emoji.is_some()).then_some((text, emoji, emoji_id))
     });
     if let Some((text, emoji, emoji_id)) = from_proto {
-        // The proto has no `animated` flag: request the animated webp, which the CDN
-        // answers with the still image for a static emoji.
         let emoji = emoji.map(|e| match emoji_id {
             Some(i) => serde_json::json!({"name": e, "id": i.to_string(), "animated": true}),
             None => serde_json::json!({"name": e}),
@@ -1533,7 +1390,6 @@ pub fn self_activities(r: &phoenix_api::gateway::events::Ready) -> Option<AppEve
     Some(AppEvent::Activities { user: id(r.user.id), activities: crate::presence::parse_activities(acts) })
 }
 
-/// `member.joined_at` (ISO 8601) as unix seconds.
 pub(super) fn premium_unix(m: &api::Member) -> Option<i64> {
     m.premium_since.as_deref().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|d| d.timestamp())
 }
@@ -1542,9 +1398,6 @@ pub(super) fn joined_unix(m: &api::Member) -> Option<i64> {
     m.joined_at.as_deref().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|d| d.timestamp())
 }
 
-/// Names render in HTML with `white-space: normal`, which collapses runs of
-/// ASCII spaces / tabs / newlines into one space (a name like "!   Slyto"
-/// shows as "! Slyto"). GPUI keeps every space, so collapse them here.
 pub(crate) fn collapse_ws(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut sp = false;

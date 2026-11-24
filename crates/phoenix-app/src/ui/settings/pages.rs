@@ -1,22 +1,3 @@
-//! Declarative content of the settings pages, reproduced from the live 2026
-//! client (CDP outlines of each page, 2026-11-23): every page is a list of
-//! [`B`] blocks rendered with the client's control layout.
-//!
-//! Layout values (panel_nNq2Vb children):
-//! * category: heading-xl/medium 24/32 title, optional body-sm lead 4px
-//!   under it, then container_Gl6U0S rows (padding --space-xs/--space-sm,
-//!   margin negated) holding baseControlItem_FiiQ6I (padding/gap 12,
-//!   min-height 48, radius --radius-lg; `.clickable` hover
-//!   --interactive-background-hover).
-//! * categories are split by divider_ZaYWLb (1px, margin 50px 0).
-//! * legends: body-md/semibold 16/20 (30px box); keybind groups body-lg/medium 20/24.
-//! * key caps (key_dMUH0f): --background-mod-muted, 1px --border-strong,
-//!   radius 4, height 23, padding 3 6 4, 12/600 text, 3px apart.
-//!
-//! Settings with no backing preference are kept for the session only
-//! (`SettingsState::toggles` / `picks`) so the page behaves like the client
-//! without pretending to sync anything.
-
 use gpui::{AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
 use super::{AppTheme, LocalPrefs, Page, SettingsPatch, SyncedSettings, save, update_local};
@@ -29,20 +10,15 @@ use crate::{
 type Cx<'a> = Context<'a, PhoenixApp>;
 type Render = fn(&PhoenixApp, &mut Context<'_, PhoenixApp>) -> AnyElement;
 
-/// Where a switch reads/writes its value.
 #[derive(Clone, Copy)]
 pub enum Bind {
-    /// Session-only, with the client's default.
     Ui(bool),
     Local(fn(&LocalPrefs) -> bool, fn(&mut LocalPrefs, bool)),
     Synced(fn(&SyncedSettings) -> bool, fn(bool) -> SettingsPatch),
-    /// Synced through settings-proto ([`super::synced_map`] entry = the id).
     Proto,
-    /// Client-only, saved in `LocalPrefs::ui` under the id; client default.
     Pref(bool),
 }
 
-/// Where a radio group / select reads/writes its index.
 #[derive(Clone, Copy)]
 pub enum Pick {
     Ui(usize),
@@ -51,42 +27,33 @@ pub enum Pick {
     Pref(usize),
 }
 
-/// One block of a settings page. Strings are i18n keys ("" = none).
 pub enum B {
     Title(&'static str),
     Lead(&'static str),
     Legend(&'static str),
     Switch(&'static str, &'static str, &'static str, Bind),
-    /// Switch whose description is the "Sound preview" link.
     Sound(&'static str, &'static str),
     Radios(&'static str, &'static str, &'static str, &'static [(&'static str, &'static str)], Pick),
     Select(&'static str, &'static str, &'static str, &'static [&'static str], Pick),
     Action(&'static str, &'static str, &'static str, bool),
     Related(&'static str, &'static str, &'static str, Page),
-    /// Collapsed "Show advanced ..." row revealing more blocks.
     Expand(&'static str, &'static str, &'static str, &'static [B]),
-    /// The client's collapsible list (`collapseAfter`): the first `n` blocks, then a
-    /// "Show N more" / "Hide N" row revealing the rest.
     Collapse(&'static str, usize, &'static [B]),
     KeyGroup(&'static str, &'static str, &'static [(&'static str, &'static [&'static str])]),
 
     Divider,
-    /// Custom control; the key is used for search.
     Custom(&'static str, Render),
 }
 
-/// Sound behind a `B::Sound` id (see `crate::sounds::setting_id`).
 fn sound_for(id: &str) -> String {
     match id {
         "snd-msg" => "message1".into(),
-        // `SELECTED_CHANNEL_NOTIFICATIONS` previews `message3`.
         "snd-msg-cur" => "message3".into(),
         "snd-ring" => "call_ringing".into(),
         i => i.strip_prefix("snd-").unwrap_or(i).into(),
     }
 }
 
-/// Voice & Video > Sounds (`VOICE_AND_VIDEO_SOUNDS_LIST`, `collapseAfter: 4`).
 pub static VOICE_SOUNDS: &[B] = &[B::Collapse(
     "vo-sounds",
     4,
@@ -124,36 +91,27 @@ fn tr(k: &str) -> SharedString {
     crate::t!(k)
 }
 
-// ---------------------------------------------------------------- rendering
-
 fn title_text(t: SharedString) -> Div {
     div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(t)
 }
 
 fn desc_text(t: SharedString) -> Div {
-    // body-sm/normal 14/18 --text-subtle
     div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(t)
 }
 
-/// baseControlItem row with the trailing control aligned to the title line.
 fn item(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyElement>, top: bool) -> Div {
     item_ex(title, desc, trailing, top, false)
 }
 
-/// [`item`] with the disabled look (`dim`: title at opacity .5).
 fn item_ex(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyElement>, top: bool, dim: bool) -> Div {
     div()
         .flex()
         .gap(z(12.))
         .mx(z(-12.))
         .px(z(12.))
-        // vanilla-settings-13 #2688 baseSettingWrapper_4Z: switch rows pad
-        // 10px 0 (no 48px floor); other rows keep baseControlItem's 12 / 48.
         .when(top, |d| d.py(z(10.)))
         .when(!top, |d| d.py(z(12.)).min_h(z(48.)))
-        .rounded(z(16.)) // --radius-lg
-        // vanilla-settings-02 #2700 description_VhFsFg: switch rows wrap
-        // their description at 572px, other rows use the full 696.
+        .rounded(z(16.))
         .child(div().flex_1().min_w_0().flex().flex_col().justify_center().gap(z(4.)).child(title_text(title).when(dim, |d| d.opacity(0.5))).children(desc.map(|d| div().when(top, |d| d.max_w(z(572.))).child(d))))
         .children(trailing.map(|t| {
             let d = div().flex_none().flex();
@@ -223,11 +181,8 @@ fn set_pick(app: &mut PhoenixApp, id: &'static str, p: Pick, v: usize, cx: &mut 
 fn switch_row(app: &PhoenixApp, id: &'static str, title: SharedString, desc: Option<AnyElement>, b: Bind, cx: &mut Cx) -> AnyElement {
     let synced = &app.prefs.synced;
     let disabled = matches!(b, Bind::Proto) && super::synced_map::disabled(&synced.proto, synced.compact, id);
-    // APPEARANCE_DISPLAY_COMPACT_AVATARS reads `!compact || display_compact_avatars`.
     let on = get_bool(app, id, b) || (id == "avatars" && !synced.compact);
     if disabled {
-        // container_VhFsFg[data-disabled=true]: label + description at .5,
-        // the indicator at .5 too, cursor not-allowed, no toggle.
         let row = item_ex(
             title,
             desc.map(|d| div().opacity(0.5).child(d).into_any_element()),
@@ -245,8 +200,6 @@ fn switch_row(app: &PhoenixApp, id: &'static str, title: SharedString, desc: Opt
         .into_any_element()
 }
 
-/// Dropdown field + its listBox (listBox_b5PEJH: padding 4, 40px options,
-/// radius 4) floating under it while open.
 pub(super) fn dropdown(
     app: &PhoenixApp,
     id: &'static str,
@@ -260,8 +213,6 @@ pub(super) fn dropdown(
     dropdown_with(app, id, field, opts, cur, width, on_pick, cx)
 }
 
-/// [`dropdown`] around a custom closed `field` (e.g. the ghost select of
-/// the content filters).
 #[allow(clippy::too_many_arguments)]
 fn dropdown_with(
     app: &PhoenixApp,
@@ -276,7 +227,6 @@ fn dropdown_with(
     let open = app.settings.as_ref().is_some_and(|s| s.open_select == Some(id));
     let field = field
         .w(z(width))
-        // selectField_ :focus-within: 2px outline --input-border-active, offset -2
         .when(open, |d| {
             d.relative().child(
                 div().absolute().top(z(-1.)).bottom(z(-1.)).left(z(-1.)).right(z(-1.)).rounded(z(8.)).border_2().border_color(c(tok(idx::INPUT_BORDER_ACTIVE))),
@@ -331,7 +281,6 @@ fn dropdown_with(
 
 fn radio_group(app: &PhoenixApp, id: &'static str, opts: &'static [(&'static str, &'static str)], p: Pick, cx: &mut Cx) -> Div {
     let cur = get_pick(app, id, p);
-    // group_oJuRbG: options 36px apart (indicator 20, text at 32px)
     div().flex().flex_col().children(opts.iter().enumerate().map(|(i, (label, desc))| {
         div()
             .id(eid(format!("rg-{id}-{i}")))
@@ -344,7 +293,6 @@ fn radio_group(app: &PhoenixApp, id: &'static str, opts: &'static [(&'static str
             .child(
                 div()
                     .flex_1()
-                    // let long descriptions wrap (vanilla-settings-02 #2841: 664px, 2 lines)
                     .min_w_0()
                     .flex()
                     .flex_col()
@@ -408,9 +356,6 @@ fn key_group(legend: &'static str, lead: &'static str, rows: &'static [(&'static
         )))
 }
 
-/// Related-row description; "Confidentialité des activités" appends the
-/// servers the activity is shared with, in bold (vanilla-settings-02 #2883
-/// strong: "Aperture Sciences et 41 autres serveurs").
 fn related_desc(app: &PhoenixApp, title: &str, desc: &'static str) -> AnyElement {
     if title != "settings.page.activity" {
         return desc_text(tr(desc)).into_any_element();
@@ -433,8 +378,6 @@ fn related(app: &PhoenixApp, icon: &'static str, title: &'static str, desc: &'st
         .flex()
         .items_center()
         .justify_center()
-        // vanilla-settings-13 #2733 icon_W6yko_: 48px tile, --radius-sm,
-        // --background-mod-muted, 24px glyph.
         .child(
             div()
                 .size(z(48.))
@@ -475,7 +418,6 @@ fn related(app: &PhoenixApp, icon: &'static str, title: &'static str, desc: &'st
 fn render_block(app: &PhoenixApp, b: &'static B, out: &mut Vec<AnyElement>, cx: &mut Cx) {
     match b {
         B::Title(t) => out.push(controls::section_title(tr(t)).into_any_element()),
-        // Lead sits 4px under the 32px heading (vanilla-settings-14b #3019→#3021): pb 24 + column gap 10 - 30.
         B::Lead(t) => out.push(div().mt(z(-30.)).pb(z(22.)).child(desc_text(tr(t))).into_any_element()),
         B::Legend(t) => out.push(
             div()
@@ -493,7 +435,6 @@ fn render_block(app: &PhoenixApp, b: &'static B, out: &mut Vec<AnyElement>, cx: 
             out.push(switch_row(app, id, tr(t), desc, *bind, cx));
         }
         B::Sound(id, t) => {
-            // the preview link (anchor_R6ReNl, 14/18 --text-link): `aQ(sound)` plays it.
             let name = sound_for(id);
             let link = div()
                 .id(eid(format!("snd-preview-{id}")))
@@ -507,11 +448,10 @@ fn render_block(app: &PhoenixApp, b: &'static B, out: &mut Vec<AnyElement>, cx: 
                     crate::sounds::preview(&name);
                 })
                 .child(tr("sp.sound_preview"));
-            let bind = Bind::Pref(*id != "snd-msg-cur"); // vanilla-settings-04: current-channel sound off
+            let bind = Bind::Pref(*id != "snd-msg-cur");
             if app.prefs.local.notification_sounds {
                 out.push(switch_row(app, id, tr(t), Some(link.into_any_element()), bind, cx));
             } else {
-                // `useDisabled: getDisableAllSounds()`, value `!isSoundDisabled && !disabled`: off and dimmed.
                 let row = item_ex(
                     tr(t),
                     Some(div().opacity(0.5).child(link).into_any_element()),
@@ -611,9 +551,6 @@ fn render_block(app: &PhoenixApp, b: &'static B, out: &mut Vec<AnyElement>, cx: 
                 item(
                     tr(t),
                     Some(desc_text(tr(d)).into_any_element()),
-                    // vanilla-settings-07 #2828 triggerButton_MdUQoo: 48px
-                    // --background-mod-subtle tile, --radius-sm, 24px
-                    // --icon-strong chevron (down closed, up open).
                     Some(
                         div()
                             .size(z(48.))
@@ -658,7 +595,6 @@ fn render_block(app: &PhoenixApp, b: &'static B, out: &mut Vec<AnyElement>, cx: 
     }
 }
 
-/// Renders a page's blocks (rows 10px apart like the stacked containers).
 pub fn render(app: &PhoenixApp, blocks: &'static [B], cx: &mut Cx) -> Div {
     let mut out = Vec::new();
     for b in blocks {
@@ -666,8 +602,6 @@ pub fn render(app: &PhoenixApp, blocks: &'static [B], cx: &mut Cx) -> Div {
     }
     div().flex().flex_col().gap(z(10.)).children(out)
 }
-
-// ------------------------------------------------------------------ search
 
 fn push_texts(blocks: &'static [B], out: &mut Vec<&'static str>) {
     for b in blocks {
@@ -696,12 +630,10 @@ fn push_texts(blocks: &'static [B], out: &mut Vec<&'static str>) {
     }
 }
 
-/// Category titles of a page (sidebar sub-navigation under the active item).
 pub fn titles(p: Page) -> Vec<SharedString> {
     blocks(p).iter().filter_map(|b| if let B::Title(t) = b { Some(tr(t)) } else { None }).collect()
 }
 
-/// True when the page label or any of its texts contains `q` (lowercase).
 pub fn matches(p: Page, q: &str) -> bool {
     if q.is_empty() || p.label().to_lowercase().contains(q) {
         return true;
@@ -745,8 +677,6 @@ fn extra_search(p: Page) -> &'static [&'static str] {
     }
 }
 
-// ------------------------------------------------------------------- pages
-
 const NONE: &[B] = &[];
 
 pub fn blocks(p: Page) -> &'static [B] {
@@ -772,13 +702,6 @@ pub fn blocks(p: Page) -> &'static [B] {
     }
 }
 
-/// "Filtres de contenu sensible" (vanilla-settings-03 #2700-#2749): header
-/// (16/500 title, 14/18 description + link), then tabbedSettingsContainer_
-/// (gap 48): a 226px vertical tabBar_ (40px tabs, padding 10 8, 2px
-/// --text-brand left border when selected, else 1px --border-subtle and
-/// --text-subtle) beside the panel of selectItemRow_ rows (49px, 1px bottom
-/// border) with a borderless 140px select (16px state icon + label, 18px
-/// chevron) and the tab's 14/18 --text-muted note.
 fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     const TABS: [(&str, &str); 2] = [("sp.cs.tab_sexual", "sp.cs.tab_sexual_d"), ("sp.cs.tab_violent", "sp.cs.tab_violent_d")];
     const ROWS: [[(&str, &str, usize); 3]; 2] = [
@@ -816,7 +739,6 @@ fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     }));
     let opts: Vec<SharedString> = SHOW_BLOCK.iter().map(|o| tr(o)).collect();
     let rows = ROWS[tab].iter().map(|&(id, label, def)| {
-        // settings-proto explicit/gore_content_settings (synced_map entries).
         let pk = if super::synced_map::entry(id).is_some() { Pick::Proto } else { Pick::Ui(def) };
         let cur = get_pick(app, id, pk).min(2);
         let field = div()
@@ -872,8 +794,6 @@ fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-// "Jeux enregistrés" (vanilla-settings-12 dump): Current Game / Added Games
-// with the IGDB note, then Related Settings → Activity Privacy.
 static GAMES: &[B] = &[
     B::Title("sp.rg.current"),
     B::Custom("sp.rg.none", current_game),
@@ -884,23 +804,19 @@ static GAMES: &[B] = &[
     B::Related("user-profile", "settings.page.activity", "sp.rg.related_d", Page::ActivityPrivacy),
 ];
 
-/// vanilla-settings-12 #2686 `notDetected_kQPUsd`: --background-mod-subtle
-/// box, padding 16, radius 12 (computed), game name 16/22 semibold
-/// --interactive-text-active (#2688), then "Not seeing your game?" 14 --text-muted
-/// + "Add it!" body-sm/medium --text-brand text button (#2689-#2692, gap 4).
 fn current_game(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div()
         .flex()
         .flex_col()
-        .gap(z(4.)) // gameNameLastPlayed_ gap
-        .p(z(16.)) // .notDetected_ padding
-        .rounded(z(12.)) // #2686 border-radius
-        .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))) // .notDetected_ background-color
+        .gap(z(4.))
+        .p(z(16.))
+        .rounded(z(12.))
+        .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
         .child(
             div()
                 .text_size(z(16.))
                 .line_height(z(22.))
-                .font_weight(FontWeight::SEMIBOLD) // .gameName_ font-weight
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
                 .child(tr("sp.rg.none")),
         )
@@ -908,7 +824,7 @@ fn current_game(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
             div()
                 .flex()
                 .items_center()
-                .gap(z(4.)) // nowPlayingAdd_ gap
+                .gap(z(4.))
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .child(div().text_color(c(tok(idx::TEXT_MUTED))).child(tr("sp.rg.cant_find")))
@@ -916,26 +832,16 @@ fn current_game(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                     div()
                         .id("rg-add")
                         .cursor_pointer()
-                        .font_weight(FontWeight::MEDIUM) // body-sm/medium
-                        .text_color(c(tok(idx::TEXT_BRAND))) // .primary_nJgowo color
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_BRAND)))
                         .child(tr("sp.rg.add")),
                 ),
         )
         .into_any_element()
 }
 
-// Billing pages: Phoenix doesn't handle payments, each page points to the web.
 static NITRO: &[B] = &[B::Custom("sp.ni.title", nitro_page)];
 
-/// Nitro page as the 2026 client lays it out (vanilla-settings-05b, page
-/// fully loaded): `tierCard_20JRSQ` 696x378, radius 16, 95.07deg gradient
-/// rgb(133,71,198) → rgb(184,69,193) 50% → rgb(171,93,138); `tierInfo_` at
-/// 40/40, 327 wide: nitro-md 32px bold title, five 24px-icon perks 32px apart
-/// (body-md 16/20 white, 8px gap), then (padding-top 16, gap 8) 39px
-/// `overlay-primary` white and `overlay-secondary` rgba(0,0,0,0.56) buttons;
-/// `tierImage_` 313x328 art on the right. Then the 40px-padded `giftCard_`
-/// (radius 16, 41px under): 147x146 gift art, heading-xl/semibold 24/32
-/// title, body-sm text and the "Offrir Nitro" button. Art loads at runtime.
 fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let perk = |icon: &'static str, t: &'static str| {
         div()
@@ -962,7 +868,6 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
             .text_color(if primary { gpui::black() } else { gpui::white() })
             .child(tr(t))
     };
-    // gpui gradients take two stops: one per half around the 50% stop.
     let half = |l: bool, a: u32, b: u32| {
         let d = div().absolute().top_0().h_full().w_1_2().bg(gpui::linear_gradient(95.07, gpui::linear_color_stop(gpui::rgb(a), 0.), gpui::linear_color_stop(gpui::rgb(b), 1.)));
         if l { d.left_0().rounded_l(z(16.)) } else { d.right_0().rounded_r(z(16.)) }
@@ -997,7 +902,7 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 )
                 .child(
                     div()
-                        .pt(z(24.)) // tierInfo_ gap 8 + stack_ padding-top 16
+                        .pt(z(24.))
                         .flex()
                         .flex_col()
                         .gap(z(8.))
@@ -1039,16 +944,10 @@ static GIFTS: &[B] = &[
     B::Title("sp.gi.bought"),
     B::Custom("sp.gi.none", super::gift::purchased),
 ];
-/// Facturation (vanilla-settings-06c, #3454-#3517): the data-free frame of the
-/// page. Payment sources, balance and transactions need the billing API, which
-/// Phoenix doesn't call, so those rows stay empty.
 fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
-    let line = || div().h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))); // divider_ZaYWLb
+    let line = || div().h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)));
     let data = super::billing::get().unwrap_or_default();
     let has_sources = !data.sources.is_empty();
-    // #3469 paymentSourceRow_: 32x22 card glyph, brand 16/20 + "Par défaut"
-    // pill (body-xs/semibold, #4f505a, r3, padding 0 4), sub-line 14/18
-    // --text-subtle, sm secondary "Modifier".
     let source_rows = data.sources.iter().enumerate().map(|(i, src)| {
         div()
             .mt(z(if i == 0 { 26. } else { 16. }))
@@ -1089,25 +988,22 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         let key = format!("country.{cc}");
         let name = tr(&key);
         let name = if *name == *key { cc.to_owned().into() } else { name };
-        // #3462 body-sm --text-subtle, 4px under the 32px heading
         div().mt(z(-20.)).child(desc_text(crate::t!("sp.bl.country", name = name)))
     });
     div()
-        .mt(z(-10.)) // title pb 24 + column gap 10 → line 24px under the heading
+        .mt(z(-10.))
         .flex()
         .flex_col()
         .children(country)
         .children(source_rows)
         .when(has_sources, |d| d.child(line().mt(z(16.))))
         .child(
-            // #3482 paymentSourceRow_ (gift card balance): 32px icon, 14/18 500 label at +46, sm secondary "Utiliser"
             div()
-                .mt(z(if has_sources { 32. } else { 50. })) // #3482 (no source rows): 26 + the 24px the empty spacer #3465 leaves
+                .mt(z(if has_sources { 32. } else { 50. }))
                 .h(z(32.))
                 .flex()
                 .items_center()
                 .child(
-                    // #3484 32px card glyph: brand tile with the white Discord logo
                     div().size(z(32.)).flex_none().flex().items_center().child(
                         div().w(z(32.)).h(z(22.)).rounded(z(3.)).bg(c(tok(idx::BRAND_500))).flex().items_center().justify_center()
                             .child(gpui::svg().path(crate::icons::path("discord-logo")).size(z(16.)).text_color(gpui::white())),
@@ -1116,28 +1012,23 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .child(div().ml(z(14.)).flex_1().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(tr("sp.bl.gift")))
                 .child(controls::button_sm(eid("billing-redeem"), tr("sp.bl.redeem"), BtnKind::Secondary)),
         )
-        .child(line().mt(z(16.))) // #3493
+        .child(line().mt(z(16.)))
         .child(
-            // #3494 footer_: primary md button, right aligned, 20px under the divider
             div().mt(z(20.)).mb(z(10.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)),
         )
         .into_any_element()
 }
 
-/// "Historique des transactions" table header (#3511 paymentRow_, 53px,
-/// bottom border; #3513-#3515 12/12 600 Date 122px at +21, Description at +151,
-/// Montant right).
 fn billing_history(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let pays = super::billing::get().map(|b| b.payments).unwrap_or_default();
     let col = |t: &str| div().text_size(z(12.)).line_height(z(12.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(tr(t));
     div()
-        .mt(z(-10.)) // #3505 line 24px under the heading
+        .mt(z(-10.))
         .flex()
         .flex_col()
         .child(
-            // #3510 paymentPane_: 1px --border-subtle, r8, --background-base-lower
             div()
-                .mt(z(35.)) // #3505 empty 1px spacer 24px under the heading, pane 10 below
+                .mt(z(35.))
                 .border_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .rounded(z(8.))
@@ -1151,9 +1042,6 @@ fn billing_history(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .child(div().ml(z(21.)).w(z(130.)).flex_none().child(col("sp.bl.date")))
                 .child(div().flex_1().child(col("sp.bl.desc")))
                 .child(div().mr(z(64.)).child(col("sp.bl.amount"))))
-                // #3518 payment_ rows: 57px, 1px bottom border, padding-inline 16,
-                // date 14/18 (131px), 20px shop glyph + 16px description,
-                // orb/fiat amount, 24px expand chevron.
                 .children(pays.iter().enumerate().map(|(i, p)| {
                     div()
                         .h(z(57.))
@@ -1324,7 +1212,6 @@ fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
         .flex()
         .flex_col()
         .pt(z(16.))
-        // vanilla-settings-08 #2721 heading-sm/semibold 16/20, swatches 24px under it.
         .child(title_text(tr("sp.ap.defaults")).font_weight(FontWeight::SEMIBOLD).pb(z(24.)))
         .child(
             div()
@@ -1333,9 +1220,6 @@ fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
                 .children(AppTheme::ALL.map(|t| {
                     super::view::theme_card(t, t == theme).on_click(cx.listener(move |a, _, _, cx| save(a, SettingsPatch::Theme(t), cx)))
                 }))
-                // 5th `defaultThemeSelection_` "Synchroniser avec l'ordinateur"
-                // (vanilla-settings-08b): the current theme's background with
-                // the 24px RefreshIcon in `iconWrapper_IhyaN_`.
                 .child(
                     div()
                         .id("theme-sync-os")
@@ -1355,10 +1239,6 @@ fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
         .into_any_element()
 }
 
-/// "Donne à ton Discord le style que tu veux" (`container_yH_g_W
-/// displayContainer_`, vanilla-settings-08b): 104px black card, radius 8,
-/// padding 16 25; 117x69 banner art, 16px gap, heading-lg/semibold 20/24 +
-/// body-sm 14/18 text (378px), primary md "Vas-y, essaie" button.
 fn theme_banner(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div()
         .mt(z(29.))
@@ -1368,11 +1248,11 @@ fn theme_banner(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .py(z(16.))
         .px(z(25.))
         .rounded(z(8.))
-        .bg(gpui::black()) // displayContainer_ background oklab(0 0 0)
+        .bg(gpui::black())
         .child(gpui::img(SharedString::from(super::art::theme_banner())).w(z(117.)).h(z(69.)).flex_none())
         .child(
             div()
-                .w(z(378.)) // textContent_yH_g_W width
+                .w(z(378.))
                 .flex_none()
                 .flex()
                 .flex_col()
@@ -1384,11 +1264,6 @@ fn theme_banner(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// "Thème de couleur à durée limitée" (vanilla-settings-08b): heading-sm
-/// semibold + round `body-xs/semibold` uppercase countdown pill
-/// (rgba(151,151,159,0.2), padding 0 8, 12px clock), body-sm 14/18
-/// --text-muted note with "En savoir plus" link, then the 48px Vice City
-/// swatch (135deg gradient under the `darkOverlay_` 0.2 black layer).
 fn limited_theme(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div()
         .mt(z(39.))
@@ -1423,7 +1298,6 @@ fn limited_theme(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .text_color(c(tok(idx::TEXT_MUTED)))
-                // The link runs inline after the note (`anchor_` inside the same text), not on its own line.
                 .child({
                     let (note, more) = (tr("sp.ap.limited_d"), tr("sp.ap.limited_more"));
                     let start = note.len() + 1;
@@ -1462,7 +1336,6 @@ static APPEARANCE: &[B] = &[
     B::Switch("theme-devices", "sp.ap.sync_devices", "", Bind::Pref(true)),
     B::Switch("theme-profiles", "sp.ap.apply_profiles", "", Bind::Pref(true)),
     B::Related("help", "settings.page.accessibility", "sp.ap.a11y_d", Page::Accessibility),
-    // vanilla-settings-08b: "Icône de l'appli" follows the theme category.
     B::Divider,
     B::Custom("sp.ap.icon", nitro_app_icon),
     B::Divider,
@@ -1529,7 +1402,6 @@ static A11Y: &[B] = &[
     B::Switch("name-styles", "sp.ac.name_styles", "sp.ac.name_styles_d", Bind::Pref(true)),
     B::Divider,
     B::Title("sp.ac.t2"),
-    // Compacte / Par défaut / Spacieuse = Density::ALL order
     B::Radios(
         "density",
         "settings.appearance.density",
@@ -1685,8 +1557,6 @@ fn language_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElemen
     let cur = app.prefs.synced.locale.clone();
     let ix = super::view::LOCALES.iter().position(|(c, _)| *c == cur.as_ref()).unwrap_or(0);
     let opts: Vec<SharedString> = super::view::LOCALES.iter().map(|(_, n)| SharedString::from(*n)).collect();
-    // vanilla-settings-11: the field shows the language on the left and its
-    // native name 16/20 --text-default right-aligned before the chevron.
     let name = opts.get(ix).cloned().unwrap_or_default();
     let field = div()
         .id(eid("sel-language"))
@@ -1755,10 +1625,6 @@ static ACTIVITY: &[B] = &[
 ];
 
 fn connection_tiles(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
-    // vanilla-settings-14b `accountButtonInner_yX-kzH`: 44px tile, radius 8,
-    // rgba(151,151,159,0.12) (--background-mod-subtle), 8px apart (52px
-    // pitch), rows 53px apart; the logo is the client's art loaded at runtime
-    // (`applicationIcon_jn4e52` app icons are 28px).
     let tile = |(name, url, app): (&'static str, String, bool)| {
         let logo = if app { 28. } else { 32. };
         div()
@@ -1795,9 +1661,6 @@ static CONNECTIONS: &[B] = &[
 ];
 
 
-/// connectionList_ empty state (vanilla-settings-14 #2782-#2786): a 200px
-/// area with the centred 440px "Aucune connexion" heading-lg/semibold and
-/// body-md text, both --text-muted. Only when READY lists no connection.
 fn no_connections(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     if super::account::connections().unwrap_or(0) > 0 {
         return div().into_any_element();
@@ -1821,8 +1684,6 @@ fn no_connections(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-// Vanilla Developer page (vanilla-settings-15): Developer Mode and
-// Application Test Mode switches only.
 static DEVELOPER: &[B] = &[
     B::Switch(
         "dev-mode",
@@ -1835,19 +1696,13 @@ static DEVELOPER: &[B] = &[
 
 static PROFILES: &[B] = &[B::Custom("sp.pf.main", |app, _| super::view::profiles(app).into_any_element())];
 
-// ------------------------------------------------- extra blocks (vanilla dumps)
-
-/// Inline notice `container_0v8Ae1 info_` (vanilla-settings-10 #2764):
-/// --background-feedback-mod-info, 1px --inlinenotice-border-info, radius
-/// --radius-sm, padding --space-12, 16px --icon-feedback-info glyph, gap 8,
-/// body-sm 14/18 --text-strong copy; optional trailing action (gap 12).
 fn info_notice(text: SharedString, action: Option<gpui::Stateful<Div>>) -> Div {
     div()
         .flex()
         .items_start()
-        .gap(z(16.)) // --space-16
-        .p(z(12.)) // --space-12
-        .rounded(z(8.)) // --radius-sm
+        .gap(z(16.))
+        .p(z(12.))
+        .rounded(z(8.))
         .border_1()
         .border_color(c(tok(idx::INLINENOTICE_BORDER_INFO)))
         .bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_INFO)))
@@ -1856,7 +1711,7 @@ fn info_notice(text: SharedString, action: Option<gpui::Stateful<Div>>) -> Div {
                 .flex_1()
                 .min_w_0()
                 .flex()
-                .gap(z(8.)) // iconAndTextContainer_ --space-8
+                .gap(z(8.))
                 .child(gpui::svg().path(crate::icons::path("info")).flex_none().size(z(16.)).mt(z(1.)).text_color(c(tok(idx::ICON_FEEDBACK_INFO))))
                 .child(
                     div()
@@ -1865,16 +1720,13 @@ fn info_notice(text: SharedString, action: Option<gpui::Stateful<Div>>) -> Div {
                         .flex()
                         .items_start()
                         .justify_between()
-                        .gap(z(12.)) // contentsContainer_ gap
+                        .gap(z(12.))
                         .child(div().flex_1().min_w_0().max_w(z(410.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_STRONG))).child(text))
                         .children(action),
                 ),
         )
 }
 
-/// Hardware-acceleration warning `root_vb4RFD warning_` (vanilla-settings-10
-/// #2728): padding 8, --radius-xs, --background-feedback-mod-warning, 1px
-/// --icon-feedback-warning border, 20px warning icon + 10px margin, body-sm/medium.
 fn hwaccel_banner(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
     if get_bool(app, "hwaccel", Bind::Pref(true)) {
         return div().into_any_element();
@@ -1892,9 +1744,6 @@ fn hwaccel_banner(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// vanilla-settings-10: h2 heading-xl 24/32 + 427px description, primary
-/// "Add a keybind" button at the right (x=909), two info notices, then the
-/// user's keybind rows or the empty note.
 fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let n = get_pick(app, "kb-count", Pick::Ui(0));
     let add = controls::button_icon(eid("kb-add"), "plus", tr("sp.sy.add_kb"), BtnKind::Secondary)
@@ -1908,7 +1757,6 @@ fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                 .flex()
                 .items_start()
                 .gap(z(16.))
-                // #2738 description box is 427px wide; the button sits at the right (x=909)
                 .child(div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(controls::section_title(tr("sp.sy.t2"))).child(desc_text(tr("sp.sy.t2_d")).max_w(z(427.))))
                 .child(add),
         )
@@ -1921,7 +1769,6 @@ fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         col = col.child(desc_text(tr("sp.sy.no_kb")));
     }
     for i in 0..n {
-        // keybind row: action select + recorded shortcut + remove
         col = col.child(
             div()
                 .flex()
@@ -1950,20 +1797,13 @@ fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     col.into_any_element()
 }
 
-/// vanilla-settings-09 "Aperçu" (#2687-#2759): h2 body-md/medium, then
-/// `preview_TpS9Es` (--background-base-low, 1px --border-normal, --radius-sm,
-/// padding --space-24, columns 1fr + min-content, gap --space-8). Left: two
-/// cozy messages by the current user (40px avatar at 20px, text at 80px, 16/22),
-/// the first with two reactions (`reaction_MmKct8` radius 8, padding 2 6, 20px
-/// emoji, 16/600 count), the second with a link. Right (`previewRight_`):
-/// three 32px status avatars 6px apart and a primary sm "Sample button".
 fn a11y_preview(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let me = &app.me;
     let name: SharedString = if me.display_name.is_empty() { me.name.clone() } else { me.display_name.clone() };
     let msg = |body: AnyElement, extra: Option<Div>| {
         div()
             .relative()
-            .pl(z(80.)) // cozyMessage_ padding-left
+            .pl(z(80.))
             .pr(z(30.))
             .py(z(2.))
             .child(div().absolute().left(z(20.)).top(z(4.)).child(crate::ui::avatar(Some(me), 40.)))
@@ -2000,7 +1840,6 @@ fn a11y_preview(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .child(tr("sp.ac.sample2"))
         .child(div().text_color(c(tok(idx::TEXT_LINK))).child("https://discord.com/accessibility"))
         .into_any_element();
-    // `messages_TpS9Es` starts 19px left of the padded box (#2691 x=423 vs 442).
     let left = div()
         .flex_1()
         .min_w_0()
@@ -2033,20 +1872,18 @@ fn a11y_preview(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .flex()
         .flex_col()
         .gap(z(8.))
-        // #2689 h2 body-md/medium in --text-muted
         .child(title_text(tr("sp.ac.preview")).text_color(c(tok(idx::TEXT_MUTED))))
         .child(
             div()
                 .flex()
-                .gap(z(8.)) // --space-8
-                .p(z(24.)) // --space-24
+                .gap(z(8.))
+                .p(z(24.))
                 .max_h(z({
-                    // max-height 25vh (#2690: 175 in a 700px viewport); 700 before the first frame.
                     let vh = crate::ui::title_bar::viewport_h_css();
                     0.25 * if vh > 0. { vh } else { 700. }
                 }))
                 .overflow_hidden()
-                .rounded(z(8.)) // --radius-sm
+                .rounded(z(8.))
                 .border_1()
                 .border_color(c(tok(idx::BORDER_NORMAL)))
                 .bg(c(tok(idx::BACKGROUND_BASE_LOW)))
@@ -2056,8 +1893,6 @@ fn a11y_preview(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// Title row with the secondary "Theme preview" button (vanilla-settings-08,
-/// span at x=980 w=119).
 fn theme_title(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div()
         .flex()
@@ -2068,48 +1903,38 @@ fn theme_title(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// Colour-theme swatches, computed `background-image` of each
-/// `themeSelection_IhyaN_` in vanilla-settings-08 (#2793-#2856): angle, first
-/// stop, most distinct stop (gpui gradients take two stops). Light themes
-/// already include the `.lightOverlay_` --opacity-white-48 layer.
 const THEME_SWATCHES: [(f32, u32, f32, u32, f32); 22] = [
-    (180., 0xa7d9cd, 0.06, 0xcde3b0, 0.93), //  #2793
-    (180., 0xf9d796, 0.31, 0xf6c0a8, 0.67), //  #2796
-    (149., 0x99bbce, 0.06, 0xbcbcdb, 0.26), //  #2799
-    (38., 0xf7d3d7, 0.04, 0xd1eccf, 0.69), //  #2802
-    (154., 0xcd9cb7, 0.09, 0xd1c89a, 0.76), //  #2805
-    (180., 0xf9d3da, 0.09, 0xd6dffd, 0.94), //  #2808
-    (180., 0xd0defb, 0.07, 0xe6eecf, 0.96), //  #2811
-    (39., 0xf3ece7, 0.13, 0xefeacf, 0.52), //  #2814
-    (180., 0x48288c, 0.28, 0xdb7f4b, 0.71), //  #2817
-    (180., 0x0eb5bf, 0.04, 0xa308a7, 0.40), //  #2820
-    (180., 0x142215, 0.11, 0xa98e4b, 0.84), //  #2823
-    (180., 0x950909, 0.16, 0x000000, 0.72), //  #2826
-    (180., 0x5348ca, 0.11, 0x140730, 0.62), //  #2829
-    (180., 0x895240, 0.15, 0x8f4343, 0.75), //  #2832
-    (180., 0x665069, 0.13, 0x91a3d1, 0.86), //  #2835
-    (180., 0x647962, 0.02, 0x6a8482, 0.96), //  #2838
-    (180., 0x3a7ca1, 0.06, 0x58579a, 0.26), //  #2841
-    (180., 0x01a89e, 0.00, 0xb43898, 1.00), //  #2844
-    (180., 0xaf1a6c, 0.19, 0xe7a525, 0.81), //  #2847
-    (180., 0x062053, 0.10, 0x13929a, 0.48), //  #2850
-    (180., 0x857664, 0.14, 0x5b4421, 0.60), //  #2853
-    (180., 0x2c3fe7, 0.11, 0x261d83, 0.65), //  #2856
+    (180., 0xa7d9cd, 0.06, 0xcde3b0, 0.93),
+    (180., 0xf9d796, 0.31, 0xf6c0a8, 0.67),
+    (149., 0x99bbce, 0.06, 0xbcbcdb, 0.26),
+    (38., 0xf7d3d7, 0.04, 0xd1eccf, 0.69),
+    (154., 0xcd9cb7, 0.09, 0xd1c89a, 0.76),
+    (180., 0xf9d3da, 0.09, 0xd6dffd, 0.94),
+    (180., 0xd0defb, 0.07, 0xe6eecf, 0.96),
+    (39., 0xf3ece7, 0.13, 0xefeacf, 0.52),
+    (180., 0x48288c, 0.28, 0xdb7f4b, 0.71),
+    (180., 0x0eb5bf, 0.04, 0xa308a7, 0.40),
+    (180., 0x142215, 0.11, 0xa98e4b, 0.84),
+    (180., 0x950909, 0.16, 0x000000, 0.72),
+    (180., 0x5348ca, 0.11, 0x140730, 0.62),
+    (180., 0x895240, 0.15, 0x8f4343, 0.75),
+    (180., 0x665069, 0.13, 0x91a3d1, 0.86),
+    (180., 0x647962, 0.02, 0x6a8482, 0.96),
+    (180., 0x3a7ca1, 0.06, 0x58579a, 0.26),
+    (180., 0x01a89e, 0.00, 0xb43898, 1.00),
+    (180., 0xaf1a6c, 0.19, 0xe7a525, 0.81),
+    (180., 0x062053, 0.10, 0x13929a, 0.48),
+    (180., 0x857664, 0.14, 0x5b4421, 0.60),
+    (180., 0x2c3fe7, 0.11, 0x261d83, 0.65),
 ];
 
-/// vanilla-settings-08 "Thèmes de couleur" (#2777-#2856): h2 body-md/semibold
-/// 16/20 + body-sm 14/18 subtitle, then a `stack_` (padding-top 24, gap 8) of
-/// 48px `themeSelection_` tiles (radius 8); the first is the custom theme tile
-/// (`borderOverlay_` inset 1px --border-strong, 24px palette icon) with the
-/// "nouveau" badge (`newBadge_` top -8, body-xs/semibold 12/16, padding 0 8,
-/// round, brand background #2790).
 fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
         div()
             .id(eid(format!("nitro-theme-{i}")))
             .flex_none()
             .size(z(48.))
-            .rounded(z(8.)) // .themeSelection_ border-radius
+            .rounded(z(8.))
             .cursor_pointer()
             .bg(gpui::linear_gradient(
                 ang,
@@ -2124,7 +1949,7 @@ fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .size(z(48.))
         .rounded(z(8.))
         .border_1()
-        .border_color(c(tok(idx::BORDER_STRONG))) // .borderOverlay_ inset 1px --border-strong
+        .border_color(c(tok(idx::BORDER_STRONG)))
         .flex()
         .items_center()
         .justify_center()
@@ -2132,7 +1957,7 @@ fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .child(
             div()
                 .absolute()
-                .top(z(-8.)) // .newBadge_ top
+                .top(z(-8.))
                 .left(z(-12.))
                 .w(z(72.))
                 .flex()
@@ -2166,11 +1991,6 @@ fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-/// vanilla-settings-08 "Icône de l'appli" (#2903-#2919): heading-xl title +
-/// 373px body-sm description, secondary "Icon preview" button at the right,
-/// then 48px `appIconSelection_` tiles (radius 8, gap 8, box-shadow 0 0 2px
-/// --interactive-text-default). The icon art is a Discord asset we don't
-/// ship, so the tiles stay empty.
 fn nitro_app_icon(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     div()
         .flex()
@@ -2185,14 +2005,11 @@ fn nitro_app_icon(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .child(controls::button(eid("icon-preview"), tr("sp.ap.icon_preview"), BtnKind::Secondary)),
         )
         .child(div().pt(z(20.)).flex().flex_wrap().gap(z(8.)).children(super::art::app_icons().into_iter().enumerate().map(|(i, u)| app_icon_tile(i, u))))
-        // "Icône d'application à durée limitée" (body-md/medium) + the Vice City icon
         .child(div().pt(z(30.)).child(title_text(tr("sp.ap.limited_icon"))))
         .child(div().pt(z(72.)).child(app_icon_tile(99, super::art::limited_app_icon())))
         .into_any_element()
 }
 
-/// 48px `appIconSelection_jWcVMn` tile (radius 8, box-shadow 0 0 2px
-/// --interactive-text-default) with the client's icon art loaded at runtime.
 fn app_icon_tile(i: usize, url: String) -> gpui::Stateful<Div> {
     div()
         .id(eid(format!("nitro-icon-{i}")))

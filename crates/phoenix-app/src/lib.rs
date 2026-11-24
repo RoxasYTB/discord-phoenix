@@ -1,5 +1,3 @@
-//! Discord Phoenix UI shell (GPUI). Network-agnostic: see [`backend`].
-
 pub mod actions;
 pub mod app;
 pub mod assets;
@@ -64,8 +62,6 @@ pub fn window_options(cx: &App) -> WindowOptions {
             appears_transparent: true,
             ..Default::default()
         }),
-        // Frameless like the client's Electron window (`frame: false`): the app top
-        // bar draws the window buttons (ui::title_bar, ui::window_chrome).
         window_decorations: Some(WindowDecorations::Client),
         app_id: Some(APP_ID.into()),
         icon: window_icon(),
@@ -74,7 +70,6 @@ pub fn window_options(cx: &App) -> WindowOptions {
     }
 }
 
-/// Shared app setup (also used by offscreen/headless rendering).
 pub fn init(cx: &mut App) {
     gpui_component::init(cx);
     Theme::change(ThemeMode::Dark, None, cx);

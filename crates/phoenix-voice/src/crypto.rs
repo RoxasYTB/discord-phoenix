@@ -1,18 +1,9 @@
-//! Transport encryption for RTP/RTCP over UDP (`*_rtpsize` modes).
-//!
-//! Layout of an encrypted RTP packet:
-//! `[RTP header (12 + 4*CC) | ext header (4, if X)]` = AAD (cleartext),
-//! then `ciphertext(extension body + payload) | tag(16) | nonce_suffix(4, BE)`.
-//! The full nonce is the 32-bit counter (big-endian) followed by zero bytes.
-//! For RTCP the AAD is the 8-byte RTCP header.
-
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::Aes256Gcm;
 use chacha20poly1305::XChaCha20Poly1305;
 
 use crate::{Error, Result};
 
-/// Supported encryption modes, in preference order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncryptionMode {
     Aes256GcmRtpSize,
@@ -35,7 +26,6 @@ impl EncryptionMode {
         }
     }
 
-    /// Pick the best mode the server advertises (from Ready `modes`).
     pub fn choose(server_modes: &[String]) -> Option<Self> {
         [Self::Aes256GcmRtpSize, Self::XChaCha20Poly1305RtpSize]
             .into_iter()
@@ -55,7 +45,6 @@ enum Cipher {
     XChaCha(Box<XChaCha20Poly1305>),
 }
 
-/// Stateful transport cipher (one per connection, shared by all streams).
 pub struct TransportCipher {
     mode: EncryptionMode,
     cipher: Cipher,
@@ -85,7 +74,6 @@ impl TransportCipher {
         self.mode
     }
 
-    /// Override the next nonce counter (tests / resumption).
     pub fn set_counter(&mut self, c: u32) {
         self.counter = c;
     }
@@ -114,13 +102,11 @@ impl TransportCipher {
         .map_err(|_| Error::Crypto("decrypt / authentication failed"))
     }
 
-    /// Encrypt a complete plaintext RTP packet.
     pub fn encrypt_rtp(&mut self, packet: &[u8]) -> Result<Vec<u8>> {
         let aad_len = rtp_aad_len(packet)?;
         self.encrypt_with_aad(packet, aad_len)
     }
 
-    /// Encrypt an RTCP packet (8-byte cleartext header).
     pub fn encrypt_rtcp(&mut self, packet: &[u8]) -> Result<Vec<u8>> {
         if packet.len() < 8 {
             return Err(Error::Malformed("rtcp too short"));
@@ -141,7 +127,6 @@ impl TransportCipher {
         Ok(out)
     }
 
-    /// Decrypt an RTP packet; returns the plaintext packet (header + ext body + payload).
     pub fn decrypt_rtp(&self, packet: &[u8]) -> Result<Vec<u8>> {
         let aad_len = rtp_aad_len(packet)?;
         self.decrypt_with_aad(packet, aad_len)
@@ -168,8 +153,6 @@ impl TransportCipher {
     }
 }
 
-/// Length of the unencrypted portion of an RTP packet in rtpsize modes:
-/// fixed header + CSRCs + 4-byte extension header (if present).
 pub fn rtp_aad_len(packet: &[u8]) -> Result<usize> {
     if packet.len() < 12 {
         return Err(Error::Malformed("rtp too short"));
@@ -195,7 +178,6 @@ mod tests {
 
     #[test]
     fn aes256gcm_known_vector() {
-        // NIST GCM spec test case 14: K=0^256, IV=0^96, P=0^128.
         let c = Aes256Gcm::new_from_slice(&[0u8; 32]).unwrap_or_else(|_| panic!("key"));
         let out = c.encrypt((&[0u8; 12]).into(), &[0u8; 16][..]).unwrap_or_default();
         assert_eq!(out, hex("cea7403d4d606b6e074ec5d3baf39d18d0d1c8a799996bf0265b98b5d48ab919"));
@@ -204,8 +186,8 @@ mod tests {
     #[test]
     fn rtpsize_roundtrip_both_modes() {
         let mut pkt = vec![0x90, 0x78, 0x00, 0x01, 0, 0, 0, 10, 0, 0, 0, 42];
-        pkt.extend_from_slice(&[0xbe, 0xde, 0x00, 0x01]); // ext header (AAD)
-        pkt.extend_from_slice(&[0x10, 0xaa, 0, 0]); // ext body (encrypted)
+        pkt.extend_from_slice(&[0xbe, 0xde, 0x00, 0x01]);
+        pkt.extend_from_slice(&[0x10, 0xaa, 0, 0]);
         pkt.extend_from_slice(b"opus payload");
         for mode in [EncryptionMode::Aes256GcmRtpSize, EncryptionMode::XChaCha20Poly1305RtpSize] {
             let key = [7u8; 32];
@@ -218,7 +200,7 @@ mod tests {
             let rx = TransportCipher::new(mode, &key).unwrap_or_else(|e| panic!("{e}"));
             assert_eq!(rx.decrypt_rtp(&enc).unwrap_or_default(), pkt);
             let mut bad = enc.clone();
-            bad[3] ^= 1; // tamper AAD
+            bad[3] ^= 1;
             assert!(rx.decrypt_rtp(&bad).is_err());
         }
     }

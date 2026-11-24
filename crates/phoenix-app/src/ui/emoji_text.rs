@@ -1,40 +1,17 @@
-//! Unicode emoji inside plain UI labels (channel / category / thread names).
-//!
-//! Live client (vanilla, 2026-11-24): channel names are plain text in
-//! `"gg sans","Noto Sans",...`, and Chromium draws emoji-presentation characters
-//! with the system color emoji font (`fc-match emoji` = Noto Color Emoji), e.g. the
-//! red "❓" in "〢❓・aide-membres". GPUI's per-glyph fallback only checks coverage,
-//! so "❓" came from a monochrome symbol font and some emoji (📞) were missing.
-//! Here the emoji sequences found by `richtext::emoji_ranges` get the system color
-//! emoji font (`fonts::fallback::EMOJI_FAMILY`) with no UI fallback chain;
-//! everything else stays inherited text.
-
 use gpui::{AnyElement, IntoElement, ParentElement, SharedString, Styled, div};
 
-/// `text` (drawn at `font_px`) with its Unicode emoji as images.
 pub fn label(text: SharedString, font_px: f32) -> AnyElement {
     label_impl(text, font_px, false, false)
 }
 
-/// [`label`] that also draws custom `<:name:id>` emoji as images (channel topics).
 pub fn label_with_custom(text: SharedString, font_px: f32) -> AnyElement {
     label_impl(text, font_px, true, false)
 }
 
-/// Custom statuses and activity lines: every emoji, custom or Unicode, is an
-/// image (live client 2026-11-24: `customStatusContent_` and the member
-/// activity text hold `img.emoji` 14px Twemoji, not font glyphs, while names
-/// and channel names stay text).
 pub fn status_label(text: SharedString, font_px: f32) -> AnyElement {
     label_impl(text, font_px, true, true)
 }
 
-/// Wrapping version of [`status_label`] for the profile status bubble (two
-/// lines): words and emoji images flow in a wrapping row.
-///
-/// Official CSS (`rmCN9_`):
-/// - `.statusEmoji_rmCN9_:not(:has(~.statusText_rmCN9_))` (emoji-only): 32×32 px
-/// - `.statusEmoji_rmCN9_:has(~.statusText_rmCN9_)` (emoji + text): 16×16 px, `margin-inline-end: 4px`
 pub fn status_wrapped(text: SharedString, _font_px: f32) -> AnyElement {
     let ranges = crate::richtext::emoji_ranges(&text);
     if ranges.is_empty() {
@@ -68,24 +45,16 @@ pub fn status_wrapped(text: SharedString, _font_px: f32) -> AnyElement {
 }
 
 fn label_impl(text: SharedString, font_px: f32, custom: bool, images: bool) -> AnyElement {
-    // HTML collapses newlines in these one-line labels; a bot's multi-line custom status
-    // otherwise stacked three lines over the member name.
     let text: SharedString = if text.contains(['\n', '\r']) { text.replace(['\r', '\n'], " ").into() } else { text };
     let ranges: Vec<_> = crate::richtext::emoji_ranges(&text)
         .into_iter()
-        // custom `<:name:id>` tokens stay text unless asked for
         .filter(|(r, _)| custom || !text[r.clone()].starts_with('<'))
-        // Chromium only switches to the emoji font for emoji presentation: "☲" (U+2632)
-        // in role names stays a text glyph, "❓" or "ℹ️" do not.
         .filter(|(r, _)| images || text[r.clone()].starts_with('<') || emoji_presentation(&text[r.clone()]))
         .map(|(r, _)| r)
         .collect();
-    // PHX_NO_EMOJI_FONT=1: old behaviour, for before/after renders.
     if ranges.is_empty() || std::env::var_os("PHX_NO_EMOJI_FONT").is_some() {
         return text.into_any_element();
     }
-    // Labels are one line: without nowrap the pieces before an emoji wrapped inside the
-    // row and spilled over the next row (member custom status "/help · site ✨ · docs").
     let mut row = div().flex().items_center().min_w_0().overflow_hidden().whitespace_nowrap();
     let mut at = 0;
     for r in ranges {
@@ -93,13 +62,10 @@ fn label_impl(text: SharedString, font_px: f32, custom: bool, images: bool) -> A
             row = row.child(div().flex_none().child(SharedString::from(text[at..r.start].to_string())));
         }
         if images || text[r.clone()].starts_with('<') {
-            // `.emoji` 1.375em
             row = row.child(div().flex_none().mx(gpui::px(1.)).child(crate::media::emoji::emoji_element(&text[r.clone()], font_px * 1.375)));
             at = r.end;
             continue;
         }
-        // Keep the UI font (gg sans has no emoji) but make the color emoji font the
-        // only fallback, so "❓" no longer resolves to DejaVu Sans' monochrome glyph.
         let mut e = div().flex_none();
         e.text_style().font_fallbacks =
             Some(gpui::FontFallbacks::from_fonts(vec![crate::fonts::fallback::EMOJI_FAMILY.to_string()]));
@@ -112,9 +78,6 @@ fn label_impl(text: SharedString, font_px: f32, custom: bool, images: bool) -> A
     row.into_any_element()
 }
 
-/// Unicode `Emoji_Presentation=Yes` for a sequence: VS16, multi-codepoint
-/// sequences (ZWJ, modifiers, flags, keycaps), supplementary-plane pictographs, and
-/// the BMP characters that default to emoji style.
 fn emoji_presentation(seq: &str) -> bool {
     let mut cs = seq.chars();
     let Some(first) = cs.next() else { return false };
@@ -142,7 +105,6 @@ mod tests {
         assert_eq!(r.len(), 1);
         assert_eq!(&t[r[0].0.clone()], "❓");
         assert!(crate::richtext::emoji_ranges("〢・general").is_empty());
-        // VS16 asks for emoji presentation even outside the usual blocks.
         assert_eq!(crate::richtext::emoji_ranges("ℹ\u{FE0F} Informations").len(), 1);
         assert!(super::emoji_presentation("❓") && super::emoji_presentation("ℹ\u{FE0F}") && super::emoji_presentation("🌸"));
         assert!(!super::emoji_presentation("☲") && !super::emoji_presentation("♡"));

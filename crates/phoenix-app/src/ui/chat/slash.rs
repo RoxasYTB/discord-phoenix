@@ -1,8 +1,3 @@
-//! Slash command autocomplete in the composer, like the official client:
-//! typing `/` lists the channel's commands grouped by app and filters as you
-//! type; once a command is picked, a hint bar shows its options (required
-//! ones marked) and Enter runs it through `ParityRequest::RunCommand`.
-
 use std::collections::HashMap;
 
 use gpui::{AnyElement, App, Context, FontWeight, ParentElement, SharedString, Styled, Window, div, prelude::*};
@@ -20,7 +15,6 @@ pub struct SlashUi {
     cache: HashMap<Id, Vec<SlashCommand>>,
     loading: Option<Id>,
     selected: usize,
-    /// Composer text for which the list was closed with Escape.
     dismissed: Option<String>,
 }
 
@@ -33,7 +27,6 @@ fn state(cx: &mut App) -> &mut SlashUi {
     cx.global_mut::<SlashUi>()
 }
 
-/// Option type -> hint shown next to the option name.
 pub fn type_hint(kind: u64) -> &'static str {
     match kind {
         4 => "integer",
@@ -52,7 +45,6 @@ fn text(app: &PhoenixApp, cx: &App) -> String {
     app.composer.read(cx).value().to_string()
 }
 
-/// `Some(prefix)` while the user is typing the command name itself.
 fn name_query(t: &str) -> Option<&str> {
     let q = t.strip_prefix('/')?;
     (!q.contains(char::is_whitespace)).then_some(q)
@@ -82,13 +74,11 @@ pub fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-/// Cached slash commands for the currently selected channel.
 pub fn cached_commands(app: &PhoenixApp, cx: &App) -> Vec<SlashCommand> {
     let Some(ch) = app.selected_channel else { return vec![] };
     cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch)).cloned().unwrap_or_default()
 }
 
-/// Filtered matches, grouped by app (stable: app name, then command name).
 fn matches(app: &PhoenixApp, q: &str, cx: &App) -> Vec<SlashCommand> {
     let Some(ch) = app.selected_channel else { return vec![] };
     let Some(all) = cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch)) else { return vec![] };
@@ -124,7 +114,6 @@ fn fill(app: &mut PhoenixApp, cmd: &SlashCommand, window: &mut Window, cx: &mut 
     cx.notify();
 }
 
-/// Composer key capture. True when consumed.
 pub fn on_key(app: &mut PhoenixApp, key: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) -> bool {
     let Some((t, items)) = list_open(app, cx) else { return false };
     let n = items.len();
@@ -140,8 +129,6 @@ pub fn on_key(app: &mut PhoenixApp, key: &str, window: &mut Window, cx: &mut Con
     true
 }
 
-/// Hook at the top of `chat_submit`: runs `/command args` when the command
-/// exists. True when handled (sent, or a user-facing error was shown).
 pub fn submit(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> bool {
     let t = text(app, cx);
     let Some((name, args)) = slash::split_invocation(t.trim()) else { return false };
@@ -169,8 +156,6 @@ pub fn submit(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     true
 }
 
-/// Application icon (`app-icons/{app}/{icon}.png`), or its initial on a round
-/// blurple badge when the app has no icon.
 fn app_icon(cmd: &SlashCommand, size: f32) -> AnyElement {
     if let Some(url) = &cmd.app_icon {
         return gpui::img(SharedString::from(url.clone())).size(z(size)).flex_none().rounded_full().into_any_element();
@@ -209,9 +194,6 @@ fn option_list(raw: &Value) -> Vec<(String, u64, bool, String)> {
         .unwrap_or_default()
 }
 
-/// Same container as the other composer autocompletes (116815 autocompleteAttached_ /
-/// autocomplete_rg6La1, 790340 autocomplete_CAMiwx): inset-inline 8 / 16, radius 5,
-/// --shadow-border + --shadow-high, --background-surface-high. CSS only.
 fn popup() -> gpui::Div {
     div()
         .absolute()
@@ -226,7 +208,6 @@ fn popup() -> gpui::Div {
         .flex_col()
 }
 
-/// Popup anchored above the composer (zero-height relative wrapper).
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let t = text(app, cx);
     if !t.starts_with('/') {
@@ -243,9 +224,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         };
         let sel = cx.try_global::<SlashUi>().map_or(0, |s| s.selected).min(items.len() - 1);
         use crate::theme::generated::idx;
-        // 116815 outerWrapper_ > wrapper_ (row, height 420) holding the 934305 rail and list_.
-        // Rail: wrapper_mTknAg 48px, --background-base-lowest, listPadding [16, 8, 8, 8];
-        // one 32px app icon per section (section_mTknAg radius 4, margin-bottom 8).
         let mut rail = div()
             .w(z(48.))
             .h_full()
@@ -257,8 +235,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             .flex_col()
             .items_center()
             .gap(z(8.));
-        // list_: listPadding [8, 8, 0, 8]; sections are categorySection_ (margin-bottom 16,
-        // none on the last) under a 32px sticky categoryHeader_.
         let mut list = div().id("slash-list").flex_1().min_w_0().h_full().overflow_y_scroll().pt(z(8.)).px(z(8.)).flex().flex_col();
         let mut last_app: Option<&str> = None;
         for (i, cmd) in items.iter().enumerate() {
@@ -269,8 +245,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 last_app = Some(cmd.app_name.as_str());
                 rail = rail.child(div().size(z(32.)).flex_none().rounded(z(4.)).cursor_pointer().child(app_icon(cmd, 32.)));
                 list = list.child(
-                    // categoryHeader_ / wrapper_kSdzCr: --background-surface-high, padding-inline 8 4,
-                    // 16px icon, label body-sm/semibold (14px 600) --text-default, 4px apart.
                     div()
                         .h(z(32.))
                         .flex_none()
@@ -305,9 +279,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             list = list.child(
                 div()
                     .id(("slash-cmd", i))
-                    // NewCommand row: rowHeight 56; itemWrapper_ padding 0 (the list_ has
-                    // listPadding 8) + base_ (padding 8, radius 3); selected / hover
-                    // --interactive-background-hover.
                     .h(z(56.))
                     .flex_none()
                     .p(z(8.))
@@ -344,7 +315,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         }
         return Some(anchor(popup().h(z(420.)).flex_row().child(rail).child(list)));
     }
-    // A command is picked: hint bar with its options as chips.
     let (name, args) = slash::split_invocation(t.trim_start())?;
     let cmd = find(app, name, cx)?;
     let opts = option_list(&cmd.raw);
@@ -368,9 +338,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             desc = Some(d.clone());
         }
         chips = chips.child(
-            // 358931 optionPill_: radius 4, 1px --background-base-lowest border,
-            // --background-mod-normal; optionPillKey_ padding 1px 8px on --background-surface-high;
-            // optionPillValue_ padding 1px 8px.
             div()
                 .rounded(z(4.))
                 .border_1()

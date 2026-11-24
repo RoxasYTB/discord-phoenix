@@ -1,36 +1,10 @@
-//! Inbox > Unreads: which channels the official client lists, in which order,
-//! and which of their messages it shows. Rebuilt from the client's inbox
-//! module (2026 bundle, `INBOX_OPEN` initial state + its channel loader):
-//!
-//! - DMs (most recent first), then every guild in rail order (folders
-//!   flattened): its channels in channel-list order, each followed by its
-//!   joined active unread threads.
-//! - A channel is listed when it is not muted (guild, category or channel; a
-//!   thread: its own mute), has an unread message after the ack (or after the
-//!   guild join date when it was never read), can be read (READ_MESSAGE_HISTORY)
-//!   and either has mentions or counts as unread for its "unreads" setting.
-//!   DMs need a mention count (every DM message is one).
-//! - Then a stable sort on the client's priority: favourite, DM, high / low
-//!   importance mention, last message older than 10 days (last) or 2 days,
-//!   then the notification level (all messages, default, nothing).
-//! - Messages: `around` the ack, 30, keeping those after the ack up to the last
-//!   message; 25 shown, then a "View all" button.
-//!
-//! The client acks a channel by itself when that load finds nothing to show
-//! (`ACK_INBOX_CHANNEL_NO_MESSAGES`). Phoenix never acks from the inbox: such
-//! a channel is only hidden.
-
 use crate::model::{Id, Message};
 
-/// Discord epoch (2015-01-01) in unix ms.
 const DISCORD_EPOCH_MS: u64 = 1_420_070_400_000;
 const DAY_MS: u64 = 86_400_000;
-/// `fetchMessages({limit: 30, jump: {messageId: oldestRead}})`.
 pub const FETCH_LIMIT: u32 = 30;
-/// `t.messages.slice(0, 25)`.
 pub const SHOWN: usize = 25;
 
-/// `message_notifications`, resolved (channel override, else guild).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Notify {
     All,
@@ -42,13 +16,10 @@ pub enum Notify {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Messages,
-    /// Forum / media channel: new posts instead of messages.
     Forum,
-    /// Guild scheduled events read state (`guild-events`, sortOrder 5).
     GuildEvents,
 }
 
-/// One channel as the backend sees it (read state, settings, permissions).
 #[derive(Clone, Debug)]
 pub struct Candidate {
     pub channel: Id,
@@ -56,19 +27,14 @@ pub struct Candidate {
     pub private: bool,
     pub thread: bool,
     pub kind: Kind,
-    /// Guild, category or channel muted (threads: the thread member's mute).
     pub muted: bool,
     pub has_unread: bool,
     pub mentions: u32,
-    /// Read state ack; `None` when the channel was never read.
     pub ack: Option<u64>,
-    /// Guild join date as a snowflake (ack fallback).
     pub joined: Option<u64>,
     pub last_message: Option<u64>,
     pub can_read_history: bool,
-    /// Channel override flag FAVORITED.
     pub favorite: bool,
-    /// The channel's unreads setting resolves to "all messages".
     pub unreads_all: bool,
     pub notify: Notify,
 }
@@ -103,7 +69,6 @@ fn sort_order(c: &Candidate, last: u64, now_ms: u64) -> u8 {
         return 1;
     }
     if c.mentions > 0 {
-        // Low importance mentions (3) are not tracked: always high.
         return 2;
     }
     let age = now_ms.saturating_sub(snowflake_ms(last));
@@ -120,7 +85,6 @@ fn sort_order(c: &Candidate, last: u64, now_ms: u64) -> u8 {
     }
 }
 
-/// `nZ` filter + `sortBy(sortOrder)`; `cands` are in client walk order.
 pub fn build(cands: impl IntoIterator<Item = Candidate>, now_ms: u64) -> Vec<Entry> {
     let mut out: Vec<Entry> = Vec::new();
     for c in cands {
@@ -154,13 +118,10 @@ pub fn build(cands: impl IntoIterator<Item = Candidate>, now_ms: u64) -> Vec<Ent
             sort: sort_order(&c, last, now_ms),
         });
     }
-    // lodash sortBy is stable.
     out.sort_by_key(|e| e.sort);
     out
 }
 
-/// Messages of one channel card: after the ack, up to the newest unread,
-/// oldest first. Returns the shown ones and whether "View all" is needed.
 pub fn shown_messages(e: &Entry, mut fetched: Vec<Message>) -> (Vec<Message>, bool) {
     fetched.retain(|m| m.id.0 > e.oldest_read.0 && m.id.0 <= e.newest.0);
     fetched.sort_by_key(|m| m.id.0);

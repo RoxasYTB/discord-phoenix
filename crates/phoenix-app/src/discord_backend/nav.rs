@@ -1,7 +1,3 @@
-//! Navigation data for the real backend: relationships, guild folders,
-//! threads, channel decorations and the REST calls behind the Friends page,
-//! invites and the guild menu. Emits `AppEvent::Nav`.
-
 use base64::Engine;
 use phoenix_api::{
     Cache, RestClient,
@@ -46,8 +42,6 @@ fn relationship(r: &api::Relationship) -> Option<Relationship> {
     })
 }
 
-// ------------------------------------------------------------ folders
-
 fn varint(b: &[u8], i: &mut usize) -> Option<u64> {
     let mut v = 0u64;
     for shift in (0..64).step_by(7) {
@@ -61,7 +55,6 @@ fn varint(b: &[u8], i: &mut usize) -> Option<u64> {
     None
 }
 
-/// Minimal protobuf walk: (field, wire type, length-delimited payload, scalar).
 pub(crate) fn fields(b: &[u8]) -> Vec<(u64, u8, &[u8], u64)> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -95,7 +88,6 @@ pub(crate) fn fields(b: &[u8]) -> Vec<(u64, u8, &[u8], u64)> {
     out
 }
 
-/// Value of a wrapper message (`Int64Value` / `UInt64Value`: field 1).
 fn wrapped_u64(b: &[u8]) -> Option<u64> {
     fields(b).into_iter().find(|f| f.0 == 1).map(|f| f.3)
 }
@@ -104,7 +96,6 @@ fn wrapped_str(b: &[u8]) -> Option<String> {
     fields(b).into_iter().find(|f| f.0 == 1 && f.1 == 2).map(|f| String::from_utf8_lossy(f.2).into_owned())
 }
 
-/// `PreloadedUserSettings.guild_folders` (field 14) -> folders (field 1).
 pub fn folders_from_proto(b64: &str) -> Vec<GuildFolder> {
     let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64.trim()) else { return Vec::new() };
     let mut out = Vec::new();
@@ -158,9 +149,6 @@ pub fn folders_from_json(v: Option<&Value>) -> Vec<GuildFolder> {
         .collect()
 }
 
-// ------------------------------------------------------- channel bits
-
-/// Thread member `muted` (+ `mute_config.end_time` not yet passed).
 fn thread_member_muted(c: &api::Channel) -> bool {
     let Some(m) = c.member.as_ref() else { return false };
     if !m.get("muted").and_then(Value::as_bool).unwrap_or(false) {
@@ -193,9 +181,6 @@ fn thread(c: &api::Channel) -> Option<model::Channel> {
 }
 
 fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
-    // Vanilla client rule (channel-icon picker → "is private channel" helper):
-    // a guild channel is locked when @everyone, after its own overwrite, lacks
-    // CONNECT (voice/stage), or when the @everyone overwrite denies VIEW_CHANNEL.
     let everyone_denied = |ch: &api::Channel| {
         ch.guild_id.is_some_and(|g| {
             let ow = ch.permission_overwrites.iter().find(|o| o.id == g);
@@ -215,16 +200,12 @@ fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
         })
     };
     let group = c.kind == ChannelType::GroupDm;
-    // Read-only permission check for the composer (the cache's overwrite computation).
     let perms = cache.permissions_in(c.id);
     let locked_thread = c.kind.is_thread() && c.thread_metadata.as_ref().is_some_and(|m| m.locked);
     let send_bit = if c.kind.is_thread() { api::Permissions::SEND_MESSAGES_IN_THREADS } else { api::Permissions::SEND_MESSAGES };
     ChannelExtra {
         slowmode: c.rate_limit_per_user.unwrap_or(0),
-        // Client: isBypassSlowmode = can(BYPASS_SLOWMODE) only (module 960850 `c`).
         bypass_slowmode: perms.contains(api::Permissions::BYPASS_SLOWMODE),
-        // Empty = roles not cached yet: don't lock the composer on missing data.
-        // A locked thread only takes messages from MANAGE_THREADS holders.
         send_blocked: c.guild_id.is_some()
             && !perms.is_empty()
             && (!perms.contains(send_bit) || (locked_thread && !perms.contains(api::Permissions::MANAGE_THREADS))),
@@ -241,12 +222,10 @@ fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
         recipients: if c.kind.is_private() { c.recipient_user_ids().len() } else { 0 },
         group_name: group.then(|| group_name(cache, c)).flatten(),
         members: if group { c.recipient_user_ids().into_iter().map(id).collect() } else { Vec::new() },
-        // Threads too: "Commencé par" in the thread view.
         owner: c.owner_id.filter(|_| group || c.kind.is_thread()).map(id),
     }
 }
 
-/// A thread's latest message for its card (nick, else display name).
 fn recent_of(m: &api::Message) -> crate::thread_recent::Recent {
     let name = m.member.as_ref().and_then(|mb| mb.nick.as_deref()).filter(|n| !n.is_empty()).unwrap_or(m.author.display_name());
     crate::thread_recent::Recent {
@@ -262,7 +241,6 @@ fn guild_extras(cache: &Cache, g: api::Snowflake) -> Vec<(Id, ChannelExtra)> {
     cache.guild_channels(g).iter().map(|c| (id(c.id), extra(cache, c))).collect()
 }
 
-/// Group DM name when READY only gave recipient ids (else "Unnamed").
 fn group_name(cache: &Cache, c: &api::Channel) -> Option<gpui::SharedString> {
     if c.name.as_deref().is_some_and(|n| !n.is_empty()) || !c.recipients.is_empty() {
         return None;
@@ -280,7 +258,6 @@ pub fn snapshot(cache: &Cache, ready: &Ready) -> Vec<AppEvent> {
     }
     let mut threads = Vec::new();
     let mut extras = Vec::new();
-    // Thread mutes also live in `user_guild_settings` channel_overrides.
     let mutes = convert::parse_mutes(ready.user_guild_settings.as_ref());
     for g in cache.guilds() {
         for c in cache.guild_channels(g.id) {
@@ -300,7 +277,6 @@ pub fn snapshot(cache: &Cache, ready: &Ready) -> Vec<AppEvent> {
     ]
 }
 
-/// Live gateway events that matter to navigation.
 pub fn on_gateway(cache: &Cache, ev: &GatewayEvent) -> Vec<AppEvent> {
     let mut out = Vec::new();
     match ev {
@@ -323,10 +299,6 @@ pub fn on_gateway(cache: &Cache, ev: &GatewayEvent) -> Vec<AppEvent> {
             }));
         }
         GatewayEvent::ThreadDelete(c) => out.push(AppEvent::Nav(NavEvent::ThreadDelete(id(c.id)))),
-        // Sent when a channel is opened: active threads plus my thread members. The
-        // sidebar lists only the threads I joined (those with a member entry).
-        // Settings saved by another client (type 1 = PreloadedUserSettings). Partial
-        // protos carry only changed fields: no folders field means no folder change.
         GatewayEvent::Unknown { name, data } if name == "USER_SETTINGS_PROTO_UPDATE" => {
             let s = data.get("settings");
             if s.and_then(|s| s.get("type")).and_then(Value::as_u64) == Some(1)
@@ -394,8 +366,6 @@ pub fn on_gateway(cache: &Cache, ev: &GatewayEvent) -> Vec<AppEvent> {
     }
     out
 }
-
-// --------------------------------------------------------------- REST
 
 fn api_err(e: phoenix_api::Error) -> BackendError {
     let s = e.to_string();
@@ -559,7 +529,6 @@ mod tests {
 
     #[test]
     fn folder_proto() {
-        // guild_folders { folders { guild_ids: [1,2] id { value: 9 } name { value: "ab" } color { value: 255 } } }
         let mut folder = vec![0x0a, 16];
         folder.extend(1u64.to_le_bytes());
         folder.extend(2u64.to_le_bytes());
@@ -577,7 +546,6 @@ mod tests {
         assert_eq!(f[0].id, Some(9));
         assert_eq!(f[0].name.as_deref(), Some("ab"));
         assert_eq!(f[0].color, Some(255));
-        // Live update from another client: settings reloaded, folders replaced; other setting types ignored.
         let upd = |t: u64| GatewayEvent::Unknown {
             name: "USER_SETTINGS_PROTO_UPDATE".into(),
             data: json!({"settings": {"type": t, "proto": b64}, "partial": true}),

@@ -1,13 +1,3 @@
-//! Channel topic modal (click the topic in the chat header).
-//!
-//! Live client (vanilla-topic-modal dump, 2026-11-24): a `container_dvN-MP size-md`
-//! card 480px wide, radius 12, 1px `--border-subtle`, padding 8 0 16; header
-//! padding 16 24 8 with the "Channel Topic" `heading-lg/semibold` (20/24 600
-//! `--text-strong`), a 40px icon-only close button (`headerTrailing_` margin -16 -16 0 12),
-//! and a subtitle row: 18px channel glyph + 4px gap + channel name (`body-md/normal`
-//! 16/20 `--text-subtle`). `bodySpacerTop_` 16, `bodyInner_` padding 0 8 0 24 (+ the
-//! scroller gutter), markdown topic 16/22 `--text-default`, `bodySpacerBottom_` 8.
-
 use crate::theme::z;
 use gpui::{AnyElement, Context, FontWeight, IntoElement, MouseButton, ParentElement, Styled, div, prelude::*};
 
@@ -98,7 +88,6 @@ pub fn render(app: &PhoenixApp, ch: Id, cx: &mut Context<PhoenixApp>) -> AnyElem
     crate::ui::modal::frame("topic-backdrop", close2, card)
 }
 
-/// Click handler for the topic text in the chat header.
 pub fn on_click(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static {
     let ch = app.selected_channel;
     cx.listener(move |a, _, _, cx| {

@@ -1,12 +1,3 @@
-//! QR code login through the remote-auth gateway (protocol v2).
-//!
-//! Flow: `hello` -> we send `init` with our RSA public key -> server sends an
-//! encrypted nonce, we answer `nonce_proof` with SHA-256(nonce) ->
-//! `pending_remote_init` gives the fingerprint shown as a QR code
-//! (`https://discord.com/ra/{fingerprint}`) -> the phone scans it
-//! (`pending_ticket`, encrypted user preview) and confirms (`pending_login`
-//! with a ticket) -> REST exchanges the ticket for an encrypted token.
-
 use std::time::Duration;
 
 use base64::Engine;
@@ -24,16 +15,11 @@ use crate::rest::RestClient;
 
 pub const GATEWAY_URL: &str = "wss://remote-auth-gateway.discord.gg/?v=2";
 
-/// Progress reported to the UI.
 #[derive(Clone, PartialEq)]
 pub enum RemoteAuthEvent {
-    /// Show this URL as a QR code.
     Qr(String),
-    /// Scanned; waiting for confirmation on the phone.
     Scanned { user_id: String, discriminator: String, avatar: Option<String>, username: String },
-    /// Logged in: the user token (never log it).
     Token(String),
-    /// Phone cancelled or the session timed out; a new QR is needed.
     Cancelled,
 }
 
@@ -48,7 +34,6 @@ impl std::fmt::Debug for RemoteAuthEvent {
     }
 }
 
-/// RSA-2048 key pair and the protocol crypto steps.
 pub struct Keys {
     private: RsaPrivateKey,
     spki_b64: String,
@@ -76,18 +61,15 @@ impl Keys {
         RsaPublicKey::from(&self.private)
     }
 
-    /// RSA-OAEP(SHA-256) decrypt of a base64 payload.
     pub fn decrypt(&self, b64: &str) -> Result<Vec<u8>> {
         let data = STANDARD.decode(b64).map_err(|e| Error::Protocol(format!("base64: {e}")))?;
         self.private.decrypt(Oaep::new::<Sha256>(), &data).map_err(|e| Error::Protocol(format!("rsa decrypt: {e}")))
     }
 
-    /// `nonce_proof` answer: base64url(SHA-256(nonce)) without padding.
     pub fn nonce_proof(&self, encrypted_nonce: &str) -> Result<String> {
         Ok(proof_of(&self.decrypt(encrypted_nonce)?))
     }
 
-    /// Fingerprint the server should announce: base64url(SHA-256(SPKI)).
     pub fn expected_fingerprint(&self) -> String {
         let der = STANDARD.decode(&self.spki_b64).unwrap_or_default();
         URL_SAFE_NO_PAD.encode(Sha256::digest(der))
@@ -102,7 +84,6 @@ pub fn qr_url(fingerprint: &str) -> String {
     format!("https://discord.com/ra/{fingerprint}")
 }
 
-/// `id:discriminator:avatar:username` user preview.
 pub fn parse_user_payload(s: &str) -> Option<RemoteAuthEvent> {
     let mut it = s.splitn(4, ':');
     let user_id = it.next()?.to_owned();
@@ -117,18 +98,15 @@ pub fn parse_user_payload(s: &str) -> Option<RemoteAuthEvent> {
     })
 }
 
-/// What to do after a server message.
 #[derive(Debug, PartialEq)]
 pub enum Step {
     Send(Value),
     Emit(RemoteAuthEvent),
-    /// Exchange this ticket via REST.
     Ticket(String),
     Heartbeat(Duration),
     Ignore,
 }
 
-/// Pure protocol state machine step (testable without network).
 pub fn handle(keys: &Keys, msg: &Value) -> Result<Step> {
     let op = msg.get("op").and_then(Value::as_str).unwrap_or("");
     let s = |k: &str| msg.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
@@ -158,8 +136,6 @@ pub fn handle(keys: &Keys, msg: &Value) -> Result<Step> {
     })
 }
 
-/// Run one remote-auth session until a token, cancel or error. Events go to
-/// `tx`; drop the receiver to stop.
 pub async fn run(rest: RestClient, tx: mpsc::UnboundedSender<RemoteAuthEvent>) -> Result<()> {
     let keys = tokio::task::spawn_blocking(Keys::generate)
         .await

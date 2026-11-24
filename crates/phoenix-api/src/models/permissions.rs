@@ -4,7 +4,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::{GuildId, PermissionOverwrite, OverwriteType, Role, RoleId, UserId};
 
 bitflags! {
-    /// Discord permission bits.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
     pub struct Permissions: u64 {
         const CREATE_INSTANT_INVITE = 1 << 0;
@@ -56,9 +55,7 @@ bitflags! {
         const SEND_VOICE_MESSAGES = 1 << 46;
         const SEND_POLLS = 1 << 49;
         const USE_EXTERNAL_APPS = 1 << 50;
-        /// The client's slowmode check (`can(BYPASS_SLOWMODE)`, module 960850); admins hold it.
         const BYPASS_SLOWMODE = 1 << 52;
-        // Keep unknown future bits instead of dropping them.
         const _ = !0;
     }
 }
@@ -85,8 +82,6 @@ impl<'de> Deserialize<'de> for Permissions {
     }
 }
 
-/// Guild-level permissions for a member: @everyone role + all member roles.
-/// Owners and administrators get everything.
 pub fn compute_base_permissions(
     guild_id: GuildId,
     owner_id: Option<UserId>,
@@ -97,7 +92,6 @@ pub fn compute_base_permissions(
     if owner_id == Some(user_id) {
         return Permissions::all();
     }
-    // The @everyone role shares the guild id.
     let mut perms = roles
         .iter()
         .find(|r| r.id == guild_id)
@@ -112,9 +106,6 @@ pub fn compute_base_permissions(
     perms
 }
 
-/// Apply channel overwrites on top of base permissions following the
-/// documented order: @everyone overwrite, then the union of role overwrites
-/// (deny then allow), then the member-specific overwrite.
 pub fn apply_overwrites(
     base: Permissions,
     guild_id: GuildId,
@@ -151,8 +142,6 @@ pub fn apply_overwrites(
         perms &= !ow.deny;
         perms |= ow.allow;
     }
-    // Implicit rules: without VIEW_CHANNEL nothing else applies, and
-    // without SEND_MESSAGES the message-sending sub-permissions are moot.
     if !perms.contains(Permissions::VIEW_CHANNEL) {
         return Permissions::empty();
     }
@@ -165,7 +154,6 @@ pub fn apply_overwrites(
     perms
 }
 
-/// Convenience: full channel permission computation.
 pub fn compute_channel_permissions(
     guild_id: GuildId,
     owner_id: Option<UserId>,

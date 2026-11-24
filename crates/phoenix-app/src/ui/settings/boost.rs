@@ -1,9 +1,3 @@
-//! "Boost de serveur" settings page, laid out like the 2026 client
-//! (dump vanilla-settings-16-1, `guildBoostingSettings_AioBH5`, 696px column):
-//! header (title + lead | 300px video card), purchase notice pill, guild cards,
-//! perks table, "Boost your community" cards and the FAQ list.
-//! Phoenix doesn't buy boosts: buttons are inert like the rest of billing.
-
 use gpui::{AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, relative};
 
 use crate::{
@@ -28,13 +22,10 @@ fn text(size: f32, line: f32, weight: FontWeight, color: usize, s: SharedString)
     div().text_size(z(size)).line_height(z(line)).font_weight(weight).text_color(c(tok(color))).child(s)
 }
 
-/// heading-xl/medium 24/32 --text-strong (#2731, #2921, #2936).
 fn heading_xl(s: SharedString) -> Div {
     text(24., 32., FontWeight::MEDIUM, idx::TEXT_STRONG, s)
 }
 
-/// Perks table rows (#2812..): label key, then the three tier values
-/// (`None` = check icon, `Some("")` = empty cell).
 const PERKS: &[(&str, [Option<&str>; 3])] = &[
     ("sp.bo.p_emoji", [Some("100"), Some("150"), Some("250")]),
     ("sp.bo.p_stickers", [Some("15"), Some("30"), Some("60")]),
@@ -66,7 +57,6 @@ pub(super) fn page(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
         .child(header())
         .child(notice())
         .child(
-            // refreshSections_AioBH5: column, gap --space-32
             div()
                 .flex()
                 .flex_col()
@@ -79,9 +69,6 @@ pub(super) fn page(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
         .into_any_element()
 }
 
-/// header_xDn2Ui: row, centred, gap 32, margin-bottom 32; content 364 wide
-/// (headingRow gap 10: 15x24 gem + heading-xl), lead body-sm 14/18
-/// --text-subtle; videoThumbnail 300x169, radius 10, 1px --border-normal.
 fn header() -> Div {
     div()
         .flex()
@@ -90,11 +77,11 @@ fn header() -> Div {
         .mb(z(32.))
         .child(
             div()
-                .w(z(364.)) // #2728 content_xDn2Ui width
+                .w(z(364.))
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .gap(z(4.)) // content_xDn2Ui gap
+                .gap(z(4.))
                 .child(div().flex().items_center().gap(z(10.)).child(icon("boost", 20., idx::GUILD_BOOSTING_PINK)).child(heading_xl(tr("sp.bo.title"))))
                 .child(
                     div()
@@ -116,9 +103,7 @@ fn header() -> Div {
                 .border_color(c(tok(idx::BORDER_NORMAL)))
                 .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
                 .overflow_hidden()
-                // videoTitle_DV7fsY at 12,12: body-sm/semibold white
                 .child(div().absolute().top(z(12.)).left(z(12.)).child(text(14., 18., FontWeight::SEMIBOLD, idx::WHITE, tr("sp.bo.video"))))
-                // playButton_DV7fsY: 48px, padding 12, 24px play glyph, centred
                 .child(
                     div()
                         .absolute()
@@ -131,8 +116,6 @@ fn header() -> Div {
         )
 }
 
-/// guildBoostUnavailableNotice_Jru8ph: centred pill, --white 10% fill, 2px
-/// --white border, padding 8 16, margin-bottom 32; body-sm/medium uppercase.
 fn notice() -> Div {
     div().flex().justify_center().mb(z(32.)).child(
         div()
@@ -146,10 +129,6 @@ fn notice() -> Div {
     )
 }
 
-/// wrapper_M7b2T5 (gap 16): heading-sm/semibold title, then `card_rH8mBz`
-/// rows 8 apart: --background-surface-high, 1px --border-muted, r16, p12;
-/// 40px guild icon, gap 12, name heading-sm/semibold; sm secondary
-/// "Boost this server" button with the 16px boost glyph.
 fn guild_cards(app: &PhoenixApp) -> Div {
     let mut cards = div().flex().flex_col().gap(z(8.));
     for g in app.guilds.iter().take(3) {
@@ -170,9 +149,6 @@ fn guild_cards(app: &PhoenixApp) -> Div {
                         .gap(z(12.))
                         .min_w_0()
                         .child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 40.))
-                        // guildDetails_rH8mBz: column gap 2; statsRow_rH8mBz gap --space-8:
-                        // statGroup (gap 2) 14px gem + body-xs --text-muted count, 4px
-                        // --text-muted dotSeparator, level (vanilla-settings-16-1 #2752..2759).
                         .child(
                             div()
                                 .flex()
@@ -220,10 +196,6 @@ fn guild_cards(app: &PhoenixApp) -> Div {
         .child(cards)
 }
 
-/// table_twYJsJ: rows padding 16 0 with a 1px --border-normal bottom; four
-/// flex:1 cells padded 0 16. Header: heading-lg/semibold 20/24 + body-sm
-/// /medium --text-subtle boosts count; perk label body-md/medium
-/// --text-subtle; tier values body-md/semibold --text-strong or a 24px check.
 fn perks_table() -> Div {
     let cell = || div().flex_1().min_w_0().px(z(16.));
     let tier = || cell().flex().flex_col().items_center().justify_center();
@@ -251,9 +223,6 @@ fn perks_table() -> Div {
     t
 }
 
-/// wrapper_dgf5AJ (gap 16): heading-xl, then 2x2 `card_dgf5AJ` (flex 50%,
-/// gap 16): --background-surface-high, 1px --border-subtle, r16, p12, gap 8,
-/// centred 42px --icon-muted glyph + body-sm/medium --text-subtle text.
 fn community() -> Div {
     let card = |ic: &'static str, k: &'static str| {
         div()
@@ -280,10 +249,6 @@ fn community() -> Div {
         .child(div().flex().gap(z(16.)).child(card("crown", "sp.bo.c3")).child(card("boost", "sp.bo.c4")))
 }
 
-/// wrapper_eICevE (gap 16): heading-xl + list gap 4 of `listItem_eICevE`
-/// (--background-surface-high, 1px --border-subtle, r8, p12, pointer);
-/// question heading-sm/semibold --text-subtle, 18px chevron, gap 12.
-/// Open FAQ rows (bit i = question i); every row toggles on its own like the client.
 static FAQ_OPEN: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
 
 fn faq() -> Div {
@@ -292,8 +257,6 @@ fn faq() -> Div {
     let mut list = div().flex().flex_col().gap(z(4.));
     for (i, q) in FAQ.iter().enumerate() {
         let expanded = open & (1 << i) != 0;
-        // listItem_eICevE (surface-high, border-subtle) → listItemExpanded_
-        // (surface-highest, border-normal); questionWrapper_ gap 12; answer_ padding-top 8.
         let (bg, border) = if expanded {
             (idx::BACKGROUND_SURFACE_HIGHEST, idx::BORDER_NORMAL)
         } else {

@@ -1,5 +1,3 @@
-//! Channel and guild menu actions: clone, move, scheduled events.
-
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -7,7 +5,6 @@ use super::{Body, RestClient, moderation::rfc3339};
 use crate::error::Result;
 use crate::models::{Channel, ChannelId, GuildId, Snowflake};
 
-/// Body of `POST /guilds/{g}/channels` copying `src` ("Clone Channel").
 pub fn clone_channel_body(src: &Channel, name: &str) -> Value {
     let mut v = json!({
         "name": name,
@@ -34,7 +31,6 @@ pub fn clone_channel_body(src: &Channel, name: &str) -> Value {
     v
 }
 
-/// One entry of `PATCH /guilds/{g}/channels` (channel position / parent).
 pub fn move_entry(channel: ChannelId, position: i32, parent: Option<Option<ChannelId>>) -> Value {
     let mut v = json!({ "id": channel, "position": position });
     if let Some(p) = parent {
@@ -44,7 +40,6 @@ pub fn move_entry(channel: ChannelId, position: i32, parent: Option<Option<Chann
     v
 }
 
-/// Where a scheduled event happens.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EventPlace {
     Voice(ChannelId),
@@ -52,7 +47,6 @@ pub enum EventPlace {
     External(String),
 }
 
-/// Body of `POST /guilds/{g}/scheduled-events` (guild-only privacy).
 pub fn event_body(name: &str, description: &str, start_unix: u64, end_unix: Option<u64>, place: &EventPlace) -> Value {
     let mut v = json!({
         "name": name.trim(),
@@ -91,23 +85,18 @@ impl RestClient {
         self.call_empty(Method::PATCH, &format!("/guilds/{guild}/channels"), Body::Json(Value::Array(entries))).await
     }
 
-    /// `GET /guilds/{g}/scheduled-events?with_user_count=true` (Events modal), read-only.
     pub async fn scheduled_events(&self, guild: GuildId) -> Result<Vec<Value>> {
         self.call(Method::GET, &format!("/guilds/{guild}/scheduled-events?with_user_count=true"), Body::None).await
     }
 
-    /// `GET /guilds/{g}/onboarding` (Channels & Roles page), read-only.
     pub async fn guild_onboarding(&self, guild: GuildId) -> Result<Value> {
         self.call(Method::GET, &format!("/guilds/{guild}/onboarding"), Body::None).await
     }
 
-    /// `GET /guilds/{g}/new-member-welcome` (Server Guide: welcome message, new member
-    /// actions and resource channels), read-only.
     pub async fn guild_home_settings(&self, guild: GuildId) -> Result<Value> {
         self.call(Method::GET, &format!("/guilds/{guild}/new-member-welcome"), Body::None).await
     }
 
-    /// `GET /guilds/{g}/profile` (Server Guide sidebar card: counts, tag, traits), read-only.
     pub async fn guild_profile(&self, guild: GuildId) -> Result<Value> {
         self.call(Method::GET, &format!("/guilds/{guild}/profile"), Body::None).await
     }

@@ -1,21 +1,3 @@
-//! Profile bio and badge-row helpers shared by the DM profile panel, the
-//! user popout and the full profile modal.
-//!
-//! Bio: `bioText_qjJ3Wv` (body-sm/normal 14/18) is rendered by the client's
-//! message markdown parser restricted to inline rules (bold, italic,
-//! underline, strike, inline code, links, custom and Unicode emoji). We reuse
-//! `crate::markdown::parse_inline` + `richtext::rich_inline`, line by line, so
-//! the 3-line clamp (`descriptionClamp_BcddaK`, -webkit-line-clamp 3) stays
-//! one source line per clamped line.
-//!
-//! Badges: module `UserProfileBadgeListRows` of the 2026 client. With the
-//! "2026-08-badge-management" experiment on (vanilla dumps show the
-//! `managed_IqWmhA` container, so it is on) and a non-bot target, the row
-//! shows the first 6 badges then an `overflowSlot_IqWmhA` "+N"
-//! (`hiddenCount_IqWmhA`, body-sm/normal, --text-default) — in every layout
-//! (popout, sidebar, modal). Order is `displayProfile.getBadges()`, i.e. the
-//! API `badges` array order, untouched.
-
 use gpui::{div, prelude::*, Div, Hsla, InteractiveText, SharedString, StyledText, TextRun};
 
 use crate::{
@@ -24,10 +6,8 @@ use crate::{
     theme::{c, generated::idx, tok, z},
 };
 
-/// Badges shown before the "+N" slot (`S.slice(0,6)`, `max(len-6,0)`).
 pub const MAX_VISIBLE_BADGES: usize = 6;
 
-/// (visible badges, hidden count) for a badge list.
 pub fn split_badges<T>(badges: &[T], bot: bool) -> (&[T], usize) {
     if bot || badges.len() <= MAX_VISIBLE_BADGES {
         return (badges, 0);
@@ -35,9 +15,6 @@ pub fn split_badges<T>(badges: &[T], bot: bool) -> (&[T], usize) {
     (&badges[..MAX_VISIBLE_BADGES], badges.len() - MAX_VISIBLE_BADGES)
 }
 
-/// `overflowSlot_IqWmhA` (flex, center, height 20px, min-width 20px,
-/// padding 0 2px, --text-default) holding `hiddenCount_IqWmhA` "+N"
-/// (body-sm/normal 14/18).
 pub fn overflow_slot(n: usize) -> Div {
     div()
         .flex()
@@ -75,7 +52,6 @@ fn line_rich(line: &str, color: Hsla, ellipsis: bool) -> RichText {
     rich_inline(&parse_inline(&src, &NoResolve, &mut n), &|_| true, color)
 }
 
-/// Text slice as StyledText, with clickable links.
 fn text_el(id: u64, t: &RichText, range: std::ops::Range<usize>) -> gpui::AnyElement {
     let styled = StyledText::new(SharedString::from(t.text[range.clone()].to_owned())).with_runs(slice_runs(&t.runs, range.clone()));
     let mut ranges = Vec::new();
@@ -95,12 +71,6 @@ fn text_el(id: u64, t: &RichText, range: std::ops::Range<usize>) -> gpui::AnyEle
     InteractiveText::new(("profile-bio", id), styled).on_click(ranges, move |ix, _w, cx| cx.open_url(&urls[ix])).into_any_element()
 }
 
-/// One bio line: text runs + inline emoji (`img.emoji` 1.375em = 19.25px,
-/// margin 0 .05em 0 .1em, vertical-align bottom). `wrap` lets it flow on
-/// several lines: the text is cut into words so the flex row wraps like an
-/// inline box (a whole text segment as one flex item laid the emoji after
-/// the wrapped block, on top of the next line's text). The emoji sits in a
-/// fixed 19.25px box so its ":name:" loading fallback can't spill over.
 fn line_el(id: u64, t: &RichText, wrap: bool) -> Div {
     let size = 19.25;
     let mut row = div().flex().min_w_0().items_end();
@@ -130,7 +100,6 @@ fn line_el(id: u64, t: &RichText, wrap: bool) -> Div {
     row
 }
 
-/// `range` of `text` cut after each run of whitespace ("a b  c" -> "a ", "b  ", "c").
 fn words(text: &str, range: std::ops::Range<usize>) -> Vec<std::ops::Range<usize>> {
     let mut out = Vec::new();
     let mut start = range.start;
@@ -151,8 +120,6 @@ fn words(text: &str, range: std::ops::Range<usize>) -> Vec<std::ops::Range<usize
     out
 }
 
-/// Bio with inline markdown and emoji. `clamp` keeps at most 3 lines with
-/// "…" on the third when more follow.
 pub fn bio(bio: &str, clamp: bool, color: Hsla) -> Div {
     let lines: Vec<&str> = bio.lines().filter(|l| !l.trim().is_empty()).collect();
     let id = {
@@ -174,9 +141,6 @@ pub fn bio(bio: &str, clamp: bool, color: Hsla) -> Div {
         }
         return col;
     }
-    // descriptionClamp_: one block clamped to 3 lines with `overflow-wrap: break-word`,
-    // so a long URL wraps onto the next line instead of being cut. Lines with emoji keep
-    // the per-line rows (inline images cannot sit inside one StyledText).
     let joined = lines.join("\n");
     let t = line_rich(&joined, color, false);
     if t.emoji.is_empty() {
@@ -190,7 +154,6 @@ pub fn bio(bio: &str, clamp: bool, color: Hsla) -> Div {
     col
 }
 
-/// Whether the clamped bio hides content ("View Full Bio").
 pub fn bio_is_long(bio: &str) -> bool {
     let lines: Vec<&str> = bio.lines().filter(|l| !l.trim().is_empty()).collect();
     lines.len() > 3 || (lines.len() == 1 && bio.chars().count() > 120)

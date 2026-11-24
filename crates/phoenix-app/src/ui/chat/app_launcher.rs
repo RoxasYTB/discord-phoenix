@@ -1,25 +1,3 @@
-//! App launcher popout, opened by the composer's Applications button.
-//!
-//! Measured on the live client (2026-11-24, 1536x788, Onyx theme):
-//! `contentWrapper_` 500x680, right edge on the button's right edge, bottom
-//! 8px above its top, --radius-sm, --shadow-border + --shadow-high;
-//! `searchBarContainer_` padding 16 around the same 40px search field as the
-//! expression picker; `scrollableContent_` padding 0 16 16 with 32px between
-//! sections. Section header 24px (padding-top 4, body-md/medium
-//! --text-strong), 8px above its content. Two-column sections (`type` 5,
-//! "Promoted"): 224x180 cards, gap 12, --card-background-default, radius 12,
-//! 126px banner then 8px details (38px icon radius 12, 12px gap, name
-//! heading-sm/semibold --text-strong, one line of body-sm --text-subtle).
-//! Row sections (`type` 4): 64px rows, padding 12, 40px icon, 1px
-//! --background-mod-subtle divider, 12px radius on the outer corners, four
-//! rows then "Voir plus" (body-md/medium --text-brand) in the header.
-//!
-//! Data: `GET /application-directory-static/collections?surface=2&...`
-//! (public, read-only; what the client renders as Promoted / Puzzle Games /
-//! ...). Opening the launcher in the official client also PATCHes
-//! `settings-proto/1` and posts telemetry; Phoenix does neither. Clicking an
-//! app only shows a notice: nothing is launched, authorised or installed.
-
 use std::cell::{Cell, RefCell};
 
 use gpui::{AnyElement, Bounds, Context, Entity, FontWeight, IntoElement, ParentElement, Pixels, SharedString, Styled, Window, div, img, prelude::*, px};
@@ -34,7 +12,6 @@ use crate::{
 
 pub const W: f32 = 500.;
 pub const H: f32 = 680.;
-/// Rows a row section shows before "Voir plus".
 const ROWS: usize = 4;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -49,14 +26,10 @@ pub struct LauncherApp {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Collection {
     pub title: SharedString,
-    /// Two-column banner cards (`type` 5) instead of rows (`type` 4).
     pub cards: bool,
     pub apps: Vec<LauncherApp>,
 }
 
-/// Collections in `position` order, each with its items in `position` order
-/// (stable for ties, as the client lists "Daily Word Wheel" before "Daily Word
-/// Griddle", both at 1).
 pub fn parse(v: &Value) -> Vec<Collection> {
     let mut cols: Vec<(i64, Collection)> = v
         .as_array()
@@ -97,14 +70,12 @@ pub fn parse(v: &Value) -> Vec<Collection> {
     cols.into_iter().map(|(_, c)| c).collect()
 }
 
-/// Apps whose name contains `q` (case-insensitive), once each, catalogue order.
 pub fn search(cols: &[Collection], q: &str) -> Vec<LauncherApp> {
     let q = q.trim().to_lowercase();
     let mut seen = std::collections::HashSet::new();
     cols.iter().flat_map(|c| &c.apps).filter(|a| a.name.to_lowercase().contains(&q) && seen.insert(a.id)).cloned().collect()
 }
 
-/// Slash commands matching `q` (case-insensitive) on command name, description, or app name.
 pub fn search_commands(cmds: &[SlashCommand], q: &str) -> Vec<SlashCommand> {
     let q = q.trim().to_lowercase();
     if q.is_empty() {
@@ -133,8 +104,6 @@ pub fn search_commands(cmds: &[SlashCommand], q: &str) -> Vec<SlashCommand> {
     hits.into_iter().map(|(_, c)| c).collect()
 }
 
-/// Recently used apps from `FrecencyUserSettings.application_frecency`, resolved
-/// against the loaded directory collections or the channel's slash commands.
 pub fn recents(ids: &[u64], cols: &[Collection], cmds: &[SlashCommand]) -> Vec<LauncherApp> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -169,9 +138,7 @@ thread_local! {
     static OPEN: RefCell<Option<Open>> = const { RefCell::new(None) };
     static DATA: RefCell<Option<Vec<Collection>>> = const { RefCell::new(None) };
     static REQUESTED: Cell<bool> = const { Cell::new(false) };
-    /// Row sections expanded by "Voir plus" (by title).
     static EXPANDED: RefCell<Vec<SharedString>> = const { RefCell::new(Vec::new()) };
-    /// Window bounds of the composer's Applications button, from the last paint.
     static ANCHOR: Cell<Option<Bounds<Pixels>>> = const { Cell::new(None) };
 }
 
@@ -179,7 +146,6 @@ pub fn is_open() -> bool {
     OPEN.with(|o| o.borrow().is_some())
 }
 
-/// Records the Applications button's bounds (painted inside the button).
 pub fn anchor_probe() -> impl IntoElement {
     gpui::canvas(|b, _, _| ANCHOR.set(Some(b)), |_, _, _, _| {}).absolute().top_0().left_0().size_full()
 }
@@ -206,7 +172,6 @@ pub fn toggle(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
             let v = fut.await.unwrap_or(Value::Null);
             let cols = parse(&v);
             if cols.is_empty() {
-                // Let a later open retry (offline, rate limited).
                 REQUESTED.set(false);
             }
             DATA.with(|d| *d.borrow_mut() = Some(cols));
@@ -217,7 +182,6 @@ pub fn toggle(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     cx.notify();
 }
 
-/// Closes the popout; true when it was open (Escape handling).
 pub fn close(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> bool {
     let was = OPEN.with(|o| o.borrow_mut().take()).is_some();
     if was {
@@ -231,7 +195,6 @@ fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// App icon: the app's own icon, else its initial on a neutral tile.
 fn app_icon(a: &LauncherApp, size: f32) -> AnyElement {
     let frame = div().flex_none().size(px(size)).rounded(px(12.)).overflow_hidden().border_1().border_color(tk(idx::BORDER_SUBTLE));
     match &a.icon {
@@ -249,8 +212,6 @@ fn app_icon(a: &LauncherApp, size: f32) -> AnyElement {
     }
 }
 
-/// Name (heading-sm/semibold --text-strong) over one line of description
-/// (body-sm/normal --text-subtle), both clamped to one line.
 fn details(a: &LauncherApp) -> gpui::Div {
     div()
         .flex_1()
@@ -457,7 +418,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let vp = window.viewport_size();
     let (vw, vh) = (f32::from(vp.width), f32::from(vp.height));
     let (right, bottom) = ANCHOR.get().map_or((vw - 16., vh - 75.), |b| (f32::from(b.right()), f32::from(b.top()) - 8.));
-    // Not measured below 788px: keep 8px from the window top and shrink.
     let h = if bottom - 8. < H { (bottom - 8.).max(200.) } else { H };
     let left = (right - W).max(8.);
     let q = input.read(cx).value().to_string();

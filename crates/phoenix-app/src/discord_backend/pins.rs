@@ -1,16 +1,3 @@
-//! "Unread pins" dot on the header's pin button, as the client's ReadStateStore
-//! computes it: `hasUnreadPins(c) = canBeUnread() && lastPinTimestamp > ackPinTimestamp`.
-//!
-//! - `lastPinTimestamp`: the channel object's `last_pin_timestamp` (READY guild
-//!   channels / private channels, CHANNEL_CREATE / UPDATE, THREAD_*), then
-//!   `CHANNEL_PINS_UPDATE {channel_id, last_pin_timestamp}`.
-//! - `ackPinTimestamp`: the READY `read_state` entry's `last_pin_timestamp`, then
-//!   `CHANNEL_PINS_ACK {channel_id, timestamp}`.
-//!
-//! Read-only by itself: only opening the pins popout acks (`POST
-//! /channels/{id}/pins/ack`, the client's `ackPins`), and never in the
-//! read-only examples (`NO_ACKS`).
-
 use std::collections::HashMap;
 
 use std::sync::{Mutex, MutexGuard};
@@ -19,9 +6,7 @@ use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct PinMark {
-    /// `lastPinTimestamp` (ms), 0 = never pinned.
     last: i64,
-    /// `ackPinTimestamp` (ms).
     ack: i64,
 }
 
@@ -31,7 +16,6 @@ fn state() -> MutexGuard<'static, Option<HashMap<u64, PinMark>>> {
     STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// The client's `eL`: ISO-8601 to epoch ms, 0 when absent.
 fn ts(v: Option<&str>) -> i64 {
     v.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map_or(0, |t| t.timestamp_millis())
 }
@@ -52,7 +36,6 @@ fn build(channels: impl IntoIterator<Item = (u64, i64)>, read_state: Option<&Val
         None => None,
     };
     for e in entries.into_iter().flatten() {
-        // read_state_type 0 (or absent) = channel.
         if e.get("read_state_type").and_then(Value::as_u64).unwrap_or(0) != 0 {
             continue;
         }
@@ -66,7 +49,6 @@ fn channel_pin(c: &api::Channel) -> (u64, i64) {
     (c.id.0, ts(c.last_pin_timestamp.as_deref()))
 }
 
-/// READY (first connect and non-resumed reconnects), after the cache applied it.
 pub fn init(cache: &Cache) {
     let mut chans: Vec<(u64, i64)> = cache.private_channels().iter().map(|c| channel_pin(c)).collect();
     for g in cache.guilds() {
@@ -108,13 +90,10 @@ pub fn on_gateway(ev: &GatewayEvent) {
     }
 }
 
-/// `lastPinTimestamp > ackPinTimestamp`.
 pub fn has_unread(channel: u64) -> bool {
     state().as_ref().and_then(|m| m.get(&channel)).is_some_and(|p| p.last > p.ack)
 }
 
-/// The client's `ackPins(null)` local half: `ackPinTimestamp = lastPinTimestamp`.
-/// Returns whether there was anything to ack (then the caller POSTs).
 pub fn mark_seen(channel: u64) -> bool {
     let mut g = state();
     let Some(p) = g.as_mut().and_then(|m| m.get_mut(&channel)) else { return false };

@@ -1,6 +1,3 @@
-//! Friends page (Online / All / Pending / Blocked / Add Friend) with the
-//! crate::t!("friends.active_now") column, and the Message Requests page.
-
 use crate::ui::tooltip::Tipped as _;
 use crate::theme::z;
 use gpui::{
@@ -37,7 +34,6 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
         app.nav.subs.push(sub);
         app.nav.friends_search = Some(input);
     }
-    // Created on the first home render, often before the synced settings set the locale.
     if let Some(i) = app.nav.friends_search.clone() {
         crate::ui::locale_inputs::keep_placeholder(&i, "search.placeholder", window, cx);
     }
@@ -101,12 +97,9 @@ fn send_request(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     );
 }
 
-/// Dump `-channels-me+` node 1066 (`container_ybUK7Z`, padding 8 8 8 20,
-/// 49px) with the `tabBar_zrUwGA topPill_6zZYhF` pills (node 1074).
 fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let pending = app.nav.count(RelationshipKind::Incoming) as u32;
     let pill = || {
-        // item_6zZYhF: padding 4px 12px, margin 0 8px, radius 8, 32px, 16/20 400
         div()
             .mx(z(8.))
             .px(z(12.))
@@ -124,9 +117,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         let sel = app.nav.friends_tab == t;
         pill()
             .id(id)
-            // `topPill_ .themed_.item_6zZYhF` (vanilla-friends-online #1125/#1126): idle
-            // --text-subtle; selected --background-mod-strong + --text-strong; :hover
-            // --background-mod-subtle, :active --background-mod-strong, both --text-strong.
             .text_color(c(tok(if sel { idx::TEXT_STRONG } else { idx::TEXT_SUBTLE })))
             .when(sel, |d| d.bg(c(tok(idx::BACKGROUND_MOD_STRONG))))
             .when(!sel, |d| {
@@ -151,10 +141,8 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .items_center()
         .border_b_1()
         .border_color(c(Palette::HEADER_SHADOW))
-        // iconWrapper_ybUK7Z 32x32, 20px icon --icon-muted
         .child(div().size(z(32.)).flex().items_center().justify_center().child(icon(Icon::Friends, 20., c(Palette::CHANNEL_ICON))))
         .child(
-            // title_ybUK7Z body-md/medium, margin-right 8
             div()
                 .mr(z(8.))
                 .text_size(z(16.))
@@ -163,15 +151,11 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 .text_color(c(Palette::TEXT_HEADER))
                 .child(crate::t!("friends.title")),
         )
-        // dot_ybUK7Z 4px, margin 0 4px, --background-mod-strong
         .child(div().mx(z(4.)).size(z(4.)).rounded_full().bg(c(Palette::BG_MOD_SELECTED)))
         .child(tab("tab-online", crate::t!("status.online"), FriendsTab::Online, cx))
         .child(tab("tab-all", crate::t!("friends.all"), FriendsTab::All, cx))
         .child(tab("tab-pending", crate::t!("friends.pending"), FriendsTab::Pending, cx))
         .child(
-            // addFriend_zrUwGA (#1128): --control-primary-background-default, white;
-            // :hover / :active the -hover / -active backgrounds; [aria-selected]
-            // --opacity-blurple-16 with --text-brand.
             pill()
                 .id("tab-add")
                 .when(add_sel, |d| d.bg(c(tok(idx::OPACITY_BLURPLE_16))).text_color(c(tok(idx::TEXT_BRAND))))
@@ -186,16 +170,13 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                     a.nav.add_friend_result = None;
                     cx.notify();
                 }))
-                .child(crate::t!("friends.add_tab")), // tab bar label "Ajouter" (#1129)
+                .child(crate::t!("friends.add_tab")),
         )
         .child(div().flex_1())
-        // toolbar_ybUK7Z padding-left 10; inviteToolbar_zrUwGA padding-right 8: 32px "New Group DM"
         .child(
             div()
                 .pl(z(10.))
                 .pr(z(8.))
-                // iconWrapper_ybUK7Z clickable_: 32px, icon_ybUK7Z 20px --icon-muted,
-                // hover --icon-subtle (vanilla-friends-online #1133/#1134).
                 .child(
                     div()
                         .id("fr-new-group-dm")
@@ -238,9 +219,6 @@ fn visible(app: &PhoenixApp, tab: FriendsTab) -> Vec<Relationship> {
     v
 }
 
-/// peopleColumn_zrUwGA: searchBar_wVFOQW (margin 12 16 8 24, 40px), then
-/// sectionTitle_wVFOQW (50px, h2 margin 16 20 16 24) and rows separated by
-/// divider_y75PxA (1px, margin 0 20 0 30, --border-subtle).
 fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let q = app.nav.friends_search.as_ref().map(|i| i.read(cx).value().to_lowercase()).unwrap_or_default();
     let rows: Vec<Relationship> = visible(app, tab)
@@ -259,25 +237,18 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
         .h(z(40.))
         .pl(z(4.))
         .gap(z(4.))
-        .rounded(z(8.)) // wrapper_UcGqzv radius 8
+        .rounded(z(8.))
         .border_1()
-        .border_color(c(Palette::BG_MOD_SELECTED)) // 1px #97979f/0.24
+        .border_color(c(Palette::BG_MOD_SELECTED))
         .bg(c(gpui_input_bg()))
         .flex()
         .items_center()
-                // icon_0PLWhS 30x30 with a 16px glyph (vanilla-friends-all #1141/#1142)
         .child(div().size(z(30.)).flex().items_center().justify_center().child(icon(Icon::Search, 16., c(Palette::TEXT_MUTED))))
-        // input_0PLWhS body-md 16px, padding-inline-start 0 (#1143)
         .when_some(app.nav.friends_search.clone(), |d, i| {
             d.child(div().flex_1().child(Input::new(&i).appearance(false).bordered(false).pl(z(0.)).text_size(z(16.)).line_height(z(20.))))
         });
     let mut col = div().id("friends-list").flex_1().min_h_0().overflow_y_scroll().pb(z(8.)).flex().flex_col();
     if rows.is_empty() {
-        // `FriendsEmptyState` (2026 web bundle): only the note, no illustration (the
-        // light/dark sources are declared but never rendered). `friendsEmpty_Bb-Yop`
-        // flex-grow 1, centred; `wrapper_PDJTSB` max-width 440; `text_PDJTSB marginTop8_`
-        // body-md/normal --text-muted, centred. All adds a primary "Add Friend"
-        // (`button_Bb-Yop` margin-top 20); an unmatched search shows SECTION_NO_RESULTS.
         let msg = if !q.is_empty() {
             crate::t!("friends.empty_search")
         } else {
@@ -318,9 +289,6 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
             ),
         );
     } else {
-        // `sectionTitle_wVFOQW` per section; the client strings (fr bundle): "En ligne — N",
-        // "Tous les amis - N", "Reçue(s) — N" / "Envoyée(s) — N" (Pending splits incoming
-        // and outgoing, vanilla-friends-pending #1149), "Bloqués - N".
         let mut sections: Vec<(SharedString, Vec<Relationship>)> = Vec::new();
         match tab {
             FriendsTab::Pending => {
@@ -360,20 +328,15 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
     div().size_full().flex().flex_col().child(search).child(col).into_any_element()
 }
 
-/// Search field background (input --input-background-default).
 fn gpui_input_bg() -> u32 {
     crate::theme::tok(crate::theme::generated::idx::INPUT_BACKGROUND_DEFAULT)
 }
 
 fn round_button(id: (&'static str, u64), name: &str, hover: Hsla, tip: SharedString) -> gpui::Stateful<gpui::Div> {
-    // The glyph follows the button's hover through a per-button group.
     let g = SharedString::from(format!("{}-{}", id.0, id.1));
     div()
         .id(id)
         .group(g.clone())
-        // actionButton_5GqXgh: 36px circle, --background-base-lower,
-        // --interactive-text-default; hover --interactive-text-hover
-        // (actionAccept_/actionDeny_: --icon-feedback-positive/-critical).
         .size(z(36.))
         .flex_none()
         .rounded_full()
@@ -382,7 +345,6 @@ fn round_button(id: (&'static str, u64), name: &str, hover: Hsla, tip: SharedStr
         .items_center()
         .justify_center()
         .cursor_pointer()
-        // tooltips from the client bundle: Message, More, Accept, Ignore, Cancel, Unblock
         .tip(tip)
         .child(
             gpui::svg()
@@ -403,8 +365,6 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
         .or_else(|| u.map(|u| u.display_name.clone()))
         .unwrap_or_else(|| SharedString::from(user.0.to_string()));
     let username = u.map(|u| u.name.clone()).unwrap_or_default();
-    // Pending rows show the username as subtext (`applicationSublabel_nByiE3`,
-    // body-sm/medium --text-subtle) and no hover discriminator.
     let sub: SharedString = match r.kind {
         RelationshipKind::None => SharedString::default(),
         RelationshipKind::Incoming | RelationshipKind::Outgoing => username.clone(),
@@ -419,11 +379,9 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
         }),
     };
     let pending = matches!(r.kind, RelationshipKind::Incoming | RelationshipKind::Outgoing);
-    // actions_4Y31So gap 10; pending rows (actions_nByiE3) margin-start 8.
     let mut actions = div().flex().gap(z(10.)).when(pending, |d| d.ml(z(8.)));
     let act = |action: RelAction| {
         cx.listener(move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _, cx| {
-            // Optimistic: the gateway confirms with RELATIONSHIP_ADD/REMOVE.
             match &action {
                 RelAction::Remove => a.nav.relationships.retain(|x| x.user != user),
                 RelAction::Accept => {
@@ -448,7 +406,6 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
                         .on_click(cx.listener(move |a, _, _, cx| a.open_dm_with(user, cx))),
                 )
                 .child({
-                    // "More options": opens the user context menu (Remove Friend lives there).
                     round_button(("fr-more", user.0), "more-vertical", hover, crate::t!("header.more"))
                         .on_click(move |ev, window, cx| {
                             cx.stop_propagation();
@@ -472,7 +429,6 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
         }
     }
     let tag = u.and_then(|u| u.tag.clone());
-    // peopleListItem_y75PxA: padding 16px 10px, margin 0 10 0 14, radius 8, 61px.
     div()
         .id(("friend", user.0))
         .group("friend-row")
@@ -485,11 +441,8 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
         .flex()
         .items_center()
         .cursor_pointer()
-        // peopleListItem_:hover --background-mod-subtle
         .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
         .on_click(cx.listener(move |a, _, _, cx| a.open_dm_with(user, cx)))
-        // avatar_jPuNMC 32px, margin-right 12
-        // the status cut shows the row's hover background like the mask
         .child(div().mr(z(12.)).child(crate::ui::avatar_with_status_deco(
             u,
             32.,
@@ -510,8 +463,6 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
                         .flex()
                         .items_center()
                         .child(
-                            // username_jPuNMC 16/20 600 #dcdcdf; name style font
-                            // (`dnsFont_` on the friend row name, vanilla-friends-all).
                             crate::fonts::styled_name(div(), u, false)
                                 .text_size(z(16.))
                                 .line_height(z(20.))
@@ -520,10 +471,8 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
                                 .text_ellipsis()
                                 .child(name),
                         )
-                        // guildTag_PTA1Mz margin-left 4
                         .when_some(tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
                         .when(!pending, |d| d.child(
-                            // discriminator_jPuNMC margin-left 5, 14/16 500, shown on hover
                             div()
                                 .ml(z(5.))
                                 .text_size(z(14.))
@@ -536,7 +485,6 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
                         )),
                 )
                 .child(
-                    // subtext_jPuNMC: 14/17.5 500 --text-muted (pending: 14/18 --text-subtle)
                     div()
                         .text_size(z(14.))
                         .line_height(z(if pending { 18. } else { 17.5 }))
@@ -632,8 +580,6 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .filter(|(u, _)| app.presence_of(*u) != Presence::Offline)
         .collect();
     active.sort_by_key(|(u, _)| u.0);
-    // nowPlayingColumn_zrUwGA 360px; scroller_GNEh_C padding 6 8 16 (+ thin
-    // gutter); h2 heading-lg/semibold 20/24 margin 8 0 9.
     let mut col = div()
         .id("active-now")
         .w(z(360.))
@@ -655,11 +601,9 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .line_height(z(24.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(c(Palette::TEXT_HEADER))
-                .child(crate::t!("friends.active_now_title")), // refresh-active-now h2 (#1538)
+                .child(crate::t!("friends.active_now_title")),
         );
     if active.is_empty() {
-        // emptyCard_-7KzVR (258616.546da7ea90e552ae.css): bg --background-base-low,
-        // radius 8, padding 16, centered column; emptyHeader_ mb 4; emptyText_ --interactive-text-default.
         return col.child(
             div()
                 .mt(z(12.))
@@ -708,16 +652,13 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
             },
             None => activity,
         };
-        // itemCard_-7KzVR: margin-top 12, radius 16, 1px --border-subtle,
-        // shadow 0 1 4 rgba(0,0,0,.14). headerFull_o3hXTo: padding 16, gap 12,
-        // --background-mod-muted (#97979f/0.08).
         let mut card = div()
             .id(("active", user.0))
             .mt(z(12.))
             .rounded(z(16.))
             .border_1()
             .border_color(c(Palette::DIVIDER))
-            .shadow(crate::ui::inbox::low_shadow()) // --shadow-low: 0 1 4 rgba(0,0,0,.14)
+            .shadow(crate::ui::inbox::low_shadow())
             .overflow_hidden()
             .bg(c(Palette::BG_PRIMARY))
             .cursor_pointer()
@@ -736,7 +677,6 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                         32.,
                         app.presence_of(user),
                         c(Palette::BG_PRIMARY),
-                        // the cut shows the card head's background (and its hover) like the mask
                         |d| d.bg(c(Palette::BG_MSG_HOVER)).group_hover("active-card-head", |s| s.bg(c(Palette::BG_MOD_HOVER))),
                         crate::ui::avatar_deco::source(u, None),
                     ))
@@ -745,7 +685,6 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                             .flex_1()
                             .min_w_0()
                             .child(
-                                // body-md/semibold 16/20 --text-default
                                 div()
                                     .text_size(z(16.))
                                     .line_height(z(20.))
@@ -754,17 +693,12 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                                     .text_ellipsis()
                                     .child(u.map(|u| u.display_name.clone()).unwrap_or_default()),
                             )
-                            // body-sm/normal 14/18 --text-muted
                             .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(Palette::TEXT_MUTED)).text_ellipsis().child(sub)),
                     )
-                    // headerIcon_o3hXTo 24px radius 4
                     .when_some(game.as_ref().and_then(|g| g.image.clone()), |d, i| d.child(thumb(Some(i), 24.))),
             );
         let stream = app.people.activities.get(&user).and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Streaming)).cloned();
         if let Some(s) = stream {
-            // applicationStreamingSection_o3hXTo (vanilla-friends-online #1673..#1686):
-            // 32px avatar, name + subtitle, red "LIVE" badge (16px, px 8, radius full),
-            // then 294x165 (16:9) applicationStreamingPreviewWrapper_o3hXTo.
             card = card.child(
                 div()
                     .p(z(16.))
@@ -828,8 +762,6 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                     ),
             );
         } else if let Some(g) = game {
-            // section_o3hXTo padding 16; gameSection_o3hXTo grid gap 12: 32px icon,
-            // body-sm/semibold title, body-xs/normal subtitle, 24px party avatar.
             card = card.child(
                 div()
                     .p(z(16.))

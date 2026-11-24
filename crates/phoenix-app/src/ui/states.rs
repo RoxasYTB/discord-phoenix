@@ -1,25 +1,16 @@
-//! Interactive states shared by Discord's chat-input buttons (button_hfM7yP):
-//! rest `--interactive-text-default`; hover `--interactive-text-hover` on a
-//! `--interactive-background-selected` 8px tile; pressed `--interactive-text-active`.
-//! Audit: docs/parity/states.md.
-
 use crate::theme::{c, generated::idx, tok, z};
 use crate::ui::Icon;
 use gpui::{AnimationExt, Div, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled, div, svg};
 use gpui::prelude::FluentBuilder as _;
 
-/// 32px composer button (attach, gift, GIF, sticker, emoji, apps), 20px glyph
-/// (`--chat-input-icon-size`). The glyph follows the button's hover/active state.
 pub fn composer_button(id: &'static str, i: Icon) -> gpui::Stateful<Div> {
     composer_button_ext(id, i, 20., true)
 }
 
-/// `glyph` px icon; `hover_bg` false = `noHover_hfM7yP` (gift button: no hover fill).
 pub fn composer_button_ext(id: &'static str, i: Icon, glyph: f32, hover_bg: bool) -> gpui::Stateful<Div> {
     let k = key(("composer-btn", id));
     let el = track(div().id(id), k)
         .relative()
-        // button_hfM7yP:not(.noHover) transition-duration .2s (ease)
         .when(hover_bg, |d| d.child(fade_layer(k, gpui::transparent_black(), c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED)), 200, 8.)))
         .group(id)
         .size(z(32.))
@@ -27,30 +18,26 @@ pub fn composer_button_ext(id: &'static str, i: Icon, glyph: f32, hover_bg: bool
         .flex()
         .items_center()
         .justify_center()
-        .rounded(z(8.)) // button_hfM7yP:not(.noHover) border-radius 8px
+        .rounded(z(8.))
         .cursor_pointer()
         .child(
             svg()
                 .path(i.path())
                 .size(z(glyph))
                 .flex_none()
-                .text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))) // button_hfM7yP color
-                .group_hover(id, |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))) // :hover color
+                .text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))
+                .group_hover(id, |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))))
                 .id("glyph")
-                .group_active(id, |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))), // :active color
+                .group_active(id, |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))),
         );
-    // Tab focus ring (live: 32x24 box 4px inside the 32px button, radius 8; 4 on the gift
-    // button; the emoji button's ring is 40x24, 4px wider on each side).
     let dx = if id == "emoji" { -4. } else { 0. };
     crate::ui::focus_ring::ring_inset(el, k, if hover_bg { 8. } else { 4. }, dx, 4.)
 }
 
 thread_local! {
-    /// Hover state of the elements that fade between colours, by key, with when it last changed.
     static HOVER: std::cell::RefCell<std::collections::HashMap<u64, (bool, std::time::Instant)>> = Default::default();
 }
 
-/// Stable key for [`track`] / [`fade_bg`] from any hashable id.
 pub fn key(id: impl std::hash::Hash) -> u64 {
     use std::hash::Hasher;
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -58,12 +45,10 @@ pub fn key(id: impl std::hash::Hash) -> u64 {
     h.finish()
 }
 
-/// Hover state tracked under `key` and when it last changed.
 pub fn state(key: u64) -> Option<(bool, std::time::Instant)> {
     HOVER.with(|h| h.borrow().get(&key).copied())
 }
 
-/// CSS `cubic-bezier(x1, y1, x2, y2)` timing function (Newton then bisection on x).
 pub fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32) -> impl Fn(f32) -> f32 + Copy + 'static {
     move |t: f32| {
         let t = t.clamp(0., 1.);
@@ -88,12 +73,10 @@ pub fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32) -> impl Fn(f32) -> f32 +
     }
 }
 
-/// Whether the element tracked under `key` is hovered.
 pub fn hovered(key: u64) -> bool {
     HOVER.with(|h| h.borrow().get(&key).is_some_and(|s| s.0))
 }
 
-/// Record hover enter/leave of `el` under `key` and redraw, so [`fade_bg`] can start its transition.
 pub fn track(el: gpui::Stateful<Div>, key: u64) -> gpui::Stateful<Div> {
     el.on_hover(move |over, window, _| {
         let changed = HOVER.with(|h| {
@@ -108,22 +91,16 @@ pub fn track(el: gpui::Stateful<Div>, key: u64) -> gpui::Stateful<Div> {
     })
 }
 
-/// Linear blend of two colours in RGB space (CSS transitions interpolate sRGB).
 pub fn mix(a: gpui::Hsla, b: gpui::Hsla, t: f32) -> gpui::Hsla {
     let (a, b): (gpui::Rgba, gpui::Rgba) = (a.into(), b.into());
     let l = |x: f32, y: f32| x + (y - x) * t;
     gpui::Rgba { r: l(a.r, b.r), g: l(a.g, b.g), b: l(a.b, b.b), a: l(a.a, b.a) }.into()
 }
 
-/// CSS `background-color <ms> ease-out` between `rest` and `hover`, as an absolutely
-/// positioned layer to put FIRST in a `.relative()` parent tracked with [`track`] under `key`
-/// (the parent must not set its own hover background). Only a state change younger than
-/// `ms` animates, so first paints and remounts don't flash.
 pub fn fade_layer(key: u64, rest: gpui::Hsla, hover: gpui::Hsla, ms: u64, radius: f32) -> gpui::AnyElement {
     fade_layer_pressed(key, rest, hover, None, ms, radius)
 }
 
-/// [`fade_layer`] that also shows `pressed.1` while the group `pressed.0` is held down.
 pub fn fade_layer_pressed(
     key: u64,
     rest: gpui::Hsla,
@@ -152,15 +129,10 @@ pub fn fade_layer_pressed(
     }
 }
 
-/// CSS `ease-out` (cubic-bezier(0, 0, .58, 1)), approximated as 1-(1-t)^2.
 pub fn ease_out(t: f32) -> f32 {
     1. - (1. - t) * (1. - t)
 }
 
-/// Tooltip card under a button (tooltip_ZDdyhE `data-position="bottom"`): 5px caret
-/// pointing up whose tip sits 6px below the button, card 11px below it, centred.
-/// Live header tooltip (ref-cache tooltip-header-appear.json): shows ~50ms after
-/// hover (no delay), body-sm/medium 14/18, padding 8 12.
 pub fn below_tip(text: gpui::SharedString, button_w: f32, button_h: f32) -> gpui::AnyElement {
     use gpui::{AnchoredPositionMode, FontWeight, IntoElement, anchored, deferred, point};
     let bg = c(tok(idx::BACKGROUND_SURFACE_HIGH));
@@ -170,15 +142,14 @@ pub fn below_tip(text: gpui::SharedString, button_w: f32, button_h: f32) -> gpui
     }
     const SPAN: f32 = 240.;
     let card = div()
-        .max_w(z(200.)) // tooltip_ZDdyhE max-width
-        .px(z(12.)) // --space-12
-        .py(z(8.)) // --space-8
-        .rounded(z(8.)) // --radius-sm
+        .max_w(z(200.))
+        .px(z(12.))
+        .py(z(8.))
+        .rounded(z(8.))
         .bg(bg)
         .border_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE))) // inset 0 0 0 1px --border-subtle
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
         .shadow(vec![gpui::BoxShadow {
-            // --shadow-high
             color: gpui::hsla(0., 0., 0., 0.24),
             offset: point(z(0.), z(12.)),
             blur_radius: z(24.),
@@ -198,13 +169,9 @@ pub fn below_tip(text: gpui::SharedString, button_w: f32, button_h: f32) -> gpui
         ),
     )
     .with_priority(2);
-    // Zero-size anchor at the button's top-left, out of the flex flow.
     div().absolute().top_0().left_0().child(tip).into_any_element()
 }
 
-/// Channel header toolbar button (iconWrapper_ybUK7Z .clickable_): 32px, no background,
-/// 20px glyph `--icon-muted`, `--icon-subtle` on hover, `--icon-strong` when selected,
-/// with its label as a tooltip below.
 pub fn header_button(id: &'static str, path: gpui::SharedString, selected: bool, label: gpui::SharedString) -> gpui::Stateful<Div> {
     let k = key(("hdr-btn", id));
     let rest = c(tok(if selected { idx::ICON_STRONG } else { idx::ICON_MUTED }));
@@ -212,7 +179,7 @@ pub fn header_button(id: &'static str, path: gpui::SharedString, selected: bool,
     track(div().id(id), k)
         .group(id)
         .relative()
-        .size(z(32.)) // --space-32
+        .size(z(32.))
         .flex_none()
         .flex()
         .items_center()
@@ -221,24 +188,20 @@ pub fn header_button(id: &'static str, path: gpui::SharedString, selected: bool,
         .child(
             svg()
                 .path(path)
-                .size(z(20.)) // --chat-input-icon-size
+                .size(z(20.))
                 .flex_none()
                 .text_color(rest)
                 .group_hover(id, move |s| s.text_color(hover)),
         )
         .children(hovered(k).then(|| below_tip(label, 32., 32.)))
-        // Tab focus ring on the 32px box; the wrapper has no radius, so the ring's 4px default.
         .map(|d| crate::ui::focus_ring::ring(d, k, 4.))
 }
 
-/// [`fade_layer`] for elements that already know their hover state (e.g. the guild rail's
-/// own tracking): a change of `on` seen at render time starts the transition.
 pub fn fade_to(key: u64, on: bool, rest: gpui::Hsla, hover: gpui::Hsla, ms: u64, radius: f32) -> gpui::AnyElement {
     HOVER.with(|h| {
         let mut h = h.borrow_mut();
         match h.get(&key) {
             Some(s) if s.0 == on => {}
-            // First sight: no transition.
             None => {
                 h.insert(key, (on, std::time::Instant::now() - std::time::Duration::from_secs(1)));
             }
@@ -250,26 +213,19 @@ pub fn fade_to(key: u64, on: bool, rest: gpui::Hsla, hover: gpui::Hsla, ms: u64,
     fade_layer(key, rest, hover, ms, radius)
 }
 
-/// Tooltip enter zoom: the client's spring takes the card from ~0.95 to 1 in ~100ms
-/// (ref-cache tooltip-{header,rail}-appear.json: 43→45 / 140→148px wide), opacity 1.
 pub fn tip_zoom() -> gpui::Animation {
     gpui::Animation::new(crate::ui::settings::effects::motion(100)).with_easing(ease_out)
 }
 
-/// gpui has no CSS transform on divs, so the zoom scales the card's own metrics
-/// (padding, radius, 14/18 text) by 0.95 → 1, which is what `scale()` looks like for a text card.
 pub fn zoom_card(d: Div, t: f32) -> Div {
     zoom_card_sized(d, t, 14., 18.)
 }
 
-/// [`zoom_card`] for cards with another text size / line height (rail tooltip: 16/20).
 pub fn zoom_card_sized(d: Div, t: f32, font: f32, line: f32) -> Div {
     let k = 0.95 + 0.05 * t;
     d.px(z(12. * k)).py(z(8. * k)).rounded(z(8. * k)).text_size(z(font * k)).line_height(z(line * k))
 }
 
-/// Drop the remembered state of `key`, so the next [`fade_to`] with `on = true` animates
-/// from `rest` (used for one-way transitions such as a settings row becoming selected).
 pub fn forget(key: u64) {
     HOVER.with(|h| {
         let mut h = h.borrow_mut();

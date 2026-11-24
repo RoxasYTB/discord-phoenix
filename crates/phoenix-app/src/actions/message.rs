@@ -1,6 +1,3 @@
-//! Message menu actions: forward, create thread, bookmark, reminders, view
-//! and remove reactions, report.
-
 use std::rc::Rc;
 
 use gpui::Context;
@@ -13,11 +10,9 @@ use crate::{
     ui::modals::{Field, Form, Modal, forward::Forward},
 };
 
-/// Remind Me presets: (label key, seconds from now; `None` = tomorrow 9:00).
 pub const REMINDERS: [(&str, Option<u64>); 4] =
     [("msg.remind.30m", Some(1800)), ("msg.remind.1h", Some(3600)), ("msg.remind.4h", Some(14_400)), ("msg.remind.tomorrow", None)];
 
-/// Custom reminder choices (label key, seconds).
 pub const CUSTOM_REMINDERS: [(&str, u64); 6] = [
     ("menu.mute.15m", 900),
     ("menu.mute.3h", 10_800),
@@ -27,7 +22,6 @@ pub const CUSTOM_REMINDERS: [(&str, u64); 6] = [
     ("msg.remind.1w", 604_800),
 ];
 
-/// Unix time of the next 9:00 local after `now`.
 pub fn tomorrow_9am(now: chrono::DateTime<chrono::Local>) -> u64 {
     use chrono::{Duration, TimeZone};
     let day = now.date_naive() + Duration::days(1);
@@ -35,8 +29,6 @@ pub fn tomorrow_9am(now: chrono::DateTime<chrono::Local>) -> u64 {
     chrono::Local.from_local_datetime(&t).earliest().map(|d| d.timestamp() as u64).unwrap_or(now.timestamp() as u64 + 86_400)
 }
 
-/// Next Monday 9:00 (vanilla-menu-message-reminder "Monday at 9:00 AM"); `None`
-/// on Sundays, when "Tomorrow at 9:00 AM" already is that Monday.
 pub fn next_monday_9am(now: chrono::DateTime<chrono::Local>) -> Option<u64> {
     use chrono::{Datelike, Duration, TimeZone};
     let ahead = 7 - now.weekday().num_days_from_monday() as i64;
@@ -58,7 +50,6 @@ thread_local! {
     static REMINDER_LIST: std::cell::RefCell<Vec<crate::model::Message>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Loaded reminders (Inbox > Reminders).
 pub fn reminders() -> Vec<crate::model::Message> {
     REMINDER_LIST.with(|l| l.borrow().clone())
 }
@@ -150,7 +141,6 @@ impl PhoenixApp {
         self.open_report(t, cx);
     }
 
-    /// Reminders inbox tab data (saved messages with a `due_at`).
     pub fn load_reminders_tab(&mut self, cx: &mut Context<Self>) {
         self.action(ActionRequest::Reminders, cx, move |a, r, cx| match r {
             Ok(ActionReply::Messages(m)) => REMINDER_LIST.with(|l| *l.borrow_mut() = m),
@@ -159,7 +149,6 @@ impl PhoenixApp {
         });
     }
 
-    /// Mark a reminder done (removes the saved entry).
     pub fn clear_reminder(&mut self, channel: Id, msg: Id, cx: &mut Context<Self>) {
         REMINDER_LIST.with(|l| l.borrow_mut().retain(|m| m.id != msg));
         self.parity_request(crate::commands::ParityRequest::SetSaved { channel, message: msg, saved: false }, cx, |_, _, _| {});

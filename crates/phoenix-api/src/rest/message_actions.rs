@@ -1,6 +1,3 @@
-//! Message context menu actions: forward, thread from message, reminders and
-//! reaction moderation.
-
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -9,10 +6,8 @@ use super::{Body, RestClient, moderation::rfc3339};
 use crate::error::Result;
 use crate::models::{Channel, ChannelId, GuildId, Message, MessageId, ReactionEmoji, Snowflake};
 
-/// `message_reference.type` of a forwarded message.
 pub const REFERENCE_FORWARD: u8 = 1;
 
-/// POST body that forwards `message` (from `channel`) into another channel.
 pub fn forward_body(channel: ChannelId, message: MessageId, guild: Option<GuildId>, nonce: u64) -> Value {
     let mut r = json!({ "type": REFERENCE_FORWARD, "channel_id": channel, "message_id": message });
     if let Some(g) = guild {
@@ -21,18 +16,15 @@ pub fn forward_body(channel: ChannelId, message: MessageId, guild: Option<GuildI
     json!({ "message_reference": r, "nonce": nonce.to_string(), "content": "", "flags": 0, "tts": false })
 }
 
-/// Body of `POST /channels/{c}/messages/{m}/threads` (3 days auto archive).
 pub fn thread_body(name: &str) -> Value {
     let name: String = name.trim().chars().take(100).collect();
     json!({ "name": if name.is_empty() { "New Thread".to_owned() } else { name }, "auto_archive_duration": 4320, "location": "Message" })
 }
 
-/// Body of `PUT /users/@me/saved-messages` with a reminder due at `due_unix`.
 pub fn reminder_body(channel: ChannelId, message: MessageId, due_unix: u64) -> Value {
     json!({ "channel_id": channel, "message_id": message, "due_at": rfc3339(due_unix), "save_data": { "type": 0 } })
 }
 
-/// One reminder of `GET /users/@me/saved-messages` (entries with a `due_at`).
 #[derive(Debug, Clone)]
 pub struct Reminder {
     pub message: Option<Message>,
@@ -41,9 +33,6 @@ pub struct Reminder {
     pub due_at: String,
 }
 
-/// Pick the reminders out of a saved-messages payload: either a top level
-/// `reminders` array or `results` entries carrying `due_at` (in `save_data`
-/// or at the entry root).
 pub fn parse_reminders(v: &Value) -> Vec<Reminder> {
     let mut out = Vec::new();
     let mut scan = |arr: Option<&Vec<Value>>, need_due: bool| {
@@ -77,18 +66,15 @@ struct Created {
 }
 
 impl RestClient {
-    /// Forward a message (message_reference type FORWARD) into `to`.
     pub async fn forward_message(&self, to: ChannelId, from: ChannelId, message: MessageId, guild: Option<GuildId>) -> Result<Message> {
         let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
         self.call(Method::POST, &format!("/channels/{to}/messages"), Body::Json(forward_body(from, message, guild, nonce << 22))).await
     }
 
-    /// Start a thread on an existing message.
     pub async fn create_thread_from_message(&self, channel: ChannelId, message: MessageId, name: &str) -> Result<Channel> {
         self.call(Method::POST, &format!("/channels/{channel}/messages/{message}/threads"), Body::Json(thread_body(name))).await
     }
 
-    /// Save a message with a reminder.
     pub async fn set_reminder(&self, channel: ChannelId, message: MessageId, due_unix: u64) -> Result<()> {
         self.call_empty(Method::PUT, "/users/@me/saved-messages", Body::Json(reminder_body(channel, message, due_unix))).await
     }
@@ -98,19 +84,16 @@ impl RestClient {
         Ok(parse_reminders(&v))
     }
 
-    /// Remove every reaction (`emoji: None`) or every reaction of one emoji.
     pub async fn remove_reactions(&self, channel: ChannelId, message: MessageId, emoji: Option<&ReactionEmoji>) -> Result<()> {
         self.call_empty(Method::DELETE, &reactions_path(channel, message, emoji), Body::None).await
     }
 
-    /// Id of a created object, for callers that only need it.
     pub async fn post_for_id(&self, path: &str, body: Value) -> Result<Snowflake> {
         let c: Created = self.call(Method::POST, path, Body::Json(body)).await?;
         Ok(c.id)
     }
 }
 
-/// `/channels/{c}/messages/{m}/reactions[/{emoji}]`.
 pub fn reactions_path(channel: ChannelId, message: MessageId, emoji: Option<&ReactionEmoji>) -> String {
     let base = format!("/channels/{channel}/messages/{message}/reactions");
     match emoji {

@@ -1,11 +1,7 @@
-//! Crate error type.
-
 use thiserror::Error;
 
-/// Result alias used everywhere in this crate.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// All errors produced by `phoenix-voice`.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("websocket: {0}")]

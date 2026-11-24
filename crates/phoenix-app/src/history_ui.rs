@@ -1,5 +1,3 @@
-//! UI side of the message cache: apply a background refresh without moving the view.
-
 use gpui::{Context, ListOffset};
 
 use crate::{
@@ -7,17 +5,12 @@ use crate::{
     model::{Id, Message},
 };
 
-/// `AppEvent::HistoryRefresh`: the cached first page shown for `channel` was
-/// outdated. Replace it, keeping the message at the top of the viewport in
-/// place when the user has scrolled up.
 pub fn on_refresh(app: &mut PhoenixApp, channel: Id, messages: Vec<Message>, cx: &mut Context<PhoenixApp>) {
-    // Only a still-first page shown from the cache is replaced.
     if !app.messages.get(&channel).is_some_and(|e| e.loaded_once && !e.loading && e.msgs.len() <= 50) {
         return;
     }
     let anchor = (app.selected_channel == Some(channel) && !app.chat.at_bottom).then(|| {
         let top = app.message_list.logical_scroll_top();
-        // Row 0 is the channel header; message i is row i + 1.
         let id = top.item_ix.checked_sub(1).and_then(|i| app.messages.get(&channel)?.msgs.get(i).map(|m| m.id));
         (id, top.offset_in_item)
     });
@@ -30,19 +23,14 @@ pub fn on_refresh(app: &mut PhoenixApp, channel: Id, messages: Vec<Message>, cx:
     }
 }
 
-// ------------------------------------------------- off-thread page layout
-
 use std::collections::{HashMap, HashSet};
 
 use crate::{grouping, markdown::{MentionResolver, SoundboardMention}, richtext::{self, RenderedMessage}};
 
-/// Owned copy of the names / roles a page's mentions refer to, so the
-/// markdown + rich text of a page can be built on a background thread.
 #[derive(Default)]
 pub struct PageResolver {
     users: HashMap<u64, String>,
     channels: HashMap<u64, String>,
-    /// role id → (name, color, current user has it)
     roles: HashMap<u64, (String, Option<u32>, bool)>,
     sounds: HashMap<(u64, u64), SoundboardMention>,
 }
@@ -68,7 +56,6 @@ impl MentionResolver for PageResolver {
     }
 }
 
-/// Ids in `<@u>`, `<@!u>`, `<@&r>` and `<#c>` tokens: (users, roles, channels).
 fn mention_ids(text: &str, users: &mut HashSet<u64>, roles: &mut HashSet<u64>, channels: &mut HashSet<u64>) {
     for (i, _) in text.match_indices('<') {
         let rest = &text[i + 1..];
@@ -92,7 +79,6 @@ fn mention_ids(text: &str, users: &mut HashSet<u64>, roles: &mut HashSet<u64>, c
     }
 }
 
-/// Copy what `msgs` mention out of the app state (UI thread, cheap).
 pub fn page_resolver(app: &PhoenixApp, msgs: &[Message]) -> PageResolver {
     let (mut u, mut r, mut c) = (HashSet::new(), HashSet::new(), HashSet::new());
     for m in msgs {
@@ -123,7 +109,6 @@ pub fn page_resolver(app: &PhoenixApp, msgs: &[Message]) -> PageResolver {
     out
 }
 
-/// Same as `PhoenixApp::render_msg` for a whole page; runs off the UI thread.
 pub fn render_page(
     msgs: &[Message],
     resolver: &PageResolver,
@@ -163,12 +148,10 @@ pub fn render_page(
         .collect()
 }
 
-/// First page of a channel: fetch, lay out on the background executor, insert.
 pub fn load_first_page(app: &PhoenixApp, id: Id, cx: &mut Context<PhoenixApp>) {
     let fut = app.backend.load_messages(id, None, 50);
     cx.spawn(async move |this, cx| {
         let msgs = fut.await.unwrap_or_default();
-        // Users for these messages were delivered just before the page.
         let Ok((resolver, me, off, revealed)) = this.update(cx, |a, _| {
             let rev: HashSet<(Id, usize)> = a.revealed.iter().filter(|(m, _)| msgs.iter().any(|x| x.id == *m)).copied().collect();
             (page_resolver(a, &msgs), a.me.id, a.utc_offset, rev)
@@ -176,12 +159,6 @@ pub fn load_first_page(app: &PhoenixApp, id: Id, cx: &mut Context<PhoenixApp>) {
             return;
         };
         let t0 = std::time::Instant::now();
-        // Own thread, not GPUI's background pool: image decodes queue there
-        // and delayed pages by up to ~600 ms under load (docs/perf.md).
-        // The open channel is laid out inline: under CPU contention (READY /
-        // RESUME burst) a thread hop measured 470–600 ms vs ~100–200 ms inline
-        // (docs/perf.md). Pages for channels no longer on screen go off-thread.
-        // GPUI's test scheduler also rejects wakeups from foreign threads.
         let on_screen = this.update(cx, |a, _| a.selected_channel == Some(id)).unwrap_or(false);
         if cfg!(test) || on_screen {
             let rendered = render_page(&msgs, &resolver, me, off, &revealed);
@@ -209,7 +186,6 @@ pub fn load_first_page(app: &PhoenixApp, id: Id, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-/// `insert_history(.., older = false)` with the rows already built.
 fn insert_first_page(app: &mut PhoenixApp, ch: Id, page: Vec<Message>, rendered: Vec<RenderedMessage>, cx: &mut Context<PhoenixApp>) {
     crate::perf::channel_messages_ready(ch.0, "load");
     let mut entry = app.messages.remove(&ch).unwrap_or_default();

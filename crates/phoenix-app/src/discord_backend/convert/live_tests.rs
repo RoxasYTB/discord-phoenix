@@ -1,5 +1,3 @@
-//! Live gateway events against read state: what the official client shows
-//! when another session (or another user) acts while we're connected.
 use super::*;
 use phoenix_api::gateway::events::parse_dispatch;
 
@@ -18,13 +16,11 @@ fn setup() -> (Cache, Adapter) {
     cache.apply(&e);
     let GatewayEvent::Ready(r) = e else { panic!("not ready") };
     let mut prefs = Prefs::from_ready(&r);
-    // Both channels fully read up to their last message.
     prefs.reads.insert(CH, ReadMark { last_read: 700000000000000050, mentions: 0 });
     prefs.reads.insert(DM, ReadMark { last_read: 900000000000000500, mentions: 0 });
     (cache, Adapter::new(r.user.id, prefs))
 }
 
-/// A MESSAGE_CREATE from the fixture, re-addressed.
 fn msg(id: u64, channel: u64, guild: bool, author: u64, everyone: bool) -> GatewayEvent {
     let mut m = fixture("message_create.json");
     m["id"] = Value::String(id.to_string());
@@ -130,7 +126,6 @@ fn presence_with_profile_updates_the_user() {
     let u = out.iter().find_map(|x| match x { AppEvent::Users(u) => u.first().cloned(), _ => None }).expect("user refreshed");
     assert_eq!(u.display_name.as_ref(), "Alice Two");
     assert!(matches!(u.avatar, model::ImageRef::Url(_)));
-    // Id-only presences don't touch the profile.
     let out = feed(&cache, &mut a, &parse_dispatch("PRESENCE_UPDATE", r#"{"user":{"id":"200000000000000002"},"status":"idle"}"#));
     assert!(!out.iter().any(|x| matches!(x, AppEvent::Users(_))));
 }

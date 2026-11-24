@@ -1,6 +1,3 @@
-//! User menu actions: nicknames, friend nickname, per-server profile, ignore,
-//! call card, roles, mod view, report, voice moderation and Watch Stream.
-
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use gpui::{App, Context};
@@ -18,7 +15,6 @@ use crate::{
 };
 
 thread_local! {
-    /// Users ignored from the menus this session.
     static IGNORED: RefCell<HashSet<Id>> = RefCell::new(HashSet::new());
 }
 
@@ -26,7 +22,6 @@ pub fn is_ignored(u: Id) -> bool {
     IGNORED.with(|s| s.borrow().contains(&u))
 }
 
-/// "Add Note" / "Edit Note" (vanilla-menu-member-5) depending on whether a note is stored.
 pub fn note_label(app: &PhoenixApp, u: Id) -> &'static str {
     if app.people.profiles.get(&u).is_some_and(|p| !p.note.is_empty()) { "menu.edit_note" } else { "menu.add_note" }
 }
@@ -46,7 +41,6 @@ fn text_form(title: gpui::SharedString, label: gpui::SharedString, initial: Stri
 }
 
 impl PhoenixApp {
-    /// "Change Nickname" (`user: None` = our own).
     pub fn open_nickname(&mut self, guild: Id, user: Option<Id>, cx: &mut Context<Self>) {
         let who = user.unwrap_or(self.me.id);
         let initial = self.users.get(&who).map(|u| u.display_name.to_string()).unwrap_or_default();
@@ -73,7 +67,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// "Edit Per-server Profile": settings > Profiles (server profile tab).
     pub fn open_server_profile(&mut self, guild: Id, cx: &mut Context<Self>) {
         crate::ui::settings::open(self, cx);
         if let Some(s) = self.settings.as_mut() {
@@ -97,7 +90,6 @@ impl PhoenixApp {
         self.action_toast(ActionRequest::Ignore { user, ignored }, Some(ok), cx);
     }
 
-    /// "Call": open the DM and show the outgoing call card. No call is placed.
     pub fn open_call_ui(&mut self, user: Id, cx: &mut Context<Self>) {
         self.open_dm_with(user, cx);
         let ch = self.selected_channel.unwrap_or(Id(0));
@@ -140,9 +132,6 @@ fn item(e: &Ent, label: gpui::SharedString, f: impl Fn(&mut PhoenixApp, &mut Con
     MenuItem::action(label, None, move |_, _, cx: &mut App| e.update(cx, |a, cx| f(a, cx)))
 }
 
-/// Voice rows of the member menu, split the way vanilla-menu-member places
-/// them: Watch Stream after Add Note, Move To > after Roles >, and Server
-/// Mute / Server Deafen (checkboxes) + Disconnect after Open in Mod View.
 #[derive(Default)]
 pub struct VoiceItems {
     pub watch: Option<MenuItem>,
@@ -196,7 +185,6 @@ pub fn voice_items(app: &PhoenixApp, user: Id, guild: Option<Id>, e: &Ent) -> Vo
             out.move_to = Some(MenuItem::submenu(crate::t!("voice.move_to"), targets));
         }
         let e2 = e.clone();
-        // Member menus say "Déconnecter" (the self action is "Se déconnecter").
         out.mods.push(MenuItem::danger(crate::t!("menu.disconnect_member"), None, move |_, _, cx: &mut App| {
             e2.update(cx, |a, cx| a.voice_moderate(g, user, VoiceMod::Move(None), cx))
         }));

@@ -1,6 +1,3 @@
-//! Locally persisted picker preferences: frequently used emoji and the
-//! skin tone, in `$XDG_CONFIG_HOME/discord-phoenix/expressions.json`.
-
 use std::{collections::HashMap, path::PathBuf};
 
 use serde_json::{Value, json};
@@ -11,15 +8,12 @@ use crate::model::Id;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Usage {
     pub count: u32,
-    /// Unix seconds of the last use.
     pub last: i64,
 }
 
 #[derive(Debug, Default)]
 pub struct Prefs {
-    /// 0 = default, 1..=5 Fitzpatrick tones.
     pub tone: u8,
-    /// Keys: `u:<glyph>` or `c:<id>:<name>:<0|1 animated>`.
     pub usage: HashMap<String, Usage>,
     path: Option<PathBuf>,
 }
@@ -105,7 +99,6 @@ impl Prefs {
 
     pub fn record(&mut self, item: &PickItem) {
         self.record_at(item, chrono::Utc::now().timestamp());
-        // Keep the file small: forget the least useful entries.
         if self.usage.len() > 200 {
             let now = chrono::Utc::now().timestamp();
             let mut keys: Vec<(f64, String)> = self.usage.iter().map(|(k, u)| (score(u, now), k.clone())).collect();
@@ -123,7 +116,6 @@ impl Prefs {
         u.last = now;
     }
 
-    /// Frecency-ranked items, best first.
     pub fn frequent(&self, limit: usize, now: i64) -> Vec<PickItem> {
         let mut v: Vec<(f64, &String)> = self.usage.iter().map(|(k, u)| (score(u, now), k)).collect();
         v.sort_by(|a, b| b.0.total_cmp(&a.0).then_with(|| a.1.cmp(b.1)));
@@ -131,7 +123,6 @@ impl Prefs {
     }
 }
 
-/// Uses weighted by recency (Discord-like buckets).
 fn score(u: &Usage, now: i64) -> f64 {
     let days = (now - u.last).max(0) as f64 / 86_400.;
     let weight = if days < 1. {

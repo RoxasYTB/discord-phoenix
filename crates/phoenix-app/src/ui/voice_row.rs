@@ -1,11 +1,3 @@
-//! Voice channel member row (channel list) interactions: profile popout anchor and
-//! the row bounds it needs.
-//!
-//! Live client (vanilla, 2026-11-24): clicking `voiceUser_YUoOxm` opens the standard
-//! `user-profile-popout` (300px) with its left edge 8px right of the row and its top
-//! aligned with the row; while open the row carries `selected_YUoOxm`. Clicking the
-//! row never joins the channel.
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -20,9 +12,6 @@ thread_local! {
 }
 
 thread_local! {
-    /// Voice channels with "Hide Names" checked (voice channel context menu), saved in
-    /// `$XDG_CONFIG_HOME/discord-phoenix/voice-hidden-names.txt` like the client keeps it
-    /// across restarts.
     static HIDDEN_NAMES: std::cell::RefCell<Option<std::collections::BTreeSet<u64>>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -67,9 +56,6 @@ pub fn set_names_hidden(channel: Id, hidden: bool) {
     }
 }
 
-/// "Hide Names" layout (`listCollapse_YUoOxm`: row, wrap; `.content_` margin-inline-start
-/// 8, padding 0): only the avatars, side by side, inside `list_YUoOxm` (padding 0 0 10 38;
-/// `draggable_xIeVT2` height 32).
 pub fn collapsed_list(app: &crate::app::PhoenixApp, users: &[Id]) -> AnyElement {
     div()
         .w_full()
@@ -91,13 +77,10 @@ pub fn collapsed_list(app: &crate::app::PhoenixApp, users: &[Id]) -> AnyElement 
         .into_any_element()
 }
 
-/// Remember where the row for `user` was painted.
 pub fn record(user: Id, b: Bounds<Pixels>) {
     ROWS.with(|r| r.borrow_mut().insert(user.0, b));
 }
 
-/// `open_profile` anchor that lands the popout at (row right + 8, row top).
-/// profile.rs places the card at (at.x - 300 - 16, at.y - 60).
 pub fn popout_anchor(user: Id, fallback: Point<Pixels>) -> Point<Pixels> {
     let b = ROWS.with(|r| r.borrow().get(&user.0).copied());
     match b {
@@ -106,8 +89,6 @@ pub fn popout_anchor(user: Id, fallback: Point<Pixels>) -> Point<Pixels> {
     }
 }
 
-/// optionsButton_YUoOxm: 24x24, radius 4px, hover/active --interactive-background-active.
-/// Opens the user's context menu at the button (voice menu when in the call).
 pub fn options_button(user: Id, guild: Option<Id>, in_call: bool) -> AnyElement {
     div()
         .id(("voice-user-options", user.0))
@@ -123,7 +104,7 @@ pub fn options_button(user: Id, guild: Option<Id>, in_call: bool) -> AnyElement 
             svg()
                 .path(crate::icons::path("more-horizontal"))
                 .size(z(16.))
-                .text_color(c(tok(idx::CHANNELS_DEFAULT))), // .icon_YUoOxm --channels-default
+                .text_color(c(tok(idx::CHANNELS_DEFAULT))),
         )
         .on_click(move |ev, window, cx| {
             cx.stop_propagation();
@@ -136,12 +117,6 @@ pub fn options_button(user: Id, guild: Option<Id>, in_call: bool) -> AnyElement 
         .into_any_element()
 }
 
-/// "In a voice channel" card in the profile popout (`clickableContainer_Bu4Al8` in
-/// `cardsList_M2WrKU`, live vanilla popout opened from a voice row): same card
-/// metrics as the activity cards (padding 8px, --radius-sm, border --border-subtle,
-/// header body-xs/medium), body = guild circle + channel name heading-xs/semibold
-/// with the speaker icon (`voiceIcon_Bu4Al8`) and the guild name. Clicking opens the
-/// channel's text chat; it never joins voice.
 pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui::Entity<crate::app::PhoenixApp>) -> Option<AnyElement> {
     use gpui::{FontWeight, prelude::FluentBuilder};
     let ch = app.channels.values().find(|c| c.voice_users.contains(&user))?;
@@ -149,33 +124,29 @@ pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui:
     let g = ch.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g));
     let gname = g.map(|g| g.name.clone());
     let acronym = g.map(|g| g.acronym.clone()).unwrap_or_default();
-    // GuildIcon: the guild's icon when it has one, the acronym otherwise.
     let icon = g.and_then(|g| match &g.icon {
         crate::model::ImageRef::Url(u) => Some(u.clone()),
         _ => None,
     });
-    // `.theme-light :where(.overlay_P1YEjQ)` borders the card
     let light = crate::ui::profile_theme::is_light();
     Some(
         div()
             .id(("profile-voice-card", user.0))
-            .pb(z(8.)) // container_M2WrKU card spacing
+            .pb(z(8.))
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap(z(8.)) // card_Bu4Al8 gap
-                    .p(z(8.)) // --custom-activity-card-padding (popout)
-                    .rounded(z(8.)) // --radius-sm
-                    // :where(.overlay_P1YEjQ): --user-profile-overlay-background, 1px
-                    // --border-muted on light cards only; clickableContainer_:hover → -hover.
+                    .gap(z(8.))
+                    .p(z(8.))
+                    .rounded(z(8.))
                     .bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)))
                     .hover(|s| s.bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND_HOVER))))
                     .when(light, |d| d.border_1().border_color(c(tok(idx::BORDER_MUTED))))
                     .cursor_pointer()
                     .child(
                         div()
-                            .text_size(z(12.)) // header_Bu4Al8 body-xs/medium
+                            .text_size(z(12.))
                             .line_height(z(16.))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(c(tok(idx::TEXT_DEFAULT)))
@@ -185,10 +156,8 @@ pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui:
                         div()
                             .flex()
                             .items_center()
-                            .gap(z(8.)) // content_Bu4Al8 gap
+                            .gap(z(8.))
                             .child(
-                                // container_vg4rr1: 60px, --radius-sm, 1px --border-subtle,
-                                // --card-background-default under a --background-mod-subtle layer
                                 div()
                                     .size(z(60.))
                                     .flex_none()
@@ -214,7 +183,7 @@ pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui:
                                     .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .gap(z(4.)) // details_Bu4Al8 gap
+                                    .gap(z(4.))
                                     .child(
                                         div()
                                             .flex()
@@ -224,7 +193,7 @@ pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui:
                                             .child(
                                                 div()
                                                     .min_w_0()
-                                                    .text_size(z(14.)) // heading-xs/semibold
+                                                    .text_size(z(14.))
                                                     .line_height(z(18.))
                                                     .font_weight(FontWeight::SEMIBOLD)
                                                     .text_color(c(tok(idx::TEXT_STRONG)))
@@ -235,7 +204,7 @@ pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui:
                                     .when_some(gname, |d, n| {
                                         d.child(
                                             div()
-                                                .text_size(z(12.)) // body-xs
+                                                .text_size(z(12.))
                                                 .line_height(z(16.))
                                                 .text_color(c(tok(idx::TEXT_MUTED)))
                                                 .text_ellipsis()
@@ -269,12 +238,6 @@ mod tests {
     }
 }
 
-/// Stage audience strip under the speakers (`audienceContainer_xIeVT2`: row, gap 8,
-/// height 24, margin-top 4, padding-inline-start --space-xs, inside `list_YUoOxm`
-/// padding 0 0 10 38). `audienceIconContainer_` 24px circle --background-base-lowest
-/// with a 16px --interactive-text-default glyph; avatars overlap like `overlap_YUoOxm`
-/// (4px --background-base-lowest ring, margin-inline -8/-4); extra count in
-/// `moreContainer_` (--background-base-lowest, 4px ring, radius 16, padding 3 8).
 pub fn stage_audience(app: &crate::app::PhoenixApp, channel: Id) -> AnyElement {
     use crate::theme::generated::global::SPACE_XS;
     let audience: Vec<Id> = app
@@ -345,7 +308,6 @@ thread_local! {
     static STREAM_HOVER: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
 }
 
-/// Voice row hover → stream preview card (only for users that are live).
 pub fn set_stream_hover(user: Id, hovered: bool) -> bool {
     STREAM_HOVER.with(|h| {
         let before = h.get();
@@ -358,12 +320,6 @@ pub fn set_stream_hover(user: Id, hovered: bool) -> bool {
     })
 }
 
-/// Stream preview card shown right of a live user's voice row while hovered
-/// (`streamPreviewWrapper_30W6Js`: slides in from translate 8px / scale .98 with
-/// opacity 0 → 1 over 150ms). `previewContainer_` 142px tall, --background-mod-normal;
-/// `previewHover_` overlay --opacity-black-60, semibold 18px line, shown on hover;
-/// `body_` padding 10 with the `liveIcon_` badge (margin-inline-end 8) and the name.
-/// The preview image itself (GET /streams/{key}/preview) is not fetched yet.
 pub fn stream_preview(app: &crate::app::PhoenixApp, user: Id) -> Option<AnyElement> {
     use gpui::{AnimationExt, FontWeight};
     if STREAM_HOVER.with(|h| h.get()) != Some(user.0) || !crate::ui::voice_panel::flags(user).stream {
@@ -374,7 +330,7 @@ pub fn stream_preview(app: &crate::app::PhoenixApp, user: Id) -> Option<AnyEleme
     let card = div()
         .id(("stream-preview", user.0))
         .occlude()
-        .w(z(252.)) // 142 * 16/9
+        .w(z(252.))
         .rounded(z(8.))
         .overflow_hidden()
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))

@@ -1,7 +1,3 @@
-//! App top bar of the refreshed client (`--custom-app-top-bar-height`, 32px):
-//! spans the whole window above the guild list, channel list and page, shows
-//! the current place centered and the inbox / help buttons on the right.
-
 use crate::ui::tooltip::Tipped as _;
 use gpui::{Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
@@ -16,11 +12,9 @@ fn title(app: &PhoenixApp) -> (Icon, SharedString) {
     if let Some(g) = app.selected_guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)) {
         return (Icon::Hash, g.name.clone());
     }
-    // vanilla-dm #29: the bar reads "Direct Messages" in every DM, not the DM name.
     if app.nav.home == HomeView::Dm {
         return (Icon::Members, crate::t!("dm.title"));
     }
-    // nitro-home dump: the title bar reads "Nitro" with the Nitro glyph.
     if app.nav.home == HomeView::Nitro {
         return (Icon::Nitro, crate::t!("settings.page.nitro"));
     }
@@ -37,18 +31,13 @@ fn bar_button(id: &'static str, i: Icon, active: bool, tip: SharedString) -> gpu
         .items_center()
         .justify_center()
         .rounded(z(m::TITLE_BAR_ITEM_RADIUS))
-        // `-webkit-app-region: no-drag`: keep presses out of the drag region.
         .occlude()
         .cursor_pointer()
-        // `clickable_fErCLM`: `--icon-muted`; hover `--background-mod-normal` +
-        // `--interactive-icon-hover`; selected `--interactive-icon-active`.
         .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
         .child(icon(i, 18. * zoom(), c(tok(if active { idx::INTERACTIVE_ICON_ACTIVE } else { idx::ICON_MUTED }))))
         .tip(tip)
 }
 
-/// `backForwardButtons_nS9Yqn` half (dump -channels-N-N+ #20/#22): 26×24, 18px
-/// arrow, `padding 0 2 0 6` / `0 6 0 2`, outer corners `6px`, `--interactive-icon-default`.
 fn nav_arrow(id: &'static str, name: &'static str, back: bool, enabled: bool) -> gpui::Stateful<gpui::Div> {
     let d = div()
         .id(id)
@@ -70,13 +59,10 @@ fn nav_arrow(id: &'static str, name: &'static str, back: bool, enabled: bool) ->
     if enabled {
         d.cursor_pointer().hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
     } else {
-        // `disabled_nS9Yqn`
         d.opacity(0.5)
     }
 }
 
-/// Offscreen renders have no compositor, so gpui reports server-side decorations and the
-/// window buttons vanish. Examples comparing against the desktop client set this.
 pub static FORCE_CLIENT_DECORATIONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn client_decorated(window: &gpui::Window) -> bool {
@@ -84,21 +70,13 @@ fn client_decorated(window: &gpui::Window) -> bool {
         || matches!(window.window_decorations(), gpui::Decorations::Client { .. })
 }
 
-/// Whether the last title bar drew the window buttons (popouts anchored to the
-/// inbox button read it; they render without the window).
 static DREW_WIN_BUTTONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Distance from the window's right edge to the inbox button's right edge:
-/// help 24 + gap 12 + (window buttons 3×32 + 2×4 gap + 1px divider with 4px
-/// margins + 4 gap = 117, + gap 12) or the 12px trailing padding.
-/// Vanilla-inbox-1: inbox #36 right edge 1115 of 1280 (165).
 pub fn inbox_right_inset() -> f32 {
     let tail = if DREW_WIN_BUTTONS.load(std::sync::atomic::Ordering::Relaxed) { 117. + 12. } else { 12. };
     tail + 24. + 12.
 }
 
-/// Window height in CSS px (logical / zoom) at the last title bar render, for
-/// popouts whose max-height depends on `@media (max-height: …)`.
 static VIEWPORT_H_CSS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 pub fn viewport_h_css() -> f32 {
@@ -111,8 +89,6 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
     DREW_WIN_BUTTONS.store(client_decorated(window), std::sync::atomic::Ordering::Relaxed);
     let (glyph, text) = title(app);
     let guild = app.selected_guild.and_then(|g| app.guilds.iter().find(|x| x.id == g));
-    // `bar_3zSH5d` (dump #13): 32px, no fill (the app background shows through).
-    // `bar_3zSH5d` `-webkit-app-region: drag`: press-drag moves, double click maximizes.
     crate::ui::window_chrome::drag_region(div().id("app-title-bar"))
         .h(z(m::TITLE_BAR_H))
         .flex_none()
@@ -122,8 +98,6 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
         .items_center()
         .justify_between()
         .child(
-            // `title_LnjVAX` (dump #15): centered, gap 8; 16px guild icon (radius 4) +
-            // `body-sm/medium` name in `--text-strong`.
             div()
                 .absolute()
                 .inset_0()
@@ -144,7 +118,6 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .child(div().max_w(z(480.)).text_ellipsis().child(text)),
         )
         .child(
-            // `leading_3zSH5d` > `backForwardButtons_nS9Yqn` (dump #18/#19): 80px wide, gap 2.
             div()
                 .relative()
                 .w(z(80.))
@@ -156,8 +129,6 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .child(nav_arrow("title-forward", "nav/forward", false, false)),
         )
         .child(
-            // `trailing_3zSH5d` (dump #24): gap 12, 24px `clickable_fErCLM` buttons.
-            // With client-side decorations the window buttons end flush right (#46: 1163..1280).
             div()
                 .relative()
                 .when(!client_decorated(window), |d| d.pr(z(12.)))
@@ -173,8 +144,6 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
         )
 }
 
-/// Login screen: no app content in the bar, only the drag region and the window
-/// buttons, drawn over the login background (same `bar_3zSH5d` geometry).
 pub fn login_bar(window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     crate::ui::window_chrome::drag_region(div().id("login-title-bar"))
         .absolute()
@@ -188,11 +157,6 @@ pub fn login_bar(window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> impl In
         .when(client_decorated(window), |d| d.child(win_buttons(cx)))
 }
 
-/// `winButtons_3zSH5d winButtonsWithDivider_3zSH5d` (vanilla-guild-text #46..#52): gap
-/// `--space-4`, `:before` divider 1px `--border-subtle`, height 32 - `--space-12`,
-/// margin-inline `--space-4`; 32×32 `winButton_3zSH5d` (`--custom-app-top-bar-height`)
-/// with a 12×12 glyph (#48/#50/#52) in `--interactive-text-default`. Only drawn when the
-/// window has no server-side frame.
 fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let btn = |id: &'static str, close: bool| {
         div()
@@ -203,15 +167,12 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
             .flex()
             .items_center()
             .justify_center()
-            // `pointer-events: auto` + `no-drag`
             .occlude()
             .cursor_pointer()
             .map(|d| {
                 if close {
-                    // `winButtonClose_3zSH5d:hover` (no :active rule)
                     d.hover(|s| s.bg(c(tok(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT))))
                 } else {
-                    // `winButtonMinMax_3zSH5d:hover` / `:active`
                     d.hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
                         .active(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))))
                 }
@@ -220,7 +181,6 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let fg = c(tok(idx::INTERACTIVE_TEXT_DEFAULT));
     let fg_hover = c(tok(idx::INTERACTIVE_TEXT_HOVER));
     let fg_active = c(tok(idx::INTERACTIVE_TEXT_ACTIVE));
-    // 12×12 glyph box; min/max glyphs are plain rects so they are drawn as divs.
     let glyph_box = || div().relative().size(z(12.)).flex_none();
     div()
         .flex()
@@ -229,7 +189,6 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .gap(z(4.))
         .child(div().mx(z(4.)).w(z(1.)).h(z(m::TITLE_BAR_H - 12.)).bg(c(tok(idx::BORDER_SUBTLE))))
         .child(
-            // Minimize (#48): filled 10×1 rect at (1, 6).
             btn("win-min", false)
                 .child(glyph_box().child(
                     div()
@@ -246,8 +205,6 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 .on_click(cx.listener(|_, _, w, _| w.minimize_window())),
         )
         .child(
-            // Maximize (#50): 9×9 rect at 1.5 with a 1px stroke = 10×10 outline at (1, 1).
-            // The client keeps this glyph when maximized (one `Maximiser` button).
             btn("win-max", false)
                 .child(glyph_box().child(
                     div()
@@ -264,7 +221,6 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 .on_click(cx.listener(|_, _, w, _| w.zoom_window())),
         )
         .child(
-            // Close (#52): 10×10 cross in the 12px box; white on the red hover.
             btn("win-close", true)
                 .child(
                     gpui::svg()
@@ -274,7 +230,6 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .text_color(fg)
                         .group_hover("win-close", |s| s.text_color(c(tok(idx::CONTROL_CRITICAL_PRIMARY_ICON_DEFAULT)))),
                 )
-                // Settings > Windows "Minimize to tray": close hides to the tray icon.
                 .on_click(cx.listener(|a, _, w, _| {
                     if a.prefs.local.minimize_to_tray && crate::tray::running() {
                         w.minimize_window();

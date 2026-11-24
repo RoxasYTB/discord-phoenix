@@ -1,6 +1,3 @@
-//! Message search popout (Ctrl+F): `from:`, `mentions:`, `in:`, `has:`,
-//! `before:`, `after:`, `during:` and `pinned:` filters, paged results.
-
 use crate::theme::z;
 use gpui::{
     AnyElement, App, Context, Entity, FontWeight, ParentElement, SharedString, Styled, Subscription,
@@ -21,28 +18,23 @@ use crate::{
 pub const PAGE: u32 = 25;
 pub const WIDTH: f32 = 420.;
 
-/// What to search, with names already resolved to ids.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SearchRequest {
-    /// Guild scope; when `None`, `channel` (a DM) is searched.
     pub guild: Option<Id>,
     pub channel: Option<Id>,
     pub content: Option<String>,
     pub authors: Vec<Id>,
     pub mentions: Vec<Id>,
     pub channels: Vec<Id>,
-    /// `has:` values ("link", "image"...).
     pub has: Vec<String>,
     pub min_id: Option<Id>,
     pub max_id: Option<Id>,
     pub pinned: Option<bool>,
-    /// `authorType:` values (user / bot / webhook).
     pub author_types: Vec<String>,
     pub offset: u32,
     pub sort: SortOrder,
 }
 
-/// "Trier" menu of the results header (Plus récents / Date / Pertinence in the client).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SortOrder {
     #[default]
@@ -63,13 +55,11 @@ pub struct SearchState {
     pub page: Option<SearchPage>,
     pub loading: bool,
     pub error: Option<SharedString>,
-    /// The "Trier" menu is open.
     sort_menu: bool,
     seq: u64,
     _sub: Subscription,
 }
 
-/// Queries run this session, newest first (the popout's "History" group).
 #[derive(Default)]
 pub struct SearchHistory(pub Vec<String>);
 
@@ -82,7 +72,6 @@ impl gpui::Global for Search {}
 
 const DAY: u64 = 86_400_000 << 22;
 
-/// Turn the typed text into a request, resolving `from:`/`in:` names.
 pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, String> {
     let p = parse_search(text);
     let mut req = SearchRequest {
@@ -155,8 +144,6 @@ pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, Stri
     Ok(req)
 }
 
-/// The results sidebar is shown (not just the options popout): the chat makes
-/// room for it instead of the member list / profile panel.
 pub fn results_shown(cx: &App) -> bool {
     cx.try_global::<Search>().and_then(|s| s.0.as_ref()).is_some_and(|s| s.page.is_some() && s.request.is_some())
 }
@@ -282,14 +269,12 @@ fn rerun(app: &mut PhoenixApp, f: impl FnOnce(&mut SearchRequest), cx: &mut Cont
     run(app, req, cx);
 }
 
-/// Put `q` in the search box (real_shots `PHX_OPEN=search:<q>`).
 pub fn set_query(q: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     let Some(input) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).map(|s| s.input.clone()) else { return };
     let q = q.to_string();
     input.update(cx, |s, cx| s.set_value(q, window, cx));
 }
 
-/// Append `tokens` (from the filters modal) to the query and run it.
 pub fn append_and_submit(app: &mut PhoenixApp, tokens: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     let Some(input) = cx.global::<Search>().0.as_ref().map(|s| s.input.clone()) else { return };
     if !tokens.is_empty() {
@@ -302,7 +287,6 @@ pub fn append_and_submit(app: &mut PhoenixApp, tokens: &str, window: &mut Window
     submit(app, cx);
 }
 
-/// Keys set by the "Filtres" modal (dates, `pinned:`, `authorType:`).
 const MORE_KEYS: [&str; 5] = ["before:", "after:", "during:", "pinned:", "authorType:"];
 
 fn add_filter(prefix: &'static str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -316,8 +300,6 @@ fn add_filter(prefix: &'static str, window: &mut Window, cx: &mut Context<Phoeni
     });
 }
 
-/// "Filters" group of the live popout (dump search-popout `groupWrapper_lm2_KW`):
-/// (inserted keyword, icon, label, shown key, shown value).
 const FILTERS: [(&str, &str, &str, &str, &str); 4] = [
     ("from:", "search/user", "search.f_from", "search.k_from", "search.v_user"),
     ("in:", "hash", "search.f_in", "search.k_in", "search.v_channel"),
@@ -326,12 +308,6 @@ const FILTERS: [(&str, &str, &str, &str, &str); 4] = [
 ];
 
 
-/// One hit (`searchResult_`): 1px --border-subtle, radius 8, --background-base-lowest,
-/// margin-bottom 8, the message laid out cozy (padding 8 20 8 80: 40px avatar at 20,
-/// name 16/22 medium in the author colour + tag / role icon / APP, 12px medium
-/// --text-muted time 4px after, content 16/22 --text-default). Hover shows "Y aller"
-/// (`buttonsContainer_` top 8 right 8: 24px, padding 4, radius 3, body-xs/medium
-/// --text-default on --background-base-lowest), which jumps to the message.
 fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let guild = app.channel_guild(m.channel).or(app.selected_guild);
     let author_cow = app.member_user(guild, m.author);
@@ -340,19 +316,15 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
     let id = m.id;
     let content: String = m.content.chars().take(400).collect();
     let rich = !content.is_empty();
-    // Attachments and embeds like the chat (bot results are often embed-only).
     let acx: &App = cx;
     let extras: Vec<AnyElement> = m
         .attachments
         .iter()
         .map(|a| crate::ui::chat::attachment(a, acx))
         .chain(m.embeds.iter().map(|e| crate::ui::chat::embed(app, e, acx)))
-        // Bot components (Components V2 messages have nothing else), drawn without
-        // interactions and without highlights, like the client's search results.
         .chain(crate::ui::components::render_static(app, &cx.entity(), m, acx))
         .collect();
     let bot = author.is_some_and(|u| u.bot);
-    // The guild nickname at send time, like the chat ("Loris (#1 Roxas lover)").
     let shown: SharedString = m
         .author_nick
         .clone()
@@ -361,7 +333,6 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
         .unwrap_or_else(|| crate::t!("common.unknown"));
     let role_gradient = app.author_role_gradient_in(guild, m.author);
     let reply = m.reply_to.is_some().then(|| reply_line(app, m));
-    // Mentions, emoji and markdown like in the chat, with the searched words highlighted.
     let text: Option<AnyElement> = rich.then(|| crate::ui::components::markdown_highlighted(app, &content, &cx.entity(), m.id, hl));
     div()
         .id(("search-hit", ix))
@@ -442,18 +413,12 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
         .into_any_element()
 }
 
-/// `text` with the searched words behind `span.highlight`: the client highlights the
-/// channel name of each result group too (live dump: "règlement" lit "r" + "glement"
-/// in `channelNameText_`).
 fn highlight_plain(text: SharedString, hl: &Highlighter) -> gpui::StyledText {
     let style = gpui::HighlightStyle { background_color: Some(gpui::rgba(crate::search_highlight::HIGHLIGHT_RGBA).into()), ..Default::default() };
     let ranges = hl.ranges(&text);
     gpui::StyledText::new(text).with_highlights(ranges.into_iter().map(|r| (r, style)))
 }
 
-/// Reply line over a hit (`repliedMessage_ messageSpine_`, 18px, margin-bottom 4): the
-/// spine from the avatar, then 16px avatar + name (64%) + preview, or the italic
-/// "could not be loaded" placeholder with the reply glyph when the reply has no preview.
 fn reply_line(app: &PhoenixApp, m: &Message) -> gpui::Div {
     let spine = div()
         .absolute()
@@ -501,8 +466,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let page = s.page.clone();
     let req = s.request.clone();
     let sort_menu = s.sort_menu;
-    // The client hides the search popout while the "Plus de filtres" modal is up (the
-    // header bar goes back to idle) and shows it again when the modal closes.
     if (page.is_none() || req.is_none())
         && let Some(modal) = crate::ui::search_filters::render(app, window, cx)
     {
@@ -514,7 +477,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     Some(results_panel(app, input, page, req, error, loading, sort_menu, window, cx))
 }
 
-/// Close the "Trier" menu; false when it was not open.
 fn close_sort_menu(cx: &mut App) -> bool {
     let open = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).is_some_and(|s| s.sort_menu);
     if open {
@@ -526,7 +488,6 @@ fn close_sort_menu(cx: &mut App) -> bool {
     open
 }
 
-/// "4 083" / "4,083": digit groups with the locale's separator.
 fn group_digits(n: u32) -> String {
     let sep = if crate::i18n::locale() == "en" { ',' } else { '\u{202f}' };
     let d = n.to_string();
@@ -540,8 +501,6 @@ fn group_digits(n: u32) -> String {
     out
 }
 
-/// Page numbers of the pager: the first, the last and the ones around the current
-/// page (three at either end), `None` for an ellipsis (1 2 3 … 164 / 1 2 3 … 164).
 fn page_items(cur: u32, last: u32) -> Vec<Option<u32>> {
     let mut want: Vec<u32> = vec![1, last, cur.saturating_sub(1).max(1), cur, (cur + 1).min(last)];
     if cur <= 2 {
@@ -564,10 +523,7 @@ fn page_items(cur: u32, last: u32) -> Vec<Option<u32>> {
     out
 }
 
-/// The header search bar while a search is shown: the query with its clear (x) button.
 fn live_bar(input: &Entity<InputState>, active: bool, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
-    // The header `searchBar_` (244×32, radius 8, --input-background-default,
-    // 1px --input-border-default; editor padding 0 6, 14/22 medium) as a live input.
     div()
         .id("search-bar-live")
         .absolute()
@@ -576,10 +532,8 @@ fn live_bar(input: &Entity<InputState>, active: bool, cx: &mut Context<PhoenixAp
         .w(z(244.))
         .h(z(32.))
         .rounded(z(8.))
-        // The input token is translucent: lay it over the header background.
         .bg(c(Palette::BG_PRIMARY))
         .border_1()
-        // Typing (popout open): --input-border-active; results shown: the idle border.
         .border_color(tk(if active { idx::INPUT_BORDER_ACTIVE } else { idx::INPUT_BORDER_DEFAULT }))
         .occlude()
         .flex()
@@ -598,8 +552,6 @@ fn live_bar(input: &Entity<InputState>, active: bool, cx: &mut Context<PhoenixAp
         )
 }
 
-/// `button_ sm secondary hasText`: 32px, 1px --border-subtle-ish, radius 8,
-/// --background-mod-subtle; padding 3 11, 16px glyph + 14/18 medium, gap 4.
 fn sm_secondary(id: &'static str, glyph: &str, label: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -622,10 +574,6 @@ fn sm_secondary(id: &'static str, glyph: &str, label: SharedString) -> gpui::Sta
         .child(label)
 }
 
-/// Results panel (live CDP 2026-11-24, `searchResultsWrap_`): a 48px `searchHeader_`
-/// (padding 8 16: the total, body-md/medium --text-strong, then "Filtres" and "Trier"
-/// sm secondary buttons, gap 8), the scroller (padding 16 16 0) with the hits grouped by
-/// channel, and the 56px `paginationDock_`.
 #[allow(clippy::too_many_arguments)]
 fn results_panel(
     app: &PhoenixApp,
@@ -667,7 +615,6 @@ fn results_panel(
                 .child(sm_secondary("search-results-sort", "sort", crate::t!("search.sort")).on_mouse_down(
                     gpui::MouseButton::Left,
                     cx.listener(|_, _, _, cx| {
-                        // Before the panel's own mouse down (which closes the menu).
                         cx.stop_propagation();
                         if let Some(s) = cx.global_mut::<Search>().0.as_mut() {
                             s.sort_menu = !s.sort_menu;
@@ -676,15 +623,12 @@ fn results_panel(
                     }),
                 )),
         );
-    // Body: hits grouped by channel (`searchResultGroup_`, margin-bottom 24), the empty
-    // state or the error.
     let mut body = div().flex().flex_col().pt(z(16.)).px(z(16.));
     if let Some(e) = error.filter(|_| !loading) {
         body = body.child(empty_state(e, true));
     } else if page.messages.is_empty() && !loading {
         body = body.child(empty_state(crate::t!("search.no_results"), false));
     } else {
-        // The client's search highlighter (`wG(query)`), and `th(query)` for the channel names.
         let hl = Highlighter::new(req.content.as_deref().unwrap_or_default(), false);
         let mut i = 0;
         while i < page.messages.len() {
@@ -726,9 +670,6 @@ fn results_panel(
     div().absolute().top_0().left_0().right_0().bottom_0().child(live_bar(&input, false, cx)).child(panel).children(modal).into_any_element()
 }
 
-/// `channelNameContainer_` (22px, margin-bottom 8): 16px channel glyph (padding-end 4),
-/// name body-md/medium --text-strong; on the right `parentChannelName_` (folder glyph
-/// 16×12 + category body-xs/medium --text-default, one line).
 fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div {
     let channel = app.channels.get(&ch);
     let name: SharedString = channel.map(|c| c.name.clone()).unwrap_or_else(|| crate::t!("common.unknown_lower"));
@@ -754,9 +695,6 @@ fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div
         })
 }
 
-/// `emptyResultsWrap_` (padding 20) > `emptyResultsContent_` (280 wide, centred,
-/// padding-bottom 40): a 160px illustration (ours: a magnifier in a ring) and the text
-/// 16/24 medium --text-default, centred.
 fn empty_state(text: SharedString, error: bool) -> gpui::Div {
     div().min_h(z(600.)).p(z(20.)).flex().items_center().justify_center().child(
         div()
@@ -790,10 +728,6 @@ fn empty_state(text: SharedString, error: bool) -> gpui::Div {
     )
 }
 
-/// `paginationDock_` (56px, padding 0 16) > `pageControl_` (padding 4 0): 40px
-/// "Précédent" / "Suivant" blank buttons (16px caret, 16/18 semibold, radius 8, padding
-/// 0 12 0 8 / 0 8 0 12), 28px round page buttons (radius 14, 16 semibold; the current one
-/// --brand-500 with white text) 8px apart and "…" (14/18 semibold).
 fn pager(cur: u32, pages: u32, cx: &mut Context<PhoenixApp>) -> gpui::Div {
     let caret = |next: bool| {
         let g = named("chevron-right", 16., tk(idx::TEXT_STRONG));
@@ -865,15 +799,10 @@ fn pager(cur: u32, pages: u32, cx: &mut Context<PhoenixApp>) -> gpui::Div {
     div().flex_none().h(z(56.)).px(z(16.)).flex().items_center().justify_center().child(nav)
 }
 
-/// Show page `p` (1-based) of the current search.
 fn go_page(app: &mut PhoenixApp, p: u32, cx: &mut Context<PhoenixApp>) {
     rerun(app, |r| r.offset = p.saturating_sub(1) * PAGE, cx);
 }
 
-/// "Trier" menu (`menu_ flexible_`): 144 wide under the button, right-aligned, 1px
-/// --border-subtle, radius 8, --background-surface-higher; scroller padding 8 0 8 8;
-/// 36px `menuitemradio` rows (padding 8, radius 2): label body-sm/medium --text-strong and
-/// a 20px radio indicator on the right.
 fn sort_popover(cur: SortOrder, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let items = [(SortOrder::Newest, "search.newest"), (SortOrder::Oldest, "search.sort_date"), (SortOrder::Relevance, "search.relevance")];
     div()
@@ -927,9 +856,6 @@ fn named(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
     gpui::svg().path(crate::icons::path(name)).size(z(size)).flex_none().text_color(color)
 }
 
-/// `itemContainer_lm2_KW` > `item_`: radius 8, padding 4 8; 20px `itemIcon_`
-/// (--text-muted, margin-end 8); hover --interactive-background-hover.
-/// A history query split into free text and `key:value` filters.
 #[derive(Debug, PartialEq)]
 enum HistorySeg {
     Text(String),
@@ -953,12 +879,6 @@ fn history_segments(q: &str) -> Vec<HistorySeg> {
     out
 }
 
-/// History row content (search-popout #75 `autocompletePillContainer_lm2_KW`):
-/// free text = `nonText_` body-sm/semibold --text-strong, margin-end 8;
-/// filter = `filterPill_` (padding 3 2 3 6, radius --radius-xs 0 0 --radius-xs)
-/// plus `answerPill_` (padding 3 6 3 2, radius 0 --radius-xs --radius-xs 0,
-/// gap 4, margin-end 8), both --background-mod-strong; user answers carry a
-/// 16px avatar.
 fn history_pills(app: &PhoenixApp, q: &str) -> gpui::Div {
     let mut row = div().flex().items_center().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).whitespace_nowrap().overflow_hidden();
     let pill = || div().py(z(3.)).bg(tk(idx::BACKGROUND_MOD_STRONG));
@@ -996,7 +916,6 @@ fn option_row(id: (&'static str, usize)) -> gpui::Stateful<gpui::Div> {
         .hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
 }
 
-/// `groupHeader_lm2_KW`: padding 4 8, body-xs/semibold 12/16 --text-subtle.
 fn group_header(label: SharedString) -> gpui::Div {
     div()
         .px(z(8.))
@@ -1010,15 +929,6 @@ fn group_header(label: SharedString) -> gpui::Div {
         .child(div().flex_1().child(label))
 }
 
-/// The search options popout (dump search-popout): the header search bar turns
-/// into the input, and a 356px dropdown opens under it (right edge 12px from
-/// the window, top = header bottom − 4): `container_cbVzxY` padding 12 8,
-/// radius 8, 1px --border-subtle, --background-surface-high, --shadow-high.
-/// Groups (`groupWrapper_lm2_KW`, gap 4): "Filters" (44px rows: label
-/// body-sm/medium --text-strong, then key body-sm/semibold --text-subtle + value
-/// body-sm/medium --text-muted, gap 4), a `divider_` (margin 8 −8, 1px
-/// --border-subtle), "History" (28px rows: search glyph + query
-/// body-sm/semibold --text-strong; 18px clear-history trash).
 fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<SharedString>, loading: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let history = cx.try_global::<SearchHistory>().map(|h| h.0.clone()).unwrap_or_default();
     let mut filters = div().flex().flex_col().gap(z(4.)).child(group_header(crate::t!("search.filters")));
@@ -1046,7 +956,6 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
     }
     filters = filters.child(
         option_row(("search-filter", FILTERS.len()))
-            // The client opens the "Filtres" modal (live dump search-more-filters).
             .on_click(cx.listener(|a, _, w, cx| {
                 crate::ui::search_filters::open(a, w, cx);
             }))
@@ -1063,9 +972,6 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
             ),
     );
     let mut body = div().flex().flex_col();
-    // Typed query: a 28px "Search for: <query>" row (dump search-popout-vanilla
-    // #3369–#3375 `itemContainer_` > `labelWithElements_` body-sm/medium gap 4,
-    // query `nonText_` body-sm/semibold --text-strong), then a `divider_` (#3376).
     let query = input.read(cx).value().trim().to_string();
     if !query.is_empty() {
         body = body
@@ -1133,14 +1039,11 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
             div()
                 .id("search-popout")
                 .debug_selector(|| "search-options-popout".into())
-                // Live client: the options popout closes when the search bar loses
-                // focus; its layer lets the press through (no `trapClicks_`).
                 .on_mouse_down_out(cx.listener(|a, ev: &gpui::MouseDownEvent, w, cx| {
                     let bar = gpui::Bounds::new(
                         gpui::point(w.viewport_size().width - z(8. + 244.), z(layout::TITLE_BAR_H + 8.)),
                         gpui::size(z(244.), z(32.)),
                     );
-                    // A filter popover (date picker, combobox) draws outside the popout.
                     if !bar.contains(&ev.position) && !crate::ui::search_filters::is_open(cx) {
                         close(a, w, cx);
                     }
@@ -1169,7 +1072,6 @@ mod history_tests {
 
     #[test]
     fn pager_pages() {
-        // Live client: page 1 and 2 of 164 show "1 2 3 … 164".
         assert_eq!(page_items(1, 164), vec![Some(1), Some(2), Some(3), None, Some(164)]);
         assert_eq!(page_items(2, 164), vec![Some(1), Some(2), Some(3), None, Some(164)]);
         assert_eq!(page_items(10, 164), vec![Some(1), None, Some(9), Some(10), Some(11), None, Some(164)]);

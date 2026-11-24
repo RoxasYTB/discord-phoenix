@@ -1,9 +1,3 @@
-//! User settings: the protobuf `settings-proto/1` blob (preloaded user
-//! settings) plus the legacy JSON fallback.
-//!
-//! Only the fields Phoenix reads or writes are modelled; prost skips the rest
-//! on decode. PATCH sends only the changed fields, which Discord merges.
-
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use reqwest::Method;
@@ -51,7 +45,6 @@ pub struct PrivacySettings {
     pub restricted_guild_ids: Vec<u64>,
     #[prost(bool, tag = "4")]
     pub default_guilds_restricted: bool,
-    /// Servers the game/app activity is not shared with.
     #[prost(fixed64, repeated, tag = "13")]
     pub activity_restricted_guild_ids: Vec<u64>,
 }
@@ -68,15 +61,12 @@ pub struct LocalizationSettings {
     pub locale: Option<StringValue>,
 }
 
-/// `Theme` enum values of the appearance settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Theme {
     #[default]
     Dark,
     Light,
-    /// "Ash" in the client (proto DARKER).
     Ash,
-    /// "Onyx" in the client (proto MIDNIGHT).
     Onyx,
 }
 
@@ -97,7 +87,6 @@ impl Theme {
             Self::Onyx => 4,
         }
     }
-    /// Legacy JSON `theme` string.
     pub fn from_json(s: &str) -> Self {
         match s {
             "light" => Self::Light,
@@ -114,12 +103,10 @@ pub struct AppearanceSettings {
     pub theme: i32,
     #[prost(bool, tag = "2")]
     pub developer_mode: bool,
-    /// `UIDensity`: 0 unset, 1 compact, 2 cozy ("spacious"), 3 responsive, 4 default.
     #[prost(int32, tag = "12")]
     pub ui_density: i32,
 }
 
-/// The subset of `PreloadedUserSettings` Phoenix uses.
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct PreloadedUserSettings {
     #[prost(message, optional, tag = "6")]
@@ -158,7 +145,6 @@ impl PreloadedUserSettings {
     pub fn developer_mode(&self) -> bool {
         self.appearance.as_ref().is_some_and(|a| a.developer_mode)
     }
-    /// Raw `appearance.ui_density` proto value (0 when unset).
     pub fn ui_density(&self) -> i32 {
         self.appearance.as_ref().map_or(0, |a| a.ui_density)
     }
@@ -175,7 +161,6 @@ impl PreloadedUserSettings {
         self.privacy.as_ref().is_some_and(|p| p.default_guilds_restricted)
     }
 
-    // Patch builders (only the given field is set).
     pub fn patch_appearance(theme: Theme, developer_mode: bool) -> Self {
         Self {
             appearance: Some(AppearanceSettings { theme: theme.to_proto(), developer_mode, ui_density: 0 }),
@@ -197,7 +182,6 @@ impl PreloadedUserSettings {
             ..Default::default()
         }
     }
-    /// Note: Discord replaces the whole privacy message's repeated fields.
     pub fn patch_default_guilds_restricted(v: bool) -> Self {
         Self {
             privacy: Some(PrivacySettings { default_guilds_restricted: v, ..Default::default() }),
@@ -206,8 +190,6 @@ impl PreloadedUserSettings {
     }
 }
 
-/// One change, encoded with explicit field values (so `false` / `0` are
-/// really sent, which prost's proto3 encoding would omit).
 #[derive(Clone, Debug, PartialEq)]
 pub enum SettingChange {
     Theme(Theme),
@@ -215,15 +197,10 @@ pub enum SettingChange {
     Compact(bool),
     Locale(String),
     DefaultGuildsRestricted(bool),
-    /// `appearance.ui_density` proto value (see [`AppearanceSettings::ui_density`]).
     UiDensity(i32),
-    /// Any scalar at a field path of `PreloadedUserSettings` (tags, outermost
-    /// first). `wrapper`: the last tag is a `google.protobuf.*Value` message
-    /// whose field 1 holds the value.
     Path { path: Vec<u32>, wrapper: bool, value: ProtoValue },
 }
 
-/// A scalar read from / written to the settings blob.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProtoValue {
     Int(u64),
@@ -247,7 +224,6 @@ fn read_varint(b: &[u8], i: &mut usize) -> Option<u64> {
     }
 }
 
-/// Every `(tag, wire type, varint | bytes)` field of one message level.
 fn fields(b: &[u8]) -> Vec<(u32, u8, u64, &[u8])> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -281,10 +257,6 @@ fn fields(b: &[u8]) -> Vec<(u32, u8, u64, &[u8])> {
     out
 }
 
-/// Read the scalar at `path` from a raw `PreloadedUserSettings` blob with
-/// protobuf merge semantics (the last occurrence wins, sub-messages merge).
-/// `as_str` reads a string; a present wrapper without field 1 is the
-/// default (0 / "").
 pub fn proto_read(raw: &[u8], path: &[u32], wrapper: bool, as_str: bool) -> Option<ProtoValue> {
     let (&first, rest) = path.split_first()?;
     let mut found = None;
@@ -334,7 +306,6 @@ fn field_bytes(tag: u32, data: &[u8], out: &mut Vec<u8>) {
 }
 
 impl SettingChange {
-    /// Top-level `PreloadedUserSettings` bytes carrying only this change.
     pub fn encode(&self) -> Vec<u8> {
         let mut inner = Vec::new();
         let mut out = Vec::new();
@@ -399,14 +370,11 @@ struct ProtoBody {
 }
 
 impl RestClient {
-    /// `GET /users/@me/settings-proto/1`
     pub async fn get_settings_proto(&self) -> Result<PreloadedUserSettings> {
         let b: ProtoBody = self.call(Method::GET, "/users/@me/settings-proto/1", Body::None).await?;
         PreloadedUserSettings::decode_base64(&b.settings)
     }
 
-    /// `PATCH /users/@me/settings-proto/1` with a partial message; returns the
-    /// merged settings.
     pub async fn patch_settings_proto(&self, patch: &PreloadedUserSettings) -> Result<PreloadedUserSettings> {
         let b: ProtoBody = self
             .call(
@@ -418,9 +386,6 @@ impl RestClient {
         PreloadedUserSettings::decode_base64(&b.settings)
     }
 
-    /// Apply one change. The full current blob is sent back with the change
-    /// appended: protobuf merge semantics make the appended fields win while
-    /// every field Phoenix doesn't model is preserved.
     pub async fn patch_setting(&self, change: &SettingChange) -> Result<PreloadedUserSettings> {
         let b: ProtoBody = self.call(Method::GET, "/users/@me/settings-proto/1", Body::None).await?;
         let mut raw = STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))?;
@@ -431,13 +396,11 @@ impl RestClient {
         PreloadedUserSettings::decode_base64(&b.settings)
     }
 
-    /// `GET /users/@me/settings-proto/1` as raw protobuf bytes.
     pub async fn get_settings_proto_raw(&self) -> Result<Vec<u8>> {
         let b: ProtoBody = self.call(Method::GET, "/users/@me/settings-proto/1", Body::None).await?;
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
     }
 
-    /// [`Self::patch_setting`] returning the merged blob as raw bytes.
     pub async fn patch_setting_raw(&self, change: &SettingChange) -> Result<Vec<u8>> {
         let mut raw = self.get_settings_proto_raw().await?;
         raw.extend(change.encode());
@@ -447,23 +410,19 @@ impl RestClient {
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
     }
 
-    /// `GET /users/@me/consent`: `{"usage_statistics": {"consented": bool}, "personalization": {...}}`.
     pub async fn get_consent(&self) -> Result<Value> {
         self.call(Method::GET, "/users/@me/consent", Body::None).await
     }
 
-    /// `POST /users/@me/consent` granting or revoking one consent type.
     pub async fn set_consent(&self, kind: &str, granted: bool) -> Result<()> {
         let (grant, revoke): (Vec<&str>, Vec<&str>) = if granted { (vec![kind], vec![]) } else { (vec![], vec![kind]) };
         self.call_empty(Method::POST, "/users/@me/consent", Body::Json(json!({ "grant": grant, "revoke": revoke }))).await
     }
 
-    /// `GET /users/@me/email-settings` (`categories`: communication, social, ...).
     pub async fn get_email_settings(&self) -> Result<Value> {
         self.call(Method::GET, "/users/@me/email-settings", Body::None).await
     }
 
-    /// `PATCH /users/@me/email-settings` for one category, like the client.
     pub async fn patch_email_setting(&self, category: &str, on: bool) -> Result<Value> {
         self.call(
             Method::PATCH,
@@ -473,18 +432,15 @@ impl RestClient {
         .await
     }
 
-    /// Legacy JSON `GET /users/@me/settings` (fallback).
     pub async fn get_settings_json(&self) -> Result<Value> {
         self.call(Method::GET, "/users/@me/settings", Body::None).await
     }
 
-    /// Legacy JSON `PATCH /users/@me/settings` (fallback).
     pub async fn patch_settings_json(&self, patch: Value) -> Result<Value> {
         self.call(Method::PATCH, "/users/@me/settings", Body::Json(patch)).await
     }
 }
 
-/// Build proto-equivalent settings from the legacy JSON object.
 pub fn from_json(v: &Value) -> PreloadedUserSettings {
     let mut s = PreloadedUserSettings::patch_appearance(
         Theme::from_json(v.get("theme").and_then(Value::as_str).unwrap_or("dark")),
@@ -514,7 +470,6 @@ mod tests {
         assert!(d.developer_mode());
         assert!(d.compact());
 
-        // Unknown top-level field 14 (guild folders) is skipped.
         let mut bytes = STANDARD.decode(&enc).unwrap();
         bytes.extend_from_slice(&[0x72, 0x02, 0x08, 0x01]);
         let d = PreloadedUserSettings::decode_base64(&STANDARD.encode(bytes)).unwrap();
@@ -523,7 +478,6 @@ mod tests {
 
     #[test]
     fn theme_wire_values() {
-        // appearance { theme: LIGHT }
         let bytes = [0x6a, 0x02, 0x08, 0x02];
         let d = PreloadedUserSettings::decode_base64(&STANDARD.encode(bytes)).unwrap();
         assert_eq!(d.theme(), Theme::Light);
@@ -554,11 +508,8 @@ mod tests {
         let base = PreloadedUserSettings::patch_appearance(Theme::Light, true);
         let mut raw = prost::Message::encode_to_vec(&base);
         let ch = |path: &[u32], wrapper, value| SettingChange::Path { path: path.to_vec(), wrapper, value };
-        // text_and_images.render_embeds = false (wrapper present, empty value)
         raw.extend(ch(&[6, 12], true, ProtoValue::Int(0)).encode());
-        // text_and_images.render_spoilers = "ALWAYS"
         raw.extend(ch(&[6, 4], true, ProtoValue::Str("ALWAYS".into())).encode());
-        // appearance.timestamp_hour_cycle = H23 (plain enum)
         raw.extend(ch(&[13, 9], false, ProtoValue::Int(2)).encode());
         assert_eq!(proto_read(&raw, &[6, 12], true, false), Some(ProtoValue::Int(0)));
         assert_eq!(proto_read(&raw, &[6, 4], true, true), Some(ProtoValue::Str("ALWAYS".into())));

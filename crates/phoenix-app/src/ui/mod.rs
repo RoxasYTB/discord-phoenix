@@ -84,18 +84,13 @@ pub fn icon(i: Icon, size: f32, color: Hsla) -> gpui::Svg {
     svg().path(i.path()).size(px(size)).flex_none().text_color(color)
 }
 
-/// Circle avatar. URL images go through GPUI's asset cache, which fetches
-/// lazily only when the element is actually painted (rows are virtualized).
 pub fn avatar(user: Option<&User>, size: f32) -> AnyElement {
     avatar_ref(user.map(|u| u.avatar.clone()).unwrap_or(ImageRef::Default(0)), size)
 }
 
-/// [`avatar`] from the image alone.
 pub fn avatar_ref(img_ref: ImageRef, size: f32) -> AnyElement {
     match img_ref {
         ImageRef::Url(url) => crate::media::avatar_image(url, size),
-        // The client shows the CDN default avatar (embed/avatars/<n>.png), fetched at runtime;
-        // the colour shows while it loads.
         ImageRef::Default(ix) => div()
             .size(px(size))
             .flex_none()
@@ -106,27 +101,14 @@ pub fn avatar_ref(img_ref: ImageRef, size: f32) -> AnyElement {
     }
 }
 
-/// Avatar with the presence status cut-out (bottom-right) like the client's
-/// `svg-mask-avatar-status-round-<size>` + status rect (see [`status_svg`]).
-/// GPUI has no masks: the cut is painted with `ring`, the colour behind the avatar.
 pub fn avatar_with_status(user: Option<&User>, size: f32, p: Presence, ring: Hsla) -> Div {
     avatar_with_status_overlay(user, size, p, ring, |d| d)
 }
 
-/// [`avatar_with_status`] whose cut also shows the row's hover / selected
-/// background: `overlay` styles a layer over `ring` (e.g. `group_hover`), so
-/// the cut keeps matching a translucent row background like a real mask.
 pub fn avatar_with_status_overlay(user: Option<&User>, size: f32, p: Presence, ring: Hsla, overlay: impl FnOnce(Div) -> Div) -> Div {
     avatar_with_status_deco(user, size, p, ring, overlay, None)
 }
 
-/// [`avatar_with_status_overlay`] with an avatar decoration (`deco`, the image
-/// source to draw). Layers, bottom to top: avatar, decoration, status cut-out,
-/// status glyph. The client masks the decoration with
-/// `svg-mask-avatar-decoration-status-round-<size>`, whose hole is the same
-/// circle as the avatar's cut (32: centre 27, r 8; 80: 68/14; 96: 80/18;
-/// 120: 100/20, in avatar coordinates), so painting the cut over the
-/// decoration reproduces the mask and the status always stays on top.
 pub fn avatar_with_status_deco(
     user: Option<&User>,
     size: f32,
@@ -155,13 +137,10 @@ pub fn avatar_with_status_deco(
         .child(div().absolute().left(px(cx - s / 2.)).top(px(cx - s / 2.)).child(status_dot(p, s, ring)))
 }
 
-/// The status glyph (`svg-mask-status-*` shapes) in the presence colour.
-/// `_ring` is kept for callers: the shapes are real holes now.
 pub fn status_dot(p: Presence, size: f32, _ring: Hsla) -> gpui::Svg {
     gpui::svg().path(status_svg::path(p, false)).size(px(size)).flex_none().text_color(presence_color(p))
 }
 
-/// Red mention badge ("3").
 pub fn badge(n: u32) -> Div {
     let label: SharedString = if n > 99 { "99+".into() } else { n.to_string().into() };
     div()
@@ -179,7 +158,6 @@ pub fn badge(n: u32) -> Div {
         .child(label)
 }
 
-/// 32px square icon button with hover background (user panel, header).
 pub fn icon_button(id: &'static str, i: Icon, color: Hsla, size: f32) -> gpui::Stateful<Div> {
     div()
         .id(id)

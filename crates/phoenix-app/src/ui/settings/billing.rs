@@ -1,26 +1,17 @@
-//! "Facturation" page data (vanilla-settings-06c dump): payment sources,
-//! billing country and transaction history, from read-only GETs
-//! (`/users/@me/billing/payment-sources`, `/billing/country-code`,
-//! `/billing/payments`).
-
 use parking_lot::RwLock;
 use serde_json::Value;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Source {
-    /// Brand shown as title ("PayPal", "Visa").
     pub brand: String,
-    /// Second line: PayPal email or "•••• 4242".
     pub sub: String,
     pub default: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Payment {
-    /// MM/DD/YYYY like the client.
     pub date: String,
     pub description: String,
-    /// "4 100" (orbs) or "4,99 $".
     pub amount: String,
     pub orbs: bool,
 }
@@ -42,7 +33,6 @@ pub fn set(b: Billing) {
     *DATA.write() = Some(b);
 }
 
-/// Settings opened: load the billing page data once (GET only).
 pub fn fetch(app: &crate::app::PhoenixApp, cx: &mut gpui::Context<crate::app::PhoenixApp>) {
     if DATA.read().is_some() {
         return;
@@ -61,7 +51,6 @@ fn s(v: &Value, k: &str) -> String {
     v.get(k).and_then(Value::as_str).unwrap_or_default().to_owned()
 }
 
-/// Payment source JSON: `type` 1 card (`brand`, `last_4`), 2 PayPal (`email`).
 pub fn parse_sources(v: &Value) -> Vec<Source> {
     v.as_array()
         .into_iter()
@@ -82,16 +71,12 @@ pub fn parse_sources(v: &Value) -> Vec<Source> {
         .collect()
 }
 
-/// Country shown under "Modes de paiement": the default source's billing
-/// address country (the client shows "États-Unis" from the PayPal address
-/// even when `country-code` says FR), else `fallback`.
 pub fn source_country(v: &Value, fallback: Option<String>) -> Option<String> {
     let arr = v.as_array()?;
     let pick = arr.iter().find(|p| p.get("default").and_then(Value::as_bool) == Some(true)).or(arr.first());
     pick.and_then(|p| p.get("billing_address")?.get("country")?.as_str().map(str::to_owned)).or(fallback)
 }
 
-/// A single source is the default one (the client marks it "Par défaut").
 pub fn mark_default(mut v: Vec<Source>) -> Vec<Source> {
     if v.len() == 1 {
         v[0].default = true;
@@ -99,7 +84,6 @@ pub fn mark_default(mut v: Vec<Source>) -> Vec<Source> {
     v
 }
 
-/// Thousands grouped with a narrow no-break space ("4 100").
 fn group(n: u64) -> String {
     let d = n.to_string();
     let mut out = String::new();

@@ -1,37 +1,22 @@
-//! Message components: the v1 interactive rows (buttons, select menus) and the
-//! Components V2 layout (`IS_COMPONENTS_V2` message flag): sections, text
-//! displays, thumbnails, media galleries, files, separators and containers.
-//!
-//! Field names and integer values follow the Discord API reference
-//! (<https://discord.com/developers/docs/components/reference>). Deserializing
-//! never fails on a well-formed array: a component whose `type` is unknown, or
-//! whose fields do not parse, becomes [`Component::Unknown`] with its raw JSON,
-//! and serializing writes that JSON back unchanged.
-
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use super::{ChannelType, EmojiId, Snowflake, null_default};
 
-/// `IS_COMPONENTS_V2` (1 << 15): the message has no content/embeds, only
-/// layout components.
 pub const FLAG_IS_COMPONENTS_V2: u64 = 1 << 15;
 
 int_enum! {
-    /// Button `style`.
     pub enum ButtonStyle: u8 {
         Primary = 1,
         Secondary = 2,
         Success = 3,
         Danger = 4,
-        /// Opens `url`, sends no interaction.
         Link = 5,
-        /// Opens the store page of `sku_id`.
         Premium = 6,
     }
 }
 
-#[allow(clippy::derivable_impls)] // enum is macro-generated
+#[allow(clippy::derivable_impls)]
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self::Primary
@@ -39,26 +24,23 @@ impl Default for ButtonStyle {
 }
 
 int_enum! {
-    /// Separator `spacing`.
     pub enum SeparatorSpacing: u8 {
         Small = 1,
         Large = 2,
     }
 }
 
-#[allow(clippy::derivable_impls)] // enum is macro-generated
+#[allow(clippy::derivable_impls)]
 impl Default for SeparatorSpacing {
     fn default() -> Self {
         Self::Small
     }
 }
 
-/// Emoji on a button or select option.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ComponentEmoji {
     #[serde(default)]
     pub id: Option<EmojiId>,
-    /// Unicode character, or the name of a custom emoji.
     #[serde(default, deserialize_with = "null_default")]
     pub name: String,
     #[serde(default, deserialize_with = "null_default")]
@@ -66,8 +48,6 @@ pub struct ComponentEmoji {
 }
 
 impl ComponentEmoji {
-    /// `<a:name:id>` / `<:name:id>` for a custom emoji, the character otherwise
-    /// (the inline token the markdown renderer understands).
     pub fn token(&self) -> String {
         match self.id {
             Some(id) => format!("<{}:{}:{}>", if self.animated { "a" } else { "" }, self.name, id),
@@ -76,7 +56,6 @@ impl ComponentEmoji {
     }
 }
 
-/// `type: 2`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Button {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,7 +76,6 @@ pub struct Button {
     pub disabled: bool,
 }
 
-/// One choice of a string select.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SelectOption {
     #[serde(default, deserialize_with = "null_default")]
@@ -112,7 +90,6 @@ pub struct SelectOption {
     pub default: bool,
 }
 
-/// Pre-selected entity of an auto-populated select (`type` = "user" | "role" | "channel").
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SelectDefault {
     pub id: Snowflake,
@@ -120,19 +97,13 @@ pub struct SelectDefault {
     pub kind: String,
 }
 
-/// Which select a [`SelectMenu`] is (its component `type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SelectKind {
-    /// 3: options given by the bot.
     #[default]
     String,
-    /// 5
     User,
-    /// 6
     Role,
-    /// 7: users and roles.
     Mentionable,
-    /// 8
     Channel,
 }
 
@@ -159,10 +130,8 @@ impl SelectKind {
     }
 }
 
-/// `type: 3 | 5 | 6 | 7 | 8`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SelectMenu {
-    /// Set from the component `type`, not a JSON field.
     #[serde(skip)]
     pub kind: SelectKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -193,14 +162,12 @@ fn yes() -> bool {
     true
 }
 
-/// `type: 4` (modals only).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TextInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<u32>,
     #[serde(default, deserialize_with = "null_default")]
     pub custom_id: String,
-    /// 1 short, 2 paragraph.
     #[serde(default = "one_u8")]
     pub style: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -221,10 +188,8 @@ fn one_u8() -> u8 {
     1
 }
 
-/// An unfurled media item (`media` of thumbnails and gallery items, `file` of files).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct UnfurledMedia {
-    /// `https://…` or `attachment://name` (resolved by Discord into the CDN URL on send).
     #[serde(default, deserialize_with = "null_default")]
     pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -237,21 +202,17 @@ pub struct UnfurledMedia {
     pub content_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachment_id: Option<Snowflake>,
-    /// Thumbhash of the image (base64), shown while it loads.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<String>,
-    /// 0 unknown, 1 loading, 2 loaded, 3 not found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loading_state: Option<u8>,
 }
 
 impl UnfurledMedia {
-    /// The URL to fetch: the media proxy when given (it resizes), else `url`.
     pub fn fetch_url(&self) -> &str {
         self.proxy_url.as_deref().filter(|u| !u.is_empty()).unwrap_or(&self.url)
     }
 
-    /// `width`×`height` when both are known and non-zero.
     pub fn size(&self) -> Option<(u32, u32)> {
         match (self.width, self.height) {
             (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
@@ -264,19 +225,16 @@ impl UnfurledMedia {
     }
 }
 
-/// `type: 9`: one to three text displays with an accessory on the right.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Section {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<u32>,
     #[serde(default, deserialize_with = "null_default")]
     pub components: Vec<Component>,
-    /// A [`Component::Thumbnail`] or a [`Component::Button`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accessory: Option<Box<Component>>,
 }
 
-/// `type: 10`: markdown.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TextDisplay {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -285,7 +243,6 @@ pub struct TextDisplay {
     pub content: String,
 }
 
-/// `type: 11`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Thumbnail {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -298,7 +255,6 @@ pub struct Thumbnail {
     pub spoiler: bool,
 }
 
-/// One item of a media gallery.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct GalleryItem {
     #[serde(default)]
@@ -309,7 +265,6 @@ pub struct GalleryItem {
     pub spoiler: bool,
 }
 
-/// `type: 12`: 1 to 10 images / videos.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MediaGallery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -318,7 +273,6 @@ pub struct MediaGallery {
     pub items: Vec<GalleryItem>,
 }
 
-/// `type: 13`: an uploaded file (`file.url` is `attachment://…` when sent).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct FileComponent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -327,7 +281,6 @@ pub struct FileComponent {
     pub file: UnfurledMedia,
     #[serde(default, deserialize_with = "null_default")]
     pub spoiler: bool,
-    /// File name and size in bytes, filled by Discord on received messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -335,7 +288,6 @@ pub struct FileComponent {
 }
 
 impl FileComponent {
-    /// `name`, else the last path segment of the URL without its query.
     pub fn file_name(&self) -> String {
         if let Some(n) = self.name.as_deref().filter(|n| !n.is_empty()) {
             return n.to_owned();
@@ -345,12 +297,10 @@ impl FileComponent {
     }
 }
 
-/// `type: 14`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Separator {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<u32>,
-    /// Draw a line (default true); `false` is blank space only.
     #[serde(default = "yes", deserialize_with = "null_true")]
     pub divider: bool,
     #[serde(default)]
@@ -367,21 +317,18 @@ fn null_true<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
     Ok(Option::<bool>::deserialize(d)?.unwrap_or(true))
 }
 
-/// `type: 17`: a card around other components, with an optional colour bar.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Container {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<u32>,
     #[serde(default, deserialize_with = "null_default")]
     pub components: Vec<Component>,
-    /// `0xRRGGBB`; `null` = no bar.
     #[serde(default)]
     pub accent_color: Option<u32>,
     #[serde(default, deserialize_with = "null_default")]
     pub spoiler: bool,
 }
 
-/// `type: 1`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ActionRow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -390,7 +337,6 @@ pub struct ActionRow {
     pub components: Vec<Component>,
 }
 
-/// One message component.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Component {
     ActionRow(ActionRow),
@@ -404,12 +350,10 @@ pub enum Component {
     File(FileComponent),
     Separator(Separator),
     Container(Container),
-    /// A type this client doesn't know (or that failed to parse), kept verbatim.
     Unknown(Value),
 }
 
 impl Component {
-    /// The numeric component `type`.
     pub fn type_id(&self) -> u8 {
         match self {
             Self::ActionRow(_) => 1,
@@ -427,7 +371,6 @@ impl Component {
         }
     }
 
-    /// Direct children (row items, section texts + accessory, container items).
     pub fn children(&self) -> Vec<&Component> {
         match self {
             Self::ActionRow(r) => r.components.iter().collect(),
@@ -437,7 +380,6 @@ impl Component {
         }
     }
 
-    /// Markdown of every text display, depth-first (search previews, notifications).
     pub fn texts<'a>(&'a self, out: &mut Vec<&'a str>) {
         if let Self::TextDisplay(t) = self {
             out.push(&t.content);
@@ -507,10 +449,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// Shapes copied from real bot messages (ids, URLs and text replaced).
     fn fixture() -> Value {
         json!([
-            // v1: a row of buttons, one per style family, with emoji / disabled / link.
             {"type": 1, "id": 1, "components": [
                 {"type": 2, "id": 2, "custom_id": "a", "style": 1, "label": "Primary", "emoji": {"id": "100000000000000001", "name": "ok", "animated": true}},
                 {"type": 2, "id": 3, "custom_id": "b", "style": 2, "label": "Secondary", "emoji": {"name": "🔥"}, "disabled": true},
@@ -525,7 +465,6 @@ mod tests {
             {"type": 1, "components": [{"type": 6, "custom_id": "r"}]},
             {"type": 1, "components": [{"type": 7, "custom_id": "m", "max_values": 3}]},
             {"type": 1, "components": [{"type": 8, "custom_id": "c", "channel_types": [0, 2]}]},
-            // v2 layout.
             {"type": 17, "id": 10, "accent_color": 16766720, "spoiler": false, "components": [
                 {"type": 10, "id": 11, "content": "## Title"},
                 {"type": 14, "id": 12, "spacing": 1, "divider": true},
@@ -608,7 +547,6 @@ mod tests {
 
     #[test]
     fn tolerates_bad_fields() {
-        // A field of the wrong type degrades that component only.
         let c: Vec<Component> = serde_json::from_value(json!([
             {"type": 2, "style": "big"},
             {"type": 10, "content": null},

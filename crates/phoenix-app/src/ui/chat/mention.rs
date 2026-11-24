@@ -1,10 +1,3 @@
-//! Mention pills in message text: hover state and click actions.
-//!
-//! Static style (`.mention` / `wrapper_NDaLCQ`: --mention-background, --mention-foreground,
-//! radius 3px, padding 0 2px, weight medium) is baked into the runs by `richtext`. Here:
-//! `.interactive:hover` (background --brand-500, color --white, 50ms ease-out) and the click
-//! (user mention opens the profile popout, channel mention opens the channel).
-
 use std::cell::Cell;
 use std::ops::Range;
 
@@ -19,19 +12,14 @@ use crate::{
 };
 
 thread_local! {
-    /// (message, block, element seed, hovered click-range index).
     static HOVER: Cell<Option<(u64, usize, u64, usize)>> = const { Cell::new(None) };
-    /// Link of the message text under the cursor: (message, block, seed, url), for the
-    /// link rows of the message menu.
     static HOVER_LINK: std::cell::RefCell<Option<(u64, usize, u64, gpui::SharedString)>> = const { std::cell::RefCell::new(None) };
 }
 
-/// The text link under the cursor in this block, if any.
 pub fn hovered_link(msg: Id, bi: usize, seed: u64) -> Option<gpui::SharedString> {
     HOVER_LINK.with(|h| h.borrow().as_ref().filter(|(m, b, s, _)| *m == msg.0 && *b == bi && *s == seed).map(|(_, _, _, u)| u.clone()))
 }
 
-/// Hover listener body for an `InteractiveText`: tracks which mention range is under the mouse.
 pub fn on_hover(
     msg: Id,
     bi: usize,
@@ -60,8 +48,6 @@ pub fn on_hover(
     }
 }
 
-/// Runs with the hovered mention (if it is in this text) painted in its hover state.
-/// `base` is the byte offset of `runs` within the ranges' coordinate space.
 pub fn hovered_runs(
     msg: Id,
     bi: usize,
@@ -82,14 +68,10 @@ pub fn hovered_runs(
         let span = at..at + run.len;
         if span.start < r.end && r.start < span.end {
             match run.background_color {
-                // A coloured role mention (inline role colour, background at 10 %): the
-                // live client keeps the text colour and raises the background to 30 %
-                // (inbox Mentions tab, 2026-11-24).
                 Some(bg) if role && is_role_tint(bg, run.color) => run.background_color = Some(gpui::Hsla { a: 0.3, ..bg }),
-                // User, channel and uncoloured role mentions: `.interactive:hover`.
                 _ => {
-                    run.background_color = Some(c(tok(idx::BRAND_500))); // --brand-500
-                    run.color = c(tok(idx::WHITE)); // --white
+                    run.background_color = Some(c(tok(idx::BRAND_500)));
+                    run.color = c(tok(idx::WHITE));
                 }
             }
         }
@@ -98,12 +80,10 @@ pub fn hovered_runs(
     Some(out)
 }
 
-/// `bg` is the role colour `fg` at 10 % (set by `richtext::color_role_mentions`).
 fn is_role_tint(bg: gpui::Hsla, fg: gpui::Hsla) -> bool {
     (bg.a - 0.1).abs() < 0.01 && (bg.h - fg.h).abs() < 1e-3 && (bg.s - fg.s).abs() < 1e-3 && (bg.l - fg.l).abs() < 1e-3
 }
 
-/// Click on a mention pill.
 pub fn click(entity: &Entity<PhoenixApp>, m: &Mention, window: &mut Window, cx: &mut App) {
     match *m {
         Mention::User(u) => {
@@ -114,7 +94,6 @@ pub fn click(entity: &Entity<PhoenixApp>, m: &Mention, window: &mut Window, cx: 
             });
         }
         Mention::Channel(ch) => entity.update(cx, |a, cx| {
-            // Text chat only: a mention never joins voice.
             if a.channels.contains_key(&Id(ch)) {
                 a.open_channel_chat(Id(ch), cx);
             }
@@ -166,7 +145,6 @@ mod tests {
         assert!((out[0].background_color.unwrap().a - 0.3).abs() < 1e-6);
         HOVER.with(|h| h.set(Some((7, 0, 0, 1))));
         let out = hovered_runs(Id(7), 0, 0, &ranges, &targets, &runs).unwrap();
-        // Uncoloured role: same pill hover as a user mention.
         assert_eq!(out[1].color, c(tok(idx::WHITE)));
         HOVER.with(|h| h.set(None));
     }

@@ -1,5 +1,3 @@
-//! Typed gateway events.
-
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -7,7 +5,6 @@ use serde_json::Value;
 
 use crate::models::*;
 
-/// READY for a user account (with deduplicated user objects).
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Ready {
     #[serde(default)]
@@ -20,22 +17,18 @@ pub struct Ready {
     pub guilds: Vec<Guild>,
     #[serde(default, deserialize_with = "null_default")]
     pub private_channels: Vec<Channel>,
-    /// Linked third-party accounts (Settings > Connections), kept raw.
     #[serde(default, deserialize_with = "null_default")]
     pub connected_accounts: Vec<serde_json::Value>,
     #[serde(default, deserialize_with = "null_default")]
     pub relationships: Vec<Relationship>,
-    /// Users referenced by id elsewhere in the payload.
     #[serde(default, deserialize_with = "null_default")]
     pub users: Vec<User>,
-    /// `merged_members[i]` = current user's member objects for `guilds[i]`.
     #[serde(default, deserialize_with = "null_default")]
     pub merged_members: Vec<Vec<Member>>,
     #[serde(default)]
     pub read_state: Option<Value>,
     #[serde(default)]
     pub user_guild_settings: Option<Value>,
-    /// Account notification settings (`flags & 16` = USE_NEW_NOTIFICATIONS).
     #[serde(default)]
     pub notification_settings: Option<Value>,
     #[serde(default)]
@@ -48,13 +41,10 @@ pub struct Ready {
     pub country_code: Option<String>,
     #[serde(default)]
     pub auth_session_id_hash: Option<String>,
-    /// Greys out the Sponsored Content personalisation switches.
     #[serde(default)]
     pub ad_personalization_toggles_disabled: Option<bool>,
-    /// Discoverable-content switch locked (client default: true).
     #[serde(default)]
     pub swp_message_promotion_locked: Option<bool>,
-    /// Discoverable-content default when the settings-proto field is unset.
     #[serde(default)]
     pub swp_message_promotion_default_opted_out: Option<bool>,
 }
@@ -66,7 +56,6 @@ pub struct SupplementalGuild {
     pub voice_states: Vec<VoiceState>,
 }
 
-/// READY_SUPPLEMENTAL: presences and voice states sent right after READY.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ReadySupplemental {
     #[serde(default, deserialize_with = "null_default")]
@@ -113,7 +102,6 @@ pub struct ReactionRemoveAll {
     pub message_id: MessageId,
     #[serde(default)]
     pub guild_id: Option<GuildId>,
-    /// Set for MESSAGE_REACTION_REMOVE_EMOJI.
     #[serde(default)]
     pub emoji: Option<ReactionEmoji>,
 }
@@ -154,7 +142,6 @@ pub struct GuildMembersChunk {
     pub chunk_count: u32,
     #[serde(default)]
     pub not_found: Vec<UserId>,
-    /// Sent when op 8 asked for `presences: true`.
     #[serde(default)]
     pub presences: Vec<Value>,
     #[serde(default)]
@@ -190,7 +177,6 @@ pub struct MessageAck {
 #[derive(Debug, Clone, Deserialize)]
 pub struct PresenceUser {
     pub id: UserId,
-    /// Present only when the user's profile changed (otherwise just `id`).
     #[serde(default)]
     pub username: Option<String>,
     #[serde(default)]
@@ -202,8 +188,6 @@ pub struct PresenceUser {
 }
 
 impl PresenceUser {
-    /// Merge the changed profile fields into `u`; false when this presence
-    /// carries no profile (the common id-only case).
     pub fn merge_into(&self, u: &mut crate::models::User) -> bool {
         let Some(name) = &self.username else { return false };
         u.username = name.clone();
@@ -229,7 +213,6 @@ pub struct PresenceUpdate {
     pub client_status: Option<Value>,
 }
 
-/// Item in a lazy member list (GUILD_MEMBER_LIST_UPDATE).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MemberListItem {
@@ -265,7 +248,6 @@ pub struct MemberListGroup {
 #[derive(Debug, Clone, Deserialize)]
 pub struct GuildMemberListUpdate {
     pub guild_id: GuildId,
-    /// List id (hash of the channel's view permissions, or "everyone").
     pub id: String,
     #[serde(default)]
     pub member_count: u32,
@@ -277,16 +259,12 @@ pub struct GuildMemberListUpdate {
     pub ops: Vec<MemberListOp>,
 }
 
-/// Everything the gateway task reports: connection lifecycle + dispatches.
 #[derive(Debug, Clone)]
 pub enum GatewayEvent {
-    /// Websocket open and HELLO received.
     Connected { heartbeat_interval: Duration },
-    /// Round-trip of the last heartbeat.
     HeartbeatAck { latency: Duration },
     Disconnected { code: Option<u16>, reason: String },
     Reconnecting { attempt: u32, delay: Duration, resume: bool },
-    /// Unrecoverable (e.g. 4004 auth failed). The task has stopped.
     Fatal { code: u16, reason: String },
 
     Ready(Box<Ready>),
@@ -315,7 +293,6 @@ pub enum GatewayEvent {
     ThreadDelete(Box<Channel>),
 
     MessageCreate(Box<Message>),
-    /// May be partial; the cache merges it into the stored message.
     MessageUpdate(Box<Value>),
     MessageDelete(MessageDelete),
     MessageDeleteBulk(MessageDeleteBulk),
@@ -334,7 +311,6 @@ pub enum GatewayEvent {
     VoiceServerUpdate(VoiceServerUpdate),
     SoundboardSounds(Box<SoundboardSounds>),
 
-    /// Any dispatch not modelled above (or that failed to parse), verbatim.
     Unknown { name: String, data: Value },
 }
 
@@ -347,8 +323,6 @@ macro_rules! parse_events {
     };
 }
 
-/// Parse a dispatch payload (`t`, raw `d`) into a [`GatewayEvent`].
-/// Parse failures degrade to [`GatewayEvent::Unknown`].
 pub fn parse_dispatch(name: &str, raw: &str) -> GatewayEvent {
     if name == "RESUMED" {
         return GatewayEvent::Resumed;
@@ -401,9 +375,6 @@ pub fn parse_dispatch(name: &str, raw: &str) -> GatewayEvent {
     }
 }
 
-// ---- outgoing command payloads ---------------------------------------------
-
-/// Op 4: join/leave/move voice. `channel_id: None` disconnects.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct UpdateVoiceState {
     pub guild_id: Option<GuildId>,
@@ -413,17 +384,14 @@ pub struct UpdateVoiceState {
     pub self_video: bool,
 }
 
-/// Op 3.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct UpdatePresence {
     pub since: u64,
     pub activities: Vec<Value>,
-    /// "online", "idle", "dnd", "invisible".
     pub status: String,
     pub afk: bool,
 }
 
-/// Dispatch `SOUNDBOARD_SOUNDS` in response to op 31 `REQUEST_SOUNDBOARD_SOUNDS`.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct SoundboardSounds {
     pub guild_id: GuildId,
@@ -431,13 +399,11 @@ pub struct SoundboardSounds {
     pub soundboard_sounds: Vec<SoundboardSound>,
 }
 
-/// Op 31: `REQUEST_SOUNDBOARD_SOUNDS`.
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 pub struct RequestSoundboardSounds {
     pub guild_ids: Vec<GuildId>,
 }
 
-/// Op 8.
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 pub struct RequestGuildMembers {
     pub guild_id: Vec<GuildId>,
@@ -451,10 +417,8 @@ pub struct RequestGuildMembers {
     pub nonce: Option<String>,
 }
 
-/// Member list ranges: `[[0, 99], [100, 199]]`.
 pub type Ranges = Vec<[u32; 2]>;
 
-/// Op 14: lazy guild request (member sidebar, typing, threads, activities).
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 pub struct LazyGuildRequest {
     pub guild_id: GuildId,
@@ -472,7 +436,6 @@ pub struct LazyGuildRequest {
     pub thread_member_lists: Vec<ChannelId>,
 }
 
-/// One guild's entry for op 37.
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
 pub struct GuildSubscription {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -492,7 +455,6 @@ pub struct GuildSubscription {
 }
 
 impl GuildSubscription {
-    /// What the official client sends when a guild is opened.
     pub fn focused(channel: Option<ChannelId>) -> Self {
         let mut s = Self { typing: Some(true), threads: Some(true), activities: Some(true), ..Default::default() };
         if let Some(c) = channel {

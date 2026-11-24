@@ -1,9 +1,3 @@
-//! User profile side panel on the right of a 1:1 DM (`aside_HbUF2J` >
-//! `outer_P1YEjQ user-profile-sidebar`). Structure and values from the CDP
-//! dump of a DM with the panel open (see docs/parity/popouts.md, "DM profile
-//! panel"): 320px aside with 8px padding, 304px card (2px padding, radius 8),
-//! 105px banner, 80px avatar, body margin 0 16 / gap 20, footer button.
-
 use std::cell::RefCell;
 use std::collections::HashSet;
 
@@ -21,9 +15,6 @@ thread_local! {
     static REQUESTED: RefCell<HashSet<Id>> = RefCell::new(HashSet::new());
 }
 
-/// The DM peer whose panel should show, if the open channel is a 1:1 DM.
-/// Group DM: the channel model only keeps the first recipient (avatar), so
-/// use the nav extras (recipient count / group icon), like the DM list does.
 pub fn is_group_dm(app: &PhoenixApp, channel: Id) -> bool {
     app.nav.extras.get(&channel).is_some_and(|e| e.recipients > 1 || e.group_icon.is_some())
 }
@@ -51,13 +42,10 @@ fn ensure_profile(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-/// `descriptionClamp_BcddaK` (-webkit-line-clamp 3) > `bioText_qjJ3Wv` body-sm/normal
-/// 14/18 in --text-strong, inline markdown + emoji (see ui::profile_bio).
 fn bio_lines(bio: &str) -> gpui::Div {
     crate::ui::profile_bio::bio(bio, true, c(tok(idx::TEXT_STRONG)))
 }
 
-/// The panel, or None outside a 1:1 DM / when toggled off.
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if !app.show_members {
         return None;
@@ -66,23 +54,14 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     ensure_profile(app, uid, cx);
     ensure_avatar_colour(app, uid, cx);
     let theme = app.people.profiles.get(&uid).and_then(|p| p.theme);
-    // `.custom-user-profile-theme` re-declares the text/control tokens on the card.
     Some(crate::ui::profile_theme::scoped(theme, || panel(app, uid, cx)))
 }
 
 fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let i = info(app, uid, None);
-    // `:where(.outer_P1YEjQ).user-profile-sidebar-redesign:not(.custom-user-profile-theme)`
-    // background --chat-background-default (dump vanilla-dm-profile-panel #1548).
-    // With a Nitro theme the outer card is the primary -> secondary gradient and
-    // `inner_P1YEjQ` lays --profile-gradient-overlay (black / .6) over it.
     let theme = i.prof.and_then(|p| p.theme);
     let card_bg = tok(idx::CHAT_BACKGROUND_DEFAULT);
-    // --profile-gradient-start = color-mix(in oklab, overlay 100%, primary) is the
-    // overlay itself (black / .6 in dark themes) painted over the outer gradient,
-    // so the composited colour is 40% of each channel.
     let ring_bg = theme.map(|t| crate::ui::profile_theme::composite(t, t.0)).unwrap_or(card_bg);
-    // `profileEffects_ZjcCyW` (vanilla-dm #2060): the applied effect over the 300px inner card.
     let effect = i
         .prof
         .and_then(|p| p.effect_sku)
@@ -93,33 +72,26 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
     let created = i.prof.map(|p| p.created);
     let header = div()
         .relative()
-        .h(z(144.)) // header_S_xUx6 144px, margin-bottom 8
+        .h(z(144.))
         .mb(z(8.))
-        .child(banner(&i, 105., 6.)) // banner_vNEdYY 300x105
-        // wrapper_xpwejc: top/right 8px, gap 8
+        .child(banner(&i, 105., 6.))
         .child(banner_buttons(app, uid, None, 8., cx))
-        // avatar_WRLIGC: 80px at (14, 55) incl. the ring
         .child(div().absolute().left(z(8.)).top(z(49.)).child(avatar_block(&i, 80., 6., ring_bg)));
     let mut body = div()
-        .mx(z(16.)) // body_A7qlid margin 0 16, gap 20
+        .mx(z(16.))
         .flex()
         .flex_col()
         .gap(z(20.))
         .child(
-            // info_A7qlid gap 8: name block, then mutuals_PXYMZ1
             div()
                 .flex()
                 .flex_col()
                 .gap(z(8.))
                 .child(name_block(&i, false, Some(crate::ui::profile_note::note_button(uid, cx))))
-                // note_A7qlid: the inline note editor
                 .children(crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx))
-                // mutuals_PXYMZ1: 16px face pile + "N mutual friends" • "N mutual servers"
                 .children(i.prof.and_then(mutuals_row)),
         );
     if let Some(b) = bio {
-        // section_NcvRRg gap 8; descriptionClamp_BcddaK body-sm 14/18, 3 lines;
-        // viewFullBio_BcddaK margin-top 8, 12/16 text button.
         let e2 = e.clone();
         body = body.child(
             div()
@@ -141,7 +113,6 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
         );
     }
     if let Some(t) = created {
-        // headings_NcvRRg: body-xs/semibold 12/16; value 14/18
         body = body.child(
             div()
                 .flex()
@@ -153,13 +124,12 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
     }
     let e3 = e.clone();
     let footer = div().flex_none().p(z(16.)).child(
-        // redesignFooter_YBm90d padding 16; button_F7qvhY radius 8, 7px 15px, 16/20 500
         div()
             .id("dm-panel-view-full")
             .w_full()
             .h(z(39.))
             .rounded(z(8.))
-            .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))) // secondary_F7qvhY rgba(151,151,159,.12)
+            .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
             .border_1()
             .border_color(c(Palette::DIVIDER))
             .flex()
@@ -175,7 +145,7 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
             .child(crate::t!("profile.view_full")),
     );
     div()
-            .w(z(320.)) // aside_HbUF2J 320px, padding 8
+            .w(z(320.))
             .flex_none()
             .h_full()
             .p(z(8.))
@@ -184,7 +154,7 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
                 div()
                     .relative()
                     .size_full()
-                    .p(z(2.)) // outer_P1YEjQ padding --custom-user-profile-theme-padding, radius --radius-sm
+                    .p(z(2.))
                     .rounded(z(8.))
                     .overflow_hidden()
                     .when(theme.is_none(), |d| d.bg(c(card_bg)))
@@ -193,10 +163,8 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
                         div()
                             .relative()
                             .size_full()
-                            .rounded(z(6.)) // inner_P1YEjQ radius 6
+                            .rounded(z(6.))
                             .overflow_hidden()
-                            // inner_P1YEjQ: linear-gradient(start, start 105px, end) where
-                            // start = end = the overlay colour (oklab(0 0 0 / .6))
                             .when_some(theme, |d, t| d.bg(crate::ui::profile_theme::overlay(t)))
                             .flex()
                             .flex_col()

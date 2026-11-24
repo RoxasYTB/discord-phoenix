@@ -1,7 +1,3 @@
-//! Small DSP helpers for voice: level metering, noise gate / VAD, linear
-//! resampling and mixing. Pure code, no audio devices.
-
-/// RMS level of a frame in dBFS (-100 for digital silence).
 pub fn level_db(frame: &[f32]) -> f32 {
     if frame.is_empty() {
         return -100.0;
@@ -11,14 +7,10 @@ pub fn level_db(frame: &[f32]) -> f32 {
     if rms <= 1e-5 { -100.0 } else { (20.0 * rms.log10()).max(-100.0) }
 }
 
-/// Noise gate with hangover. In automatic mode the threshold follows the
-/// tracked noise floor (+12 dB, never below -60 dBFS), otherwise it is the
-/// fixed `threshold_db` (Discord's "input sensitivity" slider).
 #[derive(Debug, Clone)]
 pub struct NoiseGate {
     pub automatic: bool,
     pub threshold_db: f32,
-    /// Frames the gate stays open after the level drops (20 ms each).
     pub hangover_frames: u32,
     noise_floor: f32,
     hang: u32,
@@ -36,13 +28,10 @@ impl NoiseGate {
         if self.automatic { (self.noise_floor + 12.0).max(-60.0) } else { self.threshold_db }
     }
 
-    /// Feed one frame's level; returns whether audio should be transmitted.
     pub fn process(&mut self, db: f32) -> bool {
-        // Fast attack downwards, slow release upwards for the floor tracker.
         if db < self.noise_floor {
             self.noise_floor = 0.8 * self.noise_floor + 0.2 * db;
         } else {
-            // Rise slowly (slower still while talking) so steady noise is learned.
             let k = if self.open { 0.02 } else { 0.1 };
             self.noise_floor += k * (db - self.noise_floor);
         }
@@ -62,7 +51,6 @@ impl NoiseGate {
     }
 }
 
-/// One-pole high-pass filter (removes rumble / DC below ~80 Hz).
 #[derive(Debug, Clone)]
 pub struct HighPass {
     a: f32,
@@ -87,9 +75,6 @@ impl HighPass {
     }
 }
 
-/// Simple noise suppression: a downward expander that pulls frames close to
-/// the tracked noise floor down by up to 24 dB, with smoothed gain so the
-/// tail of words is not chopped.
 #[derive(Debug, Clone)]
 pub struct NoiseSuppressor {
     floor: f32,
@@ -110,7 +95,6 @@ impl NoiseSuppressor {
         } else {
             self.floor += 0.01 * (db - self.floor);
         }
-        // 0 dB above floor -> -24 dB, 12 dB above floor -> unity.
         let over = (db - self.floor).clamp(0.0, 12.0);
         let target_db = -24.0 * (1.0 - over / 12.0);
         let target = 10f32.powf(target_db / 20.0);
@@ -124,7 +108,6 @@ impl NoiseSuppressor {
     }
 }
 
-/// Automatic gain control towards -20 dBFS RMS on speech frames.
 #[derive(Debug, Clone)]
 pub struct Agc {
     gain: f32,
@@ -143,12 +126,10 @@ impl Agc {
         self.gain
     }
 
-    /// `speech`: whether the frame is voice (only then the gain adapts).
     pub fn process(&mut self, frame: &mut [f32], speech: bool) {
         let db = level_db(frame);
         if speech && db > -70.0 {
             let want = 10f32.powf((Self::TARGET_DB - db) / 20.0).clamp(0.25, 8.0);
-            // Fast down (avoid clipping), slow up.
             let k = if want < self.gain { 0.3 } else { 0.03 };
             self.gain += k * (want - self.gain);
         }
@@ -158,7 +139,6 @@ impl Agc {
     }
 }
 
-/// Streaming linear resampler for interleaved audio.
 #[derive(Debug, Clone)]
 pub struct Resampler {
     from: u32,
@@ -177,7 +157,6 @@ impl Resampler {
         self.from == self.to
     }
 
-    /// Resample `input` (interleaved) and append to `out`.
     pub fn process(&mut self, input: &[f32], out: &mut Vec<f32>) {
         if self.is_identity() {
             out.extend_from_slice(input);
@@ -186,7 +165,6 @@ impl Resampler {
         let ch = self.channels;
         let frames = input.len() / ch;
         let step = self.from as f64 / self.to as f64;
-        // Position is relative to `last` at index -1, input frames at 0..frames.
         while self.pos < frames as f64 {
             let i = self.pos.floor();
             let t = (self.pos - i) as f32;
@@ -205,8 +183,6 @@ impl Resampler {
     }
 }
 
-/// Convert interleaved audio between channel counts (downmix by average,
-/// upmix by duplication).
 pub fn convert_channels(input: &[f32], from: usize, to: usize) -> Vec<f32> {
     if from == to {
         return input.to_vec();
@@ -227,14 +203,12 @@ pub fn convert_channels(input: &[f32], from: usize, to: usize) -> Vec<f32> {
     out
 }
 
-/// Mix `src` (i16 PCM) into `acc` with gain.
 pub fn mix_into(acc: &mut [f32], src: &[i16], gain: f32) {
     for (a, s) in acc.iter_mut().zip(src) {
         *a += *s as f32 / 32768.0 * gain;
     }
 }
 
-/// Clamp to [-1, 1] and convert to i16.
 pub fn to_i16(x: &[f32]) -> Vec<i16> {
     x.iter().map(|s| (s.clamp(-1.0, 1.0) * 32767.0) as i16).collect()
 }

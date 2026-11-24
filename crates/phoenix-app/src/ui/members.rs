@@ -1,11 +1,3 @@
-//! 240px member list, virtualized.
-//!
-//! With a real session the rows come from the server-ordered lazy list
-//! (GUILD_MEMBER_LIST_UPDATE, `People::lists`): hoisted role groups, then
-//! Online / Offline, with placeholders for unsynced ranges. Scrolling asks
-//! for the ranges in view (op 37). Without it (mock), `PhoenixApp::member_rows`
-//! groups locally.
-
 use crate::theme::z;
 use gpui::{
     AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div,
@@ -20,7 +12,6 @@ use crate::{
     theme::{Palette, c, generated::idx, m, role_color, space, tok},
 };
 
-/// `AppEvent::MemberListRows` / `AppEvent::Activities`.
 pub fn on_event(app: &mut PhoenixApp, ev: AppEvent, cx: &mut Context<PhoenixApp>) {
     match ev {
         AppEvent::MemberListRows { guild, rows } => {
@@ -30,8 +21,6 @@ pub fn on_event(app: &mut PhoenixApp, ev: AppEvent, cx: &mut Context<PhoenixApp>
             }
         }
         AppEvent::Activities { user, mut activities } => {
-            // Guild presences for ourselves often come without the custom status
-            // (it lives in the settings proto): keep ours like the client does.
             use crate::presence::ActivityKind as K;
             if user == app.me.id
                 && app.people.custom_status.is_some()
@@ -47,11 +36,7 @@ pub fn on_event(app: &mut PhoenixApp, ev: AppEvent, cx: &mut Context<PhoenixApp>
     cx.notify();
 }
 
-/// If the open guild has a server list, size the virtual list for it
-/// (keeping the scroll position) and return true.
 pub fn sync_server_list(app: &mut PhoenixApp) -> bool {
-    // +1: item 0 is the Activity section, which scrolls with
-    // the list like the client's (they sit inside `members_86es0b`).
     let Some(len) = app.selected_guild.and_then(|g| rows_for(app, g)).map(|l| l.len() + 1) else {
         return false;
     };
@@ -67,7 +52,6 @@ pub fn sync_server_list(app: &mut PhoenixApp) -> bool {
     true
 }
 
-/// Ask for the ranges around the scroll position when it enters a new chunk.
 fn request_ranges(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) {
     let (Some(ch), true) = (app.selected_channel, app.people.lists.contains_key(&g)) else { return };
     let top = app.member_list.logical_scroll_top().item_ix.saturating_sub(1);
@@ -77,21 +61,18 @@ fn request_ranges(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) {
     }
     app.people.requested.set(key);
     if key.1 == 0 {
-        return; // [0, 99] is subscribed when the channel opens.
+        return;
     }
     let fut = app.backend.subscribe_member_ranges(g, ch, ranges_for(top));
     cx.background_spawn(fut).detach();
 }
 
-/// The open channel when it is a thread.
 fn open_thread(app: &PhoenixApp) -> Option<Id> {
     app.selected_channel.filter(|c| app.nav.thread_parent(*c).is_some())
 }
 
 static NO_ROWS: Vec<ListEntry> = Vec::new();
 
-/// Rows the member list shows: the thread's own members in a thread (empty
-/// until `thread-members` answers), else the guild's lazy list.
 fn rows_for(app: &PhoenixApp, g: Id) -> Option<&Vec<ListEntry>> {
     match open_thread(app) {
         Some(t) => Some(app.people.thread_lists.get(&t).unwrap_or(&NO_ROWS)),
@@ -99,8 +80,6 @@ fn rows_for(app: &PhoenixApp, g: Id) -> Option<&Vec<ListEntry>> {
     }
 }
 
-/// Group thread members like the client's thread sidebar: highest hoisted
-/// role (online only), then Online, then Offline; names sorted in each.
 fn thread_rows(app: &PhoenixApp, g: Id, mut members: Vec<Member>) -> Vec<ListEntry> {
     let roles = app.roles.get(&g).cloned().unwrap_or_default();
     let mut hoisted: Vec<_> = roles.iter().filter(|r| r.hoist).collect();
@@ -135,8 +114,6 @@ fn thread_rows(app: &PhoenixApp, g: Id, mut members: Vec<Member>) -> Vec<ListEnt
     out
 }
 
-/// Fetch the open thread's members once, and keep the virtual list sized
-/// for whichever list (thread / guild) is showing.
 fn ensure_thread_list(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) {
     let want = rows_for(app, g).map(|l| l.len() + 1);
     if want.is_some_and(|n| n != app.member_list.item_count()) {
@@ -180,14 +157,14 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         ensure_thread_list(app, g, cx);
     }
     div()
-        .w(z(m::member_list_w())) // --custom-member-list-width
+        .w(z(m::member_list_w()))
         .flex_none()
         .h_full()
         .flex()
         .flex_col()
-        .bg(c(Palette::BG_SECONDARY)) // container_86es0b --custom-channel-members-bg = --background-base-lower
+        .bg(c(Palette::BG_SECONDARY))
         .border_l_1()
-        .border_color(c(Palette::DIVIDER)) // container_86es0b border-inline-start --border-subtle
+        .border_color(c(Palette::DIVIDER))
         .child(
             div()
                 .flex_1()
@@ -198,16 +175,13 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .child(
                     list(app.member_list.clone(), move |ix, _w, cx| row(&entity, ix, cx))
                         .size_full()
-                        // live client: content_tqapBM is 260px of the 268px list, the thin
-                        // scroller keeps an 8px gutter on the right.
                         .pr(z(8.))
-                        .pb(z(10.)), // members_86es0b padding-bottom 10px
+                        .pb(z(10.)),
                 )
                 .children(crate::ui::chat::scrollbar::thin_fade_scrollbar(&app.member_list)),
         )
 }
 
-/// "2d ago" style elapsed time since `start_ms`.
 pub fn elapsed(start_ms: i64, now_s: i64) -> String {
     let s = (now_s - start_ms / 1000).max(0);
     match s {
@@ -218,14 +192,6 @@ pub fn elapsed(start_ms: i64, now_s: i64) -> String {
     }
 }
 
-/// Member list Activity rows (client member list groups hook): GLOBAL_FEED
-/// entries of the rendered content types whose author is a member of `g`
-/// (unknown authors are requested with op 8, like `requestMember`) and can
-/// VIEW_CHANNEL the open channel, in feed order.
-/// The header counts the cards shown. Live
-/// client 2026-11-24, guild with 6 feed entries of which 5 by non-members:
-/// "Activité — 1" with one card; authors that are not members never resolve
-/// through op 8, so counting them as pending kept "6" forever.
 fn feed_cards(app: &PhoenixApp, g: Id) -> Vec<crate::commands::InventoryEntry> {
     let is_member = |u: Id| {
         app.members.get(&g).is_some_and(|ms| ms.iter().any(|m| m.user == u))
@@ -235,8 +201,6 @@ fn feed_cards(app: &PhoenixApp, g: Id) -> Vec<crate::commands::InventoryEntry> {
     let mut unknown: Vec<Id> = Vec::new();
     let mut out = Vec::new();
     for e in entries {
-        // Rendered content types (client member list row switch): PLAYED_GAME (1)
-        // and LAUNCHED_ACTIVITY (8, `extra.activity_name`), both name + 48px art.
         if !matches!(e.content_type, 1 | 8) || e.game.is_none() {
             continue;
         }
@@ -257,20 +221,12 @@ fn feed_cards(app: &PhoenixApp, g: Id) -> Vec<crate::commands::InventoryEntry> {
     out
 }
 
-/// Activity section expanded past its first 3 cards (toggleExpandIcon).
 static ACTIVITY_EXPANDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// The "Activity" section at the top of the member list: one card per
-/// member playing a game. Dump `-channels-N-N+` nodes 1502 (header) and
-/// 1512 (card `container_g7esM5 usesCardRows_g7esM5`).
 fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> AnyElement {
     let acts = feed_cards(app, g);
     let count = acts.len();
     let expanded = ACTIVITY_EXPANDED.load(std::sync::atomic::Ordering::Relaxed);
-    // Member list content feed gate (client bundle, member list groups hook):
-    // shown when the guild allows it (`activity_feed_enabled`) AND the open
-    // channel is not a forum (`isForumChannel()` = GUILD_FORUM only; media
-    // channels keep it).
     let forum = app
         .selected_channel
         .and_then(|id| app.channels.get(&id))
@@ -279,12 +235,10 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
         return div().into_any_element();
     }
     let now = crate::mock::now();
-    // headerContainer_HxSvbL: flex, margin -3px 0; label, 24px settingsButton
-    // (padding 4, 12px gear), spacer, 24x18 toggleExpandIcon.
     let muted = c(Palette::TEXT_MUTED);
     let mut col = div().flex_none().flex().flex_col().child(
         div()
-            .pt(z(space::lg())) // membersGroup_86es0b padding-block --space-lg --space-xxs, inline --space-md --space-xxs
+            .pt(z(space::lg()))
             .pb(z(space::xxs()))
             .pl(z(space::md()))
             .pr(z(space::xxs()))
@@ -309,9 +263,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                             .child(gpui::svg().path(crate::icons::path("gear")).size(z(12.)).text_color(muted)),
                     )
                     .child(div().flex_1())
-                    // toggleExpandIcon only when expandedCount > 3 (or hidden).
                     .when(acts.len() > 3, |d| {
-                        // collapsed (3 cards): ChevronSmallRight; expanded: ChevronSmallDown.
                         let ent = entity.clone();
                         d.child(
                             div()
@@ -324,8 +276,6 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                         cx.notify();
                                     });
                                 })
-                                // toggleExpandIcon_ 24x18; the 24-unit glyph keeps its aspect
-                                // (SVG "meet": 18x18 centred), GPUI svg would stretch it.
                                 .w(z(24.))
                                 .h(z(18.))
                                 .flex()
@@ -351,7 +301,6 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
             .unwrap_or_default();
         let ent = entity.clone();
         let game: SharedString = e.game.clone().unwrap_or_default().into();
-        // thumbnailButton_ img: app-icons/{app}/{icon}.png?size=240
         let art = match e.icon.clone() {
             Some(url) => gpui::img(url).size_full().into_any_element(),
             None => div()
@@ -366,7 +315,6 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                 .into_any_element(),
         };
         let badge_in = |ic: &'static str, t: SharedString, col: gpui::Hsla| {
-            // badgeContainer_CTWncy: gap 4, 12px icon, body-xs/normal 12/16
             div()
                 .flex()
                 .items_center()
@@ -375,11 +323,6 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                 .child(div().text_size(z(12.)).line_height(z(16.)).text_color(col).text_ellipsis().child(t))
         };
         let badge = |ic: &'static str, t: SharedString| badge_in(ic, t, c(Palette::TEXT_MUTED));
-        // Time badge (client content badge `$`): while the session is live, a running
-        // timer in --text-feedback-positive; otherwise "x ago" in the muted colors.
-        // Live client 2026-11-24: an entry with trait 3 `is_live` showed "12:08" =
-        // now - `started_at` exactly, while the author's presence had no matching start.
-        // A matching presence activity start is the fallback.
         let entry_live = e.live && e.expires_ms.is_none_or(|x| x > now * 1000);
         let live_start = e.started_ms.filter(|_| entry_live).or_else(|| {
             app.people.activities.get(&uid).and_then(|acts| {
@@ -396,22 +339,20 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
         col = col.child(
             div()
                 .id(("activity-card", e.id.0))
-                .mt(z(8.)) // container_g7esM5 margin 8px 0 0 8px (no right margin)
+                .mt(z(8.))
                 .ml(z(8.))
-                // live container_g7esM5 box 252x69.33 (vanilla-members #1512: 52px cardRow
-                // + 2x8 padding + 2x0.667 border); 70 drifted every following row by 2/3px per card.
-                .w(z(m::member_list_w() - 16.)) // cardPlacement_ max-width: list width - 2 × 8px; fixed so long names cannot widen it
+                .w(z(m::member_list_w() - 16.))
                 .h(z(52. + 16. + 2. * 0.667))
                 .overflow_hidden()
-                .p(z(8.)) // padding 8px
-                .rounded(z(12.)) // border-radius 12px
+                .p(z(8.))
+                .rounded(z(12.))
                 .border_1()
-                .border_color(c(Palette::DIVIDER)) // --border-subtle (#97979f @16%)
-                .bg(c(Palette::BG_TERTIARY)) // --background-base-lowest (#0a0a0c midnight)
+                .border_color(c(Palette::DIVIDER))
+                .bg(c(Palette::BG_TERTIARY))
                 .hover(|s| s.bg(c(Palette::BG_MOD_HOVER)))
                 .cursor_pointer()
                 .flex()
-                .gap(z(8.)) // cardRow_g7esM5 gap 8px
+                .gap(z(8.))
                 .on_click(move |ev, window, cx| {
                     let at = ev.position();
                     ent.update(cx, |a, cx| a.open_profile(uid, Some(g), at, window, cx));
@@ -423,9 +364,8 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                         .overflow_hidden()
                         .flex()
                         .flex_col()
-                        .mb(z(-2.)) // infoSection_g7esM5 margin-bottom -2px
+                        .mb(z(-2.))
                         .child(
-                            // userSection_g7esM5: 18px, margin-bottom 2px; 16px facePile, margin-right 6
                             div()
                                 .h(z(18.))
                                 .mb(z(2.))
@@ -435,12 +375,6 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                 .items_center()
                                 .child(div().mr(z(6.)).child(crate::ui::avatar(user, 16.)))
                                 .child(
-                                    // userName_g7esM5: 14px / 1.2857, 500, ellipsis, max-width 85%.
-                                    // Client bundle (content inventory card user section): the
-                                    // name gets the member's role colorString (else the class
-                                    // color --channels-default) and only the display name
-                                    // style's FONT (displayNameStylesFont), never its colors.
-                                    // Gradient role colours (colorStrings) paint the name too.
                                     crate::fonts::styled_name(
                                         div()
                                             .min_w_0()
@@ -467,7 +401,6 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                 ),
                         )
                         .child(
-                            // heading-xs/medium lineClamp1: 14/18, 500, --text-default #d4d5d8
                             div()
                                 .text_size(z(14.))
                                 .line_height(z(18.))
@@ -477,15 +410,11 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                 .child(game.clone()),
                         )
                         .child(
-                            // badgesContainer_CTWncy: gap 0 8px
                             div()
                                 .h(z(16.))
                                 .flex()
                                 .gap(z(8.))
                                 .overflow_hidden()
-                                // badgeContainer_: game-controller + "Il y a 2j" (entry id time), then
-                                // the traits: FIRST_TIME "New player", RESURRECTED, TRENDING, streak >= 3.
-                                // Time badge icon (client): AppsIcon for a launched activity, else GameControllerIcon.
                                 .child(time_badge)
                                 .when(e.first_time, |d| d.child(badge("medal", crate::t!("members.new_player"))))
                                 .when(e.resurrected, |d| d.child(badge("refresh", crate::t!("members.resurrection"))))
@@ -496,10 +425,9 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                 .child(
                     div()
                         .flex_none()
-                        .size(z(48.)) // thumbnailButton_NJVMoP 48x48, radius 8; img radius 4
+                        .size(z(48.))
                         .rounded(z(4.))
                         .overflow_hidden()
-                        // placeholder tile only when the app has no icon
                         .when(e.icon.is_none(), |d| d.bg(c(Palette::BG_MOD_SELECTED)))
                         .child(art),
                 ),
@@ -508,17 +436,12 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
     col.into_any_element()
 }
 
-/// Running activity timer like the client's content timer: "m:ss", or "h:mm:ss"
-/// from one hour. `start_ms` unix ms, `now_s` unix seconds.
 fn live_timer(start_ms: i64, now_s: i64) -> SharedString {
     let s = (now_s - start_ms / 1000).max(0);
     let (h, m, sec) = (s / 3600, s / 60 % 60, s % 60);
     if h > 0 { format!("{h}:{m:02}:{sec:02}") } else { format!("{m}:{sec:02}") }.into()
 }
 
-/// Server tag chiplet: chipletContainerInner_k8jyN7 (--background-mod-strong,
-/// 4px radius, 0 4px padding, 16px line height).
-/// Badge: vanilla-members #1696 `badge_k8jyN7` 14×14, margin-right 2.
 pub fn server_tag(tag: &(SharedString, Option<SharedString>)) -> gpui::Div {
     div()
         .flex_none()
@@ -526,7 +449,7 @@ pub fn server_tag(tag: &(SharedString, Option<SharedString>)) -> gpui::Div {
         .items_center()
         .px(z(4.))
         .rounded(z(4.))
-        .bg(c(tok(idx::BACKGROUND_MOD_STRONG))) // --background-mod-strong
+        .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
         .text_size(z(12.))
         .line_height(z(16.))
         .font_weight(FontWeight::SEMIBOLD)
@@ -536,10 +459,6 @@ pub fn server_tag(tag: &(SharedString, Option<SharedString>)) -> gpui::Div {
 }
 
 pub fn header(t: SharedString) -> AnyElement {
-    // membersGroup_86es0b: padding-block --space-lg --space-xxs (20/4),
-    // padding-inline --space-md --space-xxs (16/4), height auto. Not
-    // uppercased in the 2026 client; 14px/500 (Text sm/medium).
-    // Dump node 1598: padding 24px 4px 4px 20px, 46px tall.
     div()
         .pt(z(space::lg()))
         .pb(z(space::xxs()))
@@ -554,9 +473,6 @@ pub fn header(t: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// membersGroup_86es0b > membersGroupHeader_86es0b (flex): optional
-/// roleIcon_86es0b 16px (margin-right 4, vertical-align top), the
-/// membersGroupName_ (ellipsis), then " — N" which never truncates.
 fn group_header(app: &PhoenixApp, g: Id, id: &str, count: u32) -> AnyElement {
     let name = group_name(app, g, id);
     let icon = id
@@ -577,7 +493,7 @@ fn group_header(app: &PhoenixApp, g: Id, id: &str, count: u32) -> AnyElement {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(c(Palette::TEXT_MUTED))
                 .when_some(icon, |d, url| d.child(gpui::img(url).flex_none().size(z(16.)).mr(z(4.))))
-                .child(div().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(name.trim().to_string().into(), 14.))) // HTML collapses edge spaces
+                .child(div().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(name.trim().to_string().into(), 14.)))
                 .child(div().flex_none().child(SharedString::from(format!(" — {count}")))),
         )
         .into_any_element()
@@ -596,7 +512,6 @@ fn group_name(app: &PhoenixApp, g: Id, id: &str) -> String {
 }
 
 fn placeholder(ix: usize) -> AnyElement {
-    // Deterministic widths so the skeleton doesn't flicker.
     let w = 60. + ((ix * 37) % 80) as f32;
     div()
         .ml(z(16.))
@@ -612,8 +527,6 @@ fn placeholder(ix: usize) -> AnyElement {
 fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     let app = entity.read(cx);
     let Some(g) = app.selected_guild else { return div().into_any_element() };
-    // Item 0: the Activity section, scrolled with the members. (The online /
-    // total / voice counts row was Vencord's MemberCount plugin, not vanilla.)
     let Some(ix) = ix.checked_sub(1) else {
         let entity = entity.clone();
         let el = div().flex().flex_col().child(activity_section(app, &entity, g)).into_any_element();
@@ -625,7 +538,6 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     if let Some(rows) = rows_for(app, g) {
         return match rows.get(ix) {
             Some(ListEntry::Group { id, count }) => {
-                // A group row synced without `count`: fall back to the rows below it.
                 let n = if *count > 0 {
                     *count
                 } else {
@@ -655,16 +567,12 @@ fn member_row(
     mem: &Member,
     nick: Option<&SharedString>,
 ) -> AnyElement {
-    // The crown only shows outside hoisted role sections: live, the owner listed under a
-    // hoisted role has no ownerIcon_, while dumps show it in the Online / Offline groups.
     let hoisted = mem.presence != Presence::Offline
         && app.roles.get(&g).is_some_and(|rs| rs.iter().any(|r| r.hoist && mem.roles.contains(&r.id)));
     let owner = !hoisted && app.guilds.iter().find(|x| x.id == g).and_then(|x| x.owner) == Some(mem.user);
     member_row_in(app, entity, Some(g), mem, nick, owner)
 }
 
-/// A member row; `g: None` is a group DM's member list (no role colour,
-/// voice looked up across every guild).
 pub fn member_row_in(
     app: &PhoenixApp,
     entity: &Entity<PhoenixApp>,
@@ -682,9 +590,6 @@ pub fn member_row_in(
     let tag = user.and_then(|u| u.tag.clone());
     let acts = app.people.activities.get(&uid).map(Vec::as_slice).unwrap_or(&[]);
     let sub = SubText::of(acts);
-    // A Streaming activity wins over the presence ("En direct", #9147ff
-    // svg-mask-status-streaming) and over the voice line (dump: the streaming
-    // bot shows only its stream text, no speaker).
     let streaming = !offline && acts.iter().any(|a| a.kind == crate::presence::ActivityKind::Streaming);
     let in_voice = !streaming && match g {
         Some(g) => app
@@ -693,19 +598,10 @@ pub fn member_row_in(
             .is_some_and(|ids| ids.iter().filter_map(|i| app.channels.get(i)).any(|ch| ch.voice_users.contains(&uid))),
         None => app.channels.values().any(|ch| ch.guild.is_some() && ch.voice_users.contains(&uid)),
     } && !crate::ui::voice_panel::flags(uid).undiscoverable;
-    // ^ the client's `voiceStatusChannel` (module 714114): a *discoverable* voice state in a
-    // channel we can VIEW (`guild_channels` only lists those), so a hidden voice activity
-    // adds neither the voice line nor the "+1".
-    // Second line only when the client's activity status renders something; the
-    // list item's fallback text is used only before the activities arrive.
     let two_lines = !offline && (in_voice || sub.is_some() || (acts.is_empty() && mem.activity.is_some()));
     let has_plate = user.is_some_and(|u| u.nameplate.is_some());
-    // Dump `-channels-N-N+` node 1643: member_Iy0c7A margin-left 8px,
-    // padding 1px 0, radius 8 (44px); childContainer_J1Adu_ padding 0 8px 0 10px;
-    // memberInner_Iy0c7A padding 4px 0 (42px); avatar 32 + margin-right 12.
     div().py(z(1.)).child(div()
         .id(("member", mem.user.0))
-        // Decorations play while the row is hovered (ui::avatar_deco).
         .on_hover({
             let e = e.clone();
             move |h, _, cx| {
@@ -716,12 +612,8 @@ pub fn member_row_in(
         })
         .group("member-row")
         .ml(z(8.))
-        // live client: member_Iy0c7A is 44px with a sub line (name 18 + sub 16),
-        // 42px without (avatar 32), both including its 1px block padding.
         .h(z(if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. }))
-        .pl(z(space::xs())) // childContainer_J1Adu_ padding-inline-start --space-xs
-        // childContainer_J1Adu_ padding-right 8px, 32px with `nameplated_J1Adu_`
-        // (vanilla-members row at y 718): names ellipsize before the nameplate art.
+        .pl(z(space::xs()))
         .pr(z(if has_plate { 32. } else { 8. }))
         .py(z(4.))
         .rounded(z(8.))
@@ -729,19 +621,13 @@ pub fn member_row_in(
         .items_center()
         .cursor_pointer()
         .when(offline, |d| d.opacity(0.3))
-        // clickable_J1Adu_:hover .childContainer_J1Adu_ / .avatar opacity 1
         .hover(|s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))).opacity(1.))
-        // clickable_J1Adu_:active .childContainer_J1Adu_
         .active(|s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_ACTIVE))))
-        // `nameplated_J1Adu_`: nameplate layer behind the row content.
         .relative()
-        // Tab focus: the client's ring sits 4px inside the 252x44 row (live, 244x36).
         .map(|d| crate::ui::focus_ring::ring_inset(d, crate::ui::states::key(("member", uid.0)), 8., 4., 3.))
         .when_some(
             user.and_then(|u| {
                 let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
-                // Until the probe has measured the `memberInner layout_` box, estimate its
-                // text width for the client's `ResizeObserver` mask start.
                 let name_w = name.chars().count() as f32 * 9.0
                     + if tag.is_some() { 56.0 } else { 0.0 }
                     + if u.bot { 50.0 } else { 0.0 }
@@ -756,7 +642,6 @@ pub fn member_row_in(
                 let sub_w = if two_lines { sub_chars as f32 * 6.5 + 16.0 } else { 0.0 };
                 let fallback = (26.0 + name_w.max(sub_w) + 30.0).clamp(120.0, 220.0);
                 let row_h = if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. };
-                // module 351952: fade = layout_ contentRect.width + 10 (MEMBER_LIST).
                 let fade = crate::ui::nameplate::Fade::Measured {
                     place: crate::ui::nameplate::Place::Member,
                     id: uid.0,
@@ -768,7 +653,6 @@ pub fn member_row_in(
             |d, l| d.child(l),
         )
         .when(app.people.popout.as_ref().is_some_and(|p| p.user == uid), |d| {
-            // .selected_J1Adu_ .childContainer_J1Adu_ --interactive-background-selected
             d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))).opacity(1.)
         })
         .on_click(move |ev, window, cx| {
@@ -779,9 +663,6 @@ pub fn member_row_in(
             cx.stop_propagation();
             crate::ui::user_menu::open(uid, g, ev.position, window);
         })
-        // `memberInner_Iy0c7A layout_J1Adu_` (live): flex 0 1 auto, max-width 100%, so it
-        // is as wide as its content (Clem 132px) up to the 210px content box; the
-        // nameplate mask starts at its width + 10.
         .child(
             div()
                 .relative()
@@ -795,13 +676,11 @@ pub fn member_row_in(
                         .relative()
                         .flex_none()
                         .child({
-                            // the status cut shows the row's hover / selected background like the mask
                             let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
                             let cut = move |d: gpui::Div| {
                                 d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
                                     .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
                             };
-                            // The decoration sits under the status cut-out and glyph (ui::avatar_with_status_deco).
                             let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
                             if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
                                 mobile_avatar(user, cut, deco)
@@ -812,7 +691,6 @@ pub fn member_row_in(
                         .when(streaming, |d| d.child(streaming_dot())),
                 )
                 .child(
-                    // content_J1Adu_: flex 1 1 auto
                     div()
                         .flex_grow_1()
                         .flex_shrink_1()
@@ -830,9 +708,6 @@ pub fn member_row_in(
                                         .text_size(z(16.))
                                         .line_height(z(20.))
                                         .font_weight(FontWeight::MEDIUM)
-                                        // container_J1Adu_ color --channels-default; :hover
-                                        // --interactive-text-hover, selected --interactive-text-active
-                                        // (role colours keep their own colour).
                                         .map(|d| match g.and_then(|g| app.member_color(g, mem)) {
                                             Some(col) => d.text_color(role_color(Some(col))),
                                             None if app.people.popout.as_ref().is_some_and(|p| p.user == uid) => {
@@ -842,12 +717,10 @@ pub fn member_row_in(
                                                 .text_color(c(tok(idx::CHANNELS_DEFAULT)))
                                                 .group_hover("member-row", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))),
                                         })
-                                        // name_ ellipsis: only the name shrinks, the decorators keep their width
                                         .min_w_0()
                                         .overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
-                                        // name_Wo4EpK: style font letter-spacing, gradient role colours
                                         .child(crate::fonts::name_text_with(
                                             name,
                                             user,
@@ -855,21 +728,18 @@ pub fn member_row_in(
                                             g.and_then(|g| crate::ui::role_gradient::for_member(app, g, mem)),
                                         )),
                                 )
-                                .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.)))) // chipletContainerInner_k8jyN7 margin 1px 0 1px 4px
+                                .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.))))
                                 .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))
                                 .when(owner, |d| {
-                                    // ownerIcon_Iy0c7A: 14px (icon_Iy0c7A), --text-feedback-warning
                                     d.child(gpui::svg().path(crate::icons::path("crown")).size(z(14.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))
                                 })
                                 .when(mem.premium_since.is_some(), |d| {
-                                    // premiumIcon_Iy0c7A + icon_Iy0c7A: 14px, margin-inline-start 3px, top 1px;
-                                    // path fill --guild-boosting-pink (dump vanilla-guild-chat-busy node 1757).
                                     d.child(
                                         gpui::svg()
                                             .path(crate::icons::path("chat/boost"))
                                             .size(z(14.))
                                             .flex_none()
-                                            .ml(z(3.)) // after the row gap(4), as the client (wrapper span + 3px)
+                                            .ml(z(3.))
                                             .relative()
                                             .top(z(1.))
                                             .text_color(c(tok(idx::GUILD_BOOSTING_PINK))),
@@ -883,9 +753,6 @@ pub fn member_row_in(
         .into_any_element()
 }
 
-/// Streaming status over the 32px avatar: rect 10x10 at 22,22 fill
-/// --platform-twitch (#9147ff), masked by svg-mask-status-streaming (a play
-/// triangle cut out), inside the 16px ring of the list background.
 fn streaming_dot() -> gpui::Div {
     let ring = c(Palette::BG_SECONDARY);
     div()
@@ -910,10 +777,6 @@ fn streaming_dot() -> gpui::Div {
         )
 }
 
-/// APP tag, px variant (vanilla botTagRegular_ px_, measured live in the member
-/// list): 16px tall, padding 0 4px, radius 4, --background-brand; botTagVerified_
-/// check 16px margin-left -2; botText_ 12/16 600 uppercase. The member list adds
-/// botTag_Iy0c7A's margin-inline-start 4; the profile's botTag_C2XpHA adds none.
 pub fn bot_tag_px(verified: bool) -> gpui::Div {
     div()
         .flex_none()
@@ -931,8 +794,6 @@ pub fn bot_tag_px(verified: bool) -> gpui::Div {
         .child(crate::t!("common.app").to_uppercase())
 }
 
-/// botTagVerified_: 16px CheckmarkSmallBoldIcon in --white; hovering it shows
-/// the "Verified App" tooltip (aria-describedby on the live svg).
 pub fn verified_check() -> gpui::Div {
     use crate::ui::tooltip::Tipped;
     div()
@@ -944,16 +805,12 @@ pub fn verified_check() -> gpui::Div {
 }
 
 
-/// 32px avatar "online on mobile" (live client masks):
-/// `svg-mask-avatar-status-mobile-32` cuts a rect (.59375, .4375) .5x.65625,
-/// radius .13125, and the phone glyph is a 10x15 rect at 22,17 in --status-online.
 fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) -> gpui::Div, deco: Option<SharedString>) -> gpui::Div {
     div()
         .relative()
         .flex_none()
         .size(px(32.))
         .child(crate::ui::avatar(user, 32.))
-        // svg-mask-avatar-decoration-status-mobile-32: same hole as the avatar's (x 19, y 14, 16x21 r 4.2).
         .when_some(deco, |d, src| d.child(crate::ui::avatar_deco::layer(src, 32.)))
         .child(
             div()
@@ -978,21 +835,12 @@ fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) 
         )
 }
 
-/// What the member row's second line shows (client activity status component,
-/// module 9fb052bb `ActivityStatus`).
 struct SubText {
-    /// Custom status (emoji, text): customStatusContent_HigqCD. Kept when it has
-    /// a trimmed non-empty state or an emoji.
     custom: Option<(Option<SharedString>, Option<SharedString>)>,
-    /// First non-custom activity: (text, icon).
     main: Option<(SharedString, Option<&'static str>)>,
-    /// Non-custom activities, unique by name.
     count: usize,
 }
 
-/// Activity text (client activity text helper): the name; a stream's details
-/// first; `status_display_type` 0/1/2 picks name/state/details; Spotify's
-/// artists ("a; b" -> "a, b").
 fn activity_text(a: &crate::presence::Activity) -> Option<SharedString> {
     use crate::presence::ActivityKind as K;
     let nz = |v: &Option<SharedString>| v.clone().filter(|t| !t.is_empty());
@@ -1013,8 +861,6 @@ fn activity_text(a: &crate::presence::Activity) -> Option<SharedString> {
     m
 }
 
-/// Activity icon (client activity icon helper): gamepad for playing/competing,
-/// music for listening, TV for watching/streaming.
 fn activity_icon(a: &crate::presence::Activity) -> Option<&'static str> {
     use crate::presence::ActivityKind as K;
     match a.kind {
@@ -1033,9 +879,6 @@ impl SubText {
             .find(|a| a.kind == K::Custom)
             .map(|a| (a.emoji.clone(), a.state.as_ref().map(|t| SharedString::from(t.trim().to_string())).filter(|t| !t.is_empty())))
             .filter(|(e, t)| e.is_some() || t.is_some());
-        // ActivityStatus (`current-client/js/9fb052bb9a0957b3.js` `V`): activities but the
-        // custom / hang status (hang is dropped at parse time), `uniqWith` same
-        // application_id or same name.
         let mut seen: Vec<&crate::presence::Activity> = Vec::new();
         for a in acts.iter().filter(|a| a.kind != K::Custom) {
             let same = |b: &&crate::presence::Activity| {
@@ -1051,15 +894,6 @@ impl SubText {
     }
 }
 
-/// subText_J1Adu_ (margin-top -2px) > container_HigqCD textXs_HigqCD (flex, gap 4),
-/// in the client's order:
-/// 1. the activity (12px icon_HigqCD in --status-online, then its text), else the
-///    voice line ("In a voice channel" with the speaker). With a custom status
-///    TEXT only the icon stays (`iconOnly_HigqCD`). Bots get no icon.
-/// 2. "+N" (activityCounter_HigqCD) when there are several (activities + voice),
-///    not for bots; --status-positive when the custom status has text.
-/// 3. the "•" dot (dot_HigqCD body-xs/normal) when there is a custom status too;
-/// 4. the custom status (emoji 14px + text).
 fn sub_text(in_voice: bool, bot: bool, sub: Option<SubText>, fallback: Option<SharedString>) -> gpui::Div {
     let green = c(tok(idx::STATUS_ONLINE));
     let (custom, main, count) = sub.map(|s| (s.custom, s.main, s.count)).unwrap_or((None, None, 0));
@@ -1107,7 +941,6 @@ fn sub_text(in_voice: bool, bot: bool, sub: Option<SubText>, fallback: Option<Sh
             row = row.child(div().flex_none().font_weight(FontWeight::NORMAL).text_color(c(Palette::TEXT_NORMAL)).child("•"));
         }
         if let Some(e) = emoji {
-            // emoji_HigqCD 14px; custom (animated) emoji as images
             row = row.child(div().flex_none().text_size(z(14.)).child(crate::ui::emoji_text::status_label(e, 14. * crate::theme::zoom() / 1.375)));
         }
         if let Some(t) = state {

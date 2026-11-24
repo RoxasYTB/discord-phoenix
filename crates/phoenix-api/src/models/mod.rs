@@ -1,8 +1,3 @@
-//! Serde models for Discord objects. All structs ignore unknown fields and
-//! every integer enum has an `Unknown(_)` fallback so new API values never
-//! break deserialization.
-
-/// Declares an integer-backed enum with an `Unknown` catch-all variant.
 macro_rules! int_enum {
     (
         $(#[$meta:meta])*
@@ -73,7 +68,6 @@ pub use soundboard::*;
 pub use user::*;
 pub use voice::*;
 
-/// Deserialize `null` as the type's default.
 pub(crate) fn null_default<'de, D, T>(d: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,

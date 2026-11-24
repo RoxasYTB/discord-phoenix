@@ -1,14 +1,3 @@
-//! DAVE session driver: turns voice gateway DAVE opcodes (21-31) into MLS
-//! operations, replies for the gateway, and frame encryptor/decryptor state.
-//!
-//! Transitions follow the public protocol: a commit or welcome for a non-zero
-//! `transition_id` is applied to MLS immediately but its keys only go live
-//! when the server sends `execute_transition` (op 22); transition id 0 is
-//! applied at once. Media keeps flowing during changes: the previous
-//! receive keys stay usable for [`KEY_RETENTION`], and unencrypted frames are
-//! accepted (passthrough) until DAVE is active and for the same grace period
-//! after each key change.
-
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -18,10 +7,8 @@ use crate::codec::Codec;
 use crate::gateway::DaveServerMessage;
 use crate::Result;
 
-/// How long old receive keys and passthrough stay accepted after a change.
 pub const KEY_RETENTION: Duration = Duration::from_secs(10);
 
-/// Something the gateway must send in response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DaveAction {
     KeyPackage(Vec<u8>),
@@ -39,9 +26,7 @@ pub struct DaveSession {
     mls: Box<dyn MlsSession>,
     self_id: u64,
     recognized: HashSet<u64>,
-    /// Protocol version currently in effect for media (0 = no E2EE).
     active_version: u16,
-    /// Version negotiated in the session description.
     negotiated_version: u16,
     pending: HashMap<u16, u16>,
     encryptor: Option<FrameEncryptor>,
@@ -64,7 +49,6 @@ impl DaveSession {
         }
     }
 
-    /// True when outgoing media is end-to-end encrypted.
     pub fn is_active(&self) -> bool {
         self.active_version > 0 && self.encryptor.is_some()
     }
@@ -73,13 +57,10 @@ impl DaveSession {
         self.active_version
     }
 
-    /// Epoch authenticator of the current group (privacy code source).
     pub fn epoch_authenticator(&self) -> Option<Vec<u8>> {
         self.mls.epoch_authenticator().ok()
     }
 
-    /// Voice server's session description. Returns the key package to send
-    /// when DAVE was negotiated.
     pub fn on_session_description(&mut self, dave_protocol_version: u16) -> Vec<DaveAction> {
         self.negotiated_version = dave_protocol_version;
         if dave_protocol_version == 0 {
@@ -159,7 +140,6 @@ impl DaveSession {
         }
     }
 
-    /// Prepare a transition to apply on execute (or now, for id 0).
     fn stage(&mut self, transition_id: u16, version: u16, out: &mut Vec<DaveAction>) {
         if transition_id == 0 {
             self.execute(version);
@@ -175,7 +155,6 @@ impl DaveSession {
         out.extend(self.key_package_action());
     }
 
-    /// Handle one DAVE message from the voice gateway.
     pub fn handle(&mut self, msg: &DaveServerMessage) -> Vec<DaveAction> {
         let mut out = Vec::new();
         match msg {
@@ -215,7 +194,6 @@ impl DaveSession {
                         let v = self.negotiated_version.max(1);
                         self.stage(*transition_id, v, &mut out);
                     }
-                    // Not in the group yet: the welcome will follow.
                     Err(_) if !was_member => {}
                     Err(e) => {
                         tracing::warn!(error = %e, "dave: invalid commit");
@@ -239,7 +217,6 @@ impl DaveSession {
         out
     }
 
-    /// Encrypt an outgoing media frame (passthrough until DAVE is active).
     pub fn encrypt(&mut self, codec: Codec, frame: &[u8]) -> Result<Vec<u8>> {
         match (&mut self.encryptor, self.active_version) {
             (Some(enc), v) if v > 0 => enc.encrypt(codec, frame),
@@ -247,7 +224,6 @@ impl DaveSession {
         }
     }
 
-    /// Decrypt a media frame from `user_id`.
     pub fn decrypt(&mut self, user_id: u64, frame: &[u8]) -> Result<Vec<u8>> {
         let passthrough = self.passthrough_allowed();
         if !is_encrypted(frame) {

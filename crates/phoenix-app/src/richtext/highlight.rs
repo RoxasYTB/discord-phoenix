@@ -1,8 +1,3 @@
-//! Tiny hand-written lexer for code blocks. Good enough for the languages
-//! people paste most (Rust, JS/TS, Python, C-like, shell, JSON, CSS, SQL,
-//! Lua, Go), coloured with the Solarized-like palette the official dark theme
-//! uses for highlighted code.
-
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,18 +13,17 @@ pub enum Tok {
 }
 
 impl Tok {
-    /// highlight.js class colours of the client (`.hljs-*` → `--text-code-*`).
     pub fn color(self) -> u32 {
         use crate::theme::{generated::idx, tok};
         tok(match self {
-            Tok::Plain => idx::TEXT_CODE,              // .hljs
-            Tok::Keyword => idx::TEXT_CODE_KEYWORD,    // .hljs-keyword
-            Tok::String => idx::TEXT_CODE_STRING,      // .hljs-string
-            Tok::Number => idx::TEXT_CODE_NUMBER,      // .hljs-number
-            Tok::Comment => idx::TEXT_CODE_COMMENT,    // .hljs-comment
-            Tok::Title => idx::TEXT_CODE_TITLE,        // .hljs-title.function_
-            Tok::Literal => idx::TEXT_CODE_VARIABLE,   // .hljs-literal
-            Tok::Meta => idx::TEXT_CODE_DECORATOR,     // .hljs-meta
+            Tok::Plain => idx::TEXT_CODE,
+            Tok::Keyword => idx::TEXT_CODE_KEYWORD,
+            Tok::String => idx::TEXT_CODE_STRING,
+            Tok::Number => idx::TEXT_CODE_NUMBER,
+            Tok::Comment => idx::TEXT_CODE_COMMENT,
+            Tok::Title => idx::TEXT_CODE_TITLE,
+            Tok::Literal => idx::TEXT_CODE_VARIABLE,
+            Tok::Meta => idx::TEXT_CODE_DECORATOR,
         })
     }
 }
@@ -52,7 +46,6 @@ fn hash_comments(lang: &str) -> bool {
     matches!(lang, "py" | "python" | "sh" | "bash" | "shell" | "zsh" | "rb" | "ruby" | "yaml" | "yml" | "toml" | "ini" | "conf" | "r" | "perl" | "nix")
 }
 
-/// Split `code` into coloured ranges covering the whole string.
 pub fn highlight(code: &str, lang: Option<&str>) -> Vec<(Range<usize>, Tok)> {
     let lang = lang.unwrap_or("").to_ascii_lowercase();
     let hash = hash_comments(&lang);
@@ -90,7 +83,6 @@ pub fn highlight(code: &str, lang: Option<&str>) -> Vec<(Range<usize>, Tok)> {
             continue;
         }
         if c == b'"' || c == b'\'' || c == b'`' {
-            // Rust lifetimes/chars: a lone ' followed by ident without closing is plain.
             let mut j = i + 1;
             let mut closed = false;
             while j < b.len() {

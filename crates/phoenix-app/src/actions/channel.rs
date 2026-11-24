@@ -1,6 +1,3 @@
-//! Channel and guild menu actions: Clone, Move To, Pin to Top, Favorites,
-//! Create Event, Server Settings, Show All Channels.
-
 use std::rc::Rc;
 
 use gpui::{App, Context};
@@ -15,11 +12,9 @@ use crate::{
     },
 };
 
-/// Create Event start choices: (label key, seconds from now; None = tomorrow 9:00).
 pub const EVENT_STARTS: [(&str, Option<u64>); 4] =
     [("event.in_1h", Some(3600)), ("event.in_3h", Some(10_800)), ("msg.remind.tomorrow", None), ("event.in_1w", Some(604_800))];
 
-/// Pick where the event happens: a typed location, else the first voice channel.
 pub fn event_place(location: &str, first_voice: Option<(Id, bool)>) -> Option<EventPlace> {
     let l = location.trim();
     if !l.is_empty() {
@@ -28,8 +23,6 @@ pub fn event_place(location: &str, first_voice: Option<(Id, bool)>) -> Option<Ev
     first_voice.map(|(c, stage)| if stage { EventPlace::Stage(c) } else { EventPlace::Voice(c) })
 }
 
-/// Position entries for "Move To": the channel lands first / last among its
-/// siblings, or at the end of another category.
 pub fn move_entries(app: &PhoenixApp, guild: Id, channel: Id, dest: Dest) -> Vec<(Id, i32, Option<Option<Id>>)> {
     let Some(ch) = app.channels.get(&channel) else { return Vec::new() };
     let siblings = |parent: Option<Id>| -> Vec<i32> {
@@ -151,7 +144,6 @@ fn item(e: &Ent, label: gpui::SharedString, f: impl Fn(&mut PhoenixApp, &mut Con
     MenuItem::action(label, None, move |_, _, cx: &mut App| e.update(cx, |a, cx| f(a, cx)))
 }
 
-/// "Move To…" > Category > | Move to First | Move to Last, for a guild channel.
 pub fn move_to_item(app: &PhoenixApp, e: &Ent, guild: Id, channel: Id) -> MenuItem {
     let cur = app.channels.get(&channel).and_then(|c| c.parent);
     let mut cats: Vec<MenuItem> = app
@@ -183,7 +175,6 @@ pub fn move_to_item(app: &PhoenixApp, e: &Ent, guild: Id, channel: Id) -> MenuIt
     )
 }
 
-/// "Pin Channel to Top" / "Unpin Channel" (and "Pin" / "Unpin" on DMs).
 pub fn pin_item(e: &Ent, channel: Id, dm: bool) -> MenuItem {
     let on = pins::is_pinned(channel);
     let key = match (dm, on) {
@@ -195,7 +186,6 @@ pub fn pin_item(e: &Ent, channel: Id, dm: bool) -> MenuItem {
     item(e, crate::t!(key), move |a, cx| a.toggle_channel_pin(channel, cx))
 }
 
-/// "Add to Favorites" > Favorites (check row).
 pub fn favorite_item(e: &Ent, channel: Id) -> MenuItem {
     let on = pins::is_favorite(channel);
     let e = e.clone();
@@ -211,7 +201,6 @@ pub fn favorite_item(e: &Ent, channel: Id) -> MenuItem {
     )
 }
 
-/// "Server Settings >" with the 21 sections, each opening the overlay there.
 pub fn server_settings_item(e: &Ent, guild: Id) -> MenuItem {
     MenuItem::submenu(
         crate::t!("menu.server_settings"),
@@ -219,7 +208,6 @@ pub fn server_settings_item(e: &Ent, guild: Id) -> MenuItem {
     )
 }
 
-/// "Show All Channels" (community guilds only, `COMMUNITY` feature).
 pub fn show_all_item(app: &PhoenixApp, e: &Ent, guild: Id) -> Option<MenuItem> {
     if !app.backend.guild_features(guild).iter().any(|f| f == "COMMUNITY") {
         return None;

@@ -1,17 +1,9 @@
-//! Per-route rate limit buckets driven by `X-RateLimit-*` headers.
-//!
-//! Discord groups routes into buckets identified by `X-RateLimit-Bucket`,
-//! further split by the route's major parameter (channel / guild / webhook
-//! id). Until a route's bucket hash is known it is tracked by its own
-//! normalized route key.
-
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use reqwest::header::HeaderMap;
 
-/// Rate limit information parsed from a response.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RateLimitInfo {
     pub limit: Option<u32>,
@@ -39,9 +31,6 @@ impl RateLimitInfo {
     }
 }
 
-/// Normalize a path into a rate-limit route key: major parameters are kept,
-/// minor ids become `:id`, and everything after `reactions/` collapses.
-/// E.g. `PATCH /channels/1/messages/2` -> `PATCH /channels/1/messages/:id`.
 pub fn route_key(method: &str, path: &str) -> String {
     let path = path.split('?').next().unwrap_or(path);
     let segs: Vec<&str> = path.trim_matches('/').split('/').collect();
@@ -67,7 +56,6 @@ pub fn route_key(method: &str, path: &str) -> String {
     out
 }
 
-/// Major parameter of a path (`channels/{id}`, `guilds/{id}`, `webhooks/{id}`).
 pub fn major_param(path: &str) -> &str {
     let mut it = path.trim_matches('/').split('/');
     match (it.next(), it.next()) {
@@ -85,9 +73,7 @@ struct Bucket {
 
 #[derive(Debug, Default)]
 struct Inner {
-    /// route key -> bucket hash from the server.
     hashes: HashMap<String, String>,
-    /// bucket id -> state.
     buckets: HashMap<String, Bucket>,
     global_until: Option<Instant>,
 }
@@ -109,8 +95,6 @@ impl RateLimiter {
         }
     }
 
-    /// Reserve a request slot. Returns how long to wait first if the bucket
-    /// (or the global limit) is exhausted; call again after waiting.
     pub fn acquire(&self, route: &str, major: &str, now: Instant) -> Option<Duration> {
         let mut inner = self.inner.lock();
         if let Some(until) = inner.global_until {
@@ -122,7 +106,6 @@ impl RateLimiter {
         let id = Self::bucket_id(&inner, route, major);
         let b = inner.buckets.get_mut(&id)?;
         if b.reset_at <= now {
-            // Window elapsed; assume full until the next response says otherwise.
             b.remaining = b.limit;
             b.reset_at = now + Duration::from_secs(1);
         }
@@ -133,7 +116,6 @@ impl RateLimiter {
         None
     }
 
-    /// Record headers from a response.
     pub fn update(&self, route: &str, major: &str, info: &RateLimitInfo, now: Instant) {
         let mut inner = self.inner.lock();
         if let Some(hash) = &info.bucket {
@@ -148,7 +130,6 @@ impl RateLimiter {
         inner.buckets.insert(id, Bucket { limit, remaining, reset_at: now + reset_after });
     }
 
-    /// Record a 429 response.
     pub fn on_429(&self, route: &str, major: &str, retry_after: Duration, global: bool, now: Instant) {
         let mut inner = self.inner.lock();
         if global {
@@ -207,7 +188,6 @@ mod tests {
         let rl = RateLimiter::new();
         let t0 = Instant::now();
         let route = "POST /channels/1/messages";
-        // Unknown bucket: never blocks.
         assert_eq!(rl.acquire(route, "1", t0), None);
         let info = RateLimitInfo {
             limit: Some(2),
@@ -217,11 +197,9 @@ mod tests {
             ..Default::default()
         };
         rl.update(route, "1", &info, t0);
-        assert_eq!(rl.acquire(route, "1", t0), None); // uses the last slot
+        assert_eq!(rl.acquire(route, "1", t0), None);
         assert_eq!(rl.acquire(route, "1", t0), Some(Duration::from_secs(2)));
-        // Other major parameter is a separate bucket.
         assert_eq!(rl.acquire(route, "2", t0), None);
-        // After reset the bucket refills.
         let t1 = t0 + Duration::from_secs(3);
         assert_eq!(rl.acquire(route, "1", t1), None);
         assert_eq!(rl.acquire(route, "1", t1), None);
@@ -240,7 +218,6 @@ mod tests {
             ..Default::default()
         };
         rl.update("PATCH /channels/1/messages/:id", "1", &info, t0);
-        // A second route learns it maps to the same hash -> same bucket.
         rl.update(
             "DELETE /channels/1/messages/:id",
             "1",

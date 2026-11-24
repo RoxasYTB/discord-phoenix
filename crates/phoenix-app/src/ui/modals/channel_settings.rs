@@ -1,8 +1,3 @@
-//! Channel settings overlay ("Edit Channel" / "Edit Category"): Overview
-//! (name, topic, slowmode, age-restricted), Permissions (overwrites editor
-//! with deny / neutral / allow per permission), Invites (list + revoke),
-//! Integrations (read-only) and Delete Channel.
-
 use std::rc::Rc;
 
 use gpui::{AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
@@ -33,7 +28,6 @@ pub enum Section {
 const SECTIONS: [(Section, &str); 4] =
     [(Section::Overview, "admin.cs_overview"), (Section::Permissions, "admin.cs_permissions"), (Section::Invites, "admin.cs_invites"), (Section::Integrations, "admin.cs_integrations")];
 
-/// Slowmode stops of the client's slider (seconds).
 pub const SLOWMODE: [u32; 14] = [0, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 21_600];
 
 pub fn slowmode_label(s: u32) -> String {
@@ -45,8 +39,6 @@ pub fn slowmode_label(s: u32) -> String {
     }
 }
 
-/// Channel permissions shown by the editor: (bit, label key), in the
-/// client's General / Membership / Text / Voice order.
 pub const PERMS: [(u64, &str); 22] = [
     (1 << 10, "perm.view_channel"),
     (1 << 4, "perm.manage_channel"),
@@ -75,14 +67,12 @@ pub const PERMS: [(u64, &str); 22] = [
 #[derive(Clone, Debug, PartialEq)]
 pub struct Overwrite {
     pub id: Id,
-    /// 0 role, 1 member.
     pub kind: u8,
     pub allow: u64,
     pub deny: u64,
 }
 
 impl Overwrite {
-    /// -1 deny, 0 inherit, 1 allow.
     pub fn state(&self, bit: u64) -> i8 {
         if self.allow & bit != 0 {
             1
@@ -169,7 +159,6 @@ impl State {
         self.nsfw0 = v.get("nsfw").and_then(Value::as_bool).unwrap_or(false);
         self.slow = self.slow0;
         self.nsfw = self.nsfw0;
-        // @everyone (id = guild) goes first, like the client's list.
         if let Some(g) = self.guild {
             if !self.overwrites.iter().any(|o| o.id == g) {
                 self.overwrites.insert(0, Overwrite { id: g, kind: 0, allow: 0, deny: 0 });
@@ -214,7 +203,6 @@ pub fn prepare(s: &mut State, mk: &mut dyn FnMut(SharedString, &str, bool) -> En
     }
 }
 
-/// Lazy loads of the Invites / Integrations pages.
 fn pick_section(a: &mut PhoenixApp, sec: Section, cx: &mut Context<PhoenixApp>) {
     let mut need = None;
     with_state(|s| {
@@ -308,7 +296,6 @@ fn target_name(app: &PhoenixApp, guild: Option<Id>, o: &Overwrite) -> SharedStri
 }
 
 fn tri(id: (&'static str, usize), state: i8, cx: &mut Context<PhoenixApp>, bit: u64) -> gpui::Div {
-    // permissionsTriState: ✕ (critical), / (neutral), ✓ (positive), 32px cells.
     let cell = |n: i8, glyph: &'static str, active_bg: usize| {
         let on = state == n;
         div()
@@ -372,7 +359,6 @@ fn permissions(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> gpu
                 .child(target_name(app, s.guild, o)),
         );
     }
-    // "+" adds a role overwrite (roles not listed yet).
     let present: Vec<Id> = s.overwrites.iter().map(|o| o.id).collect();
     let mut roles: Vec<&crate::model::Role> = s.guild.and_then(|g| app.roles.get(&g)).into_iter().flatten().filter(|r| !present.contains(&r.id)).collect();
     roles.sort_by_key(|r| -r.position);
@@ -396,7 +382,6 @@ fn permissions(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> gpu
         perms = perms.child(eyebrow(crate::t!("admin.perms_for", name = target_name(app, s.guild, o).to_string())));
         let voice = matches!(s.kind, ChannelKind::Voice | ChannelKind::Stage);
         for (n, (bit, key)) in PERMS.iter().enumerate() {
-            // Voice-only permissions on text channels (and vice versa for threads) are hidden.
             let voice_bit = [1 << 20, 1 << 21, 1 << 9, 1 << 22, 1 << 24].contains(bit);
             if voice_bit && !voice && s.kind != ChannelKind::Category {
                 continue;
@@ -442,8 +427,6 @@ fn invites(s: &State, cx: &mut Context<PhoenixApp>) -> gpui::Div {
     })
 }
 
-/// Invites table shared with Server Settings > Invites: inviter, code, uses,
-/// expires, revoke on hover-less "Revoke" link.
 pub fn invite_list(list: Option<&[Value]>, id: &'static str, cx: &mut Context<PhoenixApp>, removed: fn(&str)) -> gpui::Div {
     let Some(list) = list else { return div().child(text(crate::t!("common.loading"), 14., idx::TEXT_SUBTLE)) };
     if list.is_empty() {

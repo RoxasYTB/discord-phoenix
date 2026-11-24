@@ -7,11 +7,8 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
-# Opus encode/decode via audiopus (builds bundled libopus with cmake if no system lib).
 opus = ["dep:audiopus"]
-# Microphone capture and speaker playback via cpal (ALSA/PipeWire), with Opus.
 audio = ["opus", "dep:cpal"]
-# Video encoder backends (currently stubs, see src/media/video.rs).
 ffmpeg = []
 vaapi = []
 nvenc = []
@@ -36,7 +33,6 @@ openmls_rust_crypto = "0.6"
 openmls_basic_credential = "0.6"
 futures-executor = "0.3"
 
-# Global push-to-talk through the XDG GlobalShortcuts portal (same ashpd as gpui).
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts"] }
 

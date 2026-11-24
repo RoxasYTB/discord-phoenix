@@ -1,7 +1,3 @@
-//! 80px guild rail (40px rounded-square tiles, animated pill, name tooltips): Home, guilds and guild folders (from `guild_folders`),
-//! Add a Server (join by invite) and Discover. Guilds can be dragged to
-//! reorder them locally (not synced to Discord yet).
-
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -21,7 +17,6 @@ use crate::{
     ui::{badge, icon},
 };
 
-/// Folder colour when none is set (Discord's blurple-ish default).
 const FOLDER_DEFAULT: u32 = 0x5865F2;
 
 enum RailItem<'a> {
@@ -29,8 +24,6 @@ enum RailItem<'a> {
     Folder { id: u64, name: SharedString, color: u32, guilds: Vec<&'a Guild>, open: bool },
 }
 
-/// Guilds grouped by the user's folders. Guilds not in any folder (joined
-/// since the settings were saved) come first, like the official client.
 fn rail(app: &PhoenixApp) -> Vec<RailItem<'_>> {
     let by_id = |g: Id| app.guilds.iter().find(|x| x.id == g);
     let in_folders: std::collections::HashSet<Id> =
@@ -58,7 +51,6 @@ fn rail(app: &PhoenixApp) -> Vec<RailItem<'_>> {
     out
 }
 
-/// Guild ids in rail order, folders flattened (client `getFlattenedGuildIds`).
 pub fn flat_guild_order(app: &PhoenixApp) -> Vec<Id> {
     rail(app)
         .into_iter()
@@ -83,14 +75,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .flex_col()
         .gap(z(gap()))
         .child(home(app, &entity));
-    // `stack_TWWX0S` "Direct messages" (vanilla-dm-profile-panel #69): one 40px
-    // `listItem_` per DM with unread mentions, same 10px rail gap.
     let dms = unread_dm_items(app, &entity);
     let base = 2 + dms.len();
     col = col.children(dms).child(separator());
-    // Unread guilds for the "nouveau" bars: (rail child index, y offset in that
-    // child, mentions). Guilds of an open folder are checked one by one, like
-    // the official client which tests each guild row, not the folder.
     let mut spans: Vec<Span> = Vec::new();
     let is_unread = |g: &Guild| g.unread || g.mentions > 0;
     for (i, item) in rail(app).into_iter().enumerate() {
@@ -103,7 +90,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 mentions: guilds.iter().map(|g| g.mentions).sum(),
             }),
             RailItem::Folder { guilds, open: true, .. } => {
-                // Header (48) + `folderGuildsList_` margin-top (GAP - FOLDER_PAD), then 40px rows 10px apart.
                 for (k, g) in guilds.iter().enumerate().filter(|(_, g)| is_unread(g)) {
                     let y = FOLDER + gap() - FOLDER_PAD + k as f32 * (ICON + gap());
                     spans.push(Span { ix: base + i, y, h: ICON, mentions: g.mentions });
@@ -148,14 +134,11 @@ thread_local! {
     static RAIL_SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
 }
 
-/// Scrolls the server rail to `y` px from the top (offscreen compares copy the
-/// client's `scroller_5dqHTG` scrollTop).
 #[doc(hidden)]
 pub fn scroll_rail_to(y: f32) {
     RAIL_SCROLL.with(|h| h.set_offset(gpui::point(gpui::px(0.), gpui::px(-y.max(0.)))));
 }
 
-/// One unread guild row inside a rail child (see `render`).
 struct Span {
     ix: usize,
     y: f32,
@@ -163,22 +146,14 @@ struct Span {
     mentions: u32,
 }
 
-/// The official rail scroller (`wrapper_5dqHTG`) ends 16px under the panels card top
-/// while ours stops 10px above it, so a row in that 26px band still counts as visible
-/// (live 2026-11-24: bottom bar `hidden_oJAkDB` with the next unread guild peeking).
 const RAIL_UNDER_PANELS: f32 = 26.;
 
-/// Nearest unread row scrolled off above / below the rail viewport (last
-/// frame's layout) and the mentions hidden on each side.
 fn offscreen_unread(h: &gpui::ScrollHandle, spans: &[Span]) -> (Option<usize>, Option<usize>, u32, u32) {
     let view = h.bounds();
     let (mut above, mut below, mut ma, mut mb) = (None, None, 0, 0);
     if view.size.height <= px(0.) {
         return (above, below, ma, mb);
     }
-    // Client guild bar: `isUnread: () => false`, `isMentioned: guild
-    // highImportanceMentionCount > 0` — only offscreen mentions raise the bar,
-    // a merely unread guild below the fold does not.
     for s in spans.iter().filter(|s| s.mentions > 0) {
         let Some(b) = h.bounds_for_item(s.ix) else { continue };
         let top = b.top() + z(s.y);
@@ -193,13 +168,6 @@ fn offscreen_unread(h: &gpui::ScrollHandle, spans: &[Span]) -> (Option<usize>, O
     (above, below, ma, mb)
 }
 
-/// "nouveau" pill. vanilla-guild-text #56/#57 (top) and #607/#608 (bottom):
-/// unreadMentionsIndicatorTop_/Bottom_ absolute, padding 8 (bottom: 8 8 26);
-/// bar_oJAkDB unread_oJAkDB: h 24, r 12, --background-surface-highest, 1px --border-normal,
-/// shadow 0 2 6 --opacity-black-24, 12px/16px semibold uppercase --text-strong; :active top 1px.
-/// With mentions offscreen it becomes the red `mention_oJAkDB` variant: background
-/// --background-feedback-notification, 1px --border-subtle, --shadow-medium,
-/// --text-overlay-light; text intl `A2j16v` "{count} mentions" (uppercased by bar_).
 fn unread_bar(h: &gpui::ScrollHandle, ix: usize, top: bool, mentions: u32) -> AnyElement {
     use crate::theme::{generated::idx, tok};
     let h = h.clone();
@@ -208,10 +176,6 @@ fn unread_bar(h: &gpui::ScrollHandle, ix: usize, top: bool, mentions: u32) -> An
         .left_0()
         .right_0()
         .when(top, |d| d.top_0().p(z(8.)))
-        // Bottom: 8 8 26 inside `wrapper_5dqHTG`, whose margin-bottom
-        // (`--custom-app-panels-height + --space-xs - 16px`) makes it end 16px
-        // under the panels card top. Our rail stops 10px above the card instead,
-        // so the bar lands at the same place with no bottom padding.
         .when(!top, |d| d.bottom_0().pt(z(8.)).px(z(8.)))
         .child(
             div()
@@ -249,45 +213,29 @@ fn unread_bar(h: &gpui::ScrollHandle, ix: usize, top: bool, mentions: u32) -> An
                     h.scroll_to_item(ix);
                     w.refresh();
                 })
-                // vanilla-dm #590/#591: the red mentions bar still reads "nouveau".
                 .child(crate::t!("rail.unread_new").to_uppercase()),
         )
         .into_any_element()
 }
 
-// Metrics of the official guild rail (refresh layout, `.density-cozy`, dump -channels-N-N+ #50..#583).
-/// `--guildbar-avatar-size`.
 const ICON: f32 = 40.;
-/// `--guildbar-folder-size`.
 const FOLDER: f32 = 48.;
-/// `--radius-md`: guild icons are rounded squares.
 const ICON_RADIUS: f32 = 12.;
-/// `--radius-lg`: open folder background.
 const FOLDER_RADIUS: f32 = 16.;
-/// `--space-xs` (cozy 10, default 8, compact 6): `stack_TWWX0S scroller_5dqHTG` gap.
-/// Dump -channels-N-N+ #55 gap 10px.
 fn gap() -> f32 {
     crate::theme::space::xs()
 }
-/// `scroller_5dqHTG` padding-top is 0 on `.platform-linux` (dump #55 starts at y=32).
 const PAD_TOP: f32 = 0.;
-/// `scroller_5dqHTG` padding-bottom: `calc(var(--space-xs) + 16px)` = 26px (dump #55).
 fn pad_bottom() -> f32 {
     gap() + 16.
 }
-/// `--custom-folder-padding`: `(--guildbar-folder-size - --guildbar-avatar-size) / 2`.
 const FOLDER_PAD: f32 = (FOLDER - ICON) / 2.;
-/// `--custom-folder-preview-padding` (`--space-4`).
 const PREVIEW_PAD: f32 = 4.;
-/// `--custom-folder-preview-gap`.
 const PREVIEW_GAP: f32 = 2.;
-/// `item__o8_Xq` transition: height/opacity/transform .2s ease-out.
 const PILL_MS: u64 = 200;
 
 thread_local! {
-    /// Rail item currently under the mouse (drives the pill and the tooltip).
     static HOVERED: Cell<Option<u64>> = const { Cell::new(None) };
-    /// Last pill target height per rail item, so a change animates from it.
     static PILLS: RefCell<HashMap<u64, (f32, f32, u32)>> = RefCell::new(HashMap::new());
 }
 
@@ -295,7 +243,6 @@ fn hovered(key: u64) -> bool {
     HOVERED.with(|h| h.get() == Some(key))
 }
 
-/// Make `el` update the shared hover state (and re-render) on enter/leave.
 fn track_hover(el: gpui::Stateful<gpui::Div>, key: u64, entity: &Entity<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let e = entity.clone();
     el.on_hover(move |over, _, cx| {
@@ -311,17 +258,15 @@ fn track_hover(el: gpui::Stateful<gpui::Div>, key: u64, entity: &Entity<PhoenixA
     })
 }
 
-/// Server-name tooltip to the right of the rail, like the official client
-/// (surface-high card, 1px subtle border, 8px radius, 8/12 padding, pointer).
 pub fn right_tooltip(text: SharedString, item_h: f32) -> AnyElement {
     let card = div()
         .max_w(z(196.))
         .px(z(12.))
         .py(z(8.))
         .rounded(z(8.))
-        .bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_SURFACE_HIGH))) // tooltip_ZDdyhE
+        .bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_SURFACE_HIGH)))
         .border_1()
-        .border_color(c(crate::theme::tok(crate::theme::generated::idx::BORDER_SUBTLE))) // inset 1px --border-subtle
+        .border_color(c(crate::theme::tok(crate::theme::generated::idx::BORDER_SUBTLE)))
         .shadow_lg()
         .text_size(z(16.))
         .line_height(z(20.))
@@ -329,15 +274,12 @@ pub fn right_tooltip(text: SharedString, item_h: f32) -> AnyElement {
         .text_color(c(Palette::TEXT_NORMAL))
         .child(text)
         .with_animation("rail-tip-zoom", crate::ui::states::tip_zoom(), |d, t| crate::ui::states::zoom_card_sized(d, t, 16., 20.));
-    // Left-pointing 5px triangle, drawn as stacked 1px slices.
     let mut pointer = div().flex().flex_col().justify_center().items_end().w(z(5.));
     for i in 0..9 {
         let w = 5. - (4. - i as f32).abs();
         pointer = pointer.child(div().w(z(w)).h(z(1.)).bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_SURFACE_HIGH))));
     }
     let tip = deferred(
-        // vanilla-tooltip-guild #2089: the card starts 12px right of the 40px tile (x 72 for
-        // a tile at 20..60), with the 5px caret in that gap.
         anchored()
             .position_mode(AnchoredPositionMode::Local)
             .position(point(z((m::server_bar_w() + item_h) / 2. + 12. - 5.), z(0.))).child(
@@ -350,8 +292,6 @@ pub fn right_tooltip(text: SharedString, item_h: f32) -> AnyElement {
                 .with_animation(
                     "rail-tip",
                     Animation::new(crate::ui::settings::effects::motion(100)).with_easing(ease_out_quint()),
-                    // ref-cache tooltip-rail-appear.json: shown ~60ms after hover, opacity 1,
-                    // card slides 4px right-to-left (x 76 → 72) over ~100ms.
                     |d, t| d.ml(z(4. * (1. - t))),
                 ),
         ),
@@ -360,8 +300,6 @@ pub fn right_tooltip(text: SharedString, item_h: f32) -> AnyElement {
     div().absolute().top_0().left_0().child(tip).into_any_element()
 }
 
-/// Pill on the left edge: 40px selected, 20px hovered, 8px unread.
-/// `--text-strong`, 8px wide with half of it off-screen, 0 4 4 0 radius.
 fn pill(key: u64, selected: bool, hover: bool, unread: bool) -> AnyElement {
     let target = if selected {
         40.
@@ -394,11 +332,10 @@ fn pill(key: u64, selected: bool, hover: bool, unread: bool) -> AnyElement {
     div().absolute().left_0().top_0().h_full().w(z(4.)).flex().items_center().child(bar).into_any_element()
 }
 
-/// Red count badge cut out of the rail background (bottom-right of the icon).
 fn mention_badge(n: u32) -> impl IntoElement {
     div()
         .absolute()
-        .right(z(-4.)) // lowerBadge_hqZPsU bottom/right 0 + 4px cut-out ring
+        .right(z(-4.))
         .bottom(z(-4.))
         .p(z(4.))
         .rounded(z(12.))
@@ -406,11 +343,6 @@ fn mention_badge(n: u32) -> impl IntoElement {
         .child(badge(n).bg(c(Palette::NOTIFICATION)))
 }
 
-/// `upperBadge_hqZPsU` voice badge (GuildMediaStateStore `audio`): someone is
-/// in one of the guild's voice channels. Hidden for muted guilds unless we are
-/// connected there; `--status-positive` when connected, else `--icon-overlay-dark`
-/// (`iconBadge_rwEpIL`). 16px round, 2px icon padding (`icon_lMvXrQ`), 2px
-/// cut-out ring (`badgeMaskStroke` 2).
 fn voice_badge(app: &PhoenixApp, g: &Guild) -> Option<AnyElement> {
     use crate::theme::{generated::idx, tok};
     let chans = app.guild_channels.get(&g.id)?;
@@ -440,27 +372,21 @@ fn voice_badge(app: &PhoenixApp, g: &Guild) -> Option<AnyElement> {
     )
 }
 
-/// One 72px-wide rail row holding a centred 40px tile.
 fn row(id: impl Into<ElementId>, key: u64, entity: &Entity<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let row = track_hover(
         div().id(id).w_full().h(z(ICON)).flex_none().flex().justify_center().relative().cursor_pointer(),
         key,
         entity,
     );
-    // Tab focus ring around the centred 40px tile (16px in from the 72px row), tile radius 12.
     crate::ui::focus_ring::ring_inset(row, crate::ui::states::key(("rail-row", key)), ICON_RADIUS, (m::SERVER_BAR_W - ICON) / 2., 0.)
 }
 
 const HOME_KEY: u64 = 1;
 
-/// Unread DM rail items (vanilla-dm-profile-panel #71..#78): unread pill
-/// (`item__o8_Xq visible`), 40px round avatar, `lowerBadge_hqZPsU` mention count.
 fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElement> {
     app.dms
         .iter()
         .filter_map(|d| app.channels.get(d))
-        // Muted DMs and message requests never surface in the rail (they stay
-        // in Home: Message Requests / the muted DM row).
         .filter(|ch| ch.mentions > 0 && !ch.muted && !app.nav.message_requests.contains(&ch.id))
         .map(|ch| {
             let id = ch.id;
@@ -495,8 +421,6 @@ const DISCOVER_KEY: u64 = 3;
 fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
     let selected = app.selected_guild.is_none();
     let hover = hovered(HOME_KEY);
-    // Unread DMs get their own rail items (`unread_dm_items`): the Home badge only
-    // counts pending friend requests.
     let pending = app.nav.count(crate::ui::home::data::RelationshipKind::Incoming) as u32;
     let e = entity.clone();
     row("home", HOME_KEY, entity)
@@ -514,7 +438,6 @@ fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
                         .justify_center()
                         .rounded(z(ICON_RADIUS))
                         .relative()
-                        // childWrapper_JJ-hgR transition: background-color .15s ease-out
                         .child(crate::ui::states::fade_to(
                             crate::ui::states::key(("rail-tile", HOME_KEY)),
                             selected || hover,
@@ -523,7 +446,6 @@ fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
                             150,
                             ICON_RADIUS,
                         ))
-                        // Live (dpr 1.25): the 24x24 glyph sits 8px inside the 40px tile.
                         .child(svg().path(crate::icons::path("discord-logo")).size(z(24.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
                 )
                 .when(pending > 0, |d| d.child(mention_badge(pending))),
@@ -534,8 +456,6 @@ fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
 
 fn guild_inner(g: &Guild, size: f32) -> AnyElement {
     match &g.icon {
-        // The tile's `--radius-md` must clip the image itself (GPUI doesn't clip children).
-        // Animated (`a_`) icons show their first frame and play while hovered, like the client.
         ImageRef::Url(u) if crate::media::is_animated(u) => {
             let r = z(ICON_RADIUS * size / ICON);
             let group = SharedString::new_static("phx-guild-icon");
@@ -559,8 +479,6 @@ fn guild_inner(g: &Guild, size: f32) -> AnyElement {
         }
         ImageRef::Url(u) => img(u.clone()).size(z(size)).rounded(z(ICON_RADIUS * size / ICON)).into_any_element(),
         _ => div()
-            // live client acronym_JJ-hgR (inline size): "T-B", "Tdg", "LRèr" 16px,
-            // a 6-character acronym 12px (5 characters assumed 14px).
             .text_size(z(if size < 30. {
                 7.
             } else {
@@ -576,7 +494,6 @@ fn guild_inner(g: &Guild, size: f32) -> AnyElement {
     }
 }
 
-/// Dragged guild + its preview.
 #[derive(Clone)]
 pub struct DraggedGuild {
     pub id: Id,
@@ -605,8 +522,6 @@ impl Render for DraggedGuild {
 }
 
 impl PhoenixApp {
-    /// Local reorder stub: move `dragged` just before `target` (and into the
-    /// target's folder). Not yet persisted to Discord's settings.
     pub fn move_guild(&mut self, dragged: Id, target: Id, cx: &mut Context<Self>) {
         if dragged == target {
             return;
@@ -645,7 +560,6 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, _nested: bool
         .justify_center()
         .overflow_hidden()
         .rounded(z(ICON_RADIUS))
-        // Icon guilds have no tile behind transparent pixels (vanilla rail).
         .when(!has_icon, |d| d.bg(c(if active { Palette::BLURPLE } else { Palette::GUILD_ICON_BG })))
         .text_color(if active && !has_icon { gpui::white() } else { c(Palette::TEXT_NORMAL) })
         .child(guild_inner(g, ICON));
@@ -687,9 +601,6 @@ fn folder(
     let has_selected = guilds.iter().any(|g| Some(g.id) == app.selected_guild);
     let e = entity.clone();
     let head_inner: AnyElement = if open {
-        // Open folder (`folderIconWrapper_RTMSuZ` padding `--custom-folder-padding`):
-        // folder glyph in `--custom-folder-color` on a `--guildbar-avatar-size`
-        // tile, `--radius-md`, `--background-mod-subtle` on hover.
         div()
             .size(z(FOLDER))
             .p(z(FOLDER_PAD))
@@ -701,8 +612,6 @@ fn folder(
                     .items_center()
                     .justify_center()
                     .when(hover, |d| d.bg(c(Palette::GUILD_ICON_BG)))
-                    // folderIcon_RTMSuZ: 18px glyph (24-unit folder drawn at 0.75):
-                    // 15x15 ink box, tab 7.5 wide, body from 2.25 down, radius 2.25.
                     .child(
                         div()
                             .w(z(15.))
@@ -714,10 +623,6 @@ fn folder(
             )
             .into_any_element()
     } else {
-        // Closed folder (`folderPreviewWrapper_RTMSuZ`): `--guildbar-folder-size`
-        // tile, `--radius-lg`, folder colour mixed 60 % transparent, 4px padding;
-        // 2x2 preview (`folderPreviewGuildIcon_RTMSuZ`) with 2px gap and
-        // 13px outer / 4px inner corner radii.
         let inner = FOLDER - PREVIEW_PAD * 2.;
         let cell = (inner - PREVIEW_GAP) / 2.;
         let mut grid = div().size(z(inner)).flex().flex_wrap().gap(z(PREVIEW_GAP));
@@ -747,7 +652,6 @@ fn folder(
             .child(grid)
             .into_any_element()
     };
-    // `folderHeader_RTMSuZ` / `folderButton_RTMSuZ`: 48x48.
     let header = row(("folder", id), key, entity)
         .h(z(FOLDER))
         .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_folder(id, cx)))
@@ -766,7 +670,6 @@ fn folder(
     if !open {
         return header.into_any_element();
     }
-    // `folderGuildsList_RTMSuZ>:first-child` margin-top: `--space-xs - --custom-folder-padding`.
     let mut body =
         div().w_full().mt(z(gap() - FOLDER_PAD)).flex().flex_col().gap(z(gap())).pb(z(FOLDER_PAD));
     for g in guilds {
@@ -776,9 +679,6 @@ fn folder(
         .w_full()
         .relative()
         .child(
-            // `folderGroupBackground_RTMSuZ`: `--guildbar-folder-size` wide,
-            // `--radius-lg`, 1px `--border-muted`, folder colour mixed 85 %
-            // transparent, inset `--custom-guild-list-padding - --custom-folder-padding`.
             div()
                 .absolute()
                 .top_0()
@@ -794,7 +694,6 @@ fn folder(
         .into_any_element()
 }
 
-/// 32x1 `--app-frame-border` line between Home and the guilds.
 fn separator() -> AnyElement {
     div()
         .w_full()
@@ -806,8 +705,6 @@ fn separator() -> AnyElement {
         .into_any_element()
 }
 
-/// Add a Server / Discover tiles (`circleIconButton_g8YUxD`): `--background-mod-subtle`
-/// tile, `--text-default` glyph, `--background-brand` background on hover.
 fn action(entity: &Entity<PhoenixApp>, id: &'static str, i: Icon, label: SharedString) -> gpui::Stateful<gpui::Div> {
     let key = if id == "add-server" { ADD_KEY } else { DISCOVER_KEY };
     let hover = hovered(key);
@@ -818,7 +715,6 @@ fn action(entity: &Entity<PhoenixApp>, id: &'static str, i: Icon, label: SharedS
                 .size(z(ICON))
                 .rounded(z(ICON_RADIUS))
                 .relative()
-                // circleIconButton_g8YUxD transition: background-color .15s ease-out
                 .child(crate::ui::states::fade_to(
                     crate::ui::states::key(("rail-tile", key)),
                     hover,
@@ -830,7 +726,7 @@ fn action(entity: &Entity<PhoenixApp>, id: &'static str, i: Icon, label: SharedS
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(icon(i, 20. * crate::theme::zoom(), c(Palette::TEXT_NORMAL))), // circleIcon_g8YUxD 20px, --text-default
+                .child(icon(i, 20. * crate::theme::zoom(), c(Palette::TEXT_NORMAL))),
         )
         .when(hover, |d| d.child(right_tooltip(label, ICON)))
 }

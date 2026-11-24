@@ -1,11 +1,5 @@
-//! Pulls icon SVG markup out of the official client's JS bundles.
-//! Icons are registered as `Name:function(t){... jsx("svg",{viewBox:"..",
-//! children:[jsx("path",{d:"..",fillRule:"evenodd",fill:<expr>})]})}`; we
-//! rebuild a plain monochrome SVG from the literal attributes only.
-
 const SHAPES: &[&str] = &["path", "circle", "rect", "ellipse", "polygon"];
 
-/// Index of the `}` closing the `{` at `open`, skipping string literals.
 fn close_brace(s: &[u8], open: usize) -> Option<usize> {
     let mut depth = 0i32;
     let mut i = open;
@@ -47,7 +41,6 @@ fn kebab(k: &str) -> String {
     o
 }
 
-/// Literal `key:"value"` / `key:number` pairs at the top level of an object body.
 fn literal_attrs(obj: &str) -> Vec<(String, String)> {
     let b = obj.as_bytes();
     let mut out = Vec::new();
@@ -110,9 +103,6 @@ fn attr_ok(k: &str) -> bool {
     )
 }
 
-/// Builds an SVG for component `name` from the bundle text, if registered there.
-/// A `#secondary` suffix keeps only the shapes filled with `secondaryColor`
-/// (the second tone of two-tone icons such as the Discovery guild badge).
 pub fn icon_svg(js: &str, name: &str) -> Option<String> {
     let (name, second) = match name.strip_suffix("#secondary") {
         Some(n) => (n, true),
@@ -123,7 +113,6 @@ pub fn icon_svg(js: &str, name: &str) -> Option<String> {
     while let Some(pos) = js[from..].find(&needle) {
         let at = from + pos;
         from = at + needle.len();
-        // Must be a whole identifier.
         if at > 0 && js.as_bytes()[at - 1].is_ascii_alphanumeric() {
             continue;
         }
@@ -138,7 +127,7 @@ pub fn icon_svg(js: &str, name: &str) -> Option<String> {
 
 fn build(body: &str, second: bool) -> Option<String> {
     if body.contains("\"mask\"") || body.contains("\"defs\"") {
-        return None; // two-tone / masked icons: not representable as a mask tint
+        return None;
     }
     let svg_at = body.find("(\"svg\",{")?;
     let svg_open = svg_at + "(\"svg\",".len();
@@ -149,8 +138,6 @@ fn build(body: &str, second: bool) -> Option<String> {
         .find(|(k, _)| k == "viewBox")
         .map(|(_, v)| v)
         .unwrap_or_else(|| "0 0 24 24".into());
-    // `secondaryColor:l="transparent"` in the props destructuring: shapes filled
-    // with it are an invisible backdrop (e.g. CircleQuestionIcon's circle).
     let secondary = body.find("secondaryColor:").map(|i| {
         let v = &body[i + "secondaryColor:".len()..];
         v[..v.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')).unwrap_or(v.len())].to_owned()
@@ -193,7 +180,6 @@ fn build(body: &str, second: bool) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // Synthetic sample in the bundle's shape (not real icon data).
     const JS: &str = r#"n.d(e,{},{DemoIcon:function(t){let{size:e="md"}=t;return(0,i.jsxs)("svg",{xmlns:"http://www.w3.org/2000/svg",width:_,fill:"none",viewBox:"0 0 24 24",children:[(0,i.jsx)("path",{fill:"string"==typeof o?o:o.css,fillRule:"evenodd",d:"M1 1h2v2z"}),(0,i.jsx)("circle",{cx:12,cy:12,r:"3",fill:o})]})},OtherIcon:function(){}})"#;
     #[test]
     fn extracts_literal_shapes() {

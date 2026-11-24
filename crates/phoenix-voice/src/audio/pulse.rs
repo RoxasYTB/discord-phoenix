@@ -1,23 +1,11 @@
-//! PulseAudio / PipeWire device names, like the official client's lists
-//! ("Logitech G PRO X Gaming Headset Stéréo analogique"), through `pactl`.
-//!
-//! cpal goes through ALSA, whose device names (`pipewire`, `sysdefault:…`)
-//! mean nothing to the user. When a Pulse device is picked, the stream is
-//! opened on the default ALSA device and then moved to that sink/source
-//! with `pactl move-sink-input` / `move-source-output` (only our own
-//! streams, matched by process id).
-
 use std::process::Command;
 use std::time::Duration;
 
 use serde_json::Value;
 
-/// One sink (output) or source (input).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulseDevice {
-    /// Node name, e.g. `alsa_output.usb-…analog-stereo`.
     pub name: String,
-    /// Human description shown in the lists.
     pub description: String,
 }
 
@@ -29,7 +17,6 @@ fn pactl_json(args: &[&str]) -> Option<Value> {
     serde_json::from_slice(&out.stdout).ok()
 }
 
-/// Parsed `pactl -f json list sinks|sources` output (monitors skipped).
 pub fn parse_devices(v: &Value) -> Vec<PulseDevice> {
     v.as_array()
         .map(|a| {
@@ -47,7 +34,6 @@ pub fn parse_devices(v: &Value) -> Vec<PulseDevice> {
         .unwrap_or_default()
 }
 
-/// Sources (`input`) or sinks, default first. `None` without a Pulse server.
 pub fn devices(input: bool) -> Option<Vec<PulseDevice>> {
     let mut v = parse_devices(&pactl_json(&["list", if input { "sources" } else { "sinks" }])?);
     let def = Command::new("pactl")
@@ -64,13 +50,10 @@ pub fn devices(input: bool) -> Option<Vec<PulseDevice>> {
     Some(v)
 }
 
-/// Pulse node name for a description shown in the lists.
 pub fn node_for(input: bool, description: &str) -> Option<String> {
     devices(input)?.into_iter().find(|d| d.description == description).map(|d| d.name)
 }
 
-/// Move this process's playback (or capture) streams to `node`, once the
-/// freshly opened ALSA stream has shown up in the Pulse server.
 pub fn route_own_streams(input: bool, node: String) {
     std::thread::spawn(move || {
         let pid = std::process::id().to_string();

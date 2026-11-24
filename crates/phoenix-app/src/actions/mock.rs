@@ -1,12 +1,8 @@
-//! Offline replies for the mock backend: nothing leaves the machine, so the
-//! menus can be exercised without touching a real account.
-
 use phoenix_api::rest::reporting::ReportMenu;
 
 use super::{ActionReply, ActionRequest};
 use crate::{backend::BackendError, model::User};
 
-/// A small two-step report menu shaped like the server's.
 pub fn report_menu(name: &str) -> ReportMenu {
     let json = format!(
         r#"{{"name":"{name}","variant":"mock","version":"1","language":"en","root_node_id":1,"success_node_id":9,"fail_node_id":10,

@@ -1,25 +1,7 @@
-//! Search term highlighting, as the client does it (local bundle
-//! `current-client/js/698890330839a6c6.js`, module 697530, with the stemmer of
-//! module 83956):
-//!
-//! - the query is split on `/\W+/` (so any non-ASCII letter splits a word:
-//!   "règlement" gives "r" and "glement"), a trailing possessive `'s` is dropped,
-//!   words are lowercased, English stop words removed, and each word is stemmed
-//!   with the Snowball English (Porter2) stemmer;
-//! - a text is split on `/(\W+)/` and every token whose stem is one of the query
-//!   stems is highlighted, whole (`supportPartialMatches`, used for forum titles
-//!   of 3 to 12 characters, matches a stem that merely contains a query stem);
-//! - in a message the highlighter runs over every markdown node with a string
-//!   content except code blocks (text, bold, italic, links, inline code…).
-//!
-//! The highlighted token is `span.highlight`: background hsl(--yellow-300 / .3).
-
 use std::{collections::HashSet, ops::Range};
 
-/// `.highlight` background: hsl(var(--yellow-300-hsl) / .3) = rgba(253, 184, 51, .3).
 pub const HIGHLIGHT_RGBA: u32 = 0xfdb8334d;
 
-/// The client's stop word list (English only).
 const STOP: [&str; 33] = [
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such",
     "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with",
@@ -31,12 +13,10 @@ pub struct Highlighter {
     partial: bool,
 }
 
-/// JS `\w`: ASCII letters, digits and `_`.
 fn is_word(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
-/// `s.replace(/('|’|＇)(s|S)$/, "")`.
 fn strip_possessive(s: &str) -> &str {
     for q in ['\'', '\u{2019}', '\u{FF07}'] {
         for e in ['s', 'S'] {
@@ -48,8 +28,6 @@ fn strip_possessive(s: &str) -> &str {
     s
 }
 
-/// Lowercased, possessive-free and stemmed token, or `None` when it can't match
-/// (empty or a stop word).
 fn normalize(token: &str) -> Option<String> {
     let lower = strip_possessive(token).to_lowercase();
     if lower.is_empty() || STOP.contains(&lower.as_str()) {
@@ -58,8 +36,6 @@ fn normalize(token: &str) -> Option<String> {
     Some(stem(&lower))
 }
 
-/// Split like JS `text.split(/(\W+)/g)`: alternating word and separator runs,
-/// as byte ranges.
 fn tokens(text: &str) -> Vec<Range<usize>> {
     let mut out = Vec::new();
     let mut start = 0;
@@ -79,7 +55,6 @@ fn tokens(text: &str) -> Vec<Range<usize>> {
 }
 
 impl Highlighter {
-    /// `th(query, partial)`: partial matching only for queries of 3 to 12 characters.
     pub fn new(query: &str, partial: bool) -> Self {
         let words = query.split(|c: char| !is_word(c)).filter_map(normalize).collect();
         let n = query.chars().count();
@@ -90,7 +65,6 @@ impl Highlighter {
         self.words.is_empty()
     }
 
-    /// Byte ranges of `text` to highlight (whole tokens, merged when adjacent).
     pub fn ranges(&self, text: &str) -> Vec<Range<usize>> {
         if self.words.is_empty() {
             return Vec::new();
@@ -107,13 +81,10 @@ impl Highlighter {
     }
 }
 
-// ------------------------------------------------------------ Porter2 stemmer
-
 fn vowel(c: u8) -> bool {
     matches!(c, b'a' | b'e' | b'i' | b'o' | b'u' | b'y')
 }
 
-/// Start of the region after the first non-vowel following a vowel, from `from`.
 fn region(w: &[u8], from: usize) -> usize {
     let mut i = from;
     while i < w.len() && !vowel(w[i]) {
@@ -125,8 +96,6 @@ fn region(w: &[u8], from: usize) -> usize {
     (i + 1).min(w.len())
 }
 
-/// Short syllable ending at `end` (exclusive): non-vowel, vowel, non-vowel other
-/// than w, x, Y; or vowel + non-vowel at the start of the word.
 fn short_syllable_at(w: &[u8], end: usize) -> bool {
     if end == 2 {
         return vowel(w[0]) && !vowel(w[1]);
@@ -147,8 +116,6 @@ fn has_vowel(w: &[u8]) -> bool {
     w.iter().copied().any(vowel)
 }
 
-/// Snowball English (Porter2) stem of a lowercase ASCII word; other input is
-/// returned unchanged past the exceptions.
 pub fn stem(word: &str) -> String {
     if word.len() < 3 || !word.is_ascii() {
         return word.to_owned();
@@ -169,8 +136,7 @@ pub fn stem(word: &str) -> String {
         _ => {}
     }
     let mut w: Vec<u8> = word.trim_start_matches('\'').as_bytes().to_vec();
-    // Initial y, and y after a vowel, are consonants (Y).
-    let mut after_vowel = true; // the first letter counts as "after a vowel"
+    let mut after_vowel = true;
     for ch in w.iter_mut() {
         if *ch == b'y' && after_vowel {
             *ch = b'Y';
@@ -188,14 +154,12 @@ pub fn stem(word: &str) -> String {
     };
     let r2 = region(&w, r1);
 
-    // Step 0: 's' 's '
     for s in ["'s'", "'s", "'"] {
         if ends(&w, s) {
             w.truncate(w.len() - s.len());
             break;
         }
     }
-    // Step 1a
     if ends(&w, "sses") {
         replace_end(&mut w, 4, "ss");
     } else if ends(&w, "ied") || ends(&w, "ies") {
@@ -207,7 +171,6 @@ pub fn stem(word: &str) -> String {
     if matches!(&w[..], b"inning" | b"outing" | b"canning" | b"herring" | b"earring" | b"proceed" | b"exceed" | b"succeed") {
         return String::from_utf8(w).unwrap_or_default();
     }
-    // Step 1b
     let eed = ["eedly", "eed"].into_iter().find(|s| ends(&w, s));
     let ed = ["ingly", "edly", "ing", "ed"].into_iter().find(|s| ends(&w, s));
     match (eed, ed) {
@@ -231,12 +194,10 @@ pub fn stem(word: &str) -> String {
         }
         _ => {}
     }
-    // Step 1c
     let n = w.len();
     if n > 2 && matches!(w[n - 1], b'y' | b'Y') && !vowel(w[n - 2]) {
         w[n - 1] = b'i';
     }
-    // Step 2 (suffix in R1)
     const STEP2: [(&str, &str); 24] = [
         ("ization", "ize"),
         ("ational", "ate"),
@@ -276,7 +237,6 @@ pub fn stem(word: &str) -> String {
             }
         }
     }
-    // Step 3 (suffix in R1; ative in R2)
     const STEP3: [(&str, &str); 9] = [
         ("ational", "ate"),
         ("tional", "tion"),
@@ -294,7 +254,6 @@ pub fn stem(word: &str) -> String {
             replace_end(&mut w, s.len(), with);
         }
     }
-    // Step 4 (suffix in R2)
     const STEP4: [&str; 18] =
         ["ement", "ance", "ence", "able", "ible", "ment", "ant", "ent", "ism", "ate", "iti", "ous", "ive", "ize", "ion", "al", "er", "ic"];
     if let Some(&s) = STEP4.iter().filter(|s| ends(&w, s)).max_by_key(|s| s.len()) {
@@ -303,7 +262,6 @@ pub fn stem(word: &str) -> String {
             w.truncate(at);
         }
     }
-    // Step 5
     let n = w.len();
     if n >= 1 && w[n - 1] == b'e' {
         let at = n - 1;
@@ -327,7 +285,6 @@ mod tests {
 
     #[test]
     fn porter2_vocabulary() {
-        // Pairs from the Snowball English sample vocabulary.
         for (w, s) in [
             ("consign", "consign"),
             ("consigned", "consign"),
@@ -389,7 +346,6 @@ mod tests {
 
     #[test]
     fn query_words_split_on_non_ascii() {
-        // The live client highlighted "r" and "glement" in "règlement" for that query.
         let h = Highlighter::new("règlement", false);
         let t = "〢📜・règlement";
         let got: Vec<&str> = h.ranges(t).into_iter().map(|r| &t[r]).collect();
@@ -410,7 +366,6 @@ mod tests {
     fn partial_only_for_short_queries() {
         assert_eq!(Highlighter::new("pho", true).ranges("phoenix").len(), 1);
         assert_eq!(Highlighter::new("pho", false).ranges("phoenix").len(), 0);
-        // 14 characters: exact stems only.
         assert_eq!(Highlighter::new("phoenixes rock", true).ranges("phoenix").len(), 1);
         assert_eq!(Highlighter::new("phoenixes rock", true).ranges("phoenixlike").len(), 0);
     }

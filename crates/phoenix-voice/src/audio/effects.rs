@@ -1,11 +1,3 @@
-//! UI sound effects (notification / voice cue sounds), played on the system
-//! default output like the client's `WebAudioSound` on its `DEFAULT` output
-//! channel (`setSinkId("default")`).
-//!
-//! One thread owns the cpal stream (not `Send`): it opens the default device
-//! when a sound starts, mixes every active sound in the callback and closes
-//! the device once nothing played for [`IDLE_CLOSE`].
-
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 use std::time::Duration;
@@ -17,7 +9,6 @@ use super::dsp::{Resampler, convert_channels};
 
 const IDLE_CLOSE: Duration = Duration::from_secs(3);
 
-/// Decoded interleaved PCM.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pcm {
     pub rate: u32,
@@ -31,7 +22,6 @@ impl Pcm {
         Duration::from_secs_f64(frames as f64 / f64::from(self.rate.max(1)))
     }
 
-    /// The same sound at `rate` Hz with `channels` channels.
     pub fn adapt(&self, rate: u32, channels: u16) -> Vec<f32> {
         let mixed = convert_channels(&self.samples, usize::from(self.channels.max(1)), usize::from(channels.max(1)));
         let mut r = Resampler::new(self.rate, rate, usize::from(channels.max(1)));
@@ -41,11 +31,9 @@ impl Pcm {
     }
 }
 
-/// A playing sound: [`Handle::stop`] ends it (and a looped one).
 #[derive(Clone, Debug)]
 pub struct Handle {
     stopped: Arc<AtomicBool>,
-    /// Volume 0..=1 as f32 bits, live (the client's `sound.volume` setter).
     volume: Arc<AtomicU32>,
 }
 
@@ -63,7 +51,6 @@ impl Handle {
 
 struct Voice {
     pcm: Arc<Pcm>,
-    /// `pcm` adapted to the open device, built on first use.
     buf: Option<(u32, u16, Arc<Vec<f32>>)>,
     pos: usize,
     looped: bool,
@@ -72,7 +59,6 @@ struct Voice {
 
 struct Shared {
     voices: Vec<Voice>,
-    /// Device format of the open stream.
     format: Option<(u32, u16)>,
 }
 
@@ -99,13 +85,11 @@ fn worker() -> &'static mpsc::Sender<Cmd> {
 }
 
 impl Handle {
-    /// A handle for a sound started later with [`start`] (e.g. once decoded).
     pub fn new(volume: f32) -> Self {
         Handle { stopped: Arc::new(AtomicBool::new(false)), volume: Arc::new(AtomicU32::new(volume.clamp(0., 1.).to_bits())) }
     }
 }
 
-/// Start `pcm` under `handle` (skipped if it was already stopped).
 pub fn start(handle: &Handle, pcm: Arc<Pcm>, looped: bool) {
     if handle.is_stopped() {
         return;
@@ -114,14 +98,12 @@ pub fn start(handle: &Handle, pcm: Arc<Pcm>, looped: bool) {
     let _ = worker().send(Cmd::Wake);
 }
 
-/// Start `pcm` at `volume` (0..=1); `looped` repeats until stopped.
 pub fn play(pcm: Arc<Pcm>, volume: f32, looped: bool) -> Handle {
     let handle = Handle::new(volume);
     start(&handle, pcm, looped);
     handle
 }
 
-/// Mix the active voices into `out` (interleaved, device format).
 fn mix(out: &mut [f32]) {
     out.fill(0.);
     let mut s = lock();
@@ -130,7 +112,6 @@ fn mix(out: &mut [f32]) {
         if v.handle.is_stopped() {
             continue;
         }
-        // Not adapted to this device yet ([`prepare`] runs on the worker).
         let Some((_, _, buf)) = v.buf.clone().filter(|(r, c, _)| (*r, *c) == (rate, ch)) else { continue };
         if buf.is_empty() {
             v.handle.stop();
@@ -161,7 +142,6 @@ fn mix(out: &mut [f32]) {
     }
 }
 
-/// Resample the queued sounds for the open device, off the audio callback.
 fn prepare() {
     let (fmt, todo): (Option<(u32, u16)>, Vec<Arc<Pcm>>) = {
         let s = lock();
@@ -223,7 +203,6 @@ fn run(rx: mpsc::Receiver<Cmd>) {
         if busy && stream.is_none() {
             stream = open();
             if stream.is_none() {
-                // No device: drop what was queued.
                 lock().voices.clear();
             }
         }
@@ -235,7 +214,6 @@ fn run(rx: mpsc::Receiver<Cmd>) {
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
         if stream.is_some() && lock().voices.is_empty() {
-            // Idle: keep the device a little in case another cue follows.
             if let Ok(Cmd::Wake) = rx.recv_timeout(IDLE_CLOSE) {
                 continue;
             }

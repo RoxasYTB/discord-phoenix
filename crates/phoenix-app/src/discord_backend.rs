@@ -1,11 +1,3 @@
-//! Real [`Backend`] on top of `phoenix-api`.
-//!
-//! Networking runs on a private multi-threaded tokio runtime (its own worker
-//! threads), never on GPUI's executor: every trait method spawns onto that
-//! runtime and hands the UI a `JoinHandle` to await. Gateway dispatches are
-//! applied to a [`Cache`] and translated into [`AppEvent`]s by
-//! [`convert::Adapter`].
-
 pub mod convert;
 mod account;
 mod expressions;
@@ -51,7 +43,6 @@ use convert::{Adapter, Prefs, sf};
 use store::{KeyringStore, Secret, TokenStore};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(45);
-/// Delay before acking a channel that keeps receiving messages while open.
 const TYPING_INTERVAL: Duration = Duration::from_secs(8);
 const ACK_DEBOUNCE: Duration = Duration::from_millis(1500);
 
@@ -59,11 +50,8 @@ fn err(s: impl Into<String>) -> BackendError {
     BackendError(s.into())
 }
 
-/// Waits between network retries of a message send (first one measured on the client).
 const SEND_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(1500), Duration::from_millis(3000)];
 
-/// Human-readable login/API error. Never includes the token (the API error
-/// types don't carry it).
 fn api_err(e: ApiError) -> BackendError {
     match &e {
         ApiError::CaptchaRequired { .. } => {
@@ -86,15 +74,10 @@ struct Session {
     cache: Cache,
     adapter: Arc<Mutex<Adapter>>,
     selected_channel: Mutex<Option<api::Snowflake>>,
-    /// Channels with a debounced ack in flight.
     pending_acks: Mutex<HashSet<u64>>,
-    /// Per guild, the channel whose member list op 37 last asked for.
     subscribed: Mutex<HashMap<u64, u64>>,
-    /// Last typing notification (channel, when): Discord shows it for ~10s.
     last_typing: Mutex<Option<(u64, Instant)>>,
-    /// Notification levels / mutes for desktop notifications.
     notify: Mutex<crate::notifications::NotifyPrefs>,
-    /// READY `notification_settings` USE_NEW_NOTIFICATIONS (inbox unreads setting).
     new_notifications: bool,
 }
 
@@ -105,8 +88,6 @@ struct Inner {
     mfa_ticket: Mutex<Option<Secret>>,
     mfa_opts: Mutex<crate::auth::MfaOptions>,
     remote_auth: Mutex<Option<tokio::task::AbortHandle>>,
-    /// REST client from the stored token, usable before READY (history while
-    /// the disk snapshot is shown).
     pre_rest: Mutex<Option<RestClient>>,
     store: Arc<dyn TokenStore>,
     props: ClientProperties,
@@ -135,7 +116,6 @@ impl std::fmt::Debug for DiscordBackend {
 }
 
 impl DiscordBackend {
-    /// Backend storing the token in the OS keyring.
     pub fn new() -> Self {
         Self::with_store(Arc::new(KeyringStore))
     }
@@ -147,12 +127,9 @@ impl DiscordBackend {
             .enable_all()
             .build()
             .expect("tokio runtime");
-        // Slow scan of the local Discord install for the next start's super
-        // properties (build number, Electron); low priority, off the UI thread.
         let _ = std::thread::Builder::new().name("phoenix-buildinfo".into()).spawn(|| {
             phoenix_api::BuildInfo::refresh_cache();
         });
-        // Parse last session's READY while the window is being built.
         snapshot::preload();
         Self {
             inner: Arc::new(Inner {
@@ -169,7 +146,6 @@ impl DiscordBackend {
         }
     }
 
-    /// HTTP client for GPUI image loading (`cx.set_http_client`).
     pub fn http_client(&self) -> Arc<dyn gpui::http_client::HttpClient> {
         Arc::new(http::CdnHttpClient::new(self.inner.rt.handle().clone(), self.inner.props.user_agent()))
     }
@@ -201,7 +177,6 @@ impl Default for DiscordBackend {
     }
 }
 
-/// Tolerate tokens pasted with quotes or whitespace.
 fn clean_token(t: &str) -> String {
     t.trim().trim_matches('"').trim().to_owned()
 }
@@ -214,7 +189,6 @@ async fn store_op<T: Send + 'static>(
     tokio::task::spawn_blocking(move || f(&*s)).await.map_err(|e| e.to_string())?
 }
 
-/// Connect the gateway with `token`, wait for READY, start the event pump.
 async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<ReadyData, BackendError> {
     if let Some(old) = inner.session.lock().take() {
         old.gateway.shutdown();
@@ -225,24 +199,18 @@ async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<Rea
     let mut cfg = GatewayConfig::new(token.expose());
     cfg.properties = inner.props.clone();
     cfg.raw_dispatch = Some(snapshot::hook());
-    // Stored-session start: RESUME the previous run's gateway session when it
-    // is recent and nothing else owns it (see snapshot.rs).
     let core = if remember { None } else { tokio::task::spawn_blocking(snapshot::take_core).await.ok().flatten() };
     if let Some(c) = &core {
         cfg.resume = c.resume.clone();
         crate::perf::mark("gateway_resume_attempt");
     }
     let (gateway, mut rx) = Gateway::spawn(cfg);
-    // The token check (clear 401 for a bad token) runs during the gateway
-    // handshake instead of before it; dispatches queue in `rx` meanwhile.
     if let Err(e) = rest.get_me().await {
         gateway.shutdown();
         return Err(api_err(e));
     }
     crate::perf::span("rest_get_me", t0);
     if let Some(snapshot::Core { cache, ready, adapter, .. }) = core {
-        // Replayed events and RESUMED go through the pump like live ones; an
-        // INVALID_SESSION makes the gateway IDENTIFY and the pump resyncs on READY.
         let data = convert::build_ready(&cache, &ready, &adapter.prefs);
         crate::perf::span("resume_session_built", t0);
         return Ok(start_session(&inner, rest, gateway, cache, &ready, adapter, rx, data));
@@ -285,7 +253,6 @@ async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<Rea
     Ok(start_session(&inner, rest, gateway, cache, &ready, adapter, rx, data))
 }
 
-/// Install the session and start the event pump.
 #[allow(clippy::too_many_arguments)]
 fn start_session(
     inner: &Arc<Inner>,
@@ -323,8 +290,6 @@ fn start_session(
         inner.emit(e);
     }
     nav::snapshot(&session.cache, ready).into_iter().for_each(|e| inner.emit(e));
-    // Voice users already in the cache are put on the channels of `data`;
-    // their mute / deafen flags go through the UI-thread store.
     for g in &ready.guilds {
         convert::voice_flag_events(&session.cache, Some(g.id)).into_iter().for_each(|e| inner.emit(e));
     }
@@ -337,10 +302,8 @@ fn tracing_warn(msg: &str) {
     eprintln!("discord-phoenix: {msg}");
 }
 
-/// Gateway events -> cache -> AppEvents, until the session ends.
 async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<GatewayEvent>) {
     while let Some(ev) = rx.recv().await {
-        // Logged out / replaced: stop delivering.
         if !inner.session.lock().as_ref().is_some_and(|cur| Arc::ptr_eq(cur, &s)) {
             return;
         }
@@ -357,12 +320,10 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
         pins::on_gateway(&ev);
         if let GatewayEvent::Ready(r) = &ev {
             pins::init(&s.cache);
-            // Reconnected without RESUME: the cache was rebuilt, rebuild the UI too.
             crate::commands::set_session_id(&r.session_id);
             let prefs = Prefs::from_ready(r);
             let data = convert::build_ready(&s.cache, r, &prefs);
             *s.adapter.lock() = Adapter::new(r.user.id, prefs);
-            // New session: nothing is subscribed any more.
             s.subscribed.lock().clear();
             inner.emit(AppEvent::Resync(crate::commands::Resync(data)));
             nav::snapshot(&s.cache, r).into_iter().for_each(|e| inner.emit(e));
@@ -372,8 +333,6 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             inner.emit(AppEvent::Parity(e));
         }
         nav::on_gateway(&s.cache, &ev).into_iter().for_each(|e| inner.emit(e));
-        // Mark the open channel read BEFORE mapping, so the guild pill / mention
-        // badge computed for this message doesn't flash on while it's being read.
         if let GatewayEvent::MessageCreate(m) = &ev
             && *s.selected_channel.lock() == Some(m.channel_id)
             && m.author.id != s.adapter.lock().me
@@ -396,7 +355,6 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
     }
 }
 
-/// Read-only mode (examples/real_shots): never ack / mark anything read on the server.
 pub static NO_ACKS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn acks_disabled() -> bool {
@@ -564,7 +522,6 @@ impl Backend for DiscordBackend {
 
     fn inbox_unreads(&self, guild_order: &[Id]) -> Vec<crate::ui::inbox_unreads::Entry> {
         let Ok(s) = self.inner.session() else { return Vec::new() };
-        // Clone first: never hold the notify and adapter locks together.
         let notify = s.notify.lock().clone();
         let adapter = s.adapter.lock();
         let now = chrono::Utc::now().timestamp_millis().max(0) as u64;
@@ -599,7 +556,6 @@ impl Backend for DiscordBackend {
 
     fn guild_permissions(&self, guild: Id) -> u64 {
         let Ok(s) = self.inner.session() else { return 0 };
-        // Base permissions are the same in every channel for the bits we use.
         s.cache.guild_channels(sf(guild)).first().map(|c| s.cache.permissions_in(c.id).bits()).unwrap_or(0)
     }
 
@@ -689,14 +645,11 @@ impl Backend for DiscordBackend {
             let ch = sf(channel);
             *s.selected_channel.lock() = Some(ch);
             let c = s.cache.channel(ch);
-            // Op 37 with a channel range populates the member list + presences.
-            // Sent again on every switch: the client asks for the open channel only.
             if let Some(g) = c.as_ref().and_then(|c| c.guild_id)
                 && s.subscribed.lock().insert(g.0, ch.0) != Some(ch.0)
             {
                 let _ = s.gateway.subscribe_guild(g, GuildSubscription::focused(Some(ch)));
             }
-            // The list shown follows the channel's list id, whatever SYNC lands last.
             let shown = s.adapter.lock().show_list(&s.cache, ch);
             shown.into_iter().for_each(|e| inner.emit(e));
             if let Some(last) = c.and_then(|c| c.last_message_id) {
@@ -789,7 +742,6 @@ impl Backend for DiscordBackend {
     ) -> BoxFuture<Message> {
         self.with_session(move |_, s| async move {
             let mut msg = CreateMessage::text(content);
-            // enforce_nonce makes the network retries below idempotent.
             msg.nonce = Some(nonce.to_string());
             msg.enforce_nonce = Some(true);
             if let Some((r, mention)) = reply {
@@ -805,8 +757,6 @@ impl Backend for DiscordBackend {
                     spoiler: f.spoiler,
                 })
                 .collect();
-            // Files first (same flow as the client: upload URLs, chunked PUT to the
-            // cloud), once; only the message POST below is retried.
             let attachments = if files.is_empty() {
                 Vec::new()
             } else {
@@ -817,8 +767,6 @@ impl Backend for DiscordBackend {
                 phoenix_api::rest::uploads::message_attachments(&files, &slots).as_array().cloned().unwrap_or_default()
             };
             msg.attachments = attachments;
-            // The client retries a send the network dropped (measured: second POST
-            // ~1.5 s after the first) and only marks it failed after that.
             let mut retries = SEND_RETRY_DELAYS.iter();
             let m = loop {
                 let res = s.rest.send_message(sf(channel), msg.clone()).await;
@@ -943,8 +891,6 @@ impl Backend for DiscordBackend {
         pins::has_unread(channel.0)
     }
 
-    /// The client acks when its pins popout mounts with unread pins (`ackPins`):
-    /// `POST /channels/{id}/pins/ack`. Never in read-only mode.
     fn ack_pins(&self, channel: Id) -> BoxFuture<()> {
         let send = pins::mark_seen(channel.0) && !acks_disabled();
         self.with_session(move |_, s| async move {
@@ -1006,8 +952,6 @@ impl Backend for DiscordBackend {
         self.shop_storefront_impl()
     }
     fn app_directory_collections(&self, locale: String) -> BoxFuture<serde_json::Value> {
-        // Query of the client's launcher (surface 2, active state 1, platform 1);
-        // platform must be numeric, other surfaces/platforms come back empty.
         self.with_session(move |_, s| async move {
             let path = format!("/application-directory-static/collections?surface=2&active_state=1&platform=1&locale={locale}");
             s.rest.request_json(reqwest::Method::GET, &path, None).await.map_err(api_err)

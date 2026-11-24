@@ -1,10 +1,5 @@
-//! Discord-flavoured markdown subset, parsed once per message (never per
-//! frame). Output is a list of blocks whose inline text carries
-//! non-overlapping styled spans, ready to be turned into GPUI text runs.
-
 use std::ops::Range;
 
-/// Bit flags for inline styles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Style(pub u16);
 
@@ -18,10 +13,7 @@ impl Style {
     pub const SPOILER: Style = Style(1 << 5);
     pub const LINK: Style = Style(1 << 6);
     pub const MENTION: Style = Style(1 << 7);
-    /// `<t:unix:fmt>` timestamp pill.
     pub const TIMESTAMP: Style = Style(1 << 8);
-    /// Resolved Discord Soundboard mention (`<sound:guild:sound>`). Emoji assets
-    /// and exact styling are not yet verified against a safe live reference.
     pub const SOUNDBOARD: Style = Style(1 << 9);
 
     pub fn has(self, other: Style) -> bool {
@@ -51,7 +43,6 @@ pub struct Span {
     pub style: Style,
     pub link: Option<String>,
     pub mention: Option<Mention>,
-    /// Spoiler group index (for click-to-reveal), if inside a spoiler.
     pub spoiler: Option<usize>,
 }
 
@@ -66,16 +57,12 @@ pub enum Block {
     Paragraph(Inline),
     Quote(Inline),
     Code { lang: Option<String>, code: String },
-    /// `#`, `##`, `###` headers (level 1..=3).
     Heading(u8, Inline),
-    /// `-# small text`.
     Subtext(Inline),
-    /// `- item` / `* item` / `1. item`; `depth` from leading indentation.
     ListItem { ordered: Option<u32>, depth: u8, inline: Inline },
 }
 
 impl Block {
-    /// The inline text of any non-code block.
     pub fn inline(&self) -> Option<&Inline> {
         match self {
             Block::Paragraph(i) | Block::Quote(i) | Block::Heading(_, i) | Block::Subtext(i) => Some(i),
@@ -85,7 +72,6 @@ impl Block {
     }
 }
 
-/// Line-level constructs: headings, subtext and list items.
 fn line_block(line: &str, r: &dyn MentionResolver, sp: &mut usize) -> Option<Block> {
     for (pfx, lvl) in [("### ", 3u8), ("## ", 2), ("# ", 1)] {
         if let Some(t) = line.strip_prefix(pfx)
@@ -118,7 +104,6 @@ fn line_block(line: &str, r: &dyn MentionResolver, sp: &mut usize) -> Option<Blo
     None
 }
 
-/// Format a `<t:unix:style>` timestamp like the official client.
 pub fn format_timestamp(ts: i64, style: char) -> Option<String> {
     use chrono::{Local, TimeZone};
     let dt = Local.timestamp_opt(ts, 0).single()?;
@@ -137,18 +122,15 @@ fn relative(delta: i64) -> String {
     crate::i18n::relative_long(delta)
 }
 
-/// Resolves `<@id>` / `<#id>` to display text (without the sigil).
 pub trait MentionResolver {
     fn user(&self, id: u64) -> Option<String>;
     fn channel(&self, id: u64) -> Option<String>;
     fn role(&self, _id: u64) -> Option<String> {
         None
     }
-    /// Role color 0xRRGGBB for role mentions (inline color + 10% alpha background).
     fn role_color(&self, _id: u64) -> Option<u32> {
         None
     }
-    /// True when the current user has this role (a mention of it highlights the message).
     fn has_role(&self, _id: u64) -> bool {
         false
     }
@@ -190,7 +172,6 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
     };
 
     while !rest.is_empty() {
-        // Fenced code block.
         if let Some(after) = rest.strip_prefix("```")
             && let Some(end) = after.find("```")
         {
@@ -219,7 +200,6 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
             Some(i) => (&rest[..i], &rest[i + 1..]),
             None => (rest, ""),
         };
-        // A code fence may start mid-line; only handle line-level constructs here.
         if line.contains("```") && rest.find("```").is_some_and(|i| i < line.len()) {
             let i = rest.find("```").unwrap_or(0);
             if i > 0 {
@@ -251,7 +231,6 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
 mod link;
 
 thread_local! {
-    /// `allowEmojiLinks`: emoji allowed in masked link labels (rich embeds, webhook messages).
     static EMOJI_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -259,8 +238,6 @@ fn emoji_links() -> bool {
     EMOJI_LINKS.with(std::cell::Cell::get)
 }
 
-/// [`parse`] with emoji allowed in masked link labels, as the client parses rich embed
-/// text (`parseRichEmbedText` … `allowEmojiLinks: true`) and webhook messages.
 pub fn parse_emoji_links(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
     let prev = EMOJI_LINKS.with(|e| e.replace(true));
     let out = parse(src, r);
@@ -268,7 +245,6 @@ pub fn parse_emoji_links(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
     out
 }
 
-/// Parse inline markdown into flattened spans.
 pub fn parse_inline(src: &str, r: &dyn MentionResolver, spoiler_counter: &mut usize) -> Inline {
     let mut out = Inline::default();
     let mut ctx = Ctx {
@@ -343,7 +319,6 @@ impl Ctx<'_> {
             let rest = &src[i..];
             let c = bytes[i];
 
-            // Escapes.
             if c == b'\\' && i + 1 < bytes.len() && !bytes[i + 1].is_ascii_alphanumeric() {
                 self.push(&src[plain_start..i], style, spoiler);
                 let ch_len = src[i + 1..].chars().next().map_or(1, char::len_utf8);
@@ -353,7 +328,6 @@ impl Ctx<'_> {
                 continue;
             }
 
-            // Inline code: no nested formatting.
             if c == b'`' {
                 let ticks = if rest.starts_with("``") { 2 } else { 1 };
                 let close = &rest[..ticks];
@@ -369,7 +343,6 @@ impl Ctx<'_> {
                 }
             }
 
-            // Mentions <@123> <@!123> <#123> <@&123>.
             if c == b'<'
                 && let Some(end) = rest.find('>')
             {
@@ -383,8 +356,6 @@ impl Ctx<'_> {
                     self.push(&src[plain_start..i], style, spoiler);
                     let mut label = String::new();
                     if let Some(emoji) = sound.emoji_name.filter(|e| !e.is_empty()) {
-                        // Soundboard emoji metadata may not be in the same shape
-                        // as chat custom emoji; retain a safe textual fallback.
                         label.push_str(&emoji);
                         label.push(' ');
                     }
@@ -450,8 +421,6 @@ impl Ctx<'_> {
                 }
             }
 
-            // Masked link `[label](url)`: the client's link rule (see `link`). A match that
-            // fails validation is kept as literal text, unformatted.
             if c == b'['
                 && let Some(m) = link::match_at(rest)
             {
@@ -459,8 +428,6 @@ impl Ctx<'_> {
                 let target = link::validate_url(&rest[m.url.clone()]).filter(|_| link::label_ok(label, emoji_links()));
                 if let Some(url) = target {
                     self.push(&src[plain_start..i], style, spoiler);
-                    // The label keeps its own inline markdown (`[**Title** by **Artist**](url)`
-                    // in music bot embeds showed the asterisks).
                     let first = self.out.spans.len();
                     self.run(label, style | Style::LINK, spoiler);
                     for s in &mut self.out.spans[first..] {
@@ -474,7 +441,6 @@ impl Ctx<'_> {
                 continue;
             }
 
-            // Bare links.
             if (c == b'h') && (rest.starts_with("https://") || rest.starts_with("http://")) {
                 let at_boundary = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
                 if at_boundary {
@@ -493,13 +459,11 @@ impl Ctx<'_> {
                 }
             }
 
-            // Paired delimiters.
             let mut matched = false;
             for &(d, s) in DELIMS {
                 if !rest.starts_with(d) {
                     continue;
                 }
-                // `_` italics must sit on word boundaries (snake_case stays plain).
                 if d == "_" && i > 0 && bytes[i - 1].is_ascii_alphanumeric() {
                     continue;
                 }
@@ -540,7 +504,6 @@ impl Ctx<'_> {
     }
 }
 
-/// Find a closing delimiter, skipping over inline code spans.
 fn find_close(body: &str, d: &str) -> Option<usize> {
     let b = body.as_bytes();
     let mut i = 0;
@@ -552,13 +515,10 @@ fn find_close(body: &str, d: &str) -> Option<usize> {
             continue;
         }
         if body[i..].starts_with(d) {
-            // For single `*`, don't treat the first half of `**` as a close.
             if d == "*" && body[i..].starts_with("**") {
                 i += 2;
                 continue;
             }
-            // `***x***` / `___x___`: a double delimiter closes on the last two characters of
-            // the run, so the inner single one closes first (bold + italic, underline + italic).
             if d.len() == 2 && (d == "**" || d == "__") {
                 let ch = d.as_bytes()[0];
                 let run = b[i..].iter().take_while(|&&c| c == ch).count();
@@ -571,7 +531,6 @@ fn find_close(body: &str, d: &str) -> Option<usize> {
     None
 }
 
-/// Ranges in `inline.text` that are clickable (links + spoilers), in order.
 pub fn clickable(inline: &Inline) -> impl Iterator<Item = &Span> {
     inline
         .spans
@@ -786,9 +745,6 @@ mod tests {
         assert_eq!(relative(3600), "in an hour");
     }
 
-    /// yohan's 16:40 message in #phoenix (24/11), the channel mention swapped for the test
-    /// resolver's: the client links only `[phxsurligne](…)`; the leading `[Test Phoenix]`
-    /// stays literal (its `]` is followed by a `[` before any other `]`).
     #[test]
     fn masked_link_takes_the_nearest_bracket() {
         let src = "[Test Phoenix] envoyé depuis le client officiel — surlignage de recherche : phxsurligne **phxsurligne** *phxsurligne* __phxsurligne__ ~~phxsurligne~~ [phxsurligne](https://example.com/a) `phxsurligne` ||phxsurligne|| <#7> fire 🔥 https://example.com/phxsurligne";
@@ -804,29 +760,23 @@ mod tests {
         assert_eq!(links, vec![("phxsurligne", "https://example.com/a"), ("https://example.com/phxsurligne", "https://example.com/phxsurligne")]);
         let code: Vec<_> = styled(&i).into_iter().filter(|(_, st)| st.has(Style::CODE)).map(|(t, _)| t).collect();
         assert_eq!(code, vec!["phxsurligne"]);
-        // The code span right after the link is not swallowed into it.
         let at = i.text.find("phxsurligne phxsurligne phxsurligne #").unwrap();
         assert!(i.spans.iter().any(|s| s.range.start == at && s.link.is_some()));
     }
 
     #[test]
     fn rejected_masked_links_stay_literal() {
-        // Mentions, URLs and (outside embeds) emoji are not allowed in the label; a bad
-        // protocol is refused: the whole match is shown as typed, unformatted.
         for src in ["[a <@42>](https://x.y)", "[www.evil.com](https://x.y)", "[go **now**](javascript:alert(1))", "[🔥](https://x.y)", "[ ](https://x.y)"] {
             let i = inline(src);
             assert_eq!(i.text, src);
             assert_eq!(styled(&i), vec![(src, Style::PLAIN)], "{src}");
         }
-        // Emoji labels are fine in rich embeds.
         let b = parse_emoji_links("[🔥 hot](https://x.y)", &R);
         let i = b[0].inline().unwrap();
         assert!(i.spans.iter().all(|s| s.link.as_deref() == Some("https://x.y")));
-        // Nested brackets and a paren group in the URL.
         let i = inline("[a [b] c](https://x.y/w_(b)) d");
         assert_eq!(i.text, "a [b] c d");
         assert_eq!(i.spans[0].link.as_deref(), Some("https://x.y/w_(b)"));
-        // A label over two lines is still a link.
         let i = inline("[a\nb](https://x.y)");
         assert!(i.spans.iter().all(|s| s.link.is_some()));
     }

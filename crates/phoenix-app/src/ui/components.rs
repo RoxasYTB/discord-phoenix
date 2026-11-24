@@ -1,17 +1,3 @@
-//! Bot message components: buttons, select menus, Components V2 layout
-//! (containers, sections, text, thumbnails, media galleries, separators),
-//! polls, and the interaction modal a bot can open.
-//!
-//! Layout and values from the 2026 client: the component renderer of
-//! `current-client/js/e940c8e032f54075.js` (lE / lS) and its CSS modules
-//! (243794 container_uEFz2z / section_5m-AKz / container_rc97-L, 193433
-//! button_9OQtot, 763343 content_ZMR-xe, 544242 divider_pdtj88, TZN6d8
-//! thumbnails), checked against live search-result dumps of real bot messages
-//! (2026-11-24). Polls: 8px-radius card, 16px padding, 600px max.
-//!
-//! The chat row calls [`render`] (components) and [`render_poll`] (poll)
-//! under the embeds; [`overlays`] draws the modal / dialogs / toast.
-
 use std::collections::HashSet;
 
 use gpui::{
@@ -49,18 +35,14 @@ impl MentionResolver for Names<'_> {
     }
 }
 
-/// Markdown text (text displays, section texts) without inline images.
 pub fn markdown(app: &PhoenixApp, text: &str) -> AnyElement {
     markdown_sized(app, text, false, None, None)
 }
 
-/// [`markdown`] of a message shown outside the chat (inbox, pins): custom and
-/// unicode emoji render as images instead of their raw `<:name:id>` token.
 pub fn markdown_in(app: &PhoenixApp, text: &str, entity: &Entity<PhoenixApp>, msg: Id) -> AnyElement {
     markdown_sized(app, text, false, Some((entity, msg)), None)
 }
 
-/// [`markdown_in`] with the searched words highlighted (search results).
 pub fn markdown_highlighted(
     app: &PhoenixApp,
     text: &str,
@@ -71,8 +53,6 @@ pub fn markdown_highlighted(
     markdown_sized(app, text, false, Some((entity, msg)), Some(hl))
 }
 
-/// [`markdown`]; `reduced` is root_ sizeReduced_ (text inside a container):
-/// .875rem, line-height calc(--chat-markup-line-height * .875), small .75rem.
 fn markdown_sized(
     app: &PhoenixApp,
     text: &str,
@@ -85,7 +65,6 @@ fn markdown_sized(
     if let Some(hl) = hl {
         richtext::apply_highlights(&parsed, &mut blocks, hl);
     }
-    // --chat-markup-line-height 1.375
     let mut col = div()
         .flex()
         .flex_col()
@@ -113,8 +92,6 @@ fn markdown_sized(
                 .child(div().w(z(4.)).rounded(z(4.)).bg(c(Palette::INTERACTIVE_MUTED)))
                 .child(StyledText::new(t.text).with_runs(t.runs))
                 .into_any_element(),
-            // markup_ h1/h2/h3 margin 16px 0 8px; markdownContainer_ h*:first-child margin-top 0,
-            // h*:not(:has(+*)) margin-bottom 0 (vanilla-guild-chat-busy honeypot: h3 mb 8px).
             RBlock::Heading(l, t) => div()
                 .when(bi > 0, |d| d.mt(z(16.)))
                 .when(bi + 1 < n, |d| d.mb(z(8.)))
@@ -126,7 +103,6 @@ fn markdown_sized(
                 .line_height(gpui::relative(1.375))
                 .child(StyledText::new(t.text).with_runs(t.runs))
                 .into_any_element(),
-            // markup_ small: .875rem / 1.20313rem, --text-subtle; sizeReduced_ small .75rem.
             RBlock::Subtext(t) => div()
                 .text_size(fz(if reduced { 12. } else { 14. }))
                 .line_height(fz(if reduced { 16.5 } else { 19.25 }))
@@ -157,7 +133,6 @@ fn emoji_el(e: &Emoji, size: f32) -> AnyElement {
     crate::media::emoji::emoji_element(&e.token(), size)
 }
 
-/// Everything a click handler needs to send an interaction.
 #[derive(Clone)]
 struct Ctx {
     entity: Entity<PhoenixApp>,
@@ -166,10 +141,7 @@ struct Ctx {
     message: Id,
     app: Id,
     flags: u64,
-    /// Inside a container: text is root_ sizeReduced_.
     reduced: bool,
-    /// False in search results (`shouldDisableInteractiveComponents`): same look,
-    /// nothing is sent.
     interactive: bool,
 }
 
@@ -177,13 +149,10 @@ fn t(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// Components of a bot message, or `None` when it has none.
 pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cx: &App) -> Option<AnyElement> {
     render_with(app, entity, msg, true, cx)
 }
 
-/// [`render`] for a search result: the client draws the components with their
-/// interactions disabled (no click sends anything).
 pub fn render_static(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cx: &App) -> Option<AnyElement> {
     render_with(app, entity, msg, false, cx)
 }
@@ -204,15 +173,11 @@ fn render_with(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, int
         reduced: false,
         interactive,
     };
-    // container_uEFz2z: column, row-gap 6px; .isComponentsV2_: row-gap --space-8,
-    // max-width min(600px, 100%), width fit-content (243794 css). The accessories
-    // container_YUQhib above it has padding-top 2px (dump: header ends -132, container -130).
     let mut col = div().flex().flex_col().min_w_0().gap(z(if v2 { 8. } else { 6. }));
     for (i, comp) in parts.components.iter().enumerate() {
         col = col.child(comp_el(app, &k, comp, i, cx));
     }
     Some(if v2 {
-        // fit-content: a flex row lets the column shrink to its widest child.
         div().mt(z(2.)).flex().child(col.max_w(z(600.))).into_any_element()
     } else {
         col.mt(z(2.)).into_any_element()
@@ -221,7 +186,6 @@ fn render_with(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, int
 
 fn comp_el(app: &PhoenixApp, k: &Ctx, comp: &Comp, ix: usize, cx: &App) -> AnyElement {
     match comp {
-        // container_J1RNcC (column) > children_J1RNcC: flex, wrap, gap --space-8.
         Comp::ActionRow(r) => {
             let mut row = div().flex().flex_wrap().gap(z(8.));
             for (j, it) in r.components.iter().enumerate() {
@@ -236,22 +200,16 @@ fn comp_el(app: &PhoenixApp, k: &Ctx, comp: &Comp, ix: usize, cx: &App) -> AnyEl
         Comp::Thumbnail(th) => thumbnail(th, k.message, ix, cx),
         Comp::MediaGallery(g) => gallery(&g.items, k.message, ix, cx),
         Comp::File(f) => file(f, k.message, ix, cx),
-        // nF: divider_pdtj88 border-bottom 1px --background-mod-strong when `divider`,
-        // spacingLarge_pdtj88 margin --space-8 0 when spacing is large; the gap of
-        // the parent spaces a small one.
         Comp::Separator(s) => div()
             .when(s.spacing == api::SeparatorSpacing::Large, |d| d.my(z(8.)))
             .when(s.divider, |d| d.h(z(1.)).bg(t(idx::BACKGROUND_MOD_STRONG)))
             .into_any_element(),
         Comp::Container(ct) => container(app, k, ct, ix, cx),
-        // Modal-only components never show in a message.
         Comp::TextInput(_) => div().into_any_element(),
         Comp::Unknown(_) => unknown(),
     }
 }
 
-/// n1: container_xAKhZr (1px --status-warning, --radius-md 12, padding 16) with
-/// body-sm/medium --text-subtle "Please update Discord to view this message".
 fn unknown() -> AnyElement {
     div()
         .p(z(16.))
@@ -266,10 +224,6 @@ fn unknown() -> AnyElement {
         .into_any_element()
 }
 
-/// lA: section_5m-AKz (column, gap 4) > children_ (row, gap 12, space-between) >
-/// textChildren_ (flex 1, column, row-gap 4; centred vertically next to a button) +
-/// accessory_ (align-items flex-start, min-width 0; restrictWidth_ max-width
-/// calc(50% - 12px), seen on every live section: drawn as 50%).
 fn section(app: &PhoenixApp, k: &Ctx, s: &api::Section, ix: usize, cx: &App) -> AnyElement {
     let button = matches!(s.accessory.as_deref(), Some(Comp::Button(_)));
     let mut texts = div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).when(button, |d| d.justify_center());
@@ -288,10 +242,6 @@ fn section(app: &PhoenixApp, k: &Ctx, s: &api::Section, ix: usize, cx: &App) -> 
         .into_any_element()
 }
 
-/// lC: container_rc97-L: --background-surface-high, 1px --border-subtle,
-/// --radius-sm 8, padding --space-16, column gap --space-8, overflow hidden;
-/// .withAccentColor_:before 4px bar of the accent colour at the start; text inside
-/// is sizeReduced_. A spoiler container is blurred under the spoiler cover until clicked.
 fn container(app: &PhoenixApp, k: &Ctx, ct: &api::Container, ix: usize, cx: &App) -> AnyElement {
     if ct.components.is_empty() {
         return div().into_any_element();
@@ -322,21 +272,10 @@ fn container(app: &PhoenixApp, k: &Ctx, ct: &api::Container, ix: usize, cx: &App
     card.into_any_element()
 }
 
-/// Spoiler cover over a component (obscured attachment wrapper): the hidden
-/// spoiler background (`spoilerContainer_0_7_Rr` radius 8) and the SPOILER pill
-/// of `spoilerWarning_` (live dump: padding 8 12, radius 20, 15px semibold,
-/// --opacity-black-60), revealed on click.
 fn spoiler_overlay(key: SharedString) -> AnyElement {
     spoiler_cover(key, false).inset_0().into_any_element()
 }
 
-/// The cover itself, positioned by the caller. Live 2026-11-24 (sandbox container
-/// spoiler): spoilerContainer_ hidden: --__spoiler-background-color--hidden (hover
-/// --hidden--hover), radius --radius-sm, box-shadow .5px .5px 1px 1px
-/// --__spoiler-container-box-shadow-color; spoilerWarning_ 15px/15px semibold, uppercase,
-/// padding 8 12 (87×31), radius 20, warning colours (hover variants). With `veil`, the
-/// covered card (container_rc97-L.isHidden_: filter blur(--custom-embed-spoiler-blur-radius
-/// 44px), --background-surface-high) shows through as a blurred dark layer, like in the client.
 fn spoiler_cover(key: SharedString, veil: bool) -> gpui::Stateful<gpui::Div> {
     let group: SharedString = format!("{key}-cover").into();
     div()
@@ -375,7 +314,6 @@ fn spoiler_cover(key: SharedString, veil: bool) -> gpui::Stateful<gpui::Div> {
         .on_click(move |_, _, cx| crate::media::reveal(key.clone(), cx))
 }
 
-/// Abramowitz–Stegun 7.1.26 (|error| < 1.5e-7).
 fn erf(x: f32) -> f32 {
     let s = x.signum();
     let x = x.abs();
@@ -384,15 +322,11 @@ fn erf(x: f32) -> f32 {
     s * y
 }
 
-/// Share of a box spanning [0, len] that lands on `x` once blurred with a gaussian of
-/// standard deviation `sigma` (CSS `blur(r)` uses σ = r).
 pub fn blur_coverage(x: f32, len: f32, sigma: f32) -> f32 {
     let k = 1. / (sigma * std::f32::consts::SQRT_2);
     0.5 * (erf((len - x) * k) + erf(x * k))
 }
 
-/// `color` box blurred by `sigma`, clipped to its own bounds (the spoiler container is
-/// overflow hidden): a grid of quads whose alpha is the separable gaussian coverage.
 fn blurred_veil(color: gpui::Hsla, sigma: f32, radius: f32) -> impl IntoElement {
     gpui::canvas(
         |_, _, _| {},
@@ -410,7 +344,6 @@ fn blurred_veil(color: gpui::Hsla, sigma: f32, radius: f32) -> impl IntoElement 
                 let ay = blur_coverage(cy, h, sigma);
                 for (i, ax) in cols.iter().enumerate() {
                     let cx = (i as f32 + 0.5) * cw;
-                    // Outside the rounded corners: left to the cover's own clip-free corner.
                     let (dx, dy) = ((radius - cx).max(cx - (w - radius)).max(0.), (radius - cy).max(cy - (h - radius)).max(0.));
                     if dx * dx + dy * dy > radius * radius {
                         continue;
@@ -429,9 +362,6 @@ fn blurred_veil(color: gpui::Hsla, sigma: f32, radius: f32) -> impl IntoElement 
     .size_full()
 }
 
-/// Colours of a component button (e940c8e: PRIMARY and PREMIUM → Button BRAND,
-/// SUCCESS → GREEN, DESTRUCTIVE → RED, SECONDARY and LINK → PRIMARY), from the
-/// `lookFilled_9OQtot.color*_` rules: (background, hover, active, border, text).
 fn button_tokens(style: api::ButtonStyle) -> [usize; 5] {
     use api::ButtonStyle as S;
     match style {
@@ -466,14 +396,10 @@ fn button_tokens(style: api::ButtonStyle) -> [usize; 5] {
     }
 }
 
-/// What a click on a component button does.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ButtonAction {
-    /// LINK: open `url` (the client asks first for links it doesn't trust).
     Open(String),
-    /// PREMIUM: the SKU's store page (not available in Phoenix: no store).
     Store,
-    /// An interaction (`type: 3`) carrying `custom_id`.
     Interact(String),
     None,
 }
@@ -486,14 +412,6 @@ pub fn button_action(b: &api::Button) -> ButtonAction {
     }
 }
 
-/// V: Button (size SMALL) > content_ZMR-xe. button_9OQtot: 1px border, radius 8,
-/// 14px medium; sizeSmall_: height 32, line-height 18, min-width 60, padding
-/// calc(4 - 1) calc(12 - 1); disabled opacity .5 + not-allowed. Content: emoji
-/// (textEmoji_ margin-inline-end 4 when there is a label; measured 19.25px),
-/// label (ellipsis), WindowLaunchIcon xs (launchIcon_ margin-inline-start 8) on
-/// links, ShopIcon xs white (shopIcon_ margin-inline-end 4) on premium buttons,
-/// whose label is the SKU name + price, or "Product Unavailable" (disabled) when
-/// the SKU can't be shown.
 fn button(app: &PhoenixApp, k: &Ctx, b: &api::Button, ix: usize) -> AnyElement {
     let [bg, hover, active, border, fg] = button_tokens(b.style);
     let action = button_action(b);
@@ -544,7 +462,6 @@ fn button(app: &PhoenixApp, k: &Ctx, b: &api::Button, ix: usize) -> AnyElement {
         .font_weight(FontWeight::MEDIUM)
         .text_color(t(fg))
         .child(content)
-        // loading_ZMR-xe: the dots spinner centred over the hidden content.
         .when(pending, |d| d.child(div().absolute().inset_0().flex().items_center().justify_center().child("•••")));
     if disabled || pending {
         return el.opacity(0.5).cursor_not_allowed().into_any_element();
@@ -569,7 +486,6 @@ fn icon_svg(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
     gpui::svg().path(crate::icons::path(name)).flex_none().size(z(size)).text_color(color)
 }
 
-/// Options shown by user / role / channel selects (from local state).
 fn auto_options(app: &PhoenixApp, kind: api::SelectKind, guild: Option<Id>) -> Vec<api::SelectOption> {
     use api::SelectKind as K;
     let opt = |label: String, value: u64| api::SelectOption { label, value: value.to_string(), ..Default::default() };
@@ -603,9 +519,6 @@ fn auto_options(app: &PhoenixApp, kind: api::SelectKind, guild: Option<Id>) -> V
     out
 }
 
-/// Select menus use the client's shared Select (`select_` field, 40px): the
-/// same look as [`crate::ui::controls::select_field`]; the menu lists at most 5
-/// rows before scrolling (maxVisibleItems 5).
 fn select(app: &PhoenixApp, k: &Ctx, s: &api::SelectMenu) -> AnyElement {
     let kind = s.kind;
     let key = (k.message, s.custom_id.clone());
@@ -728,8 +641,6 @@ fn select(app: &PhoenixApp, k: &Ctx, s: &api::SelectMenu) -> AnyElement {
     col.into_any_element()
 }
 
-/// A component media item as a chat attachment, so it is drawn (and opened in the
-/// viewer, or covered when it is a spoiler) like an uploaded one.
 fn as_attachment(m: &api::UnfurledMedia, name: Option<&str>, size: u64, spoiler: bool) -> crate::model::Attachment {
     use crate::model::AttachmentKind as K;
     let ct = m.content_type.as_deref().unwrap_or("");
@@ -762,8 +673,6 @@ fn as_attachment(m: &api::UnfurledMedia, name: Option<&str>, size: u64, spoiler:
     }
 }
 
-/// nQ: imgContainer_TZN6d8: 85px square (--__thumbnail-size), --radius-sm 8,
-/// img_ object-fit cover; opens the viewer. Non-image media: the 85px placeholder.
 fn thumbnail(th: &api::Thumbnail, msg: Id, ix: usize, cx: &App) -> AnyElement {
     let a = as_attachment(&th.media, None, 0, th.spoiler);
     let key: SharedString = a.url.clone();
@@ -801,8 +710,6 @@ fn thumbnail(th: &api::Thumbnail, msg: Id, ix: usize, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// nw: the attachments' media mosaic with isInAppComponentsV2 (max-width 600px);
-/// one item is a oneByOneGrid_ (fit-content, max-height 350px).
 fn gallery(items: &[api::GalleryItem], msg: Id, ix: usize, cx: &App) -> AnyElement {
     let atts: Vec<crate::model::Attachment> = items.iter().map(|i| as_attachment(&i.media, None, 0, i.spoiler)).collect();
     match atts.as_slice() {
@@ -817,8 +724,6 @@ fn gallery(items: &[api::GalleryItem], msg: Id, ix: usize, cx: &App) -> AnyEleme
             if a.kind == crate::model::AttachmentKind::Video {
                 return crate::ui::chat::attach::video_card(a, size, cx);
             }
-            // oneByOneGrid_ is inline-block at the media's own size (never upscaled):
-            // the line box under it adds 2.4px (live dump: 256px image, 258.4px container).
             div()
                 .id(("gallery", (msg.0 << 8) ^ ix as u64))
                 .pb(z(2.4))
@@ -833,10 +738,6 @@ fn gallery(items: &[api::GalleryItem], msg: Id, ix: usize, cx: &App) -> AnyEleme
         many => {
             let refs: Vec<&crate::model::Attachment> = many.iter().collect();
             if refs.len() >= 2 {
-                // In the fit-content v2 column a 100% width is indefinite and the rows'
-                // aspect ratio + 350px cap would shrink the mosaic (525 instead of 566 for
-                // three squares, live sandbox dump): ask for the full 600px instead, the
-                // column then clamps it to the space it has.
                 div().w(z(600.)).max_w_full().child(crate::ui::chat::mosaic::grid(&refs, 600., cx)).into_any_element()
             } else {
                 crate::ui::chat::attachment(refs[0], cx)
@@ -845,8 +746,6 @@ fn gallery(items: &[api::GalleryItem], msg: Id, ix: usize, cx: &App) -> AnyEleme
     }
 }
 
-/// ng: fileDisplayContainer_aMNXbv (max-width 100%, min-content) around the
-/// attachments' file card (name, size, download), behind a spoiler cover if set.
 fn file(f: &api::FileComponent, msg: Id, ix: usize, cx: &App) -> AnyElement {
     let a = as_attachment(&f.file, Some(f.file_name().as_str()), f.size.unwrap_or(0), false);
     let key: SharedString = format!("component-file-{}-{ix}", msg.0).into();
@@ -857,9 +756,6 @@ fn file(f: &api::FileComponent, msg: Id, ix: usize, cx: &App) -> AnyElement {
     div().max_w_full().child(card).into_any_element()
 }
 
-/// e5 (poll CHECKBOXES selection icon, size 20): checkbox_SZxRc8 2px --text-default border,
-/// radius 3; checkboxSelected_ --brand-500 fill without border and a white
-/// CheckmarkLargeIcon at .85 × size.
 fn checkbox(on: bool) -> AnyElement {
     div()
         .size(px(20.))
@@ -874,8 +770,6 @@ fn checkbox(on: bool) -> AnyElement {
         .into_any_element()
 }
 
-/// CircleCheckIcon at `size`: the `secondaryColor` disc (r 10) under the `color` ring with
-/// the check cut out (r 11), both on a 24 viewBox.
 pub fn circle_check(size: f32, color: gpui::Hsla, secondary: gpui::Hsla) -> gpui::Div {
     div()
         .relative()
@@ -885,9 +779,6 @@ pub fn circle_check(size: f32, color: gpui::Hsla, secondary: gpui::Hsla) -> gpui
         .child(gpui::svg().absolute().top_0().left_0().path(crate::icons::path("circle-check")).size(px(size)).text_color(color))
 }
 
-/// Vx (answerSelectionIcon_ on the answer we voted for, LIST mode), live JS 2026-11-24:
-/// expired victor → --control-connected-background-default on white, expired loser →
-/// --icon-strong on --background-mod-muted, otherwise --brand-500 on white.
 pub fn voted_check(size: f32, victor: bool, expired: bool) -> gpui::Div {
     let (fg, bg) = match (expired, victor) {
         (true, true) => (c(tok(idx::CONTROL_CONNECTED_BACKGROUND_DEFAULT)), gpui::white()),
@@ -897,9 +788,6 @@ pub fn voted_check(size: f32, victor: bool, expired: bool) -> gpui::Div {
     circle_check(size, fg, bg)
 }
 
-/// k$ (poll RADIO_BUTTONS selection icon, size 24): the 20px ring (r 10, 2px) in
-/// radioBackground_ --text-default and, selected, the r 5 dot in radioForeground_
-/// --control-brand-foreground.
 fn radio(on: bool) -> AnyElement {
     div()
         .size(px(24.))
@@ -925,16 +813,11 @@ fn hash(s: &str) -> u64 {
     s.bytes().fold(1469598103934665603u64, |h, b| (h ^ b as u64).wrapping_mul(1099511628211))
 }
 
-// ------------------------------------------------------------------ polls
-
-/// "0 vote" / "2 votes" (wqBc7A, CLDR one: French 0 and 1).
 fn votes_text(n: u32) -> String {
     let one = if crate::i18n::locale() == "fr" { n < 2 } else { n == 1 };
     if one { crate::t!("poll.vote_one", n = n).to_string() } else { crate::t!("poll.votes", n = n).to_string() }
 }
 
-/// Poll countdown (fr live 2026-11-24 "59 min restantes"): dex68a "{n} j restant(s)",
-/// BWqf0c "{n} heure(s) restante(s)" (CLDR one), 3SLXAz "{n} min restantes" / "< 1 min restante".
 fn time_left(secs: i64) -> String {
     let one = |n: i64| if crate::i18n::locale() == "fr" { n < 2 } else { n == 1 };
     match secs {
@@ -946,45 +829,30 @@ fn time_left(secs: i64) -> String {
     }
 }
 
-/// Percent of `count` over `total`, rounded like the client (0 when empty).
 pub fn percent(count: u32, total: u32) -> u32 {
     if total == 0 { 0 } else { ((count as f64 * 100.) / total as f64).round() as u32 }
 }
 
-/// Answer style of the client's poll view model (951727 `Ay`, live JS 2026-11-24), resolved
-/// to the custom properties of normalStyles_ / votedStyles_ / victorStyles_ JVBjO_:
-/// (--custom-poll-style-border, --custom-poll-style-vote-percentage).
 fn answer_style(expired: bool, leader: bool, self_vote: bool) -> (Option<usize>, usize) {
     match (expired, leader, self_vote) {
-        // victorSelected / victorNotSelected
         (true, true, _) => (Some(idx::STATUS_POSITIVE), idx::POLLS_VICTOR_FILL),
-        // voted
         (false, _, true) => (Some(idx::CONTROL_BRAND_FOREGROUND), idx::POLLS_VOTED_FILL),
-        // loserSelected, notVoted, selected, normalVote: border transparent
         _ => (None, idx::INTERACTIVE_BACKGROUND_ACTIVE),
     }
 }
 
-/// Poll card of a message (306417 / 1b027c… live 2026-11-24). `None` when the message has
-/// no poll. The view model: results (LIST mode, bars, vote counts, Vx icon) once we voted,
-/// the poll expired or "Show results" was clicked; otherwise radio buttons / checkboxes.
-/// Prompt only while it can be answered; footer "N votes ∙ <time left | Poll closed>",
-/// then "Show results" (textButton) and Vote / Remove Vote / Go back to vote (sm buttons).
 pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> Option<AnyElement> {
     let poll = store::get(msg.id)?.poll.clone()?;
     let now = chrono::Utc::now().timestamp();
     let expired = poll.ended(now);
     let voted = poll.voted();
     let show_votes = app.parity.poll_show_results.contains(&msg.id);
-    // canShowVoteCounts = hasVoted || isExpired || showResults (also tapShouldOpenVotersModal → LIST)
     let results = voted || expired || show_votes;
     let total = poll.total();
     let choice = app.parity.poll_choice.get(&msg.id).cloned().unwrap_or_default();
     let (ch, id) = (msg.channel, msg.id);
-    // isLeader: count >= max && count != 0 (ties are all victors).
     let top = poll.answers.iter().map(|a| a.count).max().unwrap_or(0);
 
-    // answersContainer_D4-WfD: grid, gap 8, margin 8px 0 16px.
     let mut answers = div().mt(px(8.)).mb(px(16.)).flex().flex_col().gap(px(8.));
     for a in &poll.answers {
         let pct = percent(a.count, total);
@@ -996,14 +864,9 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
         let aid = a.id;
         let multi = poll.multi;
         let gid: SharedString = format!("poll-answer-{}-{}", id.0, a.id).into();
-        // answerInner_: outline 1px var(--custom-poll-style-border); currentlyVoting_.selected_
-        // → --control-brand-foreground; .answer_:hover .currentlyVoting_ → --border-strong.
-        // An outline doesn't take room: drawn as an overlay just outside the 50px row.
         let outline = if !results && ticked { Some(idx::CONTROL_BRAND_FOREGROUND) } else { style_border };
         let mut inner = div()
             .relative()
-            // answerInner_D4-WfD: min-height 50, padding 8 16, gap 8, --radius-sm,
-            // --background-mod-muted, overflow hidden, --text-default.
             .min_h(px(50.))
             .px(px(16.))
             .py(px(8.))
@@ -1015,14 +878,11 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
             .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
             .text_color(c(tok(idx::TEXT_DEFAULT)));
         if results {
-            // votePercentageBar_: absolute, var(--custom-poll-style-vote-percentage), z-index -1.
             inner = inner.child(div().absolute().top_0().left_0().h_full().w(gpui::relative(pct as f32 / 100.)).bg(c(tok(fill))));
         }
         inner = inner
-            // emoji_D4-WfD: 24px, margin-inline-end 2.
             .when_some(a.emoji.as_ref(), |d, em| d.child(div().mr(px(2.)).flex_none().child(emoji_el(em, 24.))))
             .child(
-                // label_: margin-inline-end auto, body-sm/semibold (14 / 18, 600)
                 div()
                     .relative()
                     .flex_1()
@@ -1033,8 +893,6 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
                     .child(SharedString::from(a.text.clone())),
             )
             .when(results, |d| {
-                // votesData_: row, gap 8, nowrap — the count is a secondary textButton
-                // (--text-strong) body-xs/semibold, then "X%" body-md/semibold (inherited colour).
                 d.child(
                     div()
                         .relative()
@@ -1053,7 +911,6 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
                         .child(div().text_size(px(16.)).line_height(px(20.)).font_weight(FontWeight::SEMIBOLD).child(format!("{pct}%"))),
                 )
             })
-            // answerSelectionIcon_ (F): Vx in LIST mode on our own vote, radio / checkbox while voting.
             .when(results && self_vote, |d| d.child(voted_check(24., leader && expired, expired)))
             .when(!results, |d| d.child(if poll.multi { checkbox(ticked) } else { radio(ticked) }));
         let mut row = div().id(gpui::ElementId::Name(gid.clone())).group(gid.clone()).relative().child(inner).child(
@@ -1076,8 +933,6 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
         answers = answers.child(row);
     }
 
-    // secondaryAction (P, showVoterDetails): "N votes" textButton secondary body-sm/medium,
-    // then the expiration label body-sm/normal --text-muted after a "∙" (margin 0 .5rem).
     let muted = c(tok(idx::TEXT_MUTED));
     let label = if expired { crate::t!("poll.closed").to_string() } else { poll.expiry.map(|e| time_left(e - now)).unwrap_or_default() };
     let details = div()
@@ -1088,7 +943,6 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
         .line_height(px(18.))
         .child(div().font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(votes_text(total)))
         .when(!label.is_empty(), |d| d.child(div().mx(px(8.)).text_color(muted).child("\u{2219}")).child(div().text_color(muted).child(label)));
-    // tertiaryAction: "Show results" while it can be answered and nothing is shown yet.
     let tertiary = (!expired && !voted && !show_votes).then(|| {
         let e = entity.clone();
         div()
@@ -1102,8 +956,6 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
             .child(crate::t!("poll.show_results"))
             .on_click(move |_, _, cx: &mut App| e.update(cx, |a, cx| a.poll_show_results(ch, id, true, cx)))
     });
-    // primaryAction: none once expired; Remove Vote (secondary) after voting; Go back to vote
-    // (secondary) while showing results; else Vote (primary), enabled with a selection.
     use crate::ui::controls::{BtnKind, button_sm};
     let e = entity.clone();
     let primary: Option<AnyElement> = if expired {
@@ -1138,12 +990,9 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
         )
     };
 
-    // promptLabel: only while the poll can be answered (not expired).
     let prompt = (!expired).then(|| if poll.multi { crate::t!("poll.multi") } else { crate::t!("poll.single") });
     Some(
         div()
-            // pollContainer_ margin 4px 0; container_HOJNvw: --background-surface-high, 1px
-            // --border-subtle, --radius-sm, padding 16, max-width 472, min-width 302, column.
             .my(px(4.))
             .w_full()
             .max_w(px(472.))
@@ -1156,13 +1005,11 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
             .flex()
             .flex_col()
             .child(
-                // header_: grid 1fr 24px (infoIcon), column gap 8 → the question wraps 32px short.
                 div()
                     .pr(px(32.))
                     .flex()
                     .flex_col()
                     .child(
-                        // question_: body-md/medium (16 / 20, 500)
                         div()
                             .text_size(px(16.))
                             .line_height(px(20.))
@@ -1170,12 +1017,10 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
                             .text_color(c(tok(idx::TEXT_STRONG)))
                             .child(SharedString::from(poll.question.clone())),
                     )
-                    // prompt_: margin-top 4, body-sm/normal --text-muted
                     .when_some(prompt, |d, p| d.child(div().mt(px(4.)).text_size(px(14.)).line_height(px(18.)).text_color(muted).child(p))),
             )
             .child(answers)
             .child(
-                // bottomBar_: row wrap, gap 16, centred, min-height --custom-button-button-md-height.
                 div()
                     .min_h(px(crate::theme::generated::global::CUSTOM_BUTTON_BUTTON_MD_HEIGHT))
                     .flex()
@@ -1237,7 +1082,6 @@ impl PhoenixApp {
     fn toggle_select(&mut self, k: &Ctx, key: (Id, String), kind: u8, max: u32, cx: &mut gpui::Context<Self>) {
         let was_open = self.parity.open_select.as_ref() == Some(&key);
         self.parity.open_select = if was_open { None } else { Some(key.clone()) };
-        // Multi-selects send when the menu closes.
         if was_open
             && max > 1
             && let Some(v) = self.parity.select_values.get(&key).cloned()
@@ -1265,7 +1109,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// "Show results" / "Go back to vote" (local only, like the client's poll store).
     fn poll_show_results(&mut self, channel: Id, msg: Id, on: bool, cx: &mut gpui::Context<Self>) {
         if on {
             self.parity.poll_show_results.insert(msg);
@@ -1291,7 +1134,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Vote (or remove our vote with an empty list), optimistically.
     pub fn vote_poll(&mut self, channel: Id, msg: Id, answers: Vec<u32>, cx: &mut gpui::Context<Self>) {
         let before = store::get(msg).and_then(|p| p.poll.clone());
         store::update_poll(msg, |p| apply_own_vote(p, &answers));
@@ -1310,7 +1152,6 @@ impl PhoenixApp {
     }
 }
 
-/// Replace our previous votes with `answers` in the counts.
 pub fn apply_own_vote(p: &mut PollView, answers: &[u32]) {
     let old: Vec<u32> = p.answers.iter().filter(|a| a.me).map(|a| a.id).collect();
     for id in old {
@@ -1320,8 +1161,6 @@ pub fn apply_own_vote(p: &mut PollView, answers: &[u32]) {
         p.apply_vote(*id, true, true);
     }
 }
-
-// ------------------------------------------------------------- modal
 
 pub enum Field {
     Line(Entity<InputState>),
@@ -1519,12 +1358,7 @@ fn toast(app: &PhoenixApp) -> Option<AnyElement> {
     use crate::theme::{generated::idx, tok, z};
     use gpui::{Animation, AnimationExt as _};
     let t = app.parity.toast.clone()?;
-    // Toast container_W6gbBa top_W6gbBa (default position "top"): centred, top --space-8,
-    // padding-inline --space-8; toast-slide-in from translateY(-100%) + fade, 300ms linear
-    // (modules.toast.ANIMATION_DURATION_MS).
     let card = div()
-        // wrapper_O41c2-: --background-surface-highest, --radius-md, --shadow-high, padding
-        // --space-12, max-width --toast-max-width 280; baselayer_ default: 1px --border-normal.
         .max_w(z(280.))
         .p(z(12.))
         .rounded(z(12.))
@@ -1533,7 +1367,6 @@ fn toast(app: &PhoenixApp) -> Option<AnyElement> {
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST)))
         .shadow(crate::ui::inbox::shadow_high())
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        // content_: inline-flex, gap --space-8; text body-md/normal --text-strong, 2 lines max.
         .child(
             div()
                 .flex()
@@ -1564,7 +1397,6 @@ fn toast(app: &PhoenixApp) -> Option<AnyElement> {
     )
 }
 
-/// Modals, dialogs, popouts and toast of the parity screens.
 pub fn overlays(app: &mut PhoenixApp, window: &mut Window, cx: &mut gpui::Context<PhoenixApp>) -> Vec<AnyElement> {
     if let Some(spec) = app.parity.pending_modal.take() {
         app.parity.modal = Some(build_modal(spec, window, cx));
@@ -1584,11 +1416,8 @@ mod tests {
 
     #[test]
     fn spoiler_veil_matches_the_client_blur() {
-        // Live 2026-11-24: a 53px container blurred by 44px over the spoiler grey shows
-        // ~44% of the dark card at its centre (61,61,68 between 89,90,99 and the card).
         let a = super::blur_coverage(26.4, 52.85, 44.);
         assert!((0.42..0.47).contains(&a), "{a}");
-        // A tall box is fully opaque in the middle and half at its edge.
         assert!(super::blur_coverage(500., 1000., 44.) > 0.99);
         assert!((super::blur_coverage(0., 1000., 44.) - 0.5).abs() < 0.01);
     }
@@ -1596,12 +1425,9 @@ mod tests {
     #[test]
     fn poll_answer_styles_follow_the_client() {
         use crate::theme::generated::idx;
-        // Expired leader (with or without our vote): victor border and fill.
         assert_eq!(super::answer_style(true, true, true), (Some(idx::STATUS_POSITIVE), idx::POLLS_VICTOR_FILL));
         assert_eq!(super::answer_style(true, true, false), (Some(idx::STATUS_POSITIVE), idx::POLLS_VICTOR_FILL));
-        // Expired loser we voted for: normal style (no brand outline any more).
         assert_eq!(super::answer_style(true, false, true), (None, idx::INTERACTIVE_BACKGROUND_ACTIVE));
-        // Open poll, our vote: voted style.
         assert_eq!(super::answer_style(false, true, true), (Some(idx::CONTROL_BRAND_FOREGROUND), idx::POLLS_VOTED_FILL));
         assert_eq!(super::answer_style(false, true, false), (None, idx::INTERACTIVE_BACKGROUND_ACTIVE));
     }
@@ -1615,7 +1441,6 @@ mod tests {
         assert_eq!(button_action(&go), ButtonAction::Interact("go".into()));
         assert_eq!(button_action(&Button { style: ButtonStyle::Premium, ..Default::default() }), ButtonAction::Store);
         assert_eq!(button_action(&Button { style: ButtonStyle::Link, ..Default::default() }), ButtonAction::None);
-        // Colours: primary and premium share the brand control, link and secondary the secondary one.
         assert_eq!(button_tokens(ButtonStyle::Premium), button_tokens(ButtonStyle::Primary));
         assert_eq!(button_tokens(ButtonStyle::Link), button_tokens(ButtonStyle::Secondary));
         assert_eq!(button_tokens(ButtonStyle::Danger)[0], idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT);

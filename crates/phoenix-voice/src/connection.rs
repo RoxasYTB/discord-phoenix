@@ -1,12 +1,3 @@
-//! A complete voice connection: voice gateway + UDP media + DAVE.
-//!
-//! [`connect`] spawns one tokio task that runs the whole handshake (Identify,
-//! Ready, IP discovery, Select Protocol, Session Description), drives DAVE
-//! from the gateway, sends Opus frames handed in through [`AudioOut`] and
-//! delivers received (decrypted, DAVE-unwrapped) Opus frames to a callback.
-//! Audio devices live elsewhere ([`crate::audio`]), so this module is fully
-//! testable without sound hardware.
-
 use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 use std::time::{Duration, Instant};
@@ -24,19 +15,14 @@ use crate::rtp::{self, RtpSender};
 use crate::udp::{Incoming, MediaSocket};
 use crate::{Error, Result};
 
-/// Remote user considered silent after this long without audio.
 const SPEAKING_TIMEOUT: Duration = Duration::from_millis(300);
 
-/// What the capture side hands to the connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AudioOut {
-    /// One 20 ms Opus frame.
     Frame(Vec<u8>),
-    /// Transmission stopped (gate closed or muted): send trailing silence.
     End,
 }
 
-/// One received Opus frame, ready for a jitter buffer.
 #[derive(Debug, Clone)]
 pub struct AudioIn {
     pub user_id: u64,
@@ -46,38 +32,28 @@ pub struct AudioIn {
     pub opus: Vec<u8>,
 }
 
-/// Connection events for the UI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VoiceEvent {
-    /// Media path is up.
     Connected { ssrc: u32, mode: String },
-    /// Voice gateway round-trip time.
     Ping(u32),
     Speaking { user_id: u64, speaking: bool },
-    /// DAVE end-to-end encryption state changed.
     Encryption { e2ee: bool, protocol_version: u16 },
-    /// Voice privacy code of the current DAVE epoch (None when not E2EE).
     PrivacyCode(Option<String>),
-    /// Media counters, about once per second.
     Stats(ConnStats),
     Reconnecting,
     Disconnected { reason: String },
 }
 
-/// Media statistics for the connection info popout.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ConnStats {
     pub packets_sent: u64,
     pub packets_received: u64,
-    /// Inbound packets missing from the received sequence numbers.
     pub packets_lost: u64,
-    /// Outbound loss reported by the server (RTCP), percent.
     pub outbound_loss_pct: Option<f32>,
 }
 
 pub struct VoiceConfig {
     pub info: VoiceConnectInfo,
-    /// Voice channel id (DAVE group id).
     pub channel_id: u64,
     pub user_id: u64,
 }
@@ -86,8 +62,6 @@ enum Cmd {
     Close,
 }
 
-/// Handle to a running connection; dropping it does not close the
-/// connection, call [`VoiceConnection::close`].
 #[derive(Clone)]
 pub struct VoiceConnection {
     tx: mpsc::UnboundedSender<Cmd>,
@@ -99,8 +73,6 @@ impl VoiceConnection {
     }
 }
 
-/// Start a voice connection. `audio_in` is called from the network task for
-/// every received audio frame; keep it cheap (push into a queue).
 pub fn connect(
     cfg: VoiceConfig,
     audio_out: mpsc::UnboundedReceiver<AudioOut>,
@@ -286,7 +258,6 @@ async fn run(
                     if (2..1000).contains(&d) {
                         stats.packets_lost += u64::from(d - 1);
                     } else if d == 0 || d >= 32768 {
-                        // Duplicate or reordered: keep the newest sequence.
                         last_seq.insert(h.ssrc, prev);
                     }
                 }

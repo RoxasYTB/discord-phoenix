@@ -1,7 +1,3 @@
-//! Chat-view interaction state (inline edit, reply mention toggle, context
-//! menu, delete confirm, pins popout, thread panel, uploads, "new messages"
-//! bar) and the `PhoenixApp` actions behind it.
-
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use gpui::{
@@ -16,9 +12,7 @@ use crate::{
     model::{Id, Message, Reaction, ThreadRef},
 };
 
-/// Most files of one message (client `getMaxAttachmentsCount`).
 pub const MAX_FILES: usize = phoenix_api::rest::uploads::MAX_ATTACHMENTS;
-/// Quick reactions offered in the context menu / toolbar.
 pub const QUICK_REACTIONS: [&str; 4] = ["👍", "❤️", "😂", "🔥"];
 
 pub struct EditState {
@@ -51,12 +45,9 @@ pub struct ThreadPanel {
 pub struct PendingFile {
     pub name: SharedString,
     pub bytes: Arc<Vec<u8>>,
-    /// Decoded preview for images.
     pub image: Option<Arc<Image>>,
     pub spoiler: bool,
-    /// Blurred preview shown while `spoiler` is on (`spoiler::blurred_image`).
     pub blurred: Option<Arc<Image>>,
-    /// Alt text set in the attachment modal (sent as `attachments[].description`).
     pub description: String,
 }
 
@@ -66,16 +57,12 @@ pub struct Sending {
     pub label: SharedString,
     pub size: u64,
     pub started: Instant,
-    /// Bytes confirmed by the upload so far (written by the backend's progress callback).
     pub sent: Arc<std::sync::atomic::AtomicU64>,
-    /// Set by the card's X: the progress callback then stops the upload.
     pub cancel: Arc<std::sync::atomic::AtomicBool>,
-    /// Nonce of the optimistic message the card is drawn under.
     pub nonce: Option<u64>,
 }
 
 impl Sending {
-    /// 0..=1 share of the bytes uploaded.
     pub fn fraction(&self) -> f32 {
         if self.size == 0 {
             return 1.;
@@ -84,25 +71,18 @@ impl Sending {
     }
 }
 
-/// Who receives the emoji chosen in the emoji picker (owned by another
-/// module). The picker reads [`ChatState::emoji_target`] to know it must
-/// open, then calls [`PhoenixApp::emoji_picked`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmojiTarget {
     Reaction { channel: Id, msg: Id },
     Composer,
 }
 
-/// How long a jumped-to message stays highlighted.
-const FLASH_HOLD: std::time::Duration = std::time::Duration::from_millis(2600); // flash_overlay timeline
-/// Older pages fetched at most when jumping to a message that isn't loaded.
+const FLASH_HOLD: std::time::Duration = std::time::Duration::from_millis(2600);
 const JUMP_MAX_PAGES: u32 = 10;
 
 pub struct ChatState {
-    /// `theme::style_generation()` the cached rich text was built under.
     pub style_gen: u32,
     pub edit: Option<EditState>,
-    /// Reply pings the author (the "@ ON" toggle in the reply bar).
     pub reply_mention: bool,
     pub menu: Option<MenuState>,
     pub confirm_delete: Option<(Id, Id)>,
@@ -110,21 +90,14 @@ pub struct ChatState {
     pub thread: Option<ThreadPanel>,
     pub uploads: Vec<PendingFile>,
     pub sending: Vec<Sending>,
-    /// The composer's "+" menu (Upload a File, Create Thread…) is open.
     pub attach_menu: bool,
-    /// New messages received while scrolled up: (count, first timestamp).
     pub new_messages: Option<(u32, i64)>,
     pub at_bottom: bool,
-    /// First unread message after "Mark Unread" (channel, msg).
     pub unread_marker: Option<(Id, Id)>,
     pub emoji_target: Option<EmojiTarget>,
     pub error: Option<SharedString>,
-    /// Shift held: the hover toolbar shows Delete (and skips the confirm).
     pub shift_held: bool,
-    /// Message highlighted after a jump (reply click, pins, search): flash_
-    /// `[data-flash=true]` background + 2px --text-brand overlay bar.
     pub flash: Option<Id>,
-    /// Blocked / ignored message runs expanded with "Montrer", keyed by the run's first message.
     pub hidden_open: std::collections::HashSet<Id>,
     next_key: u64,
 }
@@ -155,7 +128,6 @@ impl Default for ChatState {
     }
 }
 
-/// Reaction route name: unicode as is, custom `<a:name:id>` -> `name`.
 pub fn reaction_name(emoji: &str) -> String {
     let t = emoji.trim_start_matches('<').trim_end_matches('>');
     let parts: Vec<&str> = t.split(':').collect();
@@ -167,7 +139,6 @@ pub fn reaction_name(emoji: &str) -> String {
     }
 }
 
-/// Apply a reaction toggle to a message in place. Returns false when nothing changed.
 pub fn apply_reaction(m: &mut Message, emoji: &str, emoji_id: Option<Id>, add: bool) -> bool {
     let same = |r: &Reaction| match (r.emoji_id, emoji_id) {
         (Some(a), Some(b)) => a == b,
@@ -216,9 +187,6 @@ pub fn pending_file(name: String, bytes: Vec<u8>) -> PendingFile {
 }
 
 impl PhoenixApp {
-    /// Cached rich text holds colours resolved for the theme it was built
-    /// under, and the list caches row heights: rebuild both after a theme,
-    /// zoom or font size change.
     pub fn chat_sync_style(&mut self) {
         let g = crate::theme::style_generation();
         if self.chat.style_gen == g {
@@ -240,9 +208,7 @@ impl PhoenixApp {
         self.messages.get(&channel)?.msgs.iter().find(|m| m.id == id)
     }
 
-    /// Hook from `select_channel`.
     pub fn chat_on_select(&mut self, channel: Id) {
-        // Leaving / reopening a channel shows the present again, like the client.
         self.messages.retain(|_, e| !e.detached);
         self.chat.edit = None;
         self.chat.menu = None;
@@ -256,7 +222,6 @@ impl PhoenixApp {
         if self.chat.pins.as_ref().is_some_and(|p| p.channel != channel) {
             self.chat.pins = None;
         }
-        // The threads browser lists the open channel's threads.
         self.parity.threads_open = false;
         if self.chat.unread_marker.is_some_and(|(c, _)| c != channel) {
             self.chat.unread_marker = None;
@@ -264,7 +229,6 @@ impl PhoenixApp {
         self.chat.thread = None;
     }
 
-    /// Hook from the message list scroll handler.
     pub fn chat_on_scroll(&mut self, ev: &ListScrollEvent, cx: &mut Context<Self>) {
         let bottom = ev.visible_range.end >= ev.count || ev.is_following_tail;
         if bottom != self.chat.at_bottom {
@@ -276,7 +240,6 @@ impl PhoenixApp {
         }
     }
 
-    /// Hook from `append_message` for the open channel.
     pub fn chat_note_incoming(&mut self, own: bool, ts: i64) {
         if own {
             self.message_list.scroll_to_end();
@@ -309,7 +272,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Escape: closes the innermost chat overlay. True when consumed.
     pub fn chat_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let closed = self.chat.menu.take().is_some()
             || self.chat.confirm_delete.take().is_some()
@@ -324,8 +286,6 @@ impl PhoenixApp {
         cx.notify();
         true
     }
-
-    // ------------------------------------------------------------ editing
 
     pub fn start_edit(&mut self, id: Id, window: &mut Window, cx: &mut Context<Self>) {
         let Some(channel) = self.selected_channel else { return };
@@ -365,7 +325,6 @@ impl PhoenixApp {
         let (id, channel) = (e.id, e.channel);
         let text = e.input.read(cx).value().trim().to_string();
         if text.is_empty() {
-            // Discord: saving an empty edit asks to delete the message.
             self.chat.edit = None;
             self.chat.confirm_delete = Some((channel, id));
             cx.notify();
@@ -373,7 +332,6 @@ impl PhoenixApp {
         }
         let unchanged = self.find_msg(channel, id).is_some_and(|m| m.content.as_ref() == text);
         if !unchanged {
-            // Optimistic local update, replaced by the server echo.
             if let Some(mut m) = self.find_msg(channel, id).cloned() {
                 m.content = text.clone().into();
                 m.edited = true;
@@ -400,14 +358,10 @@ impl PhoenixApp {
         }
     }
 
-    // ----------------------------------------------------------- reactions
-
-    /// Click on an existing reaction pill: toggle our own reaction.
     pub fn toggle_reaction(&mut self, channel: Id, msg: Id, r: &Reaction, cx: &mut Context<Self>) {
         self.set_reaction_local(channel, msg, r.emoji.clone(), r.emoji_id, !r.me, cx);
     }
 
-    /// Add a reaction (quick reactions, emoji picker). No-op if already reacted.
     pub fn react_with(&mut self, channel: Id, msg: Id, emoji: SharedString, emoji_id: Option<Id>, cx: &mut Context<Self>) {
         self.set_reaction_local(channel, msg, emoji, emoji_id, true, cx);
     }
@@ -442,15 +396,12 @@ impl PhoenixApp {
         .detach();
     }
 
-    /// Emoji picker hook: open the picker for this target.
     pub fn open_emoji_picker(&mut self, target: EmojiTarget, cx: &mut Context<Self>) {
         self.chat.menu = None;
         self.chat.emoji_target = Some(target);
         cx.notify();
     }
 
-    /// Emoji picker hook: an emoji was chosen (`emoji` is the unicode char or
-    /// `<:name:id>` for custom emoji).
     pub fn emoji_picked(&mut self, emoji: SharedString, emoji_id: Option<Id>, window: &mut Window, cx: &mut Context<Self>) {
         match self.chat.emoji_target.take() {
             Some(EmojiTarget::Reaction { channel, msg }) => self.react_with(channel, msg, emoji, emoji_id, cx),
@@ -464,12 +415,8 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    // ------------------------------------------------------------ delete
-
-    /// Shift-click skips the confirmation (like Discord).
     pub fn request_delete(&mut self, channel: Id, id: Id, skip_confirm: bool, cx: &mut Context<Self>) {
         self.chat.menu = None;
-        // Never send a DELETE for a message the server does not have (pending/failed/local).
         if self.find_msg(channel, id).is_some_and(super::pending::is_local) {
             self.discard_local(channel, id, cx);
             return;
@@ -488,8 +435,6 @@ impl PhoenixApp {
         }
         cx.notify();
     }
-
-    // ------------------------------------------------------ menu actions
 
     pub fn open_message_menu(&mut self, channel: Id, msg: Id, pos: Point<Pixels>, cx: &mut Context<Self>) {
         self.chat.menu = Some(MenuState { channel, msg, pos });
@@ -543,7 +488,6 @@ impl PhoenixApp {
     pub fn mark_unread_from(&mut self, channel: Id, id: Id, cx: &mut Context<Self>) {
         let Some(entry) = self.messages.get(&channel) else { return };
         let Some(ix) = entry.msgs.iter().position(|m| m.id == id) else { return };
-        // The read marker goes on the message just before (or id - 1).
         let last_read = ix.checked_sub(1).map(|p| entry.msgs[p].id).unwrap_or(Id(id.0.saturating_sub(1)));
         let old = self.chat.unread_marker.replace((channel, id));
         if let Some((c, m)) = old {
@@ -558,8 +502,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    // ------------------------------------------------------------ pins
-
     pub fn toggle_pins(&mut self, cx: &mut Context<Self>) {
         if self.chat.pins.take().is_some() {
             cx.notify();
@@ -567,7 +509,6 @@ impl PhoenixApp {
         }
         let Some(channel) = self.selected_channel else { return };
         self.chat.pins = Some(PinsState { channel, loading: true, msgs: Vec::new() });
-        // The client's pins popout acks on mount when it has unread pins.
         if self.backend.has_unread_pins(channel) {
             drop(self.backend.ack_pins(channel));
         }
@@ -598,8 +539,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Scroll to `id` and flash it; when it isn't loaded yet, page older history
-    /// (read-only GETs) until it shows up, the channel start, or `pages` runs out.
     fn jump_reveal(&mut self, channel: Id, id: Id, pages: u32, cx: &mut Context<Self>) {
         let Some(e) = self.messages.get_mut(&channel) else { return };
         if let Some(ix) = e.msgs.iter().position(|m| m.id == id) {
@@ -610,11 +549,9 @@ impl PhoenixApp {
         if e.loading || !e.loaded_once {
             return;
         }
-        // Snowflakes are time-ordered: a reply target newer than our oldest row was deleted.
         if e.msgs.first().is_some_and(|m| m.id.0 < id.0) {
             return;
         }
-        // Client: jump with ?around= into a detached page (older pages stay pageable).
         if pages == JUMP_MAX_PAGES {
             self.jump_around(channel, id, cx);
             return;
@@ -651,8 +588,6 @@ impl PhoenixApp {
         .detach();
         cx.notify();
     }
-
-    // ----------------------------------------------------------- threads
 
     pub fn open_thread(&mut self, thread: ThreadRef, window: &mut Window, cx: &mut Context<Self>) {
         let id = thread.id;
@@ -704,8 +639,6 @@ impl PhoenixApp {
         .detach();
     }
 
-    // ------------------------------------------------------------ uploads
-
     pub fn prompt_attach(&mut self, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: true,
@@ -718,8 +651,6 @@ impl PhoenixApp {
                 let _ = this.update(cx, |this, cx| this.add_paths(paths, cx));
             }
             Ok(Ok(None)) | Err(_) => {}
-            // The file chooser portal failed (missing xdg-desktop-portal backend…): say so
-            // instead of doing nothing.
             Ok(Err(e)) => {
                 eprintln!("file chooser failed: {e:#}");
                 let _ = this.update(cx, |this, cx| {
@@ -731,8 +662,6 @@ impl PhoenixApp {
         .detach();
     }
 
-    /// Progress callback that fills the upload card `key`, and a repaint loop
-    /// that runs while the card exists. `None` when there is no such card.
     pub fn upload_progress(&mut self, key: u64, cx: &mut Context<Self>) -> Option<crate::backend::UploadProgress> {
         let s = self.chat.sending.iter().find(|s| s.key == key)?;
         let (sent, cancel) = (s.sent.clone(), s.cancel.clone());
@@ -758,8 +687,6 @@ impl PhoenixApp {
         }))
     }
 
-    /// The X of an upload card: stop the upload and drop the optimistic copy
-    /// (the client's cancel; nothing is posted).
     pub fn cancel_upload(&mut self, key: u64, cx: &mut Context<Self>) {
         let Some(ix) = self.chat.sending.iter().position(|s| s.key == key) else { return };
         let s = self.chat.sending.remove(ix);
@@ -770,13 +697,10 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Per-file limit of the selected channel (Nitro, boosts).
     pub fn upload_limit(&self) -> u64 {
         self.selected_channel.map_or(20 << 20, |ch| self.backend.max_upload_size(ch))
     }
 
-    /// Adds one file to the tray after the client's checks (count, per-file
-    /// size, total size). False when it was refused (`chat.error` says why).
     pub fn push_upload(&mut self, name: String, bytes: Vec<u8>) -> bool {
         let limit = self.upload_limit();
         if self.chat.uploads.len() >= MAX_FILES {
@@ -801,7 +725,6 @@ impl PhoenixApp {
         true
     }
 
-    /// Drag & drop / file picker: read the files off the UI thread.
     pub fn add_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
         let max = self.upload_limit();
         let task = cx.background_spawn(async move {
@@ -835,9 +758,6 @@ impl PhoenixApp {
         .detach();
     }
 
-    /// Ctrl+V in the composer (the text area's paste hook, before it inserts
-    /// text): attaches a pasted image, copied files, or a text that is only
-    /// `file://` URIs (a file manager's copy). True when the paste was taken.
     pub fn paste_clipboard(&mut self, item: &ClipboardItem, cx: &mut Context<Self>) -> bool {
         if self.selected_channel.is_none() {
             return false;
@@ -904,10 +824,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    // ------------------------------------------------------------- send
-
-    /// Hook at the top of `submit_composer`: sends text + reply (with the
-    /// mention toggle) + attachments. True when handled.
     pub fn chat_submit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(ch) = self.selected_channel else { return true };
         if super::slash::submit(self, window, cx) {
@@ -922,8 +838,6 @@ impl PhoenixApp {
             cx.notify();
             return true;
         }
-        // Slowmode: the send is held back and the text stays (submit_composer's check
-        // never ran for sends since this hook always handles them).
         if super::composer::send_held(self, ch) {
             super::composer::emphasize_cooldown();
             cx.notify();
@@ -933,7 +847,6 @@ impl PhoenixApp {
         self.composer.update(cx, |s, cx| s.set_value("", window, cx));
         let reply = self.replying_to.take().map(|r| (r, self.chat.reply_mention));
         self.chat.reply_mention = true;
-        // The client keeps the file name and flags spoilers with `is_spoiler`.
         let files: Vec<Upload> = std::mem::take(&mut self.chat.uploads)
             .into_iter()
             .map(|f| Upload {
@@ -954,8 +867,6 @@ impl PhoenixApp {
             };
             self.chat.sending.push(Sending { key, channel: ch, label, size, started: Instant::now(), sent: Arc::new(0.into()), cancel: Arc::default(), nonce: None });
         }
-        // Optimistic copy + POST (ui::chat::pending). The upload card goes away when
-        // the copy is settled (echo, POST answer or failure).
         let upload = (!files.is_empty()).then_some(key);
         let nonce = self.send_optimistic(ch, text, reply, files, upload, cx);
         if let Some(s) = self.chat.sending.iter_mut().find(|s| s.key == key) {
@@ -967,13 +878,10 @@ impl PhoenixApp {
     }
 }
 
-/// Paths of a pasted text made only of `file://` URIs (one per line, like a
-/// file manager's copy); `None` for any other text.
 pub fn file_uris(text: &str) -> Option<Vec<PathBuf>> {
     let mut out = Vec::new();
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
         let path = line.strip_prefix("file://")?;
-        // `file:///abs` or `file://localhost/abs`.
         let path = path.strip_prefix("localhost").unwrap_or(path);
         if !path.starts_with('/') {
             return None;
@@ -1015,10 +923,6 @@ impl<T: Send + 'static> DetachChat for crate::backend::BoxFuture<T> {
 mod tests {
     use super::*;
 
-    /// MockBackend end to end: tray checks, paste of an image, spoiler and alt
-    /// text, then the send: the backend gets the files with their original
-    /// names, the progress card fills and goes away, the message lands with
-    /// its attachments and the tray is empty again.
     #[gpui::test]
     fn upload_end_to_end_on_the_mock(cx: &mut gpui::TestAppContext) {
         use crate::{backend::Backend, mock::MockBackend};
@@ -1038,11 +942,9 @@ mod tests {
                     .unwrap();
                 app.select_channel(ch, cx);
                 assert_eq!(app.upload_limit(), 20 << 20);
-                // Refused: empty file, over the limit.
                 assert!(!app.push_upload("empty.txt".into(), vec![]));
                 assert!(!app.push_upload("big.bin".into(), vec![0; (20 << 20) + 1]));
                 assert!(app.chat.error.as_ref().is_some_and(|e| e.contains("big.bin")));
-                // Pasted image + one file.
                 let png = {
                     let mut out = std::io::Cursor::new(Vec::new());
                     image::RgbaImage::new(2, 2).write_to(&mut out, image::ImageFormat::Png).unwrap();

@@ -1,5 +1,3 @@
-//! Unsigned LEB128 (used by AV1 OBUs and the DAVE frame footer).
-
 use crate::{Error, Result};
 
 pub fn write(mut v: u64, out: &mut Vec<u8>) {
@@ -23,7 +21,6 @@ pub fn encoded_len(mut v: u64) -> usize {
     n
 }
 
-/// Read from the start of `data`; returns `(value, bytes_consumed)`.
 pub fn read(data: &[u8]) -> Result<(u64, usize)> {
     let mut v: u64 = 0;
     for (i, b) in data.iter().enumerate().take(10) {

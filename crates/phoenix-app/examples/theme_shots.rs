@@ -1,7 +1,3 @@
-//! Offscreen render of the main window in a given theme and zoom.
-//! `cargo run -p phoenix-app --example theme_shots -- out.png [dark|light|ash|onyx] [zoom%]` (PHOENIX_HC=1: high contrast)
-//! Env: `PHX_COMPACT` (compact mode), `PHX_DM` (open a DM).
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -24,7 +20,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -67,13 +62,11 @@ fn main() -> anyhow::Result<()> {
         cx.update_window(win.into(), |_, _, cx| {
             v.update(cx, |app, cx| {
                 app.prefs.synced.theme = theme;
-                // PHOENIX_HC=1: Accessibility "Enable High Contrast mode".
                 if std::env::var_os("PHOENIX_HC").is_some() {
                     app.prefs.local.ui.insert("contrast".into(), 1);
                 }
                 app.prefs.local.zoom = zoom;
                 app.prefs.synced.compact = std::env::var_os("PHX_COMPACT").is_some();
-                // PHX_DM=1: open the first direct message instead of the guild channel.
                 if std::env::var_os("PHX_DM").is_some()
                     && let Some(dm) = app.channels.values().filter(|c| c.guild.is_none()).map(|c| c.id).min()
                 {
@@ -87,12 +80,10 @@ fn main() -> anyhow::Result<()> {
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

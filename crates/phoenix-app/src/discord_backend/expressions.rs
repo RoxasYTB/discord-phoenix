@@ -1,5 +1,3 @@
-//! Backend side of the expression pickers and message search.
-
 use std::{sync::Arc, time::Duration};
 
 use phoenix_api::rest::search::{
@@ -77,14 +75,11 @@ pub(super) async fn sticker_packs(s: Arc<Session>) -> Result<Vec<StickerPackData
 }
 
 fn gif(g: &Gif) -> GifItem {
-    // `src` can be an mp4 (trending): the UI only decodes images, so fall back to `gif_src`.
     let video = g.src.is_empty() || g.src.split('?').next().is_some_and(|u| u.ends_with(".mp4") || u.ends_with(".webm"));
     let preview = if video && !g.gif_src.is_empty() { g.gif_src.clone() } else { g.src.clone() };
     GifItem { url: g.url.clone().into(), preview: preview.into(), width: g.width, height: g.height }
 }
 
-// Previews are requested as GIF so the picker can animate them (no video
-// decoding in the UI).
 const PREVIEW: GifFormat = GifFormat::TinyGif;
 
 pub(super) async fn gif_trending(s: Arc<Session>) -> Result<GifHome, BackendError> {
@@ -100,9 +95,6 @@ pub(super) async fn gif_trending(s: Arc<Session>) -> Result<GifHome, BackendErro
     })
 }
 
-/// Tenor media URLs carry the format in the last 5 chars of the id segment
-/// (`AAAPo` = mp4, `AAAAM` = tinygif): favorites are stored as mp4, the UI
-/// only decodes images.
 fn tenor_still(src: &str) -> String {
     if let Some(rest) = src.strip_prefix("https://media.tenor.com/")
         && let Some((seg, file)) = rest.split_once('/')
@@ -168,7 +160,6 @@ pub(super) fn query_of(req: &SearchRequest) -> SearchQuery {
 
 pub(super) async fn search(inner: Arc<Inner>, s: Arc<Session>, req: SearchRequest) -> Result<SearchPage, BackendError> {
     let q = query_of(&req);
-    // A 202 means the index is still building: retry a few times.
     for _ in 0..4 {
         let out = match (req.guild, req.channel) {
             (Some(g), _) => s.rest.search_guild_messages(sf(g), &q).await,

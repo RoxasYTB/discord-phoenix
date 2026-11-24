@@ -1,5 +1,3 @@
-//! Chat area: header, virtualized message list, composer, typing indicator.
-
 use crate::ui::tooltip::Tipped as _;
 use gpui::{
     AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement,
@@ -16,7 +14,6 @@ use crate::{
     ui::{avatar, icon, members, sidebar::channel_icon},
 };
 
-// Messaging features live in submodules (composer moved to `composer.rs`).
 pub mod app_launcher;
 pub mod attach;
 pub mod composer;
@@ -37,7 +34,6 @@ pub mod spoiler;
 pub mod system;
 pub use state::ChatState;
 
-/// Colour of a generated CSS token (`--name` → `idx::NAME`) for the active theme.
 pub(crate) fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
@@ -46,7 +42,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let entity = cx.entity();
     let show_members = app.show_members && app.selected_guild.is_some();
     let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
-    // The call view's side chat has no member list.
     let show_members = show_members && !crate::ui::call_view::active(app);
     let search_results = crate::ui::search::results_shown(cx);
     div()
@@ -90,8 +85,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                                 .flex_1()
                                 .min_h_0()
                                 .relative()
-                                // scroller_ scrollbarGutterStable_: messageListItem_ is 579px in a
-                                // 595px chat (vanilla-guild-text-groups), 16px reserved for the bar.
                                 .pr(z(16.))
                                 .child(
                                     list(app.message_list.clone(), move |ix, _w, cx| row(&entity, ix, cx))
@@ -105,7 +98,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                         .child(panels::drop_overlay(app))
                         .children(crate::ui::forum::render(app, cx)),
                 )
-                // Search results take the right column (the panel itself is an overlay).
                 .when(search_results, |d| d.child(div().flex_none().w(gpui::px(crate::ui::search::WIDTH))))
                 .when(show_members && !search_results, |d| d.child(members::render(app, cx)))
                 .when(!search_results, |d| {
@@ -121,14 +113,8 @@ fn guild_discoverable(app: &PhoenixApp) -> bool {
     app.selected_guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).is_some_and(|g| g.discoverable)
 }
 
-/// Guilds whose Discovery notice was closed this session (Discord keeps it client-side).
 static NOTICE_CLOSED: std::sync::Mutex<Vec<u64>> = std::sync::Mutex::new(Vec::new());
 
-/// Discovery channel notice. vanilla-guild-text #1101 `bar_8PBDGr`: --background-feedback-mod-info,
-/// border-bottom 1px --inlinenotice-border-info, margin-top -1, padding 4 8 4 16, gap 8;
-/// #1103 text_ body-sm/normal 14/18 --text-default with an underlined "En savoir plus" (#1104);
-/// #1105 close_ 32×32, --icon-muted (hover --icon-default), 18px glyph.
-/// Window x of the "Mode Découverte" label centre (f32 bits), set while painting the header.
 static LABEL_CX: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 fn discovery_label_probe() -> impl IntoElement {
@@ -145,11 +131,6 @@ fn discovery_label_probe() -> impl IntoElement {
     .size_full()
 }
 
-/// vanilla-guild-text #1102 `arrow_8PBDGr`: 16×10, fixed, centred under the header's
-/// Discovery label (#1061, centre 666 vs arrow 657+8), top = bar top − 9 so its base
-/// sits on the bar's 1px top border. Filled --background-base-lower then
-/// --background-feedback-mod-info, edges stroked --inlinenotice-border-info.
-/// Our own path (rounded apex), not the client's SVG.
 fn discovery_arrow() -> impl IntoElement {
     gpui::canvas(
         |_, _, _| {},
@@ -190,7 +171,6 @@ fn discovery_arrow() -> impl IntoElement {
 fn discovery_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::AnyElement> {
     let gid = app.selected_guild?;
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c))?;
-    // It points at the header label, which locked channels don't show.
     let locked = app.nav.extras.get(&ch.id).is_some_and(|e| e.locked);
     let thread = app.nav.thread_parent(ch.id).is_some();
     if ch.guild.is_none() || locked || thread || !guild_discoverable(app) || NOTICE_CLOSED.lock().ok()?.contains(&gid.0) {
@@ -254,17 +234,12 @@ fn discovery_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gp
     )
 }
 
-/// `--chat-input-icon-size` glyph in a 32px toolbar button.
 const HDR_ICON: f32 = 20.;
 
-/// --custom-message-margin-left-content-cozy = avatar + 2 × --space-md
-/// (density-aware; cozy: dump -channels-N-N+ #1184 padding-left 80px).
-/// `.a11y-font-scaled-down` (font under 16px) pins it to 4.5rem.
 pub(crate) fn msg_left() -> f32 {
     if crate::theme::font_scaled_down() { 72. * crate::theme::font_scale() } else { m::AVATAR + 2. * space::md() }
 }
 
-/// `--chat-avatar-size` of a cozy message: 40px, 2.5rem under `.a11y-font-scaled-down`.
 pub(crate) fn msg_avatar_size() -> f32 {
     msg_avatar()
 }
@@ -278,13 +253,6 @@ fn hdr_button(id: &'static str, i: Icon, color: gpui::Hsla, size: f32) -> gpui::
     hdr(id, i.path(), color)
 }
 
-/// Pins button with the client's unread-pins badge (`badge: {type: "unread",
-/// position: "bottom"}` while `ReadStateStore.hasUnreadPins`): `iconBadge_ybUK7Z`
-/// 8×8, radius 8, `iconBadgeStyleUnread_` --background-brand, and the 20px icon
-/// cut by `svg-mask-header-bar-badge-bottom` (circle cx=cy=.75, r=.25 → centre
-/// 15,15 r 5 in the icon, read live over CDP). The icon sits at 6,6 in the 32px
-/// box, so the cut is a 10px disc of the header background at 16,16 and the dot
-/// is centred in it at 17,17.
 fn pin_button(app: &PhoenixApp, color: gpui::Hsla) -> gpui::Stateful<gpui::Div> {
     let b = hdr_button("pin", Icon::Pin, color, HDR_ICON);
     let unread = app.selected_channel.is_some_and(|c| app.backend.has_unread_pins(c)) && app.chat.pins.is_none();
@@ -305,13 +273,10 @@ fn pin_button(app: &PhoenixApp, color: gpui::Hsla) -> gpui::Stateful<gpui::Div> 
     })
 }
 
-/// Header toolbar button whose glyph comes from the runtime icon provider by name
-/// (iconWrapper_ .clickable_: 32px box, 20px svg).
 fn hdr_named(id: &'static str, name: &str, color: gpui::Hsla) -> gpui::Stateful<gpui::Div> {
     hdr(id, crate::icons::path(name), color)
 }
 
-/// `.selected_ybUK7Z` buttons are drawn `--icon-strong`; the tooltip is the button's aria-label.
 fn hdr(id: &'static str, path: SharedString, color: gpui::Hsla) -> gpui::Stateful<gpui::Div> {
     let selected = color == tk(idx::ICON_STRONG);
     let label = match id {
@@ -322,7 +287,6 @@ fn hdr(id: &'static str, path: SharedString, color: gpui::Hsla) -> gpui::Statefu
         "members" => crate::t!("header.members_show"),
         "dm-call" => crate::t!("header.voice_call"),
         "dm-video" => crate::t!("header.video_call"),
-        // aria-labels of vanilla-dm / vanilla-group-dm toolbars.
         "dm-add" => crate::t!("header.add_to_dm"),
         "gdm-add" => crate::t!("header.add_to_gdm"),
         "gdm-members" if selected => crate::t!("header.members_hide"),
@@ -335,14 +299,9 @@ fn hdr(id: &'static str, path: SharedString, color: gpui::Hsla) -> gpui::Statefu
 }
 
 thread_local! {
-    /// Last painted border-box width of the channel header (`container_ybUK7Z`, the
-    /// `container-type: inline-size` box the search width is resolved against).
     static HEADER_W: std::cell::Cell<f32> = const { std::cell::Cell::new(0.) };
 }
 
-/// An invisible full-size child that records its parent's painted width (CSS px, page
-/// zoom already divided out) into `cell`, and repaints once when it changed: the
-/// client's container queries, resolved one frame late.
 pub(crate) fn width_probe(cell: &'static std::thread::LocalKey<std::cell::Cell<f32>>) -> impl IntoElement {
     gpui::canvas(
         move |b, w, _| {
@@ -357,36 +316,22 @@ pub(crate) fn width_probe(cell: &'static std::thread::LocalKey<std::cell::Cell<f
     .inset_0()
 }
 
-/// `search_bWCaDq` width: `clamp(64px, 100cqi - 320px, 244px)`, where 100cqi is the
-/// header's content box (border box minus the 20px + 8px inline padding). Measured on the
-/// live client (zoom 125 %, CDP viewport emulation): header 583 → 235, 543 → 195,
-/// 483 → 135, 433 → 85, 383 → 64; see docs/parity/responsive.md.
 fn header_search_w(pad_start: f32) -> f32 {
     let w = HEADER_W.with(std::cell::Cell::get);
     if w <= 0. { 244. } else { (w - pad_start - 8. - 320.).clamp(64., 244.) }
 }
 
-/// Channel / DM header. Dump -channels-N-N+ #1040 (guild) and -channels-me-N+ #1088 (DM):
-/// section title_ padding 8px 8px 8px 20px, height 49px, border-bottom --border-subtle;
-/// upperContainer_ → children_ (icon/avatar, title, dot, topic) + toolbar_ (gap 10px, padding-left 10px).
 fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
     let is_dm = ch.is_some_and(|c| c.guild.is_none());
     let name = ch.map(|c| c.name.clone()).unwrap_or_default();
     let topic = ch.and_then(|c| c.topic.clone());
-    // Forum channels: header has no topic and only bell + member list (vanilla-forum
-    // section "En-tête du salon": h1, Paramètres de notification, Masquer la liste des membres).
     let is_forum = ch.is_some_and(|c| c.kind == ChannelKind::Forum);
     let topic = topic.filter(|_| !is_forum);
-    // Thread: breadcrumb parent › thread, the icon is the parent's (vanilla-thread-channel #1190).
     let thread_parent = ch.and_then(|c| app.nav.thread_parent(c.id)).and_then(|p| app.channels.get(&p));
     let kind = thread_parent.or(ch).map(|c| c.kind).unwrap_or(ChannelKind::Text);
-    // A private (locked) channel gets the *LockIcon glyph and no "Mode Découverte" label
-    // (real compare 20261123-170026: locked #général shows hash-lock + dot, no label).
     let locked = ch.is_some_and(|c| app.nav.extras.get(&c.id).is_some_and(|e| e.locked));
-    // Threads never show it either (vanilla-thread-channel, compare thread-more-1713).
     let discoverable = !is_dm && !locked && thread_parent.is_none() && guild_discoverable(app);
-    // container_ .clickable_ .icon_ color: --icon-muted; .selected_: --icon-strong.
     let ic = tk(idx::ICON_MUTED);
     let on = tk(idx::ICON_STRONG);
     let is_group_dm = ch.is_some_and(|c| crate::ui::dm_profile_panel::is_group_dm(app, c.id));
@@ -403,8 +348,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .child(width_probe(&HEADER_W))
         .h(z(m::HEADER_H + 1.))
         .flex_none()
-        // padding-inline-start --custom-message-margin-horizontal (--space-md); a group DM's
-        // section is half that (vanilla-group-dm #1059: 10px), its hoverable name box adds the rest.
         .pl(z(pad_start))
         .pr(z(8.))
         .py(z(8.))
@@ -415,7 +358,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .border_b_1()
         .border_color(tk(idx::BORDER_SUBTLE))
         .child(
-            // children_: flex 1, items centred, overflow hidden (#1189 clips the Discovery label).
             div()
                 .flex_1()
                 .min_w_0()
@@ -423,10 +365,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 .flex()
                 .items_center()
                 .child(if let Some(gc) = ch.map(|c| c.id).filter(|_| is_group_dm) {
-                    // vanilla-group-dm #1064 hoverableContainer_9yrrgG: h 32, radius 8, padding-inline and
-                    // gap --custom-message-margin-horizontal / 2, hover --background-mod-subtle with a 16px
-                    // pencil (editIcon_, display none until hover); #1065 gdmIcon_ 24px, margin-inline-end 4px;
-                    // #1067 name body-md/medium 16/20 --text-strong.
                     let half = space::md() / 2.;
                     div()
                         .id("gdm-name")
@@ -457,10 +395,8 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         )
                         .into_any_element()
                 } else if is_dm {
-                    // avatar_ 20px, margin-inline-end 8px (#1092).
                     div().mr(z(8.)).child(avatar(peer, 20. * crate::theme::zoom())).into_any_element()
                 } else {
-                    // channelIcon_ 20px glyph in a 20×32 box, margin 0 11px 0 -1px (#1043); --channel-icon.
                     div()
                         .ml(z(-1.))
                         .mr(z(11.))
@@ -475,8 +411,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .into_any_element()
                 })
                 .when_some(thread_parent.map(|p| (p.id, p.name.clone())), |d, (pid, pname)| {
-                    // vanilla-thread-channel #1193/#1194: parent titleWrapper_ mr 8, h2 body-md/medium
-                    // 16px, 24px tall, --text-default, nowrap, clickable; #1195 caret_ 10×24, mr 8, --icon-muted.
                     d.child(
                         div()
                             .id("thread-parent")
@@ -503,17 +437,11 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                     )
                 })
                 .when(!is_group_dm, |d| d.child(
-                    // titleWrapper_ margin-inline-end 8px; h1 body-md/medium 16px/20px --text-strong (#1047);
-                    // thread title #1198 is flex 0 1 auto, overflow hidden, nowrap (clipped by children_).
-                    // 1:1 DM: the recipient's name style font (vanilla-dm header `dnsFont_`).
                     crate::fonts::styled_name(
                         div(),
                         peer.filter(|_| is_dm),
                         false,
                     )
-                        // Channel/DM titleWrapper_ is flex-shrink 0 (live, every width down to a
-                        // 9px children_): it is clipped by children_, never ellipsized. Only a
-                        // thread title shrinks.
                         .flex_shrink(if thread_parent.is_some() { 1. } else { 0. })
                         .min_w_0()
                         .overflow_hidden()
@@ -527,8 +455,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 ))
                 .when(kind == ChannelKind::Announcement && thread_parent.is_none(), |d| d.child(crate::ui::forum::follow_button()))
                 .when(discoverable, |d| {
-                    // vanilla-guild-text #1060 dot_GxzgQj: 4px, --background-mod-strong, margin-inline 4 12;
-                    // #1061/#1062 label_GxzgQj > body-sm/medium 14px/18px --text-muted "Mode Découverte".
                     d.child(div().flex_none().ml(z(4.)).mr(z(12.)).size(z(4.)).rounded_full().bg(tk(idx::BACKGROUND_MOD_STRONG)))
                         .child(
                             div()
@@ -544,9 +470,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 })
                 .when_some(topic.filter(|_| !is_dm), |d, t| {
                     let topic_click = crate::ui::home::topic::on_click(app, cx);
-                    // #1068 leadingBar_pVbL3l after the Discovery label: 1×16, --border-subtle, ml 8.
-                    // Otherwise dot_ 4px, margin 0 4px, --text-muted 24% (#1049); topic_ margin-inline-start 8px,
-                    // body-sm/medium 14px/18px --text-muted (#1050).
                     d.child(if discoverable {
                         div().flex_none().ml(z(8.)).w(z(1.)).h(z(16.)).bg(tk(idx::BORDER_SUBTLE))
                     } else {
@@ -567,14 +490,11 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                                 .overflow_hidden()
                                 .text_ellipsis()
                                 .on_click(topic_click)
-                                // Inline markdown stripped, mentions resolved and custom emoji
-                                // drawn (a real topic began with a raw `<:icon_…:id>` token).
                                 .child(crate::ui::emoji_text::label_with_custom(reply_preview_text(app, &t), 14.)),
                         )
                 }),
         )
         .child(
-            // toolbar_ybUK7Z: gap and padding-inline-start --space-xs (cozy 10, default 8, compact 6).
             div()
                 .flex_none()
                 .pl(z(space::xs()))
@@ -582,7 +502,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 .items_center()
                 .gap(z(space::xs()))
                 .when(is_dm, |d| {
-                    // DM toolbar (#1101–#1109): voice call, video call, pins, add to DM, user profile.
                     d.child(hdr_named("dm-call", "phone-call", ic))
                         .child(hdr_named("dm-video", "video-call", ic))
                         .child(
@@ -596,14 +515,8 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         })))
                 })
                 .when(!is_dm, |d| {
-                    // Guild toolbar (#1055–#1061): threads, notifications, pins, member list.
-                    // Inside a thread the toolbar has no Threads button (vanilla-thread-channel #1208).
                     d.when(thread_parent.is_none() && !is_forum, |d| d.child(hdr_button("threads", Icon::Threads, ic, HDR_ICON).on_click(cx.listener(|a, _, _, cx| a.toggle_threads_popout(cx)))))
                         .map(|d| {
-                            // Chat header `nH`: BellSlashIcon when `isChannelMuted ||
-                            // resolvedMessageNotifications !== ALL_MESSAGES` (the level is
-                            // inherited from the category, then the server). A muted
-                            // thread too (compare thread-more-1713).
                             let slashed = ch.is_some_and(|c| {
                                 c.muted
                                     || app.backend.notify_prefs().is_some_and(|p| {
@@ -637,7 +550,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                                 }),
                             ),
                         )
-                        // Thread toolbar ends with "Plus" 32×32 (vanilla-thread-channel, x=982).
                         .when_some(thread_parent.and(ch.map(|c| c.id)), |d, t| {
                             d.child(hdr_named("thread-more", "more-horizontal", ic).on_click(move |ev, w, _| {
                                 crate::ui::thread_menu::open(t, ev.position(), w)
@@ -645,14 +557,10 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         })
                 })
                 .child(
-                    // search_ margin-inline-start 4px; searchBar_ 244×32, radius 8px,
-                    // --input-background-default, 1px --input-border-default (#1063–#1073);
-                    // editor_ padding 0 6px, 14px/22px medium; icon_ 24px box, padding 4px, 16px glyph.
                     div()
                         .ml(z(4.))
                         .flex_none()
                         .w(z(header_search_w(pad_start)))
-                        // `.density-compact .searchBar_i16Ad0` is 28px tall.
                         .h(z(if crate::theme::density() == crate::theme::Density::Compact { 28. } else { 32. }))
                         .rounded(z(8.))
                         .bg(tk(idx::INPUT_BACKGROUND_DEFAULT))
@@ -664,8 +572,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                // Live CDP: searchBar_ inner editor starts 8px from left border, 18px line-height
-                                // centres the 14px placeholder 2px higher than 22px line-height.
                                 .pl(z(8.))
                                 .pr(z(6.))
                                 .pb(z(1.))
@@ -700,15 +606,10 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
         blocked::Row::Collapsed(bar) => bar,
         blocked::Row::Expanded(bar) => {
             let m = message(app, entity, msg, r, entry, cx);
-            // expanded_cKojhe: the run sits on --message-background-hover.
             row_wrapper().bg(tk(idx::MESSAGE_BACKGROUND_HOVER)).children(bar).child(m).into_any_element()
         }
     };
     if i + 1 == entry.msgs.len() {
-        // scrollerSpacer_8AE1Qq height 40px under the last message, overlapped 16px by
-        // the form_ (vanilla-guild-text-groups #2777 at y609, form #2779 at y633): 24px
-        // visible. Our list runs 9px under the composer, so pad 24 + 9 = 33px
-        // (real compare msg-1 at dpr 1.5: last embed ended 18px lower than vanilla with 15px).
         return row_wrapper().pb(z(20.)).child(el).into_any_element();
     }
     el
@@ -732,23 +633,18 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
         let peer = chan.voice_users.first().filter(|_| !group).and_then(|u| app.users.get(u));
         let strong = name.clone();
         let desc = if group { crate::t!("chat.group_start", name = strong) } else { crate::t!("chat.dm_start", name = strong) };
-        // the recipient / group name is a `<strong>` inside the description (vanilla-group-dm #1112)
         let bold = desc.find(&*name).filter(|_| !name.is_empty()).map(|i| i..i + name.len());
         let desc_el = gpui::StyledText::new(desc.clone()).with_highlights(
             bold.map(|r| (r, gpui::HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() })),
         );
         let e1 = entity.clone();
         let e2 = entity.clone();
-        // `container_w6h4R2` (vanilla-group-dm #1103): column, margin 20.
         return div()
             .m(z(20.))
             .flex()
             .flex_col()
-            // vanilla-group-dm #1104 editableGdmIcon_5yEg41 80px.
             .child(if group { crate::ui::group_dm::group_avatar(app, chan.id, 80., c(Palette::BG_PRIMARY)) } else { avatar(peer, 80.) })
             .child(
-                // `header_w6h4R2 heading-xxl/semibold` (#1110): 32/40, --font-weight-bold,
-                // margin 8 0, --text-strong.
                 div()
                     .my(z(8.))
                     .text_size(z(32.))
@@ -758,10 +654,6 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
                     .child(name.clone()),
             )
             .child(
-                // `description_w6h4R2 body-md/normal` (#1111): 16/20 --text-default.
-                // 1:1 (vanilla-dm-start #1139): first the username as `heading-xl/medium`
-                // 24/32 500 --text-strong, margin-bottom 20; after the sentence the
-                // `responsive_Vu5YPS` row (margin-top 8, gap 8).
                 div()
                     .text_size(z(16.))
                     .line_height(z(20.))
@@ -781,8 +673,6 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
                     .when_some(peer.map(|u| u.id), |d, uid| d.child(dm_intro_actions(app, entity, uid))),
             )
             .when(group, |d| {
-                // `stack_ buttonContainer_KT4tG0` (#1113): margin-top 16, gap 8; md
-                // primary "Invite to Group DM" (UserPlusIcon) and secondary "Edit Group".
                 use crate::ui::controls::{BtnKind, button_icon};
                 d.child(
                     div()
@@ -800,10 +690,7 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
                 )
             });
     }
-    // A thread opens on its own start (ThreadIcon, the thread name as the heading), not on
-    // "Welcome to #thread name!" with the text channel #.
     let is_thread = app.nav.thread_parent(ch).is_some();
-    // container_ (welcome) margin: --custom-message-margin-horizontal; header_ margin 8px 0.
     div()
         .m(z(16.))
         .flex()
@@ -811,14 +698,13 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
         .gap(z(8.))
         .child(
             div()
-                .mt(z(16.)) // emptyChannelIcon_ margin-top
-                .size(z(68.)) // emptyChannelIcon_ 68px
+                .mt(z(16.))
+                .size(z(68.))
                 .rounded_full()
-                .bg(tk(idx::BACKGROUND_MOD_MUTED)) // emptyChannelIcon_ background-color
+                .bg(tk(idx::BACKGROUND_MOD_MUTED))
                 .flex()
                 .items_center()
                 .justify_center()
-                // the channel's own type icon (voice text chat, announcements), not always #
                 .child(icon(
                     if is_thread { Icon::Threads } else { channel.map_or(Icon::Hash, |c| crate::ui::sidebar::channel_icon(c.kind)) },
                     42.,
@@ -837,17 +723,12 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
             d.child(
                 div()
                     .text_size(z(16.))
-                    .text_color(tk(idx::TEXT_DEFAULT)) // description_ color
+                    .text_color(tk(idx::TEXT_DEFAULT))
                     .child(crate::t!("chat.channel_start", name = name)),
             )
         })
 }
 
-/// 1:1 DM intro row (vanilla-dm-start #1142..#1156): mutual servers
-/// (`container_nM9YUb clickable_ divider_`: gap 8, 24px guild icon stack, `body-sm/normal`
-/// `mutualGuildsLink_` --interactive-text-default → hover / active, then a 4px
-/// --border-strong dot with 4px margins), then `stack_TWWX0S` gap 8 of sm secondary
-/// buttons: Remove Friend (or Add Friend) and Block.
 fn dm_intro_actions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, uid: Id) -> gpui::Div {
     use crate::ui::controls::{BtnKind, button_sm};
     let mutual: Vec<Id> = app.people.profiles.get(&uid).map(|p| p.mutual_guild_ids.clone()).unwrap_or_default();
@@ -890,7 +771,6 @@ fn dm_intro_actions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, uid: Id) -> g
                         .group_hover("dm-intro-mutual", |s| s.text_color(tk(idx::INTERACTIVE_TEXT_HOVER)))
                         .child(label),
                 )
-                // divider_nM9YUb:after
                 .child(div().mx(z(4.)).size(z(4.)).rounded_full().bg(tk(idx::BORDER_STRONG))),
         );
     }
@@ -916,15 +796,8 @@ fn day_divider(label: SharedString) -> gpui::Div {
     dated_divider(label, false)
 }
 
-/// Date divider; `unread` is the merged `.isUnread_` form (first unread message is the
-/// first of its day): line and date in --divider-color (--background-feedback-notification)
-/// plus the "NEW" end cap.
 fn dated_divider(label: SharedString, unread: bool) -> gpui::Div {
     let line = if unread { idx::BACKGROUND_FEEDBACK_NOTIFICATION } else { idx::BORDER_SUBTLE };
-    // divider_ (message list) margin-inline 1rem .875rem; .group-spacing-16
-    // .divider_.hasContent_ margin 1.5rem top / .5rem bottom; divider_ border-top
-    // --border-subtle; content_ 12px semibold, line-height 13px, padding 2px 4px,
-    // radius 8px, --text-muted on --background-base-lower.
     div()
         .ml(z(16.))
         .mr(z(14.))
@@ -941,7 +814,7 @@ fn dated_divider(label: SharedString, unread: bool) -> gpui::Div {
             div()
                 .bg(tk(idx::BACKGROUND_BASE_LOWER))
                 .rounded(z(8.))
-                .mt(z(-1.)) // content_4TfzT5 margin-top -1px
+                .mt(z(-1.))
                 .px(z(4.))
                 .py(z(2.))
                 .text_size(z(12.))
@@ -952,7 +825,6 @@ fn dated_divider(label: SharedString, unread: bool) -> gpui::Div {
         )
 }
 
-/// "Monday, November 23, 2026 at 3:04 PM" (timestamp tooltip).
 pub fn format_time_tooltip(ts: i64) -> SharedString {
     use chrono::{Local, TimeZone};
     Local
@@ -966,13 +838,9 @@ fn time_tooltip(ts: i64) -> impl Fn(&mut Window, &mut App) -> gpui::AnyView + 's
     crate::ui::tooltip::tip(format_time_tooltip(ts))
 }
 
-/// Server tag chiplet after a username: clanTagChiplet_ (--background-mod-strong, radius 4px,
-/// padding 0 4px, .72rem, margin-inline-start 6px; 2px in reply lines) holding
-/// chipletContainerInner_ (line-height 16px) with the guild badge and tag text.
 pub(crate) fn server_tag_chip(tag: &(SharedString, Option<SharedString>), in_reply: bool) -> gpui::Div {
     div()
         .flex_none()
-        // vanilla-dm #1270 (message): margin -2 0 0 6, box h 15; #1424 (reply): margin -2 4 0 2, opacity .64.
         .ml(z(if in_reply { 2. } else { 6. }))
         .when(in_reply, |d| d.mr(z(4.)))
         .h(z(15.))
@@ -986,20 +854,14 @@ pub(crate) fn server_tag_chip(tag: &(SharedString, Option<SharedString>), in_rep
         .line_height(z(16.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(tk(idx::TEXT_DEFAULT))
-        .when_some(tag.1.clone(), |d, u| d.child(img(u).size(z(if in_reply { 12. } else { 14. })).flex_none())) // #1192 12px / #1208 14px
+        .when_some(tag.1.clone(), |d, u| d.child(img(u).size(z(if in_reply { 12. } else { 14. })).flex_none()))
         .child(tag.0.clone())
 }
 
-/// roleIcon_2i8Bfm: 1rem + 4px square, margin-inline-start .25rem, top 1px (centred in the
-/// 22px header row); after the
-/// server tag (vanilla-inbox-1 headerText_ hasRoleIcon_).
 pub(crate) fn role_icon(url: SharedString) -> gpui::Img {
     img(url).flex_none().size(z(20.)).ml(z(4.)).object_fit(gpui::ObjectFit::Contain)
 }
 
-/// "New member" clover after the author name: newMemberBadge_ (calc(1rem + 4px) square,
-/// margin-inline-start .25rem, top 1px, color --text-feedback-positive) holding the
-/// NewUserIcon at 20px; tooltip "New member" (client module HU decides who gets it).
 fn new_member_badge(id: Id) -> gpui::Stateful<gpui::Div> {
     div()
         .id(("new-member", id.0))
@@ -1012,24 +874,21 @@ fn new_member_badge(id: Id) -> gpui::Stateful<gpui::Div> {
         .tip(crate::t!("chat.new_member"))
 }
 
-/// Discord's "APP" tag next to bot authors (vanilla-guild-text-groups botTagCozy_ /
-/// botTagVerified_ / botText_: 15px tall, 46px wide for a verified "APP").
 pub(crate) fn bot_tag(verified: bool) -> gpui::Div {
     div()
         .flex_none()
-        .ml(z(4.)) // botTagCozy_ margin-inline-start .25rem
-        .mt(z(1.6)) // botTagCozy_ position relative, top .1rem
-        .px(z(4.4)) // .rem_.botTag_ padding 0 .275rem
-        .h(z(15.)) // .rem_.botTag_ height .9375rem
-        .rounded(z(4.)) // .rem_.botTag_ border-radius 4px
-        .bg(tk(idx::BACKGROUND_BRAND)) // botTagRegular_
+        .ml(z(4.))
+        .mt(z(1.6))
+        .px(z(4.4))
+        .h(z(15.))
+        .rounded(z(4.))
+        .bg(tk(idx::BACKGROUND_BRAND))
         .flex()
         .items_center()
-        .text_size(z(12.8)) // botText_ font-size .8rem
+        .text_size(z(12.8))
         .line_height(z(15.))
-        .font_weight(FontWeight::SEMIBOLD) // botText_ 600
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(gpui::white())
-        // botTagVerified_ 16px, margin -.02rem 0 0 -.2rem, fill --white
         .when(verified, |d| d.child(crate::ui::members::verified_check().mt(z(-0.32)).ml(z(-3.2))))
         .child(crate::t!("common.app"))
 }
@@ -1045,7 +904,6 @@ pub(crate) fn message(
     let author_cow = app.member_user(app.selected_guild, msg.author);
     let author = author_cow.as_deref();
     let name = msg.author_nick.clone().or_else(|| app.member_nick(msg.author)).or_else(|| author.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
-    // username_ color: role colour, else --text-strong.
     let color = app.author_color(msg.author).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
     let id = msg.id;
     if let Some(sys) = system::render(app, entity, msg, r) {
@@ -1054,7 +912,6 @@ pub(crate) fn message(
     let compact = app.prefs.synced.compact;
     let editing = app.chat.edit.as_ref().is_some_and(|e| e.id == id);
     let replying = app.replying_to == Some(id);
-    // mentioned_: content mentions, @everyone, or a pinging reply to one of my messages.
     let reply_pings_me = msg.reply_mentions_author
         && msg.reply_to.and_then(|rid| entry.index_of(rid)).is_some_and(|p| entry.msgs[p].author == app.me.id);
     let mentioned = r.mentions_me || msg.mention_everyone || reply_pings_me;
@@ -1063,14 +920,8 @@ pub(crate) fn message(
     let mut content = div().flex().flex_col().min_w_0().text_size(fz(16.)).text_color(c(Palette::TEXT_NORMAL));
     let last_text = r.blocks.iter().rposition(|b| matches!(b, RBlock::Text(_)));
     let n_blocks = r.blocks.len();
-    // Discord exposes `display_compact_avatars` only as an option for compact
-    // message display. Cozy mode always shows its normal group avatar.
-    // 738015 `.compact_2i8Bfm .avatar_2i8Bfm`: inline 1em x 1em, margin-inline .1em .25em,
-    // inside the compact header (which starts at 1rem = 16px * font_scale).
     let compact_avatars = compact && app.prefs.synced.flag("avatars");
     let compact_header_left = 16. * crate::theme::font_scale();
-    // Compact: the absolute "[time] [avatar] Name" header overlaps the first line by
-    // `overflow` px; pad the first text line with thin spaces to clear it.
     let is_bot = author.is_some_and(|a| a.bot);
     let overflow = if compact {
         compact_header_overflow(
@@ -1088,10 +939,6 @@ pub(crate) fn message(
     if compact && !matches!(r.blocks.first(), Some(RBlock::Text(_))) {
         content = content.child(div().flex_none().h(fz(22.)));
     }
-    // A message that is only a gifv link (Tenor/Giphy) shows just the gif: the link
-    // text is hidden (vanilla #discussion, real compare 20261123-161135).
-    // Text & images settings (settings-proto text_and_images): render_embeds,
-    // inline_embed_media (image/gifv/video embeds) and render_reactions.
     let show_embed = |e: &&crate::model::Embed| {
         let sy = &app.prefs.synced;
         let media = matches!(e.kind.as_deref(), Some("image" | "gifv" | "video"));
@@ -1107,8 +954,6 @@ pub(crate) fn message(
             _ => content = content.child(block(entity, id, bi, b, edited_here)),
         }
     }
-    // A message with no text keeps its `edited_` span after the embeds
-    // (vanilla-guild-chat-busy: honeypot embed, `timestamp_ > edited_` below the embed).
     let edited_after_embeds = msg.edited && last_text.is_none();
     if msg.edited && !edited_after_embeds && !last_text.is_some_and(|l| l + 1 == n_blocks) {
         content = content.child(edited_marker(ts));
@@ -1119,7 +964,6 @@ pub(crate) fn message(
         color,
         time: r.time_full.clone(),
     }));
-    // Two or more images/videos share one mosaic; files follow (nonVisualMediaItem_ margin-top 8px).
     let visual: Vec<&Attachment> = msg.attachments.iter().filter(|a| mosaic::is_visual(a)).collect();
     if visual.len() >= 2 && crate::ui::settings::effects::inline_attachments() {
         content = content.child(mosaic::render(&visual, cx));
@@ -1135,13 +979,11 @@ pub(crate) fn message(
         content = content.child(embed(app, e, cx));
     }
     media::set_current_author(None);
-    // Forward: the snapshot sits inside the quote frame; reactions/threads stay outside.
     if let Some(f) = &msg.forward {
         content = div().flex().flex_col().min_w_0().text_size(fz(16.)).text_color(c(Palette::TEXT_NORMAL)).child(forward::wrap(app, f, content));
     }
     content = content.children(crate::ui::components::render(app, entity, msg, cx)).children(crate::ui::components::render_poll(app, entity, msg));
     if edited_after_embeds {
-        // accessories container_ row gap 4px, then timestamp_ 20px (dump: embed ends 219, timestamp_ 223).
         content = content.child(div().mt(z(4.)).h(z(20.)).flex().items_center().child(edited_marker(ts)));
     }
     if !msg.reactions.is_empty() && app.prefs.synced.flag("reactions") {
@@ -1150,7 +992,6 @@ pub(crate) fn message(
     if let Some(t) = &msg.thread {
         content = content.child(message_ext::thread_chip(app, entity, t, false));
     }
-    // Ephemeral (local system reply to a failed send): "Only you can see this — Dismiss message".
     if msg.flags & crate::model::FLAG_EPHEMERAL != 0 {
         content = content.child(crate::ui::chat::pending::ephemeral_footer(entity, msg));
     }
@@ -1158,10 +999,7 @@ pub(crate) fn message(
         Some(b) => b,
         None => content,
     };
-    // messageContent_.isSending_: the optimistic copy is drawn at 50 % opacity, header and
-    // avatar untouched (live client, 20261124 pending test). Failed sends are coloured in render_msg.
     let content = if msg.send_state == crate::model::SendState::Sending { content.opacity(0.5) } else { content };
-    // Upload in flight: the file card with its progress bar sits under the dimmed text.
     let content = match attach::upload_progress_card(app, entity, msg) {
         Some(card) => div().flex().flex_col().min_w_0().child(content).child(card),
         None => content,
@@ -1174,11 +1012,9 @@ pub(crate) fn message(
                 let (t, m) = crate::richtext::preview_with_mentions(&entry.rendered[p].parsed);
                 (SharedString::from(t), m)
             }, entry.msgs[p].author_nick.clone().or_else(|| app.member_nick(entry.msgs[p].author)).or_else(|| {
-                // referenced_message has no `member`: reuse the nick from any loaded message by that author.
                 let a = entry.msgs[p].author;
                 entry.msgs.iter().rev().filter(|m| m.author == a).find_map(|m| m.author_nick.clone())
             })),
-            // Not in the loaded history: the reply's own `referenced_message`.
             None => match &msg.reply_preview {
                 Some((a, nick, text)) => (
                     app.member_user(app.selected_guild, *a),
@@ -1192,44 +1028,33 @@ pub(crate) fn message(
             },
         };
         let found = found.or_else(|| msg.reply_preview.as_ref().map(|_| usize::MAX));
-        // repliedMessage_: 14px, line-height --custom-message-reply-message-preview-line-height
-        // (1.125rem), cozy margin-bottom --reply-spacing (4px). Compact: margin-inline-start
-        // timestamp-width + meta-space - (compact-indent - 1rem) = -24px, padding-inline-start
-        // --custom-message-reply-indent (.625rem).
         div()
             .relative()
-            .h(fz(if compact { 20. } else { 18. })) // cozy: vanilla-guild-text-groups #2624 repliedMessage_ 18px (line-height 1.125rem); compact #1185 20px
+            .h(fz(if compact { 20. } else { 18. }))
             .when(!compact, |d| d.mb(z(4.)))
             .when(compact, |d| d.ml(z(-24.)).pl(z(10.)))
             .flex()
             .items_center()
-            .gap(z(4.)) // replyAvatar_ margin-inline-end --custom-message-meta-space
+            .gap(z(4.))
             .text_size(fz(14.))
             .line_height(fz(18.))
             .text_color(tk(idx::TEXT_DEFAULT))
             .child(
-                // messageSpine_:before — 2px --spine-default, radius 6px, top 50%, bottom 0,
-                // from the avatar centre (avatar/2 + gutter, minus half the spine) to 4px
-                // (--reply-spacing) before the reply. Compact: avatar = 2.25rem timestamp,
-                // gutter = meta-space, ends at the reply indent.
                 div()
                     .absolute()
-                    .left(z(if compact { -23. } else { -41. })) // #1186 left -40px, margin-left -1px
-                    .top(z(9.)) // #1186 top 10px, margin-top -1px
-                    .w(z(if compact { 29. } else { 37. })) // #1186 37px
+                    .left(z(if compact { -23. } else { -41. }))
+                    .top(z(9.))
+                    .w(z(if compact { 29. } else { 37. }))
                     .h(z(if compact { 11. } else { 13. }))
                     .border_l_2()
                     .border_t_2()
                     .rounded_tl(z(6.))
                     .border_color(tk(idx::SPINE_DEFAULT))
-                    .hover(|s| s.border_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))), // repliedMessageClickableSpine_:hover
+                    .hover(|s| s.border_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))),
             )
             .when(!compact, |d| d.child(avatar(ru.as_deref(), 16.)))
-            // vanilla-guild-text #1283: `botTagCompact_` sits before the replied username.
             .when(ru.as_deref().is_some_and(|u| u.bot), |d| d.child(bot_tag(ru.as_deref().is_some_and(|u| u.verified_bot)).ml_0()))
             .child(
-                // repliedMessage_ username: like the message header, a display name
-                // style switches the font (live client) while the color stays the role's.
                 crate::fonts::styled_name(
                     div()
                         .flex_none()
@@ -1242,10 +1067,9 @@ pub(crate) fn message(
                 .child({
                     let reply_text = SharedString::from(format!(
                         "{}{}",
-                        if msg.reply_mentions_author { "@" } else { "" }, // "@" only when the reply pinged
+                        if msg.reply_mentions_author { "@" } else { "" },
                         rnick.map(|n| n.to_string()).or_else(|| ru.as_deref().map(|u| u.display_name.to_string())).unwrap_or_else(|| crate::t!("common.unknown").to_string())
                     ));
-                    // Live client (2026-11-24 CDP): repliedMessage_ username also uses twoColorGradient_ / usernameGradient_.
                     match ru.as_deref().and_then(|u| crate::ui::role_gradient::for_author(app, u.id)) {
                         Some(stops) => crate::fonts::name_text_with(reply_text, ru.as_deref(), 14., Some(stops)),
                         None => crate::fonts::name_text(reply_text, ru.as_deref(), 14.),
@@ -1257,8 +1081,8 @@ pub(crate) fn message(
                 div()
                     .flex_1()
                     .min_w_0()
-                    .text_color(tk(idx::TEXT_DEFAULT)) // repliedTextContent_ color: inherit
-                    .hover(|s| s.text_color(tk(idx::TEXT_STRONG))) // repliedTextPreview_.clickable_:hover
+                    .text_color(tk(idx::TEXT_DEFAULT))
+                    .hover(|s| s.text_color(tk(idx::TEXT_STRONG)))
                     .id(("reply-jump", msg.id.0))
                     .cursor_pointer()
                     .on_click({
@@ -1268,11 +1092,9 @@ pub(crate) fn message(
                     .whitespace_nowrap()
                     .overflow_hidden()
                     .text_ellipsis()
-                    // #1291 `repliedTextPlaceholder_`: no text content (embeds, attachments only).
                     .when(found.is_none() || preview.is_empty(), |d| d.italic())
                     .map(|d| {
                         let text = if found.is_some() && preview.is_empty() { crate::t!("chat.reply_click_to_see") } else { preview };
-                        // Mentions keep the message mention colours (repliedTextContent_ .mention).
                         let seg = |a: usize, b: usize| -> gpui::AnyElement {
                             let hl: Vec<_> = mranges
                                 .iter()
@@ -1296,7 +1118,6 @@ pub(crate) fn message(
                         if tokens.is_empty() {
                             return d.child(seg(0, text.len()));
                         }
-                        // repliedTextContent_ custom emoji: img.emoji 18×18 inline (vanilla-guild-text-groups).
                         let mut row = d.flex().items_center();
                         let mut at = 0;
                         for (r, _) in &tokens {
@@ -1326,18 +1147,15 @@ pub(crate) fn message(
         .cursor_pointer()
         .hover(|s| s.underline())
         .on_click(message_ext::open_author(entity, msg))
-        // Live client (2026-11-24 CDP): message username_ applies twoColorGradient_ / usernameGradient_ (100px tile).
         .child(match crate::ui::role_gradient::for_author(app, msg.author) {
             Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
             None => crate::fonts::name_text(name, author, 16.),
         })
-        // roleDot_: 8px circle in the role colour, 4px after the name.
         .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col))));
 
     let base = div()
         .id(("msg", id.0))
         .group("msg")
-        // Author decorations play while the message is hovered (ui::avatar_deco).
         .on_hover({
             let e = entity.clone();
             move |h, _, cx| {
@@ -1348,14 +1166,10 @@ pub(crate) fn message(
         })
         .on_mouse_down(gpui::MouseButton::Right, message_ext::on_right_click(entity, msg))
         .relative()
-        .pr(z(space::xl())) // message_ padding-inline-end --space-xl (#1184)
+        .pr(z(space::xl()))
         .map(|d| {
-            // message_:hover / .selected_ --message-background-hover; .mentioned_ and
-            // .replying_ have their own backgrounds, hover shades and a 2px bar
-            // (--icon-feedback-warning / --brand-500) drawn over the row.
             let ephemeral = msg.flags & crate::model::FLAG_EPHEMERAL != 0;
             let (bg, hover, bar) = if ephemeral {
-                // ephemeral_: --brand-05a background with the 2px --brand-500 bar (live Clyde reply).
                 (idx::BRAND_05A, idx::BRAND_10A, Some(idx::BRAND_500))
             } else if replying {
                 (idx::MESSAGE_HIGHLIGHT_BACKGROUND_DEFAULT, idx::BRAND_10A, Some(idx::BRAND_500))
@@ -1377,11 +1191,6 @@ pub(crate) fn message(
         });
 
     let body = if compact {
-        // Compact (Discord's IRC-like layout): "[time] Name" sits inline at the
-        // start of the first line and wrapped lines are indented to 80 px,
-        // like the web client's negative text-indent.
-        // compact_ wrapper: padding-inline-start --custom-message-margin-compact-indent (5rem),
-        // padding-block --custom-message-padding-vertical-container-compact (.125rem).
         base.pl(fz(80.))
             .py(fz(2.))
             .when_some(reply, |d, reply| d.child(reply))
@@ -1394,8 +1203,6 @@ pub(crate) fn message(
                     .flex()
                     .items_center()
                     .child(
-                        // .compact_ .timestamp_: .6875rem, --text-muted, margin-inline-end
-                        // --custom-message-meta-space.
                         div()
                             .id(("msg-time", id.0))
                             .flex_none()
@@ -1406,8 +1213,6 @@ pub(crate) fn message(
                             .child(r.time_short.clone()),
                     )
                     .when(compact_avatars, |d| {
-                        // 738015 `.compact_2i8Bfm .avatar_2i8Bfm`: 1em x 1em inline,
-                        // margin-inline: .1em .25em.
                         d.child(
                             div()
                                 .id(("msg-avatar-compact", id.0))
@@ -1429,20 +1234,14 @@ pub(crate) fn message(
             )
             .child(content)
     } else {
-        base.pl(z(msg_left())) // --custom-message-margin-left-content-cozy (#1184 80px)
-            .py(fz(2.)) // --custom-message-spacing-vertical-container-cozy (.125rem)
+        base.pl(z(msg_left()))
+            .py(fz(2.))
             .when_some(reply, |d, reply| d.child(reply))
             .when(r.group_start, |d| {
                 d.child(
                     div()
                         .absolute()
-                        // avatar_: inset-inline-start --custom-message-margin-horizontal,
-                        // margin-top 4px - cozy vertical padding (so 4px below the row top,
-                        // after the reply line when there is one).
-                        // Under .a11y-font-scaled-down: inset 1rem, margin-top .25rem - .125rem.
-                        .left(if crate::theme::font_scaled_down() { fz(16.) } else { z(space::md()) }) // #1200 left 20px
-                        // #1200: .125rem row padding + 1.125rem reply + 4px --reply-spacing + (4px - .125rem)
-                        // margin-top; #2640: 2 + 18 + 4 + 2 at 16px.
+                        .left(if crate::theme::font_scaled_down() { fz(16.) } else { z(space::md()) })
                         .top({
                             let pad = if crate::theme::font_scaled_down() { 4. * crate::theme::font_scale() } else { 4. };
                             z(if msg.reply_to.is_some() { 18. * crate::theme::font_scale() + 4. + pad } else { pad })
@@ -1450,7 +1249,6 @@ pub(crate) fn message(
                         .id(("msg-avatar", id.0))
                         .cursor_pointer()
                         .rounded_full()
-                        // .full-motion avatar_2i8Bfm.clickable_:hover drop-shadow(--elevation-medium: 0 4px 4px --opacity-black-16)
                         .hover(|s| {
                             s.shadow(vec![gpui::BoxShadow {
                                 color: gpui::hsla(0., 0., 0., 0.16),
@@ -1460,15 +1258,10 @@ pub(crate) fn message(
                                 inset: false,
                             }])
                         })
-                        // avatar_2i8Bfm.clickable_:active translateY(1px)
                         .active(|s| s.mt(z(1.)))
                         .on_click(message_ext::open_author(entity, msg))
                         .child(avatar(author, msg_avatar()))
                         .when_some(author.and_then(|u| u.decoration.clone()), |d, deco| {
-                            // avatarDecoration_2i8Bfm: --custom-message-avatar-decoration-size = avatar × 1.2
-                            // (--decoration-to-avatar-ratio), centred on the avatar (−(deco−avatar)/2),
-                            // z-index 1, no pointer events. Drawn inside the avatar box so the
-                            // :active translateY(1px) moves it too, like the client.
                             let s = msg_avatar() * 1.2;
                             let off = (s - msg_avatar()) / 2.;
                             d.child(
@@ -1493,8 +1286,6 @@ pub(crate) fn message(
                         .when(is_bot, |d| d.child(bot_tag(author.is_some_and(|u| u.verified_bot))))
                         .when(crate::ui::forum::is_op(app, msg.channel, msg.author), |d| d.child(crate::ui::forum::op_tag()))
                         .child(
-                            // .cozy_ .timestamp_: .75rem, --chat-text-muted, medium;
-                            // timestampInline_ margin-inline-start .25rem.
                             div()
                                 .id(("msg-time", id.0))
                                 .ml(fz(4.))
@@ -1518,8 +1309,6 @@ pub(crate) fn message(
                         .flex()
                         .items_center()
                         .justify_end()
-                        // .cozy_ .timestamp_.alt_: .6875rem, --text-muted, width 56px
-                        // (3.5rem under .a11y-font-scaled-down).
                         .text_size(fz(11.))
                         .text_color(gpui::transparent_black())
                         .group_hover("msg", |s| s.text_color(tk(idx::TEXT_MUTED)))
@@ -1532,10 +1321,6 @@ pub(crate) fn message(
     .when(!compact && msg.thread.is_some(), |d| d.child(message_ext::thread_spine(if msg.reply_to.is_some() { 70. } else { 48. })))
     .child(message_ext::toolbar(app, entity, msg, app.chat.shift_held));
     let new_marker = app.chat.unread_marker.is_some_and(|(_, m)| m == id);
-    // The list measures each row with `layout_as_root`, which ignores the
-    // root's own margins: group spacing must be padding on a wrapper or rows
-    // get painted over each other.
-    // groupStart_ margin-top --custom-group-spacing-start (1.0625rem with group-spacing-16).
     let gap = if !r.group_start { 0. } else if compact { 4. } else { 17. * crate::theme::font_scale() };
     row_wrapper()
         .when_some(r.day_divider.clone(), |d, label| d.child(dated_divider(label, new_marker)))
@@ -1544,28 +1329,21 @@ pub(crate) fn message(
         .into_any_element()
 }
 
-/// Root of a list row: a flex column so children's margins stay inside the
-/// measured box (no margin collapsing through the root).
 fn row_wrapper() -> gpui::Div {
     div().w_full().flex().flex_col()
 }
 
-/// Width in px of `s` drawn in `font` at `size` (no kerning; close enough
-/// for layout offsets).
 fn text_width(cx: &App, font: &gpui::Font, size: gpui::Pixels, s: &str) -> f32 {
     let ts = cx.text_system();
     let id = ts.resolve_font(font);
     s.chars().map(|ch| ts.advance(id, size, ch).map(|a| f32::from(a.width)).unwrap_or(0.)).sum()
 }
 
-/// How far the compact "[time] [avatar] Name " header runs past the 80 px content
-/// indent, i.e. the first-line text indent.
 fn compact_header_overflow(time: &str, name: &str, compact_avatars: bool, bot: bool, tag: Option<&str>, left: f32, cx: &App) -> f32 {
     let mut name_font = crate::richtext::ui_font();
     name_font.weight = FontWeight::MEDIUM;
     let mut w = text_width(cx, &crate::richtext::ui_font(), fz(11.), time) + f32::from(fz(4.));
     if compact_avatars {
-        // 1em avatar + .1em start + .25em end margin (.compact_2i8Bfm .avatar_2i8Bfm)
         w += f32::from(fz(16. + 1.6 + 4.));
     }
     w += text_width(cx, &name_font, fz(16.), name);
@@ -1577,13 +1355,12 @@ fn compact_header_overflow(time: &str, name: &str, compact_avatars: bool, bot: b
     if let Some(tg) = tag {
         let mut f = name_font.clone();
         f.weight = FontWeight::SEMIBOLD;
-        w += text_width(cx, &f, fz(11.52), tg) + f32::from(z(14.)); // ml 6 + px 4*2
+        w += text_width(cx, &f, fz(11.52), tg) + f32::from(z(14.));
     }
     w += f32::from(z(4.));
     (f32::from(z(left)) + w - f32::from(fz(80.))).max(0.)
 }
 
-/// Prefix `t` with transparent thin spaces at least `width` px wide.
 fn indent_rich(t: &RichText, width: f32, cx: &App) -> RichText {
     if width <= 0. {
         return t.clone();
@@ -1612,14 +1389,13 @@ fn indent_rich(t: &RichText, width: f32, cx: &App) -> RichText {
 fn edited_marker(ts: i64) -> impl IntoElement {
     div()
         .id(("edited", ts as u64))
-        .text_size(z(10.)) // edited_ font-size .625rem
-        .line_height(z(10.)) // edited_ line-height 1
-        .font_weight(FontWeight::NORMAL) // edited_ --font-weight-normal
+        .text_size(z(10.))
+        .line_height(z(10.))
+        .font_weight(FontWeight::NORMAL)
         .text_color(tk(idx::TEXT_MUTED))
         .child(crate::t!("chat.edited"))
 }
 
-/// Append Discord's small muted " (edited)" after the last line of text.
 fn with_edited(t: &RichText) -> (SharedString, Vec<gpui::TextRun>) {
     let mut text = t.text.to_string();
     text.push_str(&crate::t!("chat.edited_suffix"));
@@ -1638,13 +1414,9 @@ fn with_edited(t: &RichText) -> (SharedString, Vec<gpui::TextRun>) {
 }
 
 fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: bool) -> AnyElement {
-    // Inline code needs its own bordered box (`code.inline`), which a text run can't draw:
-    // such text takes the segmented layout too.
     if !t.emoji.is_empty() || !message_ext::code_ranges(t).is_empty() {
         let el = message_ext::rich_with_emoji(entity, msg, bi, t);
         if edited {
-            // max-width 100%: as a bare flex item the text row took its unwrapped width and
-            // ran past the column (edited announcements with a #channel mention).
             return div()
                 .flex()
                 .flex_wrap()
@@ -1655,9 +1427,6 @@ fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: b
         }
         return el;
     }
-    // StyledText runs cannot change size, so a short one-line message gets the real 10px
-    // `edited_` span next to it (baseline-aligned: 22px line, 16px text); longer text keeps the
-    // inline suffix so it follows the last wrapped line.
     if edited && t.click_ranges.is_empty() && !t.text.contains('\n') && t.text.chars().count() <= 60 {
         let plain = div().line_height(gpui::relative(1.375)).child(StyledText::new(t.text.clone()).with_runs(t.runs.clone()));
         return div()
@@ -1665,7 +1434,7 @@ fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: b
             .flex_wrap()
             .items_end()
             .child(plain)
-            .child(div().ml(z(4.)).mb(z(5.)).child(edited_marker(msg.0 as i64))) // " " text node + baseline
+            .child(div().ml(z(4.)).mb(z(5.)).child(edited_marker(msg.0 as i64)))
             .into_any_element();
     }
     let (text, runs) = if edited { with_edited(t) } else { (t.text.clone(), t.runs.clone()) };
@@ -1679,7 +1448,6 @@ fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: b
     let e = entity.clone();
     div()
         .line_height(lh)
-        // Right-click on a link: the message menu (opened by the row) gets the link rows.
         .on_mouse_down(gpui::MouseButton::Right, move |_, _, _| {
             if let Some(url) = mention::hovered_link(msg, bi, 0) {
                 panels::set_menu_link(url);
@@ -1709,8 +1477,6 @@ fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: b
 fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: bool) -> AnyElement {
     match b {
         RBlock::Text(t) => rich(entity, msg, bi, t, edited),
-        // blockquoteContainer_: margin-block --space-4; blockquoteDivider_ 4px, radius 4px,
-        // --spine-default; blockquote padding-inline 12px 8px, max-width 90%.
         RBlock::Quote(t) => div()
             .flex()
             .my(z(4.))
@@ -1724,8 +1490,6 @@ fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: bo
                 2 => 20.,
                 _ => 16.,
             };
-            // markup_ h1 1.5rem / h2 1.25rem / h3 1rem, margin 16px 0 8px; first child
-            // margin-top 8px (h1, h2) or 4px (h3).
             let first = if *level <= 2 { 8. } else { 4. };
             div()
                 .mt(z(if bi == 0 { first } else { 16. }))
@@ -1734,7 +1498,6 @@ fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: bo
                 .child(rich(entity, msg, bi, t, edited))
                 .into_any_element()
         }
-        // markup_ small: .875rem, line-height 1.20313rem, --text-subtle.
         RBlock::Subtext(t) => div()
             .text_size(fz(14.))
             .line_height(fz(19.25))
@@ -1764,9 +1527,6 @@ fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: bo
                 .child(div().flex_1().min_w_0().child(rich(entity, msg, bi, text, edited)))
                 .into_any_element()
         }
-        // markup_ pre: margin-top 6px, radius 4px, max-width 90%; markup_ code: .875rem /
-        // 1.125rem, 1px --border-normal; .hljs: padding .5em, --background-base-lower,
-        // --text-code.
         RBlock::Code { code, runs, .. } => div()
             .mt(z(6.))
             .max_w(gpui::relative(0.9))
@@ -1779,7 +1539,6 @@ fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: bo
             .text_size(fz(14.))
             .line_height(fz(18.))
             .text_color(tk(idx::TEXT_CODE))
-            // codeContainer_: relative, shows codeActions_ (copy button) on hover
             .relative()
             .group(crate::ui::code_copy::GROUP)
             .child(StyledText::new(code.clone()).with_runs(runs.clone()))
@@ -1788,13 +1547,10 @@ fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: bo
     }
 }
 
-/// Clickable image (opens the viewer). `w x h` is the drawn size; the proxy
-/// is asked for 2x for HiDPI.
 fn media_image(url: &str, original: SharedString, filename: SharedString, size_o: (u32, u32), size: (f32, f32)) -> gpui::Stateful<gpui::Img> {
     media_image_with(url, original, filename, size_o, size, false)
 }
 
-/// [`media_image`]; `still` asks the proxy for the first frame (`format=webp`).
 pub(crate) fn media_image_with(
     url: &str,
     original: SharedString,
@@ -1813,27 +1569,21 @@ pub(crate) fn media_image_with(
         author: media::current_author(),
     };
     let mut im = img(src.clone());
-    // Bounded LRU instead of the window's keep-forever asset cache.
     if let Some(cache) = media::lru::chat() {
         im = im.image_cache(&cache);
     }
-    // visualMediaItemContainer_ width 100% / max-width 550px: media shrinks with the message column, keeping its ratio.
     im.id(gpui::ElementId::Name(src))
         .w(z(w))
         .max_w_full()
         .aspect_ratio(w / h.max(1.))
         .rounded(z(8.))
-        // Unknown size: the box is a guess, so show the whole image rather than crop it.
         .object_fit(if ow == 0 || oh == 0 { gpui::ObjectFit::Contain } else { gpui::ObjectFit::Cover })
         .cursor_pointer()
-        // `imageContainer_` --background-mod-normal while loading (base-lower is the chat
-        // background itself, so the slot looked empty); same box when the image fails.
         .with_loading(|| div().size_full().rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_NORMAL)).into_any_element())
         .with_fallback(|| div().size_full().rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_NORMAL)).into_any_element())
         .on_click(move |_, _, cx| media::open_viewer(viewer.clone(), cx))
 }
 
-/// Spoiler cover: blurred (tiny upscaled proxy image) + dark veil + pill.
 pub(crate) fn spoiler_cover(key: SharedString, url: &str, (w, h): (f32, f32), cx: &App) -> Option<AnyElement> {
     if media::is_revealed(&key, cx) {
         return None;
@@ -1848,18 +1598,11 @@ pub(crate) fn spoiler_cover(key: SharedString, url: &str, (w, h): (f32, f32), cx
             .rounded(z(8.))
             .overflow_hidden()
             .cursor_pointer()
-            // `spoilerContainer_0_7_Rr.attachmentContainer_` radius-sm 8; hidden bg
-            // `--__spoiler-background-color--hidden`.
             .bg(tk(idx::SPOILER_BACKGROUND_COLOR_HIDDEN))
             .group("spoiler-cover")
-            // `hiddenSpoiler_` blur(--custom-message-attachment-spoiler-blur-radius 44px):
-            // approximated by a 1/24 thumbnail upscaled; no dark overlay in the client.
             .child(img(tiny).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
             .child(
                 div().absolute().inset_0().flex().items_center().justify_center().child(
-                    // `spoilerWarning_0_7_Rr`: radius 20, 15px semibold uppercase,
-                    // bg --__spoiler-warning-background-color (black-60, hover black-88),
-                    // text --__spoiler-warning-text-color (primary-200, hover white).
                     div()
                         .px(z(12.))
                         .py(z(6.))
@@ -1880,14 +1623,11 @@ pub(crate) fn spoiler_cover(key: SharedString, url: &str, (w, h): (f32, f32), cx
     )
 }
 
-/// Accessibility "Sticker animations" other than Always (or On interaction while hovered):
-/// the media proxy's first frame (`passthrough=false`) instead of the animated file.
 fn still_sticker(u: SharedString, fmt: media::StickerFormat) -> SharedString {
     let animated = matches!(fmt, media::StickerFormat::Apng | media::StickerFormat::Gif);
     if !animated || media::sticker_plays(&u) || !u.contains("media.discordapp.net") {
         return u;
     }
-    // APNG stickers play as `.webp?…&animated=true`: the still is the same URL without it.
     if u.contains("&animated=true") {
         return u.replace("&animated=true", "").into();
     }
@@ -1898,13 +1638,10 @@ fn still_sticker(u: SharedString, fmt: media::StickerFormat) -> SharedString {
 pub(crate) fn attachment(a: &Attachment, cx: &App) -> AnyElement {
     let remote = attach::loadable(&a.url);
     let spoiler = a.is_spoiler();
-    // "Display images, videos and lolcats: when uploaded directly" (inline_attachment_media).
     let inline = crate::ui::settings::effects::inline_attachments();
     match a.kind {
         AttachmentKind::Sticker(media::StickerFormat::Lottie) if !a.url.is_empty() => {
             let name = a.filename.clone();
-            // 160px sticker, rasterized at 200 device px (scale 1.25) and played in a loop
-            // (or on hover when "Animate on interaction" is selected).
             let im = media::lottie::image(a.url.clone(), 200, !media::sticker_plays(&a.url))
                 .id(gpui::ElementId::Name(a.url.clone()))
                 .mt(z(4.))
@@ -1942,9 +1679,7 @@ pub(crate) fn attachment(a: &Attachment, cx: &App) -> AnyElement {
             return div()
                 .mt(z(4.))
                 .relative()
-                // Right-click on the image adds the image rows to the message menu.
                 .on_mouse_down(gpui::MouseButton::Right, move |_, _, _| panels::set_menu_media(link.clone()))
-                // GIF uploads follow "Play GIFs when Discord is focused": off = first frame, played on hover.
                 .child({
                     let gif = a.filename.to_ascii_lowercase().ends_with(".gif");
                     let still = gif && !media::gif_plays(&a.url);
@@ -1989,9 +1724,6 @@ fn sticker_name(name: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// Embed description / field values: Discord renders them as markdown.
-/// Parsed embed markdown, keyed by source text and style generation, so
-/// visible embeds are not re-parsed on every frame. Cleared when full.
 fn embed_blocks(app: &PhoenixApp, src: &str) -> std::rc::Rc<[RBlock]> {
     use std::{cell::RefCell, collections::HashMap, rc::Rc};
     type EmbedCache = (u32, HashMap<SharedString, Rc<[RBlock]>>);
@@ -2007,8 +1739,6 @@ fn embed_blocks(app: &PhoenixApp, src: &str) -> std::rc::Rc<[RBlock]> {
         if let Some(b) = map.get(src) {
             return b.clone();
         }
-        // Channel / role / user mentions resolved like message text (bots' embeds showed
-        // "#unknown" and "@unknown-role" for channels and roles of the server).
         let parsed = crate::markdown::parse_emoji_links(src, &app.resolver());
         let blocks: Rc<[RBlock]> = crate::richtext::render_blocks(&parsed, &|_| true, c(Palette::TEXT_NORMAL)).into();
         map.insert(SharedString::from(src.to_owned()), blocks.clone());
@@ -2058,9 +1788,6 @@ fn embed_markdown(app: &PhoenixApp, src: &str, size: f32) -> AnyElement {
     d.into_any_element()
 }
 
-/// Embed text block with its inline emoji drawn as images (custom `<:name:id>` tokens
-/// showed raw in bot embeds): text segments, emoji and newlines as flex-wrap items, like
-/// message text but without click targets.
 fn embed_text(t: &RichText, size: f32) -> gpui::Div {
     if t.emoji.is_empty() {
         return div().child(StyledText::new(t.text.clone()).with_runs(t.runs.clone()));
@@ -2073,7 +1800,6 @@ fn embed_text(t: &RichText, size: f32) -> gpui::Div {
             if i > 0 {
                 row = row.child(div().w_full().h_0());
             }
-            // one item per word so the text flows after an inline emoji
             for w in message_ext::words(&t.text, r.clone()) {
                 let runs = message_ext::slice_runs(&t.runs, w.clone());
                 let text: SharedString = t.text[w].to_owned().into();
@@ -2089,7 +1815,6 @@ fn embed_text(t: &RichText, size: f32) -> gpui::Div {
             continue;
         }
         row = push(row, last..r.start);
-        // `.emoji` 1.375em of the embed text
         row = row.child(div().mx(z(1.)).child(crate::media::emoji::emoji_element(token, size * 1.375)));
         last = r.end;
     }
@@ -2098,19 +1823,11 @@ fn embed_text(t: &RichText, size: f32) -> gpui::Div {
 
 pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
     let has_text = e.title.is_some() || e.description.is_some() || e.author.is_some() || !e.fields.is_empty();
-    // gifv embeds always render as bare media, even with a provider/title (Tenor).
     let media_only = e.kind.as_deref() == Some("gifv") || (e.kind.as_deref() == Some("image") && !has_text);
-    // Image-only embeds (links to pictures/gifs) render bare, like attachments.
     if media_only && let Some(m) = e.thumbnail.as_ref().or(e.image.as_ref()) {
-        // gifv embeds (embedVideo_) are capped at 300px tall: the Tenor gif renders
-        // 372x300 in vanilla #discussion (live CDP box); image links keep the 550x350 box.
         let max_h = if e.kind.as_deref() == Some("gifv") { 300. } else { media::MAX_H };
         let size = media::fit(m.width, m.height, media::MAX_W, max_h);
         let original = e.url.clone().unwrap_or_else(|| m.url.clone());
-        // gifv: play the animated gif rendition (GPUI animates GIF frames only while the
-        // row is laid out, i.e. on screen in the virtual list, and the window is active).
-        // Accessibility "Play GIFs when Discord is focused" (gif_auto_play): off = still frame.
-        // Off: the still frame, playing while hovered (client gifv rule).
         let gifv = e.kind.as_deref() == Some("gifv");
         let animated = (gifv && media::gif_plays(&original))
             .then(|| e.video.iter().chain(e.thumbnail.iter()).find_map(|v| media::gifv_animated(&v.url, size.0)))
@@ -2119,11 +1836,6 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
             let still = media_image(&m.url, original.clone(), "".into(), (m.width, m.height), size);
             return div().mt(z(4.)).child(media::gif_hover(original, still)).into_any_element();
         };
-        // While the animated rendition downloads/decodes, show the embed's static
-        // thumbnail (proxied, resized) instead of an empty box, then swap. The thumbnail
-        // of a gifv is the whole .gif: without `format=webp` the proxy resized every frame
-        // (megabytes, tens of seconds), so the box stayed empty. The client asks for the
-        // single-frame webp (`?format=webp&width=&height=`, ~4 KB).
         let still = media::video_poster(&m.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32);
         let key = original.clone();
         return div()
@@ -2141,13 +1853,9 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
             })))
             .into_any_element();
     }
-    // Discord promotes `article` and `video` embed thumbnails to full-width media
-    // below the description (`sanitizeEmbed`, verified live on immich.app article embed).
     let side_thumb = e.image.is_none() && !matches!(e.kind.as_deref(), Some("video" | "article"));
     let thumb = e.thumbnail.clone().filter(|_| side_thumb);
     let big = e.image.clone().or_else(|| e.thumbnail.clone().filter(|_| !side_thumb));
-    // Merged multi-image posts (model::merge_embeds_on_url) draw their images in
-    // the attachment media mosaic, like the client's embed `renderImages`.
     let gallery: Vec<crate::model::Attachment> = e
         .images
         .iter()
@@ -2163,7 +1871,6 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
         .collect();
     let big = big.filter(|_| gallery.len() < 2);
 
-    // Fields: inline ones share a row (up to 3, or 2 with a side thumbnail).
     let per_row = if thumb.is_some() { 2 } else { 3 };
     let mut rows: Vec<Vec<&crate::model::EmbedField>> = Vec::new();
     for f in &e.fields {
@@ -2186,7 +1893,6 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
                                 .mb(z(2.))
                                 .text_size(z(14.))
                                 .line_height(z(18.))
-                                // embedFieldName_ body-sm/semibold --text-strong, margin-bottom 2
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(tk(idx::TEXT_STRONG))
                                 .child(f.name.clone()),
@@ -2217,14 +1923,11 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
                 d.child(img(media::resized(&u, 40, 40)).size(z(20.)).rounded_full().flex_none())
             })
             .child(
-                // flex 1 / min-width 0: as a shrunk flex item the text kept its wider wrap
-                // and was clipped in narrow windows ("… membres • Hier" lost its time)
                 div()
                     .flex_1()
                     .min_w_0()
                     .text_size(z(12.))
                     .line_height(z(16.))
-                    // embedFooterText_ body-xs/medium --text-default
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(tk(idx::TEXT_DEFAULT))
                     .child(SharedString::from(parts.join(" \u{2022} "))),
@@ -2239,12 +1942,11 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
             .items_center()
             .gap(z(8.))
             .when_some(a.icon.clone(), |d, u| {
-                d.child(img(media::resized(&u, 48, 48)).size(z(24.)).rounded_full().flex_none()) // embedAuthorIcon_ 24, mr 8
+                d.child(img(media::resized(&u, 48, 48)).size(z(24.)).rounded_full().flex_none())
             })
             .child(
                 div()
                     .text_size(z(14.))
-                    // embedAuthorName_ .875rem semibold --text-strong
                     .line_height(z(18.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tk(idx::TEXT_STRONG))
@@ -2261,16 +1963,12 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
             .text_size(z(16.))
             .line_height(z(22.))
             .font_weight(FontWeight::SEMIBOLD)
-            // embedTitle_ 1rem semibold --text-strong; embedTitleLink_ is an anchor (--text-link)
             .text_color(if url.is_some() { tk(idx::TEXT_LINK) } else { tk(idx::TEXT_STRONG) })
             .when(url.is_some(), |d| d.hover(|s| s.underline()))
             .child(t)
             .when_some(url, |d, u| d.cursor_pointer().on_click(move |_, _, cx| cx.open_url(&u)))
     });
 
-    // embed_ radius 4px; gridContainer_ max-width 516px; embedFull_ --background-surface-high,
-    // 1px --border-subtle, 4px start border (embed colour or --border-normal); grid_ padding
-    // .125rem 1rem .5rem .75rem; children embedMargin_ margin-top 8px.
     div()
         .mt(z(4.))
         .max_w(z(516.))
@@ -2300,7 +1998,6 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
                         .gap(z(8.))
                         .pt(z(8.))
                         .when_some(e.provider.clone(), |d, p| {
-                            // embedProvider_ .embedLink_ --interactive-text-default
                             d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)).child(p))
                         })
                         .children(author)
@@ -2310,7 +2007,6 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
                         .when_some(big, |d, m| {
                             let size = media::fit(m.width, m.height, 400., 300.);
                             let original = m.url.clone();
-                            // embedFull_ .embedMedia_ margin-top 16px, radius 4px.
                             let video = (e.kind.as_deref() == Some("video")).then(|| e.url.clone().unwrap_or_else(|| m.url.clone()));
                             d.child(
                                 div()
@@ -2340,22 +2036,17 @@ pub(crate) fn embed(app: &PhoenixApp, e: &Embed, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// One-line reply preview of raw message `content` (mentions resolved, markdown stripped).
 pub(crate) fn reply_preview_text(app: &PhoenixApp, content: &SharedString) -> SharedString {
     let m = crate::model::Message { content: content.clone(), ..Default::default() };
     app.render_msg(&m, None).preview
 }
 
-/// Jumped-to message highlight. flash_: `transition: background-color .6s ease`;
-/// flashOverlay_: --message-highlight-background-default, border-inline-start 2px
-/// --text-brand, `transition: opacity .6s ease`. Fades in, holds, fades out when
-/// `data-flash` drops (see `FLASH_HOLD`).
 fn flash_overlay(id: Id) -> AnyElement {
     use gpui::AnimationExt;
     const IN: f32 = 600.;
     const OUT_AT: f32 = 2000.;
     const TOTAL: f32 = 2600.;
-    let ease = crate::ui::states::cubic_bezier(0.25, 0.1, 0.25, 1.0); // CSS `ease`
+    let ease = crate::ui::states::cubic_bezier(0.25, 0.1, 0.25, 1.0);
     div()
         .absolute()
         .inset_0()
@@ -2366,8 +2057,6 @@ fn flash_overlay(id: Id) -> AnyElement {
             gpui::Animation::new(std::time::Duration::from_millis(TOTAL as u64)),
             move |d, t| {
                 let ms = t * TOTAL;
-                // flashPulse .6s ease-in-out overrides the fade-in (full motion):
-                // opacity 1 at 0/40/80/100 %, 0 at 20/60 %.
                 let o = if ms < IN {
                     let p = ms / IN;
                     let k = ((p % 0.4) / 0.2).min(2.);

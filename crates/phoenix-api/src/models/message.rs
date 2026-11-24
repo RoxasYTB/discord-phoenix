@@ -35,7 +35,7 @@ int_enum! {
     }
 }
 
-#[allow(clippy::derivable_impls)] // enum is macro-generated
+#[allow(clippy::derivable_impls)]
 impl Default for MessageType {
     fn default() -> Self {
         Self::Default
@@ -43,7 +43,6 @@ impl Default for MessageType {
 }
 
 impl MessageType {
-    /// Whether the message is a normal user-authored message (rendered with content).
     pub fn is_regular(self) -> bool {
         matches!(
             self,
@@ -52,7 +51,6 @@ impl MessageType {
     }
 }
 
-/// Message nonces may be strings or integers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Nonce {
@@ -116,7 +114,6 @@ pub struct EmbedField {
 pub struct Embed {
     #[serde(default)]
     pub title: Option<String>,
-    /// "rich", "image", "video", "gifv", "article", "link", ...
     #[serde(rename = "type", default)]
     pub kind: Option<String>,
     #[serde(default)]
@@ -180,9 +177,6 @@ impl Attachment {
     }
 }
 
-/// Metadata attached to a message containing a Soundboard mention.
-/// Extra server fields are intentionally ignored; the renderer needs the name
-/// and optional emoji to display the inline mention.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MessageSoundboardSound {
     #[serde(default)]
@@ -223,7 +217,6 @@ mod soundboard_tests {
     }
 }
 
-/// Emoji as used in reactions (custom when `id` is set, unicode otherwise).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct ReactionEmoji {
     #[serde(default)]
@@ -239,8 +232,6 @@ impl ReactionEmoji {
         Self { id: None, name: Some(s.into()), animated: false }
     }
 
-    /// Form used in reaction REST routes: `name:id` for custom emoji, the
-    /// raw character otherwise. (Percent-encoded by the REST client.)
     pub fn route_form(&self) -> String {
         match (self.id, &self.name) {
             (Some(id), Some(n)) => format!("{n}:{id}"),
@@ -250,7 +241,6 @@ impl ReactionEmoji {
         }
     }
 
-    /// Same identity regardless of `animated`/name drift on custom emoji.
     pub fn same_as(&self, other: &ReactionEmoji) -> bool {
         match (self.id, other.id) {
             (Some(a), Some(b)) => a == b,
@@ -343,7 +333,6 @@ pub struct ChannelMention {
     pub name: String,
 }
 
-/// A user mention; gateway payloads attach a partial `member`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Mention {
     #[serde(flatten)]
@@ -360,7 +349,6 @@ pub struct Message {
     pub guild_id: Option<GuildId>,
     #[serde(default)]
     pub author: User,
-    /// Partial member (no `user`) on guild MESSAGE_CREATE.
     #[serde(default)]
     pub member: Option<Member>,
     #[serde(default, deserialize_with = "null_default")]
@@ -391,7 +379,6 @@ pub struct Message {
     pub pinned: bool,
     #[serde(default)]
     pub webhook_id: Option<Snowflake>,
-    /// Set on interaction responses; components are sent back to this app.
     #[serde(default)]
     pub application_id: Option<Snowflake>,
     #[serde(rename = "type", default)]
@@ -400,7 +387,6 @@ pub struct Message {
     pub flags: u64,
     #[serde(default)]
     pub message_reference: Option<MessageReference>,
-    /// The replied-to message. `None` + reference set = deleted/not loaded.
     #[serde(default)]
     pub referenced_message: Option<Box<Message>>,
     #[serde(default, deserialize_with = "null_default")]
@@ -409,8 +395,6 @@ pub struct Message {
     pub soundboard_sounds: Vec<MessageSoundboardSound>,
     #[serde(default)]
     pub thread: Option<Box<Channel>>,
-    /// Buttons / selects, or the whole body of a Components V2 message
-    /// (`flags & FLAG_IS_COMPONENTS_V2`).
     #[serde(default, deserialize_with = "null_default", skip_serializing_if = "Vec::is_empty")]
     pub components: Vec<super::Component>,
     #[serde(default)]
@@ -428,7 +412,6 @@ impl Message {
         self.mentions.iter().any(|m| m.user.id == user)
     }
 
-    /// Apply a reaction add/remove to the local reaction list.
     pub fn apply_reaction(&mut self, emoji: &ReactionEmoji, me: bool, add: bool, burst: bool) {
         let pos = self.reactions.iter().position(|r| r.emoji.same_as(emoji));
         match (pos, add) {

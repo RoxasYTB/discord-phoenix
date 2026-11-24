@@ -1,5 +1,3 @@
-//! Moderation: timeouts, kicks, bans and bulk deletes.
-
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -7,10 +5,8 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{ChannelId, GuildId, MessageId, UserId};
 
-/// Longest timeout Discord accepts (28 days).
 pub const MAX_TIMEOUT_SECS: u64 = 28 * 24 * 3600;
 
-/// PATCH body for a timeout of `secs` seconds from `now_unix` (0 clears it).
 pub fn timeout_body(now_unix: u64, secs: u64) -> Value {
     if secs == 0 {
         return json!({ "communication_disabled_until": null });
@@ -19,7 +15,6 @@ pub fn timeout_body(now_unix: u64, secs: u64) -> Value {
     json!({ "communication_disabled_until": rfc3339(until) })
 }
 
-/// UTC RFC 3339 timestamp (days-to-civil algorithm by H. Hinnant).
 pub(crate) fn rfc3339(unix: u64) -> String {
     let (days, rem) = ((unix / 86_400) as i64, unix % 86_400);
     let z = days + 719_468;
@@ -44,7 +39,6 @@ impl RestClient {
         self.call_empty(Method::DELETE, &format!("/guilds/{guild}/members/{user}"), Body::None).await
     }
 
-    /// Ban, deleting `delete_message_seconds` of their history (max 7 days).
     pub async fn ban_member(&self, guild: GuildId, user: UserId, delete_message_seconds: u32) -> Result<()> {
         self.call_empty(
             Method::PUT,

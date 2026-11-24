@@ -1,12 +1,3 @@
-//! Thread header "More" (…) menu (vanilla-thread-channel: `Plus` 32×32 at the end
-//! of the toolbar, after the member list toggle). The client's menu (navId
-//! `thread-context`, "Actions du fil") has six groups: join/voice | jump to top,
-//! edit, pin, tags, open, summarize | favorite | invitable, archive, lock,
-//! delete | mute, notifications | Copy Link, Copy Thread ID. It has no Mark As
-//! Read. Only the last group (read-only) is offered here, in the client's order
-//! and without a separator between its two items (client string key for Copy
-//! Thread ID = `DQ797g`).
-
 use std::cell::RefCell;
 
 use gpui::{AnyElement, App, ClipboardItem, Context, Pixels, Point, Window};
@@ -21,14 +12,11 @@ use crate::{
 
 thread_local! {
     static OPEN: RefCell<Option<(Id, Point<Pixels>)>> = const { RefCell::new(None) };
-    /// Right-clicked forum post card (thread-context on a post).
     static POST: RefCell<Option<(crate::commands::ForumPost, Id, Point<Pixels>)>> = const { RefCell::new(None) };
 }
 
-/// `MANAGE_THREADS` (1 << 34): close, lock, pin and delete any post.
 const MANAGE_THREADS: u64 = 1 << 34;
 
-/// Right-click on a forum post card.
 pub fn open_post(post: crate::commands::ForumPost, forum: Id, pos: Point<Pixels>, window: &mut Window) {
     POST.with(|o| *o.borrow_mut() = Some((post, forum, pos)));
     window.refresh();
@@ -68,16 +56,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     Some(context_menu::render(pos, items, std::rc::Rc::new(|w: &mut Window, _: &mut App| close(w))))
 }
 
-/// Forum post card menu (live `thread-context` on a post, dumps/vanilla-menu-thread,
-/// 2026-11-24, seen with Manage Threads on a pinned locked post): Mark As Read
-/// (disabled when read) | Add to Favorites > | Follow Post, Close Post, Lock/Unlock
-/// Post, Edit Post, Edit Tags >, Copy Link | Mute Post, Notification Settings (both
-/// disabled until the post is followed) | Pin/Unpin Post, Delete Post | Copy Thread ID.
-/// Rows without an icon are 34px, the two submenus and Copy ID 36px. Every write is a
-/// stub here; the follow state is not in the model, so the post is treated as not
-/// followed. The menu for an archived post and the one without moderation rights were
-/// not dumped: an archived post drops Close, a non-moderator keeps Follow, Copy Link
-/// and (as the post owner) Close / Edit.
 fn render_post(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let (p, forum, pos) = POST.with(|o| o.borrow().clone())?;
     let e = cx.entity();

@@ -1,5 +1,3 @@
-//! Application (slash) commands: the command index and interactions.
-
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -8,11 +6,8 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{ChannelId, GuildId, MessageId, Snowflake, null_default};
 
-/// One option (or sub-command) of an application command.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct CommandOption {
-    /// 1 sub-command, 2 group, 3 string, 4 integer, 5 bool, 6 user,
-    /// 7 channel, 8 role, 9 mentionable, 10 number, 11 attachment.
     #[serde(rename = "type")]
     pub kind: u8,
     pub name: String,
@@ -34,7 +29,6 @@ pub struct ApplicationCommand {
     pub application_id: Snowflake,
     #[serde(default)]
     pub version: Option<Snowflake>,
-    /// 1 chat input, 2 user, 3 message, 4 primary entry point.
     #[serde(rename = "type", default = "one")]
     pub kind: u8,
     pub name: String,
@@ -56,7 +50,6 @@ pub struct CommandApplication {
     pub icon: Option<String>,
 }
 
-/// Response of `GET /{guilds|channels|users}/{id}/application-command-index`.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct CommandIndex {
     #[serde(default, deserialize_with = "null_default")]
@@ -66,7 +59,6 @@ pub struct CommandIndex {
 }
 
 impl CommandIndex {
-    /// Chat-input commands whose name starts with `prefix`, for the composer.
     pub fn matching(&self, prefix: &str) -> Vec<&ApplicationCommand> {
         let p = prefix.to_lowercase();
         let mut v: Vec<_> = self
@@ -79,13 +71,10 @@ impl CommandIndex {
     }
 }
 
-/// Where the command index is looked up.
 #[derive(Debug, Clone, Copy)]
 pub enum CommandScope {
     Guild(GuildId),
-    /// DM / group DM channel.
     Channel(ChannelId),
-    /// User-installed apps.
     Me,
 }
 
@@ -97,7 +86,6 @@ pub(crate) fn index_path(scope: CommandScope) -> String {
     }
 }
 
-/// Where an interaction happens.
 #[derive(Debug, Clone, Copy)]
 pub struct InteractionTarget {
     pub guild: Option<GuildId>,
@@ -123,8 +111,6 @@ fn base(kind: u8, app: Snowflake, t: InteractionTarget, session: &str, data: Val
     v
 }
 
-/// Body of a slash command invocation (`type: 2`). `options` is the already
-/// built option tree (`[{type,name,value}]`).
 pub fn slash_body(cmd: &ApplicationCommand, t: InteractionTarget, session: &str, options: Value) -> Value {
     base(
         2,
@@ -142,7 +128,6 @@ pub fn slash_body(cmd: &ApplicationCommand, t: InteractionTarget, session: &str,
     )
 }
 
-/// Body of a button / select click (`type: 3`).
 #[allow(clippy::too_many_arguments)]
 pub fn component_body(
     app: Snowflake,
@@ -164,7 +149,6 @@ pub fn component_body(
     b
 }
 
-/// Body of a modal submit (`type: 5`). `components` are action rows of text inputs with values.
 pub fn modal_body(app: Snowflake, t: InteractionTarget, session: &str, modal_id: Snowflake, custom_id: &str, components: Value) -> Value {
     base(5, app, t, session, json!({ "id": modal_id, "custom_id": custom_id, "components": components }))
 }
@@ -174,7 +158,6 @@ impl RestClient {
         self.call(Method::GET, &index_path(scope), Body::None).await
     }
 
-    /// `POST /interactions` with a body built by `slash_body`/`component_body`/`modal_body`.
     pub async fn create_interaction(&self, body: Value) -> Result<()> {
         self.call_empty(Method::POST, "/interactions", Body::Json(body)).await
     }

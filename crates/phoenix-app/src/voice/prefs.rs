@@ -1,6 +1,3 @@
-//! Voice & Video preferences (client-only, like Discord's local voice
-//! settings), saved as JSON in `$XDG_CONFIG_HOME/discord-phoenix/voice.json`.
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -20,7 +17,6 @@ pub enum InputMode {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UserAudio {
-    /// Percent, 0..=200 (Discord's user volume).
     pub volume: u32,
     pub muted: bool,
 }
@@ -33,32 +29,24 @@ impl Default for UserAudio {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoicePrefs {
-    /// `None` = system default.
     pub input_device: Option<String>,
     pub output_device: Option<String>,
-    /// Percent, 0..=100.
     pub input_volume: u32,
-    /// Percent, 0..=200.
     pub output_volume: u32,
     pub input_mode: InputMode,
     pub auto_sensitivity: bool,
-    /// Manual threshold in dBFS (-100..=0).
     pub sensitivity_db: f32,
-    /// GPUI keystroke, e.g. `ctrl-grave`.
     pub ptt_key: Option<String>,
     pub ptt_delay_ms: u32,
     pub echo_cancellation: bool,
     pub noise_suppression: bool,
     pub agc: bool,
-    /// Percent, 0..=100.
     pub attenuation: u32,
     pub attenuate_self: bool,
     pub attenuate_others: bool,
     pub users: HashMap<u64, UserAudio>,
-    /// User panel mute/deafen: the account doesn't store them, so they stay local.
     pub self_mute: bool,
     pub self_deaf: bool,
-    /// "Profil d'entrée audio": 0 voice isolation, 1 studio, 2 custom.
     pub audio_profile: u32,
 }
 
@@ -194,13 +182,11 @@ impl VoicePrefs {
         self.users.get(&id.0).copied().unwrap_or_default()
     }
 
-    /// Effective playback gain for a user (local mute = 0).
     pub fn user_gain(&self, id: Id) -> f32 {
         let u = self.user(id);
         if u.muted { 0. } else { u.volume as f32 / 100. }
     }
 
-    /// Every control needed to bring the audio engine in line with these prefs.
     pub fn controls(&self) -> Vec<VoiceControl> {
         let mut v = vec![
             VoiceControl::SetInputDevice(self.input_device.clone()),
@@ -220,13 +206,11 @@ impl VoicePrefs {
     }
 }
 
-/// Process-wide voice prefs, loaded on first use.
 pub fn prefs() -> &'static Mutex<VoicePrefs> {
     static P: OnceLock<Mutex<VoicePrefs>> = OnceLock::new();
     P.get_or_init(|| Mutex::new(VoicePrefs::load()))
 }
 
-/// Change the prefs, save them and push the matching controls.
 pub fn update(f: impl FnOnce(&mut VoicePrefs), save: bool) {
     let (before, after) = {
         let mut p = prefs().lock();

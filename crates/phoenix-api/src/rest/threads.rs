@@ -1,14 +1,3 @@
-//! Archived threads of a text channel (the threads browser's "older threads").
-//!
-//! The client calls `GET /channels/{id}/threads/archived/public` and
-//! `GET /channels/{id}/users/@me/threads/archived/private`, both paged by
-//! `before` = the oldest `archive_timestamp` seen, `limit` 25.
-//!
-//! The browser's member facepile is NOT a `thread-members` list call: the
-//! row (ThreadBrowser `U`) reads `member_ids_preview` + `member_count` of the
-//! thread channel object and only requests missing users through the gateway
-//! (`requestMember`); unknown ones show the default avatar.
-
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::Value;
@@ -17,11 +6,9 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{Channel, ChannelId, null_default};
 
-/// Which archive list to read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveKind {
     Public,
-    /// Private threads the current user joined.
     JoinedPrivate,
 }
 
@@ -38,7 +25,6 @@ pub(crate) fn archived_threads_path(channel: ChannelId, kind: ArchiveKind, befor
     s
 }
 
-/// ISO timestamps only need `+` and `:` escaped for a query string.
 fn urlencoding_min(s: &str) -> String {
     s.replace('+', "%2B").replace(':', "%3A")
 }
@@ -47,7 +33,6 @@ fn urlencoding_min(s: &str) -> String {
 pub struct ArchivedThreads {
     #[serde(default, deserialize_with = "null_default")]
     pub threads: Vec<Channel>,
-    /// Thread member objects of the current user (raw).
     #[serde(default, deserialize_with = "null_default")]
     pub members: Vec<Value>,
     #[serde(default)]
@@ -55,13 +40,11 @@ pub struct ArchivedThreads {
 }
 
 impl ArchivedThreads {
-    /// Oldest archive timestamp of the page (the next `before` cursor).
     pub fn cursor(&self) -> Option<&str> {
         self.threads.iter().filter_map(|t| t.thread_metadata.as_ref()?.archive_timestamp.as_deref()).min()
     }
 }
 
-/// Merge public + private pages, newest archive first, no duplicates.
 pub fn merge_archived(mut a: Vec<Channel>, b: Vec<Channel>) -> Vec<Channel> {
     for t in b {
         if !a.iter().any(|x| x.id == t.id) {

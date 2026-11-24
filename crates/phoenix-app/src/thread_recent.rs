@@ -1,7 +1,3 @@
-//! Most recent message of each thread, for the thread card under its starter message
-//! (the client's ThreadMessageStore: filled by THREAD_LIST_SYNC `most_recent_messages`
-//! and every MESSAGE_CREATE in a thread). Written by the gateway thread, read by the UI.
-
 use std::collections::HashMap;
 
 use gpui::SharedString;
@@ -12,11 +8,9 @@ use crate::model::{Id, ImageRef};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Recent {
     pub author: Id,
-    /// Server nick, else global name, else username (as sent with the message).
     pub name: SharedString,
     pub avatar: ImageRef,
     pub content: SharedString,
-    /// Unix seconds.
     pub ts: i64,
 }
 
@@ -25,7 +19,6 @@ static STORE: RwLock<Option<HashMap<Id, Recent>>> = RwLock::new(None);
 pub fn set(thread: Id, r: Recent) {
     let mut s = STORE.write();
     let map = s.get_or_insert_with(HashMap::new);
-    // Keep the newest one (a sync can arrive after a live message).
     if map.get(&thread).is_none_or(|o| o.ts <= r.ts) {
         map.insert(thread, r);
     }
@@ -35,8 +28,6 @@ pub fn get(thread: Id) -> Option<Recent> {
     STORE.read().as_ref()?.get(&thread).cloned()
 }
 
-/// "Il y a 2 min" (web bundle module 469881 with its default strings): under a minute
-/// counts as 1 min, then h, j, "Il y a plus de 30 j", "Il y a plus d'1 an".
 pub fn ago(secs: i64) -> SharedString {
     let s = secs.max(0);
     match s {

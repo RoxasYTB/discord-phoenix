@@ -1,7 +1,3 @@
-//! "Inventaire des cadeaux" settings page (dump vanilla-settings-16-3):
-//! gift card promo, Redeem codes, the gifting badge ladder and "Gifts I
-//! purchased". Phoenix handles no payments: buttons are inert.
-
 use gpui::{AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::FluentBuilder as _};
 
 use crate::{
@@ -22,10 +18,6 @@ fn text(size: f32, line: f32, weight: FontWeight, color: usize, s: SharedString)
     div().text_size(z(size)).line_height(z(line)).font_weight(weight).text_color(c(tok(color))).child(s)
 }
 
-/// `container_J9WkLo`: 90deg --expressive-gradient-blue-end → -start over
-/// --background-surface-high, --radius-lg, min-height 180, padding 16 16 16 28;
-/// stack gap 24: heading-lg/semibold 20/24, then body-xs bullet items
-/// (12px glyph, gap 6, 8 apart) and `overlay-primary` sm buttons 12 apart.
 pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let item = |ic: &'static str, k: &'static str| {
         div()
@@ -37,7 +29,6 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
             .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr(k)))
     };
     let store = |k: &'static str| {
-        // overlay-primary_F7qvhY: white fill, black text, 1px --border-normal
         controls::button_sm(eid(format!("gift-store-{k}")), tr(k), BtnKind::Secondary)
             .bg(gpui::white())
             .text_color(gpui::black())
@@ -52,7 +43,7 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
         .pb(z(16.))
         .pr(z(16.))
         .pl(z(28.))
-        .rounded(z(16.)) // --radius-lg
+        .rounded(z(16.))
         .bg(gpui::linear_gradient(
             90.,
             gpui::linear_color_stop(c(tok(idx::EXPRESSIVE_GRADIENT_BLUE_END)), 0.),
@@ -92,7 +83,6 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
                 ),
         )
         .child(
-            // animatedGraphic_J9WkLo (282x188 lottie): our own glyph stands in.
             div()
                 .w(z(282.))
                 .h(z(188.))
@@ -104,9 +94,6 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
         .into_any_element()
 }
 
-/// Redeem field (#container_VhFsFg): label body-md/medium --text-strong,
-/// description body-sm --text-muted, 8 below; 40px input (--input-background
-/// -default, 1px --input-border-default, r8) + md primary "Redeem", gap 8.
 pub(super) fn redeem(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     div()
         .py(z(10.))
@@ -149,11 +136,6 @@ const BADGES: &[(&str, u32)] = &[
     ("sp.gi.t6", 20),
 ];
 
-/// `container_qZFuGA`: content section (--background-mod-subtle, r 12 12 0 0,
-/// p32) with a row of 96px `badgeItem_` (p8 gap8, 44px icon, name body-sm
-/// /semibold --text-muted, "Gifted: Nx" body-xs --text-subtle), footer
-/// text body-xs; footer section (--background-surface-high, r 0 0 12 12,
-/// p24) with the md primary "Send a gift" button on the right.
 pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let mut grid = div().flex().justify_center().gap(z(8.));
     for (k, n) in BADGES {
@@ -204,7 +186,6 @@ pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
         .into_any_element()
 }
 
-/// Empty "Gifts I purchased": "No gifts." + the generous-soul line.
 pub(super) fn purchased(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     div()
         .flex()
@@ -215,14 +196,8 @@ pub(super) fn purchased(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyE
         .into_any_element()
 }
 
-/// "Abonnements" (dump vanilla-settings-16-2, `content_NedsCW` gap 32):
-/// heading-lg/semibold 20/24 + 16px margin, `sectionDescription_4VCFtm`
-/// 16/20 --text-default; then the "Subscription credit" fieldset: legend
-/// body-lg/medium 20/24 (mb 12), body-sm description (mt -8). Subscription
-/// cards and credit rows need billing data Phoenix doesn't fetch.
 pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let data = super::subscriptions::get().unwrap_or_default();
-    // content_NedsCW: column, gap 32. Section: title 20/24 600, 16, lead 16/20, 16, card.
     let mut head = div()
         .flex()
         .flex_col()
@@ -247,15 +222,10 @@ pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> 
         .into_any_element()
 }
 
-/// Nitro Squad card (`container_pmhtZL nitro-pink_pmhtZL container_xFL7Bm`, live client
-/// 2026-11-24): --background-surface-high, r8, padding 4 24 0, a 270deg pink→blue wash
-/// (both stops at alpha .3) masked by `radial-gradient(100% 100% at 50% 100%, transparent 60%, #000)`.
 fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
     use gpui::{hsla, linear_color_stop, linear_gradient};
     let start = hsla(305.455 / 360., 0.761, 0.3118, 0.3);
     let end = hsla(240. / 360., 0.8206, 0.4373, 0.3);
-    // GPUI has no masks: the radial mask is sampled on its vertical axis (x = 50%),
-    // alpha = clamp((d - .6) / .4) with d = distance to the bottom edge / height.
     const STRIPS: usize = 16;
     let wash = div().absolute().inset_0().flex().flex_col().children((0..STRIPS).map(|k| {
         let d = 1. - (k as f32 + 0.5) / STRIPS as f32;
@@ -277,10 +247,8 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
         .pb(z(12.))
         .border_b_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
-        // The client draws its NITRO SQUAD wordmark (16px tall); ours is set in type.
         .child(div().text_size(z(16.)).line_height(z(18.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.su.squad").to_uppercase()))
         .child(
-            // Beta pill: white, rgb(47,48,53) 12/16 600 uppercase, padding 0 8, pill radius.
             div()
                 .h(z(16.))
                 .px(z(8.))
@@ -316,14 +284,12 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
                 .text_color(c(tok(idx::TEXT_MUTED)))
                 .child(gpui::StyledText::new(full).with_highlights(hl)),
         )
-        // "Leave Plan" is inert: it would cancel the user's membership.
         .child(div().mt(z(12.)).child(controls::button(eid("squad-leave"), tr("sp.su.leave"), BtnKind::Secondary)));
     let rows = sq.members.iter().map(|m| {
         let mut name: String = m.user.display_name.to_string();
         if m.me {
             name.push_str(&tr("sp.su.you"));
         }
-        // container_-PdA9i: padding 8 8 8 4, r8; 24px avatar, 12 gap; "·" 4px each side.
         div()
             .h(z(40.))
             .pl(z(4.))
@@ -342,7 +308,6 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
         .flex()
         .flex_col()
         .pl(z(32.))
-        // usersListHeader_xFL7Bm: padding 12 4 0, margin-bottom 10.
         .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, tr("sp.su.members")).pt(z(12.)).px(z(4.)).mb(z(10.)))
         .children(rows);
     div()
@@ -362,8 +327,6 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
         .into_any_element()
 }
 
-/// `accountCreditRow_ysRrD_` in `premiumSubscriptionAccountCredit_ysRrD_`: --background-base-lower,
-/// r5, padding 16; 32px tier gradient tile (r4, p4, 24px white glyph), details margin 0 8.
 fn credit_row(cr: &super::subscriptions::Credit, paused: bool) -> AnyElement {
     use gpui::{linear_color_stop, linear_gradient};
     let (a, b) = if cr.tier == 0 {

@@ -1,10 +1,5 @@
-//! Mock messages covering every kind of message content (markdown, code, embeds,
-//! attachments, sticker, poll, forward, system lines), appended to the mock
-//! `#showcase` channel of the first guild so offscreen renders show each of them.
-
 use crate::model::*;
 
-/// Showcase messages for `channel`, ids starting after `next_id`, timestamps after `ts`.
 pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts: i64) -> Vec<Message> {
     let mut out: Vec<(u64, Message)> = Vec::new();
     let push = |author: u64, m: Message, out: &mut Vec<(u64, Message)>| out.push((author, m));
@@ -93,7 +88,6 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
         },
         &mut out,
     );
-    // A multi-image social post: one embed per image sharing the url, merged into a mosaic.
     let post = |img: &str, text: bool| Embed {
         color: Some(0x1D9BF0),
         provider: text.then(|| "SocialSite".into()),
@@ -201,12 +195,9 @@ impl<T> Tap for T {}
 
 use gpui::SharedString;
 
-/// Mock media URL: a local PNG from `PHX_MOCK_MEDIA_DIR` when the render example generated one
-/// (offscreen renders have no network), else an unreachable placeholder URL.
 fn media(name: &str) -> SharedString {
     let png = name.rsplit_once('.').map_or(name.to_owned(), |(b, _)| format!("{b}.png"));
     match std::env::var("PHX_MOCK_MEDIA_DIR").map(|d| format!("{d}/{png}")) {
-        // `local/<abs path>`: served from disk by `Assets::load`.
         Ok(p) if std::path::Path::new(&p).exists() => format!("local/{p}").into(),
         _ => format!("https://example.invalid/{name}").into(),
     }

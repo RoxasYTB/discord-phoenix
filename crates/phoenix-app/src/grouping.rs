@@ -1,25 +1,8 @@
-//! Message grouping: consecutive messages by the same author within
-//! 7 minutes collapse under one header (avatar + username), like Discord.
-//!
-//! Rules from the 2026 client (`current-client/js/4d795811fbaaab27.js`, module 857069 `u`,
-//! "starts a new group"): a message with a thread or of a command type; then for a non-default
-//! type: the previous one is a user message, or this one is a reply; for a default one: the
-//! previous one is a system message, another author, a different ephemeral flag, a webhook
-//! posting under another name, the forum post's starter message, another day, 7 minutes or
-//! more apart (`Math.abs(a - b) < 7 min` groups), or a silent / non-silent switch (a silent one
-//! after a normal one, or a normal one with mentions after a silent one); finally a different
-//! application. User message types: `USER_MESSAGE` (module 448761). Blocked / ignored authors
-//! are drawn elsewhere (collapsed rows) and not compared here.
-
 use crate::model::{Message, MessageKind};
 
 pub const GROUP_WINDOW_SECS: i64 = 7 * 60;
 
-/// `MessageTypesSets.USER_MESSAGE`: default, reply, chat input / context menu command,
-/// role subscription purchase, purchase notification, stage raise hand, voice hangout
-/// invite, emoji added.
 const USER_MESSAGE: [u8; 9] = [0, 19, 20, 23, 26, 41, 45, 47, 68];
-/// `isCommandType`: CHAT_INPUT_COMMAND, CONTEXT_MENU_COMMAND.
 const COMMAND: [u8; 2] = [20, 23];
 const FLAG_HAS_THREAD: u64 = 1 << 5;
 const FLAG_SUPPRESS_NOTIFICATIONS: u64 = 1 << 12;
@@ -28,14 +11,10 @@ fn is_user_message(m: &Message) -> bool {
     matches!(m.kind, MessageKind::Default | MessageKind::Reply) && USER_MESSAGE.contains(&m.type_id)
 }
 
-/// `message.type > MessageTypes.DEFAULT`.
-/// Local / mock replies may only carry `reply_to`.
 fn non_default(m: &Message) -> bool {
     m.type_id > 0 || !matches!(m.kind, MessageKind::Default) || m.reply_to.is_some()
 }
 
-/// Creation time in ms: from the snowflake when the id is one (the client compares
-/// `Date`s), else the second timestamp.
 fn ms(m: &Message) -> i64 {
     if m.id.0 >= 1 << 40 {
         ((m.id.0 >> 22) + 1_420_070_400_000) as i64
@@ -44,7 +23,6 @@ fn ms(m: &Message) -> i64 {
     }
 }
 
-/// Does `cur` start a new group (render avatar + username header)?
 pub fn starts_group(prev: Option<&Message>, cur: &Message, utc_offset_secs: i64) -> bool {
     let Some(prev) = prev else { return true };
     if cur.thread.is_some() || cur.flags & FLAG_HAS_THREAD != 0 || COMMAND.contains(&cur.type_id) {
@@ -69,7 +47,6 @@ pub fn starts_group(prev: Option<&Message>, cur: &Message, utc_offset_secs: i64)
     split || cur.application_id != prev.application_id
 }
 
-/// Should a day divider be drawn above `cur`?
 pub fn day_divider(prev: Option<&Message>, cur: &Message, utc_offset_secs: i64) -> bool {
     prev.is_some_and(|p| day(p.timestamp, utc_offset_secs) != day(cur.timestamp, utc_offset_secs))
 }
@@ -78,7 +55,6 @@ fn day(ts: i64, off: i64) -> i64 {
     (ts + off).div_euclid(86_400)
 }
 
-/// Compute group-start flags for a whole slice.
 pub fn group_flags(msgs: &[Message], utc_offset_secs: i64) -> Vec<bool> {
     msgs.iter()
         .enumerate()
@@ -107,7 +83,7 @@ mod tests {
         }
     }
 
-    const T0: i64 = 1_763_800_000; // a weekday mid-day UTC
+    const T0: i64 = 1_763_800_000;
 
     #[test]
     fn first_message_starts_group() {
@@ -119,15 +95,12 @@ mod tests {
         let a = msg(1, 1, T0);
         let b = msg(2, 1, T0 + 60);
         assert!(!starts_group(Some(&a), &b, 0));
-        // `Math.abs(a - b) < 7 min`: exactly 7 minutes apart starts a new group.
         let c = msg(3, 1, T0 + GROUP_WINDOW_SECS - 1);
         assert!(!starts_group(Some(&a), &c, 0));
         let d = msg(4, 1, T0 + GROUP_WINDOW_SECS);
         assert!(starts_group(Some(&a), &d, 0));
     }
 
-    /// #phoenix, 24/11: yohan's poll (16:46), the POLL_RESULT system line (type 46, 16:50,
-    /// same author), then yohan at 16:56. The client draws the 16:56 message with its header.
     #[test]
     fn system_message_breaks_the_group() {
         let poll = msg(1, 1, T0);
@@ -135,14 +108,12 @@ mod tests {
         let next = msg(3, 1, T0 + 599);
         assert!(starts_group(Some(&poll), &result, 0));
         assert!(starts_group(Some(&result), &next, 0));
-        // Mock / local messages carry no raw type: the kind decides.
         let local = Message { kind: MessageKind::Pin, ..msg(4, 1, T0 + 600) };
         assert!(starts_group(Some(&local), &msg(5, 1, T0 + 601), 0));
     }
 
     #[test]
     fn snowflake_times_and_other_splits() {
-        // Real snowflakes: 1574814389830422673 (16:50:09) and 1574815884067999868 (16:56:05).
         let a = Message { id: Id(1574814389830422673), ..msg(0, 1, 0) };
         let b = Message { id: Id(1574815884067999868), ..msg(0, 1, 0) };
         assert_eq!(ms(&b) - ms(&a), 356_254);
@@ -164,8 +135,6 @@ mod tests {
         assert!(starts_group(Some(&base), &app, 0));
         let threaded = Message { thread: Some(crate::model::ThreadRef::default()), ..msg(2, 1, T0 + 1) };
         assert!(starts_group(Some(&base), &threaded, 0));
-        // The previous one is the forum post's starter message (same id as the channel; real
-        // snowflakes only, mock ids can collide).
         let post = Id(1574814389830422673);
         let starter = Message { id: post, channel: post, ..msg(0, 1, 0) };
         let next = Message { id: Id(1574815884067999868), channel: post, ..msg(0, 1, 0) };
@@ -198,14 +167,11 @@ mod tests {
         let b = msg(2, 1, midnight + 60);
         assert!(starts_group(Some(&a), &b, 0));
         assert!(day_divider(Some(&a), &b, 0));
-        // With a +2h offset both fall on the same local day.
         assert!(!starts_group(Some(&a), &b, 7200));
     }
 
     #[test]
     fn out_of_order_timestamps_group_within_window() {
-        // The client compares `Math.abs(prev - cur) < 7 min`: a message dated 10 s before the
-        // previous one still joins its group; 7 minutes before does not.
         assert!(!starts_group(Some(&msg(1, 1, T0)), &msg(2, 1, T0 - 10), 0));
         assert!(starts_group(Some(&msg(1, 1, T0)), &msg(2, 1, T0 - GROUP_WINDOW_SECS), 0));
     }

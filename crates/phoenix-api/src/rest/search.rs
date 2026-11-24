@@ -1,9 +1,3 @@
-//! Message search, GIF (Tenor proxy) and sticker endpoints.
-//!
-//! - `GET /guilds/{id}/messages/search` and `GET /channels/{id}/messages/search`
-//! - `GET /gifs/trending`, `GET /gifs/trending-gifs`, `GET /gifs/search`, `GET /gifs/suggest`
-//! - `GET /sticker-packs`, `GET /guilds/{id}/stickers`
-
 use reqwest::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use url::form_urlencoded::Serializer;
@@ -12,7 +6,6 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{ChannelId, GuildId, Message, Snowflake, UserId};
 
-/// `has:` filter values accepted by Discord search.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HasFilter {
     Link,
@@ -57,14 +50,12 @@ impl HasFilter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SearchSort {
-    /// Newest first (Discord's default).
     #[default]
     Newest,
     Oldest,
     Relevance,
 }
 
-/// Parameters of a message search. Empty fields are omitted from the query.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SearchQuery {
     pub content: Option<String>,
@@ -72,14 +63,11 @@ pub struct SearchQuery {
     pub mentions: Vec<UserId>,
     pub channel_ids: Vec<ChannelId>,
     pub has: Vec<HasFilter>,
-    /// Snowflake bounds (`before:` / `after:` dates are converted by the caller).
     pub min_id: Option<Snowflake>,
     pub max_id: Option<Snowflake>,
     pub pinned: Option<bool>,
-    /// `author_type`: user / bot / webhook (a leading `-` excludes).
     pub author_types: Vec<String>,
     pub sort: SearchSort,
-    /// Results to skip (pages of 25).
     pub offset: u32,
     pub include_nsfw: bool,
 }
@@ -101,7 +89,6 @@ impl SearchQuery {
             && self.author_types.is_empty()
     }
 
-    /// URL query string (without the leading `?`).
     pub fn to_query(&self) -> String {
         let mut s = Serializer::new(String::new());
         if let Some(c) = self.content.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
@@ -155,30 +142,20 @@ impl SearchQuery {
     }
 }
 
-/// Filters typed in the search box, before user/channel names are resolved
-/// to ids by the caller (it owns the cache).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParsedSearch {
     pub content: String,
-    /// `from:name`
     pub from: Vec<String>,
-    /// `mentions:name`
     pub mentions: Vec<String>,
-    /// `in:channel` (leading `#` stripped)
     pub in_channels: Vec<String>,
     pub has: Vec<HasFilter>,
-    /// `before:` / `during:` / `after:` raw values (YYYY-MM-DD).
     pub before: Option<String>,
     pub after: Option<String>,
     pub during: Option<String>,
     pub pinned: Option<bool>,
-    /// `authorType:user|bot|webhook` (the "More filters" modal's author type).
     pub author_types: Vec<String>,
 }
 
-/// Split `hello from:bob in:#general has:image` into filters and free text.
-/// Values may be quoted: `from:"Some Name"`. Unknown `key:` prefixes stay in
-/// the content (so `http://` searches keep working).
 pub fn parse_search(input: &str) -> ParsedSearch {
     let mut out = ParsedSearch::default();
     let mut words = Vec::new();
@@ -269,7 +246,6 @@ fn tokenize(input: &str) -> Vec<String> {
     out
 }
 
-/// Convert a `YYYY-MM-DD` date (UTC midnight) into a snowflake bound.
 pub fn date_to_snowflake(date: &str) -> Option<Snowflake> {
     let mut it = date.split('-');
     let y: i64 = it.next()?.parse().ok()?;
@@ -285,7 +261,6 @@ pub fn date_to_snowflake(date: &str) -> Option<Snowflake> {
 
 const DISCORD_EPOCH_MS: i64 = 1_420_070_400_000;
 
-/// Days since 1970-01-01 (Howard Hinnant's algorithm).
 fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = if y >= 0 { y } else { y - 399 } / 400;
@@ -296,9 +271,6 @@ fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// One page of search results. Each entry is a hit; Discord returns it as a
-/// one-element array (formerly with surrounding context messages), the hit
-/// being the message flagged `hit` or the first one.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SearchResponse {
     #[serde(default)]
@@ -318,7 +290,6 @@ impl SearchResponse {
 #[derive(Debug, Clone)]
 pub enum SearchOutcome {
     Results(SearchResponse),
-    /// HTTP 202: the guild is still being indexed; retry later.
     Indexing { retry_after: f64 },
 }
 
@@ -336,19 +307,14 @@ fn parse_search_reply(status: StatusCode, bytes: &[u8]) -> Result<SearchOutcome>
     Ok(SearchOutcome::Results(serde_json::from_slice(bytes)?))
 }
 
-// ---- GIFs ------------------------------------------------------------------
-
-/// A GIF result from Discord's Tenor proxy.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Gif {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
     pub title: String,
-    /// Page URL; this is what gets sent as the message content.
     #[serde(default)]
     pub url: String,
-    /// Media in the requested `media_format` (mp4 by default).
     #[serde(default)]
     pub src: String,
     #[serde(default)]
@@ -364,7 +330,6 @@ pub struct Gif {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct GifCategory {
     pub name: String,
-    /// Preview media of the category tile.
     #[serde(default)]
     pub src: String,
 }
@@ -373,7 +338,6 @@ pub struct GifCategory {
 pub struct GifTrending {
     #[serde(default)]
     pub categories: Vec<GifCategory>,
-    /// The "Trending GIFs" tile preview.
     #[serde(default)]
     pub gifs: Vec<Gif>,
 }
@@ -403,13 +367,10 @@ fn gif_query(extra: &[(&str, &str)], locale: &str, fmt: GifFormat) -> String {
     for (k, v) in extra {
         s.append_pair(k, v);
     }
-    // The client sends no `provider` since the switch to Klipy (GIFS_* calls, bundle 3ad442).
     s.append_pair("media_format", fmt.as_str());
     s.append_pair("locale", locale);
     s.finish()
 }
-
-// ---- stickers --------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Sticker {
@@ -418,10 +379,8 @@ pub struct Sticker {
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
-    /// Comma-separated autocomplete keywords (unicode emoji for standard ones).
     #[serde(default)]
     pub tags: String,
-    /// 1 png, 2 apng, 3 lottie, 4 gif.
     #[serde(default)]
     pub format_type: u8,
     #[serde(default)]
@@ -467,39 +426,33 @@ struct StickerPacks {
 }
 
 impl RestClient {
-    /// `GET /guilds/{id}/messages/search`
     pub async fn search_guild_messages(&self, guild: GuildId, q: &SearchQuery) -> Result<SearchOutcome> {
         let path = format!("/guilds/{guild}/messages/search?{}", q.to_query());
         let (status, bytes) = self.raw(Method::GET, &path, Body::None).await?;
         parse_search_reply(status, &bytes)
     }
 
-    /// `GET /channels/{id}/messages/search` (DMs and group DMs).
     pub async fn search_channel_messages(&self, channel: ChannelId, q: &SearchQuery) -> Result<SearchOutcome> {
         let path = format!("/channels/{channel}/messages/search?{}", q.to_query());
         let (status, bytes) = self.raw(Method::GET, &path, Body::None).await?;
         parse_search_reply(status, &bytes)
     }
 
-    /// `GET /gifs/trending`: category tiles for the GIF picker home.
     pub async fn gif_trending(&self, locale: &str, fmt: GifFormat) -> Result<GifTrending> {
         let path = format!("/gifs/trending?{}", gif_query(&[], locale, fmt));
         self.call(Method::GET, &path, Body::None).await
     }
 
-    /// `GET /gifs/trending-gifs`: the "Trending GIFs" grid.
     pub async fn gif_trending_gifs(&self, locale: &str, fmt: GifFormat) -> Result<Vec<Gif>> {
         let path = format!("/gifs/trending-gifs?{}", gif_query(&[], locale, fmt));
         self.call(Method::GET, &path, Body::None).await
     }
 
-    /// `GET /gifs/search?q=`
     pub async fn gif_search(&self, query: &str, locale: &str, fmt: GifFormat) -> Result<Vec<Gif>> {
         let path = format!("/gifs/search?{}", gif_query(&[("q", query)], locale, fmt));
         self.call(Method::GET, &path, Body::None).await
     }
 
-    /// `GET /gifs/suggest?q=`: search term suggestions.
     pub async fn gif_suggest(&self, query: &str, limit: u8, locale: &str) -> Result<Vec<String>> {
         let mut s = Serializer::new(String::new());
         s.append_pair("q", query);
@@ -509,14 +462,12 @@ impl RestClient {
         self.call(Method::GET, &path, Body::None).await
     }
 
-    /// `GET /sticker-packs`: Discord's standard sticker packs.
     pub async fn get_sticker_packs(&self, locale: &str) -> Result<Vec<StickerPack>> {
         let path = format!("/sticker-packs?locale={}", url::form_urlencoded::byte_serialize(locale.as_bytes()).collect::<String>());
         let r: StickerPacks = self.call(Method::GET, &path, Body::None).await?;
         Ok(r.sticker_packs)
     }
 
-    /// `GET /guilds/{id}/stickers`
     pub async fn get_guild_stickers(&self, guild: GuildId) -> Result<Vec<Sticker>> {
         self.call(Method::GET, &format!("/guilds/{guild}/stickers"), Body::None).await
     }
@@ -553,7 +504,6 @@ mod tests {
 
     #[test]
     fn date_snowflakes() {
-        // 2015-01-01 is the Discord epoch.
         assert_eq!(date_to_snowflake("2015-01-01"), Some(Snowflake(0)));
         let s = date_to_snowflake("2015-01-02").unwrap();
         assert_eq!(s.0 >> 22, 86_400_000);

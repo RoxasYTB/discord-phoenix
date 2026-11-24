@@ -1,7 +1,3 @@
-//! "Applications autorisées" (vanilla-settings-14 dump #2799-#2856): the
-//! OAuth2 tokens of the account (`GET /oauth2/tokens`, read-only), one
-//! authedAppV2_ card each.
-
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 use parking_lot::RwLock;
 use serde_json::Value;
@@ -31,7 +27,6 @@ pub fn get() -> Option<Vec<AuthorizedApp>> {
 }
 
 pub fn set(mut v: Vec<AuthorizedApp>) {
-    // Newest authorization first, like the client.
     v.sort_by_key(|a| std::cmp::Reverse(a.token_id));
     *APPS.write() = Some(v);
 }
@@ -59,7 +54,6 @@ pub fn parse(v: &Value) -> Vec<AuthorizedApp> {
         .collect()
 }
 
-/// Settings opened: load the tokens once.
 pub fn fetch(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     if APPS.read().is_some() {
         return;
@@ -74,7 +68,6 @@ pub fn fetch(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-/// i18n key of a scope's permission line (client OAuth2 scope strings).
 fn scope_key(s: &str) -> Option<&'static str> {
     Some(match s {
         "identify" => "sp.auth.s.identify",
@@ -101,7 +94,6 @@ fn scope_key(s: &str) -> Option<&'static str> {
     })
 }
 
-/// Snowflake creation date, in the locale's date format.
 fn date(id: u64) -> String {
     let ms = (id >> 22) as i64 + 1_420_070_400_000;
     chrono::DateTime::from_timestamp_millis(ms)
@@ -113,7 +105,6 @@ fn small(t: impl Into<SharedString>, col: usize) -> gpui::Div {
     div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(col))).child(t.into())
 }
 
-/// The cards, or the client's note when nothing is authorized.
 pub fn render(_: &PhoenixApp, _: &mut Context<PhoenixApp>) -> AnyElement {
     let Some(apps) = get() else {
         return small(crate::t!("sp.cn.none"), idx::TEXT_SUBTLE).into_any_element();
@@ -146,7 +137,6 @@ pub fn render(_: &PhoenixApp, _: &mut Context<PhoenixApp>) -> AnyElement {
             .pb(z(16.))
             .flex()
             .flex_col()
-            // headerV2_: padding 16, 40px avatar r8, name 16/600 + date 14
             .child(
                 div()
                     .p(z(16.))
@@ -168,7 +158,6 @@ pub fn render(_: &PhoenixApp, _: &mut Context<PhoenixApp>) -> AnyElement {
                         gpui::svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))),
                     )),
             )
-            // appDetailsContainer_: padding 4 16 0, collapsible sections 16px apart
             .child(
                 div()
                     .px(z(16.))
@@ -214,7 +203,6 @@ pub fn render(_: &PhoenixApp, _: &mut Context<PhoenixApp>) -> AnyElement {
                                     .child(small(crate::t!("sp.auth.ip"), idx::TEXT_DEFAULT)),
                             ),
                     )
-                    // footer_: sm critical-secondary "Retirer l'autorisation", right
                     .child(
                         div().flex().justify_end().child(
                             controls::button_sm(gpui::ElementId::Name(format!("deauth-{}", a.token_id).into()), crate::t!("sp.auth.deauth"), BtnKind::Secondary)

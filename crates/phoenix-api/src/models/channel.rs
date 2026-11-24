@@ -20,7 +20,7 @@ int_enum! {
     }
 }
 
-#[allow(clippy::derivable_impls)] // enum is macro-generated
+#[allow(clippy::derivable_impls)]
 impl Default for ChannelType {
     fn default() -> Self {
         Self::GuildText
@@ -37,7 +37,6 @@ impl ChannelType {
     pub fn is_voice(self) -> bool {
         matches!(self, Self::GuildVoice | Self::GuildStageVoice)
     }
-    /// Channels whose messages can be read directly (forums contain threads instead).
     pub fn is_text_like(self) -> bool {
         matches!(
             self,
@@ -109,7 +108,6 @@ pub struct DefaultReaction {
     pub emoji_name: Option<String>,
 }
 
-/// Any channel: guild text/voice/category/forum, thread, DM or group DM.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Channel {
     pub id: ChannelId,
@@ -135,10 +133,8 @@ pub struct Channel {
     pub user_limit: Option<u32>,
     #[serde(default)]
     pub rate_limit_per_user: Option<u32>,
-    /// DM / group DM recipients (excluding the current user).
     #[serde(default, deserialize_with = "null_default")]
     pub recipients: Vec<User>,
-    /// Deduplicated form used in user-account READY payloads.
     #[serde(default, deserialize_with = "null_default")]
     pub recipient_ids: Vec<UserId>,
     #[serde(default)]
@@ -155,11 +151,8 @@ pub struct Channel {
     pub thread_metadata: Option<ThreadMetadata>,
     #[serde(default)]
     pub member_count: Option<u32>,
-    /// Thread only: first few member ids (the threads browser facepile).
     #[serde(default, deserialize_with = "null_default")]
     pub member_ids_preview: Vec<UserId>,
-    /// Thread only: the current user's thread member object (`muted`,
-    /// `mute_config`, `flags`) when they joined the thread.
     #[serde(default)]
     pub member: Option<serde_json::Value>,
     #[serde(default)]
@@ -178,23 +171,17 @@ pub struct Channel {
     pub default_sort_order: Option<u8>,
     #[serde(default)]
     pub default_forum_layout: Option<u8>,
-    /// DM from a non-friend waiting in "Message Requests".
     #[serde(default, deserialize_with = "null_default")]
     pub is_message_request: bool,
 }
 
-/// `flags` bit for channels listed in the Server Guide only (onboarding
-/// resources): the official client hides them from the channel list and
-/// never counts them as unread.
 pub const CHANNEL_FLAG_GUILD_RESOURCE: u64 = 1 << 7;
 
 impl Channel {
-    /// A Server Guide resource page, not a sidebar channel.
     pub fn is_guild_resource(&self) -> bool {
         self.flags & CHANNEL_FLAG_GUILD_RESOURCE != 0
     }
 
-    /// Human-facing name; for DMs builds it from recipients.
     pub fn display_name(&self) -> String {
         if let Some(n) = self.name.as_deref().filter(|n| !n.is_empty()) {
             return n.to_owned();
@@ -207,7 +194,6 @@ impl Channel {
         }
     }
 
-    /// Ids of DM recipients regardless of the deduplicated or full form.
     pub fn recipient_user_ids(&self) -> Vec<UserId> {
         if self.recipients.is_empty() {
             self.recipient_ids.clone()

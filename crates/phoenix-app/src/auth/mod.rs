@@ -1,6 +1,3 @@
-//! Login flow state beyond email/password: MFA method choice (TOTP, SMS,
-//! backup code) and the QR code (remote auth) panel.
-
 use gpui::{Context, SharedString};
 
 use crate::{app::PhoenixApp, backend::ReadyData};
@@ -30,24 +27,20 @@ impl MfaMethod {
     }
 }
 
-/// QR login progress pushed by the backend.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RemoteAuthUpdate {
     Qr(String),
     Scanned { username: String },
-    /// Session ended (timeout / phone cancelled) or failed with a message.
     Ended(Option<String>),
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum QrState {
-    /// Not started yet (or restart requested).
     #[default]
     Idle,
     Connecting,
     Code {
         url: String,
-        /// Module matrix, row-major, `size * size`.
         modules: Vec<bool>,
         size: usize,
     },
@@ -62,7 +55,6 @@ pub struct LoginUi {
     pub qr: QrState,
 }
 
-/// Encode `url` as a QR module matrix.
 pub fn qr_matrix(url: &str) -> Option<(Vec<bool>, usize)> {
     let code = qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::L).ok()?;
     let size = code.width();
@@ -70,7 +62,6 @@ pub fn qr_matrix(url: &str) -> Option<(Vec<bool>, usize)> {
     Some((modules, size))
 }
 
-/// Start the QR session if the login screen shows and none is running.
 pub fn ensure_qr(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     if app.screen != crate::app::Screen::Login || app.logging_in || app.login_ui.qr != QrState::Idle {
         return;
@@ -95,7 +86,6 @@ fn finish(app: &mut PhoenixApp, res: Result<ReadyData, crate::backend::BackendEr
             app.apply_ready(ready, cx);
         }
         Err(e) if e.0.is_empty() => {
-            // Cancelled/expired: a fresh code is generated on the next frame.
             if !matches!(app.login_ui.qr, QrState::Unavailable(_)) {
                 app.login_ui.qr = QrState::Idle;
             }
@@ -117,14 +107,12 @@ pub fn on_remote_auth(app: &mut PhoenixApp, u: RemoteAuthUpdate, _cx: &mut Conte
     };
 }
 
-/// Retry after the QR panel showed an error.
 pub fn retry_qr(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     app.backend.cancel_remote_auth();
     app.login_ui.qr = QrState::Idle;
     cx.notify();
 }
 
-/// Second step of a password login with the chosen method.
 pub fn submit_mfa(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let code = app.login_mfa.read(cx).value().to_string();
     let fut = app.backend.login_mfa(app.login_ui.mfa_method, code);
@@ -182,7 +170,6 @@ mod tests {
         let (m, n) = qr_matrix("https://discord.com/ra/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG").unwrap();
         assert_eq!(m.len(), n * n);
         assert!(n >= 21);
-        // Top-left finder pattern: dark corner, light ring at (1,1).
         assert!(m[0] && !m[n + 1] && m[2 * n + 2]);
     }
 }

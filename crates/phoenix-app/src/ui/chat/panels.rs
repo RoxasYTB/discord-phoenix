@@ -1,7 +1,3 @@
-//! Chat overlays and side panels: message context menu, delete confirm,
-//! pinned-messages popout, thread panel, "new messages" / "jump to present"
-//! bars, drag & drop target.
-
 use crate::ui::tooltip::Tipped as _;
 use std::rc::Rc;
 
@@ -23,7 +19,6 @@ use crate::{
     ui::{avatar, context_menu, modal},
 };
 
-/// Everything drawn above the whole window (root `children` hook).
 pub fn overlays(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement> {
     let mut out = Vec::new();
     if let Some(m) = app.chat.menu {
@@ -36,8 +31,6 @@ pub fn overlays(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<Phoenix
 }
 
 thread_local! {
-    /// Image URL under the cursor at the last right-click, then the one the
-    /// open message menu was opened on.
     static MENU_MEDIA: std::cell::RefCell<(Option<SharedString>, Option<SharedString>)> = const { std::cell::RefCell::new((None, None)) };
 }
 
@@ -46,7 +39,6 @@ pub fn set_menu_media(url: SharedString) {
 }
 
 thread_local! {
-    /// Same pair for a link of the message text under the cursor.
     static MENU_LINK: std::cell::RefCell<(Option<SharedString>, Option<SharedString>)> = const { std::cell::RefCell::new((None, None)) };
 }
 
@@ -54,7 +46,6 @@ pub fn set_menu_link(url: SharedString) {
     MENU_LINK.with(|m| m.borrow_mut().0 = Some(url));
 }
 
-/// Called when a message menu opens: the pending image and link (if any) become its targets.
 pub fn arm_menu_media() {
     for slot in [&MENU_MEDIA, &MENU_LINK] {
         slot.with(|m| {
@@ -73,9 +64,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     let pinned = msg.is_some_and(|x| x.pinned);
     let has_text = msg.is_some_and(|x| !x.content.is_empty());
     let ic = |i: ChatIcon| Some(i.path());
-    // A message that only exists locally (pending/failed send, local ephemeral) has no
-    // server id: every API action would target a fake id, so only local ones are offered.
-    // Live failed-send menu (20261124): ... Copy Text, ..., Resend Message, ..., Delete Message.
     if let Some(local) = msg.filter(|x| super::pending::is_local(x)) {
         let mut items = Vec::new();
         if has_text {
@@ -113,11 +101,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         return context_menu::render(m.pos, items, dismiss);
     }
 
-    // Vanilla order (vanilla-menu-message dump, 2026-11-23): 4 quick reactions
-    // as 44px tiles, Add Reaction, View Reactions | Edit (own), Reply, Forward,
-    // Create Thread | Copy Text, Pin, Bookmark, Remind Me >, Apps >, Mark
-    // Unread, Copy Message Link, Speak Message | Delete, Report (others) |
-    // Copy Message ID. Every row has a left icon.
     let has_reactions = msg.is_some_and(|x| !x.reactions.is_empty());
     let in_guild = app.channels.get(&ch).is_some_and(|c| c.guild.is_some());
     let stub = |key: &'static str, icon: &str| {
@@ -150,8 +133,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         );
     }
     let mut items = vec![MenuItem::Custom(strip.into_any_element())];
-    // vanilla-menu-message-addreaction: "Add Reaction >" lists the 12 most used
-    // emoji (20px emojiIcon_ + ":name:"), a separator, then "View More" (picker).
     let mut frequent: Vec<MenuItem> = crate::ui::pickers::grid::build(app, "", cx)
         .items
         .into_iter()
@@ -219,7 +200,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
             ee.update(cx, |a, cx| a.copy_message_text(ch, id, cx))
         }));
     }
-    // Pin needs Manage Messages or Pin Messages (1 << 51) in a server; always in DMs.
     let guild = app.channels.get(&ch).and_then(|c| c.guild);
     let manage = crate::actions::has(app, guild, crate::actions::MANAGE_MESSAGES);
     if guild.is_none() || crate::actions::has(app, guild, crate::actions::MANAGE_MESSAGES | (1 << 51)) {
@@ -285,8 +265,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
             ee.update(cx, |a, cx| a.remove_reactions(ch, id, None, cx))
         }));
     }
-    // vanilla-menu-message (someone else's message, Manage Messages): Delete
-    // Message then Report Message.
     if own || manage {
         let ee = e.clone();
         items.push(MenuItem::danger(crate::t!("msg.delete"), ic(ChatIcon::Trash), move |ev, _, cx| {
@@ -300,7 +278,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
             ee.update(cx, |a, cx| a.report_message(ch, id, cx))
         }));
     }
-    // vanilla-menu-message: "View Interaction Info" on application / interaction messages.
     let interaction_app = crate::commands::store::interaction_info(id)
         .map(|i| i.app_id)
         .or_else(|| crate::commands::store::get(id).map(|p| p.app))
@@ -332,7 +309,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.0.to_string()))
     }));
     }
-    // vanilla-menu-image: | Copy Image, Save Image | Copy Image Link, Open Image Link.
     if let Some(url) = MENU_MEDIA.with(|m| m.borrow().1.clone()) {
         items.push(MenuItem::Separator);
         items.push(stub("msg.copy_image", "image"));
@@ -344,8 +320,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         }));
         items.push(MenuItem::action(crate::t!("msg.open_image_link"), Some(crate::icons::path("menu/open-link")), move |_, _, cx| cx.open_url(&url)));
     }
-    // vanilla-menu-link (2026-11-24): a link of the message text adds | Copy Link,
-    // Open Link (`message-copy-native-link`, `message-open-native-link`, 36px icon rows).
     if let Some(url) = MENU_LINK.with(|m| m.borrow().1.clone()) {
         items.push(MenuItem::Separator);
         let u = url.clone();
@@ -364,7 +338,6 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     context_menu::render(m.pos, items, dismiss)
 }
 
-/// Small message card used in the delete confirm and the pins popout.
 fn message_card(app: &PhoenixApp, m: &Message) -> gpui::Div {
     let u = app.users.get(&m.author);
     div()
@@ -439,9 +412,6 @@ fn delete_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx
     if let Some(m) = msg {
         body.push(message_card(app, m).shadow_md().into_any_element());
     }
-    // The 2026 client has no "Protip" block any more (live sandbox 2026-11-24: title,
-    // "Tu es sûr(e) de vouloir supprimer ce message ?", the message preview, Annuler /
-    // Supprimer); Shift+click on Delete still skips this dialog.
     modal::confirm(modal::Confirm {
         title: crate::t!("msg.delete"),
         body,
@@ -457,7 +427,6 @@ fn delete_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx
     })
 }
 
-/// Pinned messages popout under the header pin icon (lives in `ui::inbox`).
 pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     crate::ui::inbox::pins_popout(app, cx)
 }
@@ -466,13 +435,8 @@ thread_local! {
     static THREAD_SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
 }
 
-/// container_HeWz1C header_HeWz1C (vanilla-thread-channel #1336–#1371):
-/// forum post action bar with left `reactButtons_HeWz1C` (starter message
-/// reactions + add-reaction button) and right `buttons_HeWz1C` (Follow/Following
-/// + Copy Link + Jump to Top, gap 4; sm secondary h32 radius 8).
 fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::ScrollHandle, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     use crate::theme::{generated::idx, tok};
-    // Posts opened from the forum list are not in the channel cache: the open forum.
     let ch = app.channels.get(&thread).or_else(|| app.nav.find_thread(thread));
     let forum = ch.and_then(|c| c.parent).or(app.selected_channel)?;
     let f = app.channels.get(&forum)?;
@@ -517,7 +481,6 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
             );
         }
     }
-    // addReactButton_HeWz1C (vanilla-thread-channel #1352): 32x28, radius 8, secondary border, 18px icon.
     reacts = reacts.child(
         div()
             .id("forum-post-add-react")
@@ -554,7 +517,6 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
             .tip(tip)
             .child(gpui::svg().path(crate::icons::path(path)).size(z(16.)).flex_none().text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
     };
-    // button_F7qvhY sm_F7qvhY secondary_F7qvhY hasText_F7qvhY (#1356): Follow / Following.
     let follow_btn = div()
         .id("forum-post-follow")
         .h(z(32.))
@@ -624,12 +586,6 @@ fn forum_post_bar_absent(app: &PhoenixApp, id: crate::model::Id) -> bool {
         .is_some_and(|f| f.kind == crate::model::ChannelKind::Forum)
 }
 
-/// Start of a thread (live sandbox thread 2026-11-24, container_w6h4R2 at the top of the
-/// list): iconWrapper_ii8eNV 64px --background-mod-strong disc (margin-top 16) with the
-/// 32px thread icon in --icon-subtle, h3 heading-xxl/semibold 32/40 bold margin 8 0
-/// --text-strong, then "Commencé par **name**" (subtitle_ii8eNV body-md/normal
-/// --text-default, margin-bottom 2; threadCreatorName_ semibold --text-strong). The
-/// container keeps --custom-message-margin-horizontal (20) on every side.
 fn thread_intro(app: &PhoenixApp, id: crate::model::Id, name: SharedString, entry: &crate::app::ChannelMessages) -> gpui::Div {
     use crate::theme::generated::idx;
     let tk = |i: usize| c(crate::theme::tok(i));
@@ -657,7 +613,6 @@ fn thread_intro(app: &PhoenixApp, id: crate::model::Id, name: SharedString, entr
     d
 }
 
-/// Thread side panel (replaces the member list while open).
 pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let t = app.chat.thread.as_ref()?;
     let entity: Entity<PhoenixApp> = cx.entity();
@@ -690,24 +645,21 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
         .or(app.selected_channel)
         .and_then(|f| app.channels.get(&f))
         .is_some_and(|f| f.kind == crate::model::ChannelKind::Forum);
-    // Same chat sidebar frame as the "New Thread" sidebar (ref-cache
-    // create-thread-sidebar-header / -frame; see ui/thread_create.rs).
     let tk = |i: usize| c(crate::theme::tok(i));
     use crate::theme::generated::idx;
     Some(
         div()
-            .w(z(480.)) // chatLayerWrapper_ 480
+            .w(z(480.))
             .flex_none()
             .h_full()
             .border_l_1()
             .border_t_1()
-            .rounded_tl(z(12.)) // container_FrbQJp border-radius 12px 0 0
+            .rounded_tl(z(12.))
             .border_color(tk(idx::BORDER_SUBTLE))
             .bg(tk(idx::BACKGROUND_BASE_LOWER))
             .flex()
             .flex_col()
             .child(
-                // container_ybUK7Z: height 49, padding 8 8 8 20, 1px --border-subtle bottom
                 div()
                     .h(z(49.))
                     .flex_none()
@@ -719,15 +671,12 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                     .items_center()
                     .border_b_1()
                     .border_color(tk(idx::BORDER_SUBTLE))
-                    // iconWrapper_ 32, svg 20 --icon-muted. A forum post has no icon: its
-                    // title starts at the 20px padding (dumps/vanilla-forum-post-sidebar).
                     .when(!is_post, |d| {
                         d.child(div().size(z(32.)).flex_none().flex().items_center().justify_center().child(
                             gpui::svg().path(crate::icons::path("chat/thread")).size(z(20.)).flex_none().text_color(tk(idx::ICON_MUTED)),
                         ))
                     })
                     .child(
-                        // titleWrapper_ > h1 body-md/medium 16/20 --text-strong
                         div()
                             .flex_1()
                             .min_w_0()
@@ -739,9 +688,6 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                             .child(t.thread.name.clone()),
                     )
                     .child({
-                        // toolbar_ (vanilla-forum-post-sidebar #1634): padding-left 10, gap 10;
-                        // More then Close, iconWrapper_ clickable 32 with a 20px glyph,
-                        // --icon-muted, :hover --icon-subtle.
                         let btn = |id: &'static str, path: &'static str| {
                             div()
                                 .id(id)
@@ -766,8 +712,6 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                             .pl(z(10.))
                             .flex()
                             .gap(z(10.))
-                            // Thread toolbar (live 2026-11-24): "Paramètres de notification" bell,
-                            // "Plus", "Fermer" (forum posts keep More + Close).
                             .when(!is_post, |d| d.child(btn("thread-notify", "bell").tip(crate::t!("menu.notify_settings")).on_click(cx.listener(|a, _, _, cx| {
                                 a.stub(&crate::t!("menu.notify_settings"), cx)
                             }))))
@@ -779,8 +723,6 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
             )
             .child(body)
             .child(
-                // channelTextArea_: margin 0 10 10, radius 8, 1px --border-subtle;
-                // inner --chat-background-default, textArea 16/22
                 div()
                     .flex_none()
                     .mx(z(10.))
@@ -799,8 +741,6 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                     .child(div().flex_1().min_w_0().child(Input::new(&t.input).appearance(false).bordered(false)))
                     .when(empty, |d| {
                         d.child(
-                            // Long post titles end with an ellipsis inside the field instead of
-                            // running past its border.
                             div()
                                 .absolute()
                                 .left(z(18.))
@@ -818,13 +758,6 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
     )
 }
 
-/// Blurple "N new messages since ..." bar at the top of the list.
-/// newMessagesBar_ barBase_: absolute, top 0, inset-inline --space-8 --space-16, height 32px,
-/// padding-inline --space-16, --brand-500, radius 0 0 8px 8px, --elevation-low, white,
-/// 1px --border-subtle border. barButtonMain_ (body-sm/medium 14px, ellipsis, flex 1) jumps
-/// to the first unread; barButtonAlt_ (semibold, padding --space-4 --space-8, --radius-sm,
-/// hover --control-secondary-background-hover) "Mark As Read" + ChatCheckIcon (barButtonIcon_
-/// 16px, margin-inline-start 8px, top -1px).
 pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     use crate::{theme::generated::idx, ui::chat::tk};
     use gpui::px;
@@ -832,8 +765,6 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
     if app.chat.at_bottom {
         return None;
     }
-    // Client unread bar: same day "N nouveaux messages depuis 10:42" (BctFH/), older
-    // "… depuis le 23 novembre 2026 à 10:42" (3wXb9P, its \n rendered as a space).
     let today = chrono::TimeZone::timestamp_opt(&chrono::Local, ts, 0)
         .single()
         .is_some_and(|d| d.date_naive() == chrono::Local::now().date_naive());
@@ -857,8 +788,7 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
             .border_color(tk(idx::BORDER_SUBTLE))
             .bg(tk(idx::BRAND_500))
             .shadow(vec![gpui::BoxShadow {
-                // --elevation-low: 0 1px 0 --opacity-black-20 (+ two 4% layers, too faint to draw).
-                color: gpui::hsla(0., 0., 0., 0.2), // --opacity-black-20 (dark)
+                color: gpui::hsla(0., 0., 0., 0.2),
                 offset: gpui::point(px(0.), px(1.)),
                 blur_radius: px(0.),
                 spread_radius: px(0.),
@@ -892,7 +822,7 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
                     .py(z(4.))
                     .pl(z(4.))
                     .pr(z(8.))
-                    .rounded(z(8.)) // --radius-sm (:root 8px)
+                    .rounded(z(8.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .cursor_pointer()
                     .hover(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
@@ -907,7 +837,6 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
     )
 }
 
-/// "You're viewing older messages — Jump To Present" above the composer.
 pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let scrolled_up = (!app.chat.at_bottom && app.message_list.is_scrolled_to_end() == Some(false))
         || crate::history_detached::is_detached(app);
@@ -916,13 +845,8 @@ pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEle
     }
     use crate::theme::{generated::idx, tok};
     Some(
-        // jumpToPresentBar_ bottomBar_ barBase_: centred max-content pill (min 284x44),
-        // --background-surface-highest, 1px --border-normal, --radius-lg, --shadow-medium,
-        // padding 8px 12px (jumpToPresentBar_ overrides bottomBar_),
-        // color --text-default.
         div()
             .absolute()
-            // Live (ref-cache jump-present-bar-hover): pill bottom 20px above the form.
             .bottom(z(20.))
             .left_0()
             .right(z(16.))
@@ -934,7 +858,7 @@ pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEle
                     .min_w(z(284.))
                     .min_h(z(44.))
                     .py(z(8.))
-                    .px(z(12.)) // live computed padding 8px 12px (jumpToPresentBar_ padding-inline --space-12)
+                    .px(z(12.))
                     .rounded(z(16.))
                     .border_1()
                     .border_color(c(tok(idx::BORDER_NORMAL)))
@@ -945,7 +869,6 @@ pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEle
                     .items_center()
                     .text_color(c(tok(idx::TEXT_DEFAULT)))
                     .on_click(cx.listener(|a, _, _, cx| a.jump_to_present(cx)))
-                    // barButtonMain_ barButtonBase_ body-sm/medium, padding-inline-start --space-4, end 12.
                     .child(
                         div()
                             .flex_1()
@@ -960,7 +883,6 @@ pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEle
                             .text_ellipsis()
                             .child(crate::t!("chat.older")),
                     )
-                    // Button variant primary, size sm: "Revenir aux messages les plus récents".
                     .child(
                         crate::ui::controls::button_sm("jump-present-btn", crate::t!("chat.jump_present"), crate::ui::controls::BtnKind::Primary)
                             .on_click(cx.listener(|a, _, _, cx| a.jump_to_present(cx))),
@@ -971,22 +893,17 @@ pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEle
 }
 
 thread_local! {
-    /// External drag over the chat: (entered, last move), to replay the fly-in.
     static DROP_DRAG: std::cell::Cell<Option<(std::time::Instant, std::time::Instant)>> = const { std::cell::Cell::new(None) };
 }
 
-/// Whole fly-in: icons .8s, title 1s after .175s, instructions 1.25s after .185s.
 const DROP_ANIM_MS: f32 = 1435.;
 
-/// Track file drags over `el` (the `chat-drop` column) so the overlay can
-/// replay the client's enter keyframes each time a drag comes in.
 pub fn track_drop(el: gpui::Stateful<Div>) -> gpui::Stateful<Div> {
     el.on_drag_move::<gpui::ExternalPaths>(|ev, window, _| {
         let now = std::time::Instant::now();
         let inside = ev.bounds.contains(&ev.event.position);
         let cur = DROP_DRAG.get();
         match (inside, cur) {
-            // A pause of over a second means the previous drag left the window unseen.
             (true, Some((start, last))) if now.duration_since(last).as_secs_f32() < 1. => DROP_DRAG.set(Some((start, now))),
             (true, _) => {
                 DROP_DRAG.set(Some((now, now)));
@@ -997,12 +914,10 @@ pub fn track_drop(el: gpui::Stateful<Div>) -> gpui::Stateful<Div> {
     })
 }
 
-/// Files dropped: the next drag starts a fresh fly-in.
 pub fn drop_ended() {
     DROP_DRAG.set(None);
 }
 
-/// Piecewise-linear keyframes with CSS `ease` inside each segment.
 fn keyframes(stops: &[(f32, f32)], p: f32) -> f32 {
     let ease = crate::ui::states::cubic_bezier(0.25, 0.1, 0.25, 1.);
     let p = p.clamp(0., 1.);
@@ -1016,11 +931,6 @@ fn keyframes(stops: &[(f32, f32)], p: f32) -> f32 {
     stops.last().map_or(0., |s| s.1)
 }
 
-/// uploadIconAnimateInLeft/Middle/Right_TLgD1o (.8s ease forwards):
-/// (x, y, opacity, tilt in degrees) of the left icon at progress `p`; the
-/// right one mirrors x and the tilt. The tilt was sampled every 50ms on the
-/// live client (overshoot to -35.9° at 250ms, -28° at 450ms, -32° at 600ms,
-/// settling at -30°) and fits these stops within 0.2°.
 fn icon_pose(p: f32) -> (f32, f32, f32, f32) {
     const T: [f32; 7] = [0., 0.041667, 0.308334, 0.583334, 0.75, 0.833334, 1.];
     const X: [f32; 7] = [0., 0., -48., -41., -45., -44., -44.];
@@ -1031,34 +941,22 @@ fn icon_pose(p: f32) -> (f32, f32, f32, f32) {
     (at(&X), at(&Y), at(&O), at(&R))
 }
 
-/// uploadTextFadeIn_TLgD1o: (opacity, y) at `ms` after the overlay appeared.
 fn text_pose(ms: f32, delay: f32, dur: f32) -> (f32, f32) {
     let p = ((ms - delay) / dur).clamp(0., 1.);
     let k = keyframes(&[(0., 0.), (0.08334, 0.), (0.458, 1.), (1., 1.)], p);
     (k, -4. * (1. - k))
 }
 
-/// 865429 `icons_` (100x60, relative): `wrapOne/Three_` translateY -70, `wrapTwo_` -80,
-/// each holding an absolute 100x130 `icon_` that flies in to its final keyframe
-/// (= the reduce-motion pose): one translate(-44,-6) rotate(-30deg), two (0,-6)
-/// with its blurple glow, three (44,-6) rotate(30deg). Painted one, three, two
-/// like the client's DOM order.
-/// The art comes from the local Discord cache ([`crate::icons::art`]); without it, one glyph.
-///
-/// The three icons at `ms` into the fly-in (`None`: final pose).
 fn upload_icons_at(ms: Option<f32>) -> AnyElement {
     use crate::icons::art;
     let Some(arts) = art::upload_icons() else {
         return icon(ChatIcon::Upload, 48., gpui::white()).into_any_element();
     };
-    // The side canvases are 10px wider than icon_ on each side, the middle one
-    // UPLOAD_GLOW_PAD on every side for its glow (see art::UPLOAD_CANVAS_W).
     let pad = (art::UPLOAD_CANVAS_W - 100.) / 2.;
     let place = |p: &std::path::PathBuf, x: f32, y: f32| {
         gpui::img(p.clone()).absolute().left(z(x - pad)).top(z(y)).w(z(art::UPLOAD_CANVAS_W)).h(z(art::UPLOAD_CANVAS_H))
     };
     let (x, y, o, r) = ms.map_or((-44., -6., 1., -30.), |ms| icon_pose(ms / 800.));
-    // One pre-rotated file per whole degree of tilt.
     let tilt = ((-r).round().max(0.) as usize).min(art::UPLOAD_MAX_TILT);
     let g = art::UPLOAD_GLOW_PAD;
     div()
@@ -1072,9 +970,6 @@ fn upload_icons_at(ms: Option<f32>) -> AnyElement {
         .into_any_element()
 }
 
-/// uploadDropModal_ inner_: 2px dashed --opacity-white-40, radius 6, centred
-/// column; title_ 22px bold white; instructions_ 12/16 white, margin-top 4.
-/// `ms` into the fly-in (`None`: settled).
 fn drop_inner(name: SharedString, ms: Option<f32>) -> Div {
     let (to, ty) = ms.map_or((1., 0.), |ms| text_pose(ms, 175., 1000.));
     let (io, iy) = ms.map_or((1., 0.), |ms| text_pose(ms, 185., 1250.));
@@ -1116,15 +1011,10 @@ fn drop_inner(name: SharedString, ms: Option<f32>) -> Div {
         )
 }
 
-/// Full-area overlay shown while files are dragged over the chat. Each new
-/// drag (see [`track_drop`]) replays the client's enter keyframes: icons fly
-/// out (.8s), bgScale_ bounces (uploadModalBounce_ .99 → 1.005 → .995 → 1),
-/// title and instructions fade in from -4px.
 pub fn drop_overlay(app: &PhoenixApp) -> impl IntoElement {
     use crate::theme::generated::idx;
     use gpui::AnimationExt;
     let name = app.selected_channel.and_then(|c| app.channels.get(&c)).map(|c| c.name.clone()).unwrap_or_default();
-    // uploadDropModal_ 310x170; bgScale_ --brand-500 radius 10.
     let modal = div().w(z(310.)).h(z(170.)).rounded(z(10.)).bg(super::tk(idx::BRAND_500)).flex();
     let modal = match DROP_DRAG.get().map(|(start, _)| start) {
         Some(start) if start.elapsed().as_secs_f32() * 1000. < DROP_ANIM_MS => modal
@@ -1147,7 +1037,7 @@ pub fn drop_overlay(app: &PhoenixApp) -> impl IntoElement {
         .size_full()
         .invisible()
         .group_drag_over::<gpui::ExternalPaths>("chat-drop", |s| s.visible())
-        .bg(super::tk(idx::OPACITY_BLACK_80)) // uploadArea_ --opacity-black-80
+        .bg(super::tk(idx::OPACITY_BLACK_80))
         .flex()
         .items_center()
         .justify_center()
@@ -1156,8 +1046,6 @@ pub fn drop_overlay(app: &PhoenixApp) -> impl IntoElement {
 
 #[cfg(test)]
 mod tests {
-    /// Tilt and position of the left upload icon, sampled on the live client
-    /// with the animation paused at these times (ms, x, y, degrees).
     #[test]
     fn upload_icon_pose_matches_live_samples() {
         for (ms, x, y, deg) in [

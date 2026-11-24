@@ -21,9 +21,5 @@ debug = "line-tables-only"
 opt-level = 2
 debug = false
 
-# Vendored GPUI with the subpixel layout patch (docs/gpui-patches.md).
 [patch.crates-io]
-# Pulled by git rev (not path) so every worktree shares one compiled GPUI: a path
-# dependency gets a different package id per checkout and rebuilds the whole GUI stack.
-# Update the rev after changing vendor/gpui-pre (see docs/gpui-patches.md).
 gpui-pre = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "27fff99e390cc854fb23c26ac791245412e303b6" }

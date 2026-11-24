@@ -1,7 +1,3 @@
-//! Blocked / ignored authors (client n8 / n5 "collapsed-message-item"): a run of their
-//! consecutive messages folds into "N messages bloqués — Montrer"; "Montrer" expands
-//! the run on --message-background-hover, "Masquer" folds it back.
-
 use gpui::{AnyElement, Entity, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div};
 
 use super::tk;
@@ -27,11 +23,8 @@ fn why(app: &PhoenixApp, author: Id) -> Option<Why> {
 
 pub enum Row {
     Normal,
-    /// Inside a folded run (not its first message): nothing.
     Hidden,
-    /// First message of a folded run: the bar alone.
     Collapsed(AnyElement),
-    /// Message of an expanded run; the first one carries the bar.
     Expanded(Option<AnyElement>),
 }
 
@@ -65,10 +58,6 @@ fn bar(entity: &Entity<PhoenixApp>, key: Id, w: Why, n: usize, open: bool) -> An
     let icon = if w == Why::Blocked { "deny" } else { "chat/eye-slash" };
     let action = if open { crate::t!("chat.hidden_hide") } else { crate::t!("chat.hidden_show") };
     let e = entity.clone();
-    // System-message layout: content at x+80, 16px icon centred in the 72px gutter.
-    // blockedSystemMessage_: 1rem / 1.375rem; blockedMessageText_ --text-default;
-    // blockedIcon_ 1rem --text-muted (container hover --icon-feedback-critical);
-    // blockedAction_ --text-muted, row hover --text-link, own hover underline.
     let group = gpui::SharedString::from(format!("blocked-{}", key.0));
     let g2 = group.clone();
     let g3 = group.clone();

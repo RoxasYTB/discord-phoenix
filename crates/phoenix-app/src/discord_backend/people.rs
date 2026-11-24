@@ -1,5 +1,3 @@
-//! Member list ranges, profiles, notes, own status and DM opening.
-
 use phoenix_api::{
     gateway::{GatewayCommand, GuildSubscription, UpdatePresence},
     rest::profile::CustomStatus,

@@ -1,12 +1,3 @@
-//! Phoenix API: an unofficial Discord *user-account* client library.
-//!
-//! * [`models`]: tolerant serde types for Discord objects + permission math.
-//! * [`rest`]: rate-limited HTTP client ([`rest::RestClient`]).
-//! * [`gateway`]: websocket session with resume/reconnect ([`gateway::Gateway`]).
-//! * [`cache`]: in-memory state store fed from gateway events ([`cache::Cache`]).
-//!
-//! Not affiliated with or endorsed by Discord.
-
 pub mod build_info;
 pub mod cache;
 pub mod error;

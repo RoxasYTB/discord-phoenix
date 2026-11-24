@@ -1,5 +1,3 @@
-//! Read-only Mod View panel and the DM call card.
-
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
 
 use super::card;
@@ -11,7 +9,6 @@ use crate::{
     ui::controls::{BtnKind, button},
 };
 
-/// Unix seconds encoded in a snowflake (Discord epoch 2015-01-01).
 pub fn snowflake_unix(id: u64) -> i64 {
     ((id >> 22) / 1000) as i64 + 1_420_070_400
 }
@@ -80,7 +77,6 @@ pub fn mod_view(app: &PhoenixApp, guild: Id, user: Id, cx: &mut Context<PhoenixA
     card(480., crate::t!("menu.mod_view"), None, body.into_any_element(), None, cx)
 }
 
-/// Outgoing DM call card ("Calling…"): only the UI, no call is placed.
 pub fn call_card(app: &PhoenixApp, _channel: Id, user: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let u = app.users.get(&user);
     let body = div()
@@ -103,7 +99,6 @@ pub fn call_card(app: &PhoenixApp, _channel: Id, user: Id, cx: &mut Context<Phoe
 mod tests {
     #[test]
     fn snowflake_time() {
-        // 175928847299117063 is the docs' example snowflake (2016-04-30).
         assert_eq!(super::snowflake_unix(175_928_847_299_117_063), 1_462_015_105);
     }
 }

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Measure the already running official Discord, read-only from /proc.
-# Never starts, stops or signals it. usage: discord_official.sh [seconds=30]
 set -euo pipefail
 secs=${1:-30}
 mapfile -t pids < <(pgrep -f 'discord/app-')

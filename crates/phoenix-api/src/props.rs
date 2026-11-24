@@ -1,22 +1,9 @@
-//! Client "super properties": the identity the desktop client advertises in
-//! the `X-Super-Properties` header and in gateway Identify.
-
 use base64::Engine;
 use serde::Serialize;
 
-/// Electron version of the impersonated desktop client.
 pub const DEFAULT_ELECTRON_VERSION: &str = "44.10.2";
-/// Desktop client (host) version.
 pub const DEFAULT_CLIENT_VERSION: &str = "1.0.170";
-/// Web client build number. Discord bumps this constantly; callers should
-/// refresh it (e.g. scraped at startup). A stale value still logs in, but the
-/// API hides newer content from old builds: with 460000 the shop catalogue
-/// (`/collectibles-categories/v2`) returns no profile frames at all, with the
-/// official client's current build it returns all 41. Values below match the
-/// stable Linux desktop client of 2026-11-23 (`build_info.json` 1.0.170,
-/// `build_number` in its web bundle, Chrome/Electron from its user agent).
 pub const DEFAULT_BUILD_NUMBER: u64 = 679_055;
-/// Chromium version bundled with [`DEFAULT_ELECTRON_VERSION`].
 pub const DEFAULT_CHROME_VERSION: &str = "152.0.7977.169";
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -51,15 +38,10 @@ impl Default for ClientProperties {
 }
 
 impl ClientProperties {
-    /// Properties matching the stable Linux desktop client.
-    /// Built from the compiled-in constants only.
     pub fn linux_desktop() -> Self {
         Self::from_build_info(&crate::build_info::BuildInfo::default())
     }
 
-    /// Properties using the versions of the locally installed Discord when
-    /// found (see [`crate::build_info::BuildInfo::detect_fast`]), else the
-    /// constants. Cheap: reads a few small files, never scans or networks.
     pub fn current() -> Self {
         Self::from_build_info(&crate::build_info::BuildInfo::detect_fast())
     }
@@ -100,14 +82,12 @@ impl ClientProperties {
         &self.browser_user_agent
     }
 
-    /// Base64(JSON) for the `X-Super-Properties` header.
     pub fn to_header(&self) -> String {
         let json = serde_json::to_vec(self).expect("properties serialize");
         base64::engine::general_purpose::STANDARD.encode(json)
     }
 }
 
-/// OS locale as a BCP-47 tag (`fr_FR.UTF-8` → `fr-FR`), `en-US` if unset.
 pub fn os_locale_tag() -> String {
     let raw = ["LC_ALL", "LC_MESSAGES", "LANG"]
         .iter()
@@ -121,8 +101,6 @@ pub fn os_locale_tag() -> String {
     base.replace('_', "-")
 }
 
-/// Discord locale code closest to the OS locale (Discord uses bare `fr`,
-/// `de`… except for a few regional codes).
 pub fn os_discord_locale() -> String {
     discord_locale_for(&os_locale_tag())
 }
@@ -143,8 +121,6 @@ pub fn discord_locale_for(tag: &str) -> String {
     }
 }
 
-/// `Accept-Language` as Chromium builds it from `navigator.languages`
-/// (app locale first, then the OS locale): `fr,fr-FR;q=0.9`.
 pub fn accept_language(locale: &str, os_tag: &str) -> String {
     if locale.eq_ignore_ascii_case(os_tag) {
         locale.into()
@@ -153,7 +129,6 @@ pub fn accept_language(locale: &str, os_tag: &str) -> String {
     }
 }
 
-/// IANA time zone from `$TZ` or the `/etc/localtime` symlink.
 pub fn os_timezone() -> Option<String> {
     if let Ok(tz) = std::env::var("TZ") {
         let tz = tz.trim_start_matches(':');

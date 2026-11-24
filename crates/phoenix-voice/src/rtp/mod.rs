@@ -1,5 +1,3 @@
-//! RTP/RTCP primitives, codec packetizers and the receive jitter buffer.
-
 pub mod av1;
 pub mod h264;
 pub mod jitter;
@@ -8,10 +6,8 @@ pub mod vp8;
 
 use crate::{Error, Result};
 
-/// Default MTU budget for RTP payloads (before transport encryption overhead).
 pub const DEFAULT_MAX_PAYLOAD: usize = 1100;
 
-/// Parsed RTP header (no CSRCs kept; extension kept raw).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RtpHeader {
     pub marker: bool,
@@ -19,7 +15,6 @@ pub struct RtpHeader {
     pub sequence: u16,
     pub timestamp: u32,
     pub ssrc: u32,
-    /// One-byte-header extension (profile, body) if present.
     pub extension: Option<(u16, Vec<u8>)>,
 }
 
@@ -45,7 +40,6 @@ impl RtpHeader {
     }
 }
 
-/// Build a full RTP packet.
 pub fn build_packet(h: &RtpHeader, payload: &[u8]) -> Vec<u8> {
     let mut v = Vec::with_capacity(16 + payload.len());
     h.write(&mut v);
@@ -53,8 +47,6 @@ pub fn build_packet(h: &RtpHeader, payload: &[u8]) -> Vec<u8> {
     v
 }
 
-/// Parse a (decrypted) RTP packet into header + payload slice.
-/// Handles padding, CSRCs and header extensions.
 pub fn parse_packet(p: &[u8]) -> Result<(RtpHeader, &[u8])> {
     if p.len() < 12 || p[0] >> 6 != 2 {
         return Err(Error::Malformed("not rtp v2"));
@@ -91,19 +83,14 @@ pub fn parse_packet(p: &[u8]) -> Result<(RtpHeader, &[u8])> {
     ))
 }
 
-/// A codec payload packetizer: splits one encoded frame into RTP payloads.
-/// The last payload carries the marker bit.
 pub trait Packetizer: Send {
     fn packetize(&mut self, frame: &[u8], max_payload: usize) -> Result<Vec<Vec<u8>>>;
 }
 
-/// Reassembles RTP payloads of one frame (same timestamp) into an encoded frame.
 pub trait Depacketizer: Send {
-    /// Feed one payload in sequence order. Returns a complete frame on marker/end.
     fn push(&mut self, payload: &[u8], marker: bool) -> Result<Option<Vec<u8>>>;
 }
 
-/// Opus: one frame per packet.
 #[derive(Default)]
 pub struct OpusPacketizer;
 
@@ -122,7 +109,6 @@ impl Depacketizer for OpusPacketizer {
     }
 }
 
-/// Per-SSRC sequence/timestamp state for an outgoing stream.
 #[derive(Debug, Clone)]
 pub struct RtpSender {
     pub ssrc: u32,
@@ -138,7 +124,6 @@ impl RtpSender {
         Self { ssrc, payload_type, sequence: rand::random(), packets_sent: 0, octets_sent: 0, last_timestamp: 0 }
     }
 
-    /// Wrap payloads of one frame into full (unencrypted) RTP packets.
     pub fn wrap(&mut self, payloads: Vec<Vec<u8>>, timestamp: u32) -> Vec<Vec<u8>> {
         let n = payloads.len();
         self.last_timestamp = timestamp;

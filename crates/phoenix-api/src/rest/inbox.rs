@@ -1,5 +1,3 @@
-//! Mentions inbox and saved messages ("bookmarks").
-
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -8,14 +6,12 @@ use super::{Body, RestClient};
 use crate::error::Result;
 use crate::models::{ChannelId, GuildId, Message, MessageId, null_default};
 
-/// Filters for `GET /users/@me/mentions`.
 #[derive(Debug, Clone, Copy)]
 pub struct MentionsQuery {
     pub limit: u8,
     pub before: Option<MessageId>,
     pub roles: bool,
     pub everyone: bool,
-    /// Only this guild.
     pub guild: Option<GuildId>,
 }
 
@@ -41,7 +37,6 @@ pub(crate) fn mentions_path(q: MentionsQuery) -> String {
     s
 }
 
-/// One entry of `GET /users/@me/saved-messages`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SavedMessage {
     #[serde(default)]
@@ -61,7 +56,6 @@ impl RestClient {
         self.call(Method::GET, &mentions_path(q), Body::None).await
     }
 
-    /// Remove a message from the mentions inbox.
     pub async fn dismiss_mention(&self, message: MessageId) -> Result<()> {
         self.call_empty(Method::DELETE, &format!("/users/@me/mentions/{message}"), Body::None).await
     }

@@ -1,6 +1,3 @@
-//! Login screen styled after Discord's: card with email/password (or token)
-//! on the left, QR code panel on the right.
-
 use gpui::{
     AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div,
     img, prelude::*, px,
@@ -269,8 +266,6 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
         )
 }
 
-/// Real QR code (remote-auth URL) drawn as module squares, with the app
-/// icon in the middle (error correction absorbs the covered modules).
 fn qr_code(modules: &[bool], n: usize) -> AnyElement {
     let cell = (160. / n as f32).floor().max(1.);
     let mut col = div().flex().flex_col();

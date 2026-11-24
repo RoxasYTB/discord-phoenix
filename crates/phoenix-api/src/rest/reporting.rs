@@ -1,6 +1,3 @@
-//! In-app reporting (message / user): the server-driven menu and the submit
-//! body. The UI walks the menu nodes; submitting is the caller's decision.
-
 use std::collections::BTreeMap;
 
 use reqwest::Method;
@@ -33,7 +30,6 @@ pub struct ReportNode {
     pub info: Option<String>,
     #[serde(default)]
     pub button: Option<ReportButton>,
-    /// `[label, target node id]` pairs.
     #[serde(default)]
     pub children: Vec<(String, u64)>,
     #[serde(default)]
@@ -66,7 +62,6 @@ impl ReportMenu {
     }
 }
 
-/// What is reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReportTarget {
     Message { channel: Snowflake, message: Snowflake },
@@ -82,7 +77,6 @@ impl ReportTarget {
     }
 }
 
-/// Body of `POST /reporting/{name}` for the visited `breadcrumbs`.
 pub fn report_body(menu: &ReportMenu, target: ReportTarget, breadcrumbs: &[u64]) -> Value {
     let mut v = json!({
         "version": menu.version,
@@ -108,7 +102,6 @@ pub fn report_body(menu: &ReportMenu, target: ReportTarget, breadcrumbs: &[u64])
 }
 
 impl RestClient {
-    /// `GET /reporting/menu/{name}` (read-only).
     pub async fn get_report_menu(&self, target: ReportTarget) -> Result<ReportMenu> {
         self.call(Method::GET, &format!("/reporting/menu/{}", target.menu_name()), Body::None).await
     }

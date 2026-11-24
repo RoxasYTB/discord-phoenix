@@ -1,8 +1,3 @@
-//! Expression frecency: the protobuf `settings-proto/2` blob
-//! (`FrecencyUserSettings`). It holds the favorite GIFs and the per-emoji /
-//! per-sticker usage the official client ranks "Frequently used" with.
-//! Read-only here; prost skips the fields Phoenix doesn't model.
-
 use std::collections::HashMap;
 
 use base64::Engine;
@@ -17,7 +12,6 @@ use crate::error::{Error, Result};
 pub struct FrecencyItem {
     #[prost(uint32, tag = "1")]
     pub total_uses: u32,
-    /// Unix milliseconds of the latest uses.
     #[prost(uint64, repeated, tag = "2")]
     pub recent_uses: Vec<u64>,
     #[prost(int32, tag = "3")]
@@ -30,21 +24,18 @@ pub struct FrecencyItem {
 pub struct FavoriteGif {
     #[prost(int32, tag = "1")]
     pub format: i32,
-    /// Media URL (often an mp4).
     #[prost(string, tag = "2")]
     pub src: String,
     #[prost(uint32, tag = "3")]
     pub width: u32,
     #[prost(uint32, tag = "4")]
     pub height: u32,
-    /// Higher = added later.
     #[prost(uint32, tag = "5")]
     pub order: u32,
 }
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct FavoriteGifs {
-    /// Keyed by the GIF page URL (what gets sent).
     #[prost(map = "string, message", tag = "1")]
     pub gifs: HashMap<String, FavoriteGif>,
 }
@@ -57,14 +48,12 @@ pub struct StickerFrecency {
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct EmojiFrecency {
-    /// Custom emoji id, or the unicode emoji name / surrogate.
     #[prost(map = "string, message", tag = "1")]
     pub emojis: HashMap<String, FrecencyItem>,
 }
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct ApplicationFrecency {
-    /// Keyed by application id (decimal snowflake string).
     #[prost(map = "string, message", tag = "1")]
     pub applications: HashMap<String, FrecencyItem>,
 }
@@ -91,21 +80,18 @@ impl FrecencyUserSettings {
         <Self as prost::Message>::decode(bytes.as_slice()).map_err(|e| Error::Protocol(format!("frecency proto: {e}")))
     }
 
-    /// Emoji keys, most used first.
     pub fn emojis_ranked(&self) -> Vec<String> {
         let mut v: Vec<(&String, &FrecencyItem)> = self.emoji_frecency.iter().flat_map(|e| e.emojis.iter()).collect();
         v.sort_by(|a, b| rank(b.1).cmp(&rank(a.1)).then_with(|| a.0.cmp(b.0)));
         v.into_iter().map(|(k, _)| k.clone()).collect()
     }
 
-    /// Sticker ids, most used first.
     pub fn stickers_ranked(&self) -> Vec<u64> {
         let mut v: Vec<(&u64, &FrecencyItem)> = self.sticker_frecency.iter().flat_map(|e| e.stickers.iter()).collect();
         v.sort_by(|a, b| rank(b.1).cmp(&rank(a.1)).then_with(|| a.0.cmp(b.0)));
         v.into_iter().map(|(k, _)| *k).collect()
     }
 
-    /// Favorite GIFs `(url, gif)`, newest first (the picker's order).
     pub fn favorite_gifs(&self) -> Vec<(String, FavoriteGif)> {
         let mut v: Vec<(String, FavoriteGif)> =
             self.favorite_gifs.iter().flat_map(|f| f.gifs.iter()).map(|(k, g)| (k.clone(), g.clone())).collect();
@@ -113,7 +99,6 @@ impl FrecencyUserSettings {
         v
     }
 
-    /// Application ids, most used first (`FrecencyUserSettings.application_frecency`, field 9).
     pub fn applications_ranked(&self) -> Vec<u64> {
         let mut v: Vec<(u64, &FrecencyItem)> = self
             .application_frecency
@@ -132,7 +117,6 @@ struct ProtoBody {
 }
 
 impl RestClient {
-    /// `GET /users/@me/settings-proto/2`
     pub async fn get_frecency_settings(&self) -> Result<FrecencyUserSettings> {
         let b: ProtoBody = self.call(Method::GET, "/users/@me/settings-proto/2", Body::None).await?;
         FrecencyUserSettings::decode_base64(&b.settings)

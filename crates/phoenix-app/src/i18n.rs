@@ -1,18 +1,9 @@
-//! Tiny UI translation layer.
-//!
-//! Locale files live in `crates/phoenix-app/locales/<code>.yml` and are flat
-//! `dotted.key: "value"` maps (a strict subset of YAML) embedded at compile
-//! time. `{name}` placeholders are filled from the `t!` arguments. Lookups fall
-//! back to English, then to the key itself. To add a language, drop a new file
-//! in `locales/` and list it in [`LOCALES`].
-
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use gpui::SharedString;
 
-/// (code prefix, file contents). Index 0 is the English fallback.
 const LOCALES: &[(&str, &str)] = &[
     ("en", include_str!("../locales/en.yml")),
     ("fr", include_str!("../locales/fr.yml")),
@@ -27,7 +18,6 @@ fn tables() -> &'static [Table] {
     T.get_or_init(|| LOCALES.iter().map(|(_, src)| parse(src)).collect())
 }
 
-/// Parses `key: "value"` lines; `#` comments and blank lines are skipped.
 fn parse(src: &'static str) -> Table {
     let mut m = HashMap::new();
     for line in src.lines() {
@@ -48,8 +38,6 @@ fn index_of(code: &str) -> usize {
     LOCALES.iter().position(|(c, _)| *c == lang).unwrap_or(0)
 }
 
-/// Switches the UI language from a Discord locale code ("fr", "en-US", ...).
-/// `PHOENIX_LOCALE` (dev/screenshots) wins over the account locale.
 pub fn set_locale(code: &str) {
     let forced = env_locale();
     CURRENT.store(index_of(forced.as_deref().unwrap_or(code)), Ordering::Relaxed);
@@ -69,7 +57,6 @@ fn current() -> usize {
     CURRENT.load(Ordering::Relaxed)
 }
 
-/// The active language prefix ("en", "fr").
 pub fn locale() -> &'static str {
     LOCALES[current()].0
 }
@@ -87,7 +74,6 @@ fn fill(s: &str, args: &[(&str, &str)]) -> String {
     out
 }
 
-/// Translates `key` in the active locale, filling `{name}` placeholders.
 pub fn t(key: &str, args: &[(&str, &str)]) -> SharedString {
     t_in(current(), key, args)
 }
@@ -100,7 +86,6 @@ fn t_in(idx: usize, key: &str, args: &[(&str, &str)]) -> SharedString {
     }
 }
 
-/// `t!("key")` or `t!("key", name = value, ...)` -> `SharedString`.
 #[macro_export]
 macro_rules! t {
     ($key:expr) => { $crate::i18n::t($key, &[]) };
@@ -109,10 +94,6 @@ macro_rules! t {
     };
 }
 
-// ---- dates and times -------------------------------------------------------
-
-/// "01:30" today (the 2026 client drops "Today at", compare run 2026-11-23) /
-/// "Yesterday at 01:30" / localized full date for older ones.
 pub fn calendar(dt: chrono::DateTime<chrono::Local>, now: chrono::DateTime<chrono::Local>) -> SharedString {
     let time = clock(dt);
     let days = (now.date_naive() - dt.date_naive()).num_days();
@@ -123,17 +104,14 @@ pub fn calendar(dt: chrono::DateTime<chrono::Local>, now: chrono::DateTime<chron
     }
 }
 
-/// Wall-clock time in the locale's style ("1:30 AM" / "01:30").
 pub fn clock<Tz: chrono::TimeZone>(dt: chrono::DateTime<Tz>) -> String
 where
     Tz::Offset: std::fmt::Display,
 {
-    // Language > Time format (settings-proto appearance.timestamp_hour_cycle).
     let h24 = crate::ui::settings::effects::hour24().unwrap_or(locale() != "en");
     if h24 { dt.format("%H:%M").to_string() } else { dt.format("%-I:%M %p").to_string() }
 }
 
-/// "11/23/2026" / "23/11/2026".
 pub fn short_date<Tz: chrono::TimeZone>(dt: chrono::DateTime<Tz>) -> String
 where
     Tz::Offset: std::fmt::Display,
@@ -141,7 +119,6 @@ where
     if locale() == "en" { dt.format("%m/%d/%Y").to_string() } else { dt.format("%d/%m/%Y").to_string() }
 }
 
-/// "November 23, 2026" / "23 novembre 2026" (date dividers, profiles).
 pub fn long_date(date: chrono::NaiveDate) -> String {
     use chrono::Datelike;
     let month = t(&format!("month.{}", date.month()), &[]);
@@ -152,7 +129,6 @@ pub fn long_date(date: chrono::NaiveDate) -> String {
     }
 }
 
-/// "Nov 23, 2026" / "23 nov. 2026".
 pub fn medium_date(date: chrono::NaiveDate) -> String {
     use chrono::Datelike;
     let month = t(&format!("month_short.{}", date.month()), &[]);
@@ -163,14 +139,12 @@ pub fn medium_date(date: chrono::NaiveDate) -> String {
     }
 }
 
-/// "Monday, November 23, 2026 at 3:04 PM" / "lundi 23 novembre 2026 à 15:04".
 pub fn full_datetime(dt: chrono::DateTime<chrono::Local>) -> String {
     use chrono::Datelike;
     let wd = t(&format!("weekday.{}", dt.weekday().num_days_from_monday()), &[]);
     t("time.full", &[("weekday", &wd), ("date", &long_date(dt.date_naive())), ("time", &clock(dt))]).to_string()
 }
 
-/// "in an hour" / "2 minutes ago" (`<t:..:R>`), localized.
 pub fn relative_long(delta: i64) -> String {
     let a = delta.unsigned_abs();
     let (n, unit) = match a {
@@ -190,7 +164,6 @@ pub fn relative_long(delta: i64) -> String {
     t(if delta >= 0 { "time.in" } else { "time.ago" }, &[("what", &what)]).to_string()
 }
 
-/// Short elapsed time: "now", "5m ago", "2h ago", "2d ago", "3mo ago".
 pub fn ago_short(secs: i64) -> SharedString {
     let s = secs.max(0);
     match s {

@@ -1,6 +1,3 @@
-//! "Reactions" modal: emoji tabs with counts on the left, the users who
-//! reacted with the selected one on the right (`GET .../reactions/{emoji}`).
-
 use std::collections::HashMap;
 
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, Styled, div, prelude::*};
@@ -17,7 +14,6 @@ pub struct Reactions {
     pub channel: Id,
     pub msg: Id,
     pub selected: usize,
-    /// Reactor ids per emoji index, once loaded.
     pub users: HashMap<usize, Vec<Id>>,
     pub loading: bool,
 }
@@ -71,7 +67,6 @@ pub fn render(app: &PhoenixApp, r: &Reactions, cx: &mut Context<PhoenixApp>) -> 
     let list = reactions(app, r.channel, r.msg);
     let guild = app.channels.get(&r.channel).and_then(|c| c.guild);
     let manage = has(app, guild, crate::actions::ADMINISTRATOR) || has(app, guild, MANAGE_MESSAGES);
-    // reactorsList: 216px emoji column (--background-base-lower), user list.
     let mut tabs = div().id("rx-tabs").w(z(216.)).flex_none().overflow_y_scroll().py(z(8.)).px(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).flex().flex_col().gap(z(2.));
     for (i, x) in list.iter().enumerate() {
         let on = i == r.selected;

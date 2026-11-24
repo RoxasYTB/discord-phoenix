@@ -1,12 +1,3 @@
-//! Frame times per interaction, offscreen on mock data (no window on screen).
-//! `cargo run --release -p phoenix-app --example frames [-- N]`
-//!
-//! For each scenario: p50 / p95 / max frame time, frames over 16 ms, and
-//! allocations per frame. A "frame" is refresh + layout + paint
-//! (`run_until_parked`), without the GPU readback of screenshots.
-//! Prints one `scenario p50_us p95_us max_us over16 allocs bytes` line each,
-//! then RSS. See docs/perf.md.
-
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     sync::atomic::{AtomicU64, Ordering},

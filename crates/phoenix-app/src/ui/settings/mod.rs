@@ -1,15 +1,3 @@
-//! Full-screen User Settings overlay (Discord layout: left nav, content,
-//! close button; Esc closes) and the settings it reads/writes.
-//!
-//! * [`SyncedSettings`]: account settings stored by Discord (settings-proto),
-//!   exactly the ones the client keeps in `PreloadedUserSettings`: theme,
-//!   developer mode and UI density (`appearance`), compact message display
-//!   (`text_and_images`), locale (`localization`), server DMs (`privacy`).
-//! * [`LocalPrefs`]: what the client keeps per machine (localStorage stores:
-//!   AccessibilityStore `fontScale`/`saturation`/`reducedMotion`, the Electron
-//!   zoom factor, desktop notification and sound toggles), saved as JSON in
-//!   `$XDG_CONFIG_HOME/discord-phoenix/settings.json` and never sent to Discord.
-
 pub mod account;
 mod art;
 pub mod authorized_apps;
@@ -59,7 +47,6 @@ impl AppTheme {
             Self::Onyx => crate::t!("settings.theme.onyx"),
         }
     }
-    /// Preview swatch colour.
     pub fn swatch(self) -> u32 {
         match self {
             Self::Dark => 0x313338,
@@ -70,22 +57,15 @@ impl AppTheme {
     }
 }
 
-/// Account settings synced through Discord.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SyncedSettings {
     pub theme: AppTheme,
     pub compact: bool,
     pub developer_mode: bool,
     pub locale: SharedString,
-    /// Privacy: allow DMs from members of servers (inverse of
-    /// `default_guilds_restricted`).
     pub allow_server_dms: bool,
-    /// Every other synced control, by settings id ([`synced_map::ENTRIES`]),
-    /// as its wire value; missing = client default.
     pub proto: std::collections::HashMap<&'static str, u64>,
-    /// UI density (`appearance.ui_density`, synced like in the client).
     pub density: crate::theme::Density,
-    /// Consent / e-mail switches ([`synced_map::REST`]); missing = default.
     pub rest: std::collections::HashMap<&'static str, bool>,
 }
 
@@ -111,10 +91,8 @@ pub enum SettingsPatch {
     DeveloperMode(bool),
     Locale(SharedString),
     AllowServerDms(bool),
-    /// A [`synced_map`] entry set to a wire value.
     Proto(&'static str, u64),
     Density(crate::theme::Density),
-    /// A [`synced_map::REST`] switch.
     Rest(&'static str, bool),
 }
 
@@ -133,7 +111,6 @@ impl SyncedSettings {
                 self.rest.insert(id, *v);
             }
             SettingsPatch::Proto(id, v) => {
-                // Entries sharing a field (flag bits) share the value.
                 let path = synced_map::entry(id).map(|e| e.path);
                 for e in synced_map::ENTRIES.iter().filter(|e| Some(e.path) == path) {
                     self.proto.insert(e.id, *v);
@@ -142,37 +119,27 @@ impl SyncedSettings {
             SettingsPatch::Density(d) => self.density = *d,
         }
     }
-    /// Synced switch value (client default when unset).
     pub fn flag(&self, id: &str) -> bool {
         if let Some((_, d)) = synced_map::rest(id) {
             return self.rest.get(id).copied().unwrap_or(d);
         }
         synced_map::get_bool(&self.proto, id)
     }
-    /// Synced radio / select index (client default when unset).
     pub fn pick(&self, id: &str) -> usize {
         synced_map::get_pick(&self.proto, id)
     }
 }
 
-/// Client-only preferences.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocalPrefs {
-    /// Chat font size in px (Discord: 12..=24, default 16).
     pub font_size: f32,
-    /// Zoom percent (50..=200, default 100).
     pub zoom: u32,
     pub desktop_notifications: bool,
     pub notification_sounds: bool,
     pub reduced_motion: bool,
-    /// Accessibility "Play animated emoji" (client default on).
     pub animate_emoji: bool,
     pub saturation: u32,
-    /// Windows/Linux settings "Minimize to tray" (client default on): the close
-    /// button hides the window to the tray icon instead of quitting.
     pub minimize_to_tray: bool,
-    /// Client-only controls without a dedicated field, by settings id
-    /// (switch 0/1 or option index). Missing = client default.
     pub ui: std::collections::BTreeMap<String, u64>,
 }
 
@@ -200,19 +167,15 @@ fn config_path() -> Option<PathBuf> {
 }
 
 impl LocalPrefs {
-    /// Streamer Mode is on and hides personal info (email, phone).
     pub fn streamer_hides_info(&self) -> bool {
         self.flag("streamer", false) && self.flag("st-info", true)
     }
-    /// Desktop notifications, muted by Streamer Mode "Disable notifications".
     pub fn notifications_on(&self) -> bool {
         self.desktop_notifications && !(self.flag("streamer", false) && self.flag("st-notifs", true))
     }
-    /// Client-only switch `id` (see [`Self::ui`]).
     pub fn flag(&self, id: &str, default: bool) -> bool {
         self.ui.get(id).map(|v| *v != 0).unwrap_or(default)
     }
-    /// Client-only option index `id`.
     pub fn pick(&self, id: &str, default: usize) -> usize {
         self.ui.get(id).map(|v| *v as usize).unwrap_or(default)
     }
@@ -271,7 +234,6 @@ impl LocalPrefs {
     }
 }
 
-/// Everything other views may read (compact mode, font size, dev mode...).
 #[derive(Clone, Debug, Default)]
 pub struct Prefs {
     pub synced: SyncedSettings,
@@ -292,9 +254,7 @@ pub enum Page {
     #[default]
     MyAccount,
     Profiles,
-    /// "Données et confidentialité".
     DataPrivacy,
-    /// "Permissions de messagerie" (content & social).
     PrivacySafety,
     Devices,
     Connections,
@@ -307,9 +267,7 @@ pub enum Page {
     Advanced,
     System,
     ActivityPrivacy,
-    /// "Jeux enregistrés" (Games & Apps).
     RegisteredGames,
-    /// Billing section (vanilla sidebar): read-only pointers to discord.com.
     Nitro,
     ServerBoost,
     Subscriptions,
@@ -345,15 +303,11 @@ impl Page {
     }
 }
 
-/// Nav sections in Discord order.
-/// Sidebar sections in the 2026 order (live settings-home dump): the
-/// profile tab sits above them; the first section's label is visually hidden.
 pub const NAV: &[(&str, &[Page])] = &[
     ("settings.nav.user", &[Page::MyAccount, Page::DataPrivacy, Page::PrivacySafety, Page::Notifications]),
     ("settings.nav.billing", &[Page::Nitro, Page::ServerBoost, Page::Subscriptions, Page::GiftInventory, Page::Billing]),
     ("settings.nav.app", &[Page::VoiceVideo, Page::Appearance, Page::Accessibility, Page::System, Page::Language]),
     ("settings.nav.apps", &[Page::RegisteredGames, Page::ActivityPrivacy, Page::Connections]),
-    // last section: no label, "Développeur" then "Déconnexion"
     ("", &[Page::Advanced]),
 ];
 
@@ -364,19 +318,13 @@ pub struct SettingsState {
     pub error: Option<SharedString>,
     pub reveal_email: bool,
     pub reveal_phone: bool,
-    /// Session-only values of settings Phoenix doesn't back yet.
     pub toggles: std::collections::HashMap<&'static str, bool>,
     pub picks: std::collections::HashMap<&'static str, usize>,
-    /// Open "Show advanced ..." expanders.
     pub expanded: std::collections::HashSet<&'static str>,
-    /// Dropdown whose list is open.
     pub open_select: Option<&'static str>,
-    /// Sidebar search box (created on first render).
     pub search: Option<gpui::Entity<gpui_component::input::InputState>>,
     pub search_sub: Option<gpui::Subscription>,
-    /// Full-screen profile editor (Page::Profiles).
     pub profile: Option<profile_editor::EditorState>,
-    /// Content panel scroll (lets offscreen shots match scrolled dumps).
     pub scroll: gpui::ScrollHandle,
 }
 
@@ -395,7 +343,6 @@ pub fn open_action(app: &mut PhoenixApp, _: &OpenSettings, _: &mut gpui::Window,
     open(app, cx);
 }
 
-/// Esc: close the logout dialog, then the overlay. True when handled.
 pub fn on_escape(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> bool {
     let Some(s) = app.settings.as_mut() else { return false };
     if s.page == Page::Profiles {
@@ -414,7 +361,6 @@ pub fn on_escape(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> bool {
     true
 }
 
-/// After login: fetch the synced settings.
 pub fn on_ready(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let fut = app.backend.load_settings();
     cx.spawn(async move |this, cx| {
@@ -423,8 +369,6 @@ pub fn on_ready(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
             if let Ok(s) = res {
                 crate::i18n::set_locale(&s.locale);
                 this.prefs.synced = s;
-                // Rows already rendered hold times / day dividers in the previous locale:
-                // force the next chat_sync_style to rebuild them.
                 this.chat.style_gen = u32::MAX;
                 cx.notify();
             }
@@ -433,7 +377,6 @@ pub fn on_ready(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-/// Optimistically apply then save a synced setting; reverts on failure.
 pub fn save(app: &mut PhoenixApp, patch: SettingsPatch, cx: &mut Context<PhoenixApp>) {
     let before = app.prefs.synced.clone();
     app.prefs.synced.apply(&patch);
@@ -444,7 +387,6 @@ pub fn save(app: &mut PhoenixApp, patch: SettingsPatch, cx: &mut Context<Phoenix
         let _ = this.update(cx, |this, cx| {
             match res {
                 Ok(mut s) => {
-                    // Backends that don't echo every entry (mock) keep ours.
                     for (k, v) in &this.prefs.synced.proto {
                         s.proto.entry(*k).or_insert(*v);
                     }

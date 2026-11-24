@@ -1,11 +1,3 @@
-//! Server "Events" modal (sidebar row "Événements"): `GET
-//! /guilds/{id}/scheduled-events`, read-only. Frame, header and empty state
-//! from the live client (dump vanilla-events-modal): root__KoJTP medium 602x400,
-//! --radius-md 12, 1px border, --modal-background; header padding 16 24 8 with
-//! the 24px calendar icon (margin-right 8, --icon-muted), heading-sm/semibold
-//! title, a 16px divider (margin 0 16) and the "Create Event" sm primary button;
-//! close icon 24 on the right. Content padding 8 16 16 24.
-
 use gpui::{AnyElement, App, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*, px};
 
 use crate::{
@@ -29,7 +21,6 @@ fn t(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-/// CREATE_EVENTS (1 << 44) or MANAGE_EVENTS (1 << 33).
 fn can_create(perms: u64) -> bool {
     crate::ui::inbox::has_perm(perms, (1 << 44) | (1 << 33))
 }
@@ -42,7 +33,6 @@ pub fn close(cx: &mut App) {
     cx.set_global(Slot(None));
 }
 
-/// Opens the modal for `guild` and loads its events.
 pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
     cx.set_global(Slot(Some(Events { guild, list: None, error: None })));
     app.parity_request(ParityRequest::ScheduledEvents { guild }, cx, move |_, r, cx| {
@@ -55,7 +45,6 @@ pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
         }
         let (list, error) = match r {
             Ok(ParityReply::Events(mut v)) => {
-                // Upcoming and live first, by start time; completed/canceled hidden.
                 v.retain(|e| e.status <= 2);
                 v.sort_by_key(|e| (e.status != 2, e.start));
                 (Some(v), None)
@@ -75,9 +64,6 @@ fn when_label(e: &GuildEvent) -> String {
     format!("{} {}", crate::i18n::long_date(local.date_naive()), local.format("%H:%M"))
 }
 
-/// One event card: optional 160px cover image (`guild-events/{id}/{hash}.png`),
-/// date/live header + interested count, title, description, and footer with
-/// location, "Interested" button, and copy-link button.
 fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
     let live = e.status == 2;
     let ch_kind = e.channel.and_then(|ch| app.channels.get(&ch)).map(|ch| ch.kind);
@@ -234,7 +220,6 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
     });
     let close2 = on_close.clone();
     let header = div()
-        // flex_hkRWAH header: padding 16 24 8, radius 12 12 0 0
         .pt(z(16.))
         .px(z(24.))
         .pb(z(8.))
@@ -242,7 +227,6 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .items_center()
         .child(gpui::svg().path(crate::icons::path("calendar")).size(z(24.)).mr(z(8.)).flex_none().text_color(t(idx::ICON_MUTED)))
         .child(
-            // heading-sm/semibold 16/20 --text-strong
             div()
                 .text_size(z(16.))
                 .line_height(z(20.))
@@ -251,9 +235,7 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                 .child(crate::t!("events.title")),
         )
         .when(can_create(perms), |d| {
-            // divider_JG2DGL: 1px x 16, margin 0 16, --border-subtle
             d.child(div().w(px(1.)).h(z(16.)).mx(z(16.)).bg(t(idx::BORDER_SUBTLE))).child(
-                // button_F7qvhY sm primary: h 32, padding 3 11, radius 8, body-sm/medium
                 div()
                     .id("events-create")
                     .h(z(32.))
@@ -277,7 +259,6 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         })
         .child(div().flex_1())
         .child(
-            // iconButton_JG2DGL: 24px close icon, --icon-muted
             div()
                 .id("events-close")
                 .cursor_pointer()
@@ -287,8 +268,6 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
     let body: AnyElement = match &s.list {
         None => div().size_full().flex().items_center().justify_center().text_color(t(idx::TEXT_MUTED)).child(crate::t!("common.loading")).into_any_element(),
         Some(list) if list.is_empty() => {
-            // container_NkbMg8: centred column; title heading-xl/semibold 24/32 margin-bottom 8;
-            // subtitle / roleTip_ (margin-top 4) body-sm/normal 14/18 --text-default.
             div()
                 .size_full()
                 .flex()
@@ -329,7 +308,6 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         }
     };
     let card = div()
-        // root__KoJTP medium: 602x400, radius 12, 1px border, shadow 0 4 8 black 16%
         .w(z(602.))
         .h(z(400.))
         .rounded(z(12.))
@@ -346,7 +324,6 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .flex()
         .flex_col()
         .child(header)
-        // content__KoJTP: padding 8 16 16 24
         .child(div().flex_1().min_h_0().pt(z(8.)).pr(z(16.)).pb(z(16.)).pl(z(24.)).child(body));
     Some(crate::ui::modal::frame("events-modal", on_close, card))
 }

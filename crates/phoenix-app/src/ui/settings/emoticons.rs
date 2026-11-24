@@ -1,10 +1,3 @@
-//! "Automatically convert emoticons in your messages to emoji"
-//! (settings-proto text_and_images.convert_emoticons): on send, a
-//! whitespace-delimited emoticon outside code becomes its emoji, like the
-//! client's emoticon table (emoticon → emoji name, observed in the 2026 web
-//! bundle; glyphs from our Unicode table).
-
-/// (emoticons, emoji)
 const TABLE: &[(&[&str], &str)] = &[
     (&[">:(", ">:-(", ">=(", ">=-("], "😠"),
     (&[":\")", ":-\")", "=\")", "=-\")"], "😊"),
@@ -38,8 +31,6 @@ fn lookup(tok: &str) -> Option<&'static str> {
     TABLE.iter().find(|(e, _)| e.contains(&tok)).map(|(_, g)| *g)
 }
 
-/// Replace emoticon words (whole whitespace-separated tokens) outside
-/// inline/fenced code.
 pub fn convert(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut ticks = 0usize;

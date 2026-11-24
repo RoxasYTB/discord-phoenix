@@ -1,18 +1,3 @@
-//! DM call header: the call area at the top of a DM / group DM while it rings us
-//! (CALL_CREATE lists us in `ringing`, see [`crate::ui::incoming_call`]). We never
-//! place or answer calls ourselves from here; the buttons reuse the incoming-call
-//! answer/decline paths.
-//!
-//! CSS (current client):
-//! - `callContainer_hbKzX7`: background --black, flex 1 1 auto, overflow hidden;
-//!   Onyx and High contrast add a 1px --app-frame-border top border.
-//! - `wrapper_NdapwK.ringingIncoming_NdapwK:after`: 3px --interactive-text-active
-//!   circle around the avatar, `incoming-call-pulse` over
-//!   --custom-call-avatar-incoming-duration (5.407s = 4 pulses: opacity 1 → 0 while
-//!   scaling 1 → 1.1).
-//! - `voiceAvatar_NdapwK.ringingOutgoing_NdapwK` opacity .3 (outgoing ring; we never
-//!   call, so only the incoming state is drawn).
-
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder as _;
@@ -23,9 +8,7 @@ use crate::{
     theme::{c, generated::idx, tok, z},
 };
 
-/// Avatar size in the call area (same 80px as the incoming call card).
 const AVATAR: f32 = 80.;
-/// One pulse of `incoming-call-pulse` (5.407s / 4).
 const PULSE_MS: u64 = 1352;
 
 fn ringing_avatar(app: &PhoenixApp, user: crate::model::Id) -> AnyElement {
@@ -49,7 +32,6 @@ fn ringing_avatar(app: &PhoenixApp, user: crate::model::Id) -> AnyElement {
                     ("dm-call-pulse-anim", user.0),
                     gpui::Animation::new(Duration::from_millis(PULSE_MS)).repeat(),
                     move |d, t| {
-                        // scale 1 → 1.1 around the centre, opacity 1 → 0.
                         let grow = (size + 6.) * 0.1 * t;
                         d.opacity(1. - t)
                             .top(z(-3. - grow / 2.))
@@ -61,7 +43,6 @@ fn ringing_avatar(app: &PhoenixApp, user: crate::model::Id) -> AnyElement {
         .into_any_element()
 }
 
-/// Call area for the selected DM while it rings us, else `None`.
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let ch = app.selected_channel?;
     if app.parity.incoming_call != Some(ch) {
@@ -73,7 +54,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     }
     let users: Vec<crate::model::Id> = channel.voice_users.iter().copied().take(6).collect();
     let button = |id: &'static str, icon: &'static str, bg: usize, hover: usize, tip: gpui::SharedString| {
-        // Same 56px round centerButton as the incoming call card.
         div()
             .id(id)
             .size(z(56.))
@@ -92,7 +72,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             .id("dm-call-header")
             .w_full()
             .flex_none()
-            // The client's call area is resizable; this is its default open height.
             .h(z(240.))
             .bg(c(tok(idx::BLACK)))
             .when(crate::theme::frame_borders(), |d| d.border_t_1().border_color(c(tok(idx::APP_FRAME_BORDER))))

@@ -1,6 +1,3 @@
-//! Message history: cache-first loading, background refresh and prefetch.
-//! Strictly read-only on the account: GET /channels/{id}/messages never acks.
-
 use std::{
     sync::{Arc, LazyLock},
     time::Instant,
@@ -15,9 +12,7 @@ use crate::{
     model::{Id, Message},
 };
 
-/// The app pages history by 50.
 const PAGE: u32 = 50;
-/// Background fetches (prefetch / refresh) running at once; extra hovers are dropped.
 static BG: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(2));
 
 async fn fetch(rest: &RestClient, channel: Id, before: Option<Id>, limit: u32) -> Result<Vec<api::Message>, BackendError> {
@@ -38,15 +33,11 @@ fn emit_users(inner: &Inner, msgs: &[api::Message]) {
     for m in msgs {
         convert::message_users(m, &mut users);
     }
-    // Delivered before the page so author names resolve on first render.
     inner.emit(AppEvent::Users(users));
 }
 
-/// Side effects of showing a page: users, missing guild members (op 8), mention recount.
 fn after_page(inner: &Inner, s: &Session, channel: Id, msgs: &[api::Message], latest: bool) {
     emit_users(inner, msgs);
-    // Like the official client: op 8 for authors / reply targets whose guild member
-    // (server nick, roles) we don't have yet; GUILD_MEMBERS_CHUNK fills the cache.
     if let Some(g) = s.cache.channel(sf(channel)).and_then(|c| c.guild_id) {
         let mut ids: Vec<api::Snowflake> = Vec::new();
         for m in msgs {
@@ -57,7 +48,6 @@ fn after_page(inner: &Inner, s: &Session, channel: Id, msgs: &[api::Message], la
                 }
             }
         }
-        // Voice users in the channel list show their server nick too.
         for v in s.cache.voice_states(Some(g)) {
             if !ids.contains(&v.user_id) && s.cache.member(g, v.user_id).is_none() {
                 ids.push(v.user_id);
@@ -81,8 +71,6 @@ fn after_page(inner: &Inner, s: &Session, channel: Id, msgs: &[api::Message], la
     }
 }
 
-/// Fetch the latest page into the cache; if it differs from what was cached,
-/// tell the UI (`AppEvent::HistoryRefresh`, ignored for channels it hasn't loaded).
 async fn refresh(inner: Arc<Inner>, s: Arc<Session>, channel: Id) {
     let Ok(_permit) = BG.acquire().await else { return };
     if !msg_cache::begin_fetch(channel.0) {
@@ -100,8 +88,6 @@ async fn refresh(inner: Arc<Inner>, s: Arc<Session>, channel: Id) {
     s.cache.insert_messages(sf(channel), msgs);
 }
 
-/// After READY: warm the channels with unread mentions, then the ones the
-/// user viewed last time.
 pub(super) fn warm_recent(inner: &Arc<Inner>, s: &Arc<Session>) {
     let (inner, s) = (inner.clone(), s.clone());
     tokio::spawn(async move {
@@ -109,7 +95,6 @@ pub(super) fn warm_recent(inner: &Arc<Inner>, s: &Arc<Session>) {
             let a = s.adapter.lock();
             let mut m: Vec<(u64, u64)> =
                 a.prefs.reads.iter().filter(|(_, r)| r.mentions > 0).map(|(c, _)| (*c, s.cache.channel(api::Snowflake(*c)).and_then(|ch| ch.last_message_id).map_or(0, |l| l.0))).collect();
-            // Most recent activity first.
             m.sort_by_key(|x| std::cmp::Reverse(x.1));
             m.into_iter().take(8).map(|x| x.0).collect()
         };
@@ -128,8 +113,6 @@ pub(super) fn warm_recent(inner: &Arc<Inner>, s: &Arc<Session>) {
     });
 }
 
-/// History before READY. Waits briefly for the keyring; the page is cached
-/// stale (gateway events may be missed until the session starts).
 async fn pre_session(inner: &Arc<Inner>, channel: Id, before: Option<Id>, limit: u32) -> Option<Vec<Message>> {
     let mut rest = None;
     for _ in 0..100 {
@@ -171,7 +154,6 @@ impl DiscordBackend {
                                 tokio::spawn(refresh(inner.clone(), s, channel));
                             }
                         }
-                        // Drawn from the disk snapshot before the gateway is up.
                         Err(_) => emit_users(&inner, &msgs),
                     }
                     return Ok(msgs.iter().map(convert::message).collect::<Vec<Message>>());
@@ -179,7 +161,6 @@ impl DiscordBackend {
             }
             let s = match inner.session() {
                 Ok(s) => s,
-                // Disk snapshot on screen, gateway not up yet: plain REST with the stored token.
                 Err(e) => return pre_session(&inner, channel, before, limit).await.ok_or(e),
             };
             let msgs = fetch(&s.rest, channel, before, limit).await?;
@@ -193,8 +174,6 @@ impl DiscordBackend {
         })
     }
 
-    /// Detached history pages (jump to a message, scroll down from there). Never
-    /// cached on disk: the disk cache only holds the latest page.
     pub(super) fn load_messages_at_impl(&self, channel: Id, at: crate::backend::HistoryAt, limit: u32) -> BoxFuture<Vec<Message>> {
         self.spawn(move |inner| async move {
             let s = inner.session()?;
@@ -212,7 +191,6 @@ impl DiscordBackend {
         })
     }
 
-    /// Warm a channel the pointer is on (or likely to be opened). Never acks.
     pub(super) fn prefetch_impl(&self, channel: Id) {
         let Ok(s) = self.inner.session() else { return };
         if msg_cache::has_fresh(channel.0) || BG.available_permits() == 0 {

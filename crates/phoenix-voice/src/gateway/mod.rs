@@ -1,10 +1,3 @@
-//! Voice gateway v8 client.
-//!
-//! [`GatewayMachine`] is a pure state machine (identify/resume, `seq_ack`
-//! tracking, heartbeat bookkeeping) so it can be tested without sockets.
-//! [`spawn`] drives it over tokio-tungstenite (rustls), reconnecting with
-//! Resume on resumable close codes.
-
 pub mod protocol;
 
 use std::time::Duration;
@@ -27,7 +20,6 @@ pub enum State {
     Connected,
 }
 
-/// Pure voice gateway state machine.
 pub struct GatewayMachine {
     info: VoiceConnectInfo,
     state: State,
@@ -63,8 +55,6 @@ impl GatewayMachine {
         self.heartbeat_interval
     }
 
-    /// First frame to send after the socket opens: Identify, or Resume if a
-    /// session was already established.
     pub fn on_open(&mut self) -> String {
         self.heartbeat_interval = None;
         self.pending_nonce = None;
@@ -92,7 +82,6 @@ impl GatewayMachine {
                 self.state = State::Connected;
             }
             ServerMessage::Resumed => self.state = State::Connected,
-            // Any ack clears the outstanding heartbeat (servers may echo an older nonce).
             ServerMessage::HeartbeatAck { .. } if self.pending_nonce.is_some() => {
                 self.pending_nonce = None;
                 self.missed_acks = 0;
@@ -112,8 +101,6 @@ impl GatewayMachine {
         Ok(self.track(d))
     }
 
-    /// Produce the next heartbeat. Errors when two heartbeats went unacked
-    /// (zombie connection → reconnect/resume).
     pub fn heartbeat(&mut self, nonce: u64) -> Result<String> {
         if self.pending_nonce.is_some() {
             self.missed_acks += 1;
@@ -125,7 +112,6 @@ impl GatewayMachine {
         Ok(protocol::heartbeat(nonce, self.seq_ack))
     }
 
-    /// Returns true if the client should reconnect with Resume.
     pub fn on_close(&mut self, code: Option<u16>) -> bool {
         self.state = State::Disconnected;
         let resumable = code.is_none_or(protocol::close_code_resumable);
@@ -136,7 +122,6 @@ impl GatewayMachine {
     }
 }
 
-/// Commands accepted by a running gateway task.
 #[derive(Debug)]
 pub enum Command {
     Text(String),
@@ -144,7 +129,6 @@ pub enum Command {
     Close,
 }
 
-/// Events emitted by the gateway task.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GatewayEvent {
     Message(ServerMessage),
@@ -152,7 +136,6 @@ pub enum GatewayEvent {
     Closed { code: Option<u16>, reason: String },
 }
 
-/// Cloneable handle to send commands to the gateway task.
 #[derive(Clone)]
 pub struct GatewayHandle {
     tx: mpsc::UnboundedSender<Command>,
@@ -191,7 +174,6 @@ impl GatewayHandle {
         self.send(Command::Binary { opcode: protocol::op::DAVE_MLS_KEY_PACKAGE, payload: kp })
     }
 
-    /// Commit followed by the optional Welcome, concatenated (op 28).
     pub fn dave_commit_welcome(&self, cw: &crate::dave::mls::CommitWelcome) -> Result<()> {
         let mut p = cw.commit.clone();
         if let Some(w) = &cw.welcome {
@@ -205,7 +187,6 @@ impl GatewayHandle {
     }
 }
 
-/// Reconnect policy.
 #[derive(Debug, Clone, Copy)]
 pub struct ReconnectPolicy {
     pub max_attempts: u32,
@@ -218,7 +199,6 @@ impl Default for ReconnectPolicy {
     }
 }
 
-/// Spawn the gateway task. `url` defaults to [`VoiceConnectInfo::url`].
 pub fn spawn(
     info: VoiceConnectInfo,
     url: Option<String>,
@@ -365,7 +345,6 @@ mod tests {
         assert!(m.on_close(Some(4015)));
         let r = m.on_open();
         assert!(r.contains("\"op\":7") && r.contains("\"seq_ack\":5"));
-        // non-resumable
         assert!(!m.on_close(Some(4006)));
         assert!(m.on_open().contains("\"op\":0"));
     }

@@ -1,6 +1,3 @@
-//! Offscreen render of the voice call view with mock voice state (never joins voice).
-//! `cargo run -p phoenix-app --example call_view -- out.png [chat] [grid] [nostrip]`
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -20,7 +17,6 @@ fn main() -> anyhow::Result<()> {
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
         gpui_platform::current_headless_renderer()
     });
-    // The headless text system doesn't scan system fonts: load them explicitly.
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -70,7 +66,6 @@ fn main() -> anyhow::Result<()> {
                 {
                     ch.voice_users.insert(0, me);
                 }
-                // Mock voice state: no backend join, only the UI fields.
                 app.voice_channel = Some(lounge);
                 app.open_channel_chat(lounge, cx);
                 phoenix_app::ui::call_view::show(lounge);
@@ -90,12 +85,10 @@ fn main() -> anyhow::Result<()> {
     }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
-    // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
     cx.advance_clock(std::time::Duration::from_secs(2));
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;

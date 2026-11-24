@@ -1,16 +1,3 @@
-//! Headless, READ-ONLY probe against the real account whose token is in the
-//! keyring. It never sends messages, never acks, never types, never changes
-//! presence (the gateway identifies with status "unknown") and never joins
-//! voice. It logs parse failures, unknown events, suspicious empty fields and
-//! slow requests so they can be turned into anonymized regression tests.
-//!
-//! ```sh
-//! cargo run -p phoenix-app --example real_probe -- [seconds=150] [live.json]
-//! ```
-//! `live.json` (optional) is a list of `{id, pill, badge}` read from the
-//! official client's guild bar, to compare guild order and unread state.
-//! Output contains ids but never the token; keep it out of the repo.
-
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     time::{Duration, Instant},
@@ -37,7 +24,6 @@ macro_rules! info {
     ($($t:tt)*) => { println!("info {}", format!($($t)*)) };
 }
 
-/// Re-run serde on a dispatch that degraded to `Unknown` to get the error.
 fn explain(name: &str, data: &Value) -> Option<String> {
     use serde_json::from_value as f;
     let d = data.clone();
@@ -65,7 +51,6 @@ fn explain(name: &str, data: &Value) -> Option<String> {
     r.err().map(|e| e.to_string())
 }
 
-/// Each message of a raw REST page parsed alone: finds the one that breaks a page.
 fn check_raw_messages(ch: u64, raw: &Value) {
     let Some(arr) = raw.as_array() else {
         bug!("channel {ch}: messages page is not an array");
@@ -163,7 +148,6 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
     };
     info!("READY in {:?}: {} guilds, {} private channels, {} relationships", t0.elapsed(), ready.guilds.len(), ready.private_channels.len(), ready.relationships.len());
 
-    // ---- READY sanity ---------------------------------------------------
     for g in &ready.guilds {
         if g.unavailable {
             info!("guild {} unavailable in READY", g.id);
@@ -225,7 +209,6 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
     info!("unread guilds {unread_g}, unread channels {unread_c}, mentions {}", data.guilds.iter().map(|g| g.mentions).sum::<u32>());
     let gidx: HashMap<u64, usize> = data.guilds.iter().enumerate().map(|(i, g)| (g.id.0, i)).collect();
 
-    // ---- compare against the live official client ------------------------
     if let Some(live) = &live {
         let lids: Vec<u64> = live.iter().filter_map(|v| v["id"].as_str()?.parse().ok()).collect();
         let ours: Vec<u64> = data.guilds.iter().map(|g| g.id.0).filter(|g| lids.contains(g)).collect();
@@ -300,14 +283,12 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
         bug!("message requests appear in the DM list ({shown_req})");
     }
 
-    // ---- collect events for a while, open channels meanwhile -----------------
     let deadline = Instant::now() + Duration::from_secs(secs);
     let mut probes = probe_targets(&cache, &ready, &data);
     info!("probing {} channels", probes.len());
     let mut opened_guilds = HashSet::new();
     let mut member_list_updates = 0u32;
     loop {
-        // Interleave one REST probe per loop turn with event draining.
         if let Some(ch) = probes.pop() {
             let c = cache.channel(ch);
             let kind = c.as_ref().map(|c| c.kind);
@@ -452,7 +433,6 @@ async fn cdn_check(http: &reqwest::Client, url: &str) {
     }
 }
 
-/// A few text channels of several guilds (readable ones), forums and DMs.
 fn probe_targets(cache: &Cache, ready: &events::Ready, data: &phoenix_app::backend::ReadyData) -> Vec<api::ChannelId> {
     let mut out = Vec::new();
     for g in data.guilds.iter().take(8) {
@@ -471,7 +451,6 @@ fn probe_targets(cache: &Cache, ready: &events::Ready, data: &phoenix_app::backe
             }
         }
     }
-    // Every readable forum / media channel (they often have no last_message_id).
     for g in ready.guilds.iter() {
         for c in cache.guild_channels(g.id) {
             let forum = matches!(c.kind, api::ChannelType::GuildForum | api::ChannelType::GuildMedia);
@@ -480,7 +459,6 @@ fn probe_targets(cache: &Cache, ready: &events::Ready, data: &phoenix_app::backe
             }
         }
     }
-    // One hidden channel per guild: REST must answer 403 (we filter it out).
     for g in ready.guilds.iter().take(8) {
         if let Some(c) = cache.guild_channels(g.id).into_iter().find(|c| {
             c.kind == api::ChannelType::GuildText && !cache.permissions_in(c.id).contains(api::Permissions::VIEW_CHANNEL)

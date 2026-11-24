@@ -1,9 +1,3 @@
-//! Window-level push-to-talk and keybind recording.
-//!
-//! The global binding goes through the XDG GlobalShortcuts portal (see
-//! `phoenix_voice::hotkey`); these key handlers also drive push-to-talk while
-//! the Phoenix window has focus, which works on every desktop.
-
 use std::cell::{Cell, RefCell};
 
 use gpui::{Context, KeyDownEvent, KeyUpEvent, Keystroke};
@@ -14,7 +8,6 @@ use crate::app::PhoenixApp;
 
 thread_local! {
     static RECORDING: Cell<bool> = const { Cell::new(false) };
-    /// Key currently held for push-to-talk.
     static HELD: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
@@ -26,7 +19,6 @@ pub fn set_recording(on: bool) {
     RECORDING.with(|r| r.set(on));
 }
 
-/// Human label for a keystroke (`ctrl-shift-a` -> `CTRL + SHIFT + A`).
 pub fn label(keystroke: &str) -> String {
     keystroke
         .split('-')
@@ -62,7 +54,6 @@ fn base_key(binding: &str) -> &str {
     binding.rsplit('-').next().unwrap_or(binding)
 }
 
-/// Root capture-phase key down hook.
 pub fn on_key_down(app: &mut PhoenixApp, ev: &KeyDownEvent, cx: &mut Context<PhoenixApp>) {
     if is_recording() {
         if ev.keystroke.key == "escape" {
@@ -91,7 +82,6 @@ pub fn on_key_down(app: &mut PhoenixApp, ev: &KeyDownEvent, cx: &mut Context<Pho
     }
 }
 
-/// Root capture-phase key up hook.
 pub fn on_key_up(app: &mut PhoenixApp, ev: &KeyUpEvent, _cx: &mut Context<PhoenixApp>) {
     let released = HELD.with(|h| {
         let mut h = h.borrow_mut();

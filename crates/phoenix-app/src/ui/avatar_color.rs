@@ -1,14 +1,3 @@
-//! Banner colour for users with neither a banner nor an accent colour.
-//!
-//! The official client paints such banners with the avatar's dominant colour
-//! (dump vanilla-dm-profile-panel #1562 `fill_vNEdYY`: rgb(76,49,53) for a
-//! plain photo avatar). Observed behaviour: it loads the 128px avatar, samples
-//! every 10th pixel (skipping alpha < 125 and near-white > 250), runs a
-//! modified median cut quantizer (5-bit channels, 5 colours, 75% of the
-//! splits by population then by population x volume) and takes the first
-//! palette entry. This is a fresh implementation of that algorithm.
-//! Results are cached per avatar URL for the session.
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -16,11 +5,9 @@ use futures::AsyncReadExt;
 use gpui::App;
 
 thread_local! {
-    /// URL -> colour (`None` = fetching or failed).
     static CACHE: RefCell<HashMap<String, Option<u32>>> = RefCell::new(HashMap::new());
 }
 
-/// The 128px static PNG of an avatar URL (the client samples a 128px image).
 fn sample_url(avatar: &str) -> Option<String> {
     if !avatar.contains("/avatars/") && !avatar.contains("/guilds/") {
         return None;
@@ -30,13 +17,11 @@ fn sample_url(avatar: &str) -> Option<String> {
     Some(format!("{stem}.png?size=128"))
 }
 
-/// Cached dominant colour for `avatar`, if already computed.
 pub fn get(avatar: &str) -> Option<u32> {
     let key = sample_url(avatar)?;
     CACHE.with(|c| c.borrow().get(&key).copied().flatten())
 }
 
-/// Start computing the colour for `avatar` once; windows refresh when done.
 pub fn ensure(avatar: &str, cx: &mut App) {
     let Some(url) = sample_url(avatar) else { return };
     let fresh = CACHE.with(|c| {
@@ -67,7 +52,6 @@ pub fn ensure(avatar: &str, cx: &mut App) {
     .detach();
 }
 
-/// Dominant colour of a PNG as 0xRRGGBB.
 pub fn dominant_png(bytes: &[u8]) -> Option<u32> {
     let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png).ok()?.to_rgba8();
     let px: Vec<[u8; 3]> = img
@@ -136,7 +120,6 @@ impl VBox {
     }
 }
 
-/// Split `v` at the median of its longest axis.
 fn median_cut(h: &[u32], v: &VBox) -> Option<Vec<VBox>> {
     let count = v.count(h);
     if count == 0 {
@@ -147,7 +130,6 @@ fn median_cut(h: &[u32], v: &VBox) -> Option<Vec<VBox>> {
     if count == 1 {
         return Some(vec![*v]);
     }
-    // 0 = r, 1 = g, 2 = b
     let axis = if maxw == rw {
         0
     } else if maxw == gw {
@@ -220,12 +202,11 @@ fn median_cut(h: &[u32], v: &VBox) -> Option<Vec<VBox>> {
     None
 }
 
-/// Repeatedly split the box with the largest `key` until `target` boxes.
 fn iterate(q: &mut Vec<VBox>, h: &[u32], target: f64, key: &dyn Fn(&VBox) -> i64) {
     let mut ncolors = 1;
     let mut niters = 0;
     while niters < 1000 {
-        q.sort_by_key(|v| key(v)); // stable, ascending; pop takes the largest
+        q.sort_by_key(|v| key(v));
         let Some(v) = q.pop() else { return };
         if v.count(h) == 0 {
             q.push(v);
@@ -249,7 +230,6 @@ fn iterate(q: &mut Vec<VBox>, h: &[u32], target: f64, key: &dyn Fn(&VBox) -> i64
     }
 }
 
-/// Palette of up to `max` colours, most significant first.
 pub fn palette(px: &[[u8; 3]], max: usize) -> Vec<[u8; 3]> {
     if px.is_empty() || !(2..=256).contains(&max) {
         return vec![[0, 0, 0]];
@@ -258,7 +238,6 @@ pub fn palette(px: &[[u8; 3]], max: usize) -> Vec<[u8; 3]> {
     for p in px {
         h[ix(i32::from(p[0] >> SHIFT), i32::from(p[1] >> SHIFT), i32::from(p[2] >> SHIFT))] += 1;
     }
-    // Bounds exactly as the reference loop computes them (min first, else max).
     let mut v = VBox { r1: 1_000_000, r2: 0, g1: 1_000_000, g2: 0, b1: 1_000_000, b2: 0 };
     for p in px {
         let (r, g, b) = (i32::from(p[0] >> SHIFT), i32::from(p[1] >> SHIFT), i32::from(p[2] >> SHIFT));
@@ -296,7 +275,6 @@ mod tests {
 
     #[test]
     fn two_colour_image() {
-        // 70% dark red, 30% blue: the dominant entry is the red cluster.
         let mut px = vec![[120u8, 20, 30]; 70];
         px.extend(std::iter::repeat_n([20u8, 40, 200], 30));
         let p = palette(&px, 5);

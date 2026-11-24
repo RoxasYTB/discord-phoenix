@@ -1,12 +1,3 @@
-//! Profile Board game widgets (`widgets[].data.type` = favorite_games,
-//! current_games, want_to_play_games, played_games), shown in the full
-//! profile's Board tab.
-//!
-//! Data: `GET /users/{id}/profile` → `widgets[] {data: {type, games:
-//! [{game_id, comment, tags}]}}`, then `GET /games/{game_id}` for the name and
-//! cover (read-only). Board order = widget order; the client caps the lists at
-//! favorite 1 / current 5 / want-to-play 20 / played 20.
-
 use gpui::SharedString;
 use serde_json::Value;
 
@@ -28,7 +19,6 @@ impl Kind {
             _ => return None,
         })
     }
-    /// Client caps (`favorite_games:1, current_games:5, want_to_play_games:20, played_games:20`).
     pub fn cap(self) -> usize {
         match self {
             Self::Favorite => 1,
@@ -51,7 +41,6 @@ pub struct GameWidget {
     pub games: Vec<Game>,
 }
 
-/// (kind, game ids) of each game widget, in board order, capped.
 pub fn widget_ids(widgets: &[Value]) -> Vec<(Kind, Vec<u64>)> {
     widgets
         .iter()
@@ -70,8 +59,6 @@ pub fn widget_ids(widgets: &[Value]) -> Vec<(Kind, Vec<u64>)> {
         .collect()
 }
 
-/// Name and cover of a `GET /games/{id}` payload: `name`, `media.cover_url`
-/// (shape cached in ref-cache/games-endpoint-shape.txt).
 pub fn parse_game(id: u64, v: &Value) -> Game {
     let cover = v
         .get("media")

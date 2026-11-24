@@ -1,21 +1,3 @@
-//! The client's keyboard easter eggs (main bundle, keyboard shortcuts modal module 453244
-//! and keybind `VIBE_WITH_WUMPUS`), with the client's own assets loaded at runtime
-//! (`sounds::assets::asset_file`: local Discord cache or `discord.com/assets`).
-//!
-//! - DDR arrows: while the Ctrl+/ modal is open, arrow keys play `ddr-up|down|left|right`
-//!   (each throttled to 100 ms) and light the matching arrow (`ddrArrows_jCEr5v`: four 50px
-//!   sprites, right 40 / top 22, `active` shows the third frame after a 200 ms `steps(2)`).
-//! - "Raging Demon": the last five keydowns H H Right N K in that modal (not with reduced
-//!   motion). The list is replaced by the demon layer; a 50 % black backdrop fades in over
-//!   1 s; at 1.8 s the layer shows and the app shakes for 2.4 s (`Shakeable`, intensity 5);
-//!   eight explosions start every 240 ms around the window centre (±200 × ±100, scale .6..1),
-//!   each a primary burst plus a secondary one 120 ms later (offset ±70), gone after 1 s;
-//!   750 ms after the last one the Discord symbol fades in for 3 s, then the backdrop fades
-//!   and the modal closes 500 ms later.
-//! - Ctrl+Alt+Shift+W ("Listen to Lofi Beats with Wumpus"): `vibing_wumpus` looped, faded to
-//!   .5 in 100 ms steps of `.2 × (target − start)`, the same key fades it out and stops it.
-//!   The client also opens a Rive-animated modal, which GPUI cannot draw: not reproduced.
-
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
@@ -25,16 +7,11 @@ use phoenix_voice::audio::effects::Handle;
 use crate::app::PhoenixApp;
 use crate::sounds::assets::asset_file;
 
-/// `--custom-raging-demon-duration`.
 const D: f32 = 0.15;
 
 const SYMBOL: &str = "a53fe63d4b568d70.svg";
-/// Primary burst: circleInner, circleOuter, linesSecondary, linesMain (module ids 383922,
-/// 815995, 32315, 144298), drawn at 70×69, 96×95, 183×104, 69×180.
 const PRIMARY: [&str; 4] = ["3e4d5e236f62c4ba.png", "c385ef9dd294be87.png", "ec22204197211dc7.png", "47b5cca448b07ece.png"];
-/// Secondary burst (61631, 850166, 822548, 275242): 61×58, 85×85, 162×173, 156×306.
 const SECONDARY: [&str; 4] = ["f3cbcdad40b7140d.png", "65e38691f7c05321.png", "3f93966b676ef0fb.png", "2063fc2ef0c778bf.png"];
-/// `ddrArrows_` sprites in display order: left, down, up, right (each 50 × 150).
 const ARROWS: [(&str, &str, &str); 4] = [
     ("left", "574907598f87a615.svg", "ddr-left"),
     ("down", "0a9fe5975bf11d56.svg", "ddr-down"),
@@ -46,7 +23,6 @@ const ARROWS: [(&str, &str, &str); 4] = [
 struct State {
     keys: Vec<String>,
     demon: Option<(Instant, u64)>,
-    /// Last press per arrow (sound throttle and the lit frame).
     arrows: [Option<Instant>; 4],
     lofi: Option<Handle>,
 }
@@ -59,7 +35,6 @@ fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
     S.with(|s| f(&mut s.borrow_mut()))
 }
 
-/// Fetch the modal's assets ahead (called when the Ctrl+/ modal opens).
 pub fn preload() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(preload_now);
@@ -75,7 +50,6 @@ fn preload_now() {
     crate::sounds::warm(&["ddr-up", "ddr-down", "ddr-left", "ddr-right"]);
 }
 
-/// True when the five last keys are H H Right N K (the client compares keyCodes).
 pub fn demon_combo(keys: &[String]) -> bool {
     keys.len() >= 5 && keys[keys.len() - 5..].iter().map(String::as_str).eq(["h", "h", "right", "n", "k"])
 }
@@ -84,7 +58,6 @@ pub fn demon_active() -> bool {
     with(|s| s.demon.is_some())
 }
 
-/// Keystroke hook (before the other shortcuts). True when consumed.
 pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<PhoenixApp>) -> bool {
     let m = ks.modifiers;
     if m.control && m.alt && m.shift && ks.key == "w" {
@@ -121,7 +94,6 @@ pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<Phoen
             s.arrows[i] = Some(now);
             ok
         });
-        // `k[dir]()` calls `playSound` directly: no per-sound switch, volume 1.
         if play {
             crate::sounds::play(ARROWS[i].2, 1.);
         }
@@ -131,7 +103,6 @@ pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<Phoen
     false
 }
 
-/// `VIBING_WUMPUS_PLAY_MUSIC` / `STOP_MUSIC`.
 pub fn toggle_lofi() {
     match with(|s| s.lofi.take()) {
         Some(h) => fade(h, 0.5, 0., true),
@@ -144,8 +115,6 @@ pub fn toggle_lofi() {
     }
 }
 
-/// The client's fade: every 100 ms add `.2 × (to − from)` until `to` (volume clamped to
-/// 0..=.5, set raw like its `sound.volume` setter).
 fn fade(h: Handle, from: f32, to: f32, stop: bool) {
     let _ = std::thread::Builder::new().name("lofi-fade".into()).spawn(move || {
         let step = 0.2 * (to - from);
@@ -164,8 +133,6 @@ fn fade(h: Handle, from: f32, to: f32, stop: bool) {
     });
 }
 
-// ------------------------------------------------------------ rendering
-
 fn rng(seed: &mut u64) -> f32 {
     *seed ^= *seed << 13;
     *seed ^= *seed >> 7;
@@ -173,7 +140,6 @@ fn rng(seed: &mut u64) -> f32 {
     (*seed >> 40) as f32 / (1u64 << 24) as f32
 }
 
-/// Keyframe opacity: 0 at 0, 1 from `a` to `b`, 0 at 1 (linear between).
 fn op(p: f32, a: f32, b: f32) -> f32 {
     if p <= 0. || p >= 1. {
         0.
@@ -190,8 +156,6 @@ fn ease_out(p: f32) -> f32 {
     1. - (1. - p.clamp(0., 1.)).powi(2)
 }
 
-/// One image of a burst: CSS box `(x, y, w, h)`, transform-origin `(ox, oy)`, animation
-/// `(duration, delay)` in units of `D`, scale `s0 → s1`, opacity plateau `(a, b)`.
 struct Part {
     file: &'static str,
     rect: (f32, f32, f32, f32),
@@ -211,7 +175,6 @@ fn part(p: &Part, t: f32, k: f32, base: (f32, f32)) -> Option<AnyElement> {
     let s = p.scale.0 + (p.scale.1 - p.scale.0) * ease_out(q);
     let (x, y, w, h) = p.rect;
     let (ox, oy) = p.origin.unwrap_or((w / 2., h / 2.));
-    // Scale about the origin, then the container's scale `k` about its top-left.
     let (nx, ny) = (x + ox * (1. - s), y + oy * (1. - s));
     Some(
         img(path)
@@ -247,8 +210,6 @@ const SHOW_MS: f32 = 1800.;
 const SYMBOL_MS: f32 = 1800. + 240. * 8. + 750.;
 const CLOSE_MS: f32 = SYMBOL_MS + 3000.;
 
-/// App shake offset (`Shakeable.shake(2400, 5)`): every other frame ±5 px horizontally
-/// (alternating) and a random vertical offset in ±5.
 pub fn shake_offset(window: &mut gpui::Window) -> (f32, f32) {
     let Some((start, seed)) = with(|s| s.demon) else { return (0., 0.) };
     let ms = start.elapsed().as_secs_f32() * 1000.;
@@ -262,7 +223,6 @@ pub fn shake_offset(window: &mut gpui::Window) -> (f32, f32) {
     (dir * 5., (rng(&mut r) * 2. - 1.) * 5.)
 }
 
-/// The demon layer, in place of the shortcuts card while active.
 pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let (start, seed) = with(|s| s.demon)?;
     let ms = start.elapsed().as_secs_f32() * 1000.;
@@ -275,7 +235,6 @@ pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> 
     window.request_animation_frame();
     let vp = window.viewport_size();
     let (cw, ch) = (f32::from(vp.width), f32::from(vp.height));
-    // backdrop_jCEr5v: rgba(0,0,0,.5), `transition: opacity 1s ease-in-out`, shown until the close.
     let backdrop = if ms < CLOSE_MS { (ms / 1000.).min(1.) } else { 1. - ((ms - CLOSE_MS) / 500.).min(1.) };
     let mut layer = div().absolute().top_0().left_0().size_full();
     if (SHOW_MS..SYMBOL_MS).contains(&ms) {
@@ -290,11 +249,9 @@ pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> 
             let left = cw / 2. - 200. + rng(&mut r) * 400.;
             let k = 0.6 + rng(&mut r) * 0.4;
             let (dx, dy) = (rng(&mut r) * 140. - 70., rng(&mut r) * 140. - 70.);
-            // primaryExplosion_: margin -77 / -102 (inline-start / top).
             for p in primary() {
                 layer = layer.children(part(&p, t, k, (left - 77. * k, top - 102. * k)));
             }
-            // secondaryExplosion_ at the random offset, margin -88 / -156, from 120 ms.
             if t >= 0.12 {
                 for p in secondary() {
                     layer = layer.children(part(&p, t - 0.12, k, (left + (dx - 88.) * k, top + (dy - 156.) * k)));
@@ -306,11 +263,8 @@ pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> 
         && let Some(path) = asset_file(SYMBOL)
     {
         let q = (ms - SYMBOL_MS) / 3000.;
-        // symbolFadeIn: 0% (0, .8), 5% scale 1.05, 15% (1, 1); ease-out.
         let (o, s) = if q < 0.05 { (q / 0.15, 0.8 + 0.25 * (q / 0.05)) } else if q < 0.15 { (q / 0.15, 1.05 - 0.05 * ((q - 0.05) / 0.1)) } else { (1., 1.) };
-        // symbolBackground: 0 → .2 (5 %) → .2 (15 %) → 0 (60 %).
         let bg = if q < 0.05 { q / 0.05 * 0.2 } else if q < 0.15 { 0.2 } else if q < 0.6 { 0.2 * (1. - (q - 0.15) / 0.45) } else { 0. };
-        // img: width 80 %, max 80vw × 60vh, contain; the svg is 360 × 280.
         let w = (cw * 0.8).min(ch * 0.6 * 360. / 280.) * s;
         let h = w * 280. / 360.;
         layer = layer
@@ -334,14 +288,11 @@ pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> 
     )
 }
 
-/// `ddrArrows_jCEr5v` at the modal's top right.
 pub fn arrows() -> AnyElement {
     let now = Instant::now();
     let mut row = div().absolute().top(px(22.)).right(px(40.)).flex();
     for (i, (_, file, _)) in ARROWS.iter().enumerate() {
         let since = with(|s| s.arrows[i]).map(|t| now.duration_since(t).as_millis() as u64);
-        // .active: `arrow_ .2s steps(2)` from frame -50, then background-position 0 -100;
-        // the button stays lit 500 ms after a press.
         let y = match since {
             Some(ms) if ms < 100 => -50.,
             Some(ms) if ms < 500 => -100.,
@@ -356,7 +307,6 @@ pub fn arrows() -> AnyElement {
     row.into_any_element()
 }
 
-/// Repaint while an arrow is lit.
 pub fn arrows_animating() -> bool {
     let now = Instant::now();
     with(|s| s.arrows.iter().flatten().any(|t| now.duration_since(*t) < Duration::from_millis(520)))

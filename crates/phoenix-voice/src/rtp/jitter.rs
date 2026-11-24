@@ -1,7 +1,3 @@
-//! Receive-side jitter buffer: reorders RTP packets by (wrapping) sequence
-//! number and releases them in order once `depth` packets are buffered or a
-//! gap has waited longer than `max_wait` packets.
-
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
@@ -12,18 +8,15 @@ pub struct JitterPacket {
     pub payload: Vec<u8>,
 }
 
-/// Output of [`JitterBuffer::pop`].
 #[derive(Debug, Clone)]
 pub enum JitterOutput {
     Packet(JitterPacket),
-    /// `count` packets were declared lost starting at `first`.
     Lost { first: u16, count: u16 },
 }
 
 pub struct JitterBuffer {
     depth: usize,
     capacity: usize,
-    /// Extended (unwrapped) sequence -> packet.
     packets: BTreeMap<u64, JitterPacket>,
     next: Option<u64>,
     highest: Option<u64>,
@@ -48,7 +41,6 @@ impl JitterBuffer {
         }
     }
 
-    /// Insert a packet. Duplicates and packets older than the play-out point are dropped.
     pub fn push(&mut self, p: JitterPacket) {
         let ext = self.extend(p.sequence);
         if self.next.is_some_and(|n| ext < n) {
@@ -75,14 +67,12 @@ impl JitterBuffer {
         }
     }
 
-    /// Pop the next in-order item if available.
     pub fn pop(&mut self) -> Option<JitterOutput> {
         let next = self.next?;
         if let Some(p) = self.packets.remove(&next) {
             self.next = Some(next + 1);
             return Some(JitterOutput::Packet(p));
         }
-        // Gap: give up on it once we're `depth` packets ahead.
         let (&first_avail, _) = self.packets.iter().next()?;
         if self.packets.len() >= self.depth || first_avail - next > self.depth as u64 {
             self.next = Some(first_avail);
@@ -138,7 +128,7 @@ mod tests {
         assert!(drain(&mut j).is_empty());
         j.push(pk(13));
         assert_eq!(drain(&mut j), ["lost11x1", "12", "13"]);
-        j.push(pk(11)); // late: dropped
+        j.push(pk(11));
         assert!(j.is_empty());
     }
 }

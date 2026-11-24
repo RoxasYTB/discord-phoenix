@@ -1,8 +1,3 @@
-//! Reads JS bundles out of a Chromium "simple cache" directory (Discord's
-//! `Cache/Cache_Data`). Entry layout: 8-byte magic, u32 version, u32 key
-//! length, u32 hash, u32 padding, key, then the body (stream 1) up to the
-//! stream EOF record. Bodies are stored as transferred (brotli/gzip/plain).
-
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -13,7 +8,6 @@ fn js_key(head: &[u8]) -> Option<String> {
     asset_key(head, ".js")
 }
 
-/// File name of a cached `discord.com/assets/<name><ext>` entry (query dropped).
 fn asset_key(head: &[u8], ext: &str) -> Option<String> {
     if head.len() < 24 || head[..8] != MAGIC {
         return None;
@@ -21,13 +15,10 @@ fn asset_key(head: &[u8], ext: &str) -> Option<String> {
     let kl = u32::from_le_bytes(head[12..16].try_into().ok()?) as usize;
     let key = std::str::from_utf8(head.get(24..24 + kl)?).ok()?;
     let name = key.rsplit_once("/assets/")?.1;
-    // The main bundle is cached as `web.<hash>.js?cdt=1`: drop the query.
     let name = name.split_once('?').map_or(name, |(n, _)| n);
     (name.ends_with(ext) && !name.contains('/')).then(|| name.to_owned())
 }
 
-/// `(asset file name, cache entry path)` of every cached asset ending in `ext`
-/// (e.g. `".css"`, `".svg"`), in directory order.
 pub fn asset_entries(cache: &Path, ext: &str) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
     let Ok(rd) = std::fs::read_dir(cache) else { return out };
@@ -46,9 +37,6 @@ pub fn asset_entries(cache: &Path, ext: &str) -> Vec<(String, PathBuf)> {
     out
 }
 
-/// `(asset file name, cache entry path)` for every cached JS bundle,
-/// largest first (the main `web.*.js` bundle holds most icons, so the
-/// extractor can stop early).
 pub fn js_entries(cache: &Path) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
     let Ok(rd) = std::fs::read_dir(cache) else { return Vec::new() };
@@ -73,7 +61,6 @@ fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
     memchr::memmem::find(h.get(from..)?, n).map(|p| p + from)
 }
 
-/// Decoded text of a cached JS bundle.
 pub fn read_body(entry: &Path) -> Option<String> {
     let b = std::fs::read(entry).ok()?;
     let kl = u32::from_le_bytes(b.get(12..16)?.try_into().ok()?) as usize;

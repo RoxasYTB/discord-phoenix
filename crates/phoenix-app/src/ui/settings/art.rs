@@ -1,9 +1,3 @@
-//! Art the official client shows on settings pages (connection logos, app
-//! icons, Nitro illustrations, video backgrounds). Nothing is shipped: these
-//! are the URLs the live 2026 client loads (read over CDP from the user's
-//! client, 2026-11-23), fetched at runtime through the media HTTP client and
-//! only ever cached locally. A missing image leaves the tile empty.
-
 const A: &str = "https://discord.com/assets/";
 const C: &str = "https://cdn.discordapp.com/assets/content/";
 
@@ -11,10 +5,6 @@ fn a(f: &str) -> String {
     format!("{A}{f}")
 }
 
-/// "Ajouter une nouvelle connexion" tiles in client order
-/// (vanilla-settings-14b `accountButtonInner_yX-kzH`): name, logo URL, and
-/// whether it is an app icon (28px `applicationIcon_jn4e52`) rather than a
-/// full-tile logo.
 pub fn connections() -> Vec<(&'static str, String, bool)> {
     let app = |n, u: &str| (n, format!("https://cdn.discordapp.com/app-icons/{u}.png?size=240"), true);
     let svg = |n, f: &str| (n, a(&format!("{f}.svg")), false);
@@ -44,7 +34,6 @@ pub fn connections() -> Vec<(&'static str, String, bool)> {
     ]
 }
 
-/// "Icône de l'appli" tiles (`appIconSelection_jWcVMn`, vanilla-settings-08b).
 pub fn app_icons() -> Vec<String> {
     [
         "5926a37cee0904ce", "e8396e79419904ca", "2d62663c4b493f8e", "28f89b5f78dd6f80", "96f9a2942150ba17", "22bb7108ad1c466f",
@@ -57,17 +46,14 @@ pub fn app_icons() -> Vec<String> {
     .collect()
 }
 
-/// Limited-time app icon ("Thème Vice City").
 pub fn limited_app_icon() -> String {
     a("236f9310543771ae.webp")
 }
 
-/// `bannerImage_yH_g_W` of the "Donne à ton Discord le style que tu veux" banner.
 pub fn theme_banner() -> String {
     format!("{C}568728735ebc2ee3eb3a7ab29d37c1f698f413d29cee50f9a19ed2d2eefea27f.svg")
 }
 
-/// Nitro page: `tierImage_20JRSQ` and `giftImage_20JRSQ`.
 pub fn nitro_tier() -> String {
     a("3aaa2c2d1874c196.svg")
 }

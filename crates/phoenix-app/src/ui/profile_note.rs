@@ -1,14 +1,3 @@
-//! "Add a note (only visible to you)" button beside the display name and the
-//! inline note editor of the profile popout and the DM profile panel.
-//!
-//! Dumps vanilla-profile-popout #2055 / vanilla-dm-profile-panel #1574
-//! (`displayNameTrailing_C2XpHA` > `button_AMrbh3`): 24px, padding
-//! --space-4, 16px PaperPlusIcon, --icon-subtle (hover --icon-strong),
-//! opacity 0 until the name row is hovered (`visible_AMrbh3`).
-//! Editor: `note_A7qlid` (margin -4px; textarea radius 3, 14/18, padding 4,
-//! focus background --user-profile-note-background-focus). Saving goes
-//! through `Backend::set_note` (`PUT /users/@me/notes/{id}`) on blur / Enter.
-
 use std::cell::RefCell;
 
 use gpui::{AnyElement, Context, Entity, Focusable, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*};
@@ -20,7 +9,6 @@ use crate::{
     theme::{c, generated::idx, tok, z},
 };
 
-/// Group name of the display-name row that reveals the button on hover.
 pub const NAME_ROW_GROUP: &str = "profile-name-row";
 
 struct Editor {
@@ -37,13 +25,11 @@ fn editing(uid: Id) -> Option<Entity<InputState>> {
     EDIT.with(|e| e.borrow().as_ref().filter(|e| e.user == uid).map(|e| e.input.clone()))
 }
 
-/// Close the editor (e.g. when the popout closes).
 pub fn close() {
     EDIT.with(|e| e.borrow_mut().take());
 }
 
 impl PhoenixApp {
-    /// Open the inline note editor for `uid`, prefilled with the saved note.
     pub fn start_note_edit(&mut self, uid: Id, window: &mut Window, cx: &mut Context<Self>) {
         let current = self.people.profiles.get(&uid).map(|p| p.note.to_string()).unwrap_or_default();
         let input = cx.new(|cx| {
@@ -63,7 +49,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    /// Store `text` as the note for `uid` (an account change: only on user action).
     pub fn save_note(&mut self, uid: Id, text: String, cx: &mut Context<Self>) {
         let Some(p) = self.people.profiles.get_mut(&uid) else { return };
         if p.note.as_ref() == text {
@@ -74,7 +59,6 @@ impl PhoenixApp {
     }
 }
 
-/// The 24px note button for the display-name row.
 pub fn note_button(uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let shown = editing(uid).is_some();
     div()
@@ -98,7 +82,6 @@ pub fn note_button(uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .into_any_element()
 }
 
-/// Note editor while editing, otherwise the saved note (click to edit), or None.
 pub fn note_section(note: Option<SharedString>, uid: Id, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if let Some(input) = editing(uid) {
         return Some(

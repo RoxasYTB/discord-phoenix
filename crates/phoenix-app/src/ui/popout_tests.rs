@@ -1,9 +1,3 @@
-//! GPUI tests of how the header popouts close, measured on the live client
-//! (docs/parity/popouts.md, "Dismissal"): a press outside closes and is
-//! swallowed (the client's `clickTrapContainer_ trapClicks_`), Esc closes, the trigger
-//! closes, a channel switch closes the channel-scoped ones, losing window focus
-//! does not. None of it may ack, and showing Inbox > Unreads must not either.
-
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -22,7 +16,6 @@ use crate::{
     },
 };
 
-/// The mock, counting every read marker write (ack, mark read, mark unread).
 struct Probe {
     mock: MockBackend,
     acks: AtomicUsize,
@@ -45,7 +38,6 @@ impl Backend for Probe {
     fn select_guild(&self, guild: Option<Id>) -> BoxFuture<()> {
         self.mock.select_guild(guild)
     }
-    /// The Discord backend acks the channel it is told about.
     fn select_channel(&self, channel: Id) -> BoxFuture<()> {
         self.ack();
         self.mock.select_channel(channel)
@@ -135,9 +127,6 @@ impl Harness {
         self.vcx.debug_bounds(selector).unwrap_or_else(|| panic!("{selector} not drawn"))
     }
 
-    /// Logical point (layout, `debug_bounds`) to the device-independent point
-    /// the platform reports: the page zoom patch divides input positions by
-    /// the zoom (docs/gpui-patches.md).
     fn device(&mut self, at: Point<Pixels>) -> Point<Pixels> {
         let k = self.vcx.update(|w, _| w.page_zoom());
         point(at.x * k, at.y * k)
@@ -145,20 +134,17 @@ impl Harness {
 
     fn click(&mut self, at: Point<Pixels>) {
         let at = self.device(at);
-        // A real pointer moves there first: GPUI hit-tests on mouse moves.
         self.vcx.simulate_mouse_move(at, None::<gpui::MouseButton>, Modifiers::none());
         self.vcx.run_until_parked();
         self.vcx.simulate_click(at, Modifiers::none());
         self.vcx.run_until_parked();
     }
 
-    /// Bottom-left corner (user panel): outside every header popout.
     fn click_outside(&mut self) {
         let vp = self.vcx.update(|w, _| w.viewport_size());
         self.click(point(px(30.), vp.height - px(30.)));
     }
 
-    /// Press inside a popout; on failure, say where everything was.
     fn press_inside(&mut self, selector: &'static str, is_open: fn(&PhoenixApp) -> bool) {
         let pop = self.bounds(selector);
         let at = self.device(header_point(pop));
@@ -186,7 +172,6 @@ impl Harness {
     }
 }
 
-/// A point inside a popout's header (title area: nothing clickable there).
 fn header_point(b: Bounds<Pixels>) -> Point<Pixels> {
     b.origin + point(px(30.), px(24.))
 }
@@ -203,9 +188,7 @@ fn inbox_closes_like_the_client(cx: &mut TestAppContext) {
         assert!(h.read(|a| a.parity.inbox.open));
     };
 
-    // A press inside keeps it, a press outside closes it.
     open(&mut h);
-    // An inner control still gets its press: the Saved tab switches the tab.
     let saved = h.bounds("inbox-tab-saved");
     h.click(saved.center());
     let (open_after_tab, tab) = h.read(|a| (a.parity.inbox.open, a.parity.inbox.tab));
@@ -213,15 +196,12 @@ fn inbox_closes_like_the_client(cx: &mut TestAppContext) {
     h.press_inside("inbox-popout", |a| a.parity.inbox.open);
     h.click_outside();
     assert!(!h.read(|a| a.parity.inbox.open), "press outside did not close the inbox");
-    // The press was swallowed: nothing under it (user panel) reacted.
     assert!(!h.read(|a| a.people.status_picker), "the closing press went through");
 
-    // Esc closes it and does not mark the channel read (Esc alone does).
     open(&mut h);
     h.escape();
     assert!(!h.read(|a| a.parity.inbox.open), "Esc did not close the inbox");
 
-    // The trigger again closes it (the closing press is swallowed, no reopen).
     open(&mut h);
     let btn = h.bounds("title-inbox");
     h.click(btn.center());
@@ -229,7 +209,6 @@ fn inbox_closes_like_the_client(cx: &mut TestAppContext) {
     h.click(btn.center());
     assert!(h.read(|a| a.parity.inbox.open), "the inbox button did not reopen the inbox");
 
-    // Losing window focus keeps it open (live client: window blur keeps the popout).
     h.vcx.deactivate_window();
     h.vcx.run_until_parked();
     assert!(h.read(|a| a.parity.inbox.open), "window blur closed the inbox");
@@ -276,7 +255,6 @@ fn threads_popout_closes_like_the_client(cx: &mut TestAppContext) {
     h.click(btn.center());
     assert!(!h.read(|a| a.parity.threads_open), "the threads button did not close it");
 
-    // A channel switch closes it (its list belongs to the channel).
     open(&mut h);
     let other = h.channels.get(1).copied().unwrap_or(h.channels[0]);
     h.act(|a, _, cx| a.select_channel(other, cx));
@@ -318,7 +296,6 @@ fn pins_popout_closes_like_the_client(cx: &mut TestAppContext) {
 fn one_header_popout_at_a_time(cx: &mut TestAppContext) {
     let mut h = setup(cx);
     h.act(|a, _, cx| a.toggle_inbox(cx));
-    // Opening the threads browser from the keyboard replaces the inbox.
     h.act(|a, _, cx| a.toggle_threads_popout(cx));
     assert!(h.read(|a| a.parity.threads_open && !a.parity.inbox.open));
     h.click_outside();
@@ -341,7 +318,6 @@ fn unreads_tab_shows_messages_without_acking(cx: &mut TestAppContext) {
         a.parity.inbox.open = false;
         a.toggle_inbox(cx);
     });
-    // Cards load one by one while the list end is near; let them all come in.
     for _ in 0..10 {
         h.act(|_, _, cx| cx.notify());
     }
@@ -351,7 +327,6 @@ fn unreads_tab_shows_messages_without_acking(cx: &mut TestAppContext) {
     assert!(shown.iter().all(|n| (1..=crate::ui::inbox_unreads::SHOWN).contains(n)), "unexpected message counts {shown:?}");
     assert_eq!(h.acks(), 0, "showing Inbox > Unreads sent a read marker");
 
-    // Ctrl+Shift+E marks the top card read: that one is a user ack.
     h.act(|a, _, cx| a.mark_inbox_read(cx));
     assert_eq!(h.acks(), 1);
     assert_eq!(h.read(|a| a.parity.inbox.unreads.first().map(|c| c.entry.channel)), Some(entries[1].channel));

@@ -1,7 +1,3 @@
-//! `compress=zlib-stream` transport decompression: one zlib context for the
-//! whole connection; a message is complete when the accumulated frames end
-//! with the `00 00 FF FF` sync-flush suffix.
-
 use flate2::{Decompress, FlushDecompress, Status};
 
 const SUFFIX: [u8; 4] = [0x00, 0x00, 0xFF, 0xFF];
@@ -23,8 +19,6 @@ impl ZlibStream {
         Self { inflater: Decompress::new(true), pending: Vec::new(), out: Vec::with_capacity(64 * 1024) }
     }
 
-    /// Feed one binary websocket frame. Returns the decoded JSON text once a
-    /// full message has been received.
     pub fn push(&mut self, frame: &[u8]) -> Result<Option<String>, String> {
         self.pending.extend_from_slice(frame);
         if self.pending.len() < 4 || self.pending[self.pending.len() - 4..] != SUFFIX {
@@ -58,7 +52,6 @@ impl ZlibStream {
     }
 }
 
-/// Test/mock helper: the compressing side of a zlib stream.
 pub struct ZlibEncoder {
     deflater: flate2::Compress,
 }
@@ -74,7 +67,6 @@ impl ZlibEncoder {
         Self { deflater: flate2::Compress::new(flate2::Compression::default(), true) }
     }
 
-    /// Compress one message and sync-flush (output ends with `00 00 FF FF`).
     pub fn encode(&mut self, data: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(data.len() / 2 + 64);
         let mut input = data;
@@ -104,11 +96,9 @@ mod tests {
         let mut dec = ZlibStream::new();
         let a = enc.encode(br#"{"op":10,"d":{"heartbeat_interval":41250}}"#);
         assert_eq!(&a[a.len() - 4..], &SUFFIX);
-        // Split frame: first half yields nothing.
         let (x, y) = a.split_at(a.len() / 2);
         assert_eq!(dec.push(x).unwrap(), None);
         assert_eq!(dec.push(y).unwrap().unwrap(), r#"{"op":10,"d":{"heartbeat_interval":41250}}"#);
-        // The shared dictionary carries across messages.
         let big = format!(r#"{{"t":"X","d":"{}"}}"#, "abc".repeat(50_000));
         let b = enc.encode(big.as_bytes());
         assert_eq!(dec.push(&b).unwrap().unwrap(), big);

@@ -1,15 +1,3 @@
-//! Last session on disk, so the next launch draws the UI before the gateway
-//! answers and can RESUME the gateway session instead of a new READY.
-//!
-//! `~/.cache/discord-phoenix/session/` (0700 dir, 0600 files), never the token:
-//! - `READY.json`, `READY_SUPPLEMENTAL.json`: raw payloads of the session start;
-//! - `journal.log`: every later dispatch (`seq \t name \t raw json`), so the
-//!   state at exit is READY + journal replayed through the same cache code;
-//! - `owner.pid`: the process writing them. A second Phoenix running at the
-//!   same time writes nothing and never resumes (it would steal the session).
-//!
-//! Logout deletes everything.
-
 use std::{
     fs,
     io::{BufRead, BufWriter, Write},
@@ -32,9 +20,7 @@ use super::{
 };
 
 const NAMES: [&str; 2] = ["READY", "READY_SUPPLEMENTAL"];
-/// Discord keeps a disconnected session resumable for a short while only.
 const RESUME_WINDOW: Duration = Duration::from_secs(150);
-/// Past this the journal is dropped (replay would cost more than a READY).
 const JOURNAL_CAP: u64 = 48 * 1024 * 1024;
 
 pub fn dir() -> Option<PathBuf> {
@@ -57,7 +43,6 @@ fn owner_path() -> Option<PathBuf> {
     Some(dir()?.join("owner.pid"))
 }
 
-/// Pid of another live Phoenix that owns the session files, if any.
 fn other_owner() -> Option<u32> {
     let pid: u32 = fs::read_to_string(owner_path()?).ok()?.trim().parse().ok()?;
     (pid != std::process::id() && std::path::Path::new(&format!("/proc/{pid}")).exists()).then_some(pid)
@@ -98,7 +83,6 @@ impl Files {
     fn handle(&mut self, r: Rec) {
         match r.name.as_str() {
             "READY" => {
-                // New session: the old journal no longer applies.
                 self.journal = open_private(&self.jp, false).ok().map(BufWriter::new);
                 self.size = 0;
                 if let Some(p) = file("READY") {
@@ -110,11 +94,9 @@ impl Files {
                     write_atomic(&p, r.raw.as_bytes());
                 }
             }
-            // Pure UI noise, never changes the cache.
             "TYPING_START" => {}
             _ => {
                 if self.journal.is_none() && self.size == 0 && exists() {
-                    // Resumed session: keep appending to the previous run's journal.
                     self.journal = open_private(&self.jp, true).ok().map(BufWriter::new);
                     self.size = fs::metadata(&self.jp).map_or(0, |m| m.len());
                 }
@@ -132,7 +114,6 @@ impl Files {
     }
 }
 
-/// Single writer thread: keeps the files in dispatch order.
 fn writer(rx: mpsc::Receiver<Rec>) {
     let Some(d) = dir() else { return };
     if fs::DirBuilder::new().recursive(true).mode(0o700).create(&d).is_err() || other_owner().is_some() {
@@ -147,14 +128,12 @@ fn writer(rx: mpsc::Receiver<Rec>) {
             files.handle(r);
             next = rx.try_recv().ok();
         }
-        // Flush when the burst is over: the file is current within one event.
         if let Some(w) = files.journal.as_mut() {
             let _ = w.flush();
         }
     }
 }
 
-/// Gateway hook: hand every dispatch to the writer thread.
 pub fn hook() -> RawDispatchHook {
     static TX: OnceLock<Mutex<mpsc::Sender<Rec>>> = OnceLock::new();
     let tx = TX.get_or_init(|| {
@@ -183,7 +162,6 @@ pub fn clear() {
     }
 }
 
-/// Backend state rebuilt from disk, used by `connect` to RESUME.
 pub struct Core {
     pub cache: Cache,
     pub ready: Box<Ready>,
@@ -193,7 +171,6 @@ pub struct Core {
 
 type Ui = (ReadyData, Vec<AppEvent>);
 
-/// READY + supplemental + journal replayed, converted for the UI. Blocking.
 fn load() -> Option<(Ui, Core)> {
     let t0 = std::time::Instant::now();
     let raw = fs::read_to_string(file("READY")?).ok()?;
@@ -227,7 +204,6 @@ fn load() -> Option<(Ui, Core)> {
     Some(((data, events), Core { cache, ready, adapter, resume }))
 }
 
-/// Apply the journal; returns (last seq, written within the resume window).
 fn replay(cache: &Cache, adapter: &mut Adapter) -> (Option<u64>, bool) {
     let Some(jp) = journal_path() else { return (None, false) };
     let Ok(f) = fs::File::open(&jp) else { return (None, false) };
@@ -263,7 +239,6 @@ struct Shared {
 
 static SHARED: Mutex<Option<Shared>> = Mutex::new(None);
 
-/// Start [`load`] on its own thread at backend creation, before the window exists.
 pub fn preload() {
     if !exists() {
         return;
@@ -292,12 +267,10 @@ fn with_loaded<T>(f: impl FnOnce(&mut Shared) -> Option<T>) -> Option<T> {
     f(sh)
 }
 
-/// The UI part of the preloaded snapshot (waits for it). Blocking.
 pub fn take() -> Option<Ui> {
     with_loaded(|s| s.ui.take())
 }
 
-/// The backend part, only when the gateway session can be resumed. Blocking.
 pub fn take_core() -> Option<Core> {
     with_loaded(|s| s.core.take()).filter(|c| c.resume.is_some())
 }

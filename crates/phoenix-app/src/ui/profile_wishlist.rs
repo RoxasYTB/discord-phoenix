@@ -1,9 +1,3 @@
-//! Full-profile Wishlist tab data.
-//!
-//! The client (`UserProfileStore.getWishlistIds`) takes the keys of the
-//! profile's `wishlist_settings` and loads the first with
-//! `GET /wishlists/{id}?source=user_profile` → `wishlist_items[]`.
-
 use gpui::SharedString;
 use serde_json::Value;
 
@@ -13,7 +7,6 @@ pub struct WishItem {
     pub image: Option<SharedString>,
 }
 
-/// First wishlist id of a `GET /users/{id}/profile` payload.
 pub fn first_id(profile: &Value) -> Option<String> {
     profile.get("wishlist_settings")?.as_object()?.keys().next().cloned()
 }
@@ -22,15 +15,12 @@ fn str_at<'a>(v: &'a Value, paths: &[&str]) -> Option<&'a str> {
     paths.iter().find_map(|p| v.pointer(p).and_then(Value::as_str).filter(|s| !s.is_empty()))
 }
 
-/// Items of a `GET /wishlists/{id}` payload (name + preview image).
 pub fn items(v: &Value) -> Vec<WishItem> {
     v.get("wishlist_items")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|it| {
-            // Shape (ref-cache wishlist-shape.txt): {sku_id, sku_name, sku: {name, ...}};
-            // the tile shows the collectibles-shop static preview of the SKU.
             let name = str_at(it, &["/sku_name", "/sku/name"]).unwrap_or_default();
             let sku = str_at(it, &["/sku_id", "/sku/id"])?;
             let image = Some(SharedString::from(format!("https://cdn.discordapp.com/media/v1/collectibles-shop/{sku}/static")));

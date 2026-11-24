@@ -1,5 +1,3 @@
-//! Simultaneous camera + screen share with encoders failing mid-stream.
-
 use std::sync::Arc;
 
 use phoenix_voice::codec::{Codec, LocalCapabilities};
@@ -35,8 +33,6 @@ const SCR: StreamSsrcs = StreamSsrcs { ssrc: 200, rtx_ssrc: 201 };
 fn camera_and_screen_fallback_independently_without_panic() {
     let factory = MockEncoderFactory {
         unavailable: vec![],
-        // AV1 dies after 3 frames, H264 dies after 5: camera and screen both
-        // walk AV1 -> H264 -> VP8 independently.
         fail_after: vec![(Codec::Av1, 3), (Codec::H264, 5)],
         ..Default::default()
     };
@@ -88,7 +84,6 @@ fn all_codecs_fail_stops_only_that_stream() {
     let out = m.encode(StreamKind::Camera, &frame(2), 0).unwrap();
     assert!(matches!(out.events.as_slice(), [StreamEvent::StreamFailed { kind: StreamKind::Camera, .. }]));
     assert!(!m.is_active(StreamKind::Camera));
-    // Screen untouched and keeps working; encoding the stopped camera is a no-op.
     assert!(!m.encode(StreamKind::Screen, &frame(0), 0).unwrap().packets.is_empty());
     assert!(m.encode(StreamKind::Camera, &frame(3), 0).unwrap().packets.is_empty());
 }
@@ -125,7 +120,6 @@ fn pli_forces_keyframe_on_matching_stream_with_dave_and_transport() {
     let first = m.encode(StreamKind::Camera, &frame(0), 0).unwrap();
     let au = decode(&first.packets);
     assert!(phoenix_voice::rtp::h264::is_keyframe(&au));
-    // SPS first (parameter sets present on the keyframe)
     assert_eq!(&au[..5], &[0, 0, 0, 1, 0x67]);
     let delta = m.encode(StreamKind::Camera, &frame(1), 3000).unwrap();
     assert!(!phoenix_voice::rtp::h264::is_keyframe(&decode(&delta.packets)));
@@ -133,6 +127,5 @@ fn pli_forces_keyframe_on_matching_stream_with_dave_and_transport() {
     let k = m.encode(StreamKind::Camera, &frame(2), 6000).unwrap();
     let au = decode(&k.packets);
     assert!(phoenix_voice::rtp::h264::is_keyframe(&au));
-    // Cached SPS/PPS re-sent with the PLI keyframe for Apple decoders.
     assert_eq!(&au[..5], &[0, 0, 0, 1, 0x67]);
 }

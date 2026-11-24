@@ -1,26 +1,12 @@
-//! Styled display names painted glyph by glyph: GPUI text has no
-//! `letter-spacing`, no gradient fill and no ellipsis for that kind of
-//! layout, so this element does all three.
-//!
-//! - letter-spacing: `spacing` px after every character, like the browser.
-//! - gradient: `name_Wo4EpK` `linear-gradient(to right, c0, c1, ...)` over the
-//!   text box; each glyph takes the colour at its centre (per-glyph lerp).
-//!   `twoColorGradient_` is (c1, c2, c1) and `usernameGradient_` tiles it
-//!   every 100px (`background-size: 100px auto`).
-//! - ellipsis: `userName_` / `nameContainer_` `text-overflow: ellipsis`; the
-//!   characters that do not fit are replaced by "…".
-
 use gpui::{
     App, Bounds, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, Pixels,
     SharedString, Style, TextAlign, Window, point, px, relative,
 };
 
-/// See the module docs. `colors` empty: the inherited text colour.
 pub struct NameText {
     text: SharedString,
     spacing: Pixels,
     colors: Vec<Hsla>,
-    /// Gradient tile width; `None` stretches it over the text.
     period: Option<Pixels>,
 }
 
@@ -30,7 +16,6 @@ impl NameText {
     }
 }
 
-/// The colour at `t` (0..=1) of evenly spaced gradient stops.
 pub fn gradient_at(colors: &[Hsla], t: f32) -> Option<Hsla> {
     match colors {
         [] => None,
@@ -47,7 +32,6 @@ pub fn gradient_at(colors: &[Hsla], t: f32) -> Option<Hsla> {
 }
 
 pub struct Layout {
-    /// Per character: byte range start, advance (without spacing).
     chars: Vec<(String, Pixels)>,
     ellipsis: Pixels,
     line_height: Pixels,
@@ -84,9 +68,6 @@ impl Element for NameText {
     ) -> (LayoutId, Layout) {
         let color = window.text_style().color;
         let line_height = window.text_style().line_height_in_pixels(window.rem_size());
-        // Advances come from shaping the whole name once (a cluster shaped on
-        // its own, e.g. a combining mark or an emoji in a fallback font,
-        // measures wider than in the line), split at grapheme boundaries.
         let full = self.shape(&self.text, window, color);
         let text = self.text.clone();
         let starts: Vec<(usize, &str)> = unicode_segmentation::UnicodeSegmentation::grapheme_indices(text.as_ref(), true).collect();
@@ -99,9 +80,6 @@ impl Element for NameText {
                 ((*g).to_owned(), (x1 - x0).max(px(0.)))
             })
             .collect();
-        // Emoji in names are 1.25em-wide inline boxes in the client (vanilla-members
-        // `emoji_HG2xvK` 20px at 16px, GLaDOS row); the colour emoji font advances wider
-        // and pushed names like "🌸~GŁaĐØS~🌸" into the ellipsis.
         let em = window.text_style().font_size.to_pixels(window.rem_size()) * 1.25;
         let per = per.into_iter().map(|(g, a)| if is_pictograph(&g) { (g, if a > em { em } else { a }) } else { (g, a) }).collect();
         let chars = merge_ligatures(per);
@@ -141,7 +119,6 @@ impl Element for NameText {
         let base = window.text_style().color;
         let natural = layout.chars.iter().fold(px(0.), |w, (_, a)| w + *a + self.spacing);
         let fits = natural <= bounds.size.width + px(0.5);
-        // Characters kept before the "…" when the name does not fit.
         let limit = if fits { natural } else { bounds.size.width - layout.ellipsis };
         let total = if fits { natural } else { bounds.size.width };
         let period = self.period.unwrap_or(total);
@@ -165,15 +142,10 @@ impl Element for NameText {
     }
 }
 
-/// Emoji-presentation grapheme (supplementary pictographs, VS16, ZWJ sequences, flags).
 fn is_pictograph(g: &str) -> bool {
     g.contains(['\u{FE0F}', '\u{200D}']) || g.chars().next().is_some_and(|c| c as u32 >= 0x1F000)
 }
 
-/// A ligature (e.g. "fl" in a styled-name font) is one glyph: the shaper gives
-/// one of its graphemes the whole advance and the other none. Painting them one
-/// by one then overlaps the second letter on the next one ("flav" read "f bv"),
-/// so zero-advance graphemes are painted together with their neighbour.
 fn merge_ligatures(per: Vec<(String, Pixels)>) -> Vec<(String, Pixels)> {
     let mut out: Vec<(String, Pixels)> = Vec::with_capacity(per.len());
     for (g, adv) in per {

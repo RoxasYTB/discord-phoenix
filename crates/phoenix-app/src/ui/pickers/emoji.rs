@@ -1,8 +1,5 @@
-//! Unicode emoji table helpers: categories, shortcodes, search, skin tones.
-
 pub use super::emoji_data::EMOJI;
 
-/// Unicode categories in Discord's order (index = `EMOJI.3`).
 pub const CATEGORIES: [&str; 8] = [
     "People",
     "Nature",
@@ -14,17 +11,14 @@ pub const CATEGORIES: [&str; 8] = [
     "Flags",
 ];
 
-/// Emoji used as the sidebar icon of each category.
 pub const CATEGORY_ICON: [&str; 8] = ["😀", "🐻", "🍔", "⚽", "🚗", "💡", "❤️", "🏁"];
 
-/// Skin tone swatches (none + 5 Fitzpatrick modifiers) shown on 👏.
 pub const TONE_PREVIEW: &str = "👏";
 
 pub fn glyph(ix: usize) -> &'static str {
     EMOJI[ix].0
 }
 
-/// Name shown as `:name:` (Discord-style alias when we have one).
 pub fn shortcode(ix: usize) -> &'static str {
     let e = &EMOJI[ix];
     e.2.split(' ').find(|a| !a.is_empty()).unwrap_or(e.1)
@@ -34,7 +28,6 @@ pub fn supports_tone(ix: usize) -> bool {
     EMOJI[ix].4
 }
 
-/// Apply skin tone `tone` (1..=5, 0 = default yellow) to a base emoji.
 pub fn with_tone(e: &str, tone: u8) -> String {
     if tone == 0 || tone > 5 {
         return e.to_owned();
@@ -50,7 +43,6 @@ pub fn with_tone(e: &str, tone: u8) -> String {
     out
 }
 
-/// Glyph of entry `ix` with `tone` applied when supported.
 pub fn toned(ix: usize, tone: u8) -> String {
     if supports_tone(ix) { with_tone(glyph(ix), tone) } else { glyph(ix).to_owned() }
 }
@@ -59,7 +51,6 @@ pub fn index_of(glyph: &str) -> Option<usize> {
     EMOJI.iter().position(|e| e.0 == glyph)
 }
 
-/// Lower is better; `None` = no match. Shared with custom emoji names.
 pub fn name_score(name: &str, q: &str) -> Option<u8> {
     if name == q {
         Some(0)
@@ -74,7 +65,6 @@ pub fn name_score(name: &str, q: &str) -> Option<u8> {
     }
 }
 
-/// Unicode emoji matching `q` (case-insensitive), best first.
 pub fn search(q: &str, limit: usize) -> Vec<usize> {
     let q = q.trim().trim_matches(':').to_lowercase().replace(' ', "_");
     if q.is_empty() {
@@ -94,7 +84,6 @@ pub fn search(q: &str, limit: usize) -> Vec<usize> {
     hits.into_iter().map(|(_, i)| i).collect()
 }
 
-/// Resolve `:shortcode:` to a unicode glyph (exact match only).
 pub fn by_shortcode(name: &str) -> Option<usize> {
     let name = name.trim_matches(':');
     EMOJI.iter().position(|e| e.1 == name || e.2.split(' ').any(|a| a == name))
@@ -130,9 +119,7 @@ mod tests {
     fn skin_tones() {
         assert_eq!(with_tone("👍", 3), "👍🏽");
         assert_eq!(with_tone("👍", 0), "👍");
-        // FE0F after the base is replaced by the modifier.
         assert_eq!(with_tone("☝️", 1), "☝🏻");
-        // ZWJ sequences keep the tail.
         assert_eq!(with_tone("👩‍💻", 5), "👩🏿‍💻");
         let thumbs = index_of("👍").unwrap();
         assert!(supports_tone(thumbs));

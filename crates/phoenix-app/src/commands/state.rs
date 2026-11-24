@@ -1,7 +1,3 @@
-//! UI state of the parity screens (inbox, forum, interaction modals, poll
-//! choices, moderation dialogs, group DM picker) and the small hooks the
-//! shared app code calls.
-
 use std::collections::{HashMap, HashSet};
 
 use gpui::{Context, Entity, SharedString};
@@ -15,16 +11,11 @@ use crate::{
     model::{Id, Message},
 };
 
-/// Gateway events for the parity screens.
 #[derive(Clone, Debug)]
 pub enum ParityEvent {
-    /// `INTERACTION_MODAL_CREATE`: a bot opened a modal for us.
     Modal(ModalSpec),
-    /// `INTERACTION_FAILURE`: the bot didn't answer in time.
     InteractionFailed,
-    /// `MESSAGE_POLL_VOTE_ADD/REMOVE`.
     PollVote { channel: Id, message: Id, user: Id, answer: u32, add: bool },
-    /// `CALL_CREATE` / `CALL_UPDATE` (`ringing` user ids) and `CALL_DELETE` (empty).
     Call { channel: Id, ringing: Vec<Id> },
 }
 
@@ -33,7 +24,6 @@ pub struct TextInputSpec {
     pub custom_id: String,
     pub label: String,
     pub description: Option<String>,
-    /// 1 = short, 2 = paragraph.
     pub style: u8,
     pub placeholder: Option<String>,
     pub value: Option<String>,
@@ -85,11 +75,9 @@ impl ModalSpec {
         let mut inputs = Vec::new();
         for row in v.get("components").and_then(Value::as_array)? {
             match row.get("type").and_then(Value::as_u64) {
-                // Legacy: action row wrapping one text input.
                 Some(1) => inputs.extend(
                     row.get("components").and_then(Value::as_array).into_iter().flatten().filter_map(|c| text_input(c, None, None)),
                 ),
-                // Label wrapping a text input (newer modals).
                 Some(18) => inputs.extend(
                     row.get("component").and_then(|c| text_input(c, row.get("label"), row.get("description"))),
                 ),
@@ -110,7 +98,6 @@ impl ModalSpec {
     }
 }
 
-/// Map a raw gateway event to a [`ParityEvent`].
 pub fn from_gateway(ev: &GatewayEvent) -> Option<ParityEvent> {
     let GatewayEvent::Unknown { name, data } = ev else { return None };
     match name.as_str() {
@@ -145,15 +132,11 @@ pub enum InboxTab {
     Scheduled,
 }
 
-/// One channel card of Inbox > Unreads.
 pub struct UnreadCard {
     pub entry: crate::ui::inbox_unreads::Entry,
-    /// Unread messages shown (oldest first, at most 25).
     pub msgs: Vec<Message>,
-    /// More unread messages than shown: "View all" button.
     pub more: bool,
     pub loaded: bool,
-    /// The messages request failed (client `hasError`): the card stays, never acked.
     pub error: Option<SharedString>,
 }
 
@@ -162,25 +145,20 @@ pub struct InboxState {
     pub tab: InboxTab,
     pub mentions: Vec<Message>,
     pub saved: Vec<Message>,
-    /// Inbox > Scheduled (`GET /users/@me/scheduled-messages`), sorted by send time.
     pub scheduled: Vec<Message>,
     pub loading: bool,
     pub reached_end: bool,
     pub filter_menu: bool,
-    /// Filters of the Mentions tab.
     pub this_server: bool,
     pub everyone: bool,
     pub roles: bool,
-    /// Inbox > Unreads, in the client's order; cards load one at a time.
     pub unreads: Vec<UnreadCard>,
     pub unreads_loading: bool,
-    /// Bumped on every rebuild: drops loads of a previous opening.
     pub unreads_gen: u64,
 }
 
 impl Default for InboxState {
     fn default() -> Self {
-        // Client RecentMentionsStore defaults: all servers, @everyone and roles on.
         Self {
             open: false,
             tab: InboxTab::default(),
@@ -218,7 +196,6 @@ pub struct ForumCompose {
 #[derive(Default)]
 pub struct ForumView {
     pub posts: Vec<ForumPost>,
-    /// "Older posts": archived search pages, loaded after the active list.
     pub archived: Vec<ForumPost>,
     pub archived_more: bool,
     pub archived_loading: bool,
@@ -226,10 +203,7 @@ pub struct ForumView {
     pub has_more: bool,
     pub loading: bool,
     pub loaded: bool,
-    /// Last failed load of the active posts; shows the error state with a
-    /// retry button.
     pub error: Option<SharedString>,
-    /// Consecutive failed loads, drives the automatic retry backoff.
     pub failures: u32,
     pub tags: Vec<Id>,
     pub sort: ForumSort,
@@ -248,7 +222,6 @@ pub struct ModalView {
 pub enum ModKind {
     Timeout(u64),
     Kick,
-    /// Seconds of message history to delete.
     Ban(u32),
 }
 
@@ -268,32 +241,20 @@ pub struct GroupDmPicker {
 #[derive(Default)]
 pub struct ParityUi {
     pub inbox: InboxState,
-    /// DM / group call ringing us (incoming call popup).
     pub incoming_call: Option<Id>,
     pub threads_open: bool,
-    /// Archived threads per channel for the threads browser ("older threads").
     pub archived_threads: HashMap<Id, Vec<ForumPost>>,
     pub forums: HashMap<Id, ForumView>,
-    /// "New Post" clicked: build the composer on the next frame.
     pub forum_compose_request: Option<Id>,
-    /// Post just created: open it once a `Window` is at hand.
     pub forum_open_thread: Option<crate::model::ThreadRef>,
-    /// Bot modal waiting for its inputs to be built (needs a `Window`).
     pub pending_modal: Option<ModalSpec>,
     pub modal: Option<ModalView>,
-    /// Open select menu: (message, custom_id).
     pub open_select: Option<(Id, String)>,
-    /// Values picked in select menus, by (message, custom_id).
     pub select_values: HashMap<(Id, String), Vec<String>>,
-    /// Answers ticked in multi-choice polls before "Vote".
     pub poll_choice: HashMap<Id, HashSet<u32>>,
-    /// Polls switched to "Show results" before voting (`showResults` of the client's poll store).
     pub poll_show_results: HashSet<Id>,
-    /// Interaction buttons waiting for the bot (spinner).
     pub pending: HashSet<(Id, String)>,
-    /// Where the last interaction went (modals without `channel_id`).
     pub last_target: Option<(Option<Id>, Id)>,
-    /// Read marker captured when a channel is opened: (channel, last read).
     pub read_mark: Option<(Id, Id)>,
     pub moderation: Option<ModDialog>,
     pub group_dm: Option<GroupDmPicker>,
@@ -301,7 +262,6 @@ pub struct ParityUi {
 }
 
 impl App {
-    /// Send a [`ParityRequest`]; `done` runs on the UI thread.
     pub fn parity_request(
         &mut self,
         req: ParityRequest,
@@ -337,7 +297,6 @@ impl App {
     }
 }
 
-/// `AppEvent::Parity` handler.
 pub fn on_event(app: &mut App, ev: ParityEvent, cx: &mut Context<App>) {
     match ev {
         ParityEvent::Modal(spec) => {
@@ -350,7 +309,6 @@ pub fn on_event(app: &mut App, ev: ParityEvent, cx: &mut Context<App>) {
         }
         ParityEvent::PollVote { channel, message, user, answer, add } => {
             let mine = user == app.me.id;
-            // Our own votes were applied optimistically already.
             if !mine && store::update_poll(message, |p| p.apply_vote(answer, add, false)) {
                 app.refresh_message(channel, message);
             }
@@ -360,15 +318,11 @@ pub fn on_event(app: &mut App, ev: ParityEvent, cx: &mut Context<App>) {
     cx.notify();
 }
 
-/// Called by `select_channel` before the channel is marked read: remember
-/// where the "NEW" divider goes.
 pub fn remember_read_mark(app: &mut App, channel: Id) {
     let unread = app.channels.get(&channel).is_some_and(|c| c.unread);
     app.parity.read_mark = if unread { app.backend.last_read(channel).map(|m| (channel, m)) } else { None };
 }
 
-/// Called after the first page of a channel loaded: put the "NEW" divider
-/// above the first message after the read marker that isn't ours.
 pub fn apply_read_mark(app: &mut App, channel: Id) {
     let Some((ch, last)) = app.parity.read_mark else { return };
     if ch != channel {
@@ -384,7 +338,6 @@ pub fn apply_read_mark(app: &mut App, channel: Id) {
     }
 }
 
-/// First unread message after `last` in `msgs` that someone else sent.
 pub fn first_unread(msgs: &[Message], last: Id, me: Id) -> Option<Id> {
     msgs.iter().find(|m| m.id > last && m.author != me).map(|m| m.id)
 }

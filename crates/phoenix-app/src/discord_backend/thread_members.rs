@@ -1,8 +1,3 @@
-//! Thread member list, read-only, as the user client loads it: op 14 with
-//! `thread_member_lists: [thread]`, answered by THREAD_MEMBER_LIST_UPDATE
-//! `{guild_id, thread_id, members: [{user_id, member, presence}]}`.
-//! (`GET /channels/{id}/thread-members` is bot-only: 403 code 20002.)
-
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 
 use phoenix_api::{gateway::GatewayEvent, gateway::GuildSubscription};
@@ -48,7 +43,6 @@ fn parse(data: &Value) -> Option<(u64, Reply)> {
     Some((thread, (members, users)))
 }
 
-/// Gateway hook: hand THREAD_MEMBER_LIST_UPDATE to the waiting request.
 pub fn on_gateway(ev: &GatewayEvent) {
     let GatewayEvent::Unknown { name, data } = ev else { return };
     if name != "THREAD_MEMBER_LIST_UPDATE" {

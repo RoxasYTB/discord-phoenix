@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
-# Package a built phoenix-app as tar.gz, .deb (dpkg-deb, no cargo-deb metadata
-# needed) and AppImage.
-# Usage: package.sh <version> <binary> <outdir>
 set -euo pipefail
 VERSION="$1" BIN="$2" OUT="$3"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$HERE/../.."
-ICON="$HERE/../icons/discord-phoenix.png"   # 512x512 PNG, optional
+ICON="$HERE/../icons/discord-phoenix.png"
 ARCH=x86_64 DEBARCH=amd64
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 NAME="discord-phoenix-$VERSION-linux-$ARCH"
 
-# --- staged FHS tree (shared by deb and AppImage) ---
 FHS="$WORK/fhs/usr"
 install -Dm755 "$BIN" "$FHS/bin/phoenix-app"
 install -Dm644 "$HERE/discord-phoenix.desktop" "$FHS/share/applications/discord-phoenix.desktop"
@@ -25,15 +21,13 @@ for f in LICENSE-MIT LICENSE-APACHE README.md; do
   install -Dm644 "$ROOT/$f" "$FHS/share/doc/discord-phoenix/$f"
 done
 
-# --- tar.gz ---
 mkdir -p "$WORK/$NAME"
 cp -r "$FHS/bin" "$FHS/share" "$WORK/$NAME/"
 tar -C "$WORK" -czf "$OUT/$NAME.tar.gz" "$NAME"
 
-# --- .deb ---
 DEB="$WORK/deb"
 mkdir -p "$DEB/DEBIAN"; cp -r "$WORK/fhs/usr" "$DEB/"
-DEBVER="${VERSION/-/\~}"   # 0.1.0-beta.1 -> 0.1.0~beta.1 sorts before 0.1.0
+DEBVER="${VERSION/-/\~}"
 cat > "$DEB/DEBIAN/control" <<CTRL
 Package: discord-phoenix
 Version: $DEBVER
@@ -49,13 +43,11 @@ Description: Unofficial native Discord client
 CTRL
 dpkg-deb --root-owner-group --build "$DEB" "$OUT/discord-phoenix_${DEBVER}_${DEBARCH}.deb"
 
-# --- AppImage ---
 if [ "${SKIP_APPIMAGE:-0}" != 1 ]; then
   APPDIR="$WORK/AppDir"
   cp -r "$WORK/fhs" "$APPDIR"
   cp "$HERE/discord-phoenix.desktop" "$APPDIR/"
   if [ -f "$ICON" ]; then cp "$ICON" "$APPDIR/discord-phoenix.png"; else
-    # appimagetool requires an icon; ship a 1x1 placeholder
     printf '\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0\x1f\x15\xc4\x89\0\0\0\rIDATx\x9cc\xf8\x0f\0\0\x01\x01\0\x05\x18\xd8N\0\0\0\0IEND\xaeB`\x82' > "$APPDIR/discord-phoenix.png"
   fi
   cat > "$APPDIR/AppRun" <<'RUN'

@@ -1,35 +1,3 @@
-//! Offscreen render of Phoenix on the user's REAL account, strictly read-only.
-//!
-//! `cargo run -p phoenix-app --example real_shots -- out.png`
-//!
-//! The token comes from the keyring (never printed, never rewritten). The
-//! backend is wrapped so nothing can be sent, acked, typed, reacted, joined or
-//! changed: only READY, channel selection, message history, member list
-//! subscription and media downloads go out.
-//!
-//! Location: env `PHX_GUILD` + `PHX_CHANNEL` (`PHX_GUILD` alone = its first text channel), or `PHX_DM=<channel id>`, or by
-//! default the location shown by the user's Discord (`cdp.mjs eval location.pathname`).
-//! Size / theme / density: env `PHX_W`, `PHX_H`, `PHX_THEME` (dark|light|ash|onyx), `PHX_HC`,
-//! `PHX_DENSITY` (compact|default|cozy), `PHX_FONT` (px), otherwise read from the live Discord
-//! through CDP. `PHX_COMPACT=1` = compact message display.
-//! `PHX_AUDIO` = two digits mute/deaf (e.g. `11`), otherwise read from the live user panel.
-//! `PHX_PROFILE=<user id>|peer` opens that profile (`PHX_PROFILE_KIND` popout|modal, `PHX_PROFILE_BOX=x,y`).
-//! `PHX_VIEW=friends` opens the Friends page (`PHX_TAB` = online|all|pending|blocked|add);
-//! `PHX_VIEW=inbox` opens the inbox popout over the location (`PHX_TAB` =
-//! mentions|unreads|saved|reminders|scheduled).
-//! `PHX_OPEN` = pins|threads|search[:q]|filters[:date|calendar|list<n>]|settings[:page]|server_settings[:n]|emoji|gif|sticker|msgmenu|chanmenu[:n]|catmenu[:n]|guildmenu|guilddrop|usermenu[:n]|switcher|thread:<id>|thread_create:<msg>|attach|poll_create|leave|invite|post[:n]|events|community[:browse]|guide.
-//! `PHX_PROFILE=member:<n>` = nth member of the list; `PHX_DEBUG_GIF=1` prints the GIF home previews.
-//! `PHX_FX_STILL=1` = still profile effects (reduce motion).
-//! `PHX_SEARCH_SORT=old|rel` and `PHX_SEARCH_PAGE=<n>` with `PHX_OPEN=search:<q>`.
-//! `PHX_WAIT` = seconds to wait for messages and images (default 15).
-//! `PHX_TABS=n` presses Tab n times before the capture (`-n` = Shift+Tab), for the focus rings.
-//! `PHX_SEND=<what>` (send-lifecycle test, ONLY in the hard-coded test channel
-//! [`SEND_TEST_CHANNEL`], refused anywhere else): types
-//! "[Test Phoenix] envoyé depuis le client Rust (Phoenix) — <what>" and presses Enter.
-//! The POST is held `PHX_SEND_HOLD` ms (default 4000) so the pending copy can be shot to
-//! `<out>-pending.png`; the settled state goes to `<out>`. `PHX_SEND_FAIL=400` answers
-//! with a local 400 instead of sending (nothing leaves the machine).
-
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{AppContext, Entity, HeadlessAppContext, px, size};
@@ -46,7 +14,6 @@ use phoenix_app::{
     ui::settings::AppTheme,
 };
 
-/// Keyring store that can load but never save or delete.
 struct LoadOnlyStore;
 
 impl TokenStore for LoadOnlyStore {
@@ -65,17 +32,13 @@ fn denied<T: Send + 'static>() -> BoxFuture<T> {
     Box::pin(async { Err(BackendError("read-only capture".into())) })
 }
 
-/// The only channel `PHX_SEND` may post to (user-granted test channel).
 const SEND_TEST_CHANNEL: u64 = 1403447573389381652;
-/// Every test message starts with this, so readers know where it came from.
 const SEND_PREFIX: &str = "[Test Phoenix] envoyé depuis le client Rust (Phoenix) — ";
 
-/// Delegates reads to the real backend; every write is refused (except the guarded test send).
 struct ReadOnly(DiscordBackend);
 
 impl Backend for ReadOnly {
     fn set_event_sink(&self, sink: EventSink) {
-        // Drop events that would make the app answer with a write (none today, but keep the hook).
         self.0.set_event_sink(Arc::new(move |e: AppEvent| sink(e)));
     }
     fn login(&self, _: Credentials) -> BoxFuture<ReadyData> {
@@ -88,18 +51,17 @@ impl Backend for ReadOnly {
         self.0.restore_cached()
     }
     fn prefetch_messages(&self, channel: Id) {
-        self.0.prefetch_messages(channel) // GET only, never acks
+        self.0.prefetch_messages(channel)
     }
     fn select_guild(&self, guild: Option<Id>) -> BoxFuture<()> {
         self.0.select_guild(guild)
     }
     fn select_channel(&self, channel: Id) -> BoxFuture<()> {
-        self.0.select_channel(channel) // acks disabled via NO_ACKS
+        self.0.select_channel(channel)
     }
     fn load_messages(&self, channel: Id, before: Option<Id>, limit: u32) -> BoxFuture<Vec<Message>> {
         self.0.load_messages(channel, before, limit)
     }
-    /// Server Guide resource previews: GET messages `after` the channel id (read-only).
     fn load_messages_at(&self, channel: Id, at: phoenix_app::backend::HistoryAt, limit: u32) -> BoxFuture<Vec<Message>> {
         self.0.load_messages_at(channel, at, limit)
     }
@@ -115,7 +77,6 @@ impl Backend for ReadOnly {
         nonce: u64,
         progress: Option<phoenix_app::backend::UploadProgress>,
     ) -> BoxFuture<Message> {
-        // Hard guard: PHX_SEND set, the test channel, our prefix, no reply. Anything else is refused.
         if std::env::var_os("PHX_SEND").is_none() || ch.0 != SEND_TEST_CHANNEL || !content.starts_with(SEND_PREFIX) || reply.is_some() {
             return denied();
         }
@@ -126,7 +87,6 @@ impl Backend for ReadOnly {
             std::thread::sleep(Duration::from_millis(hold));
             let _ = tx.send(());
         });
-        // The real backend starts its request as soon as it is called: call it only after the hold.
         let real = self.0.clone();
         Box::pin(async move {
             let _ = rx.await;
@@ -167,7 +127,6 @@ impl Backend for ReadOnly {
     fn logout(&self) -> BoxFuture<()> {
         denied()
     }
-    // Reads.
     fn notify_prefs(&self) -> Option<phoenix_app::notifications::NotifyPrefs> {
         self.0.notify_prefs()
     }
@@ -177,7 +136,6 @@ impl Backend for ReadOnly {
     fn activity_feed_enabled(&self, g: Id) -> bool {
         self.0.activity_feed_enabled(g)
     }
-    /// Gateway op 8 (read-only member lookup) for Activity feed authors.
     fn request_feed_members(&self, g: Id, u: Vec<Id>) {
         self.0.request_feed_members(g, u)
     }
@@ -193,23 +151,18 @@ impl Backend for ReadOnly {
     fn has_premium(&self) -> bool {
         self.0.has_premium()
     }
-    /// Read-only `GET /users/{id}/profile` (DM profile panel, popouts).
     fn user_profile(&self, u: Id, g: Option<Id>) -> BoxFuture<phoenix_app::presence::Profile> {
         self.0.user_profile(u, g)
     }
-    /// Settings > Connections authorized apps (read-only GET).
     fn authorized_apps(&self) -> BoxFuture<Option<Vec<phoenix_app::ui::settings::authorized_apps::AuthorizedApp>>> {
         self.0.authorized_apps()
     }
-    /// Settings > Billing (read-only GETs).
     fn billing(&self) -> BoxFuture<Option<phoenix_app::ui::settings::billing::Billing>> {
         self.0.billing()
     }
-    /// Settings > Account devices count (read-only GET).
     fn session_count(&self) -> BoxFuture<Option<usize>> {
         self.0.session_count()
     }
-    /// Profile Board: widgets, games and recent activity (read-only GETs).
     fn profile_widgets(&self, u: Id) -> BoxFuture<Vec<phoenix_app::ui::settings::profile_widgets::AppWidget>> {
         self.0.profile_widgets(u)
     }
@@ -225,14 +178,12 @@ impl Backend for ReadOnly {
     fn subscribe_member_ranges(&self, g: Id, c: Id, r: Vec<[u32; 2]>) -> BoxFuture<()> {
         self.0.subscribe_member_ranges(g, c, r)
     }
-    /// GET thread-members: read-only.
     fn thread_members(&self, t: Id) -> BoxFuture<Vec<phoenix_app::model::Member>> {
         self.0.thread_members(t)
     }
     fn guild_boosts(&self, g: Id) -> Option<(u32, bool)> {
         self.0.guild_boosts(g)
     }
-    // Server Guide header art (READY cache only).
     fn guild_home_header(&self, g: Id) -> Option<String> {
         let h = self.0.guild_home_header(g);
         if std::env::var_os("PHX_DEBUG_GUIDE").is_some() {
@@ -243,7 +194,6 @@ impl Backend for ReadOnly {
     fn channel_user_limit(&self, c: Id) -> Option<u32> {
         self.0.channel_user_limit(c)
     }
-    // Browse Channels tab (PHX_OPEN=community:browse): READY settings and cache only.
     fn channel_opted_in(&self, c: Id) -> Option<bool> {
         self.0.channel_opted_in(c)
     }
@@ -265,12 +215,9 @@ impl Backend for ReadOnly {
     fn forum_tags(&self, f: Id) -> Vec<phoenix_app::commands::ForumTag> {
         self.0.forum_tags(f)
     }
-    /// Only the forum post listing and the content inventory (read-only GETs) go through.
-    // GET collectibles product by SKU (profile effects in the DM panel / popout).
     fn collectible_product(&self, sku: u64) -> BoxFuture<Option<phoenix_app::ui::settings::collectibles::Collectible>> {
         self.0.collectible_product(sku)
     }
-    // Inbox "Reminders" tab: read-only list of the saved-message reminders.
     fn action(&self, req: phoenix_app::actions::ActionRequest) -> BoxFuture<phoenix_app::actions::ActionReply> {
         match req {
             phoenix_app::actions::ActionRequest::Reminders => self.0.action(req),
@@ -290,14 +237,9 @@ impl Backend for ReadOnly {
                     r
                 })
             }
-            // GET /content-inventory/users/@me (member list Activity feed).
             phoenix_app::commands::ParityRequest::ContentInventory => self.0.parity(req),
-            // Events modal (PHX_OPEN=events): GET scheduled-events.
             phoenix_app::commands::ParityRequest::ScheduledEvents { .. } => self.0.parity(req),
-            // Channels & Roles page (PHX_OPEN=community): GET onboarding.
             phoenix_app::commands::ParityRequest::Onboarding { .. } => self.0.parity(req),
-            // Server Guide (PHX_OPEN=guide): GET new-member-welcome + GET profile.
-            // PHX_DEBUG_GUIDE=1 prints what came back (titles and lengths only).
             phoenix_app::commands::ParityRequest::ServerGuide { .. } => {
                 let fut = self.0.parity(req);
                 Box::pin(async move {
@@ -318,17 +260,13 @@ impl Backend for ReadOnly {
                     r
                 })
             }
-            // Thread / forum post opened by id (PHX_CHANNEL of a post).
             phoenix_app::commands::ParityRequest::FetchThread { .. } => self.0.parity(req),
-            // Inbox popout tabs (PHX_VIEW=inbox): GET mentions / saved / scheduled.
             phoenix_app::commands::ParityRequest::Mentions { .. }
             | phoenix_app::commands::ParityRequest::SavedMessages
             | phoenix_app::commands::ParityRequest::ScheduledMessages => self.0.parity(req),
             _ => denied(),
         }
     }
-    // Pins, expression pickers and search (PHX_OPEN): read-only GETs.
-    /// Inbox > Unreads: computed from the cached read states, no request.
     fn inbox_unreads(&self, order: &[Id]) -> Vec<phoenix_app::ui::inbox_unreads::Entry> {
         self.0.inbox_unreads(order)
     }
@@ -356,8 +294,6 @@ impl Backend for ReadOnly {
     fn search_messages(&self, r: phoenix_app::ui::search::SearchRequest) -> BoxFuture<phoenix_app::ui::search::SearchPage> {
         self.0.search_messages(r)
     }
-    // nav / other parity / open_dm / notes / stickers / voice_control keep the
-    // trait defaults (offline errors or no-ops): they may write.
 }
 
 fn cdp(expr: &str) -> Option<String> {
@@ -375,27 +311,16 @@ fn env_or_cdp(var: &str, expr: &str) -> Option<String> {
     std::env::var(var).ok().filter(|v| !v.is_empty()).or_else(|| cdp(expr))
 }
 
-/// Live scroll state of the user's Discord (read-only `scrollTop` reads).
 #[derive(Debug, Default)]
 struct Scroll {
-    /// Channel list (`sidebarList_` scroller) scrollTop, CSS px.
     channels: f32,
-    /// First channel-list row (category / channel / thread id) still in view,
-    /// and how far the scroller's top edge sits inside its `li`.
     top_channel: Option<(Id, f32)>,
-    /// Member list (`membersWrap_` scroller) scrollTop, CSS px.
     members: f32,
-    /// First message whose bottom is below the top of the message scroller,
-    /// and how far (CSS px) the scroller's top edge sits inside it.
     top_message: Option<(Id, f32)>,
-    /// Message scroller distance from the bottom (fallback when the anchor
-    /// message is not in our loaded history).
     from_bottom: f32,
-    /// Server rail (`scroller_5dqHTG`) scrollTop, CSS px.
     rail: f32,
 }
 
-/// Activity cards shown by Discord: "author id ¦ game" records joined by ¶ (kept verbatim in the JSON output).
 const FEED_JS: &str = r"[...document.querySelectorAll('[class*=container_g7esM5]')].map(c=>{const m=(c.querySelector('img')?.src||'').match(/avatars\/(\d+)/);
 return (m?m[1]:'')+'¦'+(c.querySelector('[class*=lineClamp1]')?.textContent||'')}).join('¶')";
 
@@ -414,7 +339,6 @@ fn read_scroll() -> Option<Scroll> {
     if std::env::var_os("PHX_NO_SCROLL").is_some() {
         return None;
     }
-    // `PHX_SCROLL`: the SCROLL_JS result taken from a dump, to replay it without CDP.
     let raw = std::env::var("PHX_SCROLL").ok().or_else(|| cdp(SCROLL_JS))?;
     let f: Vec<&str> = raw.split(' ').collect();
     let num = |i: usize| f.get(i).and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.);
@@ -428,9 +352,6 @@ fn read_scroll() -> Option<Scroll> {
     })
 }
 
-/// Scrolls our three lists to the Discord offsets. Pixel offsets are replayed
-/// in viewport-sized steps with a frame in between, because `ListState`
-/// only knows the heights of items it has laid out.
 fn apply_scroll(
     cx: &mut HeadlessAppContext,
     win: gpui::AnyWindowHandle,
@@ -440,9 +361,6 @@ fn apply_scroll(
 ) -> anyhow::Result<()> {
     use gpui::ListOffset;
     let top = ListOffset { item_ix: 0, offset_in_item: px(0.) };
-    // Message list: anchor on the same message, else same distance from the bottom.
-    // When Discord sits at the bottom, stick to the bottom too: a top anchor would
-    // carry every height difference of the messages above into the visible rows.
     let at_bottom = sc.from_bottom < 2.;
     let anchor = cx.update(|cx| {
         if at_bottom {
@@ -451,9 +369,8 @@ fn apply_scroll(
         let app = v.read(cx);
         let (id, off) = sc.top_message?;
         let ix = app.messages.get(&app.selected_channel?)?.index_of(id)?;
-        Some((ix + 1, off)) // item 0 is the channel header / loader
+        Some((ix + 1, off))
     });
-    // Channel list: anchor on the same row (item 0 is the guild banner / top spacer).
     let ch_anchor = cx.update(|cx| {
         use phoenix_app::app::SidebarRow::*;
         let (id, off) = sc.top_channel?;
@@ -487,7 +404,6 @@ fn apply_scroll(
             for (i, l) in lists.into_iter().enumerate() {
                 let step = left[i].min(300.);
                 if step > 0. {
-                    // Messages scroll up from the bottom, the other lists down from the top.
                     l.scroll_by(px(if i == 2 { -step } else { step }));
                     left[i] -= step;
                 }
@@ -497,7 +413,6 @@ fn apply_scroll(
     Ok(())
 }
 
-/// Window height while READY and the history load (see `open_window`).
 const LOAD_H: f32 = 800.;
 
 fn parse_id(s: &str) -> Option<Id> {
@@ -508,16 +423,13 @@ fn main() -> anyhow::Result<()> {
     phoenix_app::perf::start();
     let out = std::env::args().nth(1).unwrap_or_else(|| "real.png".into());
     phoenix_app::discord_backend::NO_ACKS.store(true, std::sync::atomic::Ordering::Relaxed);
-    // The desktop client draws its own window buttons; so does Phoenix with client decorations.
     phoenix_app::ui::title_bar::FORCE_CLIENT_DECORATIONS.store(true, std::sync::atomic::Ordering::Relaxed);
 
-    // Where: explicit env, else what the user's Discord shows.
     let (guild, channel) = if let Some(dm) = std::env::var("PHX_DM").ok().and_then(|v| parse_id(&v)) {
         (None, Some(dm))
     } else if let Some(c) = std::env::var("PHX_CHANNEL").ok().and_then(|v| parse_id(&v)) {
         (std::env::var("PHX_GUILD").ok().and_then(|v| parse_id(&v)), Some(c))
     } else if let Some(g) = std::env::var("PHX_GUILD").ok().and_then(|v| parse_id(&v)) {
-        // Guild only: its first text channel is picked once READY is in.
         (Some(g), None)
     } else {
         let path = cdp("location.pathname").unwrap_or_default();
@@ -528,8 +440,6 @@ fn main() -> anyhow::Result<()> {
             _ => (None, None),
         }
     };
-    // Same device scale as the user's Discord (`devicePixelRatio`, 1.5 here) so
-    // subpixel borders and rounding snap the same way. PHX_SCALE overrides.
     let scale: f32 = env_or_cdp("PHX_SCALE", "devicePixelRatio").and_then(|v| v.parse().ok()).filter(|s: &f32| *s > 0.).unwrap_or(2.);
     let w: f32 = env_or_cdp("PHX_W", "innerWidth").and_then(|v| v.parse().ok()).unwrap_or(1280.);
     let h: f32 = env_or_cdp("PHX_H", "innerHeight").and_then(|v| v.parse().ok()).unwrap_or(800.);
@@ -539,16 +449,12 @@ fn main() -> anyhow::Result<()> {
         Some("ash") => AppTheme::Ash,
         Some("onyx") => AppTheme::Onyx,
         Some(_) => AppTheme::Dark,
-        // The client's Dark is `theme-dark theme-darker`; a bare `theme-dark` is Ash.
         None if classes.contains("theme-midnight") => AppTheme::Onyx,
         None if classes.contains("theme-darker") => AppTheme::Dark,
         None if classes.contains("theme-light") => AppTheme::Light,
         None if classes.contains("theme-dark") => AppTheme::Ash,
         None => AppTheme::Dark,
     };
-    // Compact *message display* is a React layout, not an <html> class: only PHX_COMPACT turns it on.
-    // UI density and font size are <html> classes (`density-*`, `font-size-N`); PHX_DENSITY
-    // (compact|default|cozy) and PHX_FONT (12..24) override them.
     let compact = std::env::var_os("PHX_COMPACT").is_some();
     let density = std::env::var("PHX_DENSITY")
         .ok()
@@ -560,15 +466,12 @@ fn main() -> anyhow::Result<()> {
         .or_else(|| classes.split(' ').find_map(|c| c.strip_prefix("font-size-").map(str::to_owned)))
         .and_then(|v| v.parse().ok())
         .unwrap_or(16.);
-    // Self mute / deafen are client-side state in Discord (not on the account):
-    // read the user panel switches (`audioButtonWithMenu_` role=switch, aria-checked).
     let audio = env_or_cdp(
         "PHX_AUDIO",
         "[...document.querySelectorAll('button[role=switch][class*=audioButtonWithMenu]')].map(b=>b.getAttribute('aria-checked')==='true'?1:0).join('')",
     )
     .unwrap_or_default();
     let (self_mute, self_deaf) = (audio.starts_with('1'), audio.get(1..2) == Some("1"));
-    // Channel list width the user dragged to (sidebarList_ box), so compares line up.
     if std::env::var_os("PHX_SIDEBAR_W").is_none()
         && let Some(sw) = cdp("(document.querySelector('[class*=sidebarList_]')?.getBoundingClientRect().width||'')+''")
         && sw.parse::<f32>().is_ok()
@@ -578,8 +481,6 @@ fn main() -> anyhow::Result<()> {
     }
     let scroll = read_scroll();
     println!("scroll {scroll:?}");
-    // Open guild folders are client-side state in Discord: read the rail's
-    // `aria-expanded` folder buttons (`data-list-item-id=guildsnav___<folder id>`).
     let open_folders: Vec<u64> = env_or_cdp(
         "PHX_FOLDERS",
         "[...document.querySelectorAll('nav[class*=guilds_] [aria-expanded=true][data-list-item-id^=guildsnav___]')].map(e=>e.getAttribute('data-list-item-id').slice(12)).join(',')",
@@ -615,8 +516,6 @@ fn main() -> anyhow::Result<()> {
         let _ = cx.text_system().add_fonts(fonts);
         cx.set_http_client(Arc::new(phoenix_app::media::cache::CachingHttpClient::new(http)));
         phoenix_app::init(cx);
-        // `PHX_FX_STILL=1`: profile effects (and other animations) show their still
-        // frame, so a compare is not decided by the effect's animation phase.
         if std::env::var_os("PHX_FX_STILL").is_some() {
             cx.set_reduce_motion(true);
         }
@@ -624,19 +523,12 @@ fn main() -> anyhow::Result<()> {
     let backend: Arc<dyn Backend> = Arc::new(ReadOnly(backend));
     let view: Rc<RefCell<Option<Entity<PhoenixApp>>>> = Rc::default();
     let v2 = view.clone();
-    // Load small, capture big: in headless (test) mode gpui draws the window on
-    // every effect flush, i.e. once per gateway event. READY and the presence
-    // storm that follows meant thousands of full-size draws, so tall captures
-    // (PHX_H=1600+) took minutes. The real size is applied after READY.
     let win = cx.open_window(size(px(w), px(h.min(LOAD_H))), move |window, cx| {
         let v = cx.new(|cx| PhoenixApp::new(backend, window, cx));
         *v2.borrow_mut() = Some(v.clone());
         cx.new(|cx| Root::new(v, window, cx))
     })?;
     cx.update_window(win.into(), |_, window, _| window.set_scale_factor(scale))?;
-    // Time-based, not iteration-based: at tall sizes one parked run can draw a
-    // large frame (animated avatars/GIFs keep requesting frames), so a fixed
-    // `ms / 50` iteration count stretched a 15 s wait to minutes.
     let pump = |cx: &mut HeadlessAppContext, ms: u64| {
         let end = std::time::Instant::now() + Duration::from_millis(ms);
         while std::time::Instant::now() < end {
@@ -649,7 +541,6 @@ fn main() -> anyhow::Result<()> {
         }
     };
     let v = view.borrow().clone().expect("view");
-    // Wait for READY (restore_session from the keyring).
     let mut ready = false;
     for _ in 0..60 {
         pump(&mut cx, 500);
@@ -660,13 +551,10 @@ fn main() -> anyhow::Result<()> {
     }
     eprintln!("[{:.1}s] ready", t0.elapsed().as_secs_f32());
     anyhow::ensure!(ready, "no READY after 30s (token missing from keyring?)");
-    // `PHX_LIST=1`: print DM / group DM ids and the open threads of the
-    // current guild (for picking capture targets), then exit.
     if std::env::var_os("PHX_LIST").is_some() {
         cx.update(|cx| {
             let app = v.read(cx);
             for d in &app.dms {
-                // A 1:1 DM is named after its recipient; anything else is a group.
                 let group = app.channels.get(d).is_some_and(|c| {
                     c.voice_users.first().and_then(|u| app.users.get(u)).is_none_or(|u| u.display_name != c.name)
                 });
@@ -680,8 +568,6 @@ fn main() -> anyhow::Result<()> {
                     println!("channel {} guild={} kind={:?} name={:?}", c.id.0, g.0, c.kind, c.name.as_ref());
                 }
             }
-            // Every guild's active threads (READY / GUILD_CREATE), not just the
-            // sidebar rows of the selected guild.
             for (parent, list) in &app.nav.threads {
                 for t in list {
                     println!("thread {} guild={:?} parent={} name={:?}", t.id.0, t.guild.map(|g| g.0), parent.0, t.name.as_ref());
@@ -697,13 +583,10 @@ fn main() -> anyhow::Result<()> {
             app.prefs.synced.compact = compact;
             app.prefs.synced.density = density;
             app.prefs.local.font_size = font_px;
-            // In-memory only: the read-only capture never writes voice.json.
             app.mic_muted = self_mute || self_deaf;
             app.deafened = self_deaf;
             app.nav.expanded_folders.clear();
             app.nav.expanded_folders.extend(open_folders.iter().copied());
-            // Discord's own voice connection (client-side): mirror it in memory only, so the
-            // connected row / voice panel match. Never joins anything.
             if in_voice {
                 app.voice_channel = app
                     .channels
@@ -711,7 +594,6 @@ fn main() -> anyhow::Result<()> {
                     .find(|c| c.guild.is_some() && c.voice_users.contains(&app.me.id))
                     .map(|c| c.id);
             }
-            // Discord on the Friends page (`/channels/@me`): render it too.
             let view = std::env::var("PHX_VIEW").unwrap_or_else(|_| {
                 let home = guild.is_none() && channel.is_none() && cdp("location.pathname").as_deref() == Some("/channels/@me");
                 if home { "friends".into() } else { String::new() }
@@ -719,7 +601,6 @@ fn main() -> anyhow::Result<()> {
             let tab = std::env::var("PHX_TAB").unwrap_or_default();
             if view == "friends" {
                 use phoenix_app::ui::home::data::FriendsTab as F;
-                // Like open_home_view(Friends), without saving the nav prefs.
                 app.select_guild(None, cx);
                 app.nav.home = phoenix_app::ui::home::data::HomeView::Friends;
                 app.selected_channel = None;
@@ -739,15 +620,12 @@ fn main() -> anyhow::Result<()> {
                     app.open_channel_chat(c, cx);
                 }
             } else if let Some(c) = channel {
-                // Threads live in `nav.threads` until selected (select_thread registers them).
                 let thread = app.nav.find_thread(c).cloned();
                 let g = guild.or_else(|| app.channels.get(&c).or(thread.as_ref()).and_then(|ch| ch.guild));
                 app.select_guild(g, cx);
-                // Voice channels: open their text chat only (never joins voice).
                 if thread.is_some() && !app.channels.contains_key(&c) {
                     app.select_thread(c, cx);
                 } else if !app.channels.contains_key(&c) {
-                    // Forum posts / archived threads: GET /channels/{id}.
                     phoenix_app::ui::forum::open_by_id(app, c, cx);
                 } else {
                     app.open_channel_chat(c, cx);
@@ -769,16 +647,12 @@ fn main() -> anyhow::Result<()> {
         });
     })?;
     pump(&mut cx, wait * 1000 / 2);
-    // Full size for the rest: images in view start loading now.
     cx.update_window(win.into(), |_, window, cx| {
         window.resize(size(px(w), px(h)));
         window.bounds_changed(cx);
         window.set_scale_factor(scale);
     })?;
     pump(&mut cx, wait * 1000 / 2);
-    // Server nicks of authors outside the synced member-list range come from op 8
-    // (GUILD_MEMBERS_CHUNK): wait until every author of the page has a guild member
-    // (members who left the guild never get one, hence the timeout).
     let missing = |cx: &mut HeadlessAppContext| {
         cx.update(|cx| {
             let app = v.read(cx);
@@ -827,9 +701,6 @@ fn main() -> anyhow::Result<()> {
             }
         });
     }
-    // Same Activity cards as the Discord capture: the client fetched its feed at another
-    // time, so put the entries it shows (read-only DOM read: author id from the avatar
-    // URL + game) first, in its order. PHX_NO_FEED_SYNC=1 turns this off.
     if std::env::var_os("PHX_NO_FEED_SYNC").is_none()
         && let Some(cards) = cdp(FEED_JS)
     {
@@ -861,7 +732,6 @@ fn main() -> anyhow::Result<()> {
         pump(&mut cx, 500);
     }
     eprintln!("[{:.1}s] waited", t0.elapsed().as_secs_f32());
-    // `PHX_DEBUG_UNREADS=1`: what Inbox > Unreads holds (channel ids, counts), on stderr.
     if std::env::var_os("PHX_DEBUG_UNREADS").is_some() {
         cx.update(|cx| {
             let a = v.read(cx);
@@ -878,21 +748,14 @@ fn main() -> anyhow::Result<()> {
             }
         });
     }
-    // Same rows as the user's Discord: replay its scroll offsets on our lists.
     if let Some(sc) = scroll {
         apply_scroll(&mut cx, win.into(), &v, &sc, &pump)?;
         eprintln!("[{:.1}s] scrolled", t0.elapsed().as_secs_f32());
     }
-    // PHX_PROFILE=<user id> opens that user's profile over the location, like the
-    // overlay open in Discord: PHX_PROFILE_KIND=popout (default; PHX_PROFILE_BOX=x,y
-    // is the popout's top-left in Discord, CSS px) or modal. Read-only GET of the profile.
-    // PHX_NO_FX=1: no profile effects (compare.py --no-effects hides them in Discord too).
     if std::env::var_os("PHX_NO_FX").is_some() {
         phoenix_app::ui::profile_fx::DISABLED.store(true, std::sync::atomic::Ordering::Relaxed);
     }
-    // `PHX_PROFILE=peer`: the other user of the open DM.
     let peer = cx.update(|cx| phoenix_app::ui::dm_profile_panel::peer(v.read(cx)));
-    // `PHX_PROFILE=member:<n>`: the nth member of the guild's member list.
     let want = std::env::var("PHX_PROFILE").ok();
     let nth = want.as_deref().and_then(|v| v.strip_prefix("member:")).and_then(|n| n.parse::<usize>().ok());
     let member = nth.and_then(|n| {
@@ -916,7 +779,6 @@ fn main() -> anyhow::Result<()> {
         cx.update_window(win.into(), |_, window, cx| {
             v.update(cx, |app, cx| {
                 let g = app.selected_guild;
-                // open_profile places the popout at (at.x - 316, at.y - 60).
                 let (x, y) = at.unwrap_or((900., 200.));
                 app.open_profile(uid, g, gpui::point(px(x + 316.), px(y + 60.)), window, cx);
                 if modal {
@@ -926,7 +788,6 @@ fn main() -> anyhow::Result<()> {
         })?;
         pump(&mut cx, wait * 1000 / 3);
     }
-    // `PHX_OPEN`: an overlay over the location (read-only: nothing is sent).
     if let Ok(what) = std::env::var("PHX_OPEN") {
         use phoenix_app::ui::settings::Page as P;
         let (kind, arg) = what.split_once(':').unwrap_or((what.as_str(), ""));
@@ -942,10 +803,8 @@ fn main() -> anyhow::Result<()> {
                 "threads" => app.toggle_threads_popout(cx),
                 "search" => {
                     phoenix_app::ui::search::open(app, window, cx);
-                    // The query also goes in the header bar, like the client after Enter.
                     phoenix_app::ui::search::set_query(if arg.is_empty() { "a" } else { &arg }, window, cx);
                     if let Ok(mut req) = phoenix_app::ui::search::build_request(app, if arg.is_empty() { "a" } else { &arg }) {
-                        // `PHX_SEARCH_SORT=old|rel`, `PHX_SEARCH_PAGE=<n>` (1-based).
                         req.sort = match std::env::var("PHX_SEARCH_SORT").as_deref() {
                             Ok("old") => phoenix_app::ui::search::SortOrder::Oldest,
                             Ok("rel") => phoenix_app::ui::search::SortOrder::Relevance,
@@ -957,13 +816,11 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 "filters" => {
-                    // Search "More filters" modal; `:date` adds a date row, `:calendar` opens its picker.
                     phoenix_app::ui::search::open(app, window, cx);
                     phoenix_app::ui::search_filters::open(app, window, cx);
                     if arg == "date" || arg == "calendar" {
                         phoenix_app::ui::search_filters::add_date(cx, arg == "calendar");
                     }
-                    // `:list<n>` opens the option list of field n (0 De .. 5 Épinglé).
                     if let Some(n) = arg.strip_prefix("list").and_then(|n| n.parse().ok()) {
                         phoenix_app::ui::search_filters::show_list(cx, n);
                     }
@@ -995,14 +852,12 @@ fn main() -> anyhow::Result<()> {
                         _ => Tab::Emoji,
                     };
                     phoenix_app::ui::pickers::open(app, tab, EmojiTarget::Composer, window, cx);
-                    // `emoji:<row>`: scrolled to that grid row (later categories).
                     if let Ok(row) = arg.parse::<usize>()
                         && let Some(op) = cx.try_global::<phoenix_app::ui::pickers::Pickers>().and_then(|p| p.open.as_ref())
                     {
                         op.list.scroll_to(gpui::ListOffset { item_ix: row, offset_in_item: px(0.) });
                     }
                 }
-                // Context menus at (700, 300): channel / category (nth in the sidebar), server.
                 "chanmenu" | "catmenu" => {
                     use phoenix_app::app::SidebarRow;
                     let n: usize = arg.parse().unwrap_or(0);
@@ -1026,7 +881,6 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 "guilddrop" => app.nav.guild_menu = true,
-                // nth member of the guild's member list: right-click menu.
                 "usermenu" => {
                     let u = app.selected_guild.and_then(|g| app.members.get(&g)?.get(arg.parse().unwrap_or(0)).map(|m| m.user));
                     if let Some(u) = u {
@@ -1034,8 +888,6 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 "switcher" => phoenix_app::ui::switcher::open(app, window, cx),
-                // `thread:<id>`: that thread in the side panel; `thread_create:<msg>`: the
-                // "Nouveau fil" sidebar for a message of the open channel (open only).
                 "thread" => {
                     if let Ok(id) = arg.parse::<u64>() {
                         let id = phoenix_app::model::Id(id);
@@ -1043,7 +895,6 @@ fn main() -> anyhow::Result<()> {
                         app.open_thread(phoenix_app::model::ThreadRef { id, name, message_count: 0 }, window, cx);
                     }
                 }
-                // `attach`: the composer "+" menu; `poll_create`: the "Crée un sondage" modal.
                 "attach" => app.chat.attach_menu = true,
                 "poll_create" => {
                     if let Some(ch) = app.selected_channel {
@@ -1058,7 +909,6 @@ fn main() -> anyhow::Result<()> {
                         app.open_create_thread_from(ch, phoenix_app::model::Id(m), window, cx);
                     }
                 }
-                // Guild / channel / message dialogs, open only (nothing is saved).
                 "chansettings" | "createchannel" | "privacy" | "serverprofile" | "security" | "createevent" | "nickname" => {
                     if let Some(g) = app.selected_guild {
                         match kind.as_str() {
@@ -1076,7 +926,6 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
-                // Reactions / forward dialogs on the last message with reactions (or the last one).
                 "reactions" | "forward" => {
                     let pick = app.selected_channel.and_then(|c| {
                         let msgs = &app.messages.get(&c)?.msgs;
@@ -1091,14 +940,12 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
-                // Server notification settings modal (open only).
                 "guildnotify" => {
                     if let Some(g) = app.selected_guild {
                         let st = phoenix_app::ui::modals::guild_notify::State::new(app, g);
                         phoenix_app::actions::open_modal(phoenix_app::ui::modals::Modal::GuildNotify(st), None);
                     }
                 }
-                // User panel avatar popout (`statuspicker:sub` with the status submenu).
                 "statuspicker" => {
                     app.toggle_status_picker(window, cx);
                     phoenix_app::ui::status_picker::debug_open_status_submenu(arg == "sub");
@@ -1108,13 +955,11 @@ fn main() -> anyhow::Result<()> {
                         app.show_overlay(phoenix_app::ui::home::data::Overlay::LeaveGuild(g), cx);
                     }
                 }
-                // Invite dialog without creating an invite (read-only).
                 "invite" => {
                     if let Some(guild) = app.selected_guild {
                         app.show_overlay(phoenix_app::ui::home::data::Overlay::InviteLink { guild, link: None }, cx);
                     }
                 }
-                // `community:browse` opens the Browse Channels tab.
                 "community" => {
                     if let Some(g) = app.selected_guild {
                         phoenix_app::ui::community::open_tab(app, g, arg == "browse", cx);
@@ -1130,7 +975,6 @@ fn main() -> anyhow::Result<()> {
                         phoenix_app::ui::events::open(app, g, cx);
                     }
                 }
-                // Forum post n (0 = first, active then older) in the thread sidebar.
                 "post" => {
                     let n: usize = arg.parse().unwrap_or(0);
                     let post = app
@@ -1156,7 +1000,6 @@ fn main() -> anyhow::Result<()> {
             })
         })?;
         pump(&mut cx, wait * 1000 / 3);
-        // Scroll the emoji grid once it has laid out (opening resets the list).
         if kind == "emoji"
             && let Ok(row) = arg.parse::<usize>()
         {
@@ -1178,9 +1021,6 @@ fn main() -> anyhow::Result<()> {
             }
         });
     }
-    // The account settings (`settings::on_ready`) can land after the setup above and bring
-    // the account's own theme back: re-apply the requested look right before capturing.
-    // PHX_HC=1 turns on High contrast (in memory only, like every pref here).
     let hc = std::env::var_os("PHX_HC").is_some();
     cx.update_window(win.into(), |_, _, cx| {
         v.update(cx, |app, cx| {
@@ -1200,7 +1040,6 @@ fn main() -> anyhow::Result<()> {
         })
     })?;
     pump(&mut cx, 300);
-    // PHX_TABS=n (or -n for Shift+Tab): press Tab n times before the capture (focus rings).
     if let Some(n) = std::env::var("PHX_TABS").ok().and_then(|n| n.parse::<i32>().ok()) {
         for _ in 0..n.unsigned_abs() {
             cx.update_window(win.into(), |_, window, cx| phoenix_app::ui::focus_ring::tab(n < 0, window, cx))?;
@@ -1226,13 +1065,10 @@ fn main() -> anyhow::Result<()> {
         for _ in 0..2 {
             cx.update_window(win.into(), |_, window, _| window.refresh())?;
             pump(cx, 200);
-            // Headless time is virtual: advance it so enter animations (modals, popouts) finish.
             cx.advance_clock(std::time::Duration::from_secs(2));
             img = Some(cx.capture_screenshot(win.into())?);
         }
         eprintln!("[{:.1}s] captured", t0.elapsed().as_secs_f32());
-        // The test window's framebuffer is always sized at its 2x default; the scene
-        // is drawn at `scale`, so keep only the top-left w*scale x h*scale.
         let mut img = img.expect("frame");
         let (cw, ch) = (((w * scale).round() as u32).min(img.width()), ((h * scale).round() as u32).min(img.height()));
         if (cw, ch) != (img.width(), img.height()) {

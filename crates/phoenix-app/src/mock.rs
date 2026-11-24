@@ -1,5 +1,3 @@
-//! Standalone fake data source so the UI runs without the network layer.
-
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -84,7 +82,6 @@ struct Inner {
     channels: Vec<Channel>,
     members: HashMap<Id, Vec<Member>>,
     roles: Vec<(Id, Vec<Role>)>,
-    /// Files of every `send_message_ex` call (tests).
     sent_uploads: Vec<Vec<Upload>>,
 }
 
@@ -119,7 +116,6 @@ fn user(i: usize) -> User {
         tag: ["GLAD", "RUST", "PNX"].get(i % 4).map(|t| ((*t).into(), None)),
         nameplate: None,
         name_style: (i % 5 == 1).then(|| (17, 1, Vec::new())),
-        // PHX_MOCK_DECO=<image URL>: mock avatar decorations for offscreen renders.
         decoration: std::env::var("PHX_MOCK_DECO").ok().map(Into::into),
     }
 }
@@ -299,21 +295,16 @@ impl MockBackend {
         }
     }
 
-    /// Files passed to each `send_message_ex` call so far (tests).
     pub fn sent_uploads(&self) -> Vec<Vec<Upload>> {
         self.inner.lock().map(|i| i.sent_uploads.clone()).unwrap_or_default()
     }
 
-    /// Zero-latency mock: every call resolves immediately on the caller's
-    /// thread and events are delivered inline. Used by GPUI tests, whose
-    /// deterministic scheduler rejects wakeups from real threads.
     pub fn synchronous() -> Self {
         Self { latency: Duration::ZERO, ..Self::new() }
     }
 
     fn generate_history(inner: &mut Inner, channel: Id) -> Vec<Message> {
         let mut rng = Lcg(channel.0.wrapping_mul(2654435761));
-        // PHOENIX_MOCK_HISTORY=N forces the channel length (benchmarks).
         let n = std::env::var("PHOENIX_MOCK_HISTORY")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -384,8 +375,6 @@ impl MockBackend {
             }
             out.push(m);
         }
-        // PHX_MOCK_COMPONENTS=1: the last message is a components V2 bot reply
-        // (container with text displays, -# subtext and a separator) for renders.
         if std::env::var_os("PHX_MOCK_COMPONENTS").is_some()
             && let Some(last) = out.last_mut()
         {
@@ -408,7 +397,6 @@ impl MockBackend {
                 crate::commands::store::record(&m);
             }
         }
-        // Content showcase (every message kind) at the end of the first guild's #showcase.
         if let Some(ch) = inner.channels.iter().find(|c| c.id == channel && c.name == "showcase" && c.guild == inner.guilds.first().map(|g| g.id)) {
             let (guild, general) = (ch.guild.unwrap_or_default(), inner.channels.iter().find(|c| c.guild == ch.guild && c.name == "general").map_or(channel, |c| c.id));
             out.extend(crate::mock_showcase::messages(channel, guild, general, &mut inner.next_id, ts));
@@ -419,8 +407,6 @@ impl MockBackend {
     fn delayed<T: Send + 'static>(&self, f: impl FnOnce() -> T + Send + 'static) -> BoxFuture<T> {
         let latency = self.latency;
         if latency.is_zero() {
-            // Synchronous mode (tests): no helper thread, so GPUI's test
-            // scheduler never sees a wakeup from a foreign thread.
             return Box::pin(futures::future::ready(Ok(f())));
         }
         Box::pin(async move {
@@ -453,7 +439,6 @@ impl MockBackend {
 }
 
 impl Backend for MockBackend {
-    /// Synthetic launcher collections (invented apps, no artwork).
     fn app_directory_collections(&self, _locale: String) -> BoxFuture<serde_json::Value> {
         let app = |id: u64, name: &str, desc: &str, pos: i64| {
             serde_json::json!({"position": pos, "application": {"id": id.to_string(), "name": name, "description": desc}})
@@ -479,7 +464,6 @@ impl Backend for MockBackend {
         ]);
         Box::pin(async move { Ok(v) })
     }
-    /// A few channel overrides on the first guild (notification settings table).
     fn notify_prefs(&self) -> Option<crate::notifications::NotifyPrefs> {
         let mut p = crate::notifications::NotifyPrefs::default();
         p.update(&serde_json::json!({
@@ -493,7 +477,6 @@ impl Backend for MockBackend {
         }));
         Some(p)
     }
-    /// Mock Board: a favourite game and a played-games grid (no covers).
     fn game_widgets(&self, _user: Id) -> BoxFuture<Vec<crate::ui::profile_games::GameWidget>> {
         use crate::ui::profile_games::{Game, GameWidget, Kind};
         let g = |id: u64, n: &str| Game { id, name: n.to_owned().into(), cover: None };
@@ -504,12 +487,9 @@ impl Backend for MockBackend {
             ])
         })
     }
-    /// `PHX_NO_PREMIUM=1` previews the non-Nitro UI (locks) in examples.
     fn has_premium(&self) -> bool {
         std::env::var_os("PHX_NO_PREMIUM").is_none()
     }
-    /// Settings > Subscriptions demo: a six-seat Nitro Squad owned by the second
-    /// demo user, plus one paused Nitro Basic credit.
     fn subscriptions(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
         use crate::ui::settings::subscriptions as sub;
         let users: Vec<User> = self.inner.lock().map(|i| i.users.iter().take(6).cloned().collect()).unwrap_or_default();
@@ -520,7 +500,6 @@ impl Backend for MockBackend {
             Ok(Some(sub::Subs { squad: Some(sub::Squad { members }), credits }))
         })
     }
-    /// Profile editor: accepted locally, nothing leaves the machine.
     fn update_profile(&self, _guild: Option<Id>, _patch: crate::ui::settings::profile_editor::ProfilePatch) -> BoxFuture<()> {
         Box::pin(async { Ok(()) })
     }
@@ -530,7 +509,6 @@ impl Backend for MockBackend {
         }
     }
 
-    /// PHOENIX_MOCK_AUTOLOGIN=1 skips the login screen (benchmarks).
     fn restore_session(&self) -> Option<BoxFuture<ReadyData>> {
         std::env::var("PHOENIX_MOCK_AUTOLOGIN")
             .is_ok_and(|v| !v.is_empty() && v != "0")
@@ -545,8 +523,6 @@ impl Backend for MockBackend {
             Credentials::Mfa { code } => !code.is_empty(),
         };
         if ok {
-            // Friends list test data: a mix of online/idle/dnd/offline friends,
-            // one incoming and one outgoing request.
             let rels: Vec<_> = (1..NAMES.len().min(15) as u64)
                 .map(|n| crate::ui::home::data::Relationship {
                     user: Id(n + 1),
@@ -563,8 +539,6 @@ impl Backend for MockBackend {
             self.emit_later(Duration::from_millis(30), move || {
                 AppEvent::Nav(crate::ui::home::data::NavEvent::Snapshot {
                     relationships: rels,
-                    // PHX_MOCK_FOLDERS=1: a closed folder of 4 guilds (one unread, one
-                    // with a mention) and a colourless 2-guild folder, for rail renders.
                     folders: if std::env::var_os("PHX_MOCK_FOLDERS").is_some() {
                         vec![
                             crate::ui::home::data::GuildFolder {
@@ -679,8 +653,6 @@ impl Backend for MockBackend {
         })
     }
 
-    /// Keeps the files as local attachments and reports the whole size as
-    /// uploaded (no network). Records each call for the upload tests.
     fn send_message_ex(
         &self,
         channel: Id,
@@ -750,7 +722,6 @@ impl Backend for MockBackend {
             i.history.entry(channel).or_default().push(m.clone());
             m
         };
-        // Simulate someone answering.
         if content.to_lowercase().contains("wumpus") || content.ends_with('?') {
             self.emit_later(Duration::from_millis(400), move || AppEvent::TypingStart { channel, user: Id(2), nick: None });
             let inner2 = self.inner.clone();
@@ -824,7 +795,6 @@ impl Backend for MockBackend {
         vec!["COMMUNITY".into()]
     }
 
-    /// A few pinned messages per channel, so the pins popout renders filled offscreen.
     fn load_pins(&self, channel: Id) -> BoxFuture<Vec<Message>> {
         let inner = self.inner.clone();
         self.delayed(move || {
@@ -844,7 +814,6 @@ impl Backend for MockBackend {
         })
     }
 
-    /// Substring search over the mock histories (content filter only).
     fn search_messages(&self, req: crate::ui::search::SearchRequest) -> BoxFuture<crate::ui::search::SearchPage> {
         let inner = self.inner.clone();
         self.delayed(move || {
@@ -859,7 +828,6 @@ impl Backend for MockBackend {
         })
     }
 
-    /// Archived threads for the threads browser (other parity requests stay offline).
     fn parity(&self, req: crate::commands::ParityRequest) -> BoxFuture<crate::commands::ParityReply> {
         use crate::commands::{ForumPost, ParityReply, ParityRequest};
         match req {
@@ -913,7 +881,6 @@ impl Backend for MockBackend {
                     },
                 ]))
             }),
-            // Server Guide demo: two resources pointing at the first channels, a profile card.
             ParityRequest::ServerGuide { guild } => {
                 let chans: Vec<Id> = self.inner.lock().map(|i| i.channels.iter().filter(|c| c.guild == Some(guild) && c.kind == crate::model::ChannelKind::Text).map(|c| c.id).take(2).collect()).unwrap_or_default();
                 Box::pin(async move {
@@ -952,8 +919,6 @@ mod tests {
     use super::*;
     use crate::ui::settings::{SettingsPatch, synced_map};
 
-    /// Writes go through the same `SettingsPatch` path as the Discord backend,
-    /// applied in memory: nothing reaches an account.
     #[test]
     fn settings_writes_apply_offline() {
         let b = MockBackend::new();

@@ -1,9 +1,3 @@
-//! In-memory state store fed from gateway events.
-//!
-//! Readers get `Arc` snapshots, so holding one never blocks the writer. The
-//! [`Cache::version`] counter increases on every mutation, letting a UI skip
-//! re-rendering when nothing changed.
-
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,7 +14,6 @@ pub const DEFAULT_MESSAGE_CAP: usize = 200;
 struct State {
     me: Option<Arc<User>>,
     users: HashMap<UserId, Arc<User>>,
-    /// Guilds with `channels`/`threads`/`members` moved out to the maps below.
     guilds: HashMap<GuildId, Arc<Guild>>,
     guild_order: Vec<GuildId>,
     channels: HashMap<ChannelId, Arc<Channel>>,
@@ -39,7 +32,6 @@ struct Inner {
     message_cap: usize,
 }
 
-/// Shared cache; clone freely.
 #[derive(Clone)]
 pub struct Cache {
     inner: Arc<Inner>,
@@ -58,7 +50,6 @@ impl std::fmt::Debug for Cache {
 }
 
 impl Cache {
-    /// `message_cap`: messages kept per channel (oldest dropped first).
     pub fn new(message_cap: usize) -> Self {
         Self {
             inner: Arc::new(Inner { state: RwLock::new(State::default()), version: AtomicU64::new(0), message_cap: message_cap.max(1) }),
@@ -73,8 +64,6 @@ impl Cache {
         self.inner.version.fetch_add(1, Ordering::AcqRel);
     }
 
-    // ---- reads -------------------------------------------------------------
-
     pub fn current_user(&self) -> Option<Arc<User>> {
         self.inner.state.read().me.clone()
     }
@@ -87,7 +76,6 @@ impl Cache {
         self.inner.state.read().guilds.get(&id).cloned()
     }
 
-    /// Guilds in READY order (new joins appended).
     pub fn guilds(&self) -> Vec<Arc<Guild>> {
         let s = self.inner.state.read();
         s.guild_order.iter().filter_map(|id| s.guilds.get(id).cloned()).collect()
@@ -97,8 +85,6 @@ impl Cache {
         self.inner.state.read().channels.get(&id).cloned()
     }
 
-    /// All channels (incl. categories and threads) of a guild sorted by
-    /// `(position, id)`. Group by `parent_id` for the sidebar tree.
     pub fn guild_channels(&self, guild: GuildId) -> Vec<Arc<Channel>> {
         let s = self.inner.state.read();
         let mut v: Vec<_> = s
@@ -112,7 +98,6 @@ impl Cache {
         v
     }
 
-    /// DMs and group DMs, most recently active first.
     pub fn private_channels(&self) -> Vec<Arc<Channel>> {
         let s = self.inner.state.read();
         let mut v: Vec<_> = s.private_channels.iter().filter_map(|id| s.channels.get(id).cloned()).collect();
@@ -120,7 +105,6 @@ impl Cache {
         v
     }
 
-    /// Cached messages, oldest first.
     pub fn messages(&self, channel: ChannelId) -> Vec<Arc<Message>> {
         self.inner.state.read().messages.get(&channel).map(|q| q.iter().cloned().collect()).unwrap_or_default()
     }
@@ -147,20 +131,16 @@ impl Cache {
         self.inner.state.read().read_state.clone()
     }
 
-    /// Current user's permissions in a channel (all for DMs).
     pub fn permissions_in(&self, channel: ChannelId) -> Permissions {
         let s = self.inner.state.read();
         let Some(ch) = s.channels.get(&channel) else { return Permissions::empty() };
         let Some(gid) = ch.guild_id else { return Permissions::all() };
         let (Some(me), Some(guild)) = (&s.me, s.guilds.get(&gid)) else { return Permissions::empty() };
         let roles = s.members.get(&(gid, me.id)).map(|m| m.roles.clone()).unwrap_or_default();
-        // Threads inherit their parent's overwrites.
         let ow_src = if ch.kind.is_thread() { ch.parent_id.and_then(|p| s.channels.get(&p)).unwrap_or(ch) } else { ch };
         compute_channel_permissions(gid, guild.owner_id(), me.id, &roles, &guild.roles, &ow_src.permission_overwrites)
     }
 
-    /// Permissions of guild member `user` in `channel`; `None` when the member
-    /// (its roles) is not cached.
     pub fn member_permissions_in(&self, channel: ChannelId, user: UserId) -> Option<Permissions> {
         let s = self.inner.state.read();
         let ch = s.channels.get(&channel)?;
@@ -171,9 +151,6 @@ impl Cache {
         Some(compute_channel_permissions(gid, guild.owner_id(), user, &roles, &guild.roles, &ow_src.permission_overwrites))
     }
 
-    // ---- writes ------------------------------------------------------------
-
-    /// Insert messages fetched over REST (any order); keeps the newest `cap`.
     pub fn insert_messages(&self, channel: ChannelId, msgs: impl IntoIterator<Item = Message>) {
         let cap = self.inner.message_cap;
         let mut s = self.inner.state.write();
@@ -188,7 +165,6 @@ impl Cache {
         self.bump();
     }
 
-    /// Apply one gateway event. Returns `true` if state changed.
     pub fn apply(&self, ev: &GatewayEvent) -> bool {
         let changed = self.apply_inner(ev);
         if changed {
@@ -371,7 +347,6 @@ impl Cache {
                     s.channels.insert(c.id, Arc::new(c));
                 }
                 let q = s.messages.entry(m.channel_id).or_default();
-                // Replace an optimistic local echo with the same nonce.
                 if let Some(n) = &m.nonce
                     && let Some(i) = q.iter().position(|x| x.nonce.as_ref() == Some(n) && x.author.id == m.author.id)
                 {
@@ -386,7 +361,6 @@ impl Cache {
                 let (Some(cid), Some(mid)) = (snowflake_field(v, "channel_id"), snowflake_field(v, "id")) else { return false };
                 let Some(q) = s.messages.get_mut(&cid) else { return false };
                 let Some(slot) = q.iter_mut().find(|m| m.id == mid) else { return false };
-                // Merge the partial update over the stored message.
                 let Ok(mut base) = serde_json::to_value(&**slot) else { return false };
                 if let (Value::Object(b), Value::Object(u)) = (&mut base, &**v) {
                     for (k, val) in u {
@@ -447,7 +421,6 @@ fn snowflake_field(v: &Value, k: &str) -> Option<Snowflake> {
     serde_json::from_value(v.get(k)?.clone()).ok()
 }
 
-/// Insert keeping id order (messages usually arrive in order; fast path push).
 fn upsert_message(q: &mut VecDeque<Arc<Message>>, m: Arc<Message>) {
     if q.back().is_none_or(|b| b.id < m.id) {
         q.push_back(m);
