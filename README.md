@@ -53,9 +53,13 @@ Beta: under active development. Expect missing features and bugs.
 
 **<u>THESE SCREENSHOTS ARE NOT FINAL VERSIONS.</u>**
 
-The image below is a development snapshot of the Voice & Video settings screen. It is retained as a historical UI reference and does not claim that every control is wired in the current build. See the [parity handoff](docs/PROJECT_HANDOFF.md) and [comparison protocol](docs/PARITY_WORKFLOW.md) for verified scope and remaining gaps.
+These are real, unedited renders of Phoenix logged into a real account on the project's own community server, *Aperture Sciences* (24 November 2026, build `1f295c9`). One third-party nickname is blurred. Nothing here is a mock-up: the messages, members, roles, badges, nameplates, server rail and channel list come live from Discord's gateway and API, and Phoenix draws them natively with Rust + GPUI.
 
-![Development snapshot: Voice & Video settings](docs/screenshots/voice-settings.png)
+![Phoenix on a real account: Aperture Sciences #général](docs/screenshots/2026-11-24-aperture-chat.png)
+
+![Phoenix settings: Appearance, read from the account's synced settings](docs/screenshots/2026-11-24-settings-appearance.png)
+
+How we check parity: every view is compared against the official 2026 client on the same account, at the same window size and zoom. We measure the CSS, the states (hover, focus, pressed, open menus) and the window widths at which the layout changes. The method is in [docs/PARITY_WORKFLOW.md](docs/PARITY_WORKFLOW.md), and each area has a status table in [docs/parity/](docs/parity/), with ✅, ⚠ and ❌ and the source of each value.
 
 ## Benchmarks
 
