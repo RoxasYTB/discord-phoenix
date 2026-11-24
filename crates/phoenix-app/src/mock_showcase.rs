@@ -113,6 +113,21 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
         Message { attachments: vec![Attachment { filename: "Wumpus wave".into(), kind: AttachmentKind::Sticker(crate::media::StickerFormat::Png), ..Default::default() }], ..Default::default() },
         &mut out,
     );
+    push(
+        6,
+        Message {
+            content: "Soundboard sample: <sound:900:901>".into(),
+            soundboard_sounds: vec![crate::model::SoundboardSound {
+                id: Id(901),
+                guild: Some(guild),
+                name: Some("Synth chime".into()),
+                emoji_name: Some("🎵".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        &mut out,
+    );
     push(6, Message { edited: true, content: "this message was edited".into(), ..Default::default() }, &mut out);
     push(
         6,

@@ -34,7 +34,7 @@ pub fn on_refresh(app: &mut PhoenixApp, channel: Id, messages: Vec<Message>, cx:
 
 use std::collections::{HashMap, HashSet};
 
-use crate::{grouping, markdown::MentionResolver, richtext::{self, RenderedMessage}};
+use crate::{grouping, markdown::{MentionResolver, SoundboardMention}, richtext::{self, RenderedMessage}};
 
 /// Owned copy of the names / roles a page's mentions refer to, so the
 /// markdown + rich text of a page can be built on a background thread.
@@ -44,6 +44,7 @@ pub struct PageResolver {
     channels: HashMap<u64, String>,
     /// role id → (name, color, current user has it)
     roles: HashMap<u64, (String, Option<u32>, bool)>,
+    sounds: HashMap<(u64, u64), SoundboardMention>,
 }
 
 impl MentionResolver for PageResolver {
@@ -61,6 +62,9 @@ impl MentionResolver for PageResolver {
     }
     fn has_role(&self, id: u64) -> bool {
         self.roles.get(&id).is_some_and(|r| r.2)
+    }
+    fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<SoundboardMention> {
+        self.sounds.get(&(guild_id, sound_id)).or_else(|| self.sounds.get(&(0, sound_id))).cloned()
     }
 }
 
@@ -130,8 +134,20 @@ pub fn render_page(
     (0..msgs.len())
         .map(|i| {
             let (m, prev) = (&msgs[i], i.checked_sub(1).map(|p| &msgs[p]));
+            let mut message_resolver = PageResolver {
+                users: resolver.users.clone(),
+                channels: resolver.channels.clone(),
+                roles: resolver.roles.clone(),
+                ..PageResolver::default()
+            };
+            for sound in &m.soundboard_sounds {
+                message_resolver.sounds.insert((sound.guild.map_or(0, |id| id.0), sound.id.0), SoundboardMention {
+                    name: sound.name.as_ref().map(ToString::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| "Unknown".into()),
+                    emoji_name: sound.emoji_name.as_ref().map(ToString::to_string),
+                });
+            }
             let rev = |s: usize| revealed.contains(&(m.id, s));
-            let (parsed, blocks, mentions_me, preview) = richtext::build(&m.content, resolver, me, &rev);
+            let (parsed, blocks, mentions_me, preview) = richtext::build(&m.content, &message_resolver, me, &rev);
             RenderedMessage {
                 group_start: grouping::starts_group(prev, m, utc_offset),
                 day_divider: (prev.is_none() || grouping::day_divider(prev, m, utc_offset))

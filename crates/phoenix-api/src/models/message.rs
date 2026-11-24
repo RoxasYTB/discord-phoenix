@@ -180,6 +180,49 @@ impl Attachment {
     }
 }
 
+/// Metadata attached to a message containing a Soundboard mention.
+/// Extra server fields are intentionally ignored; the renderer needs the name
+/// and optional emoji to display the inline mention.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct MessageSoundboardSound {
+    #[serde(default)]
+    pub sound_id: Snowflake,
+    #[serde(default)]
+    pub guild_id: Option<GuildId>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub emoji_id: Option<EmojiId>,
+    #[serde(default)]
+    pub emoji_name: Option<String>,
+}
+
+#[cfg(test)]
+mod soundboard_tests {
+    use super::*;
+
+    #[test]
+    fn message_soundboard_metadata_defaults_and_ignores_extra_fields() {
+        let sound: MessageSoundboardSound = serde_json::from_str(
+            r#"{"sound_id":"77","guild_id":"9","name":"Chime","emoji_name":"🎵","volume":0.4,"available":true}"#,
+        )
+        .unwrap();
+        assert_eq!(sound.sound_id, Snowflake(77));
+        assert_eq!(sound.guild_id, Some(Snowflake(9)));
+        assert_eq!(sound.name.as_deref(), Some("Chime"));
+        assert_eq!(sound.emoji_name.as_deref(), Some("🎵"));
+
+        let empty: MessageSoundboardSound = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty, MessageSoundboardSound::default());
+    }
+
+    #[test]
+    fn message_soundboard_list_accepts_null() {
+        let message: Message = serde_json::from_str(r#"{"id":"1","channel_id":"2","author":{"id":"3"},"soundboard_sounds":null}"#).unwrap();
+        assert!(message.soundboard_sounds.is_empty());
+    }
+}
+
 /// Emoji as used in reactions (custom when `id` is set, unicode otherwise).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct ReactionEmoji {
@@ -362,6 +405,8 @@ pub struct Message {
     pub referenced_message: Option<Box<Message>>,
     #[serde(default, deserialize_with = "null_default")]
     pub sticker_items: Vec<StickerItem>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub soundboard_sounds: Vec<MessageSoundboardSound>,
     #[serde(default)]
     pub thread: Option<Box<Channel>>,
     #[serde(default)]

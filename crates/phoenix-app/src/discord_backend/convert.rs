@@ -271,6 +271,13 @@ pub fn message(m: &api::Message) -> model::Message {
                 }
             }))
             .collect(),
+        soundboard_sounds: m.soundboard_sounds.iter().map(|s| model::SoundboardSound {
+            id: id(s.sound_id),
+            guild: s.guild_id.map(id),
+            name: s.name.clone().filter(|n| !n.is_empty()).map(Into::into),
+            emoji_id: s.emoji_id.map(id),
+            emoji_name: s.emoji_name.clone().filter(|n| !n.is_empty()).map(Into::into),
+        }).collect(),
         reactions: m
             .reactions
             .iter()

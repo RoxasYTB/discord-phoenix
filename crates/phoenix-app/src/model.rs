@@ -233,11 +233,21 @@ pub struct Message {
     pub author_nick: Option<SharedString>,
     pub embeds: Vec<Embed>,
     pub attachments: Vec<Attachment>,
+    pub soundboard_sounds: Vec<SoundboardSound>,
     pub reactions: Vec<Reaction>,
     pub kind: MessageKind,
     pub pinned: bool,
     pub mention_everyone: bool,
     pub thread: Option<ThreadRef>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SoundboardSound {
+    pub id: Id,
+    pub guild: Option<Id>,
+    pub name: Option<SharedString>,
+    pub emoji_id: Option<Id>,
+    pub emoji_name: Option<SharedString>,
 }
 
 /// Origin of a forwarded message.

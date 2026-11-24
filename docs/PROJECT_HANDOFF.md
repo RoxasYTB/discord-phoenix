@@ -99,3 +99,10 @@ Les fichiers `.result` de `/home/yohan/.local/share/phoenix-queue/` indiquaient 
 ## Sauvegarde et reprise
 
 La sauvegarde la plus récente est `/mnt/windata/project-phoenix/backups/20261124-120000Z/`. Le bundle restaure la branche locale, le patch `main-since-origin.patch` contient les cinq commits locaux au-dessus de `origin/main`, et `screenshots/` préserve les trois captures non suivies. Le log `phoenix-app-lib-test-retry.log` correspond à `c479f54`.
+
+## 2026-11-24 — Soundboard chat mention continuation
+
+- Added an initial static `<sound:guildId:soundId>` parser/resolver path using message-local `soundboard_sounds` metadata, including optional emoji; unresolved tokens stay literal. The regular chat and off-thread history-page renderers are wired, and a synthetic showcase fixture was added.
+- Official local bundle evidence confirms the known sound label/emoji presentation and a click path that depends on voice/channel context. Playback is intentionally not connected. Exact inline styling, hover/focus states, and unresolved visual treatment remain unmeasured; the current chip colors/weight are provisional.
+- Updated `docs/parity/message-content.md`; detailed next steps and validation limits are in `docs/handoffs/2026-11-24-soundboard-mentions.md`.
+- At checkpoint: branch `main` was 16 commits ahead of origin; seven source files are modified and the pre-existing three untracked screenshots remain. `/home` had 3.3 GB free and load average was 5.34/3.33/2.99. No compilation/test has been run for this slice; check disk/CPU before any single serialized build.

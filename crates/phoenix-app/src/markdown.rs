@@ -20,6 +20,9 @@ impl Style {
     pub const MENTION: Style = Style(1 << 7);
     /// `<t:unix:fmt>` timestamp pill.
     pub const TIMESTAMP: Style = Style(1 << 8);
+    /// Resolved Discord Soundboard mention (`<sound:guild:sound>`). Emoji assets
+    /// and exact styling are not yet verified against a safe live reference.
+    pub const SOUNDBOARD: Style = Style(1 << 9);
 
     pub fn has(self, other: Style) -> bool {
         self.0 & other.0 == other.0 && other.0 != 0
@@ -149,6 +152,15 @@ pub trait MentionResolver {
     fn has_role(&self, _id: u64) -> bool {
         false
     }
+    fn soundboard(&self, _guild_id: u64, _sound_id: u64) -> Option<SoundboardMention> {
+        None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SoundboardMention {
+    pub name: String,
+    pub emoji_name: Option<String>,
 }
 
 pub struct NoResolve;
@@ -342,6 +354,26 @@ impl Ctx<'_> {
                 && let Some(end) = rest.find('>')
             {
                 let inner = &rest[1..end];
+                if let Some((guild, sound)) = inner
+                    .strip_prefix("sound:")
+                    .and_then(|ids| ids.split_once(':'))
+                    .and_then(|(guild, sound)| Some((guild.parse::<u64>().ok()?, sound.parse::<u64>().ok()?)))
+                    && let Some(sound) = self.r.soundboard(guild, sound)
+                {
+                    self.push(&src[plain_start..i], style, spoiler);
+                    let mut label = String::new();
+                    if let Some(emoji) = sound.emoji_name.filter(|e| !e.is_empty()) {
+                        // Soundboard emoji metadata may not be in the same shape
+                        // as chat custom emoji; retain a safe textual fallback.
+                        label.push_str(&emoji);
+                        label.push(' ');
+                    }
+                    label.push_str(if sound.name.is_empty() { "Unknown" } else { &sound.name });
+                    self.push_full(&label, style | Style::SOUNDBOARD, None, None, spoiler);
+                    i += end + 1;
+                    plain_start = i;
+                    continue;
+                }
                 if let Some(t) = inner.strip_prefix("t:") {
                     let (num, st) = t.split_once(':').unwrap_or((t, "f"));
                     if let (Ok(ts), Some(stc)) = (num.parse::<i64>(), st.chars().next())
@@ -538,6 +570,12 @@ mod tests {
         fn channel(&self, id: u64) -> Option<String> {
             (id == 7).then(|| "general".into())
         }
+        fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<SoundboardMention> {
+            (guild_id == 9 && sound_id == 77).then(|| SoundboardMention {
+                name: "Chime".into(),
+                emoji_name: Some("🎵".into()),
+            })
+        }
     }
 
     #[test]
@@ -562,6 +600,22 @@ mod tests {
     fn plain_text() {
         let i = inline("hello world");
         assert_eq!(styled(&i), vec![("hello world", Style::PLAIN)]);
+    }
+
+    #[test]
+    fn soundboard_mention_resolves_name_and_unicode_emoji() {
+        let i = inline("try <sound:9:77> now");
+        assert_eq!(i.text, "try 🎵 Chime now");
+        let sound = i.spans.iter().find(|s| s.style.has(Style::SOUNDBOARD)).unwrap();
+        assert_eq!(&i.text[sound.range.clone()], "🎵 Chime");
+        assert!(sound.mention.is_none());
+    }
+
+    #[test]
+    fn unresolved_soundboard_mention_stays_literal() {
+        let i = inline("<sound:9:88>");
+        assert_eq!(i.text, "<sound:9:88>");
+        assert!(!i.spans.iter().any(|s| s.style.has(Style::SOUNDBOARD)));
     }
 
     #[test]

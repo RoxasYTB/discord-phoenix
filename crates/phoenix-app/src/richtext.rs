@@ -96,6 +96,13 @@ fn run_for(len: usize, style: Style, revealed: bool, base: Hsla) -> TextRun {
         background_color = Some(ca(Palette::MENTION_BG));
         f.weight = FontWeight::MEDIUM;
     }
+    if style.has(Style::SOUNDBOARD) {
+        // Provisional inline chip treatment; the dedicated Soundboard mention CSS
+        // is not present in the local CSS cache.
+        color = c(Palette::MENTION_FG);
+        background_color = Some(ca(Palette::MENTION_BG));
+        f.weight = FontWeight::MEDIUM;
+    }
     if style.has(Style::TIMESTAMP) {
         // markup_ .timestamp_: --background-mod-normal.
         background_color = Some(c(tok(idx::BACKGROUND_MOD_NORMAL)));

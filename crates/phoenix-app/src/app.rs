@@ -171,6 +171,7 @@ pub(crate) struct Resolver<'a> {
     channels: &'a HashMap<Id, Channel>,
     roles: &'a HashMap<Id, Vec<Role>>,
     members: &'a HashMap<Id, Vec<Member>>,
+    soundboard_sounds: &'a [crate::model::SoundboardSound],
     me: Id,
 }
 impl Resolver<'_> {
@@ -197,6 +198,15 @@ impl MentionResolver for Resolver<'_> {
     }
     fn channel(&self, id: u64) -> Option<String> {
         self.channels.get(&Id(id)).map(|c| c.name.to_string())
+    }
+    fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<crate::markdown::SoundboardMention> {
+        let sound = self.soundboard_sounds.iter().find(|s| {
+            s.id.0 == sound_id && s.guild.is_none_or(|guild| guild.0 == guild_id)
+        })?;
+        Some(crate::markdown::SoundboardMention {
+            name: sound.name.as_ref().map(ToString::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| "Unknown".into()),
+            emoji_name: sound.emoji_name.as_ref().map(ToString::to_string),
+        })
     }
 }
 
@@ -662,13 +672,17 @@ impl PhoenixApp {
     }
 
     pub(crate) fn resolver(&self) -> Resolver<'_> {
-        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, me: self.me.id }
+        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: &[], me: self.me.id }
+    }
+
+    fn resolver_with_sounds<'a>(&'a self, sounds: &'a [crate::model::SoundboardSound]) -> Resolver<'a> {
+        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: sounds, me: self.me.id }
     }
 
     pub(crate) fn render_msg(&self, m: &Message, prev: Option<&Message>) -> RenderedMessage {
         let revealed = |i: usize| self.revealed.contains(&(m.id, i));
         let (parsed, blocks, mentions_me, preview) =
-            richtext::build(&m.content, &self.resolver(), self.me.id, &revealed);
+            richtext::build(&m.content, &self.resolver_with_sounds(&m.soundboard_sounds), self.me.id, &revealed);
         RenderedMessage {
             group_start: grouping::starts_group(prev, m, self.utc_offset),
             day_divider: (prev.is_none() || grouping::day_divider(prev, m, self.utc_offset))
