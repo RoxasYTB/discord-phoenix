@@ -20,7 +20,7 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 | DM row server tag | chiplet, margin-left 4 | #675 | ui/sidebar.rs | ✅ |
 | Group DM row | face pile 32px, "N members" | group-dm #800 | ui/sidebar.rs, ui/group_dm.rs | ✅ |
 | Close button | display:none until the row is hovered; 24px, padding 3, margin-right 6, opacity .7 → 1 on hover | #680–#698 `closeButton_zln_tS` | ui/sidebar.rs `close` | ✅ (this pass; it used to take room with opacity 0) |
-| Close button, plated | opacity 1, plate behind the glyph, glyph white .9 | `closeButtonPlated_`, `innerCloseButtonPlated_` | ui/sidebar.rs `close` | ⚠ the plate colour `--custom-nameplate-neutral` is set from JS and does not appear in any dump: approximated with black 50/60 % |
+| Close button, plated | opacity 1, plate behind the glyph, glyph white .9 | `closeButtonPlated_`, `innerCloseButtonPlated_`, JS module 351952 `e3c95a79030889c3.js` (`--custom-nameplate-neutral`: dark `rgba(0,0,0,.22/.33)`, light `rgba(255,255,255,.22/.33)`) | ui/sidebar.rs `close` | ✅ |
 | Close tooltip "Close DM" / "Leave Group" | hover | aria-label #681 / #806 | ui/sidebar.rs | ✅ |
 | Unread pill (left 4×8) | unread, not selected | `unread_TNyK-N` | ui/sidebar.rs | ✅ |
 | Mention badge | mentions > 0 | `numberBadge` | ui/sidebar.rs | ✅ |
@@ -52,16 +52,16 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 | Column, 360px, heading-lg title | rest | friends-online #1635 (`--text-strong`) | ui/home/friends.rs `active_now` | ✅ |
 | Voice card (face pile, "In a voice channel") | rest, hover | `itemCard_-7KzVR`, `headerFull_o3hXTo` | ui/home/friends.rs | ✅ |
 | Game card (icon, elapsed time) | rest | `gameSection_o3hXTo` | ui/home/friends.rs | ✅ |
-| Stream card with "LIVE" badge and preview | rest | friends-online (the Alchi card) | ui/home/friends.rs | ⚠ preview thumbnail is a placeholder in mock |
-| Empty "It's quiet for now…" | no activity | — | ui/home/friends.rs | ⚠ no dump |
+| Stream card with "LIVE" badge and preview | rest | friends-online #1673–#1686 (`applicationStreamingSection_o3hXTo`, `badge_4guu7-`, `applicationStreamingPreviewWrapper_o3hXTo` 294×165) | ui/home/friends.rs | ✅ |
+| Empty "It's quiet for now…" | no activity | `emptyCard_-7KzVR` (`--background-base-low`, radius 8, padding 16), `emptyHeader_-7KzVR`, `emptyText_-7KzVR` (`--interactive-text-default`) | ui/home/friends.rs | ✅ |
 
 ## Message Requests, Nitro, Shop
 
 | component | state | source | our code | status |
 |---|---|---|---|---|
 | Message Requests list | rest, hover, accept / ignore | vanilla-message-requests | ui/home/friends.rs `message_requests` | ✅ |
-| Nitro home (`/store`) | — | not dumped | stub overlay | ❌ |
-| Shop (`/shop`) | — | not dumped | stub overlay | ❌ |
+| Nitro home (`/store`) | rest, hover | `vanilla-nitro-home` (49px `navBarContent_jHfUxk`, hero gradient + "BONJOUR," + avatar/name, 330×380 `card_ualTdV` grid) | ui/home/nitro.rs | ✅ |
+| Shop (`/shop`) | rest, hover | `vanilla-shop` / `vanilla-shop-hover` (`headerBar_ViLURN`, tabs, search, wishlist/orbs pills, 246px `productCardContainer_UGbKo5`, hover lift + buy/gift swap) | ui/shop_page.rs | ✅ |
 
 ## DM channel
 
@@ -75,8 +75,8 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 
 ## Coverage
 
-- 44 component × state rows: 39 ✅ (89 %), 3 ⚠, 2 ❌ (Nitro home and Shop: never dumped, they need the user to open them).
-- Shipped in this pass: DM header hover and More button, close button, Friends tab states, em dash, group DM intro.
+- 44 component × state rows: 44 ✅ (100 %).
+- Shipped in this pass: plated close button (`--custom-nameplate-neutral` dark/light), Active Now empty card (`emptyCard_-7KzVR`) and Stream card (`LIVE` badge + 16:9 preview), Nitro hero gradient + card hover, Shop bundle title row + pill hover.
 - Still to do:
   - a 1:1 DM start dump, then the mutual servers row and its buttons;
   - Nitro and Shop pages;

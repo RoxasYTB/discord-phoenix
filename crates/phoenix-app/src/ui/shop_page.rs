@@ -163,7 +163,16 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
     }
     let pill = |id: &'static str| {
         // wishlistButton_ViLURN / orbs container_0XT54_: 32px, radius 8, --background-mod-subtle.
-        div().id(id).h(z(32.)).rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_SUBTLE)).flex().items_center().justify_center().cursor_pointer()
+        div()
+            .id(id)
+            .h(z(32.))
+            .rounded(z(8.))
+            .bg(tk(idx::BACKGROUND_MOD_SUBTLE))
+            .hover(|s| s.bg(tk(idx::BACKGROUND_MOD_NORMAL)))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
     };
     div()
         .flex_none()
@@ -306,6 +315,8 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                 .child(
                     div()
                         .h(z(20.))
+                        .flex()
+                        .items_center()
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
@@ -314,9 +325,9 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(tk(idx::TEXT_STRONG))
                         .when(k.items > 0, |d| {
-                            d.child(div().font_weight(FontWeight::SEMIBOLD).child(crate::t!("shop.items", n = k.items)))
+                            d.child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(crate::t!("shop.items", n = k.items)))
                         })
-                        .child(name),
+                        .child(div().min_w_0().overflow_hidden().text_ellipsis().child(name)),
                 )
                 // footerInfoShrinkOnHover_ (padding-top 4) and footerButtonContainer_ (padding-top 6)
                 // swap on hover (.25s).

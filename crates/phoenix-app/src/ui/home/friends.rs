@@ -658,24 +658,32 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .child(crate::t!("friends.active_now_title")), // refresh-active-now h2 (#1538)
         );
     if active.is_empty() {
+        // emptyCard_-7KzVR (258616.546da7ea90e552ae.css): bg --background-base-low,
+        // radius 8, padding 16, centered column; emptyHeader_ mb 4; emptyText_ --interactive-text-default.
         return col.child(
             div()
+                .mt(z(12.))
                 .p(z(16.))
+                .rounded(z(8.))
+                .bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_BASE_LOW)))
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap(z(4.))
+                .justify_center()
                 .child(
                     div()
+                        .mb(z(4.))
                         .text_size(z(16.))
+                        .line_height(z(20.))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(c(Palette::TEXT_HEADER))
+                        .text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_STRONG)))
                         .child(crate::t!("friends.quiet")),
                 )
                 .child(
                     div()
                         .text_size(z(14.))
-                        .text_color(c(Palette::TEXT_MUTED))
+                        .line_height(z(18.))
+                        .text_color(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_TEXT_DEFAULT)))
                         .text_center()
                         .child(crate::t!("friends.quiet_sub")),
                 ),
@@ -752,7 +760,74 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                     // headerIcon_o3hXTo 24px radius 4
                     .when_some(game.as_ref().and_then(|g| g.image.clone()), |d, i| d.child(thumb(Some(i), 24.))),
             );
-        if let Some(g) = game {
+        let stream = app.people.activities.get(&user).and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Streaming)).cloned();
+        if let Some(s) = stream {
+            // applicationStreamingSection_o3hXTo (vanilla-friends-online #1673..#1686):
+            // 32px avatar, name + subtitle, red "LIVE" badge (16px, px 8, radius full),
+            // then 294x165 (16:9) applicationStreamingPreviewWrapper_o3hXTo.
+            card = card.child(
+                div()
+                    .p(z(16.))
+                    .flex()
+                    .flex_col()
+                    .gap(z(12.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(z(12.))
+                            .child(crate::ui::avatar(u, 32.))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .text_size(z(14.))
+                                            .line_height(z(18.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(c(Palette::TEXT_NORMAL))
+                                            .text_ellipsis()
+                                            .child(u.map(|u| u.display_name.clone()).unwrap_or_default()),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(z(12.))
+                                            .line_height(z(16.))
+                                            .text_color(c(Palette::TEXT_MUTED))
+                                            .text_ellipsis()
+                                            .child(s.details.clone().unwrap_or(s.name.clone())),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .h(z(16.))
+                                    .px(z(8.))
+                                    .rounded_full()
+                                    .bg(c(crate::theme::tok(crate::theme::generated::idx::STATUS_DANGER)))
+                                    .flex()
+                                    .items_center()
+                                    .text_size(z(12.))
+                                    .line_height(z(16.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(gpui::white())
+                                    .child("LIVE"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .h(z(165.))
+                            .rounded(z(8.))
+                            .overflow_hidden()
+                            .bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_BASE_LOWEST)))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when_some(s.image.clone(), |d, url| d.child(gpui::img(url).size_full().object_fit(gpui::ObjectFit::Cover))),
+                    ),
+            );
+        } else if let Some(g) = game {
             // section_o3hXTo padding 16; gameSection_o3hXTo grid gap 12: 32px icon,
             // body-sm/semibold title, body-xs/normal subtitle, 24px party avatar.
             card = card.child(

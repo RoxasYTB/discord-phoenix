@@ -844,13 +844,20 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     // min-width 32 when nameplated. `closeButton_zln_tS` is display:none until the row is
     // hovered, then 24px (padding 3, margin-right 6), opacity .7 (1 on its own hover or
     // when plated); `innerCloseButton_` padding 1, radius 50%, 16px `closeIcon_`.
-    // Plated: `--custom-nameplate-neutral` plate and a white .9 glyph (#681..#683).
+    // Plated: `--custom-nameplate-neutral` / `--custom-nameplate-neutral-hovered`
+    // (web bundle module 351952 `e3c95a79030889c3.js`: dark rgba(0,0,0,.22/.33),
+    // light rgba(255,255,255,.22/.33)) and a white .9 glyph (#681..#683).
     let plated = is_dm
         && !is_group
         && ch.voice_users.first().and_then(|u| app.users.get(u)).is_some_and(|u| u.nameplate.is_some());
     let close = is_dm.then(|| {
         let e = entity.clone();
         let fg = if plated { gpui::hsla(0., 0., 1., 0.9) } else { c(fg) };
+        let (plate_bg, plate_hover) = if crate::theme::is_light() {
+            (gpui::hsla(0., 0., 1., 0.22), gpui::hsla(0., 0., 1., 0.33))
+        } else {
+            (gpui::hsla(0., 0., 0., 0.22), gpui::hsla(0., 0., 0., 0.33))
+        };
         div()
             .flex()
             .flex_none()
@@ -877,7 +884,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         div()
                             .p(z(1.))
                             .rounded_full()
-                            .when(plated, |d| d.bg(gpui::hsla(0., 0., 0., 0.5)).hover(|s| s.bg(gpui::hsla(0., 0., 0., 0.6))))
+                            .when(plated, |d| d.bg(plate_bg).hover(|s| s.bg(plate_hover)))
                             .child(icon(Icon::Close, 16., fg)),
                     ),
             )

@@ -50,6 +50,9 @@ fn card(ix: usize, pill: Option<SharedString>, title: SharedString, desc: Shared
         .flex_none()
         .rounded(z(16.))
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+        .border_1()
+        .border_color(gpui::transparent_black())
+        .hover(|s| s.border_color(c(tok(idx::BORDER_SUBTLE))))
         .overflow_hidden()
         .relative()
         .flex()
@@ -159,31 +162,38 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, _cx: &mut Context<Phoe
         .size_full()
         .flex()
         .flex_col()
-        // mainPageScroller: black, the hero has a brand-to-black gradient.
+        // mainPageScroller: black, the hero has a brand-to-black gradient covering
+        // both the navbar and the greeting (vanilla-nitro-home.png).
         .bg(gpui::black())
-        .child(
-            div()
-                .bg(gpui::linear_gradient(
-                    160.,
-                    gpui::linear_color_stop(c(tok(idx::BACKGROUND_BRAND)).opacity(0.55), 0.),
-                    gpui::linear_color_stop(gpui::black(), 1.),
-                ))
-                .child(nav),
-        )
         .child(
             div()
                 .id("nitro-scroll")
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
-                .px(z(32.))
-                .pt(z(80.))
-                .pb(z(32.))
                 .flex()
                 .flex_col()
-                .gap(z(64.))
-                .child(hello)
-                .child(div().flex().flex_col().child(section_title(crate::t!("nitro.whats_new"))).child(grid)),
+                .child(
+                    div()
+                        .bg(gpui::linear_gradient(
+                            160.,
+                            gpui::linear_color_stop(c(tok(idx::BACKGROUND_BRAND)).opacity(0.55), 0.),
+                            gpui::linear_color_stop(gpui::black(), 1.),
+                        ))
+                        .flex()
+                        .flex_col()
+                        .child(nav)
+                        .child(div().px(z(32.)).pt(z(64.)).pb(z(48.)).child(hello)),
+                )
+                .child(
+                    div()
+                        .px(z(32.))
+                        .pb(z(32.))
+                        .flex()
+                        .flex_col()
+                        .child(section_title(crate::t!("nitro.whats_new")))
+                        .child(grid),
+                ),
         )
         .into_any_element()
 }
