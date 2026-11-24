@@ -25,3 +25,16 @@ Source: current-client/css (`base_U9Tvvz`, `inTextChannel_U9Tvvz`, `dot_U9Tvvz`,
 | text | chatHeaderBarText_ + body-sm/normal | flex 1, text-default | V/JF2N (locked) / rEeodK (archived + locked) | thread_banner.rs | ✅ |
 | composer | client canSendMessage | locked thread without MANAGE_THREADS | no-permission text area | discord_backend/nav.rs `send_blocked` | ✅ |
 | Open / Unlock buttons | 0dvvEi / zA9d1J | MANAGE_THREADS only | write actions, not shown | — | ❌ |
+
+# Blocked / ignored users
+
+| element | source | value | our code | status |
+|---|---|---|---|---|
+| model | RelationshipStore: type 2 = blocked, `user_ignored` = ignored (not if blocked) | ui/home/data.rs `is_blocked` / `is_ignored` | ✅ |
+| collapsed run | n8/n5 collapsed-message-item, +FcYM/ / VFWjc+ plurals, " — " Montrer (XJuakA) / Masquer (fgq1gs) | ui/chat/blocked.rs | ✅ |
+| style | blockedSystemMessage_ 16/22, blockedMessageText_ --text-default, blockedIcon_ 16px --text-muted (hover --icon-feedback-critical), blockedAction_ --text-muted / hover --text-link + underline, expanded_ --message-background-hover | blocked.rs | ✅ |
+| icons | DenyIcon (blocked), EyeSlashIcon (ignored) | icons/names.rs | ✅ |
+| typing | TypingUsers rejects isBlockedOrIgnored | app.rs `typing_name` | ✅ |
+| mentions / notifications | blocked authors don't ping | app.rs append_message, notifications.rs | ✅ |
+| blocked DM | composer notice + Unblock (existing) | composer.rs blocked_dm_notice | ✅ |
+| ignored with relationship type 0/5 | not kept by rel_kind | — | ❌ |

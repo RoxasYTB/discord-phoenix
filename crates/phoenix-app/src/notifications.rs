@@ -201,8 +201,10 @@ pub fn on_message(prefs: &NotifyPrefs, cache: &Cache, me: api::Snowflake, viewin
     if !enabled() || viewing == Some(m.channel_id) {
         return;
     }
+    // Blocked authors never notify.
+    let blocked = cache.relationships().iter().any(|r| matches!(r.kind, api::RelationshipType::Blocked) && r.user.as_ref().map(|u| u.id).or(r.user_id).unwrap_or(r.id) == m.author.id);
     let f = facts(cache, me, m);
-    if !should_notify(prefs, &f) {
+    if blocked || !should_notify(prefs, &f) {
         return;
     }
     let author = m.author.global_name.clone().unwrap_or_else(|| m.author.username.clone());

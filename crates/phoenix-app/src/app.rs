@@ -750,7 +750,8 @@ impl PhoenixApp {
     pub(crate) fn append_message(&mut self, m: Message, cx: &mut Context<Self>) {
         let ch = m.channel;
         let selected = self.selected_channel == Some(ch);
-        let mention = m.content.contains(&format!("<@{}>", self.me.id.0));
+        // Blocked authors never ping (the client skips their mentions).
+        let mention = m.content.contains(&format!("<@{}>", self.me.id.0)) && !self.nav.is_blocked(m.author);
         if let Some(t) = self.typing.get_mut(&ch) {
             t.retain(|(u, _)| *u != m.author);
         }
@@ -1046,6 +1047,10 @@ impl PhoenixApp {
     /// Name the client shows for a typer (`getName(guild, channel, user)`):
     /// member nick, then global display name, then username.
     pub fn typing_name(&self, channel: Id, user: Id) -> Option<SharedString> {
+        // TypingUsers rejects RelationshipStore.isBlockedOrIgnored.
+        if self.nav.is_blocked(user) || self.nav.is_ignored(user) {
+            return None;
+        }
         self.typing_nicks
             .get(&(channel, user))
             .cloned()

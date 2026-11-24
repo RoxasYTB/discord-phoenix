@@ -28,6 +28,7 @@ pub mod panels;
 pub mod scrollbar;
 pub mod state;
 pub mod thread_banner;
+pub mod blocked;
 pub mod slash;
 pub mod spoiler;
 pub mod system;
@@ -598,7 +599,16 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     let (Some(msg), Some(r)) = (entry.msgs.get(i), entry.rendered.get(i)) else {
         return div().into_any_element();
     };
-    let el = message(app, entity, msg, r, entry, cx);
+    let el = match blocked::row(app, entity, entry, i) {
+        blocked::Row::Normal => message(app, entity, msg, r, entry, cx),
+        blocked::Row::Hidden => div().into_any_element(),
+        blocked::Row::Collapsed(bar) => bar,
+        blocked::Row::Expanded(bar) => {
+            let m = message(app, entity, msg, r, entry, cx);
+            // expanded_cKojhe: the run sits on --message-background-hover.
+            row_wrapper().bg(tk(idx::MESSAGE_BACKGROUND_HOVER)).children(bar).child(m).into_any_element()
+        }
+    };
     if i + 1 == entry.msgs.len() {
         // scrollerSpacer_8AE1Qq height 40px under the last message, overlapped 16px by
         // the form_ (vanilla-guild-text-groups #2777 at y609, form #2779 at y633): 24px

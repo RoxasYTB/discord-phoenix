@@ -176,6 +176,9 @@ pub struct Relationship {
     /// ISO timestamp the relationship started (friends: "Friends Since").
     #[serde(default)]
     pub since: Option<String>,
+    /// "Ignore" (the client's RelationshipStore ignored set).
+    #[serde(default)]
+    pub user_ignored: bool,
 }
 
 #[cfg(test)]

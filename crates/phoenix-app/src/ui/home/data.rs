@@ -24,6 +24,8 @@ pub struct Relationship {
     pub nickname: Option<SharedString>,
     /// Unix seconds the relationship started (`since`).
     pub since: Option<i64>,
+    /// `user_ignored`: the client hides their messages like blocked ones.
+    pub ignored: bool,
 }
 
 /// One entry of `guild_folders`. `id == None` means a lone guild that is not
@@ -200,6 +202,16 @@ pub struct NavState {
 impl NavState {
     pub fn relationship(&self, user: Id) -> Option<&Relationship> {
         self.relationships.iter().find(|r| r.user == user)
+    }
+
+    /// RelationshipStore.isBlocked: relationship type 2.
+    pub fn is_blocked(&self, user: Id) -> bool {
+        self.relationship(user).is_some_and(|r| r.kind == RelationshipKind::Blocked)
+    }
+
+    /// RelationshipStore.isIgnored: `user_ignored` and not blocked.
+    pub fn is_ignored(&self, user: Id) -> bool {
+        self.relationship(user).is_some_and(|r| r.ignored && r.kind != RelationshipKind::Blocked)
     }
 
     pub fn count(&self, kind: RelationshipKind) -> usize {

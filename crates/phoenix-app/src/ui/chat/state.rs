@@ -107,6 +107,8 @@ pub struct ChatState {
     /// Message highlighted after a jump (reply click, pins, search): flash_
     /// `[data-flash=true]` background + 2px --text-brand overlay bar.
     pub flash: Option<Id>,
+    /// Blocked / ignored message runs expanded with "Montrer", keyed by the run's first message.
+    pub hidden_open: std::collections::HashSet<Id>,
     next_key: u64,
 }
 
@@ -129,6 +131,7 @@ impl Default for ChatState {
             error: None,
             shift_held: false,
             flash: None,
+            hidden_open: Default::default(),
             next_key: 0,
         }
     }
