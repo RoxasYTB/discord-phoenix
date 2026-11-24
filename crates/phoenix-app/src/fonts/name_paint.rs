@@ -99,6 +99,11 @@ impl Element for NameText {
                 ((*g).to_owned(), (x1 - x0).max(px(0.)))
             })
             .collect();
+        // Emoji in names are 1.25em-wide inline boxes in the client (vanilla-members
+        // `emoji_HG2xvK` 20px at 16px, GLaDOS row); the colour emoji font advances wider
+        // and pushed names like "🌸~GŁaĐØS~🌸" into the ellipsis.
+        let em = window.text_style().font_size.to_pixels(window.rem_size()) * 1.25;
+        let per = per.into_iter().map(|(g, a)| if is_pictograph(&g) { (g, if a > em { em } else { a }) } else { (g, a) }).collect();
         let chars = merge_ligatures(per);
         let ellipsis = self.shape("\u{2026}", window, color).width;
         let natural = chars.iter().fold(px(0.), |w, (_, a)| w + *a + self.spacing);
@@ -160,6 +165,11 @@ impl Element for NameText {
     }
 }
 
+/// Emoji-presentation grapheme (supplementary pictographs, VS16, ZWJ sequences, flags).
+fn is_pictograph(g: &str) -> bool {
+    g.contains(['\u{FE0F}', '\u{200D}']) || g.chars().next().is_some_and(|c| c as u32 >= 0x1F000)
+}
+
 /// A ligature (e.g. "fl" in a styled-name font) is one glyph: the shaper gives
 /// one of its graphemes the whole advance and the other none. Painting them one
 /// by one then overlaps the second letter on the next one ("flav" read "f bv"),
@@ -196,6 +206,14 @@ mod tests {
         assert_eq!(merge_ligatures(vec![v("f", 9.), v("l", 0.), v("a", 7.)]), vec![v("fl", 9.), v("a", 7.)]);
         assert_eq!(merge_ligatures(vec![v("f", 0.), v("l", 9.), v("a", 7.)]), vec![v("fl", 9.), v("a", 7.)]);
         assert_eq!(merge_ligatures(vec![v("a", 7.), v("b", 7.)]), vec![v("a", 7.), v("b", 7.)]);
+    }
+
+    #[test]
+    fn pictographs() {
+        assert!(is_pictograph("🌸"));
+        assert!(is_pictograph("❤\u{FE0F}"));
+        assert!(!is_pictograph("a"));
+        assert!(!is_pictograph("☲"));
     }
 
     #[test]
