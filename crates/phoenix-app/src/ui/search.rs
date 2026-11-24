@@ -474,7 +474,17 @@ fn reply_line(app: &PhoenixApp, m: &Message) -> gpui::Div {
             let name: SharedString = nick.clone().or_else(|| app.member_nick_in(guild, *a)).or_else(|| ru.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
             let preview: String = text.chars().take(200).collect::<String>().replace('\n', " ");
             row.child(avatar(ru, 16.))
-                .child(div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).text_color(app.author_color_in(guild, *a).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))).child(name))
+                .child(
+                    crate::fonts::styled_name(
+                        div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).text_color(app.author_color_in(guild, *a).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
+                        ru,
+                        false,
+                    )
+                    .child(match app.author_role_gradient_in(guild, *a) {
+                        Some(stops) => crate::fonts::name_text_with(name, ru, 14., Some(stops)),
+                        None => crate::fonts::name_text(name, ru, 14.),
+                    }),
+                )
                 .child(div().flex_1().min_w_0().truncate().child(preview))
         }
         None => row

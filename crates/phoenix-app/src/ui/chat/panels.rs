@@ -385,13 +385,26 @@ fn message_card(app: &PhoenixApp, m: &Message) -> gpui::Div {
                         .flex()
                         .items_baseline()
                         .gap(z(8.))
-                        .child(
-                            div()
-                                .text_size(z(16.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(crate::theme::role_color(app.author_color(m.author)))
-                                .child(u.map(|u| u.display_name.clone()).unwrap_or_else(|| crate::t!("common.unknown"))),
-                        )
+                        .child({
+                            let author_name: SharedString = m
+                                .author_nick
+                                .clone()
+                                .or_else(|| app.member_nick(m.author))
+                                .or_else(|| u.map(|u| u.display_name.clone()))
+                                .unwrap_or_else(|| crate::t!("common.unknown"));
+                            crate::fonts::styled_name(
+                                div()
+                                    .text_size(z(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(crate::theme::role_color(app.author_color(m.author))),
+                                u,
+                                false,
+                            )
+                            .child(match crate::ui::role_gradient::for_author(app, m.author) {
+                                Some(stops) => crate::fonts::name_text_with(author_name, u, 16., Some(stops)),
+                                None => crate::fonts::name_text(author_name, u, 16.),
+                            })
+                        })
                         .child(
                             div()
                                 .text_size(z(12.))

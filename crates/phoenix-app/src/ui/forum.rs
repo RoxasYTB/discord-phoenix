@@ -555,13 +555,18 @@ fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &
                             .line_height(z(18.))
                             .min_w_0()
                             .overflow_hidden()
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(author_color.map(c).unwrap_or(c(Palette::TEXT_HEADER)))
-                                    .child(author.map(|u| u.display_name.to_string()).unwrap_or_else(|| crate::t!("forum.deleted_user").to_string())),
-                            )
+                            .child({
+                                let author_name: SharedString = author.map(|u| u.display_name.clone()).unwrap_or_else(|| crate::t!("forum.deleted_user"));
+                                crate::fonts::styled_name(
+                                    div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(author_color.map(c).unwrap_or(c(Palette::TEXT_HEADER))),
+                                    author,
+                                    false,
+                                )
+                                .child(match author_id.and_then(|u| app.author_role_gradient_in(guild, u)) {
+                                    Some(stops) => crate::fonts::name_text_with(author_name, author, 14., Some(stops)),
+                                    None => crate::fonts::name_text(author_name, author, 14.),
+                                })
+                            })
                             .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(":"))
                             .child(
                                 div()

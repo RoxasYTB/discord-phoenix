@@ -134,14 +134,18 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
                 .child(super::icons::icon(icon, 16., c(color))),
         )
         .child(before)
-        .child(
-            div()
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(name_color)
-                .cursor_pointer()
-                .hover(|s| s.underline())
-                .child(name),
-        )
+        .child({
+            let author = app.users.get(&msg.author);
+            crate::fonts::styled_name(
+                div().font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()),
+                author,
+                false,
+            )
+            .child(match crate::ui::role_gradient::for_author(app, msg.author) {
+                Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
+                None => crate::fonts::name_text(name, author, 16.),
+            })
+        })
         .child(after)
         // content_bLMKT5 a: medium, --interactive-text-active (the <strong> keeps the
         // anchor's 500 weight).
@@ -323,7 +327,17 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                     }
                 })
                 .into_any_element();
-            let author = link(("sys-poll-author", msg.id.0), name, name_color).into_any_element();
+            let author_user = app.users.get(&msg.author);
+            let author = crate::fonts::styled_name(
+                div().id(("sys-poll-author", msg.id.0)).font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()),
+                author_user,
+                false,
+            )
+            .child(match crate::ui::role_gradient::for_author(app, msg.author) {
+                Some(stops) => crate::fonts::name_text_with(name, author_user, 16., Some(stops)),
+                None => crate::fonts::name_text(name, author_user, 16.),
+            })
+            .into_any_element();
             let t = |k: &str| crate::i18n::t(k, &[]).into_any_element();
             if crate::i18n::locale() == "en" {
                 vec![author, t("sys.poll_closed_b"), q, t("sys.poll_closed_c")]
