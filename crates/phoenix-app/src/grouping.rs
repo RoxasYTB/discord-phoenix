@@ -60,7 +60,7 @@ pub fn starts_group(prev: Option<&Message>, cur: &Message, utc_offset_secs: i64)
             || prev.author != cur.author
             || ephemeral(prev) != ephemeral(cur)
             || cur.webhook_name.is_some() && prev.webhook_name != cur.webhook_name
-            || prev.id == cur.channel
+            || prev.id == cur.channel && prev.id.0 >= 1 << 40
             || !((a - b).abs() <= 86_400_000 && day(prev.timestamp, utc_offset_secs) == day(cur.timestamp, utc_offset_secs))
             || (a - b).abs() >= GROUP_WINDOW_SECS * 1000
             || silent(cur) && !silent(prev)
@@ -94,7 +94,7 @@ mod tests {
     fn msg(id: u64, author: u64, ts: i64) -> Message {
         Message {
             id: Id(id),
-            channel: Id(1),
+            channel: Id(1_000),
             author: Id(author),
             timestamp: ts,
             edited: false,
@@ -164,9 +164,12 @@ mod tests {
         assert!(starts_group(Some(&base), &app, 0));
         let threaded = Message { thread: Some(crate::model::ThreadRef::default()), ..msg(2, 1, T0 + 1) };
         assert!(starts_group(Some(&base), &threaded, 0));
-        // The previous one is the forum post's starter message (same id as the channel).
-        let starter = Message { id: Id(1), channel: Id(1), ..msg(0, 1, T0) };
-        assert!(starts_group(Some(&starter), &msg(2, 1, T0 + 1), 0));
+        // The previous one is the forum post's starter message (same id as the channel; real
+        // snowflakes only, mock ids can collide).
+        let post = Id(1574814389830422673);
+        let starter = Message { id: post, channel: post, ..msg(0, 1, 0) };
+        let next = Message { id: Id(1574815884067999868), channel: post, ..msg(0, 1, 0) };
+        assert!(starts_group(Some(&starter), &next, 0));
     }
 
     #[test]
