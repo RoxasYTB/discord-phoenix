@@ -577,18 +577,26 @@ pub(crate) fn banner_button(id: impl Into<gpui::ElementId>, icon: &str) -> gpui:
 }
 
 pub(crate) fn theme_backdrop(t: (u32, u32), footer: f32) -> [Div; 3] {
-    theme_backdrop_at(t, 105., footer)
+    theme_backdrop_at(t, 105., footer, 8., 8.)
 }
 
-pub(crate) fn theme_backdrop_at((primary, secondary): (u32, u32), banner: f32, footer: f32) -> [Div; 3] {
+pub(crate) fn theme_backdrop_at((primary, secondary): (u32, u32), banner: f32, footer: f32, top_r: f32, bottom_r: f32) -> [Div; 3] {
     [
-        div().absolute().top_0().left_0().right_0().h(z(banner)).bg(c(primary)),
-        div().absolute().top(z(banner)).left_0().right_0().bottom(z(footer)).bg(gpui::linear_gradient(
-            180.,
-            gpui::linear_color_stop(c(primary), 0.),
-            gpui::linear_color_stop(c(secondary), 1.),
-        )),
-        div().absolute().left_0().right_0().bottom_0().h(z(footer)).bg(c(secondary)),
+        div().absolute().top_0().left_0().right_0().h(z(banner)).rounded_t(z(top_r)).bg(c(primary)),
+        div()
+            .absolute()
+            .top(z(banner))
+            .left_0()
+            .right_0()
+            .bottom(z(footer))
+            .when(banner <= 0., |d| d.rounded_t(z(top_r)))
+            .when(footer <= 0., |d| d.rounded_b(z(bottom_r)))
+            .bg(gpui::linear_gradient(
+                180.,
+                gpui::linear_color_stop(c(primary), 0.),
+                gpui::linear_color_stop(c(secondary), 1.),
+            )),
+        div().absolute().left_0().right_0().bottom_0().h(z(footer)).rounded_b(z(bottom_r)).bg(c(secondary)),
     ]
 }
 
@@ -1030,8 +1038,8 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .overflow_y_scroll()
         .when(theme.is_none(), |d| d.bg(c(card_bg)))
         .when_some(theme, |d, t| {
-            d.children(theme_backdrop_at(t, BANNER, 0.))
-                .child(div().absolute().top_0().left_0().right_0().bottom_0().bg(crate::ui::profile_theme::overlay(t)))
+            d.children(theme_backdrop_at(t, BANNER, 0., 16., 0.))
+                .child(div().absolute().top_0().left_0().right_0().bottom_0().rounded_t(z(16.)).bg(crate::ui::profile_theme::overlay(t)))
         })
         .rounded_t(z(16.))
         .border_1()
@@ -1278,14 +1286,14 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .when_some(theme, |d, t| {
             use crate::ui::profile_theme::{modal_background, modal_inner};
             d.bg(modal_background(t))
-                .child(div().absolute().top_0().left_0().right_0().h(z(300.)).bg(gpui::linear_gradient(
+                .child(div().absolute().top_0().left_0().right_0().h(z(300.)).rounded_t(z(15.)).bg(gpui::linear_gradient(
                     180.,
                     gpui::linear_color_stop(modal_inner(t, 0.8), 0.),
                     gpui::linear_color_stop(modal_inner(t, 0.2), 1.),
                 )))
-                .child(div().absolute().top(z(300.)).left_0().right_0().bottom_0().bg(modal_inner(t, 0.2)))
+                .child(div().absolute().top(z(300.)).left_0().right_0().bottom_0().rounded_b(z(15.)).bg(modal_inner(t, 0.2)))
         })
-        .children(backdrop.map(|(a, h)| img(gpui::ImageSource::Render(a)).absolute().top_0().left_0().w(z(mw)).h(z(h))))
+        .children(backdrop.map(|(a, h)| img(gpui::ImageSource::Render(a)).absolute().top_0().left_0().w(z(mw)).h(z(h)).rounded_t(z(15.))))
         .shadow_lg()
         .pt(z(pad + system_bar))
         .pl(z(pad))
