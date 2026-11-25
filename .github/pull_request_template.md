@@ -14,3 +14,4 @@
 - [ ] No tokens, credentials or personal data in code, tests, fixtures or logs
 - [ ] I ran the app and tested the change myself; UI changes include before/after screenshots compared with the official client
 - [ ] I understand every line of this PR and take responsibility for it (AI-assisted or not), and I did the quality check in CONTRIBUTING.md
+- [ ] No version bump, release tag or release workflow change (releases are made by the maintainer)

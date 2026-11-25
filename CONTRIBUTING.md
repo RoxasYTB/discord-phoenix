@@ -69,4 +69,6 @@ PRs that skip these checks will be sent back.
 
 ## Releases
 
-Pushing a tag `vX.Y.Z` (or `vX.Y.Z-beta.N`) triggers `.github/workflows/release.yml`. Tags containing `beta`, `alpha` or `rc` are published as pre-releases.
+Releases are made by the project maintainer only. Pull requests must not bump the version, edit the changelog for a release, create or push tags, or touch the release workflow; the maintainer does that when cutting a release.
+
+For the maintainer: pushing a tag `vX.Y.Z` (or `vX.Y.Z-beta.N`) triggers `.github/workflows/release.yml`. Tags containing `beta`, `alpha` or `rc` are published as pre-releases.
