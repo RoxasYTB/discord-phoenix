@@ -1253,20 +1253,25 @@ impl PhoenixApp {
         self.member_list.reset(self.member_rows.len() + 1);
     }
 
-    pub fn member_color(&self, guild: Id, m: &Member) -> Option<u32> {
+    pub fn member_role_style(&self, guild: Id, m: &Member) -> (Option<u32>, Option<crate::ui::role_gradient::RoleGradient>) {
         if self.prefs.local.pick("roles", 0) != 0 {
-            return None;
+            return (None, None);
         }
-        self.member_role_color(guild, m)
+        let Some(roles) = self.roles.get(&guild) else {
+            return (None, None);
+        };
+        crate::ui::role_gradient::style_for_roles(roles, &m.roles)
+    }
+
+    pub fn member_color(&self, guild: Id, m: &Member) -> Option<u32> {
+        self.member_role_style(guild, m).0
     }
 
     pub fn member_role_color(&self, guild: Id, m: &Member) -> Option<u32> {
         let roles = self.roles.get(&guild)?;
-        roles
-            .iter()
-            .filter(|r| m.roles.contains(&r.id) && r.color.is_some())
-            .max_by_key(|r| r.position)
+        crate::ui::role_gradient::highest_colored_role(roles, &m.roles)
             .and_then(|r| r.color)
+            .filter(|&c| c != 0)
             .map(crate::theme::user_color)
     }
 
@@ -1317,23 +1322,30 @@ impl PhoenixApp {
         self.author_role_dot_in(self.selected_guild, user)
     }
 
+    pub fn author_role_style_in(&self, guild: Option<Id>, user: Id) -> (Option<u32>, Option<crate::ui::role_gradient::RoleGradient>) {
+        let Some(g) = guild else {
+            return (None, None);
+        };
+        let Some(m) = self.members.get(&g).and_then(|ms| crate::member_index::find(ms, g, user)) else {
+            return (None, None);
+        };
+        self.member_role_style(g, m)
+    }
+
+    pub fn author_role_style(&self, user: Id) -> (Option<u32>, Option<crate::ui::role_gradient::RoleGradient>) {
+        self.author_role_style_in(self.selected_guild, user)
+    }
+
     pub fn author_color_in(&self, guild: Option<Id>, user: Id) -> Option<u32> {
-        let g = guild?;
-        let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
-        self.member_color(g, m)
+        self.author_role_style_in(guild, user).0
     }
 
     pub fn author_color(&self, user: Id) -> Option<u32> {
-        self.author_color_in(self.selected_guild, user)
+        self.author_role_style(user).0
     }
 
-    pub fn author_role_gradient_in(&self, guild: Option<Id>, user: Id) -> Option<[u32; 3]> {
-        if self.prefs.local.pick("roles", 0) != 0 {
-            return None;
-        }
-        let g = guild?;
-        let m = crate::member_index::find(self.members.get(&g)?, g, user)?;
-        crate::ui::role_gradient::for_member(self, g, m)
+    pub fn author_role_gradient_in(&self, guild: Option<Id>, user: Id) -> Option<crate::ui::role_gradient::RoleGradient> {
+        self.author_role_style_in(guild, user).1
     }
 
     pub fn author_role_icon_in(&self, guild: Option<Id>, user: Id) -> Option<SharedString> {

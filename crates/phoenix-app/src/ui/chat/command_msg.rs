@@ -150,7 +150,8 @@ pub fn header(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cu: 
     let user = app.member_user(app.selected_guild, cu.user);
     let user = user.as_deref();
     let nick = app.member_nick(cu.user).or_else(|| user.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
-    let color = app.author_color(cu.user).map(c).unwrap_or_else(|| c(tok(idx::TEXT_STRONG)));
+    let (role_color, role_gradient) = app.author_role_style(cu.user);
+    let color = role_color.map(c).unwrap_or_else(|| c(tok(idx::TEXT_STRONG)));
     let (lead, tail) = crate::t!("slash.used").split_once("{cmd}").map(|(a, b)| (a.to_owned(), b.to_owned())).unwrap_or_default();
     let target = cu.target.and_then(|t| app.users.get(&t)).map(|u| app.member_nick(u.id).unwrap_or_else(|| u.display_name.clone()));
     let name: SharedString = if cu.command_type == 1 { format!("/{}", cu.name).into() } else { cu.name.clone() };
@@ -185,7 +186,7 @@ pub fn header(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cu: 
                 .cursor_pointer()
                 .hover(|s| s.underline())
                 .on_click(super::message_ext::open_user(entity, cu.user, msg.channel))
-                .child(crate::fonts::name_text(nick, user, 14.)),
+                .child(crate::fonts::name_text_with(nick, user, 14., role_gradient)),
         )
         .child(div().flex_none().mr(z(4.)).child(SharedString::from(lead.trim().to_owned())))
         .child(

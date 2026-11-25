@@ -930,7 +930,8 @@ pub(crate) fn message(
     let author_cow = app.member_user(app.selected_guild, msg.author);
     let author = author_cow.as_deref();
     let name = msg.author_nick.clone().or_else(|| app.member_nick(msg.author)).or_else(|| author.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
-    let color = app.author_color(msg.author).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
+    let (author_role_color, author_role_gradient) = app.author_role_style(msg.author);
+    let color = author_role_color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
     let id = msg.id;
     if let Some(sys) = system::render(app, entity, msg, r) {
         return row_wrapper().child(sys).into_any_element();
@@ -1097,12 +1098,18 @@ pub(crate) fn message(
             )
             .when(!compact, |d| d.child(avatar(ru.as_deref(), 16.)))
             .when(ru.as_deref().is_some_and(|u| u.bot), |d| d.child(bot_tag(ru.as_deref().is_some_and(|u| u.verified_bot)).ml_0()))
-            .child(
+            .child({
+                let (reply_color, reply_gradient) = ru.as_deref().map(|u| app.author_role_style(u.id)).unwrap_or((None, None));
+                let reply_text = SharedString::from(format!(
+                    "{}{}",
+                    if msg.reply_mentions_author { "@" } else { "" },
+                    rnick.map(|n| n.to_string()).or_else(|| ru.as_deref().map(|u| u.display_name.to_string())).unwrap_or_else(|| crate::t!("common.unknown").to_string())
+                ));
                 crate::fonts::styled_name(
                     div()
                         .flex_none()
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(ru.as_deref().and_then(|u| app.author_color(u.id)).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG)))
+                        .text_color(reply_color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG)))
                         .opacity(0.64),
                     ru.as_deref(),
                     false,
@@ -1111,18 +1118,8 @@ pub(crate) fn message(
                 .when_some(ru.as_deref().map(|u| u.id), |d, uid| {
                     d.cursor_pointer().hover(|s| s.underline()).on_click(message_ext::open_user(entity, uid, msg.channel))
                 })
-                .child({
-                    let reply_text = SharedString::from(format!(
-                        "{}{}",
-                        if msg.reply_mentions_author { "@" } else { "" },
-                        rnick.map(|n| n.to_string()).or_else(|| ru.as_deref().map(|u| u.display_name.to_string())).unwrap_or_else(|| crate::t!("common.unknown").to_string())
-                    ));
-                    match ru.as_deref().and_then(|u| crate::ui::role_gradient::for_author(app, u.id)) {
-                        Some(stops) => crate::fonts::name_text_with(reply_text, ru.as_deref(), 14., Some(stops)),
-                        None => crate::fonts::name_text(reply_text, ru.as_deref(), 14.),
-                    }
-                }),
-            )
+                .child(crate::fonts::name_text_with(reply_text, ru.as_deref(), 14., reply_gradient))
+            })
             .when_some(ru.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, true).opacity(0.64)))
             .child(
                 div()
@@ -1201,10 +1198,7 @@ pub(crate) fn message(
             .cursor_pointer()
             .hover(|s| s.underline())
             .on_click(message_ext::open_author(entity, msg))
-            .child(match crate::ui::role_gradient::for_author(app, msg.author) {
-                Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
-                None => crate::fonts::name_text(name, author, 16.),
-            })
+            .child(crate::fonts::name_text_with(name, author, 16., author_role_gradient))
             .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col))))
     });
 
