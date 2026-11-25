@@ -213,7 +213,24 @@ fn breadcrumb(last: SharedString, cx: &mut Context<PhoenixApp>) -> AnyElement {
 fn expanded(app: &PhoenixApp, s: &State, w: &Value, name: Option<&Entity<InputState>>, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let id = webhook_id(w).unwrap_or(0);
     let url = w.get("url").and_then(Value::as_str).map(str::to_owned).or_else(|| w.get("token").and_then(Value::as_str).map(|t| format!("https://discord.com/api/webhooks/{id}/{t}")));
-    let chan = app.channels.get(&s.channel).map(|c| c.name.to_string()).unwrap_or_default();
+    let mut options = webhook_channels(app, s.guild);
+    if options.is_empty() {
+        options.push((s.channel, SharedString::from(format!("#{}", app.channels.get(&s.channel).map(|c| c.name.to_string()).unwrap_or_default()))));
+    }
+    let current = s.webhook_channel.or_else(|| hook_channel(w)).unwrap_or(s.channel);
+    let selected = options.iter().position(|(id, _)| *id == current).unwrap_or(0);
+    let labels: Vec<SharedString> = options.iter().map(|(_, l)| l.clone()).collect();
+    let ids: Vec<Id> = options.iter().map(|(id, _)| *id).collect();
+    let e = cx.entity();
+    let toggle: std::rc::Rc<dyn Fn(&mut gpui::App)> = std::rc::Rc::new(|_| with_state(|s| s.open_select = if s.open_select == Some(HOOK_CHANNEL_SELECT) { None } else { Some(HOOK_CHANNEL_SELECT) }));
+    let pick: super::settings_form::OnPick = std::rc::Rc::new(move |k, _, cx| {
+        with_state(|s| {
+            s.webhook_channel = ids.get(k).copied();
+            s.open_select = None;
+        });
+        e.update(cx, |_, cx| cx.notify());
+    });
+    let open = s.open_select == Some(HOOK_CHANNEL_SELECT);
     div()
         .flex()
         .child(
@@ -243,7 +260,7 @@ fn expanded(app: &PhoenixApp, s: &State, w: &Value, name: Option<&Entity<InputSt
                         .flex()
                         .gap(z(20.))
                         .child(div().flex_1().flex().flex_col().child(label(crate::t!("cs.webhook_name")).mb(z(8.))).children(name.map(input_box)))
-                        .child(div().flex_1().flex().flex_col().child(label(crate::t!("cs.webhook_channel")).mb(z(8.))).child(super::settings_form::select_box("cs-hook-chan", format!("# {chan}"), false))),
+                        .child(div().flex_1().flex().flex_col().child(label(crate::t!("cs.webhook_channel")).mb(z(8.))).child(super::settings_form::dropdown("cs-hook-chan", labels, selected, open, toggle, pick, cx))),
                 )
                 .child(divider(24.))
                 .child(
@@ -289,6 +306,7 @@ pub fn webhooks_page(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) 
             with_state(|s| {
                 s.open_webhook = if s.open_webhook == id { None } else { id.clone() };
                 s.webhook_name = None;
+                s.webhook_channel = None;
             });
             e.update(cx, |_, cx| cx.notify());
         };
@@ -313,17 +331,40 @@ pub fn followed_page(_app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>)
     div().flex().flex_col().child(breadcrumb(crate::t!("cs.followed"), cx)).child(text(crate::t!("cs.followed_desc"), 14., 18., idx::TEXT_DEFAULT)).child(divider(32.)).child(list).into_any_element()
 }
 
-pub fn webhook_dirty(s: &State, cx: &gpui::App) -> Option<(u64, String)> {
-    let id: u64 = s.open_webhook.as_deref()?.parse().ok()?;
-    let orig = s.webhooks.iter().flatten().find(|w| webhook_id(w) == Some(id))?.get("name")?.as_str()?.to_owned();
-    let now = s.webhook_name.as_ref().map(|i| i.read(cx).value().trim().to_owned()).filter(|n| !n.is_empty()).unwrap_or_else(|| orig.clone());
-    (now != orig || s.webhook_avatar.is_some()).then_some((id, now))
+pub const HOOK_CHANNEL_SELECT: u8 = 40;
+
+pub fn webhook_channels(app: &PhoenixApp, guild: Option<Id>) -> Vec<(Id, SharedString)> {
+    use crate::model::ChannelKind;
+    let Some(g) = guild else { return Vec::new() };
+    if !crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 29) {
+        return Vec::new();
+    }
+    let list: Vec<&crate::model::Channel> = app.guild_channels.get(&g).into_iter().flatten().filter_map(|id| app.channels.get(id)).collect();
+    let selectable = list.iter().filter(|c| matches!(c.kind, ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Forum)).map(|c| (c.id, SharedString::from(format!("#{}", c.name))));
+    let vocal = list.iter().filter(|c| matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage)).map(|c| (c.id, c.name.clone()));
+    selectable.chain(vocal).collect()
 }
 
-pub fn webhook_body(name: &str, avatar: Option<String>) -> Value {
+fn hook_channel(w: &Value) -> Option<Id> {
+    w.get("channel_id").and_then(Value::as_str).and_then(|x| x.parse().ok()).map(Id)
+}
+
+pub fn webhook_dirty(s: &State, cx: &gpui::App) -> Option<(u64, String)> {
+    let id: u64 = s.open_webhook.as_deref()?.parse().ok()?;
+    let w = s.webhooks.iter().flatten().find(|w| webhook_id(w) == Some(id))?;
+    let orig = w.get("name")?.as_str()?.to_owned();
+    let moved = s.webhook_channel.is_some_and(|c| Some(c) != hook_channel(w));
+    let now = s.webhook_name.as_ref().map(|i| i.read(cx).value().trim().to_owned()).filter(|n| !n.is_empty()).unwrap_or_else(|| orig.clone());
+    (now != orig || s.webhook_avatar.is_some() || moved).then_some((id, now))
+}
+
+pub fn webhook_body(name: &str, avatar: Option<String>, channel: Option<Id>) -> Value {
     let mut b = json!({ "name": name });
     if let Some(a) = avatar {
         b["avatar"] = json!(a);
+    }
+    if let Some(c) = channel {
+        b["channel_id"] = json!(c.0.to_string());
     }
     b
 }
@@ -337,10 +378,22 @@ pub fn save_webhook(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     with_state(|s| {
         if let Some((id, name)) = webhook_dirty(s, cx) {
             let avatar = s.webhook_avatar.as_deref().and_then(crate::ui::file_pick::data_uri);
+            let here = s.channel;
+            let mut moved = None;
             if let Some(w) = s.webhooks.iter_mut().flatten().find(|w| webhook_id(w) == Some(id)) {
                 w["name"] = json!(name);
+                moved = s.webhook_channel.filter(|c| Some(*c) != hook_channel(w));
+                if let Some(c) = moved {
+                    w["channel_id"] = json!(c.0.to_string());
+                }
             }
-            out = Some((id, webhook_body(&name, avatar)));
+            if moved.is_some_and(|c| c != here) {
+                s.open_webhook = None;
+                if let Some(l) = &mut s.webhooks {
+                    l.retain(|x| webhook_id(x) != Some(id));
+                }
+            }
+            out = Some((id, webhook_body(&name, avatar, moved)));
         }
     });
     if let Some((id, body)) = out {
@@ -478,8 +531,10 @@ mod tests {
 
     #[test]
     fn webhook_patch_carries_the_avatar_as_a_data_uri() {
-        assert_eq!(super::webhook_body("Hook", None), serde_json::json!({ "name": "Hook" }));
-        let b = super::webhook_body("Hook", Some(crate::ui::file_pick::encode(b"abc", "image/png")));
+        assert_eq!(super::webhook_body("Hook", None, None), serde_json::json!({ "name": "Hook" }));
+        let b = super::webhook_body("Hook", Some(crate::ui::file_pick::encode(b"abc", "image/png")), None);
         assert_eq!(b["avatar"], "data:image/png;base64,YWJj");
+        let m = super::webhook_body("Hook", None, Some(crate::model::Id(1_403_447_573_389_381_652)));
+        assert_eq!(m, serde_json::json!({ "name": "Hook", "channel_id": "1403447573389381652" }));
     }
 }

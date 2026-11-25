@@ -300,25 +300,6 @@ fn webhook_row(guild: Id, w: &Value, cx: &mut Context<PhoenixApp>) -> AnyElement
     )
 }
 
-pub fn plain_description(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut rest = s;
-    while let Some(i) = rest.find('<') {
-        out.push_str(&rest[..i]);
-        let tail = &rest[i..];
-        let emoji = tail.starts_with("<:") || tail.starts_with("<a:");
-        match tail.find('>') {
-            Some(j) if emoji => rest = tail[j + 1..].trim_start_matches(' '),
-            _ => {
-                out.push('<');
-                rest = &tail[1..];
-            }
-        }
-    }
-    out.push_str(rest);
-    out.replace("**", "").replace("__", "")
-}
-
 pub fn commands(v: &Value) -> Vec<String> {
     let mut out: Vec<String> = v
         .get("application_commands")
@@ -422,7 +403,7 @@ fn app_page(app: &PhoenixApp, guild: Id, id: &str, cx: &mut Context<PhoenixApp>)
                         ),
                 ),
         )
-        .child(div().mt(z(28.)).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, plain_description(&a.description))));
+        .child(div().mt(z(28.)).child(crate::ui::profile_bio::bio(&a.description, false, crate::theme::c(crate::theme::tok(idx::TEXT_DEFAULT)))));
     if a.commands {
         let (everyone, all_channels) = everyone_allowed(perms.as_ref(), guild);
         let gid = guild;
@@ -527,11 +508,6 @@ mod tests {
         let g = group_by_channel(&hooks);
         assert_eq!(g.len(), 1);
         assert_eq!(g[0].1.len(), 1);
-    }
-
-    #[test]
-    fn descriptions_drop_markdown() {
-        assert_eq!(plain_description("<:fr:135> French.gg **est** __ok__ <3"), "French.gg est ok <3");
     }
 
     #[test]

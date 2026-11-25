@@ -370,6 +370,7 @@ pub struct State {
     pub open_webhook: Option<String>,
     pub webhook_name: Option<Entity<InputState>>,
     pub webhook_avatar: Option<std::path::PathBuf>,
+    pub webhook_channel: Option<Id>,
     pub thread: Option<ThreadFields>,
     pub slow0: u32,
     pub slow: u32,
@@ -421,6 +422,7 @@ impl State {
             open_webhook: None,
             webhook_name: None,
             webhook_avatar: None,
+            webhook_channel: None,
             thread: None,
             slow0: 0,
             slow: 0,
@@ -814,6 +816,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
             with_state(|s| {
                 s.webhook_name = None;
                 s.webhook_avatar = None;
+                s.webhook_channel = None;
             });
             cx.notify();
         });
@@ -822,6 +825,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
             with_state(|s| {
                 s.webhook_name = None;
                 s.webhook_avatar = None;
+                s.webhook_channel = None;
             });
         });
         unsaved_bar(reset, save, cx)
