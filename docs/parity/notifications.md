@@ -81,4 +81,12 @@ desktop bus (both refuse to run on `/run/user/…/bus`). The probe connects to t
 listens to #phoenix only, applies `show_message` both as us and as another account (a message we
 send is never notified to ourselves), shows the toast, and checks that the fake server's
 `ActivationToken` + `ActionInvoked` come back as a click on #phoenix. Captures go to
-`/mnt/windata/project-phoenix/compare/notifs` (private, never committed).
+`/mnt/windata/project-phoenix/compare/notifs` (private, never committed). The token is read on the
+desktop bus (keyring) before the probe switches `DBUS_SESSION_BUS_ADDRESS` to the private bus.
+
+Run of 2026-11-25 14:00 (message sent from the official client in #phoenix): as us → not shown (own
+message, `K`), as another account → `Notify("Discord Phoenix", 0, "discord-phoenix",
+"⁨Yohan⁩ (⁨#〢💬・phoenix⁩, ⁨📝 ─ ☲☲ Communautaire ☲☲⁩)", "<message>", ["default", ""],
+{desktop-entry, category=im.received, suppress-sound, urgency=1, image-data 128×128 RGBA circle}, -1)`;
+the fake server's `ActivationToken` + `ActionInvoked` came back as a click on #phoenix with the
+token, then `CloseNotification(1)` when the channel was opened. ✅

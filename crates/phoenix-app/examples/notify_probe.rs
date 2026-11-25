@@ -11,9 +11,9 @@ const TEST_CHANNEL: u64 = 1_574_797_385_463_496_724;
 const STAND_IN: api::Snowflake = api::Snowflake(1);
 
 fn private_bus() -> anyhow::Result<String> {
-    let bus = std::env::var("DBUS_SESSION_BUS_ADDRESS").unwrap_or_default();
-    if bus.is_empty() || bus.contains("/run/user/") || std::env::var("PHOENIX_NOTIFY_PRIVATE_BUS").as_deref() != Ok("1") {
-        anyhow::bail!("refusing to run: start it under dbus-run-session with PHOENIX_NOTIFY_PRIVATE_BUS=1 (scripts/notify/real_test.sh)");
+    let bus = std::env::var("PHOENIX_NOTIFY_PRIVATE_BUS").unwrap_or_default();
+    if bus.is_empty() || bus.contains("/run/user/") || Some(&bus) == std::env::var("DBUS_SESSION_BUS_ADDRESS").ok().as_ref() {
+        anyhow::bail!("refusing to run: PHOENIX_NOTIFY_PRIVATE_BUS must name a private dbus-run-session bus (scripts/notify/real_test.sh)");
     }
     Ok(bus)
 }
@@ -22,13 +22,17 @@ fn main() -> anyhow::Result<()> {
     let bus = private_bus()?;
     let secs: u64 = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(120);
     println!("probe: private bus {bus}, listening {secs}s on channel {TEST_CHANNEL}");
+    let token = tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async {
+        tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))
+    })?;
+    // SAFETY: the keyring runtime is gone and no other thread reads the environment yet.
+    unsafe { std::env::set_var("DBUS_SESSION_BUS_ADDRESS", &bus) };
     let (tx, mut clicks) = futures::channel::mpsc::unbounded::<dbus::Click>();
     if !dbus::spawn(tx) {
         anyhow::bail!("notification worker did not start");
     }
     let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build()?;
     rt.block_on(async move {
-        let token = tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
         let mut cfg = GatewayConfig::new(token.expose());
         cfg.properties = ClientProperties::linux_desktop();
         let (_gw, mut rx) = Gateway::spawn(cfg);
