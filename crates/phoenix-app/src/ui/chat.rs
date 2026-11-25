@@ -67,8 +67,13 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 cx.notify();
             }
         }))
-        .child(header(app, cx))
-        .children(crate::ui::dm_call::render(app, cx))
+        .map(|d| {
+            if crate::ui::call_view::private_split(app) {
+                d.children(crate::ui::call_view::render_private(app, header(app, cx), window, cx))
+            } else {
+                d.child(header(app, cx)).children(crate::ui::dm_call::render(app, cx))
+            }
+        })
         .child(
             div()
                 .flex_1()
@@ -338,7 +343,7 @@ fn header_search_w(pad_start: f32) -> f32 {
     if w <= 0. { 244. } else { (w - pad_start - 8. - 320.).clamp(64., 244.) }
 }
 
-fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
     let is_dm = ch.is_some_and(|c| c.guild.is_none());
     let name = ch.map(|c| c.name.clone()).unwrap_or_default();

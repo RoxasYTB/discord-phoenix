@@ -30,7 +30,7 @@ pub fn overflow_slot(n: usize) -> Div {
         .child(format!("+{n}"))
 }
 
-fn slice_runs(runs: &[TextRun], range: std::ops::Range<usize>) -> Vec<TextRun> {
+pub(crate) fn slice_runs(runs: &[TextRun], range: std::ops::Range<usize>) -> Vec<TextRun> {
     let mut out = Vec::new();
     let mut pos = 0;
     for r in runs {

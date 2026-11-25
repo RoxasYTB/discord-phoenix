@@ -10,7 +10,7 @@ use crate::theme::{DEFAULT_AVATAR, c, generated::idx, tok, z};
 use crate::ui::avatar;
 
 fn t(i: usize) -> Hsla {
-    c(tok(i))
+    crate::theme::c_for(tok(i), crate::ui::settings::AppTheme::Onyx)
 }
 
 thread_local! {
@@ -20,6 +20,56 @@ thread_local! {
     static LAST_MOVE: Cell<Option<Instant>> = const { Cell::new(None) };
     static WAKE: Cell<Option<Instant>> = const { Cell::new(None) };
     static STRIP_OPEN: Cell<bool> = const { Cell::new(true) };
+    static SPLIT_H: Cell<Option<f32>> = const { Cell::new(None) };
+    static SPLIT_LOADED: Cell<bool> = const { Cell::new(false) };
+    static SPLIT_DRAG: Cell<bool> = const { Cell::new(false) };
+    static SPLIT_TOP: Cell<f32> = const { Cell::new(0.) };
+}
+
+pub const SPLIT_MIN_H: f32 = 230.;
+pub const SPLIT_VOICE_H: f32 = 240.;
+pub const SPLIT_POPPED_H: f32 = 154.;
+pub const SPLIT_CHAT_RESERVE: f32 = 200.;
+
+pub fn private_split(app: &PhoenixApp) -> bool {
+    active(app) && app.voice_channel.and_then(|c| app.channels.get(&c)).is_some_and(|c| c.guild.is_none())
+}
+
+fn split_path() -> Option<std::path::PathBuf> {
+    crate::paths::config_file("call_header_height")
+}
+
+pub fn stored_split_height() -> Option<f32> {
+    if !SPLIT_LOADED.with(|l| l.replace(true)) {
+        let v = split_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| s.trim().parse::<f32>().ok());
+        SPLIT_H.with(|h| h.set(v));
+    }
+    SPLIT_H.with(Cell::get)
+}
+
+pub fn set_split_height(h: Option<f32>, persist: bool) {
+    SPLIT_LOADED.with(|l| l.set(true));
+    SPLIT_H.with(|c| c.set(h));
+    if persist && let Some(p) = split_path() {
+        let _ = p.parent().map(std::fs::create_dir_all);
+        let _ = match h {
+            Some(h) => std::fs::write(p, format!("{}\n", h.round())),
+            None => std::fs::remove_file(p),
+        };
+    }
+}
+
+pub fn split_height(stored: Option<f32>, column_h: f32, video: bool) -> f32 {
+    let max = column_h - SPLIT_CHAT_RESERVE;
+    match stored {
+        Some(h) => h.min(max).max(SPLIT_MIN_H),
+        None if video => column_h * 0.5,
+        None => SPLIT_VOICE_H,
+    }
+}
+
+pub fn voice_avatar_size(n: usize, width: f32) -> f32 {
+    if (80. + 16.) * n as f32 > width { 40. } else { 80. }
 }
 
 pub fn set_strip_open(open: bool) {
@@ -181,73 +231,17 @@ pub fn grid(n: usize, w: f32, h: f32, gap: f32) -> (usize, f32) {
 }
 
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    if !active(app) {
+    if !active(app) || private_split(app) {
         return None;
     }
     let ch_id = app.voice_channel?;
     let ch = app.channels.get(&ch_id)?;
     if crate::ui::call_popout::is_open() {
-        return Some(
-            div()
-                .id("call-popped-out")
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(z(16.))
-                .bg(t(idx::BLACK))
-                .child(glyph(POPOUT, 40., t(idx::INTERACTIVE_TEXT_DEFAULT)))
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(t(idx::TEXT_STRONG))
-                        .child(crate::t!("call.popped_out_notice")),
-                )
-                .child(
-                    div()
-                        .id("call-bring-back")
-                        .px(z(16.))
-                        .py(z(8.))
-                        .rounded(z(8.))
-                        .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
-                        .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
-                        .text_size(z(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))
-                        .cursor_pointer()
-                        .child(crate::t!("call.return_main"))
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            cx.defer(crate::ui::call_popout::close);
-                            cx.notify();
-                        })),
-                )
-                .into_any_element(),
-        );
+        return Some(popped_out(cx).flex_1().min_w_0().h_full().into_any_element());
     }
     let zoom = crate::theme::zoom();
 
-    let mut tiles = Vec::new();
-    let hide_no_video = crate::ui::call_menus::no_video_hidden(ch_id);
-    for &u in &ch.voice_users {
-        let f = crate::ui::voice_panel::flags(u);
-        if f.stream {
-            tiles.push(Tile { user: u, stream: true, invite: false });
-        }
-        if !hide_no_video || f.video {
-            tiles.push(Tile { user: u, stream: false, invite: false });
-        }
-    }
-    let solo = match tiles.as_slice() {
-        [only] if !only.stream => Some(only.user),
-        _ => None,
-    };
-    if let Some(user) = solo {
-        tiles.push(Tile { user, stream: false, invite: true });
-    }
+    let tiles = call_tiles(ch_id, &ch.voice_users);
 
     let vp = window.viewport_size();
     let side = if chat_open() { CHAT_W } else { 0. };
@@ -317,6 +311,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             .children(tiles.iter().map(|tile| render_tile(app, tile, tw, th, fade, cx)))
     };
 
+    let toasts = crate::ui::call_toasts::render(app, ch_id, window, cx);
     let call = div()
         .id("call-view")
         .flex_1()
@@ -327,30 +322,13 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex_col()
         .bg(t(idx::BLACK))
         .when(crate::theme::frame_borders(), |d| d.border_t_1().border_color(t(idx::APP_FRAME_BORDER)))
-        .on_mouse_move(cx.listener(|_, _, _, cx| {
-            let was_idle = idle();
-            if was_idle {
-                WAKE.with(|c| c.set(Some(Instant::now())));
-            }
-            let stale = LAST_MOVE.with(|c| c.get()).is_none_or(|t| t.elapsed() >= Duration::from_millis(250));
-            touch();
-            if stale {
-                cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(IDLE_TIMEOUT + Duration::from_millis(20)).await;
-                    let _ = this.update(cx, |_, cx| cx.notify());
-                })
-                .detach();
-            }
-            if was_idle {
-                cx.notify();
-            }
-        }))
+        .on_mouse_move(cx.listener(|_, _, _, cx| woke(cx)))
         .child(top_bar(app, ch.name.clone(), cx))
         .child(div().h(z(8.)))
         .child(tiles_el)
         .child(bottom_controls(app, collapse(w + 16.), cx))
         .relative()
-        .children(crate::ui::call_toasts::render(app, ch_id, cx));
+        .children(toasts);
 
     let root = div()
         .flex_1()
@@ -359,7 +337,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .overflow_hidden()
         .flex()
         .flex_row()
-        .bg(t(idx::BACKGROUND_BASE_LOWEST))
+        .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
         .child(call)
         .children(stream_menu(app, cx))
         .children(crate::ui::call_menus::render(app, ch_id, cx));
@@ -371,8 +349,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .min_w_0()
                 .h_full()
                 .flex()
-                .bg(t(idx::BACKGROUND_BASE_LOWEST))
-                .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(t(idx::APP_FRAME_BORDER)))
+                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(c(tok(idx::APP_FRAME_BORDER))))
                 .overflow_hidden()
                 .child(div().w(z(CHAT_W)).h_full().flex().flex_col().child(crate::ui::chat::render(app, window, cx))),
         )
@@ -380,6 +358,239 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     } else {
         root.into_any_element()
     })
+}
+
+pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    if !private_split(app) {
+        return None;
+    }
+    let ch_id = app.voice_channel?;
+    let ch = app.channels.get(&ch_id)?;
+    let zoom = crate::theme::zoom();
+    let vp = window.viewport_size();
+    let column_h = f32::from(vp.height) / zoom - 32.;
+    let w = (f32::from(vp.width) / zoom - 72. - crate::ui::sidebar_resize::width() - 16.).max(100.);
+    let popped = crate::ui::call_popout::is_open();
+    let tiles = call_tiles(ch_id, &ch.voice_users);
+    let video = tiles.iter().any(|tile| tile.stream || crate::ui::voice_panel::flags(tile.user).video);
+    let max = (column_h - SPLIT_CHAT_RESERVE).max(SPLIT_MIN_H);
+    let h = if popped { SPLIT_POPPED_H } else { split_height(stored_split_height(), column_h, video) };
+    let (fade, fading) = overlay_opacity();
+    if video && (fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active()) {
+        window.request_animation_frame();
+    }
+    let header = header.bg(gpui::transparent_black()).border_color(gpui::transparent_black());
+    let body: AnyElement = if popped {
+        popped_out(cx).flex_1().min_h_0().w_full().into_any_element()
+    } else if video {
+        let avail = (h - (m_header() + 8.) - (49. + 19. + 12.)).max(40.);
+        let (_cols, tw) = grid(tiles.len(), w, avail, 8.);
+        let th = tw * 9. / 16.;
+        div()
+            .flex_1()
+            .min_h_0()
+            .px(z(8.))
+            .flex()
+            .flex_wrap()
+            .content_center()
+            .justify_center()
+            .gap(z(8.))
+            .children(tiles.iter().map(|tile| render_tile(app, tile, tw, th, fade, cx)))
+            .into_any_element()
+    } else {
+        let users: Vec<Id> = ch.voice_users.clone();
+        let size = voice_avatar_size(users.len(), w);
+        div()
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .pb(z(24.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .children(users.into_iter().map(|u| voice_avatar(app, u, size)))
+            .into_any_element()
+    };
+    let container = div()
+        .id("dm-call-container")
+        .size_full()
+        .flex()
+        .flex_col()
+        .overflow_hidden()
+        .when(video, |d| d.bg(t(idx::BLACK)))
+        .when(crate::theme::frame_borders(), |d| d.border_t_1().border_color(t(idx::APP_FRAME_BORDER)))
+        .on_mouse_move(cx.listener(|_, _, _, cx| woke(cx)))
+        .child(header)
+        .child(body)
+        .when(!popped, |d| d.child(bottom_controls(app, collapse(w + 16.), cx)));
+    Some(
+        div()
+            .id("dm-call")
+            .relative()
+            .w_full()
+            .flex_none()
+            .h(z(h))
+            .bg(c(tok(if video { idx::BACKGROUND_BASE_LOWEST } else { idx::BACKGROUND_SURFACE_HIGH })))
+            .child(container)
+            .children(stream_menu(app, cx))
+            .children(crate::ui::call_menus::render(app, ch_id, cx))
+            .when(!popped, |d| d.child(split_handle(max, cx)))
+            .into_any_element(),
+    )
+}
+
+fn m_header() -> f32 {
+    crate::theme::m::HEADER_H + 1.
+}
+
+fn voice_avatar(app: &PhoenixApp, user: Id, size: f32) -> AnyElement {
+    let speaking = app.voice.is_speaking(user);
+    div()
+        .id(SharedString::from(format!("dm-call-avatar-{}", user.0)))
+        .relative()
+        .mx(z(8.))
+        .size(z(size))
+        .flex_none()
+        .rounded_full()
+        .child(avatar(app.users.get(&user), size * crate::theme::zoom()))
+        .when(speaking, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .rounded_full()
+                    .border(z(2.))
+                    .border_color(t(idx::STATUS_POSITIVE)),
+            )
+        })
+        .into_any_element()
+}
+
+fn split_handle(max: f32, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+    use gpui::{Bounds, DispatchPhase, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, canvas};
+    let weak = cx.entity().downgrade();
+    let probe = canvas(
+        |b: Bounds<Pixels>, _, _| SPLIT_TOP.with(|t| t.set(f32::from(b.origin.y))),
+        move |_, _, window, _| {
+            if !SPLIT_DRAG.with(Cell::get) {
+                return;
+            }
+            let w1 = weak.clone();
+            window.on_mouse_event(move |ev: &MouseMoveEvent, phase, _, cx| {
+                if phase != DispatchPhase::Bubble || !SPLIT_DRAG.with(Cell::get) {
+                    return;
+                }
+                let h = (f32::from(ev.position.y) - SPLIT_TOP.with(Cell::get)) / crate::theme::zoom();
+                set_split_height(Some(h.min(max).max(SPLIT_MIN_H)), false);
+                let _ = w1.update(cx, |_, cx| cx.notify());
+            });
+            let w2 = weak.clone();
+            window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
+                if phase != DispatchPhase::Bubble || !SPLIT_DRAG.with(Cell::get) {
+                    return;
+                }
+                SPLIT_DRAG.with(|d| d.set(false));
+                set_split_height(SPLIT_H.with(Cell::get), true);
+                let _ = w2.update(cx, |_, cx| cx.notify());
+            });
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full();
+    div().absolute().top_0().left_0().size_full().child(probe).child(
+        div()
+            .id("dm-call-resize")
+            .absolute()
+            .left_0()
+            .w_full()
+            .bottom(z(-2.))
+            .h(z(4.))
+            .cursor_ns_resize()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                SPLIT_DRAG.with(|d| d.set(true));
+                cx.stop_propagation();
+            }),
+    )
+}
+
+fn popped_out(cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id("call-popped-out")
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap(z(16.))
+        .bg(t(idx::BLACK))
+        .child(glyph(POPOUT, 40., t(idx::INTERACTIVE_TEXT_DEFAULT)))
+        .child(
+            div()
+                .text_size(z(16.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(t(idx::TEXT_STRONG))
+                .child(crate::t!("call.popped_out_notice")),
+        )
+        .child(
+            div()
+                .id("call-bring-back")
+                .px(z(16.))
+                .py(z(8.))
+                .rounded(z(8.))
+                .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
+                .text_size(z(14.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))
+                .cursor_pointer()
+                .child(crate::t!("call.return_main"))
+                .on_click(cx.listener(|_, _, _, cx| {
+                    cx.defer(crate::ui::call_popout::close);
+                    cx.notify();
+                })),
+        )
+}
+
+fn call_tiles(ch_id: Id, users: &[Id]) -> Vec<Tile> {
+    let mut tiles = Vec::new();
+    let hide_no_video = crate::ui::call_menus::no_video_hidden(ch_id);
+    for &u in users {
+        let f = crate::ui::voice_panel::flags(u);
+        if f.stream {
+            tiles.push(Tile { user: u, stream: true, invite: false });
+        }
+        if !hide_no_video || f.video {
+            tiles.push(Tile { user: u, stream: false, invite: false });
+        }
+    }
+    let solo = match tiles.as_slice() {
+        [only] if !only.stream => Some(only.user),
+        _ => None,
+    };
+    if let Some(user) = solo {
+        tiles.push(Tile { user, stream: false, invite: true });
+    }
+    tiles
+}
+
+fn woke(cx: &mut Context<PhoenixApp>) {
+    let was_idle = idle();
+    if was_idle {
+        WAKE.with(|c| c.set(Some(Instant::now())));
+    }
+    let stale = LAST_MOVE.with(|c| c.get()).is_none_or(|t| t.elapsed() >= Duration::from_millis(250));
+    touch();
+    if stale {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(IDLE_TIMEOUT + Duration::from_millis(20)).await;
+            let _ = this.update(cx, |_, cx| cx.notify());
+        })
+        .detach();
+    }
+    if was_idle {
+        cx.notify();
+    }
 }
 
 thread_local! {
@@ -1159,6 +1370,19 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn private_call_height_follows_the_client_wrapper() {
+        use super::{split_height, voice_avatar_size};
+        assert_eq!(split_height(None, 800., false), 240.);
+        assert_eq!(split_height(None, 800., true), 400.);
+        assert_eq!(split_height(Some(500.), 800., false), 500.);
+        assert_eq!(split_height(Some(700.), 800., true), 600.);
+        assert_eq!(split_height(Some(100.), 800., true), 230.);
+        assert_eq!(split_height(Some(300.), 380., true), 230.);
+        assert_eq!(voice_avatar_size(2, 600.), 80.);
+        assert_eq!(voice_avatar_size(8, 600.), 40.);
+    }
+
     #[test]
     fn solo_veil_is_the_client_ellipse() {
         let a = super::solo_veil_alpha;

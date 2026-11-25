@@ -1,11 +1,13 @@
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, div, prelude::*};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, StyledText, Window, div, prelude::*};
 
 use crate::app::PhoenixApp;
 use crate::model::{Id, Message};
-use crate::theme::{c, generated::idx, tok, z};
+use crate::markdown::{Block, Inline, Span, Style};
+use crate::richtext::RichText;
+use crate::theme::{generated::idx, tok, z};
 
 pub const MAX: usize = 3;
 pub const LINGER: Duration = Duration::from_secs(10);
@@ -16,12 +18,27 @@ struct Toasts {
     channel: Option<Id>,
     ids: Vec<Id>,
     msgs: Vec<Message>,
+    born: Vec<(Id, Instant)>,
+    leaving: Vec<(Message, Instant)>,
+    fading: Option<(Vec<Message>, Instant)>,
     hide_at: Option<Instant>,
     frozen: bool,
 }
 
 thread_local! {
     static TOASTS: RefCell<Toasts> = RefCell::new(Toasts::default());
+}
+
+pub const SPRING_DONE: Duration = Duration::from_millis(600);
+
+pub fn spring(t: Duration) -> f32 {
+    let w = 170f32.sqrt();
+    let x = t.as_secs_f32() * w;
+    if t >= SPRING_DONE { 1. } else { (1. - (1. + x) * (-x).exp()).clamp(0., 1.) }
+}
+
+fn d(i: usize) -> gpui::Hsla {
+    crate::theme::c_for(tok(i), crate::ui::settings::AppTheme::Dark)
 }
 
 pub fn accepts(m: &Message, voice: Option<Id>) -> bool {
@@ -33,11 +50,19 @@ pub fn push(channel: Id, id: Id, now: Instant) {
         if t.channel != Some(channel) {
             *t = Toasts { channel: Some(channel), ..Default::default() };
         }
+        t.fading = None;
         t.ids.push(id);
+        t.born.push((id, now));
         let extra = t.ids.len().saturating_sub(MAX);
-        t.ids.drain(..extra);
+        let gone: Vec<Id> = t.ids.drain(..extra).collect();
+        for g in gone {
+            if let Some(m) = t.msgs.iter().find(|m| m.id == g) {
+                t.leaving.push((m.clone(), now));
+            }
+        }
         let keep = t.ids.clone();
         t.msgs.retain(|m| keep.contains(&m.id));
+        t.born.retain(|(i, _)| keep.contains(i));
         t.hide_at = Some(now + LINGER);
     });
 }
@@ -48,9 +73,17 @@ pub fn shown(channel: Id, now: Instant) -> Vec<Id> {
             return Vec::new();
         }
         if !t.frozen && t.hide_at.is_some_and(|h| now >= h) {
+            let msgs = std::mem::take(&mut t.msgs);
+            if !msgs.is_empty() {
+                t.fading = Some((msgs, now));
+            }
             t.ids.clear();
-            t.msgs.clear();
+            t.born.clear();
             t.hide_at = None;
+        }
+        t.leaving.retain(|(_, at)| now.duration_since(*at) < SPRING_DONE);
+        if t.fading.as_ref().is_some_and(|(_, at)| now.duration_since(*at) >= SPRING_DONE) {
+            t.fading = None;
         }
         t.ids.clone()
     })
@@ -73,31 +106,91 @@ pub fn on_message(app: &PhoenixApp, m: &Message, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
-fn preview(app: &PhoenixApp, m: &Message) -> SharedString {
-    let text = m.content.as_ref();
-    if text.is_empty() {
-        return m.attachments.first().map(|a| a.filename.clone()).unwrap_or_default();
-    }
-    let mut out = String::new();
-    let mut at = 0;
-    for (r, k) in crate::ui::chat::rich_input::spans(text) {
-        out.push_str(&text[at..r.start]);
-        match crate::ui::chat::rich_input::plain_text(&k, app) {
-            Some(s) => out.push_str(&s),
-            None => out.push_str(&text[r.clone()]),
+pub fn joined_inline(blocks: &[Block]) -> Inline {
+    let mut out = Inline::default();
+    for b in blocks {
+        let piece = match b {
+            Block::Code { code, .. } => Inline {
+                text: code.clone(),
+                spans: vec![Span { range: 0..code.len(), style: Style::CODE, link: None, mention: None, spoiler: None }],
+            },
+            other => other.inline().cloned().unwrap_or_default(),
+        };
+        if piece.text.is_empty() {
+            continue;
         }
-        at = r.end;
+        if !out.text.is_empty() {
+            let at = out.text.len();
+            out.text.push(' ');
+            out.spans.push(Span { range: at..at + 1, style: Style::PLAIN, link: None, mention: None, spoiler: None });
+        }
+        let off = out.text.len();
+        out.text.push_str(&piece.text.replace(['\n', '\r'], " "));
+        out.spans.extend(piece.spans.into_iter().map(|mut sp| {
+            sp.range = sp.range.start + off..sp.range.end + off;
+            sp
+        }));
     }
-    out.push_str(&text[at..]);
-    out.replace('\n', " ").into()
+    out
 }
 
 fn mentioned(app: &PhoenixApp, m: &Message) -> bool {
     m.mention_everyone || m.content.contains(&format!("<@{}>", app.me.id.0)) || m.content.contains(&format!("<@!{}>", app.me.id.0))
 }
 
-fn toast(app: &PhoenixApp, m: &Message, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let shadow = vec![gpui::BoxShadow { color: c(tok(idx::OPACITY_BLACK_20)), offset: gpui::point(z(0.), z(2.)), blur_radius: z(10.), spread_radius: z(0.), inset: false }];
+fn stickers(m: &Message) -> Vec<&crate::model::Attachment> {
+    m.attachments.iter().filter(|a| matches!(a.kind, crate::model::AttachmentKind::Sticker(_)) && !a.url.is_empty()).collect()
+}
+
+fn est_height(m: &Message) -> f32 {
+    if m.content.is_empty() && !stickers(m).is_empty() { 136. } else { 32. }
+}
+
+fn line(rt: &RichText) -> gpui::Div {
+    let emoji = 22.;
+    let mut row = div().flex().items_center().min_w_0().overflow_hidden().whitespace_nowrap();
+    let mut last = 0;
+    let seg = |r: std::ops::Range<usize>| StyledText::new(SharedString::from(rt.text[r.clone()].to_owned())).with_runs(crate::ui::profile_bio::slice_runs(&rt.runs, r));
+    for (r, token) in &rt.emoji {
+        if last < r.start {
+            row = row.child(div().flex_none().child(seg(last..r.start)));
+        }
+        row = row.child(div().flex_none().mx(z(1.)).size(z(emoji)).overflow_hidden().child(crate::media::emoji::emoji_element(token, emoji * crate::theme::zoom())));
+        last = r.end;
+    }
+    if last < rt.text.len() {
+        row = row.child(div().min_w_0().text_ellipsis().child(seg(last..rt.text.len())));
+    }
+    row
+}
+
+fn body(app: &PhoenixApp, m: &Message) -> AnyElement {
+    let text = m.content.as_ref();
+    if text.is_empty() {
+        let st = stickers(m);
+        if !st.is_empty() {
+            return div()
+                .flex()
+                .gap(z(4.))
+                .children(st.into_iter().map(|a| {
+                    let im = match a.kind {
+                        crate::model::AttachmentKind::Sticker(crate::media::StickerFormat::Lottie) => crate::media::lottie::image(a.url.clone(), 128, true),
+                        _ => gpui::img(a.url.clone()),
+                    };
+                    im.size(z(128.)).object_fit(gpui::ObjectFit::Contain).into_any_element()
+                }))
+                .into_any_element();
+        }
+        let name = m.attachments.first().map(|a| a.filename.clone()).unwrap_or_default();
+        return div().min_w_0().truncate().child(name).into_any_element();
+    }
+    let blocks = crate::markdown::parse(text, &app.resolver());
+    let rt = crate::richtext::rich_inline(&joined_inline(&blocks), &|_| false, d(idx::TEXT_DEFAULT));
+    line(&rt).into_any_element()
+}
+
+fn toast(app: &PhoenixApp, m: &Message, opacity: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let shadow = vec![gpui::BoxShadow { color: d(idx::OPACITY_BLACK_20), offset: gpui::point(z(0.), z(2.)), blur_radius: z(10.), spread_radius: z(0.), inset: false }];
     let group: SharedString = format!("call-toast-{}", m.id.0).into();
     let (channel, id) = (m.channel, m.id);
     div()
@@ -105,6 +198,7 @@ fn toast(app: &PhoenixApp, m: &Message, cx: &mut Context<PhoenixApp>) -> AnyElem
         .w_full()
         .flex()
         .justify_end()
+        .opacity(opacity)
         .child(
             div()
                 .group(group.clone())
@@ -124,24 +218,24 @@ fn toast(app: &PhoenixApp, m: &Message, cx: &mut Context<PhoenixApp>) -> AnyElem
                         .overflow_hidden()
                         .flex()
                         .items_center()
-                        .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
-                        .group_hover(group, |s| s.bg(c(tok(idx::BACKGROUND_BASE_LOWER))))
+                        .bg(d(idx::BACKGROUND_BASE_LOWEST))
+                        .group_hover(group, |s| s.bg(d(idx::BACKGROUND_BASE_LOWER)))
                         .shadow(shadow.clone())
                         .text_size(z(16.))
                         .line_height(z(22.))
-                        .text_color(c(tok(idx::TEXT_DEFAULT)))
-                        .when(mentioned(app, m), |d| {
-                            d.child(
+                        .text_color(d(idx::TEXT_DEFAULT))
+                        .when(mentioned(app, m), |el| {
+                            el.child(
                                 div()
                                     .absolute()
                                     .inset_0()
                                     .rounded(z(16.))
-                                    .bg(c(tok(idx::YELLOW_300)).opacity(0.15))
+                                    .bg(d(idx::YELLOW_300).opacity(0.15))
                                     .border(z(2.))
-                                    .border_color(c(tok(idx::YELLOW_300)).opacity(0.3)),
+                                    .border_color(d(idx::YELLOW_300).opacity(0.3)),
                             )
                         })
-                        .child(div().min_w_0().truncate().child(preview(app, m))),
+                        .child(body(app, m)),
                 )
                 .child(div().flex_none().ml(z(8.)).size(z(32.)).rounded_full().shadow(shadow).child(crate::ui::avatar(app.users.get(&m.author), 32. * crate::theme::zoom()))),
         )
@@ -152,19 +246,47 @@ fn toast(app: &PhoenixApp, m: &Message, cx: &mut Context<PhoenixApp>) -> AnyElem
         .into_any_element()
 }
 
-pub fn render(app: &PhoenixApp, channel: Id, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub fn render(app: &PhoenixApp, channel: Id, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if crate::ui::call_view::chat_open() || !crate::ui::call_menus::chat_toasts(channel) {
         return None;
     }
-    let ids = shown(channel, Instant::now());
-    let kept = TOASTS.with_borrow(|t| t.msgs.clone());
+    let now = Instant::now();
+    let ids = shown(channel, now);
+    let (kept, born, leaving, fading) = TOASTS.with_borrow(|t| (t.msgs.clone(), t.born.clone(), t.leaving.clone(), t.fading.clone()));
     let stored = app.messages.get(&channel);
     let list: Vec<Message> = ids
         .iter()
         .filter_map(|id| stored.and_then(|e| e.msgs.iter().rev().find(|m| m.id == *id)).or_else(|| kept.iter().find(|m| m.id == *id)).cloned())
         .collect();
-    if list.is_empty() {
+    let fading_all = fading.filter(|_| list.is_empty());
+    if list.is_empty() && leaving.is_empty() && fading_all.is_none() {
         return None;
+    }
+    let mut animating = false;
+    let mut shift = 0.;
+    let mut out_items = Vec::new();
+    for (m, at) in &leaving {
+        let s = spring(now.duration_since(*at));
+        animating |= s < 1.;
+        let h = est_height(m) + 8.;
+        out_items.push((m.clone(), -h * s + shift, 1. - s));
+        shift += h * (1. - s);
+    }
+    let fade_out = fading_all.as_ref().map(|(_, at)| 1. - spring(now.duration_since(*at)));
+    let shown_list = match &fading_all {
+        Some((msgs, _)) => msgs.clone(),
+        None => list,
+    };
+    let opacity_of = |m: &Message| -> f32 {
+        if let Some(o) = fade_out {
+            return o;
+        }
+        born.iter().find(|(i, _)| *i == m.id).map_or(1., |(_, at)| spring(now.duration_since(*at)))
+    };
+    let items: Vec<(Message, f32)> = shown_list.iter().map(|m| (m.clone(), opacity_of(m))).collect();
+    animating |= fade_out.is_some_and(|o| o > 0.) || items.iter().any(|(_, o)| *o < 1.);
+    if animating {
+        window.request_animation_frame();
     }
     Some(
         div()
@@ -175,11 +297,17 @@ pub fn render(app: &PhoenixApp, channel: Id, cx: &mut Context<PhoenixApp>) -> Op
             .w(z(304.))
             .h(gpui::relative(0.5))
             .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap(z(8.))
             .on_hover(|on, _, _| set_frozen(*on))
-            .children(list.iter().map(|m| toast(app, m, cx)))
+            .child(
+                div()
+                    .relative()
+                    .top(z(shift))
+                    .flex()
+                    .flex_col()
+                    .gap(z(8.))
+                    .children(items.iter().map(|(m, o)| toast(app, m, *o, cx))),
+            )
+            .children(out_items.iter().map(|(m, y, o)| div().absolute().left_0().right_0().top(z(*y)).child(toast(app, m, *o, cx))))
             .into_any_element(),
     )
 }

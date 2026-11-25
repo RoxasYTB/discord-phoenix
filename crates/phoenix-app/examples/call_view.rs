@@ -14,6 +14,8 @@ fn main() -> anyhow::Result<()> {
     let no_strip = rest.iter().any(|a| a == "nostrip");
     let dm = rest.iter().any(|a| a == "dm");
     let toasts = rest.iter().any(|a| a == "toasts");
+    let voice_only = rest.iter().any(|a| a == "voiceonly");
+    let split = rest.iter().find_map(|a| a.strip_prefix("split=").and_then(|v| v.parse::<f32>().ok()));
     let feedback = rest.iter().find_map(|a| a.strip_prefix("feedback=").map(str::to_owned));
     let menu = rest.iter().find_map(|a| match a.as_str() {
         "menu=more" => Some(phoenix_app::ui::call_menus::TrayMenu::More),
@@ -95,7 +97,8 @@ fn main() -> anyhow::Result<()> {
                 }
                 phoenix_app::ui::call_view::touch();
                 phoenix_app::ui::call_view::set_strip_open(!no_strip);
-                phoenix_app::ui::voice_panel::set_flags(me, VoiceFlags { stream: true, ..Default::default() });
+                phoenix_app::ui::voice_panel::set_flags(me, VoiceFlags { stream: !voice_only, ..Default::default() });
+                phoenix_app::ui::call_view::set_split_height(split, false);
                 phoenix_app::ui::voice_panel::set_flags(Id(4), VoiceFlags { self_mute: true, ..Default::default() });
                 phoenix_app::ui::voice_panel::set_flags(Id(7), VoiceFlags { self_deaf: true, ..Default::default() });
                 app.voice.speaking.insert(Id(3));
