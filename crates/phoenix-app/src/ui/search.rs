@@ -402,7 +402,7 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
         .attachments
         .iter()
         .map(|a| crate::ui::chat::attachment(a, acx))
-        .chain(m.embeds.iter().map(|e| crate::ui::chat::embed(app, e, acx)))
+        .chain(m.embeds.iter().map(|e| crate::ui::chat::embed(app, &cx.entity(), e, acx)))
         .chain(crate::ui::chat::invite_embed::render(app, &cx.entity(), m.author, &m.content, acx))
         .chain(crate::ui::components::render_static(app, &cx.entity(), m, acx))
         .collect();

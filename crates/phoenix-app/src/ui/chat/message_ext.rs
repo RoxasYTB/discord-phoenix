@@ -702,13 +702,32 @@ pub fn rich_with_emoji_scaled(
         }
         let sd = *seg as u64;
         let seg_runs = super::mention::hovered_runs(msg, bi, sd, &ranges, &targets, &seg_runs).unwrap_or(seg_runs);
-        let shown: Vec<String> = ranges.iter().map(|r| text.get(r.clone()).unwrap_or_default().to_owned()).collect();
+        let seg_runs = super::mention::anchor_runs(msg, bi, range.start, &seg_runs).unwrap_or(seg_runs);
+        let off = range.start;
+        let scope = range.clone();
+        let anchor = {
+            let (fr, ft) = (t.click_ranges.clone(), t.click_targets.clone());
+            move |ix: usize| super::mention::anchor_at(&fr, &ft, ix + off)
+        };
+        let shown: Vec<String> = ranges
+            .iter()
+            .map(|r| anchor(r.start).map_or_else(|| text.get(r.clone()).unwrap_or_default().to_owned(), |(a, _)| t.text.get(a).unwrap_or_default().to_owned()))
+            .collect();
+        let full = t.text.clone();
         let styled = gpui::StyledText::new(text).with_runs(seg_runs);
         let e = entity.clone();
         let (hr, ht) = (ranges.clone(), targets.clone());
+        let hover_anchor = anchor.clone();
         let el = cell(
             gpui::InteractiveText::new(("rte", msg.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | *seg as u64)), styled)
-                .on_hover(move |ix, _ev, w, _cx| super::mention::on_hover(msg, bi, sd, &hr, &ht, ix, w))
+                .on_hover(move |ix, _ev, w, _cx| {
+                    super::mention::on_hover(msg, bi, sd, &hr, &ht, ix, w);
+                    super::mention::set_anchor(msg, bi, scope.clone(), ix.and_then(&hover_anchor).map(|a| a.0), w);
+                })
+                .tooltip(move |ix, w, cx| {
+                    let (r, url) = anchor(ix)?;
+                    Some(crate::ui::tooltip::tip(super::mention::link_title(full.get(r).unwrap_or_default(), &url))(w, cx))
+                })
                 .on_click(
                 ranges,
                 move |ix, w, cx| match &targets[ix] {

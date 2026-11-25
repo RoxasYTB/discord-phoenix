@@ -395,6 +395,16 @@ impl Ctx<'_> {
                     plain_start = i;
                     continue;
                 }
+                if autolink(inner) {
+                    self.push(&src[plain_start..i], style, spoiler);
+                    match link::validate_url(inner) {
+                        Some(target) => self.push_full(inner, style | Style::LINK, Some(target), None, spoiler),
+                        None => self.push(inner, style, spoiler),
+                    }
+                    i += end + 1;
+                    plain_start = i;
+                    continue;
+                }
             }
             if c == b'@' {
                 let (tok, m) = if rest.starts_with("@everyone") {
@@ -433,22 +443,18 @@ impl Ctx<'_> {
                 continue;
             }
 
-            if (c == b'h') && (rest.starts_with("https://") || rest.starts_with("http://")) {
-                let at_boundary = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
-                if at_boundary {
-                    let end = rest
-                        .find(|ch: char| ch.is_whitespace() || ch == '<' || ch == '>')
-                        .unwrap_or(rest.len());
-                    let mut url = &rest[..end];
-                    while url.ends_with(['.', ',', ')', '!', '?', ':', ';']) {
-                        url = &url[..url.len() - 1];
-                    }
-                    self.push(&src[plain_start..i], style, spoiler);
-                    self.push_full(url, style | Style::LINK, Some(url.to_string()), None, spoiler);
-                    i += url.len();
-                    plain_start = i;
-                    continue;
+            if matches!(c, b'h' | b's')
+                && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+                && let Some(url) = bare_url(rest)
+            {
+                self.push(&src[plain_start..i], style, spoiler);
+                match link::validate_url(url) {
+                    Some(target) => self.push_full(url, style | Style::LINK, Some(target), None, spoiler),
+                    None => self.push(url, style, spoiler),
                 }
+                i += url.len();
+                plain_start = i;
+                continue;
             }
 
             if c == b'<'
@@ -606,6 +612,39 @@ pub(crate) fn emphasis(s: &str) -> Option<(usize, Range<usize>, Style)> {
         b'|' => paired(s, "||", false, None).map(|(l, r)| (l, r, Style::SPOILER)),
         _ => None,
     }
+}
+
+fn autolink(inner: &str) -> bool {
+    let Some(colon) = inner.find(':') else { return false };
+    colon > 0
+        && !inner[..colon].contains([' ', '>'])
+        && inner[colon + 1..].starts_with('/')
+        && inner.len() > colon + 2
+        && !inner.contains([' ', '>'])
+}
+
+fn bare_url(rest: &str) -> Option<&str> {
+    let scheme = ["https://", "http://", "steam://"].into_iter().find(|p| rest.starts_with(p))?;
+    let end = rest.find(|ch: char| ch.is_whitespace() || ch == '<').unwrap_or(rest.len());
+    let mut url = rest[..end].trim_end_matches(['.', ',', ':', ';', '"', '\'', ']']);
+    if url.len() <= scheme.len() {
+        return None;
+    }
+    if url.ends_with(')') {
+        let mut from = 0;
+        let mut k = url.len();
+        while k > 0 && url.as_bytes()[k - 1] == b')' {
+            match url[from..].find('(') {
+                None => {
+                    url = &url[..url.len() - 1];
+                    break;
+                }
+                Some(p) => from += p + 1,
+            }
+            k -= 1;
+        }
+    }
+    Some(url)
 }
 
 fn custom_emoji_len(s: &str) -> Option<usize> {
@@ -901,9 +940,41 @@ mod tests {
     }
 
     #[test]
+    fn bare_urls_follow_the_client_regex() {
+        let links = |src: &str| -> Vec<(String, Option<String>)> {
+            let b = parse(src, &R);
+            let i = b[0].inline().unwrap();
+            i.spans.iter().filter(|s| s.style.has(Style::LINK)).map(|s| (i.text[s.range.clone()].to_owned(), s.link.clone())).collect()
+        };
+        let one = |u: &str| vec![(u.to_owned(), Some(u.to_owned()))];
+        assert_eq!(links("voir https://a.b/c."), one("https://a.b/c"));
+        assert_eq!(links("ok? https://a.b/c?x=1!"), one("https://a.b/c?x=1!"));
+        assert_eq!(links("(https://a.b/c)"), one("https://a.b/c"));
+        assert_eq!(links("https://en.wikipedia.org/wiki/A_(b)"), one("https://en.wikipedia.org/wiki/A_(b)"));
+        assert_eq!(links("\"https://a.b/c\""), one("https://a.b/c"));
+        assert_eq!(links("https://a.b/c>d"), one("https://a.b/c>d"));
+        assert!(links("steam://run/440").is_empty());
+    }
+
+    #[test]
+    fn angle_bracket_autolinks_drop_their_brackets() {
+        let b = parse("lien <https://a.b/c> fin", &R);
+        let i = b[0].inline().unwrap();
+        assert_eq!(i.text, "lien https://a.b/c fin");
+        assert!(i.spans.iter().any(|s| s.link.as_deref() == Some("https://a.b/c") && &i.text[s.range.clone()] == "https://a.b/c"));
+        let b = parse("<ftp://a.b/c>", &R);
+        let i = b[0].inline().unwrap();
+        assert_eq!(i.text, "ftp://a.b/c");
+        assert!(i.spans.iter().all(|s| s.link.is_none()));
+        let b = parse("<pas un lien>", &R);
+        assert_eq!(b[0].inline().unwrap().text, "<pas un lien>");
+    }
+
+    #[test]
     fn single_link_content() {
         assert!(is_single_link("https://tenor.com/view/cat-gif-123"));
         assert!(is_single_link("[**chat**](https://tenor.com/view/cat-gif-123)"));
+        assert!(is_single_link("<https://tenor.com/view/cat-gif-123>"));
         assert!(!is_single_link("https://tenor.com/a https://tenor.com/b"));
         assert!(!is_single_link("https://tenor.com/a\nhttps://tenor.com/b"));
         assert!(!is_single_link("regarde https://tenor.com/a"));

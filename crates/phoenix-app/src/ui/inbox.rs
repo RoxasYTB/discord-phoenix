@@ -983,7 +983,7 @@ fn message_extras(app: &PhoenixApp, m: &Message, cx: &Context<PhoenixApp>) -> Ve
     m.attachments
         .iter()
         .map(|a| crate::ui::chat::attachment(a, acx))
-        .chain(m.embeds.iter().filter(show).map(|e| crate::ui::chat::embed(app, e, acx)))
+        .chain(m.embeds.iter().filter(show).map(|e| crate::ui::chat::embed(app, &cx.entity(), e, acx)))
         .chain(crate::ui::chat::invite_embed::render(app, &cx.entity(), m.author, &m.content, acx))
         .chain(crate::ui::components::render_static(app, &cx.entity(), m, acx))
         .collect()

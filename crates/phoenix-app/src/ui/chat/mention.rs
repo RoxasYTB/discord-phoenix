@@ -15,6 +15,66 @@ thread_local! {
     static HOVER: Cell<Option<(u64, usize, u64, usize)>> = const { Cell::new(None) };
     static HOVER_LINK: std::cell::RefCell<Option<(u64, usize, u64, gpui::SharedString)>> = const { std::cell::RefCell::new(None) };
     static HOVER_PILL: Cell<Option<(u64, usize, usize, u64)>> = const { Cell::new(None) };
+    static ANCHOR: std::cell::RefCell<Option<(u64, usize, Range<usize>)>> = const { std::cell::RefCell::new(None) };
+}
+
+pub fn anchor_at(ranges: &[Range<usize>], targets: &[ClickTarget], ix: usize) -> Option<(Range<usize>, gpui::SharedString)> {
+    let k = ranges.iter().position(|r| r.contains(&ix))?;
+    let ClickTarget::Link(url) = &targets[k] else { return None };
+    let same = |j: usize| matches!(&targets[j], ClickTarget::Link(u) if u == url);
+    let (mut a, mut b) = (k, k);
+    while a > 0 && same(a - 1) && ranges[a - 1].end == ranges[a].start {
+        a -= 1;
+    }
+    while b + 1 < ranges.len() && same(b + 1) && ranges[b + 1].start == ranges[b].end {
+        b += 1;
+    }
+    Some((ranges[a].start..ranges[b].end, url.clone()))
+}
+
+pub fn set_anchor(msg: Id, bi: usize, scope: Range<usize>, r: Option<Range<usize>>, window: &mut Window) {
+    let changed = ANCHOR.with(|a| {
+        let mut a = a.borrow_mut();
+        let mine = a.as_ref().is_some_and(|(m, b, cur)| *m == msg.0 && *b == bi && cur.start < scope.end && scope.start < cur.end);
+        let new = r.map(|r| (msg.0, bi, r));
+        if *a != new && (new.is_some() || mine) {
+            *a = new;
+            true
+        } else {
+            false
+        }
+    });
+    if changed {
+        window.refresh();
+    }
+}
+
+pub fn anchor_runs(msg: Id, bi: usize, offset: usize, runs: &[TextRun]) -> Option<Vec<TextRun>> {
+    let r = ANCHOR.with(|a| a.borrow().as_ref().filter(|(m, b, _)| *m == msg.0 && *b == bi).map(|(_, _, r)| r.clone()))?;
+    let mut out = runs.to_vec();
+    let mut at = offset;
+    for run in &mut out {
+        let span = at..at + run.len;
+        if span.start < r.end && r.start < span.end {
+            run.underline = Some(gpui::UnderlineStyle { thickness: gpui::px(1.), color: Some(run.color), wavy: false });
+        }
+        at = span.end;
+    }
+    Some(out)
+}
+
+pub fn link_title(label: &str, url: &str) -> gpui::SharedString {
+    if label == url {
+        return label.to_owned().into();
+    }
+    let mut suffix = format!("\n\n({url})");
+    let mut title = label.to_owned();
+    if title.chars().count() + suffix.chars().count() > 1024 {
+        suffix = format!("...{suffix}");
+        let keep = 1024usize.saturating_sub(suffix.chars().count());
+        title = title.chars().take(keep).collect::<String>().trim_end().to_owned();
+    }
+    format!("{title}{suffix}").into()
 }
 
 pub fn hovered_pill(msg: Id, bi: usize) -> Option<usize> {
@@ -129,6 +189,27 @@ pub fn click(entity: &Entity<PhoenixApp>, m: &Mention, window: &mut Window, cx: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn anchor_spans_the_whole_masked_link() {
+        let l = |u: &str| ClickTarget::Link(u.to_owned().into());
+        let ranges = vec![0..4, 4..9, 10..15, 15..20];
+        let targets = vec![l("https://a.b"), l("https://a.b"), l("https://a.b"), l("https://c.d")];
+        assert_eq!(anchor_at(&ranges, &targets, 6).map(|a| a.0), Some(0..9));
+        assert_eq!(anchor_at(&ranges, &targets, 12).map(|a| a.0), Some(10..15));
+        assert_eq!(anchor_at(&ranges, &targets, 9), None);
+        assert_eq!(anchor_at(&[0..3], &[ClickTarget::Spoiler(0)], 1), None);
+    }
+
+    #[test]
+    fn link_title_follows_the_client() {
+        assert_eq!(link_title("https://a.b", "https://a.b").as_ref(), "https://a.b");
+        assert_eq!(link_title("docs", "https://a.b").as_ref(), "docs\n\n(https://a.b)");
+        let long = "x".repeat(2000);
+        let t = link_title(&long, "https://a.b");
+        assert_eq!(t.chars().count(), 1024);
+        assert!(t.ends_with("...\n\n(https://a.b)"));
+    }
 
     fn run(len: usize) -> TextRun {
         TextRun {
