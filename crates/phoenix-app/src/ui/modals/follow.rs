@@ -6,7 +6,7 @@ use phoenix_api::rest::guild_manage::AdminCall;
 
 use super::{Modal, close_action};
 use crate::{
-    actions::{close_modal, open_modal, with_modal},
+    actions::{open_modal, with_modal},
     app::PhoenixApp,
     model::{ChannelKind, Id, ImageRef},
     theme::{c, generated::idx, tok, z},
@@ -15,6 +15,11 @@ use crate::{
 
 pub const HEADER_ART_DARK: &str = "https://discord.com/assets/ef95e909088f721c.svg";
 pub const HEADER_ART_LIGHT: &str = "https://discord.com/assets/9b2c01218d4ab2ff.svg";
+pub const SUCCESS_ART_DARK: [&str; 3] =
+    ["https://discord.com/assets/6dadee9234160dc1.svg", "https://discord.com/assets/62d886a31822c89a.svg", "https://discord.com/assets/377cb29b8f197452.svg"];
+pub const SUCCESS_ART_LIGHT: [&str; 3] =
+    ["https://discord.com/assets/36668e0a5832822f.svg", "https://discord.com/assets/3a31d989497ba4f1.svg", "https://discord.com/assets/f959ee6e6a8d2d0b.svg"];
+pub const SUCCESS_LINES: usize = 10;
 const MANAGE_WEBHOOKS: u64 = 1 << 29;
 const TOO_MANY_WEBHOOKS: &str = "30007";
 
@@ -35,13 +40,46 @@ pub struct Destination {
 }
 
 pub fn open(channel: Id, window: &mut Window) {
-    open_modal(Modal::Follow(State { channel, guild: None, target: None, open: None, error: None, submitting: false }), Some(window));
+    let (guild, target) = last_destination().map_or((None, None), |(g, c)| (Some(g), Some(c)));
+    open_modal(Modal::Follow(State { channel, guild, target, open: None, error: None, submitting: false }), Some(window));
+}
+
+fn destination_file() -> Option<std::path::PathBuf> {
+    crate::paths::config_file("follow-destination.txt")
+}
+
+pub fn parse_destination(s: &str) -> Option<(Id, Id)> {
+    let mut it = s.split_whitespace().map(|x| x.parse::<u64>().ok());
+    match (it.next()??, it.next()??) {
+        (g, c) if g != 0 && c != 0 => Some((Id(g), Id(c))),
+        _ => None,
+    }
+}
+
+pub fn last_destination() -> Option<(Id, Id)> {
+    parse_destination(&std::fs::read_to_string(destination_file()?).ok()?)
+}
+
+fn remember_destination(guild: Id, channel: Id) {
+    if last_destination() == Some((guild, channel)) {
+        return;
+    }
+    if let Some(p) = destination_file() {
+        if let Some(d) = p.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let _ = std::fs::write(p, format!("{} {}\n", guild.0, channel.0));
+    }
+}
+
+pub fn can_webhook(app: &PhoenixApp, channel: &crate::model::Channel) -> bool {
+    let perms = app.backend.channel_permissions(channel.id).or_else(|| channel.guild.map(|g| app.backend.guild_permissions(g))).unwrap_or(0);
+    crate::ui::inbox::has_perm(perms, MANAGE_WEBHOOKS)
 }
 
 pub fn destinations(app: &PhoenixApp) -> Vec<Destination> {
     app.guilds
         .iter()
-        .filter(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g.id), MANAGE_WEBHOOKS))
         .filter_map(|g| {
             let channels: Vec<(Id, SharedString)> = app
                 .guild_channels
@@ -49,7 +87,7 @@ pub fn destinations(app: &PhoenixApp) -> Vec<Destination> {
                 .into_iter()
                 .flatten()
                 .filter_map(|id| app.channels.get(id))
-                .filter(|ch| ch.kind == ChannelKind::Text)
+                .filter(|ch| ch.kind == ChannelKind::Text && can_webhook(app, ch))
                 .map(|ch| (ch.id, ch.name.clone()))
                 .collect();
             (!channels.is_empty()).then(|| Destination { guild: g.id, name: g.name.clone(), icon: g.icon.clone(), channels })
@@ -296,9 +334,18 @@ pub fn submit(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         }
     });
     let Some(call) = call else { return };
-    a.admin(call, cx, |_, r, cx| {
+    let dest = with_modal(|m| match m {
+        Some(Modal::Follow(s)) => s.guild.zip(s.target),
+        _ => None,
+    });
+    a.admin(call, cx, move |_, r, cx| {
         match r {
-            Ok(_) => close_modal(),
+            Ok(_) => {
+                if let Some((g, c)) = dest {
+                    remember_destination(g, c);
+                }
+                open_success();
+            }
             Err(e) => edit(|s| {
                 s.submitting = false;
                 s.error = Some(if e.contains(TOO_MANY_WEBHOOKS) { crate::t!("follow.too_many_webhooks") } else { crate::t!("follow.failed") });
@@ -306,6 +353,50 @@ pub fn submit(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         }
         cx.notify();
     });
+}
+
+pub fn open_success() {
+    let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as usize).unwrap_or(0);
+    open_modal(Modal::FollowSuccess { line: seed % SUCCESS_LINES, art: (seed / SUCCESS_LINES) % 3 }, None);
+}
+
+pub fn success(line: usize, art: usize, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let arts = if crate::theme::is_light() { SUCCESS_ART_LIGHT } else { SUCCESS_ART_DARK };
+    let close = close_action(cx);
+    let close2 = close.clone();
+    let title = crate::t!(&format!("follow.success_{}", line % SUCCESS_LINES));
+    let content = div()
+        .w_full()
+        .p(z(32.))
+        .flex()
+        .flex_col()
+        .items_center()
+        .text_center()
+        .child(div().text_size(z(24.)).line_height(z(30.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_STRONG))).child(title))
+        .child(
+            div()
+                .mt(z(16.))
+                .mb(z(32.))
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_MUTED)))
+                .child(crate::t!("follow.success_body")),
+        )
+        .child(button("follow-success-ok", crate::t!("follow.success_ok"), BtnKind::Primary).on_click(move |_, w, cx| close(w, cx)));
+    let el = div()
+        .w(z(400.))
+        .rounded(z(12.))
+        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .shadow(vec![gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.24), offset: gpui::point(z(0.), z(12.)), blur_radius: z(24.), spread_radius: z(0.), inset: false }])
+        .flex()
+        .flex_col()
+        .items_center()
+        .child(gpui::img(SharedString::from(arts[art % arts.len()])).flex_none().w(z(280.)).h(z(120.)).mt(z(-96.)))
+        .child(content);
+    crate::ui::modal::frame("follow-success-backdrop", close2, el)
 }
 
 #[cfg(test)]
@@ -316,6 +407,14 @@ mod tests {
     fn follow_posts_the_destination_channel() {
         let r = phoenix_api::rest::guild_manage::build(&follow_call(Id(5), Id(9)));
         assert_eq!((r.method, r.path.as_str(), r.body), (reqwest::Method::POST, "/channels/5/followers", Some(serde_json::json!({ "webhook_channel_id": "9" }))));
+    }
+
+    #[test]
+    fn last_destination_round_trip() {
+        assert_eq!(parse_destination("12 34\n"), Some((Id(12), Id(34))));
+        assert_eq!(parse_destination("12"), None);
+        assert_eq!(parse_destination("0 34"), None);
+        assert_eq!(parse_destination("x y"), None);
     }
 
     #[test]

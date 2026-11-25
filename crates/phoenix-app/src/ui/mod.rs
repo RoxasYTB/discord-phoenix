@@ -41,6 +41,7 @@ pub mod settings;
 pub mod easter;
 pub mod extra_menus;
 pub mod members;
+pub mod mod_view;
 pub mod activity_traits;
 pub mod nameplate;
 pub mod profile_fx;

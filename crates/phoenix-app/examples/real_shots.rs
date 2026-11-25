@@ -348,6 +348,9 @@ impl Backend for ReadOnly {
     fn guild_permissions(&self, g: Id) -> u64 {
         self.0.guild_permissions(g)
     }
+    fn channel_permissions(&self, c: Id) -> Option<u64> {
+        self.0.channel_permissions(c)
+    }
     fn last_read(&self, c: Id) -> Option<Id> {
         self.0.last_read(c)
     }
@@ -358,16 +361,17 @@ impl Backend for ReadOnly {
         self.0.collectible_product(sku)
     }
     fn action(&self, req: phoenix_app::actions::ActionRequest) -> BoxFuture<phoenix_app::actions::ActionReply> {
-        let admin_get = matches!(&req, phoenix_app::actions::ActionRequest::Admin(c) if phoenix_api::rest::guild_manage::build(c).method == reqwest::Method::GET);
-        match req {
-            _ if admin_get => self.0.action(req),
-            phoenix_app::actions::ActionRequest::Reminders => self.0.action(req),
-            phoenix_app::actions::ActionRequest::ReportMenu(_) => self.0.action(req),
-            phoenix_app::actions::ActionRequest::Admin(ref c) if phoenix_api::rest::guild_manage::build(c).method == reqwest::Method::GET => self.0.action(req),
-            _ => denied(),
+        if phoenix_app::actions::guard::read_only_action(&req) {
+            self.0.action(req)
+        } else {
+            eprintln!("real_shots: write refused: {req:?}");
+            denied()
         }
     }
     fn parity(&self, req: phoenix_app::commands::ParityRequest) -> BoxFuture<phoenix_app::commands::ParityReply> {
+        if !phoenix_app::actions::guard::read_only_parity(&req) {
+            return denied();
+        }
         match req {
             phoenix_app::commands::ParityRequest::ForumPosts { .. } => {
                 let what = format!("{req:?}");
@@ -1602,6 +1606,43 @@ fn main() -> anyhow::Result<()> {
                                 p.open = which;
                             }
                         });
+                    }
+                }
+                "follow" => {
+                    let ch = arg.parse::<u64>().ok().map(phoenix_app::model::Id).or(app.selected_channel);
+                    if let Some(ch) = ch {
+                        phoenix_app::ui::modals::follow::open(ch, window);
+                    }
+                }
+                "followok" => phoenix_app::ui::modals::follow::open_success(),
+                "threadmore" => {
+                    let id = arg.parse::<u64>().ok().map(phoenix_app::model::Id).or(app.selected_channel);
+                    let w = f32::from(window.viewport_size().width);
+                    let forum = id.and_then(|t| app.nav.thread_parent(t)).and_then(|p| app.channels.get(&p)).is_some_and(|p| p.kind == phoenix_app::model::ChannelKind::Forum);
+                    let place = if forum { phoenix_app::actions::thread::Place::ForumToolbar } else { phoenix_app::actions::thread::Place::Toolbar };
+                    if let Some(id) = id {
+                        phoenix_app::ui::thread_menu::open_at(id, place, gpui::point(px(w - 24.), px(84.)), window);
+                    }
+                }
+                "modview" => {
+                    let me = app.me.id;
+                    let g = app.selected_guild;
+                    let user = arg.parse::<u64>().ok().map(phoenix_app::model::Id).or_else(|| {
+                        g.and_then(|g| app.members.get(&g)).and_then(|ms| ms.iter().find(|m| m.user != me && !app.users.get(&m.user).is_some_and(|u| u.bot))).map(|m| m.user)
+                    });
+                    if let (Some(g), Some(u)) = (g, user) {
+                        app.open_mod_view(g, u, cx);
+                        let panel = match std::env::var("PHX_MODVIEW_PANEL").as_deref() {
+                            Ok("perms") => Some(phoenix_app::ui::mod_view::Panel::Permissions),
+                            Ok("audit") => Some(phoenix_app::ui::mod_view::Panel::AuditLog),
+                            Ok("history") => Some(phoenix_app::ui::mod_view::Panel::MessageHistory),
+                            _ => None,
+                        };
+                        if let Some(p) = panel {
+                            phoenix_app::ui::mod_view::navigate(p);
+                        }
+                    } else {
+                        eprintln!("real_shots: modview needs a guild and a member");
                     }
                 }
                 "msgmenu" => {

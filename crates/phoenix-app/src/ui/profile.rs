@@ -862,7 +862,11 @@ pub(crate) fn banner_buttons(app: &PhoenixApp, uid: Id, guild: Option<Id>, end: 
     let mod_view = (uid != app.me.id && mod_view_allowed(app, guild)).then(|| {
         banner_button(("profile-mod-view", uid.0), "moderation")
             .tooltip(crate::ui::tooltip::tip(crate::t!("profile.open_mod_view")))
-            .on_click(cx.listener(|a, _, _, cx| a.parity_toast(crate::t!("profile.mod_view_unavailable"), cx)))
+            .on_click(cx.listener(move |a, _, _, cx| {
+                if let Some(g) = guild {
+                    a.open_mod_view(g, uid, cx);
+                }
+            }))
     });
     div().absolute().right(z(end)).top(z(8.)).flex().gap(z(8.)).children(mod_view).children(friend_btn).child(more)
 }

@@ -25,6 +25,7 @@ pub enum Target {
     WishlistAdd,
     WishlistMore(Option<String>),
     AnnouncementSend { channel: Id, can_thread: bool },
+    ModViewRoles { user: Id, guild: Id },
 }
 
 pub const NITRO_SKU: &str = "521847234246082599";
@@ -261,6 +262,20 @@ pub fn sized(url: &str, size: u32) -> String {
     format!("{base}?{}", parts.join("&"))
 }
 
+pub fn mod_view_role_items(app: &PhoenixApp, e: &Ent, user: Id, guild: Id) -> Vec<MenuItem> {
+    let has: Vec<Id> = app.members.get(&guild).and_then(|m| m.iter().find(|m| m.user == user)).map(|m| m.roles.clone()).unwrap_or_default();
+    let mut roles: Vec<&crate::model::Role> = app.roles.get(&guild).into_iter().flatten().filter(|r| r.id != guild && !r.managed).collect();
+    roles.sort_by_key(|r| -r.position);
+    roles
+        .into_iter()
+        .map(|r| {
+            let e = e.clone();
+            let (role, on) = (r.id, has.contains(&r.id));
+            MenuItem::check(r.name.clone(), on, move |_, _, cx: &mut gpui::App| e.update(cx, |a, cx| a.set_member_role(guild, user, role, !on, cx)))
+        })
+        .collect()
+}
+
 pub fn profile_items(app: &PhoenixApp, e: &Ent, user: Id, guild: Option<Id>) -> Vec<MenuItem> {
     let me = user == app.me.id;
     let mut items = Vec::new();
@@ -374,6 +389,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         Target::WishlistAdd => wishlist_add_items(&e),
         Target::WishlistMore(w) => wishlist_more_items(&e, w.clone()),
         Target::AnnouncementSend { channel, can_thread } => announcement_items(*channel, *can_thread),
+        Target::ModViewRoles { user, guild } => mod_view_role_items(app, &e, *user, *guild),
     };
     let dismiss: context_menu::Dismiss = Rc::new(|w, _| {
         close();

@@ -1,4 +1,4 @@
-mod audit;
+pub(crate) mod audit;
 mod engagement;
 mod expression;
 pub mod kit;

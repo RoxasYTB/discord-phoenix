@@ -392,6 +392,9 @@ pub trait Backend: Send + Sync + 'static {
     fn guild_permissions(&self, _guild: Id) -> u64 {
         0
     }
+    fn channel_permissions(&self, _channel: Id) -> Option<u64> {
+        None
+    }
     fn last_read(&self, _channel: Id) -> Option<Id> {
         None
     }

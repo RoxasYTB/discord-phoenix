@@ -32,6 +32,7 @@ pub struct SearchRequest {
     pub max_id: Option<Id>,
     pub pinned: Option<bool>,
     pub author_types: Vec<String>,
+    pub attachment_extensions: Vec<String>,
     pub offset: u32,
     pub sort: SortOrder,
 }
@@ -603,7 +604,7 @@ fn close_sort_menu(cx: &mut App) -> bool {
     open
 }
 
-fn group_digits(n: u32) -> String {
+pub(crate) fn group_digits(n: u32) -> String {
     let sep = if crate::i18n::locale() == "en" { ',' } else { '\u{202f}' };
     let d = n.to_string();
     let mut out = String::new();
@@ -814,6 +815,22 @@ fn results_panel(
     }
     let modal = crate::ui::search_filters::render(app, window, cx);
     div().absolute().top_0().left_0().right_0().bottom_0().child(live_bar(&input, false, cx)).child(panel).children(modal).into_any_element()
+}
+
+pub(crate) fn grouped_results(app: &PhoenixApp, messages: &[Message], cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    let hl = Highlighter::new("", false);
+    let mut out = div().flex().flex_col();
+    let mut i = 0;
+    while i < messages.len() {
+        let ch = messages[i].channel;
+        let mut group = div().mb(z(24.)).flex().flex_col().child(channel_group_header(app, ch, &hl));
+        while i < messages.len() && messages[i].channel == ch {
+            group = group.child(result_card(app, i, &messages[i], &hl, cx));
+            i += 1;
+        }
+        out = out.child(group);
+    }
+    out
 }
 
 fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div {

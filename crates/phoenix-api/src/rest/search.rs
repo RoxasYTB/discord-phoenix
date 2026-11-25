@@ -67,6 +67,7 @@ pub struct SearchQuery {
     pub max_id: Option<Snowflake>,
     pub pinned: Option<bool>,
     pub author_types: Vec<String>,
+    pub attachment_extensions: Vec<String>,
     pub sort: SearchSort,
     pub offset: u32,
     pub include_nsfw: bool,
@@ -87,6 +88,7 @@ impl SearchQuery {
             && self.max_id.is_none()
             && self.pinned.is_none()
             && self.author_types.is_empty()
+            && self.attachment_extensions.is_empty()
     }
 
     pub fn to_query(&self) -> String {
@@ -117,6 +119,9 @@ impl SearchQuery {
         }
         for t in &self.author_types {
             s.append_pair("author_type", t);
+        }
+        for e in &self.attachment_extensions {
+            s.append_pair("attachment_extension", e);
         }
         match self.sort {
             SearchSort::Newest => {
@@ -177,6 +182,9 @@ impl SearchQuery {
         }
         if !self.author_types.is_empty() {
             tab.insert("author_type".into(), json!(self.author_types));
+        }
+        if !self.attachment_extensions.is_empty() {
+            tab.insert("attachment_extension".into(), json!(self.attachment_extensions));
         }
         tab.insert("offset".into(), json!(self.offset));
         tab.insert("limit".into(), json!(limit));
@@ -601,6 +609,10 @@ mod tests {
         assert!(SearchQuery::text("  ").is_empty());
         let r = SearchQuery { sort: SearchSort::Relevance, ..Default::default() };
         assert_eq!(r.to_query(), "sort_by=relevance&sort_order=desc");
+        let m = SearchQuery { author_ids: vec![Snowflake(4)], attachment_extensions: vec!["png".into(), "mp4".into()], ..Default::default() };
+        assert_eq!(m.to_query(), "author_id=4&attachment_extension=png&attachment_extension=mp4&sort_by=timestamp&sort_order=desc");
+        assert!(!SearchQuery { attachment_extensions: vec!["gif".into()], ..Default::default() }.is_empty());
+        assert_eq!(m.to_tabs_body(25)["tabs"]["messages"]["attachment_extension"], serde_json::json!(["png", "mp4"]));
     }
 
     #[test]

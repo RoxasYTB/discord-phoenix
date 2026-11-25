@@ -154,6 +154,7 @@ pub(super) fn query_of(req: &SearchRequest) -> SearchQuery {
         max_id: req.max_id.map(sf),
         pinned: req.pinned,
         author_types: req.author_types.clone(),
+        attachment_extensions: req.attachment_extensions.clone(),
         sort: match req.sort {
             SortOrder::Newest => SearchSort::Newest,
             SortOrder::Oldest => SearchSort::Oldest,

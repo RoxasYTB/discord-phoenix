@@ -218,4 +218,10 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("server/dropper", &["EyeDropperIcon"]),
     ("event/location", &["LocationIcon"]),
     ("picker/sparkle", &["SparkleIcon"]),
+    ("mod/user-minus", &["UserMinusIcon"]),
+    ("mod/hammer", &["HammerIcon"]),
+    ("mod/clock-warning", &["ClockWarningIcon"]),
+    ("mod/chat-warning", &["ChatWarningIcon"]),
+    ("mod/robot", &["RobotIcon"]),
+    ("mod/chevron-large-right", &["ChevronLargeRightIcon"]),
 ];

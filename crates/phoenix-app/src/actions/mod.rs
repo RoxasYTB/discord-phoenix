@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod channel;
 pub mod exec;
+pub mod guard;
 pub mod message;
 pub mod mock;
 pub mod pins;

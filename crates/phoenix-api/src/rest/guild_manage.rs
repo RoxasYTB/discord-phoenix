@@ -144,6 +144,9 @@ pub enum AdminCall {
     Kick { guild: Snowflake, user: Snowflake },
     Ban { guild: Snowflake, user: Snowflake, delete_message_seconds: u32 },
     AuditLogFiltered { guild: Snowflake, user: Option<Snowflake>, action: Option<u32>, before: Option<Snowflake>, limit: u32 },
+    Member { guild: Snowflake, user: Snowflake },
+    MemberSupplemental { guild: Snowflake, users: Vec<Snowflake> },
+    AuditLogTarget { guild: Snowflake, target: Snowflake, limit: u32 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -396,6 +399,12 @@ pub fn build(call: &AdminCall) -> ApiReq {
             }
             req(Method::GET, p, None)
         }
+        C::Member { guild, user } => req(Method::GET, format!("/guilds/{guild}/members/{user}"), None),
+        C::MemberSupplemental { guild, users } => {
+            let ids: Vec<String> = users.iter().map(|u| u.to_string()).collect();
+            req(Method::POST, format!("/guilds/{guild}/members/supplemental"), Some(json!({ "user_ids": ids })))
+        }
+        C::AuditLogTarget { guild, target, limit } => req(Method::GET, format!("/guilds/{guild}/audit-logs?limit={}&target_id={target}", (*limit).clamp(1, 100)), None),
     }
 }
 
@@ -649,6 +658,17 @@ mod tests {
         assert_eq!(build(&AdminCall::Applications { ids: vec![Snowflake(3), Snowflake(4)] }).path, "/applications/public?application_ids=3&application_ids=4");
         let r = build(&AdminCall::AuditLogFiltered { guild: G, user: Some(Snowflake(3)), action: Some(22), before: Some(Snowflake(9)), limit: 500 });
         assert_eq!(r.path, "/guilds/1/audit-logs?limit=100&before=9&user_id=3&action_type=22");
+    }
+
+    #[test]
+    fn mod_view_reads() {
+        let m = build(&AdminCall::Member { guild: G, user: Snowflake(3) });
+        assert_eq!((m.method, m.path.as_str(), m.body), (Method::GET, "/guilds/1/members/3", None));
+        let a = build(&AdminCall::AuditLogTarget { guild: G, target: Snowflake(3), limit: 50 });
+        assert_eq!((a.method, a.path.as_str()), (Method::GET, "/guilds/1/audit-logs?limit=50&target_id=3"));
+        let s = build(&AdminCall::MemberSupplemental { guild: G, users: vec![Snowflake(3), Snowflake(4)] });
+        assert_eq!((s.method, s.path.as_str()), (Method::POST, "/guilds/1/members/supplemental"));
+        assert_eq!(s.body.unwrap(), json!({ "user_ids": ["3", "4"] }));
     }
 
     #[test]

@@ -685,6 +685,12 @@ impl Backend for DiscordBackend {
         s.cache.guild_channels(sf(guild)).first().map(|c| s.cache.permissions_in(c.id).bits()).unwrap_or(0)
     }
 
+    fn channel_permissions(&self, channel: Id) -> Option<u64> {
+        let s = self.inner.session().ok()?;
+        s.cache.channel(sf(channel))?;
+        Some(s.cache.permissions_in(sf(channel)).bits())
+    }
+
     fn last_read(&self, channel: Id) -> Option<Id> {
         let s = self.inner.session().ok()?;
         let r = s.adapter.lock().prefs.reads.get(&channel.0).map(|r| r.last_read)?;

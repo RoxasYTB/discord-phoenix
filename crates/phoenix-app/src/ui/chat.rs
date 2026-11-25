@@ -51,13 +51,15 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
     let show_members = show_members && !crate::ui::call_view::active(app);
     let search_results = crate::ui::search::results_shown(cx);
-    div()
+    let mod_view = crate::ui::mod_view::render(app, window, cx);
+    let main = div()
         .flex_1()
         .min_w_0()
         .h_full()
         .relative()
         .flex()
         .flex_col()
+        .when(mod_view.is_some(), |d| d.border_r_1().border_color(c(tok(idx::BORDER_SUBTLE))).rounded_tr(z(12.)).overflow_hidden())
         .bg(c(Palette::BG_PRIMARY))
         .on_modifiers_changed(cx.listener(|a, ev: &gpui::ModifiersChangedEvent, _, cx| {
             if a.chat.shift_held != ev.modifiers.shift {
@@ -117,7 +119,11 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .children(panels::thread_panel(app, cx))
                 .children(crate::ui::thread_create::panel(app, cx)),
         )
-        .children(panels::pins_popout(app, cx))
+        .children(panels::pins_popout(app, cx));
+    match mod_view {
+        Some(mv) => div().flex_1().min_w_0().h_full().flex().flex_row().child(main).child(mv).into_any_element(),
+        None => main.into_any_element(),
+    }
 }
 
 fn guild_discoverable(app: &PhoenixApp) -> bool {

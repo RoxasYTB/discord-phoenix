@@ -91,8 +91,7 @@ impl PhoenixApp {
     }
 
     pub fn open_mod_view(&mut self, guild: Id, user: Id, cx: &mut Context<Self>) {
-        open_modal(Modal::ModView { guild, user }, None);
-        cx.notify();
+        crate::ui::mod_view::open(self, guild, user, cx);
     }
 
     pub fn report_user(&mut self, user: Id, guild: Option<Id>, cx: &mut Context<Self>) {
