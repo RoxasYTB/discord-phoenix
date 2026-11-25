@@ -2,6 +2,10 @@
 
 Thanks for helping. Discord Phoenix is an **unofficial** client. It is not affiliated with, endorsed by, or supported by Discord Inc. "Discord" is a trademark of Discord Inc. and is used here only to describe what the client connects to.
 
+## Reporting bugs
+
+Use the issue forms and follow [docs/REPORTING_BUGS.md](docs/REPORTING_BUGS.md) ([français](docs/SIGNALER_UN_BUG.md)). It explains how to copy the version and debug info from Settings, where the logs are, how to make a side-by-side comparison with the official client, and what never to post (tokens, `journal.log`, HAR files, cookies). Maintainers triage with the labels and cycle described there.
+
 ## Reference material: 1:1 parity
 
 Phoenix aims to be visually and functionally identical to the official 2026 client. To get there, contributors may and should work from the real client:

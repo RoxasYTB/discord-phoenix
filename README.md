@@ -254,6 +254,8 @@ See [SECURITY.md](SECURITY.md) for how credentials are handled and how to report
 
 ## Contributing
 
+Found a bug? Read [how to report it](docs/REPORTING_BUGS.md) ([en français](docs/SIGNALER_UN_BUG.md)): version, debug info, logs and screenshots, and what never to post.
+
 Contributions are welcome, from a one-pixel fix to a whole feature. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; the parity tables in [docs/parity/](docs/parity/) show what is missing and how each value was measured. In short: everything is
 aimed at 1:1 parity with the official client. The real client's CSS, behaviour and assets are the reference.
 Binary assets are loaded from your local Discord install and are not shipped in this repository.

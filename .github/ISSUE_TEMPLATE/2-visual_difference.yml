@@ -1,0 +1,180 @@
+name: 🎨 Visual bug or difference with the official client / Bug visuel ou différence avec le client officiel
+description: Something looks different from the official client · Quelque chose n'a pas le même rendu que le client officiel
+title: '[Visual] '
+labels:
+- visual
+- parity
+- needs-repro
+body:
+- type: markdown
+  attributes:
+    value: |
+      **Before you start / Avant de commencer** — read the [reporting guide](https://github.com/RoxasYTB/project-phoenix/blob/main/docs/REPORTING_BUGS.md) · lis le [guide de signalement](https://github.com/RoxasYTB/project-phoenix/blob/main/docs/SIGNALER_UN_BUG.md).
+
+      🔒 **Never paste a token, cookies, a HAR file or `journal.log`. Blur usernames, messages, emails and private servers in screenshots.**
+
+      🔒 **Ne colle jamais de token, de cookies, de fichier HAR ni `journal.log`. Floute pseudos, messages, e-mails et serveurs privés sur les captures.**
+
+      Discord Phoenix is unofficial: don't report its bugs to Discord. · Phoenix n'est pas officiel : ne signale pas ses bugs à Discord.
+
+      Phoenix copies the official 2026 client 1:1: any pixel that differs is a valid report. · Phoenix reproduit le client officiel 2026 à l'identique : tout écart visible est un signalement valable.
+- type: checkboxes
+  id: searched
+  attributes:
+    label: Checks / Vérifications
+    options:
+    - label: I searched the existing issues (open and closed) and this one is new. · J'ai cherché dans les issues (ouvertes et fermées) et celle-ci est nouvelle.
+      required: true
+    - label: I'm on the latest release, or I say below which version I use. · J'utilise la dernière version, ou j'indique ci-dessous laquelle.
+      required: true
+- type: textarea
+  id: summary
+  attributes:
+    label: Summary / Résumé
+    description: One or two sentences. · Une ou deux phrases.
+  validations:
+    required: true
+- type: dropdown
+  id: area
+  attributes:
+    label: Area / Zone
+    options:
+    - Login / Connexion
+    - Server list, channels / Liste des serveurs, salons
+    - Messages, chat / Messages
+    - Composer, emoji, uploads / Zone de saisie, emoji, fichiers
+    - Members, profiles / Membres, profils
+    - Search, inbox / Recherche, boîte de réception
+    - Threads, forums / Fils, forums
+    - Voice, video / Vocal, vidéo
+    - Notifications, sounds / Notifications, sons
+    - User settings / Paramètres utilisateur
+    - Server, channel settings / Paramètres de serveur, de salon
+    - Window, tray, performance / Fenêtre, zone de notification, performances
+    - Other / Autre
+  validations:
+    required: true
+- type: textarea
+  id: where
+  attributes:
+    label: Where and how / Où et comment
+    description: 'Exact view, and the state: hover, focus, pressed, menu open, window width. · Vue exacte, et l''état : survol, focus, clic, menu ouvert, largeur de fenêtre.'
+    placeholder: |
+      1. Server text channel / Salon textuel
+      2. Hover the message toolbar / Survoler la barre d'outils d'un message
+      3. …
+  validations:
+    required: true
+- type: textarea
+  id: difference
+  attributes:
+    label: What differs / Ce qui diffère
+    description: Size, spacing, colour, font, icon, animation, alignment… · Taille, espacement, couleur, police, icône, animation, alignement…
+  validations:
+    required: true
+- type: textarea
+  id: media
+  attributes:
+    label: Screenshots or video / Captures ou vidéo (required / obligatoire)
+    description: '**Side by side: Phoenix on the left, official Discord on the right**, same view, same window size, same zoom. Blur private data. · **Côte à côte : Phoenix à gauche, Discord officiel à droite**, même vue, même taille de fenêtre, même zoom. Floute les données privées.'
+  validations:
+    required: true
+- type: input
+  id: window-size
+  attributes:
+    label: Window size / Taille de la fenêtre
+    placeholder: 1280×800 (both clients / les deux clients)
+  validations:
+    required: true
+- type: input
+  id: official-zoom
+  attributes:
+    label: Official client zoom / Zoom du client officiel
+    description: Ctrl+0 resets it to 100 %. · Ctrl+0 le remet à 100 %.
+    placeholder: 100 %
+  validations:
+    required: true
+- type: input
+  id: official-version
+  attributes:
+    label: Official client build / Build du client officiel
+    description: Bottom of its Settings sidebar. · En bas de la barre latérale de ses Paramètres.
+    placeholder: Stable 471091 (abc1234)
+  validations:
+    required: false
+- type: textarea
+  id: debug-info
+  attributes:
+    label: Debug info / Infos de débogage
+    description: Settings › bottom of the left sidebar › **Copy debug info**, then paste here. · Paramètres › bas de la barre de gauche › **Copier les infos de débogage**, puis colle ici.
+    placeholder: |
+      Discord Phoenix 0.1.0-beta.1 (abcd1234)
+      OS: ...
+      Session: ...
+      GPU: ...
+    render: text
+  validations:
+    required: true
+- type: input
+  id: version
+  attributes:
+    label: Phoenix version / Version de Phoenix
+    description: Shown at the bottom of the Settings sidebar. · Affichée en bas de la barre latérale des Paramètres.
+    placeholder: 0.1.0-beta.1 (abcd1234)
+  validations:
+    required: true
+- type: dropdown
+  id: os
+  attributes:
+    label: OS / Système
+    options:
+    - Linux (Wayland)
+    - Linux (X11)
+    - Windows 11
+    - Windows 10
+    - macOS (Apple Silicon)
+    - macOS (Intel)
+    - Other / Autre
+  validations:
+    required: true
+- type: input
+  id: os-version
+  attributes:
+    label: OS version, desktop / Version de l'OS, bureau
+    placeholder: Debian 13 + KDE Plasma 6.5, Fedora 43 + GNOME 49, Windows 11 24H2, macOS 15.1…
+  validations:
+    required: true
+- type: input
+  id: gpu
+  attributes:
+    label: GPU and driver / GPU et pilote
+    placeholder: NVIDIA GTX 1080 / 580.95, AMD RX 6700 / Mesa 25.2, Intel UHD 620 / Mesa, Apple M2…
+  validations:
+    required: true
+- type: input
+  id: scale
+  attributes:
+    label: Display scale, Phoenix zoom / Échelle de l'écran, zoom de Phoenix
+    description: OS scale (100 %, 125 %, 150 %…) and the zoom in Settings › Appearance. · Échelle de l'OS et zoom dans Paramètres › Apparence.
+    placeholder: 150 % screen, 100 % zoom, 2560×1440
+  validations:
+    required: true
+- type: dropdown
+  id: theme
+  attributes:
+    label: Theme / Thème
+    options:
+    - Dark / Sombre
+    - Light / Clair
+    - Ash / Cendre
+    - Onyx
+    - Not sure / Je ne sais pas
+  validations:
+    required: false
+- type: checkboxes
+  id: privacy
+  attributes:
+    label: Privacy / Confidentialité
+    options:
+    - label: My report contains no token, cookie, HAR file, journal.log, email, phone number or private message, and my screenshots are blurred. · Mon signalement ne contient aucun token, cookie, fichier HAR, journal.log, e-mail, numéro de téléphone ni message privé, et mes captures sont floutées.
+      required: true

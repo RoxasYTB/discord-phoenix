@@ -1,0 +1,73 @@
+name: ✨ Feature request / Demande de fonction
+description: Something the official client does that Phoenix doesn't yet, or a new idea · Une fonction du client officiel qui manque, ou une idée
+title: '[Feature] '
+labels:
+- enhancement
+body:
+- type: markdown
+  attributes:
+    value: |
+      Check the [parity tables](https://github.com/RoxasYTB/project-phoenix/tree/main/docs/parity) and the README status first: many features are already planned. · Regarde d'abord les [tableaux de parité](https://github.com/RoxasYTB/project-phoenix/tree/main/docs/parity) et l'état dans le README : beaucoup de fonctions sont déjà prévues.
+- type: checkboxes
+  id: searched
+  attributes:
+    label: Checks / Vérifications
+    options:
+    - label: I searched the existing issues and the parity tables. · J'ai cherché dans les issues et les tableaux de parité.
+      required: true
+- type: dropdown
+  id: kind
+  attributes:
+    label: Type
+    options:
+    - Missing from the official client / Présent dans le client officiel, absent de Phoenix
+    - New idea / Nouvelle idée
+  validations:
+    required: true
+- type: dropdown
+  id: area
+  attributes:
+    label: Area / Zone
+    options:
+    - Login / Connexion
+    - Server list, channels / Liste des serveurs, salons
+    - Messages, chat / Messages
+    - Composer, emoji, uploads / Zone de saisie, emoji, fichiers
+    - Members, profiles / Membres, profils
+    - Search, inbox / Recherche, boîte de réception
+    - Threads, forums / Fils, forums
+    - Voice, video / Vocal, vidéo
+    - Notifications, sounds / Notifications, sons
+    - User settings / Paramètres utilisateur
+    - Server, channel settings / Paramètres de serveur, de salon
+    - Window, tray, performance / Fenêtre, zone de notification, performances
+    - Other / Autre
+  validations:
+    required: false
+- type: textarea
+  id: problem
+  attributes:
+    label: Problem / Problème
+    description: What are you trying to do? · Qu'est-ce que tu essaies de faire ?
+  validations:
+    required: true
+- type: textarea
+  id: solution
+  attributes:
+    label: Proposed solution / Solution proposée
+    description: For a missing feature, how the official client does it, with a screenshot. · Pour une fonction manquante, comment le client officiel le fait, avec une capture.
+  validations:
+    required: true
+- type: textarea
+  id: alternatives
+  attributes:
+    label: Alternatives / Autres pistes
+  validations:
+    required: false
+- type: checkboxes
+  id: tos
+  attributes:
+    label: Rules / Règles
+    options:
+    - label: This doesn't need self-bots, scraping, or bypassing Discord's limits, Nitro or moderation. · Ça ne demande ni self-bot, ni scraping, ni contournement des limites, de Nitro ou de la modération.
+      required: true

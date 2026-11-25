@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Security vulnerability
+  - name: "📖 How to report a bug / Comment signaler un bug"
+    url: https://github.com/RoxasYTB/project-phoenix/blob/main/docs/REPORTING_BUGS.md
+    about: "Read this first: version, debug info, logs, screenshots. Guide en français : docs/SIGNALER_UN_BUG.md"
+  - name: "💬 Project Discord server / Serveur Discord du projet"
+    url: https://discord.gg/ffCe2RuBKt
+    about: "Questions, help and discussion (in French). Questions, aide et discussion."
+  - name: "🔒 Security vulnerability / Faille de sécurité"
     url: https://github.com/RoxasYTB/project-phoenix/security/advisories/new
-    about: Report privately; do not open a public issue.
+    about: "Report privately, never in a public issue. Signalement privé, jamais dans une issue publique."
