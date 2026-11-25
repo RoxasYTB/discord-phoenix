@@ -890,6 +890,17 @@ fn main() -> anyhow::Result<()> {
         window.set_scale_factor(scale);
     })?;
     pump(&mut cx, wait * 1000 / 2);
+    if let Some(n) = std::env::var("PHX_INBOX_COLLAPSE").ok().and_then(|v| v.parse::<usize>().ok()) {
+        cx.update(|cx| {
+            v.update(cx, |app, cx| {
+                if let Some(card) = app.parity.inbox.unreads.get_mut(n) {
+                    card.collapsed = true;
+                }
+                cx.notify();
+            })
+        });
+        pump(&mut cx, 500);
+    }
     let missing = |cx: &mut HeadlessAppContext| {
         cx.update(|cx| {
             let app = v.read(cx);
