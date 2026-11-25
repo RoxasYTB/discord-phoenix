@@ -7,7 +7,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 
 use crate::{
     app::PhoenixApp,
-    theme::{Palette, c, ca, z},
+    theme::{Palette, c, ca, generated::idx, tok, z},
     ui::home::data::{NavRequest, Overlay},
 };
 
@@ -23,18 +23,28 @@ pub enum Step {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TemplateSpec {
     pub id: &'static str,
+    pub code: &'static str,
     pub label_key: &'static str,
     pub icon: &'static str,
 }
 
+pub const CREATE: TemplateSpec = TemplateSpec {
+    id: "CREATE",
+    code: "2TffvPucqHkN",
+    label_key: "add_server.create_own",
+    icon: "https://discord.com/assets/b30f13ee315c2568.svg",
+};
+
 pub const TEMPLATES: &[TemplateSpec] = &[
-    TemplateSpec { id: "gaming", label_key: "add_server.tpl_gaming", icon: "activities" },
-    TemplateSpec { id: "friends", label_key: "add_server.tpl_friends", icon: "friends" },
-    TemplateSpec { id: "study", label_key: "add_server.tpl_study", icon: "book" },
-    TemplateSpec { id: "school", label_key: "add_server.tpl_school", icon: "compass" },
-    TemplateSpec { id: "local", label_key: "add_server.tpl_local", icon: "globe" },
-    TemplateSpec { id: "creators", label_key: "add_server.tpl_creators", icon: "sparkle" },
+    TemplateSpec { id: "GAMING", code: "hvtBQMfw6uSJ", label_key: "add_server.tpl_gaming", icon: "https://discord.com/assets/261f952bf028fa34.svg" },
+    TemplateSpec { id: "FRIENDS", code: "hgM48av5Q69A", label_key: "add_server.tpl_friends", icon: "https://discord.com/assets/d804200b134c9327.svg" },
+    TemplateSpec { id: "STUDY", code: "FbwUwRp4j8Es", label_key: "add_server.tpl_study", icon: "https://discord.com/assets/4900b53e7b34c3a5.svg" },
+    TemplateSpec { id: "SCHOOL_CLUB", code: "Ctg7PUHcQmZu", label_key: "add_server.tpl_school", icon: "https://discord.com/assets/2f1587b0c86b42e2.svg" },
+    TemplateSpec { id: "LOCAL_COMMUNITY", code: "64UDvRNCC52Y", label_key: "add_server.tpl_local", icon: "https://discord.com/assets/31f3db39524533b6.svg" },
+    TemplateSpec { id: "CREATORS", code: "6exdzMgjZgah", label_key: "add_server.tpl_creators", icon: "https://discord.com/assets/d8fed3f03866afe2.svg" },
 ];
+
+pub const ROW_ARROW: &str = "https://discord.com/assets/050c2ac76232eff6.svg";
 
 #[derive(Default)]
 struct State {
@@ -82,17 +92,14 @@ pub fn create_guild_body(
     template: Option<&str>,
     community: Option<bool>,
 ) -> serde_json::Value {
-    let mut obj = serde_json::json!({
+    let _ = community;
+    serde_json::json!({
         "name": name.trim(),
         "icon": icon,
         "channels": [],
         "system_channel_id": null,
-        "guild_template_code": template,
-    });
-    if let Some(is_comm) = community {
-        obj["community"] = serde_json::json!(is_comm);
-    }
-    obj
+        "guild_template_code": template.unwrap_or(CREATE.code),
+    })
 }
 
 fn ensure_name_input(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Entity<InputState> {
@@ -167,16 +174,18 @@ fn header(title: SharedString, subtitle: SharedString, pad_x: f32) -> gpui::Div 
             div()
                 .px(z(20.))
                 .text_size(z(24.))
+                .line_height(z(32.))
                 .font_weight(FontWeight::BOLD)
-                .text_color(c(Palette::TEXT_HEADER))
+                .text_color(c(tok(idx::TEXT_STRONG)))
                 .text_center()
                 .child(title),
         )
         .child(
             div()
                 .mt(z(8.))
-                .text_size(z(14.))
-                .text_color(c(Palette::TEXT_MUTED))
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
                 .text_center()
                 .child(subtitle),
         )
@@ -219,6 +228,34 @@ fn option_row(id: &'static str, icon_name: &str, label: SharedString) -> gpui::S
                 .child(label),
         )
         .child(svg().path(crate::icons::path("chevron-right")).size(z(18.)).text_color(c(Palette::INTERACTIVE)))
+}
+
+fn template_row(id: &'static str, t: TemplateSpec) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .w_full()
+        .mb(z(8.))
+        .rounded(z(8.))
+        .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
+        .active(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))))
+        .child(div().m(z(16.)).size(z(20.)).flex_none().child(gpui::img(SharedString::from(t.icon)).size(z(20.))))
+        .child(
+            div()
+                .min_w_0()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .text_ellipsis()
+                .child(crate::t!(t.label_key)),
+        )
+        .child(div().ml_auto().mr(z(16.)).size(z(20.)).flex_none().child(gpui::img(SharedString::from(ROW_ARROW)).size(z(20.))))
 }
 
 fn back_btn(id: &'static str, to: Step, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
@@ -317,12 +354,15 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
             let mut list = div()
                 .id("add-server-templates")
                 .mt(z(24.))
-                .px(z(16.))
+                .pt(z(8.))
+                .pb(z(8.))
+                .pl(z(16.))
+                .pr(z(8.))
                 .h(z(330.))
                 .overflow_y_scroll()
                 .flex()
                 .flex_col()
-                .child(option_row("tpl-own", "plus", crate::t!("add_server.create_own")).on_click(cx.listener(
+                .child(template_row("tpl-own", CREATE).on_click(cx.listener(
                     |_, _, _, cx| {
                         STATE.with(|s| {
                             let mut st = s.borrow_mut();
@@ -336,14 +376,15 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
                     div()
                         .mt(z(16.))
                         .mb(z(8.))
-                        .text_size(z(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(c(Palette::TEXT_MUTED))
+                        .text_size(z(12.))
+                        .line_height(z(16.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
                         .child(crate::t!("add_server.start_template")),
                 );
             for t in TEMPLATES {
-                let tid = t.id;
-                list = list.child(option_row(t.id, t.icon, crate::t!(t.label_key)).on_click(cx.listener(
+                let tid = t.code;
+                list = list.child(template_row(t.id, *t).on_click(cx.listener(
                     move |_, _, _, cx| {
                         STATE.with(|s| {
                             let mut st = s.borrow_mut();
@@ -689,16 +730,15 @@ mod tests {
 
     #[test]
     fn create_guild_payload_shapes() {
-        let body = create_guild_body("  Phoenix Lab ", None, Some("gaming"), Some(true));
+        let body = create_guild_body("  Phoenix Lab ", None, Some(TEMPLATES[0].code), Some(true));
         assert_eq!(body["name"], "Phoenix Lab");
-        assert_eq!(body["guild_template_code"], "gaming");
-        assert_eq!(body["community"], true);
+        assert_eq!(body["guild_template_code"], "hvtBQMfw6uSJ");
+        assert!(body.get("community").is_none());
         assert!(body["channels"].is_array());
 
         let minimal = create_guild_body("Friends", None, None, None);
         assert_eq!(minimal["name"], "Friends");
-        assert!(minimal["guild_template_code"].is_null());
-        assert!(minimal.get("community").is_none());
+        assert_eq!(minimal["guild_template_code"], CREATE.code);
     }
 
     #[test]
