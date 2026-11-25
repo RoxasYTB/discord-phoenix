@@ -173,21 +173,74 @@ fn edit(e: &Ent, label: SharedString, keys: &str, action: fn() -> Box<dyn gpui::
 
 pub const SLASH_SUGGEST: &str = "slash-suggest";
 pub const SPELLCHECK: &str = "spellcheck";
+pub const SPELLCHECK_ARTICLE: &str = "360000877191";
+
+pub fn spellcheck_article_url() -> String {
+    format!("https://support.discord.com/hc/{}/articles/{SPELLCHECK_ARTICLE}", crate::i18n::locale().to_lowercase())
+}
+
+fn synced_check(app: &PhoenixApp, e: &Ent, label: SharedString, key: &'static str) -> MenuItem {
+    let on = app.prefs.synced.flag(key);
+    let e = e.clone();
+    MenuItem::check(label, on, move |_, _, cx: &mut App| {
+        e.update(cx, |a, cx| {
+            let w = crate::ui::settings::synced_map::bool_wire(&a.prefs.synced.proto, key, !on);
+            crate::ui::settings::save(a, crate::ui::settings::SettingsPatch::Proto(key, w), cx);
+        })
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextareaEntry {
+    Suggestions,
+    SendButton,
+    Spellcheck,
+    Languages,
+    Cut,
+    Copy,
+    Paste,
+    Separator,
+}
+
+pub fn textarea_layout(commands: bool, send_button: bool, spellcheck_on: bool, selection: bool) -> Vec<TextareaEntry> {
+    use TextareaEntry as T;
+    let mut out = Vec::new();
+    if commands {
+        out.push(T::Suggestions);
+    }
+    if send_button {
+        out.push(T::SendButton);
+    }
+    out.push(T::Separator);
+    out.push(T::Spellcheck);
+    if spellcheck_on {
+        out.push(T::Languages);
+    }
+    out.push(T::Separator);
+    if selection {
+        out.push(T::Cut);
+        out.push(T::Copy);
+    }
+    out.push(T::Paste);
+    out
+}
 
 pub fn textarea_items(app: &PhoenixApp, e: &Ent, selection: bool) -> Vec<MenuItem> {
-    let mut items = vec![
-        MenuItem::submenu(crate::t!("ta.suggestions"), vec![pref_check(app, e, crate::t!("ta.slash_commands"), SLASH_SUGGEST, true)]),
-        pref_check(app, e, crate::t!("ta.send_button"), "send-btn", false),
-        MenuItem::Separator,
-        pref_check(app, e, crate::t!("ta.spellcheck"), SPELLCHECK, true),
-        MenuItem::Separator,
-    ];
-    if selection {
-        items.push(edit(e, crate::t!("ta.cut"), "Ctrl+X", || Box::new(gpui_component::input::Cut)));
-        items.push(edit(e, crate::t!("ta.copy"), "Ctrl+C", || Box::new(gpui_component::input::Copy)));
-    }
-    items.push(edit(e, crate::t!("ta.paste"), "Ctrl+V", || Box::new(gpui_component::input::Paste)));
-    items
+    use TextareaEntry as T;
+    let spell_on = app.prefs.local.flag(SPELLCHECK, true);
+    textarea_layout(true, true, spell_on, selection)
+        .into_iter()
+        .map(|entry| match entry {
+            T::Suggestions => MenuItem::submenu(crate::t!("ta.suggestions"), vec![synced_check(app, e, crate::t!("ta.slash_commands"), SLASH_SUGGEST)]),
+            T::SendButton => pref_check(app, e, crate::t!("ta.send_button"), "send-btn", false),
+            T::Spellcheck => pref_check(app, e, crate::t!("ta.spellcheck"), SPELLCHECK, true),
+            T::Languages => MenuItem::action(crate::t!("ta.languages"), None, |_, _, cx: &mut App| cx.open_url(&spellcheck_article_url())),
+            T::Cut => edit(e, crate::t!("ta.cut"), "Ctrl+X", || Box::new(gpui_component::input::Cut)),
+            T::Copy => edit(e, crate::t!("ta.copy"), "Ctrl+C", || Box::new(gpui_component::input::Copy)),
+            T::Paste => edit(e, crate::t!("ta.paste"), "Ctrl+V", || Box::new(gpui_component::input::Paste)),
+            T::Separator => MenuItem::Separator,
+        })
+        .collect()
 }
 
 pub fn friend_row_items(e: &Ent, user: Id) -> Vec<MenuItem> {
@@ -480,6 +533,24 @@ fn dirs_download() -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn textarea_menu_follows_the_client_order() {
+        use TextareaEntry as T;
+        assert_eq!(
+            textarea_layout(true, true, true, true),
+            vec![T::Suggestions, T::SendButton, T::Separator, T::Spellcheck, T::Languages, T::Separator, T::Cut, T::Copy, T::Paste]
+        );
+        assert_eq!(textarea_layout(false, false, false, false), vec![T::Separator, T::Spellcheck, T::Separator, T::Paste]);
+        assert!(spellcheck_article_url().ends_with("/articles/360000877191"));
+    }
+
+    #[test]
+    fn slash_suggestions_read_text_and_images_field_8() {
+        let e = crate::ui::settings::synced_map::ENTRIES.iter().find(|e| e.id == SLASH_SUGGEST).expect("entry");
+        assert_eq!(e.path, &[6, 8]);
+        assert_eq!(e.default, 1);
+    }
 
     #[test]
     fn avatar_links_are_copied_at_1024() {

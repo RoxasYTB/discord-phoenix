@@ -36,6 +36,7 @@ pub static ENTRIES: &[Entry] = &[
     b("split-threads", &[6, 3], true),
     Entry { id: "spoilers", path: &[6, 4], wrapper: true, kind: Kind::Str(&["ON_CLICK", "ALWAYS", "IF_MODERATOR"]), default: 0 },
     b("alt-text", &[6, 7], false),
+    b("slash-suggest", &[6, 8], true),
     b("media-uploads", &[6, 9], true),
     b("media-links", &[6, 10], true),
     b("gifs", &[6, 11], true),

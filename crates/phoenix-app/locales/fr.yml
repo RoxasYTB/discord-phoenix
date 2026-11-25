@@ -2436,6 +2436,7 @@ profile.mod_view_unavailable: "La vue du modérateur n'est pas encore disponible
 ta.suggestions: "Suggestions"
 ta.slash_commands: "Commandes slash"
 ta.send_button: "Bouton Envoyer un message"
+ta.languages: "Langues"
 ta.spellcheck: "Correcteur"
 ta.cut: "Couper"
 ta.copy: "Copier"
