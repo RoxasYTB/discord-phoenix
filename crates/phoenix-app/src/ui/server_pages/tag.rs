@@ -5,28 +5,11 @@ use serde_json::Value;
 use super::{fetch, label, page, sf, str_of, t, text, title, write};
 use crate::{
     app::PhoenixApp,
+    icons::clan_badges::{self, DISPLAY, PALETTES},
     model::Id,
-    theme::{c, generated::idx, z},
+    theme::{generated::idx, z},
     ui::controls::{BtnKind, button, switch},
 };
-
-pub const BADGES: [&str; 10] = ["gs2.badge_leaf", "gs2.badge_sword", "gs2.badge_heart", "gs2.badge_fire", "gs2.badge_water", "gs2.badge_skull", "gs2.badge_moon", "gs2.badge_bolt", "gs2.badge_compass", "gs2.badge_mushroom"];
-
-pub const COLORS: [(u32, u32); 13] = [
-    (0xff2594, 0xe06fa8),
-    (0xdf7d18, 0xd28f62),
-    (0xc29b15, 0xbebb5e),
-    (0x319c6d, 0x4ea18d),
-    (0x448ea3, 0x5fa4b7),
-    (0x9b5eff, 0xa683e1),
-    (0xaa5ce9, 0xb47ce1),
-    (0xad5faa, 0xcd68af),
-    (0xd75b5b, 0xdf7878),
-    (0xa0713e, 0xa38669),
-    (0x848441, 0x9f9f9f),
-    (0x936884, 0xb382aa),
-    (0x737373, 0xa3a3a3),
-];
 
 pub fn badge_url(guild: Id, hash: &str, size: u32) -> String {
     format!("https://cdn.discordapp.com/clan-badges/{}/{hash}.png?size={size}", guild.0)
@@ -55,6 +38,10 @@ fn tile(id: impl Into<gpui::ElementId>, selected: bool) -> gpui::Stateful<gpui::
 
 fn badge_img(guild: Id, hash: &str, size: f32) -> AnyElement {
     gpui::img(SharedString::from(badge_url(guild, hash, 64))).size(z(size)).into_any_element()
+}
+
+fn badge_art(kind: u32, primary: Option<&str>, secondary: Option<&str>, size: f32) -> Option<AnyElement> {
+    clan_badges::file(kind, primary, secondary).map(|p| gpui::img(p).size(z(size)).flex_none().into_any_element())
 }
 
 fn grid(items: Vec<gpui::Stateful<gpui::Div>>) -> gpui::Div {
@@ -110,35 +97,46 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
     let Some(prof) = prof else { return page().child(title(crate::t!("menu.gs.tag"))).child(super::loading()).into_any_element() };
     let tag = prof.get("tag").and_then(Value::as_str).map(str::to_owned);
     let enabled = tag.is_some();
-    let badge = prof.get("badge").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let badge = prof.get("badge").and_then(Value::as_u64).map_or(clan_badges::DEFAULT_BADGE, |b| b as u32);
     let hash = str_of(&prof, "badge_hash").to_owned();
-    let primary = str_of(&prof, "badge_color_primary").trim_start_matches('#').to_owned();
-    let preset = COLORS.iter().position(|(p, _)| format!("{p:06x}") == primary);
+    let color = |k: &str| prof.get(k).and_then(Value::as_str).filter(|v| !v.is_empty()).map(str::to_lowercase);
+    let (primary, secondary) = (color("badge_color_primary"), color("badge_color_secondary"));
+    let (pc, sc) = (primary.as_deref(), secondary.as_deref());
+    let preset = PALETTES.iter().position(|(p, s)| Some(*p) == pc && Some(*s) == sc);
+    let reset = primary.is_none() && secondary.is_none();
     let tag_s = tag.clone().unwrap_or_default();
     let mut badges = Vec::new();
-    for (i, key) in BADGES.iter().enumerate() {
-        let sel = i == badge;
-        let mut tl = tile(("gs2-badge", i), sel).tooltip(crate::ui::tooltip::tip(crate::t!(key)));
-        if sel && !hash.is_empty() {
-            tl = tl.child(badge_img(guild, &hash, 32.));
+    for kind in DISPLAY {
+        let sel = kind == badge;
+        let mut tl = tile(("gs2-badge", kind as usize), sel).tooltip(crate::ui::tooltip::tip(crate::t!(clan_badges::label_key(kind))));
+        match badge_art(kind, None, None, 32.) {
+            Some(art) => tl = tl.child(art),
+            None if sel && !hash.is_empty() => tl = tl.child(badge_img(guild, &hash, 32.)),
+            None => {}
         }
         badges.push(tl.on_click(cx.listener(move |a, _, _, cx| {
-            write(a, ServerCall::SetProfile { guild: sf(guild), patch: ProfilePatch { badge: Some(i as u32), ..Default::default() } }, None, cx);
+            write(a, ServerCall::SetProfile { guild: sf(guild), patch: ProfilePatch { badge: Some(kind), ..Default::default() } }, None, cx);
         })));
     }
+    let set_colors = move |p: Option<&'static str>, s: Option<&'static str>| {
+        move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _: &mut gpui::Window, cx: &mut Context<PhoenixApp>| {
+            let patch = ProfilePatch { badge_color_primary: Some(p.map(str::to_owned)), badge_color_secondary: Some(s.map(str::to_owned)), ..Default::default() };
+            write(a, ServerCall::SetProfile { guild: sf(guild), patch }, None, cx);
+        }
+    };
     let mut colors = Vec::new();
-    for (i, (p, s)) in COLORS.iter().copied().enumerate() {
-        colors.push(
-            tile(("gs2-color", i), preset == Some(i))
-                .child(div().size(z(32.)).rounded(z(4.)).bg(gpui::linear_gradient(135., gpui::linear_color_stop(c(s), 0.5), gpui::linear_color_stop(c(p), 0.5))))
-                .on_click(cx.listener(move |a, _, _, cx| {
-                    let patch = ProfilePatch { badge_color_primary: Some(format!("#{p:06x}")), badge_color_secondary: Some(format!("#{s:06x}")), ..Default::default() };
-                    write(a, ServerCall::SetProfile { guild: sf(guild), patch }, None, cx);
-                })),
-        );
+    for (i, (p, s)) in PALETTES.iter().copied().enumerate() {
+        colors.push(tile(("gs2-color", i), preset == Some(i)).children(badge_art(badge, Some(p), Some(s), 32.)).on_click(cx.listener(set_colors(Some(p), Some(s)))));
     }
-    colors.push(tile("gs2-color-reset", false).child(super::icon("refresh", 24., idx::INTERACTIVE_ICON_DEFAULT)));
-    colors.push(tile("gs2-color-custom", preset.is_none()).child(super::icon("palette", 20., idx::INTERACTIVE_ICON_DEFAULT)));
+    colors.push(
+        tile("gs2-color-reset", reset)
+            .relative()
+            .tooltip(crate::ui::tooltip::tip(crate::t!("gs2.tag_color_reset")))
+            .children(badge_art(badge, None, None, 32.))
+            .child(div().absolute().bottom(z(4.)).right(z(4.)).size(z(16.)).flex().items_center().justify_center().child(super::icon("refresh", 12., idx::TEXT_DEFAULT)))
+            .on_click(cx.listener(set_colors(None, None))),
+    );
+    colors.push(tile("gs2-color-custom", !reset && preset.is_none()).child(super::icon("server/dropper", 20., idx::INTERACTIVE_ICON_DEFAULT)));
     let left = div()
         .w(z(332.))
         .flex_none()
@@ -180,7 +178,7 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                         .flex()
                         .items_center()
                         .gap(z(8.))
-                        .children((!hash.is_empty()).then(|| badge_img(guild, &hash, 40.)))
+                        .children(badge_art(badge, pc, sc, 40.).or_else(|| (!hash.is_empty()).then(|| badge_img(guild, &hash, 40.))))
                         .child(match super::input(guild, "tag", &tag_s, cx) {
                             Some(e) => div().w(z(84.)).text_size(z(24.)).text_color(t(idx::TEXT_DEFAULT)).child(gpui_component::input::Input::new(&e).appearance(false).bordered(false)).into_any_element(),
                             None => div().text_size(z(24.)).text_color(t(idx::TEXT_DEFAULT)).child(tag_s.clone()).into_any_element(),

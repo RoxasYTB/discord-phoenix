@@ -1,4 +1,5 @@
 pub mod art;
+pub mod clan_badges;
 pub(crate) mod cache;
 mod extract;
 mod names;
@@ -81,6 +82,7 @@ pub fn init() {
                 load_dir(&dir);
             }
             art::init(&dir);
+            clan_badges::init(&dir);
         })
         .ok();
 }

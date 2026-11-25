@@ -69,8 +69,8 @@ pub struct SafetyEdit {
 pub struct ProfilePatch {
     pub tag: Option<Option<String>>,
     pub badge: Option<u32>,
-    pub badge_color_primary: Option<String>,
-    pub badge_color_secondary: Option<String>,
+    pub badge_color_primary: Option<Option<String>>,
+    pub badge_color_secondary: Option<Option<String>>,
     pub icon: Option<Option<String>>,
     pub custom_banner: Option<Option<String>>,
 }
@@ -412,5 +412,9 @@ mod tests {
         assert!(!ServerCall::DeleteGuild { guild: G }.is_read());
         let r = build(&ServerCall::SetProfile { guild: G, patch: ProfilePatch { icon: Some(Some("data:image/png;base64,AA".into())), custom_banner: Some(None), ..Default::default() } });
         assert_eq!(r.body, Some(json!({ "icon": "data:image/png;base64,AA", "custom_banner": null })));
+        let r = build(&ServerCall::SetProfile { guild: G, patch: ProfilePatch { badge_color_primary: Some(None), badge_color_secondary: Some(None), ..Default::default() } });
+        assert_eq!(r.body, Some(json!({ "badge_color_primary": null, "badge_color_secondary": null })));
+        let r = build(&ServerCall::SetProfile { guild: G, patch: ProfilePatch { badge_color_primary: Some(Some("#ff1c90".into())), ..Default::default() } });
+        assert_eq!(r.body, Some(json!({ "badge_color_primary": "#ff1c90" })));
     }
 }
