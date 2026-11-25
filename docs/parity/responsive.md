@@ -104,7 +104,7 @@ window at 150 % is 1133 CSS px.
 | Member list | no width media query in the chat layout (the only `membersWrap_86es0b` query is `max-width:485px`, below the 940 px window minimum at 100 %) | always shown when toggled on | ✅ (the old `< 940 px` auto-hide was removed) |
 | Channel drawer | none in the client | removed (was `< 720 px`) | ✅ |
 | Window minimum | `core.asar`: 940 × 500 DIP, default 1280 × 720 | `lib.rs window_options` | ✅ |
-| Call PiP | live 2026-11-25: `[class*=pictureInPicture_]` stays empty for a voice-only call and also while another member is live (EN DIRECT) but not watched | `pip::active` needs a camera in the call or a stream in `voice.watching` | ✅ (the voice card covered the composer at every width); camera case not checked live |
+| Call PiP | live 2026-11-25: `[class*=pictureInPicture_]` stays empty for a voice-only call while another member is live (EN DIRECT) but not watched, and with the camera on ("Vidéo connectée") | `pip::active` needs a stream in `voice.watching` | ✅ (the voice card covered the composer at every width); a watched stream was not checked live |
 | Title vs title-bar buttons | `Emulation.setDeviceMetricsOverride` 588 / 783 DIP at zoom 125 % (470 / 626 CSS px), then cleared: `.title_LnjVAX` 118–353 / 157–470, `trailing_3zSH5d` 282–470 / 438–626 with `z-index:1`, so the client's own title runs under the inbox and help buttons below about 750 CSS px | same geometry (title centred at 50vw under the trailing group) | ✅ same as the client |
 | Message header | name, tags and time are inline in `.header_`, so the time wraps to the next line | header row `flex_wrap`, time 22 px tall | ✅ (the time was clipped at 752 CSS px) |
 
