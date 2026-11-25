@@ -882,6 +882,7 @@ fn account(app: &PhoenixApp, x: &Ctx, d: &Data, cx: &mut Context<PhoenixApp>) ->
         name: Some(name(crate::t!("modview.discord_join"))),
         value: value(crate::presence::format_date(crate::ui::modals::server_settings::kit::snowflake_unix(x.user.0))),
         nav: None,
+        tab: None,
         id: "modview-created",
     });
     if let Some(m) = x.member {
@@ -962,7 +963,7 @@ fn panel_frame(children: Vec<AnyElement>) -> AnyElement {
     div().flex_1().min_h_0().flex().flex_col().rounded(z(8.)).overflow_hidden().bg(mix80(idx::BACKGROUND_SURFACE_HIGH)).shadow(shadow(false, true)).children(children).into_any_element()
 }
 
-fn permissions_panel(app: &PhoenixApp, m: &ModView, x: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn permissions_panel(m: &ModView, x: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let q = m.perm_query.as_ref().map(|i| i.read(cx).value().to_lowercase()).unwrap_or_default();
     let mut list = div().flex().flex_col().gap(z(12.));
     if let Some(i) = &m.perm_query {
@@ -1167,7 +1168,7 @@ pub fn render(app: &PhoenixApp, window: &mut gpui::Window, cx: &mut Context<Phoe
         } else {
             let p = match m.panel {
                 Panel::Info => info_panel(app, m, &x, cx),
-                Panel::Permissions => permissions_panel(app, m, &x, cx),
+                Panel::Permissions => permissions_panel(m, &x, cx),
                 Panel::AuditLog => audit_panel(app, m, cx),
                 Panel::MessageHistory => history_panel(app, m, cx),
             };
