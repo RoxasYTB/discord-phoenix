@@ -790,7 +790,7 @@ fn friend_activity(app: &PhoenixApp, user: Id, kind: RelationshipKind) -> Option
             row = row.child(div().flex_none().child("•"));
         }
         if let Some(e) = emoji {
-            row = row.child(div().flex_none().child(crate::ui::emoji_text::status_label(e, 16. * crate::theme::zoom() / 1.375)));
+            row = row.child(crate::ui::members::status_emoji(&e, 16.));
         }
         if let Some(t) = state {
             row = row.child(label(t));

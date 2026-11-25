@@ -1004,19 +1004,42 @@ fn sub_text(in_voice: bool, voice_icon: &'static str, bot: bool, sub: Option<Sub
             row = row.child(div().flex_none().font_weight(FontWeight::NORMAL).text_color(c(Palette::TEXT_NORMAL)).child("•"));
         }
         if let Some(e) = emoji {
-            row = row.child(div().flex_none().text_size(z(14.)).child(crate::ui::emoji_text::status_label(e, 14. * crate::theme::zoom() / 1.375)));
+            row = row.child(status_emoji(&e, 14.).debug_selector(|| "status-emoji".to_owned()));
         }
         if let Some(t) = state {
-            row = row.child(text_el(t));
+            row = row.child(text_el(t).debug_selector(|| "status-text".to_owned()));
         }
     }
     row
+}
+
+pub(crate) fn status_emoji(token: &str, size: f32) -> gpui::Div {
+    div().flex_none().size(z(size)).flex().items_center().overflow_hidden().child(crate::media::emoji::emoji_element(token, size * crate::theme::zoom()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::presence::{Activity, ActivityKind};
+
+    struct StatusRow(f32);
+
+    impl gpui::Render for StatusRow {
+        fn render(&mut self, _: &mut gpui::Window, _: &mut gpui::Context<Self>) -> impl IntoElement {
+            let custom = Some((Some(SharedString::from("<:rip:123>")), Some(SharedString::from("Repose en paix Happy 03/11/2026"))));
+            div().w(gpui::px(self.0)).child(sub_text(false, "voice", false, Some(SubText { custom, main: None, count: 0 }), None))
+        }
+    }
+
+    #[gpui::test]
+    fn custom_status_text_starts_after_the_emoji_and_the_gap(cx: &mut gpui::TestAppContext) {
+        let (_, cx) = cx.add_window_view(|_, _| StatusRow(166.));
+        let emoji = cx.debug_bounds("status-emoji").unwrap();
+        let text = cx.debug_bounds("status-text").unwrap();
+        assert_eq!(emoji.size.width, gpui::px(14.));
+        assert_eq!(text.origin.x - emoji.origin.x, gpui::px(18.));
+        assert_eq!(text.size.width, gpui::px(148.));
+    }
 
     fn act(kind: ActivityKind, name: &str, app_id: Option<&str>, state: Option<&str>) -> Activity {
         Activity {

@@ -93,7 +93,7 @@ pub fn members_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
     Some(
         div()
             .id("group-members")
-            .w(z(m::member_list_w()))
+            .w(z(m::member_list_w()) + px(1.))
             .flex_none()
             .h_full()
             .flex()
