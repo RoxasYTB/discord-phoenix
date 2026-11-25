@@ -91,6 +91,7 @@ impl PhoenixApp {
         self.collapsed.extend(p.collapsed.into_iter().map(Id));
         self.nav.expanded_folders.extend(p.folders);
         self.nav.hide_muted.extend(p.hide_muted.into_iter().map(Id));
+        self.nav.switcher_history = p.history.into_iter().map(Id).take(crate::ui::switcher::HISTORY).collect();
     }
 
     pub fn nav_home_target(&mut self, guild: Option<Id>, has_target: bool) {
@@ -121,7 +122,8 @@ impl PhoenixApp {
         folders.sort();
         let mut hide: Vec<u64> = self.nav.hide_muted.iter().map(|i| i.0).collect();
         hide.sort();
-        NavPrefs { last_channel: last, collapsed, folders, hide_muted: hide }.save();
+        let history = self.nav.switcher_history.iter().map(|i| i.0).collect();
+        NavPrefs { last_channel: last, collapsed, folders, hide_muted: hide, history }.save();
     }
 
     pub fn toggle_category_saved(&mut self, id: Id, cx: &mut Context<Self>) {

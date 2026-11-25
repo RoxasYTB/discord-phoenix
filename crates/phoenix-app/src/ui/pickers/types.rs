@@ -68,4 +68,5 @@ pub struct Frecency {
     pub applications: Vec<u64>,
     pub favorite_sounds: Vec<u64>,
     pub played_sounds: Vec<u64>,
+    pub places: std::collections::HashMap<u64, i64>,
 }

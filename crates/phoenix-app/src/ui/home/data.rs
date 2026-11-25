@@ -188,6 +188,7 @@ pub struct NavState {
     pub friends_tab: FriendsTab,
     pub guild_menu: bool,
     pub hide_muted: HashSet<Id>,
+    pub switcher_history: Vec<Id>,
     pub overlay: Option<Overlay>,
     pub invite_input: Option<gpui::Entity<gpui_component::input::InputState>>,
     pub add_friend_input: Option<gpui::Entity<gpui_component::input::InputState>>,
@@ -293,6 +294,7 @@ pub struct NavPrefs {
     pub collapsed: Vec<u64>,
     pub folders: Vec<u64>,
     pub hide_muted: Vec<u64>,
+    pub history: Vec<u64>,
 }
 
 impl NavPrefs {
@@ -311,6 +313,7 @@ impl NavPrefs {
                 ("collapsed", ids) => p.collapsed.extend(ids),
                 ("folders", ids) => p.folders.extend(ids),
                 ("hide_muted", ids) => p.hide_muted.extend(ids),
+                ("history", ids) => p.history.extend(ids),
                 _ => {}
             }
         }
@@ -326,6 +329,7 @@ impl NavPrefs {
         out.push_str(&format!("collapsed {}\n", join(&self.collapsed)));
         out.push_str(&format!("folders {}\n", join(&self.folders)));
         out.push_str(&format!("hide_muted {}\n", join(&self.hide_muted)));
+        out.push_str(&format!("history {}\n", join(&self.history)));
         out
     }
 
@@ -377,6 +381,7 @@ mod tests {
             collapsed: vec![1, 2],
             folders: vec![3],
             hide_muted: vec![],
+            history: vec![9, 5],
         };
         assert_eq!(NavPrefs::parse(&p.serialize()), p);
     }

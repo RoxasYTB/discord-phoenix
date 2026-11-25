@@ -59,6 +59,12 @@ pub struct ApplicationFrecency {
 }
 
 #[derive(Clone, PartialEq, prost::Message)]
+pub struct GuildAndChannelFrecency {
+    #[prost(map = "fixed64, message", tag = "1")]
+    pub guild_and_channels: HashMap<u64, FrecencyItem>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
 pub struct FavoriteSoundboardSounds {
     #[prost(fixed64, repeated, tag = "1")]
     pub sound_ids: Vec<u64>,
@@ -88,6 +94,8 @@ pub struct FrecencyUserSettings {
     pub played_sound_frecency: Option<PlayedSoundFrecency>,
     #[prost(message, optional, tag = "5")]
     pub favorite_emojis: Option<FavoriteEmojis>,
+    #[prost(message, optional, tag = "12")]
+    pub guild_and_channel_frecency: Option<GuildAndChannelFrecency>,
     #[prost(message, optional, tag = "13")]
     pub emoji_reaction_frecency: Option<EmojiFrecency>,
 }
@@ -260,6 +268,26 @@ pub fn client_frecency(it: &FrecencyItem, now_ms: i64) -> Option<i64> {
     Some((f64::from(it.total_uses) * (score / uses.len() as f64)).ceil() as i64)
 }
 
+fn place_weight(days: i64) -> f64 {
+    match days {
+        0 => 100.,
+        1 => 70.,
+        2..=3 => 50.,
+        4..=6 => 30.,
+        7.. => 10.,
+        _ => 1.,
+    }
+}
+
+pub fn place_frecency(it: &FrecencyItem, now_ms: i64) -> Option<i64> {
+    let uses: Vec<i64> = it.recent_uses.iter().map(|&t| t as i64).filter(|t| *t > 0).collect();
+    if uses.is_empty() {
+        return None;
+    }
+    let score: f64 = uses.iter().take(MAX_SAMPLES).map(|&t| place_weight((now_ms - t) / DAY_MS)).sum();
+    Some((f64::from(it.total_uses) * (score / uses.len() as f64)).ceil() as i64)
+}
+
 pub fn reaction_frecency(it: &FrecencyItem, max_total_uses: u32, now_ms: i64) -> Option<i64> {
     let uses: Vec<i64> = it.recent_uses.iter().map(|&t| t as i64).filter(|t| *t > 0).collect();
     if uses.is_empty() || max_total_uses == 0 {
@@ -277,6 +305,14 @@ pub fn rank_like_client<'a>(order: &[String], item: impl Fn(&str) -> Option<&'a 
 }
 
 impl FrecencyUserSettings {
+    pub fn places_at(&self, now_ms: i64) -> HashMap<u64, i64> {
+        self.guild_and_channel_frecency
+            .iter()
+            .flat_map(|g| g.guild_and_channels.iter())
+            .filter_map(|(id, it)| place_frecency(it, now_ms).map(|f| (*id, f)))
+            .collect()
+    }
+
     pub fn decode_base64_ordered(s: &str) -> Result<(Self, FrecencyOrder)> {
         let bytes = STANDARD.decode(s.trim()).map_err(|e| Error::Protocol(format!("frecency base64: {e}")))?;
         let settings = <Self as prost::Message>::decode(bytes.as_slice()).map_err(|e| Error::Protocol(format!("frecency proto: {e}")))?;
@@ -348,6 +384,23 @@ impl RestClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn place_frecency_uses_the_channel_weights() {
+        let now = 100 * DAY_MS;
+        let it = |total: u32, days: &[i64]| FrecencyItem { total_uses: total, recent_uses: days.iter().map(|d| (now - d * DAY_MS) as u64).collect(), frecency: 0, score: 0 };
+        assert_eq!(place_frecency(&it(4, &[0, 1]), now), Some(340));
+        assert_eq!(place_frecency(&it(1, &[3]), now), Some(50));
+        assert_eq!(place_frecency(&it(3, &[6, 30]), now), Some(60));
+        assert_eq!(place_frecency(&it(1, &[]), now), None);
+        let s = FrecencyUserSettings {
+            guild_and_channel_frecency: Some(GuildAndChannelFrecency { guild_and_channels: [(7u64, it(2, &[0]))].into_iter().collect() }),
+            ..Default::default()
+        };
+        let bytes = prost::Message::encode_to_vec(&s);
+        let back = <FrecencyUserSettings as prost::Message>::decode(bytes.as_slice()).unwrap();
+        assert_eq!(back.places_at(now).get(&7), Some(&200));
+    }
 
     #[test]
     fn ranks_and_roundtrips() {

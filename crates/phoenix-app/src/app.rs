@@ -614,6 +614,7 @@ impl PhoenixApp {
         self.selected_channel = Some(id);
         crate::notifications::clear(id.0);
         crate::ui::chat::voice_message::on_channel_change(self, cx);
+        crate::ui::switcher::visit(self, id);
         self.last_channel.insert(guild, id);
         self.nav_channel_selected(guild);
         self.replying_to = None;
