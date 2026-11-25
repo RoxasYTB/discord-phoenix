@@ -27,6 +27,12 @@ const EMOJI_SEQUENCE_PARTS: [(u32, u32); 7] = [
 ];
 
 static REGISTERED: OnceLock<Vec<String>> = OnceLock::new();
+static WEB_NOTO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+const WEB_NOTO_NAME: &str = "Phx Noto Sans Web";
+
+pub fn noto_family() -> &'static str {
+    if WEB_NOTO.load(std::sync::atomic::Ordering::Relaxed) { WEB_NOTO_NAME } else { "Noto Sans" }
+}
 static CHAINS: OnceLock<parking_lot::RwLock<std::collections::HashMap<&'static str, gpui::FontFallbacks>>> = OnceLock::new();
 
 pub fn ui_fallbacks() -> gpui::FontFallbacks {
@@ -355,7 +361,7 @@ pub fn register(cx: &mut gpui::App) {
             Some(files.into_iter().filter_map(|p| std::fs::read(p).ok()).collect())
         })
         .unwrap_or_default();
-    let web_name = format!("{PREFIX}Noto Sans Web");
+    let web_name = WEB_NOTO_NAME.to_owned();
     let mut have_web = false;
     for ttf in web {
         if let Some(r) = rename(&ttf, &web_name) {
@@ -363,7 +369,9 @@ pub fn register(cx: &mut gpui::App) {
             have_web = true;
         }
     }
-    if !have_web {
+    if have_web {
+        WEB_NOTO.store(true, std::sync::atomic::Ordering::Relaxed);
+    } else {
         download_web_noto();
     }
     let stack = stack_files();

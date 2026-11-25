@@ -934,7 +934,7 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .w(z(327.))
                 .flex()
                 .flex_col()
-                .child(div().h(z(36.)).text_size(z(32.)).line_height(z(24.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(gpui::white()).child(tr("sp.ni.title")))
+                .child(crate::fonts::nitro(div().h(z(36.)).text_size(z(32.)).line_height(z(24.)), true).text_color(gpui::white()).child(tr("sp.ni.title")))
                 .child(
                     div()
                         .flex()

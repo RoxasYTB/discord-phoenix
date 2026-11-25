@@ -19,7 +19,7 @@ use crate::{
     markdown::MentionResolver,
     model::*,
     richtext::{self, RenderedMessage},
-    theme::{FONT_UI, Palette, c},
+    theme::{Palette, c},
     ui,
 };
 
@@ -1546,11 +1546,7 @@ impl Render for PhoenixApp {
             }))
             .size_full()
             .relative()
-            .font_family(FONT_UI())
-            .map(|mut el| {
-                el.text_style().font_fallbacks = Some(crate::fonts::ui_fallbacks());
-                el
-            })
+            .map(crate::fonts::ui_root)
             .text_color(c(Palette::TEXT_NORMAL))
             .bg(c(Palette::BG_TERTIARY))
             .child({

@@ -105,6 +105,7 @@ fn main() -> anyhow::Result<()> {
                 phoenix_app::ui::call_view::touch();
                 phoenix_app::ui::call_view::set_strip_open(!no_strip);
                 phoenix_app::ui::voice_panel::set_flags(me, VoiceFlags { stream: !voice_only, ..Default::default() });
+                phoenix_app::ui::call_view::set_demo_still(me, (!voice_only).then(|| phoenix_app::demo_media::stream_still(1280, 720)));
                 phoenix_app::ui::call_view::set_split_height(split, false);
                 phoenix_app::ui::voice_panel::set_flags(Id(3), VoiceFlags { video: !voice_only, ..Default::default() });
                 phoenix_app::ui::voice_panel::set_flags(Id(4), VoiceFlags { self_mute: true, ..Default::default() });

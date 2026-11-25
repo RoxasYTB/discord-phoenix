@@ -17,12 +17,10 @@ const PERKS: [(&str, &str); 6] = [
 ];
 
 fn section_title(t: SharedString) -> gpui::Div {
-    div()
+    crate::fonts::nitro(div(), true)
         .mb(z(24.))
         .text_size(z(24.))
         .line_height(z(26.))
-        .font_weight(FontWeight::EXTRA_BOLD)
-        .italic()
         .text_color(c(tok(idx::TEXT_STRONG)))
         .child(SharedString::from(t.to_uppercase()))
 }
@@ -109,7 +107,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
                 .gap(z(6.))
                 .text_color(gpui::white())
                 .child(icon(Icon::Nitro, 24., gpui::white()))
-                .child(div().text_size(z(18.)).font_weight(FontWeight::EXTRA_BOLD).italic().child("NITRO")),
+                .child(crate::fonts::nitro(div().text_size(z(18.)), true).child("NITRO")),
         )
         .child(div().flex_1())
         .child(
@@ -123,7 +121,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
         .flex()
         .flex_col()
         .gap(z(12.))
-        .child(div().text_size(z(32.)).line_height(z(34.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(gpui::white()).child(SharedString::from(crate::t!("nitro.hello").to_uppercase())))
+        .child(crate::fonts::nitro(div().text_size(z(32.)).line_height(z(34.)), true).text_color(gpui::white()).child(SharedString::from(crate::t!("nitro.hello").to_uppercase())))
         .child(
             div()
                 .flex()

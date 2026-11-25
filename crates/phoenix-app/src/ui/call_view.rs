@@ -1003,6 +1003,25 @@ thread_local! {
     static STREAM_FRAMES: std::cell::RefCell<std::collections::HashMap<u64, (u64, std::sync::Arc<gpui::RenderImage>)>> = Default::default();
 }
 
+thread_local! {
+    static DEMO_STILLS: std::cell::RefCell<std::collections::HashMap<u64, std::sync::Arc<gpui::RenderImage>>> = Default::default();
+}
+
+pub fn set_demo_still(owner: Id, img: Option<std::sync::Arc<gpui::RenderImage>>) {
+    DEMO_STILLS.with(|m| match img {
+        Some(i) => {
+            m.borrow_mut().insert(owner.0, i);
+        }
+        None => {
+            m.borrow_mut().remove(&owner.0);
+        }
+    });
+}
+
+pub fn demo_still(owner: Id) -> Option<std::sync::Arc<gpui::RenderImage>> {
+    DEMO_STILLS.with(|m| m.borrow().get(&owner.0).cloned())
+}
+
 pub fn stream_image(owner: Id, own: bool) -> Option<std::sync::Arc<gpui::RenderImage>> {
     let f = if own { crate::voice::call::own_stream_frame() } else { crate::voice::call::stream_frame(owner.0) };
     let Some(f) = f else {
@@ -1110,14 +1129,24 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
     let inner = if tile.stream {
         let skey = stream_key(app, tile.user);
         let watching = skey.as_ref().is_some_and(|k| app.voice.watching.contains(k));
-        let video = if me || watching { stream_image(tile.user, me) } else { None };
+        let video = (if me || watching { stream_image(tile.user, me) } else { None }).or_else(|| demo_still(tile.user));
+        let preview = match (&video, &skey) {
+            (None, Some(k)) => {
+                crate::ui::voice_row::fetch_preview(app, k.clone(), cx);
+                crate::ui::voice_row::preview_url(k)
+            }
+            _ => None,
+        };
+        let still: Option<gpui::ImageSource> = video.map(Into::into).or_else(|| preview.map(Into::into));
+        let has_still = still.is_some();
         base.bg(t(idx::BACKGROUND_BASE_LOWER))
             .flex()
             .items_center()
             .justify_center()
-            .map(|d| match video {
-                Some(img) => d.child(gpui::img(img).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Contain)),
-                None if !me && !watching => d.child(
+            .children(still.map(|src| gpui::img(src).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Contain)))
+            .map(|d| {
+                if !me && !watching {
+                    d.child(
                     div()
                         .id(SharedString::from(format!("call-watch-{}", tile.user.0)))
                         .px(z(16.))
@@ -1140,8 +1169,30 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
                                 cx.notify();
                             }
                         })),
-                ),
-                None => d.child(glyph("icons/voice/screen.svg", 40., white)),
+                    )
+                } else if has_still {
+                    d
+                } else {
+                    d.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap(z(10.))
+                        .child(glyph("icons/voice/screen.svg", 40., white))
+                        .child(
+                            div()
+                                .text_center()
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .text_color(t(idx::TEXT_DEFAULT))
+                                .child(crate::t!("voice.stream_just_started")),
+                        ),
+                    )
+                }
             })
             .child(
                 div()

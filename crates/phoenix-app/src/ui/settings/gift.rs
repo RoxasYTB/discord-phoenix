@@ -261,7 +261,7 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
         .pb(z(12.))
         .border_b_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
-        .child(div().text_size(z(16.)).line_height(z(18.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.su.squad").to_uppercase()))
+        .child(crate::fonts::nitro(div().text_size(z(16.)).line_height(z(18.)), true).text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.su.squad").to_uppercase()))
         .child(
             div()
                 .h(z(16.))

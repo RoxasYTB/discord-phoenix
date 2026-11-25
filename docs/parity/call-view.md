@@ -18,6 +18,7 @@ Code: `crates/phoenix-app/src/ui/call_view.rs`. Offscreen render: `cargo run -p 
 | name / mute pill | experimentOverlayTitle_7NOr2f (#1504) | bg / radius / padding / gap / font | --control-overlay-secondary-background-default / 8 / 6 8 / 4 / 14/18 | `render_tile` pill | ✅ |
 | mute/deaf icon | titleIcon_ (#1505) | size | 16px | `render_tile` | ✅ |
 | stream placeholder tile | emptyPreviewContainer_ (#1408) | bg | --background-base-lower | `render_tile` stream | ✅ |
+| stream tile picture | `StreamPreview` (module 142893 consumer in web.b63d846b329d6470.js): `previewUrl` from `GET /streams/{key}/preview` → `<img class=image_hELJz2>` (`object-fit: contain`, full size); without one, `emptyPreviewContainer_hELJz2` (flex column, gap 10, centred) with the illustration and `uQZTBV` | img / placeholder | live frame (own or watched) → preview image → icon + "stream just started" | `render_tile` stream, `voice_row::fetch_preview` (2 min cache) | ✅ (was an empty tile with only the screen icon; the call_view demo shows a generated desktop image, `demo_media::stream_still`, set with `call_view::set_demo_still`, never a client asset) |
 | LIVE pill | liveIndicator_ (#1413) | font / radius / bg | 12px 600 / 4px / --status-danger | `render_tile` | ✅ |
 | grid layout (no focus) | - | columns | biggest 16:9 tile | `grid` | ✅ (click focused tile → grid) |
 | spotlight focused tile | videoSizer_QKgWuD / focusedVideo_QKgWuD (#1372) | box | 684x387 16:9, 72px below top bar, 8 above strip | `render` focus branch | ✅ |

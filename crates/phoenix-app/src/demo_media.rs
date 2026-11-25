@@ -109,6 +109,68 @@ pub fn install(cx: &mut gpui::App) {
     cx.set_http_client(http);
 }
 
+pub fn stream_still(width: u32, height: u32) -> Arc<gpui::RenderImage> {
+    let (w, h) = (width.max(16), height.max(9));
+    let mut px = vec![0u8; (w * h * 4) as usize];
+    let mut put = |x0: u32, y0: u32, x1: u32, y1: u32, rgb: u32| {
+        let [r, g, b] = [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8];
+        for y in y0.min(h)..y1.min(h) {
+            for x in x0.min(w)..x1.min(w) {
+                let i = ((y * w + x) * 4) as usize;
+                px[i..i + 4].copy_from_slice(&[b, g, r, 255]);
+            }
+        }
+    };
+    for y in 0..h {
+        for x in 0..w {
+            let t = (x as f32 / w as f32 + y as f32 / h as f32) / 2.;
+            let mix = |a: u32, b: u32| (a as f32 + (b as f32 - a as f32) * t) as u32;
+            put(x, y, x + 1, y + 1, (mix(0x1e, 0x6d) << 16) | (mix(0x3a, 0x28) << 8) | mix(0x8a, 0xd9));
+        }
+    }
+    let fx = |f: f32| (f * w as f32) as u32;
+    let fy = |f: f32| (f * h as f32) as u32;
+    put(fx(0.08), fy(0.08), fx(0.92), fy(0.86), 0x1e1f22);
+    put(fx(0.08), fy(0.08), fx(0.92), fy(0.12), 0x2b2d31);
+    for (i, c) in [0xff5f57u32, 0xfebc2e, 0x28c840].into_iter().enumerate() {
+        let x = fx(0.095) + i as u32 * fy(0.03);
+        put(x, fy(0.09), x + fy(0.018), fy(0.108), c);
+    }
+    put(fx(0.08), fy(0.12), fx(0.24), fy(0.86), 0x232428);
+    for i in 0..9 {
+        let y = fy(0.15) + i * fy(0.045);
+        put(fx(0.095), y, fx(0.095) + fx(0.03 + (i % 4) as f32 * 0.02), y + fy(0.018), 0x4e5058);
+    }
+    let palette = [0xc678dd, 0x61afef, 0x98c379, 0xe5c07b, 0xe06c75, 0x56b6c2, 0xabb2bf];
+    let mut seed = 0x9e37_79b9u32;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed
+    };
+    let mut y = fy(0.15);
+    while y + fy(0.02) < fy(0.84) {
+        let mut x = fx(0.27) + (next() % 4) * fx(0.02);
+        for _ in 0..(1 + next() % 5) {
+            let len = fx(0.03) + (next() % 6) * fx(0.012);
+            if x + len > fx(0.9) {
+                break;
+            }
+            put(x, y, x + len, y + fy(0.016), palette[(next() as usize) % palette.len()]);
+            x += len + fx(0.008);
+        }
+        y += fy(0.034);
+    }
+    put(0, fy(0.94), w, h, 0x111214);
+    for i in 0..6 {
+        let x = fx(0.4) + i * fy(0.06);
+        put(x, fy(0.952), x + fy(0.036), fy(0.988), if i == 1 { 0x5865f2 } else { 0x3f4147 });
+    }
+    let frame = image::Frame::new(image::RgbaImage::from_raw(w, h, px).expect("sized buffer"));
+    Arc::new(gpui::RenderImage::new(vec![frame]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,6 +184,16 @@ mod tests {
             }
             assert!(p.avatar_url().contains(&p.avatar.0.to_string()));
         }
+    }
+
+    #[test]
+    fn stream_still_is_a_full_frame() {
+        let img = stream_still(320, 180);
+        let size = img.size(0);
+        assert_eq!((size.width.0, size.height.0), (320, 180));
+        let bytes = img.as_bytes(0).expect("frame");
+        assert!(bytes.chunks(4).all(|p| p[3] == 255));
+        assert!(bytes.chunks(4).any(|p| p[..3] != bytes[..3]));
     }
 
     #[test]

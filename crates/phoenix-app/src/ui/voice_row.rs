@@ -341,7 +341,7 @@ pub fn fetch_preview(app: &crate::app::PhoenixApp, key: String, cx: &mut gpui::A
     .detach();
 }
 
-fn preview_url(key: &str) -> Option<SharedString> {
+pub fn preview_url(key: &str) -> Option<SharedString> {
     PREVIEWS.with(|p| p.borrow().get(key).and_then(|(u, _)| u.clone()))
 }
 

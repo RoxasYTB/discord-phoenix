@@ -11,7 +11,7 @@ impl Render for Tip {
         for i in 0..5 {
             pointer = pointer.child(div().w(px(1. + 2. * i as f32)).h(z(1.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))));
         }
-        div()
+        crate::fonts::ui_root(div())
             .flex()
             .flex_col()
             .items_center()

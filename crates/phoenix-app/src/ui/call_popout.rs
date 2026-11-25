@@ -114,11 +114,7 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
     let video = if stream {
         let skey = crate::ui::call_view::stream_key(app, user_id);
         let watching = skey.as_ref().is_some_and(|k| app.voice.watching.contains(k));
-        if me || watching {
-            crate::ui::call_view::stream_image(user_id, me)
-        } else {
-            None
-        }
+        (if me || watching { crate::ui::call_view::stream_image(user_id, me) } else { None }).or_else(|| crate::ui::call_view::demo_still(user_id))
     } else if flags.video {
         if me {
             crate::ui::call_view::camera_image()
@@ -263,7 +259,7 @@ impl gpui::Render for CallPopoutView {
         let app_ent_hang = self.app.clone();
         let white = t(idx::WHITE);
 
-        div()
+        crate::fonts::ui_root(div())
             .id("call-popout-root")
             .size_full()
             .relative()

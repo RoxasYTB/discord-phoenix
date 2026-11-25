@@ -58,11 +58,11 @@ pub const MARKETING: &str = "ABC Ginto Discord";
 pub const HEADLINE: &str = "ABC Ginto Nord";
 
 pub fn display_family(css: &str) -> gpui::SharedString {
-    FAMILIES.read().as_ref().and_then(|m| m.get(css).cloned()).unwrap_or_else(|| ui_family().into())
+    FAMILIES.read().as_ref().and_then(|m| m.get(css).cloned()).unwrap_or_else(|| display_stand_in(css).into())
 }
 
-fn has_display(dir: &Path) -> bool {
-    std::fs::read_dir(dir).into_iter().flatten().flatten().any(|e| e.file_name().to_string_lossy().starts_with("ABC_Ginto"))
+pub fn display_stand_in(css: &str) -> &'static str {
+    if css == MARKETING { ui_family() } else { fallback::noto_family() }
 }
 
 pub fn parse_font_faces(css: &str) -> Vec<(String, u16, String)> {
@@ -88,7 +88,20 @@ pub fn parse_font_faces_styled(css: &str) -> Vec<(String, u16, bool, String)> {
     out
 }
 
-pub fn extract(cache: &Path, dir: &Path) -> Vec<PathBuf> {
+fn wanted(family: &str) -> bool {
+    NAME_STYLE_FAMILIES.contains(&family) || UI_FAMILIES.contains(&family) || DISPLAY_FAMILIES.contains(&family)
+}
+
+pub fn face_file(family: &str, weight: u16, italic: bool, ext: &str) -> String {
+    format!("{}-{weight}{}.{ext}", family.replace(' ', "_"), if italic { "i" } else { "" })
+}
+
+pub struct Extracted {
+    pub written: Vec<PathBuf>,
+    pub missing: Vec<(PathBuf, String)>,
+}
+
+pub fn extract(cache: &Path, dir: &Path) -> Extracted {
     let mut entries: HashMap<String, PathBuf> = HashMap::new();
     for e in std::fs::read_dir(cache).into_iter().flatten().flatten() {
         let p = e.path();
@@ -108,27 +121,68 @@ pub fn extract(cache: &Path, dir: &Path) -> Vec<PathBuf> {
             faces.extend(parse_font_faces_styled(&css));
         }
     }
-    let mut written = Vec::new();
+    let mut out = Extracted { written: Vec::new(), missing: Vec::new() };
     let _ = std::fs::create_dir_all(dir);
     faces.sort();
     faces.dedup();
     for (family, weight, italic, asset) in faces {
-        if !NAME_STYLE_FAMILIES.contains(&family.as_str()) && !UI_FAMILIES.contains(&family.as_str()) && !DISPLAY_FAMILIES.contains(&family.as_str()) {
+        if !wanted(&family) {
             continue;
         }
-        let Some(b) = entries.get(&asset).and_then(|p| body(p)).filter(|b| is_font(b)) else { continue };
         let ext = asset.rsplit('.').next().unwrap_or("woff2");
-        let out = dir.join(format!("{}-{weight}{}.{ext}", family.replace(' ', "_"), if italic { "i" } else { "" }));
-        if std::fs::write(&out, &b).is_ok() {
-            written.push(out);
+        let target = dir.join(face_file(&family, weight, italic, ext));
+        let Some(b) = entries.get(&asset).and_then(|p| body(p)).filter(|b| is_font(b)) else {
+            if !target.exists() && !target.with_extension("ttf").exists() {
+                out.missing.push((target, asset));
+            }
+            continue;
+        };
+        if std::fs::metadata(&target).is_ok_and(|m| m.len() == b.len() as u64) || std::fs::write(&target, &b).is_ok() {
+            out.written.push(target);
         }
     }
-    written
+    out
+}
+
+fn download(missing: Vec<(PathBuf, String)>) -> Vec<PathBuf> {
+    if missing.is_empty() || std::env::var_os("PHX_NO_FONT_DOWNLOAD").is_some() {
+        return Vec::new();
+    }
+    let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return Vec::new() };
+    rt.block_on(async {
+        let client = reqwest::Client::new();
+        let mut got = Vec::new();
+        for (target, asset) in missing {
+            let url = format!("https://discord.com/assets/{}", asset.trim_start_matches("/assets/"));
+            let Ok(r) = client.get(url).send().await else { continue };
+            if !r.status().is_success() {
+                continue;
+            }
+            let Ok(b) = r.bytes().await else { continue };
+            if is_font(&b) && std::fs::write(&target, &b).is_ok() {
+                got.push(target);
+            }
+        }
+        got
+    })
 }
 
 pub fn init() -> Vec<PathBuf> {
     let Some(dir) = out_dir() else { return Vec::new() };
-    crate::icons::discord_caches().iter().flat_map(|c| extract(c, &dir)).collect()
+    let mut written = Vec::new();
+    let mut missing: Vec<(PathBuf, String)> = Vec::new();
+    for c in crate::icons::discord_caches() {
+        let e = extract(&c, &dir);
+        written.extend(e.written);
+        for m in e.missing {
+            if !missing.iter().any(|(t, _)| *t == m.0) {
+                missing.push(m);
+            }
+        }
+    }
+    missing.retain(|(t, _)| !written.contains(t));
+    written.extend(download(missing));
+    written
 }
 
 pub fn font_for_id(font_id: u32) -> Option<(&'static str, f32)> {
@@ -179,29 +233,56 @@ static GG_MONO: AtomicBool = AtomicBool::new(false);
 static GG_MONO_NAME: parking_lot::RwLock<&'static str> = parking_lot::RwLock::new("gg mono");
 
 pub fn ui_family() -> &'static str {
-    if GG_SANS.load(Ordering::Relaxed) { "gg sans" } else { "Noto Sans" }
+    if GG_SANS.load(Ordering::Relaxed) { "gg sans" } else { fallback::noto_family() }
 }
 
 pub fn mono_family() -> &'static str {
     if GG_MONO.load(Ordering::Relaxed) { *GG_MONO_NAME.read() } else { "DejaVu Sans Mono" }
 }
 
-fn load_decoded(dir: &Path) -> Vec<(String, String, Vec<u8>)> {
+pub fn ui_root<E: gpui::Styled>(mut el: E) -> E {
+    el.text_style().font_fallbacks = Some(ui_fallbacks());
+    el.font_family(ui_family())
+}
+
+pub fn nitro<E: gpui::Styled>(el: E, italic: bool) -> E {
+    let el = el.font_family(display_family(NITRO)).font_weight(gpui::FontWeight::BOLD);
+    if italic { el.italic() } else { el }
+}
+
+fn apply_theme_fonts(cx: &mut gpui::App) {
+    if !cx.has_global::<gpui_component::theme::Theme>() {
+        return;
+    }
+    let theme = gpui_component::theme::Theme::global_mut(cx);
+    theme.font_family = ui_family().into();
+    theme.mono_font_family = mono_family().into();
+}
+
+pub struct Decoded {
+    pub key: String,
+    pub css: String,
+    pub family: String,
+    pub ttf: Vec<u8>,
+}
+
+fn load_decoded(dir: &Path) -> Vec<Decoded> {
     let mut out = Vec::new();
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let p = e.path();
         if p.extension().is_none_or(|x| x != "ttf") {
             continue;
         }
-        let css = p.file_stem().and_then(|s| s.to_str()).and_then(|s| s.rsplit_once('-')).map(|(f, _)| f.replace('_', " "));
-        let (Some(css), Ok(ttf)) = (css, std::fs::read(&p)) else { continue };
-        let Some(fam) = ttf_family(&ttf) else { continue };
-        out.push((css, fam, ttf));
+        let Some(key) = p.file_stem().and_then(|s| s.to_str()).map(str::to_owned) else { continue };
+        let Some(css) = key.rsplit_once('-').map(|(f, _)| f.replace('_', " ")) else { continue };
+        let Ok(ttf) = std::fs::read(&p) else { continue };
+        let Some(family) = ttf_family(&ttf) else { continue };
+        out.push(Decoded { key, css, family, ttf });
     }
     out
 }
 
-fn extract_and_decode() -> Vec<(String, String, Vec<u8>)> {
+fn extract_and_decode() -> Vec<Decoded> {
     let Some(dir) = out_dir() else { return Vec::new() };
     for p in init() {
         let ttf_path = p.with_extension("ttf");
@@ -215,26 +296,33 @@ fn extract_and_decode() -> Vec<(String, String, Vec<u8>)> {
     load_decoded(&dir)
 }
 
-fn install(fonts: Vec<(String, String, Vec<u8>)>, cx: &mut gpui::App) -> bool {
-    let fonts: Vec<_> = if std::env::var_os("PHX_NO_GG_FONTS").is_some() {
-        fonts.into_iter().filter(|(css, ..)| !UI_FAMILIES.contains(&css.as_str())).collect()
-    } else {
+static INSTALLED: parking_lot::RwLock<Vec<String>> = parking_lot::RwLock::new(Vec::new());
+
+fn install(fonts: Vec<Decoded>, cx: &mut gpui::App) -> bool {
+    let no_gg = std::env::var_os("PHX_NO_GG_FONTS").is_some();
+    let fonts: Vec<_> = {
+        let installed = INSTALLED.read();
         fonts
+            .into_iter()
+            .filter(|f| !(no_gg && UI_FAMILIES.contains(&f.css.as_str())))
+            .filter(|f| !installed.contains(&f.key))
+            .collect()
     };
-    let known: Vec<String> = FAMILIES.read().as_ref().map(|m| m.keys().cloned().collect()).unwrap_or_default();
-    let fonts: Vec<_> = fonts.into_iter().filter(|(css, ..)| !known.contains(css)).collect();
     if fonts.is_empty() {
-        return !known.is_empty();
+        return false;
     }
     let mut map = FAMILIES.read().clone().unwrap_or_default();
     let mut blobs = Vec::new();
-    for (css, fam, ttf) in fonts {
-        map.insert(css, gpui::SharedString::from(fam));
-        blobs.push(std::borrow::Cow::Owned(ttf));
+    let mut keys = Vec::new();
+    for f in fonts {
+        map.entry(f.css).or_insert_with(|| gpui::SharedString::from(f.family));
+        keys.push(f.key);
+        blobs.push(std::borrow::Cow::Owned(f.ttf));
     }
     if cx.text_system().add_fonts(blobs).is_err() {
         return false;
     }
+    INSTALLED.write().extend(keys);
     if map.get("gg sans").is_some_and(|f| f == "gg sans") {
         GG_SANS.store(true, Ordering::Relaxed);
     }
@@ -243,13 +331,16 @@ fn install(fonts: Vec<(String, String, Vec<u8>)>, cx: &mut gpui::App) -> bool {
         GG_MONO.store(true, Ordering::Relaxed);
     }
     *FAMILIES.write() = Some(map);
+    apply_theme_fonts(cx);
     true
 }
 
 pub fn register(cx: &mut gpui::App) {
     fallback::register(cx);
     let cached = out_dir().map(|d| load_decoded(&d)).unwrap_or_default();
-    if install(cached, cx) && GG_SANS.load(Ordering::Relaxed) && out_dir().is_some_and(|d| has_display(&d)) {
+    install(cached, cx);
+    apply_theme_fonts(cx);
+    if std::env::var_os("PHX_NO_FONT_EXTRACT").is_some() {
         return;
     }
     let task = cx.background_executor().spawn(async move { extract_and_decode() });
@@ -363,6 +454,127 @@ mod tests {
                 assert!(NAME_STYLE_FAMILIES.contains(&f), "{f}");
             }
         }
+    }
+
+    const FR_EN: &str = "Paramètres Données Accessibilité àâäéèêëîïôöùûüÿçœæ ÀÂÄÉÈÊËÎÏÔÖÙÛÜŸÇŒÆ «\u{a0}»’‘“”…–—•·€°% 0123456789 The quick brown fox jumps over the lazy dog ABCDEFGHIJKLMNOPQRSTUVWXYZ ?!:;,.()[]{}@#&*+-=/\\'\"_~|<>$";
+
+    fn weight_style(key: &str) -> Option<(f32, bool)> {
+        let (_, w) = key.rsplit_once('-')?;
+        let italic = w.ends_with('i');
+        Some((w.trim_end_matches('i').parse().ok()?, italic))
+    }
+
+    fn font(family: &str, weight: f32, italic: bool, fallbacks: &gpui::FontFallbacks) -> gpui::Font {
+        gpui::Font {
+            family: family.to_owned().into(),
+            features: gpui::FontFeatures::default(),
+            fallbacks: Some(fallbacks.clone()),
+            weight: gpui::FontWeight(weight),
+            style: if italic { gpui::FontStyle::Italic } else { gpui::FontStyle::Normal },
+        }
+    }
+
+    fn run(text: &str, font: gpui::Font) -> gpui::TextRun {
+        gpui::TextRun { len: text.len(), font, color: gpui::black(), background_color: None, underline: None, strikethrough: None }
+    }
+
+    #[test]
+    fn ui_text_resolves_to_the_client_faces() {
+        let Some(dir) = out_dir() else { return };
+        let faces = load_decoded(&dir);
+        let client: Vec<&Decoded> = faces
+            .iter()
+            .filter(|f| UI_FAMILIES.contains(&f.css.as_str()) || DISPLAY_FAMILIES.contains(&f.css.as_str()))
+            .collect();
+        if !client.iter().any(|f| f.key == "gg_sans-400") {
+            return;
+        }
+        for key in ["gg_sans-400", "gg_sans-500", "gg_sans-600", "gg_sans-700"] {
+            assert!(client.iter().any(|f| f.key == key), "{key} missing from {dir:?}");
+        }
+        for f in &client {
+            let face = ttf_parser::Face::parse(&f.ttf, 0).expect("face");
+            let missing: Vec<char> = FR_EN.chars().filter(|c| *c != ' ' && face.glyph_index(*c).is_none()).collect();
+            assert!(missing.is_empty(), "{} lacks {missing:?}", f.key);
+        }
+        let web = std::fs::read(dir.join("fallback/Noto_Sans-400.ttf")).ok().and_then(|b| fallback::rename(&b, "Phx Noto Sans Web"));
+        let platform = gpui_platform::current_platform(true).text_system();
+        let ts = std::sync::Arc::new(gpui::TextSystem::new(platform));
+        let mut blobs: Vec<std::borrow::Cow<'static, [u8]>> = client.iter().map(|f| std::borrow::Cow::Owned(f.ttf.clone())).collect();
+        blobs.extend(web.clone().map(std::borrow::Cow::Owned));
+        ts.add_fonts(blobs).expect("fonts");
+        let wts = gpui::WindowTextSystem::new(ts.clone());
+        let fallbacks = gpui::FontFallbacks::from_fonts(vec!["Phx Noto Sans Web".into(), "DejaVu Sans".into()]);
+        let mut seen: Vec<(String, gpui::FontId)> = Vec::new();
+        for f in &client {
+            let (weight, italic) = weight_style(&f.key).expect("key");
+            let font = font(&f.family, weight, italic, &fallbacks);
+            let id = ts.resolve_font(&font);
+            if let Some((other, _)) = seen.iter().find(|(k, i)| *i == id && k.rsplit_once('-').map(|x| x.0) == f.key.rsplit_once('-').map(|x| x.0)) {
+                panic!("{} and {other} resolve to the same face", f.key);
+            }
+            seen.push((f.key.clone(), id));
+            let line = wts.layout_line(FR_EN, gpui::px(16.), &[run(FR_EN, font.clone())], None);
+            assert!(!line.runs.is_empty());
+            for r in line.runs.iter() {
+                assert_eq!(r.font_id, id, "{}: part of the FR/EN text left the face", f.key);
+            }
+        }
+        if web.is_some() {
+            let text = "1\u{202f}234";
+            let gg = font("gg sans", 400., false, &fallbacks);
+            let gg_id = ts.resolve_font(&gg);
+            let noto_id = ts.resolve_font(&gpui::font("Phx Noto Sans Web"));
+            let line = wts.layout_line(text, gpui::px(16.), &[run(text, gg)], None);
+            let ids: Vec<gpui::FontId> = line.runs.iter().flat_map(|r| r.glyphs.iter().map(move |_| r.font_id)).collect();
+            assert_eq!(ids, vec![gg_id, noto_id, gg_id, gg_id, gg_id], "U+202F must take the web Noto Sans of the CSS stack");
+        }
+    }
+
+    #[test]
+    fn display_stand_ins_follow_the_css_stacks() {
+        assert_eq!(display_stand_in(MARKETING), ui_family());
+        assert_eq!(display_stand_in(NITRO), fallback::noto_family());
+        assert_eq!(display_stand_in(HEADLINE), fallback::noto_family());
+    }
+
+    #[test]
+    fn face_files_keep_weight_and_style() {
+        assert_eq!(face_file("gg sans", 800, true, "woff2"), "gg_sans-800i.woff2");
+        assert_eq!(weight_style("ABC_Ginto_Discord_Nord-700i"), Some((700., true)));
+        assert_eq!(weight_style("gg_sans-500"), Some((500., false)));
+    }
+
+    #[test]
+    fn ui_text_never_names_a_font_directly() {
+        fn walk(d: &Path, bad: &mut Vec<String>) {
+            for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    if !p.ends_with("fonts") {
+                        walk(&p, bad);
+                    }
+                    continue;
+                }
+                if p.extension().is_none_or(|x| x != "rs") {
+                    continue;
+                }
+                let src = std::fs::read_to_string(&p).unwrap_or_default();
+                let src = src.split("#[cfg(test)]").next().unwrap_or("");
+                for (i, l) in src.lines().enumerate() {
+                    if l.contains(".font_family(\"") || l.contains("gpui::font(\"") {
+                        bad.push(format!("{}:{}", p.display(), i + 1));
+                    }
+                }
+            }
+        }
+        let mut bad = Vec::new();
+        walk(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut bad);
+        assert!(bad.is_empty(), "use fonts::ui_family / mono_family / display_family: {bad:?}");
+        let tip = include_str!("../ui/tooltip.rs");
+        assert!(tip.contains("crate::fonts::ui_root(div())"), "window-level tooltips are laid out outside the app root");
+        let popout = include_str!("../ui/call_popout.rs");
+        assert!(popout.contains("crate::fonts::ui_root(div())"), "the call popout is its own window");
     }
 
     #[test]
