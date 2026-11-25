@@ -773,6 +773,8 @@ impl CosmicTextSystemState {
                 descent: Pixels::ZERO,
                 runs: Vec::new(),
                 len: text.len(),
+                decoration_ascent: Pixels::ZERO,
+                decoration_descent: Pixels::ZERO,
             };
         };
 
@@ -851,6 +853,8 @@ impl CosmicTextSystemState {
             descent: layout.max_descent.into(),
             runs,
             len: text.len(),
+            decoration_ascent: Pixels::ZERO,
+            decoration_descent: Pixels::ZERO,
         }
     }
 

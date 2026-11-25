@@ -61,6 +61,30 @@ pub fn underline_y_offset(line_height: Pixels, ascent: Pixels, descent: Pixels) 
     padding_top + ascent + descent * UNDERLINE_DESCENT_OFFSET_FACTOR
 }
 
+/// PHOENIX PATCH (underline geometry, docs/gpui-patches.md): Blink's `text-decoration: underline`
+/// with auto thickness and offset, measured in Chromium at 9 scale factors. Ascent and descent
+/// are the primary font's, rounded to device pixels; the half leading is floored; the thickness
+/// is `font size / 10` floored to device pixels (at least 1) and the gap below the baseline is
+/// half of the unrounded thickness, ceiled (at least 1). Returns the top of the underline for a
+/// row whose line box starts at `row_top`, and its thickness, in logical pixels.
+pub fn underline_geometry(
+    row_top: Pixels,
+    line_height: Pixels,
+    font_size: Pixels,
+    ascent: Pixels,
+    descent: Pixels,
+    scale_factor: f32,
+) -> (Pixels, Pixels) {
+    let scale = if scale_factor > 0. { scale_factor } else { 1. };
+    let ascent = (ascent.0.abs() * scale).round();
+    let descent = (descent.0.abs() * scale).round();
+    let half_leading = ((line_height.0 * scale - ascent - descent) / 2.).floor();
+    let thickness = font_size.0 * scale / 10.;
+    let gap = (thickness / 2.).ceil().max(1.);
+    let top = (row_top.0 * scale + half_leading + ascent + gap + 0.5).floor();
+    (Pixels(top / scale), Pixels(thickness.floor().max(1.) / scale))
+}
+
 const MAX_REPORTED_MISSING_GLYPHS: usize = 1024;
 
 /// The spacing behavior required of a fallback font.

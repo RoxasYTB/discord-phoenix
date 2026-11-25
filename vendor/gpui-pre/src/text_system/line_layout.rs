@@ -30,6 +30,11 @@ pub struct LineLayout {
     pub runs: Vec<ShapedRun>,
     /// The length of the line in utf-8 bytes
     pub len: usize,
+    /// PHOENIX PATCH (underline geometry, docs/gpui-patches.md): ascent of the font requested
+    /// by the first run (the primary font), before fallback. Zero when unknown.
+    pub decoration_ascent: Pixels,
+    /// PHOENIX PATCH (underline geometry): descent of the primary font.
+    pub decoration_descent: Pixels,
 }
 
 /// A run of text that has been shaped .
@@ -58,6 +63,16 @@ pub struct ShapedGlyph {
 }
 
 impl LineLayout {
+    /// PHOENIX PATCH (underline geometry): ascent and descent decorations are placed from: the
+    /// primary font's when known, else the line's maximum.
+    pub fn decoration_metrics(&self) -> (Pixels, Pixels) {
+        if self.decoration_ascent > Pixels::ZERO {
+            (self.decoration_ascent, self.decoration_descent)
+        } else {
+            (self.ascent, self.descent)
+        }
+    }
+
     /// The index for the character at the given x coordinate
     pub fn index_for_x(&self, x: Pixels) -> Option<usize> {
         if x >= self.width {
@@ -177,6 +192,8 @@ impl LineLayout {
             descent: self.descent,
             runs: left_runs,
             len: byte_index,
+            decoration_ascent: self.decoration_ascent,
+            decoration_descent: self.decoration_descent,
         };
 
         let right = LineLayout {
@@ -186,6 +203,8 @@ impl LineLayout {
             descent: self.descent,
             runs: right_runs,
             len: self.len - byte_index,
+            decoration_ascent: self.decoration_ascent,
+            decoration_descent: self.decoration_descent,
         };
 
         (left, right)
@@ -708,6 +727,11 @@ impl LineLayoutCache {
             let mut layout = self
                 .platform_text_system
                 .layout_line(&text, font_size, runs);
+            if let Some(first) = runs.first() {
+                let metrics = self.platform_text_system.font_metrics(first.font_id);
+                layout.decoration_ascent = metrics.ascent(font_size).abs();
+                layout.decoration_descent = metrics.descent(font_size).abs();
+            }
 
             if let Some(force_width) = force_width {
                 apply_force_width_to_layout(&mut layout, force_width);
@@ -880,6 +904,8 @@ mod tests {
                 glyphs,
             }],
             len: 0,
+            decoration_ascent: px(0.),
+            decoration_descent: px(0.),
         }
     }
 
