@@ -181,11 +181,18 @@ pub fn init() {
 pub struct MessageCtx {
     pub focused: bool,
     pub selected: Option<u64>,
+    pub sidebar: Option<u64>,
     pub dnd: bool,
     pub quiet: bool,
 }
 
-static CTX: Mutex<MessageCtx> = Mutex::new(MessageCtx { focused: true, selected: None, dnd: false, quiet: false });
+impl MessageCtx {
+    pub fn viewing(&self, channel: u64) -> bool {
+        self.selected == Some(channel) || self.sidebar == Some(channel)
+    }
+}
+
+static CTX: Mutex<MessageCtx> = Mutex::new(MessageCtx { focused: true, selected: None, sidebar: None, dnd: false, quiet: false });
 
 fn ctx() -> MutexGuard<'static, MessageCtx> {
     CTX.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -204,7 +211,7 @@ const SUPPRESS_NOTIFICATIONS: u64 = 1 << 12;
 pub fn message_sounds(c: &MessageCtx, f: &crate::notifications::MessageFacts, flags: u64, blocked: bool, notify: bool, allow_any: bool) -> Vec<&'static str> {
     let base = !f.from_me && !blocked && !c.dnd && !c.quiet;
     let selected = c.selected == Some(f.channel);
-    let p = base && flags & SUPPRESS_NOTIFICATIONS == 0 && notify && (!c.focused || !selected);
+    let p = base && flags & SUPPRESS_NOTIFICATIONS == 0 && notify && (!c.focused || !c.viewing(f.channel));
     let m = notify_selected_channel() && base && selected && allow_any;
     if !p && !m {
         return Vec::new();
@@ -271,6 +278,7 @@ mod tests {
         assert!(message_sounds(&c, &MessageFacts { from_me: true, ..f }, 0, false, true, true).is_empty());
         let viewing = MessageCtx { selected: Some(7), ..c };
         assert!(message_sounds(&viewing, &f, 0, false, true, true).is_empty());
+        assert!(message_sounds(&MessageCtx { sidebar: Some(7), ..c }, &f, 0, false, true, true).is_empty(), "thread side panel");
         assert_eq!(message_sounds(&MessageCtx { focused: false, ..viewing }, &f, 0, false, true, true), ["message1"]);
         prefs(|p| {
             p.ui.insert("snd-msg".into(), 0);

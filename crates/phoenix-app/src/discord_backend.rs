@@ -379,6 +379,12 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
         pins::on_gateway(&ev);
         if let GatewayEvent::Ready(r) = &ev {
             pins::init(&s.cache);
+            let gen = crate::notifications::reminders::restart();
+            let (rest, cache) = (s.rest.clone(), s.cache.clone());
+            tokio::spawn(async move {
+                crate::notifications::reminders::set(&rest.get_reminders().await.unwrap_or_default());
+                crate::notifications::reminders::run(cache, gen).await;
+            });
             crate::commands::set_session_id(&r.session_id);
             let prefs = Prefs::from_ready(r);
             let data = convert::build_ready(&s.cache, r, &prefs);

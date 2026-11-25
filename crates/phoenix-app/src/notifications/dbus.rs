@@ -113,28 +113,31 @@ pub fn circle(rgba: &mut [u8], size: u32) {
     }
 }
 
-pub fn avatar_image(bytes: &[u8]) -> Option<(i32, i32, Vec<u8>)> {
+pub fn avatar_image(bytes: &[u8], round: bool) -> Option<(i32, i32, Vec<u8>)> {
     let img = image::load_from_memory(bytes).ok()?;
     let side = img.width().min(img.height()).min(128);
     let img = img.resize_to_fill(side, side, image::imageops::FilterType::Triangle);
     let mut rgba = img.to_rgba8().into_raw();
-    circle(&mut rgba, side);
+    if round {
+        circle(&mut rgba, side);
+    }
     Some((side as i32, side as i32, rgba))
 }
 
-async fn fetch(http: &reqwest::Client, cache: &mut HashMap<String, Image>, url: &str) -> Option<Image> {
-    if let Some(i) = cache.get(url) {
+async fn fetch(http: &reqwest::Client, cache: &mut HashMap<String, Image>, url: &str, round: bool) -> Option<Image> {
+    let key = format!("{}{url}", if round { "o:" } else { "s:" });
+    if let Some(i) = cache.get(&key) {
         return Some(i.clone());
     }
     let r = http.get(url).send().await.ok()?;
     if !r.status().is_success() {
         return None;
     }
-    let img = Arc::new(avatar_image(&r.bytes().await.ok()?)?);
+    let img = Arc::new(avatar_image(&r.bytes().await.ok()?, round)?);
     if cache.len() >= 64 {
         cache.clear();
     }
-    cache.insert(url.to_owned(), img.clone());
+    cache.insert(key, img.clone());
     Some(img)
 }
 
@@ -201,7 +204,7 @@ async fn serve(mut rx: mpsc::UnboundedReceiver<Cmd>, clicks: mpsc::UnboundedSend
                 }
                 Some(Cmd::Show(t)) => {
                     let image = match &t.icon {
-                        Some(u) => fetch(&http, &mut images, u).await,
+                        Some(u) => fetch(&http, &mut images, u, t.round).await,
                         None => None,
                     };
                     let body = if markup { escape_markup(&t.body) } else { t.body.clone() };

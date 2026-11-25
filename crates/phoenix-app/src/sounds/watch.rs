@@ -145,6 +145,7 @@ pub fn watch(app: &PhoenixApp) {
     {
         let mut c = super::ctx();
         c.selected = app.selected_channel.map(|i| i.0);
+        c.sidebar = app.chat.thread.as_ref().map(|t| t.thread.id.0);
         c.dnd = app.presence == Presence::Dnd;
         c.quiet = quiet;
     }

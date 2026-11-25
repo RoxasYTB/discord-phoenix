@@ -114,6 +114,8 @@ struct RawGuild {
     joined_at: Option<String>,
     #[serde(default)]
     data_mode: Option<String>,
+    #[serde(default, deserialize_with = "null_default")]
+    stage_instances: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -134,6 +136,7 @@ pub struct Guild {
     pub unavailable: bool,
     pub joined_at: Option<String>,
     pub data_mode: Option<String>,
+    pub stage_instances: Vec<serde_json::Value>,
 }
 
 impl From<RawGuild> for Guild {
@@ -157,6 +160,7 @@ impl From<RawGuild> for Guild {
             unavailable: r.unavailable.unwrap_or(false),
             joined_at: r.joined_at,
             data_mode: r.data_mode,
+            stage_instances: r.stage_instances,
         };
         for c in g.channels.iter_mut().chain(g.threads.iter_mut()) {
             c.guild_id.get_or_insert(g.id);
