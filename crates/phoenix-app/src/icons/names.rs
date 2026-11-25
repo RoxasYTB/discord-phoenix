@@ -110,6 +110,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("voice/camera", &["VideoIcon"]),
     ("voice/video-small", &["VideoIcon"]),
     ("voice/screen", &["ScreenArrowIcon"]),
+    ("voice/screen-x", &["ScreenXIcon"]),
     ("voice/soundboard", &["SoundboardIcon"]),
     ("voice/activity", &["AppsIcon"]),
     ("voice/noise", &["WaveformIcon"]),

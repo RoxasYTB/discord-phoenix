@@ -155,7 +155,7 @@ fn summary(app: &PhoenixApp) -> AnyElement {
         .into_any_element()
 }
 
-fn group_label(text: SharedString) -> AnyElement {
+pub fn group_label(text: SharedString) -> AnyElement {
     div().p(z(8.)).text_size(z(14.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_MUTED)).child(text).into_any_element()
 }
 
@@ -176,28 +176,31 @@ pub fn settings_items(app: &PhoenixApp, entity: gpui::Entity<PhoenixApp>) -> Vec
         let (e, set) = (entity.clone(), set.clone());
         MenuItem::radio(label, q.preset == p, move |_, _, cx| set(&e, cx, Quality { preset: p, ..q }))
     };
+    let upsell = |entity: &gpui::Entity<PhoenixApp>, cx: &mut gpui::App| {
+        entity.update(cx, |a, cx| {
+            close_modal();
+            crate::ui::settings::open(a, cx);
+            if let Some(s) = a.settings.as_mut() {
+                s.page = crate::ui::settings::Page::Nitro;
+            }
+            cx.notify();
+        });
+    };
     let mut res_items = Vec::new();
-    for r in stream::RESOLUTIONS {
-        let fps = if q.preset == Preset::Documents { 30 } else { q.fps };
-        let label = resolution_label(r);
-        if stream::allowed(perks, r, fps, false) {
-            let (e, set) = (entity.clone(), set.clone());
-            let checked = q.preset == Preset::Custom && q.resolution == r;
-            res_items.push(MenuItem::radio(label, checked, move |_, _, cx| set(&e, cx, Quality { preset: Preset::Custom, resolution: r, ..q })));
-        } else {
-            res_items.push(MenuItem::disabled(label, None));
-        }
+    for r in OPTION_RESOLUTIONS {
+        let (e, set) = (entity.clone(), set.clone());
+        let ok = stream::allowed(perks, r, q.fps, false);
+        res_items.push(MenuItem::radio(resolution_label(r), q.resolution == r, move |_, _, cx| {
+            if ok { set(&e, cx, Quality { preset: Preset::Custom, resolution: r, ..q }) } else { upsell(&e, cx) }
+        }));
     }
     let mut fps_items = Vec::new();
     for f in stream::FRAME_RATES {
-        let label: SharedString = crate::t!("golive.fps_n", value = f);
-        if stream::allowed(perks, q.resolution, f, false) {
-            let (e, set) = (entity.clone(), set.clone());
-            let checked = q.preset == Preset::Custom && q.fps == f;
-            fps_items.push(MenuItem::radio(label, checked, move |_, _, cx| set(&e, cx, Quality { preset: Preset::Custom, fps: f, ..q })));
-        } else {
-            fps_items.push(MenuItem::disabled(label, None));
-        }
+        let (e, set) = (entity.clone(), set.clone());
+        let ok = stream::allowed(perks, q.resolution, f, false);
+        fps_items.push(MenuItem::radio(fps_label(f), q.fps == f, move |_, _, cx| {
+            if ok { set(&e, cx, Quality { preset: Preset::Custom, fps: f, ..q }) } else { upsell(&e, cx) }
+        }));
     }
     let (e, set2) = (entity.clone(), set.clone());
     let hide = stream::hide_preview();
@@ -214,18 +217,27 @@ pub fn settings_items(app: &PhoenixApp, entity: gpui::Entity<PhoenixApp>) -> Vec
             e4.update(cx, |_, cx| cx.notify());
         }));
     }
-    vec![
+    let mut items = vec![
         MenuItem::Custom(group_label(crate::t!("golive.mode"))),
         radio(crate::t!("golive.gaming"), Preset::Video).with_subtext(preset_sub(Preset::Video)),
         radio(crate::t!("golive.docs"), Preset::Documents).with_subtext(preset_sub(Preset::Documents)),
         radio(crate::t!("golive.custom"), Preset::Custom),
-        MenuItem::Separator,
-        MenuItem::submenu(crate::t!("golive.resolution"), res_items),
-        MenuItem::submenu(crate::t!("golive.fps"), fps_items),
-        MenuItem::Separator,
-        MenuItem::check(crate::t!("golive.mute"), !q.sound, move |_, _, cx| set2(&e, cx, Quality { sound: !q.sound, ..q })),
-        MenuItem::submenu(crate::t!("golive.advanced"), advanced),
-    ]
+    ];
+    if q.preset == Preset::Custom {
+        items.push(MenuItem::Separator);
+        items.push(MenuItem::submenu(crate::t!("golive.resolution"), res_items));
+        items.push(MenuItem::submenu(crate::t!("golive.fps"), fps_items));
+    }
+    items.push(MenuItem::Separator);
+    items.push(MenuItem::check(crate::t!("golive.mute"), !q.sound, move |_, _, cx| set2(&e, cx, Quality { sound: !q.sound, ..q })));
+    items.push(MenuItem::submenu(crate::t!("golive.advanced"), advanced));
+    items
+}
+
+pub const OPTION_RESOLUTIONS: [u32; 4] = [720, 1080, 1440, 0];
+
+pub fn fps_label(f: u32) -> SharedString {
+    format!("{f}fps").into()
 }
 
 pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {

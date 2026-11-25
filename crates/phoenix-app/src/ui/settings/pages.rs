@@ -995,11 +995,11 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let has_sources = !data.sources.is_empty();
     let source_rows = data.sources.iter().enumerate().map(|(i, src)| {
         div()
-            .mt(z(if i == 0 { 26. } else { 16. }))
+            .mt(z(if i == 0 { 52. } else { 16. }))
             .h(z(42.))
             .flex()
             .items_center()
-            .gap(z(10.))
+            .gap(z(14.))
             .child(
                 div().w(z(32.)).h(z(22.)).flex_none().rounded(z(3.)).bg(c(tok(idx::BACKGROUND_MOD_STRONG))).flex().items_center().justify_center()
                     .text_size(z(8.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_STRONG))).child(src.brand.clone()),
@@ -1019,8 +1019,8 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                             .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(src.brand.clone()))
                             .when(src.default, |d| {
                                 d.child(
-                                    div().px(z(4.)).rounded(z(3.)).bg(gpui::rgb(0x4f505a)).text_size(z(12.)).line_height(z(14.)).font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(gpui::white()).child(tr("sp.bl.default")),
+                                    div().h(z(14.)).px(z(4.)).rounded(z(3.)).flex().items_center().bg(c(tok(idx::PRIMARY_500))).text_size(z(12.)).line_height(z(14.)).font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(gpui::white()).child(tr("sp.bl.default").to_uppercase()),
                                 )
                             }),
                     )
@@ -1044,13 +1044,13 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .when(has_sources, |d| d.child(line().mt(z(16.))))
         .child(
             div()
-                .mt(z(if has_sources { 32. } else { 50. }))
+                .mt(z(if has_sources { 16. } else { 50. }))
                 .h(z(32.))
                 .flex()
                 .items_center()
                 .child(
                     div().size(z(32.)).flex_none().flex().items_center().child(
-                        div().w(z(32.)).h(z(22.)).rounded(z(3.)).bg(c(tok(idx::BRAND_500))).flex().items_center().justify_center()
+                        div().w(z(32.)).h(z(22.)).rounded(z(2.)).bg(c(tok(idx::BRAND_500))).flex().items_center().justify_center()
                             .child(gpui::svg().path(crate::icons::path("discord-logo")).size(z(16.)).text_color(gpui::white())),
                     ),
                 )
@@ -1059,7 +1059,7 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         )
         .child(line().mt(z(16.)))
         .child(
-            div().mt(z(20.)).mb(z(10.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)),
+            div().mt(z(20.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)),
         )
         .into_any_element()
 }
@@ -1073,7 +1073,7 @@ fn billing_history(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .flex_col()
         .child(
             div()
-                .mt(z(35.))
+                .mt(z(3.))
                 .border_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .rounded(z(8.))

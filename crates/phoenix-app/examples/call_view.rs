@@ -12,6 +12,12 @@ fn main() -> anyhow::Result<()> {
     let with_chat = rest.iter().any(|a| a == "chat");
     let focus_grid = rest.iter().any(|a| a == "grid");
     let no_strip = rest.iter().any(|a| a == "nostrip");
+    let menu = rest.iter().find_map(|a| match a.as_str() {
+        "menu=more" => Some(phoenix_app::ui::call_menus::TrayMenu::More),
+        "menu=streams" => Some(phoenix_app::ui::call_menus::TrayMenu::Streams),
+        _ => None,
+    });
+    let sub = rest.iter().find_map(|a| a.strip_prefix("sub=").and_then(|v| v.parse::<usize>().ok()));
 
     let text = gpui_platform::current_platform(true).text_system();
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
@@ -80,6 +86,10 @@ fn main() -> anyhow::Result<()> {
                 phoenix_app::ui::voice_panel::set_flags(Id(4), VoiceFlags { self_mute: true, ..Default::default() });
                 phoenix_app::ui::voice_panel::set_flags(Id(7), VoiceFlags { self_deaf: true, ..Default::default() });
                 app.voice.speaking.insert(Id(3));
+                phoenix_app::ui::call_menus::open(menu);
+                if let Some(ix) = sub {
+                    phoenix_app::ui::context_menu::debug_open_submenu(ix);
+                }
             });
         })?;
         pump(&mut cx, 10);

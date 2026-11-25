@@ -156,3 +156,14 @@ Order in the "Voix connectée" panel and in the call tray: camera, screen share,
 - `PHX_VOICE=1 PHX_GUILD=1369382919948210248 PHX_CHANNEL=1574900893613039696` joins the test channel only (any other channel is refused in `ReadOnly::join_voice`), with the synthetic tone as microphone and always muted; `PHX_VOICE_OPEN=soundboard`, `PHX_VOICE_SOUND=<name>`, `PHX_VOICE_CAMERA=1`, `PHOENIX_VOICE_TRACE=1`, `PHOENIX_SOUND_LOG=1`. It leaves the channel before exiting.
 - Voice gateway: Ready → UDP discovery → Select Protocol → Session Description (`aead_aes256_gcm_rtpsize`) → Connected ✅. One early run stayed on "Connexion RTC" for 20 s without a trace; with the trace on, later runs connected every time (keep an eye on it).
 - Soundboard: playing "Bonsoir" sent the POST, played locally, gave the tile the brand ring and the button the playing border; the gateway echoed `VOICE_CHANNEL_EFFECT_SEND` with `animation_type: 1` (BASIC) and the sound's emoji ✅. The emoji animation itself is drawn under the open picker in that capture; see the emoji effect row above for the later check ⚠.
+
+## Tray menus (call-menus, 2026-11-25)
+
+Sources: `more-settings-context` = module 592982 (chunk `f9223b1802a3dcf4.js`, fetched from the assets CDN; its items 854182 and 470743 live in `c5a07be73764f6af.js` and `5817214c5ea59e00.js`), `manage-streams` = 848362 + 600125 (`f9f1b892fd9ef3ff.js`), tray wiring in `fc9b5c3443825c91.js`. Strings from `fr.js`. Nothing was measured live: the menus only exist during a call and this lot never joins voice; renders are `call_view menu=more|streams [sub=N]` (mock).
+
+| element | client | Phoenix | status |
+|---|---|---|---|
+| « … » button | `Popout align:right position:top spacing:16`, `isActive` while shown | `call_menus::render` (BottomRight anchor 16 px above the button), button uses its hover colour while open | ✅ |
+| « … » items | groups: invite / grid, my camera, non-video participants, message previews / (console handoff) / voice & video settings, region (private calls) / report stream, device permissions, report app | `more_layout` (test) | ✅ ⚠ see inventory |
+| screen share caret | `onPopoutClick` only while my stream is active; click = stop | `center_button_ex(.., live, Some(toggle Streams), ..)` | ✅ |
+| `manage-streams` | minimal: stop (danger), change windows (null with the system picker), Qualité du partage › (FPS group, Résolution group), Partager l'audio du stream, report problem | `streams_layout` (test) | ✅ ⚠ quality applies to the next stream |

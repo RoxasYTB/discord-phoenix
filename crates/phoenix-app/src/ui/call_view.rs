@@ -78,6 +78,10 @@ pub fn set_focus(f: Focus) {
     FOCUS.with(|c| c.set(f));
 }
 
+pub fn focus() -> Focus {
+    FOCUS.with(|c| c.get())
+}
+
 pub const IDLE_TIMEOUT: Duration = Duration::from_millis(2000);
 
 pub fn idle() -> bool {
@@ -227,12 +231,15 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let zoom = crate::theme::zoom();
 
     let mut tiles = Vec::new();
+    let hide_no_video = crate::ui::call_menus::no_video_hidden(ch_id);
     for &u in &ch.voice_users {
         let f = crate::ui::voice_panel::flags(u);
         if f.stream {
             tiles.push(Tile { user: u, stream: true, invite: false });
         }
-        tiles.push(Tile { user: u, stream: false, invite: false });
+        if !hide_no_video || f.video {
+            tiles.push(Tile { user: u, stream: false, invite: false });
+        }
     }
     let solo = match tiles.as_slice() {
         [only] if !only.stream => Some(only.user),
@@ -352,7 +359,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex_row()
         .bg(t(idx::BACKGROUND_BASE_LOWEST))
         .child(call)
-        .children(stream_menu(app, cx));
+        .children(stream_menu(app, cx))
+        .children(crate::ui::call_menus::render(app, ch_id, cx));
     Some(if chat_open() {
         root.child(
             div()
@@ -855,7 +863,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
             .flex()
             .items_center()
             .justify_center()
-            .map(|d| match f.video.then(|| if me { camera_image() } else { remote_image(tile.user) }).flatten() {
+            .map(|d| match f.video.then(|| if me { camera_image().filter(|_| !crate::ui::call_menus::self_video_hidden()) } else { remote_image(tile.user) }).flatten() {
                 Some(img) => d.bg(t(idx::BACKGROUND_BASE_LOWER)).child(gpui::img(img).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Contain)),
                 None => d.child(avatar(u, 80. * crate::theme::zoom())),
             })
@@ -892,6 +900,8 @@ enum Look {
     Green,
 }
 
+type CaretClick = std::rc::Rc<dyn Fn(&mut PhoenixApp, &mut Context<PhoenixApp>)>;
+
 fn center_button(
     id: &'static str,
     icon: gpui::Svg,
@@ -901,11 +911,27 @@ fn center_button(
     on_click: impl Fn(&mut PhoenixApp, &mut Context<PhoenixApp>) + 'static,
     cx: &mut Context<PhoenixApp>,
 ) -> AnyElement {
+    center_button_ex(id, icon, look, caret, None, false, tip, on_click, cx)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn center_button_ex(
+    id: &'static str,
+    icon: gpui::Svg,
+    look: Look,
+    caret: bool,
+    on_caret: Option<CaretClick>,
+    active: bool,
+    tip: SharedString,
+    on_click: impl Fn(&mut PhoenixApp, &mut Context<PhoenixApp>) + 'static,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let (bg, hover) = match look {
         Look::Dark => (gpui::transparent_black(), t(idx::BACKGROUND_MOD_MUTED)),
         Look::Red => (t(idx::OPACITY_RED_12), t(idx::OPACITY_RED_16)),
         Look::Green => (t(idx::OPACITY_GREEN_12), t(idx::OPACITY_GREEN_24)),
     };
+    let bg = if active { hover } else { bg };
     let group: SharedString = format!("{id}-grp").into();
     let btn = div()
         .id(id)
@@ -936,7 +962,9 @@ fn center_button(
                 .bg(bg)
                 .group_hover(group, |s| s.bg(hover))
                 .cursor_pointer()
-                .child(crate::ui::icon(crate::assets::Icon::Chevron, 16. * crate::theme::zoom(), t(idx::WHITE))),
+                .child(crate::ui::icon(crate::assets::Icon::Chevron, 16. * crate::theme::zoom(), t(idx::WHITE)))
+                .id(SharedString::from(format!("{id}-caret")))
+                .when_some(on_caret, |d, f| d.on_click(cx.listener(move |a, _, _, cx| f(a, cx)))),
         );
     }
     wrap.into_any_element()
@@ -978,7 +1006,9 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
         Look::Green => t(idx::GREEN_300),
         Look::Dark => white,
     };
-    let screen_look = if me.stream || crate::ui::go_live::live(app) { Look::Green } else { Look::Dark };
+    let live = crate::ui::call_menus::stream_live(app);
+    let open_menu = crate::ui::call_menus::opened();
+    let screen_look = if live { Look::Green } else { Look::Dark };
     let cam_look = if me.video { Look::Green } else { Look::Dark };
     div()
         .h(z(49.))
@@ -1035,15 +1065,25 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                 )
                 .when(level < Collapse::Minimal, |d| d.child(
                     section()
-                        .child(center_button(
-                            "call-screen",
-                            glyph("icons/voice/screen.svg", 20., icon_color(screen_look)),
-                            screen_look,
-                            false,
-                            crate::ui::go_live::label(app),
-                            crate::ui::go_live::toggle,
-                            cx,
-                        ))
+                        .child(
+                            div()
+                                .relative()
+                                .child(center_button_ex(
+                                    "call-screen",
+                                    glyph("icons/voice/screen.svg", 20., icon_color(screen_look)),
+                                    screen_look,
+                                    live,
+                                    Some(std::rc::Rc::new(|_: &mut PhoenixApp, cx: &mut Context<PhoenixApp>| {
+                                        crate::ui::call_menus::toggle(crate::ui::call_menus::TrayMenu::Streams);
+                                        cx.notify();
+                                    })),
+                                    open_menu == Some(crate::ui::call_menus::TrayMenu::Streams),
+                                    crate::ui::go_live::label(app),
+                                    crate::ui::go_live::toggle,
+                                    cx,
+                                ))
+                                .child(crate::ui::call_menus::probe(crate::ui::call_menus::TrayMenu::Streams)),
+                        )
                         .child(center_button(
                             "call-activity",
                             glyph("icons/voice/activity.svg", 20., white),
@@ -1054,15 +1094,25 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                             cx,
                         ))
                         .child(crate::ui::pickers::soundboard::call_button(app, cx))
-                        .child(center_button(
-                            "call-more",
-                            named("more-horizontal", 20., white),
-                            Look::Dark,
-                            false,
-                            crate::t!("call.more"),
-                            |_, _| {},
-                            cx,
-                        )),
+                        .child(
+                            div()
+                                .relative()
+                                .child(center_button_ex(
+                                    "call-more",
+                                    named("more-horizontal", 20., white),
+                                    Look::Dark,
+                                    false,
+                                    None,
+                                    open_menu == Some(crate::ui::call_menus::TrayMenu::More),
+                                    crate::t!("call.more"),
+                                    |_, cx| {
+                                        crate::ui::call_menus::toggle(crate::ui::call_menus::TrayMenu::More);
+                                        cx.notify();
+                                    },
+                                    cx,
+                                ))
+                                .child(crate::ui::call_menus::probe(crate::ui::call_menus::TrayMenu::More)),
+                        ),
                 ))
                 .child(
                     div()
