@@ -1118,7 +1118,7 @@ pub(crate) fn message(
                 .when_some(ru.as_deref().map(|u| u.id), |d, uid| {
                     d.cursor_pointer().hover(|s| s.underline()).on_click(message_ext::open_user(entity, uid, msg.channel))
                 })
-                .child(crate::fonts::name_text_with(reply_text, ru.as_deref(), 14., reply_gradient))
+                .child(crate::fonts::role_name_text(reply_text, ru.as_deref(), 14., app.selected_guild.is_some(), reply_gradient))
             })
             .when_some(ru.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, true).opacity(0.64)))
             .child(
@@ -1198,7 +1198,7 @@ pub(crate) fn message(
             .cursor_pointer()
             .hover(|s| s.underline())
             .on_click(message_ext::open_author(entity, msg))
-            .child(crate::fonts::name_text_with(name, author, 16., author_role_gradient))
+            .child(crate::fonts::role_name_text(name, author, 16., app.selected_guild.is_some(), author_role_gradient))
             .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col))))
     });
 

@@ -412,7 +412,7 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
         .or_else(|| app.member_nick_in(guild, m.author))
         .or_else(|| author.map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("common.unknown"));
-    let role_gradient = app.author_role_gradient_in(guild, m.author);
+    let (role_color, role_gradient) = app.author_role_style_in(guild, m.author);
     let reply = m.reply_to.is_some().then(|| reply_line(app, m, &cx.entity()));
     let text: Option<AnyElement> = rich.then(|| crate::ui::components::markdown_highlighted(app, &content, &cx.entity(), m.id, hl));
     div()
@@ -453,7 +453,7 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
                             .text_size(z(16.))
                             .line_height(z(22.))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(app.author_color_in(guild, m.author).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
+                            .text_color(role_color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
                         author,
                         false,
                     )
@@ -461,7 +461,7 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
                     .cursor_pointer()
                     .hover(|s| s.underline())
                     .on_click(crate::ui::chat::message_ext::open_user(&cx.entity(), m.author, m.channel))
-                    .child(crate::fonts::name_text_with(shown, author, 16., role_gradient)),
+                    .child(crate::fonts::role_name_text(shown, author, 16., guild.is_some(), role_gradient)),
                 )
                 .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(crate::ui::chat::server_tag_chip(&tg, false)))
                 .when_some(app.author_role_icon_in(guild, m.author), |d, u| d.child(crate::ui::chat::role_icon(u)))
@@ -529,11 +529,12 @@ fn reply_line(app: &PhoenixApp, m: &Message, entity: &gpui::Entity<PhoenixApp>) 
             let ru_cow = app.member_user(guild, *a);
             let ru = ru_cow.as_deref();
             let name: SharedString = nick.clone().or_else(|| app.member_nick_in(guild, *a)).or_else(|| ru.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
+            let (reply_color, reply_gradient) = app.author_role_style_in(guild, *a);
             let preview: String = text.chars().take(200).collect::<String>().replace('\n', " ");
             row.child(avatar(ru, 16.))
                 .child(
                     crate::fonts::styled_name(
-                        div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).text_color(app.author_color_in(guild, *a).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
+                        div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).text_color(reply_color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG))),
                         ru,
                         false,
                     )
@@ -541,10 +542,7 @@ fn reply_line(app: &PhoenixApp, m: &Message, entity: &gpui::Entity<PhoenixApp>) 
                     .cursor_pointer()
                     .hover(|s| s.underline())
                     .on_click(crate::ui::chat::message_ext::open_user(entity, *a, m.channel))
-                    .child(match app.author_role_gradient_in(guild, *a) {
-                        Some(stops) => crate::fonts::name_text_with(name, ru, 14., Some(stops)),
-                        None => crate::fonts::name_text(name, ru, 14.),
-                    }),
+                    .child(crate::fonts::role_name_text(name, ru, 14., guild.is_some(), reply_gradient)),
                 )
                 .map(|r| {
                     if preview.trim().is_empty() && m.reply_voice {

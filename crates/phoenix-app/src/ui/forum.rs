@@ -674,9 +674,7 @@ fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &
     let author_id = first.map(|m| m.author).or(p.owner);
     let author = author_id.and_then(|u| app.users.get(&u));
     let guild = app.channels.get(&p.thread).and_then(|ch| ch.guild).or(app.selected_guild);
-    let author_color = guild
-        .zip(author_id)
-        .and_then(|(g, u)| app.members.get(&g).and_then(|ms| ms.iter().find(|m| m.user == u)).and_then(|m| app.member_color(g, m)));
+    let (author_color, author_gradient) = author_id.map_or((None, None), |u| app.author_role_style_in(guild, u));
     let preview: SharedString =
         first.map(|m| crate::ui::chat::reply_preview_text(app, &preview_text(&m.content).into())).unwrap_or_default();
     let thumb = first.and_then(|m| m.attachments.iter().find(|a| a.kind == AttachmentKind::Image)).map(|a| a.url.clone());
@@ -774,10 +772,7 @@ fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &
                                     author,
                                     false,
                                 )
-                                .child(match author_id.and_then(|u| app.author_role_gradient_in(guild, u)) {
-                                    Some(stops) => crate::fonts::name_text_with(author_name, author, 14., Some(stops)),
-                                    None => crate::fonts::name_text(author_name, author, 14.),
-                                })
+                                .child(crate::fonts::role_name_text(author_name, author, 14., guild.is_some(), author_gradient))
                             })
                             .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(":"))
                             .child(

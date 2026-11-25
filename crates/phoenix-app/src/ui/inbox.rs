@@ -847,8 +847,8 @@ fn cozy_message_with(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<Pho
         .or_else(|| app.member_nick_in(guild, m.author))
         .or_else(|| u.map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("common.unknown"));
-    let name_color = app.author_color_in(guild, m.author).map(|c2| crate::theme::role_color(Some(c2))).unwrap_or_else(|| tk(idx::TEXT_STRONG));
-    let role_gradient = app.author_role_gradient_in(guild, m.author);
+    let (name_color, role_gradient) = app.author_role_style_in(guild, m.author);
+    let name_color = name_color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
     let role_dot = app.author_role_dot_in(guild, m.author);
     let bot = u.is_some_and(|u| u.bot);
     let reply = reply_line(app, m, guild);
@@ -888,7 +888,7 @@ fn cozy_message_with(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<Pho
                     .cursor_pointer()
                     .hover(|s| s.underline())
                     .on_click(crate::ui::chat::message_ext::open_user(&cx.entity(), m.author, m.channel))
-                    .child(crate::fonts::name_text_with(name, u, 16., role_gradient))
+                    .child(crate::fonts::role_name_text(name, u, 16., guild.is_some(), role_gradient))
                     .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col)))),
                 )
                 .when_some(
@@ -921,8 +921,8 @@ fn reply_line(app: &PhoenixApp, m: &Message, guild: Option<Id>) -> Option<AnyEle
         if m.reply_mentions_author { "@" } else { "" },
         nick.map(|n| n.to_string()).or_else(|| ru.map(|u| u.display_name.to_string())).unwrap_or_else(|| crate::t!("common.unknown").to_string())
     );
-    let color = ru.and_then(|u| app.author_color_in(guild, u.id)).map(|c2| crate::theme::role_color(Some(c2))).unwrap_or_else(|| tk(idx::TEXT_STRONG));
-    let gradient = ru.and_then(|u| app.author_role_gradient_in(guild, u.id));
+    let (color, gradient) = ru.map_or((None, None), |u| app.author_role_style_in(guild, u.id));
+    let color = color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
     let empty = m.reply_preview.is_none() || text.is_empty();
     let text = if m.reply_preview.is_some() && text.is_empty() { crate::t!("chat.reply_click_to_see") } else { text };
     Some(
@@ -951,7 +951,7 @@ fn reply_line(app: &PhoenixApp, m: &Message, guild: Option<Id>) -> Option<AnyEle
             .when(ru.is_some_and(|u| u.bot), |d| d.child(crate::ui::chat::bot_tag(ru.is_some_and(|u| u.verified_bot)).ml_0()))
             .child(
                 crate::fonts::styled_name(div().flex_none().font_weight(FontWeight::MEDIUM).text_color(color).opacity(0.64), ru, false)
-                    .child(crate::fonts::name_text_with(name.into(), ru, 14., gradient)),
+                    .child(crate::fonts::role_name_text(name.into(), ru, 14., guild.is_some(), gradient)),
             )
             .child(
                 div()
@@ -2124,11 +2124,8 @@ fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Contex
         .and_then(|o| app.member_nick(o))
         .or_else(|| owner.map(|u| if u.display_name.is_empty() { u.name.clone() } else { u.display_name.clone() }))
         .unwrap_or_default();
-    let owner_color = p
-        .owner
-        .and_then(|o| app.author_color_in(app.selected_guild, o))
-        .map(|c2| crate::theme::role_color(Some(c2)))
-        .unwrap_or_else(|| tk(idx::TEXT_DEFAULT));
+    let (owner_color, owner_gradient) = p.owner.map_or((None, None), |o| app.author_role_style_in(app.selected_guild, o));
+    let owner_color = owner_color.map(c).unwrap_or_else(|| tk(idx::TEXT_DEFAULT));
     div()
         .id(("archived-thread-row", p.thread.0))
         .flex_none()
@@ -2166,7 +2163,7 @@ fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Contex
                         .child(div().flex_none().mr(z(8.)).child(avatar(owner, 16.)))
                         .child(div().flex_none().child(crate::t!("threads.started_by")))
                         .child(div().flex_none().ml(z(4.)).font_weight(FontWeight::SEMIBOLD).text_color(owner_color).child(
-                            match p.owner.and_then(|o| app.author_role_gradient_in(app.selected_guild, o)) {
+                            match owner_gradient {
                                 Some(stops) => crate::fonts::name_text_with(owner_name, owner, 14., Some(stops)),
                                 None => owner_name.into_any_element(),
                             },
@@ -2200,7 +2197,8 @@ pub(crate) fn thread_browser_row(app: &PhoenixApp, t: &crate::model::Channel, pa
     let sub = match &recent {
         Some(r) => {
             let u = app.member_user(guild, r.author);
-            let color = app.author_color_in(guild, r.author).map(|c2| crate::theme::role_color(Some(c2))).unwrap_or_else(|| tk(idx::TEXT_STRONG));
+            let (color, gradient) = app.author_role_style_in(guild, r.author);
+            let color = color.map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
             div()
                 .flex()
                 .items_center()
@@ -2209,7 +2207,7 @@ pub(crate) fn thread_browser_row(app: &PhoenixApp, t: &crate::model::Channel, pa
                 .child({
                     let name = app.member_nick(r.author).unwrap_or_else(|| r.name.clone());
                     div().flex_none().max_w(z(160.)).overflow_hidden().text_ellipsis().font_weight(FontWeight::MEDIUM).text_color(color).child(
-                        match app.author_role_gradient_in(guild, r.author) {
+                        match gradient {
                             Some(stops) => crate::fonts::name_text_with(name, u.as_deref(), 14., Some(stops)),
                             None => name.into_any_element(),
                         },

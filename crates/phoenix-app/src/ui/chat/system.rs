@@ -40,7 +40,8 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         .or_else(|| app.member_nick(msg.author))
         .or_else(|| app.users.get(&msg.author).map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("sys.someone"));
-    let name_color = app.author_color(msg.author).map(c).unwrap_or_else(|| c(Palette::TEXT_HEADER));
+    let (name_color, name_gradient) = app.author_role_style(msg.author);
+    let name_color = name_color.map(c).unwrap_or_else(|| c(Palette::TEXT_HEADER));
     let target = |t: Option<crate::model::Id>| t.filter(|t| *t != msg.author);
     let other: Option<(crate::model::Id, SharedString, SharedString)> = match msg.kind {
         MessageKind::RecipientAdd(t) | MessageKind::RecipientRemove(t) => target(t).map(|t| {
@@ -129,10 +130,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             )
             .id(("sys-author", msg.id.0))
             .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
-            .child(match crate::ui::role_gradient::for_author(app, msg.author) {
-                Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
-                None => crate::fonts::name_text(name, author, 16.),
-            })
+            .child(crate::fonts::role_name_text(name, author, 16., app.selected_guild.is_some(), name_gradient))
         })
         .child(after)
         .when_some(thread.clone(), |d, t| {
@@ -281,7 +279,8 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         .or_else(|| app.member_nick(msg.author))
         .or_else(|| app.users.get(&msg.author).map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("sys.someone"));
-    let name_color = app.author_color(msg.author).map(c).unwrap_or_else(|| tk(idx::INTERACTIVE_TEXT_ACTIVE));
+    let (name_color, name_gradient) = app.author_role_style(msg.author);
+    let name_color = name_color.map(c).unwrap_or_else(|| tk(idx::INTERACTIVE_TEXT_ACTIVE));
     let question = truncate_question(poll_field(msg, "poll_question_text").unwrap_or(""));
     let votes: u32 = poll_field(msg, "victor_answer_votes").and_then(|v| v.parse().ok()).unwrap_or(0);
     let total: u32 = poll_field(msg, "total_votes").and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -323,10 +322,7 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                 false,
             )
             .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
-            .child(match crate::ui::role_gradient::for_author(app, msg.author) {
-                Some(stops) => crate::fonts::name_text_with(name, author_user, 16., Some(stops)),
-                None => crate::fonts::name_text(name, author_user, 16.),
-            })
+            .child(crate::fonts::role_name_text(name, author_user, 16., app.selected_guild.is_some(), name_gradient))
             .into_any_element();
             let t = |k: &str| crate::i18n::t(k, &[]).into_any_element();
             if crate::i18n::locale() == "en" {

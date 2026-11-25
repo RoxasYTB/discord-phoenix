@@ -315,6 +315,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
         let user_cow = app.member_user(Some(g), uid);
         let user = user_cow.as_deref();
         let mem = app.members.get(&g).and_then(|ms| crate::member_index::find(ms, g, uid));
+        let (role_col, role_grad) = mem.map_or((None, None), |m| app.member_role_style(g, m));
         let name = mem
             .and_then(|m| m.nick.clone())
             .or_else(|| user.map(|u| u.display_name.clone()))
@@ -404,7 +405,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                             .line_height(z(18.))
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(
-                                                mem.and_then(|m| app.member_color(g, m))
+                                                role_col
                                                     .map(c)
                                                     .unwrap_or_else(|| c(crate::theme::tok(crate::theme::generated::idx::CHANNELS_DEFAULT))),
                                             )
@@ -412,12 +413,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                         user,
                                         false,
                                     )
-                                    .child(crate::fonts::name_text_with(
-                                        name,
-                                        user,
-                                        14.,
-                                        mem.and_then(|m| crate::ui::role_gradient::for_member(app, g, m)),
-                                    )),
+                                    .child(crate::fonts::name_text_with(name, user, 14., role_grad)),
                                 ),
                         )
                         .child(
@@ -606,6 +602,7 @@ pub fn member_row_in(
     let offline = mem.presence == Presence::Offline;
     let name = nick.cloned().or_else(|| user.map(|u| u.display_name.clone())).unwrap_or_default();
     let uid = mem.user;
+    let (role_col, role_grad) = g.map_or((None, None), |g| app.member_role_style(g, mem));
     let e = entity.clone();
     let tag = user.and_then(|u| u.tag.clone());
     let acts = app.people.activities.get(&uid).map(Vec::as_slice).unwrap_or(&[]);
@@ -730,7 +727,7 @@ pub fn member_row_in(
                                         .text_size(z(16.))
                                         .line_height(z(20.))
                                         .font_weight(FontWeight::MEDIUM)
-                                        .map(|d| match g.and_then(|g| app.member_color(g, mem)) {
+                                        .map(|d| match role_col {
                                             Some(col) => d.text_color(role_color(Some(col))),
                                             None if app.people.popout.as_ref().is_some_and(|p| p.user == uid) => {
                                                 d.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
@@ -743,12 +740,7 @@ pub fn member_row_in(
                                         .overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
-                                        .child(crate::fonts::name_text_with(
-                                            name,
-                                            user,
-                                            16.,
-                                            g.and_then(|g| crate::ui::role_gradient::for_member(app, g, mem)),
-                                        )),
+                                        .child(crate::fonts::role_name_text(name, user, 16., g.is_some(), role_grad)),
                                 )
                                 .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.))))
                                 .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))

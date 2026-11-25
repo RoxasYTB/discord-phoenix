@@ -40,19 +40,7 @@ pub fn style_for_roles(roles: &[Role], member_roles: &[Id]) -> (Option<u32>, Opt
     let Some(top) = highest_colored_role(roles, member_roles) else {
         return (None, None);
     };
-    let color = top.color.filter(|&c| c != 0).map(crate::theme::user_color);
-    let gradient = get(top.id);
-    (color, gradient)
-}
-
-pub fn for_member(app: &crate::app::PhoenixApp, guild: Id, m: &crate::model::Member) -> Option<RoleGradient> {
-    let roles = app.roles.get(&guild)?;
-    let top = highest_colored_role(roles, &m.roles)?;
-    get(top.id)
-}
-
-pub fn for_author(app: &crate::app::PhoenixApp, user: Id) -> Option<RoleGradient> {
-    app.author_role_style(user).1
+    (top.color.map(crate::theme::user_color), get(top.id))
 }
 
 #[cfg(test)]
@@ -115,5 +103,40 @@ mod tests {
         let member_roles = [Id(601), Id(602), Id(603)];
         let (color, _) = style_for_roles(&roles, &member_roles);
         assert_eq!(color, Some(crate::theme::user_color(0x00BB00)));
+    }
+
+    #[test]
+    fn high_gradient_role_beats_lower_plain_role() {
+        set(Id(701), 0x112233, Some(0x445566), Some(0x778899));
+        let roles = [role(700, 3, Some(0xFF0000)), role(701, 8, Some(0x112233))];
+        let (color, gradient) = style_for_roles(&roles, &[Id(700), Id(701)]);
+        assert_eq!(color, Some(crate::theme::user_color(0x112233)));
+        assert_eq!(gradient, Some([0x112233, 0x445566, 0x778899]));
+        set(Id(701), 0, None, None);
+    }
+
+    #[test]
+    fn zero_or_missing_colour_never_paints_black() {
+        let roles = [role(801, 9, Some(0)), role(802, 7, None)];
+        assert_eq!(style_for_roles(&roles, &[Id(801), Id(802)]), (None, None));
+    }
+
+    #[test]
+    fn roles_missing_from_cache_are_ignored() {
+        let roles = [role(901, 2, Some(0x3498DB))];
+        let (color, _) = style_for_roles(&roles, &[Id(999), Id(901), Id(998)]);
+        assert_eq!(color, Some(crate::theme::user_color(0x3498DB)));
+        assert_eq!(style_for_roles(&roles, &[Id(999)]), (None, None));
+        assert_eq!(style_for_roles(&[], &[Id(901)]), (None, None));
+    }
+
+    #[test]
+    fn equal_position_ignores_cache_order() {
+        let roles = [role(1003, 4, Some(0x0000CC)), role(1001, 4, Some(0x00BB00)), role(1002, 4, Some(0xAA0000))];
+        let mut rev = roles.clone();
+        rev.reverse();
+        let ids = [Id(1003), Id(1002), Id(1001)];
+        assert_eq!(style_for_roles(&roles, &ids), style_for_roles(&rev, &ids));
+        assert_eq!(style_for_roles(&roles, &ids).0, Some(crate::theme::user_color(0x00BB00)));
     }
 }

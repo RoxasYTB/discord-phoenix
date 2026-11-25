@@ -383,18 +383,16 @@ fn message_card(app: &PhoenixApp, m: &Message) -> gpui::Div {
                                 .or_else(|| app.member_nick(m.author))
                                 .or_else(|| u.map(|u| u.display_name.clone()))
                                 .unwrap_or_else(|| crate::t!("common.unknown"));
+                            let (role_color, role_gradient) = app.author_role_style(m.author);
                             crate::fonts::styled_name(
                                 div()
                                     .text_size(z(16.))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(crate::theme::role_color(app.author_color(m.author))),
+                                    .text_color(crate::theme::role_color(role_color)),
                                 u,
                                 false,
                             )
-                            .child(match crate::ui::role_gradient::for_author(app, m.author) {
-                                Some(stops) => crate::fonts::name_text_with(author_name, u, 16., Some(stops)),
-                                None => crate::fonts::name_text(author_name, u, 16.),
-                            })
+                            .child(crate::fonts::role_name_text(author_name, u, 16., app.selected_guild.is_some(), role_gradient))
                         })
                         .child(
                             div()

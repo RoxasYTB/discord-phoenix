@@ -297,6 +297,20 @@ pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, si
     name_text_with(text, user, size, stops)
 }
 
+pub fn role_name_text(
+    text: gpui::SharedString,
+    user: Option<&crate::model::User>,
+    size: f32,
+    in_guild: bool,
+    gradient: Option<[u32; 3]>,
+) -> gpui::AnyElement {
+    if in_guild {
+        name_text_with(text, user, size, gradient)
+    } else {
+        name_text(text, user, size)
+    }
+}
+
 pub fn name_text_with(
     text: gpui::SharedString,
     user: Option<&crate::model::User>,

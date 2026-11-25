@@ -713,12 +713,7 @@ pub fn roles(g: &api::Guild) -> Vec<model::Role> {
         .inspect(|r| {
             let c = r.colors.as_ref();
             let primary = c.map(|c| c.primary_color).filter(|&v| v != 0).unwrap_or(r.color);
-            crate::ui::role_gradient::set(
-                id(r.id),
-                primary,
-                c.and_then(|c| c.secondary_color).filter(|&v| v != 0),
-                c.and_then(|c| c.tertiary_color).filter(|&v| v != 0),
-            );
+            crate::ui::role_gradient::set(id(r.id), primary, c.and_then(|c| c.secondary_color), c.and_then(|c| c.tertiary_color));
         })
         .map(|r| model::Role {
             id: id(r.id),
