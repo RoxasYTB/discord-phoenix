@@ -1179,7 +1179,7 @@ fn answer(guild: Id, d: &Data, prompt: &str, index: Option<usize>, channels: Vec
                             .p(z(12.))
                             .rounded(z(8.))
                             .border_1()
-                            .border_color(t(idx::STATUS_DANGER_BACKGROUND))
+                            .border_color(t(idx::RED_400))
                             .bg(t(idx::BACKGROUND_MOD_SUBTLE))
                             .flex()
                             .items_start()
