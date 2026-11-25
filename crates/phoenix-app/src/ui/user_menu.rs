@@ -86,7 +86,22 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             items.push(act(crate::t!("menu.change_nickname"), Rc::new(move |a, _, _, cx| a.open_nickname(gid, Some(u), cx))));
         }
     }
-    items.push(MenuItem::submenu(crate::t!("menu.apps"), vec![stub("menu.apps_none")]));
+    crate::ui::chat::slash::ensure_loaded(app, cx);
+    let app_cmds = crate::ui::chat::slash::context_commands(app, 2, cx);
+    let app_items: Vec<MenuItem> = if app_cmds.is_empty() {
+        vec![stub("menu.apps_none")]
+    } else if let Some(ch) = app.selected_channel {
+        app_cmds
+            .into_iter()
+            .map(|cmd| {
+                let label: SharedString = cmd.name.clone().into();
+                act_owned(&e, label, Rc::new(move |a, _, _, cx| crate::ui::chat::slash::run_context_command(a, &cmd, ch, u, cx)))
+            })
+            .collect()
+    } else {
+        vec![stub("menu.apps_none")]
+    };
+    items.push(MenuItem::submenu(crate::t!("menu.apps"), app_items));
     if !me {
         if !bot {
             let invites: Vec<MenuItem> = app

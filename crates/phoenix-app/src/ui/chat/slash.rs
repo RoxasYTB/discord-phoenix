@@ -111,6 +111,36 @@ pub fn cached_commands(app: &PhoenixApp, cx: &App) -> Vec<SlashCommand> {
     cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch)).cloned().unwrap_or_default()
 }
 
+pub fn context_commands(app: &PhoenixApp, kind: u8, cx: &App) -> Vec<SlashCommand> {
+    let mut cmds: Vec<SlashCommand> = cached_commands(app, cx).into_iter().filter(|c| c.kind == kind).collect();
+    cmds.sort_by(|a, b| a.name.cmp(&b.name));
+    cmds
+}
+
+pub fn run_context_command(app: &mut PhoenixApp, cmd: &SlashCommand, channel: Id, target: Id, cx: &mut Context<PhoenixApp>) {
+    let guild = app.channels.get(&channel).and_then(|c| c.guild);
+    let nonce = next_nonce();
+    let bot = cmd.bot_id.or(cmd.app_id).unwrap_or(Id(0));
+    command_msg::track(
+        nonce,
+        command_msg::Pending { channel, app_name: cmd.app_name.clone(), phase: command_msg::Phase::Sending, interaction: None },
+    );
+    let ph = command_msg::placeholder(app, channel, nonce, bot, &cmd.name, cmd.kind, (cmd.kind == 2).then_some(target));
+    app.append_message(ph, cx);
+    let fut = app.backend.parity(ParityRequest::ContextCommand { guild, channel, command: cmd.raw.clone(), target, nonce });
+    cx.spawn(async move |this, cx| {
+        if let Err(e) = fut.await {
+            let _ = this.update(cx, |a, cx| {
+                command_msg::set_phase(nonce, command_msg::Phase::Failed(Some(crate::t!("slash.failed", e = format!("{e:?}")).to_string())));
+                a.refresh_message(channel, Id(nonce));
+                cx.notify();
+            });
+        }
+    })
+    .detach();
+    cx.notify();
+}
+
 pub fn builtins(app: &PhoenixApp) -> Vec<SlashCommand> {
     let Some(ch) = app.selected_channel else { return vec![] };
     builtin::list(&builtin::Context::of(app, ch))

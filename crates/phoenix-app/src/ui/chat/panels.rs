@@ -288,6 +288,22 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
             ee.update(cx, |a, cx| a.report_message(ch, id, cx))
         }));
     }
+    crate::ui::chat::slash::ensure_loaded(app, cx);
+    let msg_app_cmds = crate::ui::chat::slash::context_commands(app, 3, cx);
+    if !msg_app_cmds.is_empty() {
+        let app_items: Vec<MenuItem> = msg_app_cmds
+            .into_iter()
+            .map(|cmd| {
+                let ee = e.clone();
+                let label: gpui::SharedString = cmd.name.clone().into();
+                MenuItem::action(label, None, move |_, _, cx| {
+                    let c = cmd.clone();
+                    ee.update(cx, |a, cx| crate::ui::chat::slash::run_context_command(a, &c, ch, id, cx));
+                })
+            })
+            .collect();
+        items.push(MenuItem::submenu(crate::t!("menu.apps"), app_items));
+    }
     let interaction_app = crate::commands::store::interaction_info(id)
         .map(|i| i.app_id)
         .or_else(|| crate::commands::store::get(id).map(|p| p.app))
