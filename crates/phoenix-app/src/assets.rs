@@ -264,6 +264,7 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/quests.svg" => s!(r#"<path d="M5 4h14v6a7 7 0 0 1-14 0zM9 21h6M12 17v4M8 9h8"/>"#),
         "icons/note.svg" => s!(r#"<path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7M7 8h6M7 12h8M7 16h4M19 14v8M15 18h8"/>"#),
         "icons/user-check.svg" => s!(r#"<circle cx="11" cy="7" r="4"/><path d="M3 21a8 8 0 0 1 11-7.4M15 18l2 2 4-4"/>"#),
+        "icons/user-clock.svg" => s!(r#"<circle cx="11" cy="7" r="4"/><path d="M3 21a8 8 0 0 1 10-7.7"/><circle cx="18" cy="18" r="4"/><path d="M18 16v2l1.2 1.2"/>"#),
         "icons/ribbon.svg" => s!(r#"<circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/>"#),
         "icons/orbs.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><path d="M12 6l4 6-4 6-4-6z"/>"#),
         "icons/user-circle.svg" => s!(r#"<circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3.5"/><path d="M6 18.5a8 6 0 0 1 12 0"/>"#),

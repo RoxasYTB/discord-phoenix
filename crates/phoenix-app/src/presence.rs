@@ -382,6 +382,7 @@ impl People {
     }
 
     pub fn close_overlays(&mut self) {
+        crate::ui::profile_toolbar::reset();
         self.popout = None;
         self.tag_popout = None;
         self.modal = None;

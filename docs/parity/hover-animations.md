@@ -40,7 +40,7 @@ Aucun `@keyframes` ni changement de `d`/`stroke-dashoffset` au survol sur les ic
 | Zone | Règle | Phoenix |
 |---|---|---|
 | Barre d'actions des messages (popover `_DpHsW6`) | `.hoverBarButton:hover .icon{transform:scale(1.1)}`, `.full-motion .icon{transition:transform .4s cubic-bezier(.16,1,.3,1)}`, `:active` → `scale(1)` | ✅ déjà fait (`chat::message_ext::tool_button`, 20 → 22 px en 400 ms, même courbe) |
-| Barre d'outils du profil (`_yDAPhH`) | `:hover .icon{transform:scale(1.1)}`, même transition 0,4 s | ⚠ la barre elle-même (popover au survol des sections du profil) n'existe pas encore dans Phoenix |
+| Barre d'outils du profil (`_yDAPhH`, module 675327, composant `q` du module 804329) | `.button_yDAPhH:hover .icon_yDAPhH{transform:scale(1.1)}`, `.full-motion .icon{transition:transform .4s cubic-bezier(.16,1,.3,1)}`, `:active` → `scale(1)` ; barre `popover_yDAPhH` : `opacity:0` au repos, `fadeIn` 0,15 s `ease` de `top:-14px` à `-16px` quand la bulle de statut est survolée | ✅ `profile_toolbar::toolbar_button` (icône 16 → 17,6 px en 400 ms, même courbe, retour à 16 au clic) et `profile_toolbar::popover` (fondu 150 ms `ease`, glissement de 2 px). La barre de son propre statut (`popover_oWBF11` + `bar_UIX3Vg`) n'a pas de zoom d'icône : `hoverIn` 0,15 s de `top:-18px` à `-20px` |
 
 ## Non couvert
 

@@ -18,6 +18,8 @@ pub enum Target {
     Textarea,
     FriendRow(Id),
     ProfileOverflow { user: Id, guild: Option<Id> },
+    FriendActions(Id),
+    EditProfile(Id),
     Viewer,
     SettingsMore,
     DmMore,
@@ -379,6 +381,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         }
         Target::FriendRow(u) => friend_row_items(&e, *u),
         Target::ProfileOverflow { user, guild } => profile_items(app, &e, *user, *guild),
+        Target::FriendActions(u) => crate::ui::profile_toolbar::friend_action_items(app, &e, *u),
+        Target::EditProfile(g) => crate::ui::profile_toolbar::edit_profile_items(&e, *g),
         Target::Viewer => {
             let v = cx.try_global::<crate::media::MediaState>().and_then(|m| m.viewer.clone())?;
             viewer_items(&e, &v, app.prefs.synced.developer_mode)

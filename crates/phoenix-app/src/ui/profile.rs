@@ -27,6 +27,7 @@ impl PhoenixApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        crate::ui::profile_toolbar::reset();
         if self.people.popout.as_ref().is_some_and(|p| p.user == user) {
             self.people.popout = None;
             cx.notify();
@@ -65,6 +66,7 @@ impl PhoenixApp {
     }
 
     pub fn open_profile_modal_at(&mut self, user: Id, tab: u8, cx: &mut Context<Self>) {
+        crate::ui::profile_toolbar::reset();
         self.people.popout = None;
         set_modal_tab(tab);
         self.people.modal = Some(user);
@@ -370,24 +372,6 @@ fn badges(i: &Info) -> Option<Div> {
                     .collect::<Vec<_>>()
             })
     })
-}
-
-fn status_bubble(t: SharedString) -> Div {
-    div()
-        .max_w(z(181.))
-        .min_w(z(42.))
-        .px(z(12.))
-        .py(z(8.))
-        .rounded(z(16.))
-        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST)))
-        .border_1()
-        .border_color(c(tok(idx::BORDER_MUTED)))
-        .shadow_sm()
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .line_clamp(2)
-        .child(crate::ui::emoji_text::status_wrapped(t, 14. * crate::theme::zoom()))
 }
 
 pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> Div {
@@ -869,23 +853,15 @@ pub(crate) fn ensure_avatar_colour(app: &PhoenixApp, uid: Id, cx: &mut gpui::App
 }
 
 pub(crate) fn banner_buttons(app: &PhoenixApp, uid: Id, guild: Option<Id>, end: f32, cx: &mut Context<PhoenixApp>) -> Div {
-    use crate::ui::home::data::{NavRequest, RelAction, RelationshipKind};
-    let rel = app.nav.relationship(uid).map(|r| r.kind);
-    let bot = app.users.get(&uid).is_some_and(|u| u.bot);
-    let friend_btn = match rel {
-        Some(RelationshipKind::Friend) => Some(banner_button(("profile-friend", uid.0), "user-check")),
-        None if !bot => Some(
-            banner_button(("profile-add-friend", uid.0), "invite")
-                .on_click(cx.listener(move |a, _, _, cx| {
-                    a.nav_request(NavRequest::Relationship { user: uid, action: RelAction::Accept }, cx, |_, _, _| {})
-                })),
-        ),
-        _ => None,
-    };
-    let more = banner_button(("profile-more", uid.0), "chat/more").on_click(cx.listener(move |_, ev: &gpui::ClickEvent, w, cx| {
-        crate::ui::extra_menus::open(crate::ui::extra_menus::Target::ProfileOverflow { user: uid, guild }, ev.position(), w);
-        cx.notify();
-    }));
+    let friend_btn = crate::ui::profile_toolbar::relationship_button(app, uid, cx);
+    let more = (uid != app.me.id).then(|| {
+        banner_button(("profile-more", uid.0), "chat/more").tooltip(crate::ui::tooltip::tip(crate::t!("profile.more"))).on_click(cx.listener(
+            move |_, ev: &gpui::ClickEvent, w, cx| {
+                crate::ui::extra_menus::open(crate::ui::extra_menus::Target::ProfileOverflow { user: uid, guild }, ev.position(), w);
+                cx.notify();
+            },
+        ))
+    });
     let mod_view = (uid != app.me.id && mod_view_allowed(app, guild)).then(|| {
         banner_button(("profile-mod-view", uid.0), "moderation")
             .tooltip(crate::ui::tooltip::tip(crate::t!("profile.open_mod_view")))
@@ -895,7 +871,7 @@ pub(crate) fn banner_buttons(app: &PhoenixApp, uid: Id, guild: Option<Id>, end: 
                 }
             }))
     });
-    div().absolute().right(z(end)).top(z(8.)).flex().gap(z(8.)).children(mod_view).children(friend_btn).child(more)
+    div().absolute().right(z(end)).top(z(8.)).flex().gap(z(8.)).children(mod_view).children(friend_btn).children(more)
 }
 
 pub(crate) fn mod_view_allowed(app: &PhoenixApp, guild: Option<Id>) -> bool {
@@ -947,7 +923,10 @@ fn popout_card_inner(
                 .child(avatar_block(&i, 80., 6., bg)),
         )
         .children((uid != app.me.id).then(|| banner_buttons(app, uid, guild, 12., cx)))
-        .when_some(i.custom.clone(), |d, t| d.child(div().absolute().left(z(105.)).top(z(98.)).child(status_bubble(t))));
+        .children(
+            crate::ui::profile_toolbar::status(app, uid, guild, crate::ui::profile_toolbar::Layout::Popout, theme.is_some(), i.custom.clone(), cx)
+                .map(|s| div().absolute().left(z(105.)).top(z(98.)).child(s)),
+        );
 
     let e_name = e.clone();
     let mut body = div()
@@ -1035,7 +1014,12 @@ fn popout_card_inner(
         body = body.child(roles_block(app, guild, uid, i.roles.clone(), cx));
     }
 
-    let footer = (uid != app.me.id).then(|| {
+    let footer = if uid == app.me.id {
+        Some(div().flex().flex_col().px(z(16.)).pb(z(12.)).child(crate::ui::profile_toolbar::edit_profile_button(uid, guild, cx)))
+    } else {
+        None
+    };
+    let footer = footer.or_else(|| crate::ui::profile_toolbar::can_dm(app, uid, guild).then(|| {
         div().flex().flex_col().px(z(16.)).pb(z(12.)).child(
             div()
                 .id(("profile-message", uid.0))
@@ -1070,7 +1054,7 @@ fn popout_card_inner(
                         .child(gpui::svg().path(crate::icons::path("emoji")).size(z(18.)).text_color(c(tok(idx::ICON_SUBTLE)))),
                 ),
         )
-    });
+    }));
 
     let (fx_sku, frame_sku) = i.prof.map(|p| (p.effect_sku, p.frame_sku)).unwrap_or_default();
     let effect = fx_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| crate::ui::profile_fx::effect(&c, 300., cx));
@@ -1095,7 +1079,8 @@ fn popout_card_inner(
     .children(effect.map(|e| {
         let pad = if theme.is_some() { 2. } else { 0. };
         div().absolute().top(z(pad)).left(z(pad)).right(z(pad)).bottom(z(pad)).child(e)
-    }));
+    }))
+    .children(crate::ui::profile_toolbar::scrim(uid, crate::ui::profile_toolbar::Layout::Popout));
     let frame_w = if theme.is_some() { 304. } else { 300. };
     match frame {
         None => card,
@@ -1237,26 +1222,70 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
             .cursor_pointer()
             .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
     };
-    let is_friend = app.nav.relationship(uid).is_some_and(|r| r.kind == crate::ui::home::data::RelationshipKind::Friend);
-    let buttons = (uid != app.me.id).then(|| {
-        let msg = mana_button(("profile-modal-message", uid.0), "", true, false)
-            .on_click(move |_, _, cx| e2.update(cx, |a, cx| a.message_user(uid, cx)))
+    let rel = app.nav.relationship(uid).map(|r| r.kind).unwrap_or(crate::ui::home::data::RelationshipKind::None);
+    let bot = app.users.get(&uid).is_some_and(|u| u.bot);
+    let me = uid == app.me.id;
+    let buttons = (rel != crate::ui::home::data::RelationshipKind::Blocked).then(|| {
+        use crate::ui::home::data::RelationshipKind as R;
+        let send = |primary: bool| {
+            let e2 = e2.clone();
+            let fg = if primary { idx::CONTROL_PRIMARY_TEXT_DEFAULT } else { idx::CONTROL_SECONDARY_TEXT_DEFAULT };
+            mana_button(("profile-modal-message", uid.0), "", primary, false)
+                .when(me, |d| d.opacity(0.5).cursor_default())
+                .when(!me, |d| d.on_click(move |_, _, cx| e2.update(cx, |a, cx| a.message_user(uid, cx))))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(z(4.))
+                        .child(gpui::svg().path(crate::icons::path("chat")).size(z(16.)).text_color(c(tok(fg))))
+                        .child(crate::t!("pe.send_message")),
+                )
+        };
+        let e_more = e.clone();
+        let more = icon_btn(("profile-modal-more", uid.0), "chat/more").tooltip(crate::ui::tooltip::tip(crate::t!("profile.more"))).on_click(
+            move |ev, w, cx| {
+                crate::ui::extra_menus::open(crate::ui::extra_menus::Target::ProfileOverflow { user: uid, guild }, ev.position(), w);
+                e_more.update(cx, |_, cx| cx.notify());
+            },
+        );
+        let row = div().flex().items_center().gap(z(8.));
+        if me {
+            return row.child(send(true)).child(icon_btn(("profile-modal-shop", uid.0), "shop").tooltip(crate::ui::tooltip::tip(crate::t!("ptb.shop")))).child(more);
+        }
+        if bot || rel == R::Incoming {
+            return row.child(send(true)).child(more);
+        }
+        if matches!(rel, R::Friend | R::Outgoing) {
+            let (id, icon, tip) = if rel == R::Friend { ("profile-modal-friend", "user-check", "ptb.friend") } else { ("profile-modal-pending", "user-clock", "ptb.outgoing") };
+            let friend = icon_btn((id, uid.0), icon).tooltip(crate::ui::tooltip::tip(crate::t!(tip)));
+            let friend = if rel == R::Friend {
+                friend.on_click(move |ev, w, _| crate::ui::extra_menus::open(crate::ui::extra_menus::Target::FriendActions(uid), ev.position(), w))
+            } else {
+                friend.opacity(0.5).cursor_default()
+            };
+            return row.child(send(true)).child(friend).child(more);
+        }
+        let e_add = e.clone();
+        let add = mana_button(("profile-modal-add-friend", uid.0), "", true, false)
+            .on_click(move |_, _, cx| {
+                e_add.update(cx, |a, cx| {
+                    a.nav_request(crate::ui::home::data::NavRequest::Relationship { user: uid, action: crate::ui::home::data::RelAction::Accept }, cx, |_, _, _| {})
+                })
+            })
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap(z(4.))
-                    .child(gpui::svg().path(crate::icons::path("chat")).size(z(16.)).text_color(c(tok(idx::CONTROL_PRIMARY_TEXT_DEFAULT))))
-                    .child(crate::t!("pe.send_message")),
+                    .child(gpui::svg().path(crate::icons::path("invite")).size(z(16.)).text_color(c(tok(idx::CONTROL_PRIMARY_TEXT_DEFAULT))))
+                    .child(crate::t!("ptb.add_friend")),
             );
-        let more = icon_btn(("profile-modal-more", uid.0), "chat/more");
-        div()
-            .flex()
-            .items_center()
-            .gap(z(8.))
-            .child(msg)
-            .children(is_friend.then(|| icon_btn(("profile-modal-friend", uid.0), "user-check")))
-            .child(more)
+        let e3 = e2.clone();
+        let msg_icon = icon_btn(("profile-modal-message-icon", uid.0), "chat")
+            .tooltip(crate::ui::tooltip::tip(crate::t!("ptb.message")))
+            .on_click(move |_, _, cx| e3.update(cx, |a, cx| a.message_user(uid, cx)));
+        row.child(add).child(msg_icon).child(more)
     });
 
     let mut pbody = div()
@@ -1343,9 +1372,10 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .shadow_md()
         .child(banner(&i, BANNER, 16.))
         .child(div().absolute().left(z(CARD_PAD - RING)).top(z(BANNER - AV / 2. - RING)).child(avatar_block(&i, AV, RING, card_bg)))
-        .when_some(i.custom.clone(), |d, t| {
-            d.child(div().absolute().left(z(CARD_PAD + AV + 20.)).top(z(BANNER - 8.)).child(status_bubble(t)))
-        })
+        .children(
+            crate::ui::profile_toolbar::status(app, uid, guild, crate::ui::profile_toolbar::Layout::Modal, theme.is_some(), i.custom.clone(), cx)
+                .map(|s| div().absolute().left(z(CARD_PAD + AV + 20.)).top(z(BANNER - 8.)).child(s)),
+        )
         .child(div().h(z(220. - BANNER)).flex_none())
         .child(pbody);
 

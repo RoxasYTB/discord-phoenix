@@ -144,8 +144,34 @@ fn main() -> anyhow::Result<()> {
                     "profile" | "profile-modal" => {
                         let g = app.guilds.first().map(|g| g.id);
                         app.select_guild(g, cx);
-                        let uid = g.and_then(|g| app.members.get(&g)).and_then(|m| m.iter().map(|m| m.user).find(|u| *u != app.me.id));
+                        let me = app.me.id;
+                        let uid = if std::env::var_os("PHX_PROFILE_SELF").is_some() {
+                            Some(me)
+                        } else {
+                            g.and_then(|g| app.members.get(&g)).and_then(|m| m.iter().map(|m| m.user).find(|u| *u != me))
+                        };
                         if let Some(uid) = uid {
+                            if let Ok(text) = std::env::var("PHX_PROFILE_STATUS") {
+                                if uid == me {
+                                    app.people.custom_status = Some(text.into());
+                                } else {
+                                    app.people.activities.insert(
+                                        uid,
+                                        vec![phoenix_app::presence::Activity {
+                                            kind: phoenix_app::presence::ActivityKind::Custom,
+                                            name: "Custom Status".into(),
+                                            details: None,
+                                            state: Some(text.into()),
+                                            emoji: None,
+                                            url: None,
+                                            display_type: None,
+                                            image: None,
+                                            start: None,
+                                            application_id: None,
+                                        }],
+                                    );
+                                }
+                            }
                             app.open_profile(uid, g, gpui::point(px(1000.), px(200.)), window, cx);
                             let roles = g.and_then(|g| app.roles.get(&g)).map(|r| r.iter().take(3).map(|r| r.id).collect()).unwrap_or_default();
                             app.people.profiles.insert(
@@ -230,6 +256,18 @@ fn main() -> anyhow::Result<()> {
                         app.open_thread(r, window, cx);
                     }
                 });
+            })?;
+            pump(&mut cx, 4);
+        }
+    }
+    if let Some((x, y)) = std::env::var("PHX_MOUSE").ok().and_then(|v| {
+        let (x, y) = v.split_once(',')?;
+        Some((x.trim().parse::<f32>().ok()?, y.trim().parse::<f32>().ok()?))
+    }) {
+        for _ in 0..2 {
+            let ev = gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent { position: gpui::point(px(x), px(y)), pressed_button: None, modifiers: gpui::Modifiers::default() });
+            cx.update_window(win.into(), |_, window, cx| {
+                window.dispatch_event(ev, cx);
             })?;
             pump(&mut cx, 4);
         }

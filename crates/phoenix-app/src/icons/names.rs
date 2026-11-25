@@ -141,6 +141,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("quests", &["QuestsIcon"]),
     ("note", &["PaperPlusIcon"]),
     ("user-check", &["UserCheckIcon"]),
+    ("user-clock", &["UserClockIcon"]),
     ("ribbon", &["RibbonIcon"]),
     ("orbs", &["OrbsIcon"]),
     ("user-circle", &["UserCircleIcon"]),

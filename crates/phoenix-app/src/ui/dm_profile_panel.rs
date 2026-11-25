@@ -76,7 +76,11 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
         .mb(z(8.))
         .child(banner(&i, 105., 6.))
         .child(banner_buttons(app, uid, None, 8., cx))
-        .child(div().absolute().left(z(8.)).top(z(49.)).child(avatar_block(&i, 80., 6., ring_bg)));
+        .child(div().absolute().left(z(8.)).top(z(49.)).child(avatar_block(&i, 80., 6., ring_bg)))
+        .children(
+            crate::ui::profile_toolbar::status(app, uid, None, crate::ui::profile_toolbar::Layout::Sidebar, theme.is_some(), i.custom.clone(), cx)
+                .map(|s| div().absolute().left(z(109.)).top(z(98.)).child(s)),
+        );
     let hide_notes = app.prefs.local.streamer_hides_info();
     let mut body = div()
         .mx(z(16.))
@@ -171,7 +175,8 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
                             .flex_col()
                             .child(div().id("dm-panel-scroll").flex_1().min_h_0().overflow_y_scroll().child(header).child(body))
                             .child(footer)
-                            .children(effect),
+                            .children(effect)
+                            .children(crate::ui::profile_toolbar::scrim(uid, crate::ui::profile_toolbar::Layout::Sidebar)),
                     ),
             )
             .into_any_element()
