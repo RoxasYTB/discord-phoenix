@@ -643,7 +643,23 @@ fn header_card(app: &PhoenixApp, x: &Ctx, cx: &mut Context<PhoenixApp>) -> Div {
                                 .gap(z(8.))
                                 .min_w_0()
                                 .child(text(name, 20., 24., FontWeight::MEDIUM, idx::TEXT_STRONG).min_w_0().truncate())
-                                .when_some(u.and_then(|u| u.tag.clone()), |d, t| d.child(clan_tag(&t))),
+                                .when_some(u.and_then(|u| u.tag.clone()), |d, t| {
+                                    let gid = u.and_then(|u| u.tag_guild);
+                                    let tip = crate::t!("tag_popout.tooltip", tag = t.0.as_ref());
+                                    let (tag_s, badge_s) = (t.0.clone(), t.1.clone());
+                                    d.child(
+                                        clan_tag(&t)
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(tk(idx::BACKGROUND_MOD_MUTED)))
+                                            .tooltip(crate::ui::tooltip::tip(tip))
+                                            .when_some(gid, |el, gid| {
+                                                el.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()).on_click(cx.listener(move |a, ev, w, cx| {
+                                                    cx.stop_propagation();
+                                                    a.open_tag_popout(gid, tag_s.clone(), badge_s.clone(), ev.position(), w, cx);
+                                                }))
+                                            }),
+                                    )
+                                }),
                         )
                         .child(text(username, 16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT).truncate()),
                 ),

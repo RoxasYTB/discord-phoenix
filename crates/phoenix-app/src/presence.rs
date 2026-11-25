@@ -313,12 +313,24 @@ pub struct Popout {
     pub _sub: gpui::Subscription,
 }
 
+pub struct TagPopout {
+    pub guild_id: Id,
+    pub tag: SharedString,
+    pub badge: Option<SharedString>,
+    pub at: Point<Pixels>,
+    pub profile: Option<crate::commands::guide::GuildProfile>,
+    pub loading: bool,
+    pub private: bool,
+    pub error: Option<SharedString>,
+}
+
 #[derive(Default)]
 pub struct People {
     pub lists: HashMap<Id, Vec<ListEntry>>,
     pub activities: HashMap<Id, Vec<Activity>>,
     pub profiles: HashMap<Id, Profile>,
     pub popout: Option<Popout>,
+    pub tag_popout: Option<TagPopout>,
     pub modal: Option<Id>,
     pub status_picker: bool,
     pub custom_input: Option<Entity<InputState>>,
@@ -371,6 +383,7 @@ impl People {
 
     pub fn close_overlays(&mut self) {
         self.popout = None;
+        self.tag_popout = None;
         self.modal = None;
         self.status_picker = false;
         self.custom_sub = None;

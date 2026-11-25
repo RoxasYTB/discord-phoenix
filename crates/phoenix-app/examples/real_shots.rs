@@ -1110,6 +1110,21 @@ fn main() -> anyhow::Result<()> {
                         phoenix_app::ui::nav_menus::toggle_bell(ch, gpui::point(gpui::px(820.), gpui::px(48.)), window);
                     }
                 }
+                "tagpopout" => {
+                    let target = arg
+                        .parse::<u64>()
+                        .ok()
+                        .map(|g| (phoenix_app::model::Id(g), gpui::SharedString::from("TAG"), None))
+                        .or_else(|| {
+                            app.users
+                                .values()
+                                .find_map(|u| Some((u.tag_guild?, u.tag.as_ref()?.0.clone(), u.tag.as_ref()?.1.clone())))
+                        })
+                        .or_else(|| app.selected_guild.map(|g| (g, gpui::SharedString::from("TAG"), None)));
+                    if let Some((gid, tag, badge)) = target {
+                        app.open_tag_popout(gid, tag, badge, gpui::point(gpui::px(560.), gpui::px(220.)), window, cx);
+                    }
+                }
                 "threadmenu" => {
                     let mut it = arg.split(',');
                     let id = it.next().and_then(|x| x.parse::<u64>().ok()).map(phoenix_app::model::Id).or(app.selected_channel);

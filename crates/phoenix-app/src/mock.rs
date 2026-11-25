@@ -90,6 +90,7 @@ fn user(i: usize) -> User {
         bot: n.ends_with("bot") || n == "clyde",
         verified_bot: n == "clyde",
         tag: p.tag.map(|t| (t.1.into(), p.badge_url().map(Into::into))),
+        tag_guild: p.tag.map(|t| Id(t.0)),
         nameplate: None,
         name_style: (i % 5 == 1).then(|| (17, 1, Vec::new())),
         decoration: std::env::var("PHX_MOCK_DECO").ok().map(Into::into),
@@ -896,6 +897,58 @@ impl Backend for MockBackend {
             }
             _ => Box::pin(async { Err(crate::backend::BackendError("Not available offline.".into())) }),
         }
+    }
+
+    fn guild_profile(&self, guild: Id) -> BoxFuture<crate::commands::guide::GuildProfile> {
+        let g = self.inner.lock().ok().and_then(|i| i.guilds.iter().find(|g| g.id == guild).cloned());
+        Box::pin(async move {
+            use crate::commands::guide::{GuideEmoji, GuideTrait, GuildProfile};
+            let tr = |label: &str, emoji: &str| GuideTrait {
+                label: label.into(),
+                emoji: GuideEmoji { name: Some(emoji.into()), ..Default::default() },
+            };
+            let (name, tag, desc, members, online, color) = if let Some(g) = g {
+                (
+                    g.name.to_string(),
+                    Some("PHX".to_owned()),
+                    "A native Rust + GPUI Discord client community.".to_owned(),
+                    g.member_count.unwrap_or(1_240) as u64,
+                    312,
+                    g.banner_color.map(|c| format!("#{c:06x}")),
+                )
+            } else {
+                let p = crate::demo_media::NAMES.iter().find(|p| p.tag.is_some_and(|t| t.0 == guild.0));
+                let tag_str = p.and_then(|p| p.tag).map(|t| t.1.to_owned()).unwrap_or_else(|| "TAG".to_owned());
+                let badge_str = p.and_then(|p| p.tag).map(|t| t.2.to_owned());
+                return Ok(GuildProfile {
+                    id: guild,
+                    name: format!("{tag_str} Community"),
+                    visibility: 1,
+                    member_count: 14_820,
+                    online_count: 2_340,
+                    description: "Official community server for fans, builders, and friends.".into(),
+                    tag: Some(tag_str),
+                    badge_hash: badge_str,
+                    traits: vec![tr("Gaming", "🎮"), tr("Creative", "🎨"), tr("Chill", "✨")],
+                    brand_color_primary: Some("#5865F2".into()),
+                    features: vec!["COMMUNITY".into(), "DISCOVERABLE".into()],
+                    ..Default::default()
+                });
+            };
+            Ok(GuildProfile {
+                id: guild,
+                name,
+                visibility: 1,
+                member_count: members,
+                online_count: online,
+                description: desc,
+                tag,
+                traits: vec![tr("Rust", "🦀"), tr("GPUI", "⚡"), tr("Open source", "📦")],
+                brand_color_primary: color,
+                features: vec!["COMMUNITY".into(), "DISCOVERABLE".into()],
+                ..Default::default()
+            })
+        })
     }
 }
 

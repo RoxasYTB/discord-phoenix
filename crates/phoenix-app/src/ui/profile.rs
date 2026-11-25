@@ -395,7 +395,18 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
 }
 
 pub(crate) fn name_block_with(i: &Info, big: bool, trailing: Option<AnyElement>, underline_on_hover: bool) -> Div {
+    name_block_clickable(i, big, trailing, underline_on_hover, None)
+}
+
+pub(crate) fn name_block_clickable(
+    i: &Info,
+    big: bool,
+    trailing: Option<AnyElement>,
+    underline_on_hover: bool,
+    entity: Option<gpui::Entity<PhoenixApp>>,
+) -> Div {
     let tag = i.user.as_deref().and_then(|u| u.tag.clone());
+    let tag_guild = i.user.as_deref().and_then(|u| u.tag_guild);
     let pronouns = i.prof.map(|p| p.pronouns.clone()).filter(|p| !p.is_empty());
     let bot = i.user.as_deref().is_some_and(|u| u.bot);
     let verified = i.user.as_deref().is_some_and(|u| u.verified_bot);
@@ -437,12 +448,20 @@ pub(crate) fn name_block_with(i: &Info, big: bool, trailing: Option<AnyElement>,
                     d.child(div().size(z(4.)).mx(z(1.)).rounded_full().bg(c(tok(idx::TEXT_DEFAULT))))
                         .child(div().mr(z(2.)).text_ellipsis().text_color(c(tok(idx::TEXT_DEFAULT))).child(p))
                 })
-                .when_some(tag, |d, (t, badge)| d.child(guild_tag_pill(t, badge)))
+                .when_some(tag, |d, (t, badge)| d.child(guild_tag_pill(t, badge, tag_guild, entity)))
                 .when_some(badges(i), |d, b| d.child(b)),
         )
 }
 
-fn guild_tag_pill(t: SharedString, badge: Option<SharedString>) -> impl IntoElement {
+fn guild_tag_pill(
+    t: SharedString,
+    badge: Option<SharedString>,
+    guild_id: Option<Id>,
+    entity: Option<gpui::Entity<PhoenixApp>>,
+) -> impl IntoElement {
+    let tip = crate::t!("tag_popout.tooltip", tag = t.as_ref());
+    let tag_s = t.clone();
+    let badge_s = badge.clone();
     div()
         .id(SharedString::from(format!("guild-tag-{t}")))
         .h(z(24.))
@@ -452,6 +471,14 @@ fn guild_tag_pill(t: SharedString, badge: Option<SharedString>) -> impl IntoElem
         .rounded(z(8.))
         .bg(c(tok(idx::BACKGROUND_MOD_NORMAL)))
         .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_STRONG))))
+        .cursor_pointer()
+        .tooltip(crate::ui::tooltip::tip(tip))
+        .when_some(guild_id.zip(entity), |d, (gid, ent)| {
+            d.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()).on_click(move |ev, w, cx| {
+                cx.stop_propagation();
+                ent.update(cx, |a, cx| a.open_tag_popout(gid, tag_s.clone(), badge_s.clone(), ev.position(), w, cx));
+            })
+        })
         .text_size(z(12.))
         .line_height(z(16.))
         .text_color(c(tok(idx::TEXT_STRONG)))
@@ -940,7 +967,13 @@ fn popout_card_inner(
                 .id(("profile-name", uid.0))
                 .cursor_pointer()
                 .on_click(move |_, _, cx| e_name.update(cx, |a, cx| a.open_profile_modal(uid, cx)))
-                .child(name_block_with(&i, false, (uid != app.me.id && !app.prefs.local.streamer_hides_info()).then(|| crate::ui::profile_note::note_button(uid, cx)), true)),
+                .child(name_block_clickable(
+                    &i,
+                    false,
+                    (uid != app.me.id && !app.prefs.local.streamer_hides_info()).then(|| crate::ui::profile_note::note_button(uid, cx)),
+                    true,
+                    Some(cx.entity()),
+                )),
         );
     if uid == app.me.id {
         body = body.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(status_label(i.presence)));

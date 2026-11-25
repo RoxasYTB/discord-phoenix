@@ -1119,6 +1119,17 @@ impl Backend for DiscordBackend {
     fn user_profile(&self, user: Id, guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
         self.people_profile(user, guild)
     }
+    fn guild_profile(&self, guild: Id) -> BoxFuture<crate::commands::guide::GuildProfile> {
+        self.with_session(move |_, s| async move {
+            let v = s.rest.guild_profile(sf(guild)).await.map_err(api_err)?;
+            Ok(crate::commands::guide::parse_profile(&v))
+        })
+    }
+    fn join_guild(&self, guild: Id) -> BoxFuture<()> {
+        self.with_session(move |_, s| async move {
+            s.rest.guarded_write(&phoenix_api::rest::GuardedWrite::join_guild(guild.0)).await.map(|_| ()).map_err(api_err)
+        })
+    }
     fn set_note(&self, user: Id, note: String) -> BoxFuture<()> {
         self.people_note(user, note)
     }

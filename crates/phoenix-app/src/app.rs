@@ -366,6 +366,7 @@ impl PhoenixApp {
                 bot: false,
                 verified_bot: false,
                 tag: None,
+                tag_guild: None,
                 nameplate: None,
                 name_style: None,
                 decoration: None,
@@ -1562,6 +1563,7 @@ impl Render for PhoenixApp {
             .children(ui::pickers::render_overlays(self, window, cx))
             .children(ui::chat::app_launcher::render(self, window, cx))
             .children(ui::profile::overlays(self, window, cx))
+            .children(ui::tag_popout::render(self, window, cx))
             .children(ui::components::overlays(self, window, cx))
             .children(ui::voice_panel::overlays(self, window, cx))
             .children(ui::pip::render(self, window, cx))

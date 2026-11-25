@@ -1298,7 +1298,9 @@ pub(crate) fn message(
                         )
                     })
                     .children(author_name)
-                    .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, false)))
+                    .when_some(author.and_then(|u| u.tag.clone()), |d, tg| {
+                        d.child(crate::ui::tag_popout::clickable(server_tag_chip(&tg, false), ("msg-tag-c", id.0), author.and_then(|u| u.tag_guild), &tg, entity.clone()))
+                    })
                     .when_some(app.author_role_icon(msg.author), |d, u| d.child(role_icon(u)))
                     .when(app.is_new_member(msg.author), |d| d.child(new_member_badge(msg.id)))
                     .when(is_bot, |d| d.child(bot_tag(author.is_some_and(|u| u.verified_bot))))
@@ -1353,7 +1355,9 @@ pub(crate) fn message(
                         .items_center()
                         .min_h(fz(22.))
                         .children(author_name)
-                        .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, false)))
+                        .when_some(author.and_then(|u| u.tag.clone()), |d, tg| {
+                            d.child(crate::ui::tag_popout::clickable(server_tag_chip(&tg, false), ("msg-tag", id.0), author.and_then(|u| u.tag_guild), &tg, entity.clone()))
+                        })
                         .when_some(app.author_role_icon(msg.author), |d, u| d.child(role_icon(u)))
                     .when(app.is_new_member(msg.author), |d| d.child(new_member_badge(msg.id)))
                         .when(is_bot, |d| d.child(bot_tag(author.is_some_and(|u| u.verified_bot))))

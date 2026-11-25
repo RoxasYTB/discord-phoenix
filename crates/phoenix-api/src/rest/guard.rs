@@ -122,6 +122,10 @@ impl GuardedWrite {
         write(Method::PUT, format!("/channels/{channel}/permissions/{overwrite}"), Some(body))
     }
 
+    pub fn join_guild(guild: u64) -> Self {
+        write(Method::PUT, format!("/guilds/{guild}/members/@me"), None)
+    }
+
     pub fn refusal(&self) -> Error {
         blocked(&self.method, self.path.clone())
     }

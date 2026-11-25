@@ -38,6 +38,10 @@ pub struct GuideTrait {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuildProfile {
+    pub id: Id,
+    pub name: String,
+    pub icon_hash: Option<String>,
+    pub visibility: u8,
     pub member_count: u64,
     pub online_count: u64,
     pub description: String,
@@ -166,6 +170,10 @@ pub fn parse_profile(v: &Value) -> GuildProfile {
         .unwrap_or_default();
     traits.sort_by_key(|(p, _)| *p);
     GuildProfile {
+        id: sid(v, "id").unwrap_or_default(),
+        name: s(v, "name"),
+        icon_hash: opt("icon_hash"),
+        visibility: n("visibility") as u8,
         member_count: n("member_count"),
         online_count: n("online_count"),
         description: s(v, "description"),

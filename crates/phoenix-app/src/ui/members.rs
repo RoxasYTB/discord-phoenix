@@ -743,7 +743,15 @@ pub fn member_row_in(
                                         .text_ellipsis()
                                         .child(crate::fonts::role_name_text(name, user, 16., g.is_some(), role_grad)),
                                 )
-                                .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.))))
+                                .when_some(tag, |d, t| {
+                                    d.child(crate::ui::tag_popout::clickable(
+                                        server_tag(&t).my(z(1.)),
+                                        ("member-tag", uid.0),
+                                        user.and_then(|u| u.tag_guild),
+                                        &t,
+                                        entity.clone(),
+                                    ))
+                                })
                                 .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))
                                 .when(owner, |d| {
                                     d.child(gpui::svg().path(crate::icons::path("crown")).size(z(14.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))

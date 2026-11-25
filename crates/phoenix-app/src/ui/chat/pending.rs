@@ -176,6 +176,7 @@ impl PhoenixApp {
             bot: true,
             verified_bot: true,
             tag: None,
+            tag_guild: None,
             nameplate: None,
             name_style: None,
             decoration: None,

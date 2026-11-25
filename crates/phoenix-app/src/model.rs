@@ -27,6 +27,7 @@ pub struct User {
     pub bot: bool,
     pub verified_bot: bool,
     pub tag: Option<(SharedString, Option<SharedString>)>,
+    pub tag_guild: Option<Id>,
     pub nameplate: Option<(SharedString, Option<u32>)>,
     pub name_style: Option<(u32, u32, Vec<u32>)>,
     pub decoration: Option<SharedString>,

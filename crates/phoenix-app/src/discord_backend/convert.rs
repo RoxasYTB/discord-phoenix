@@ -44,6 +44,7 @@ pub fn user(u: &api::User) -> model::User {
         bot: u.bot || u.system,
         verified_bot: u.system || u.public_flags.is_some_and(|f| f & (1 << 16) != 0),
         tag: u.primary_guild.as_ref().and_then(|p| Some((p.shown_tag()?.to_owned().into(), p.badge_url().map(Into::into)))),
+        tag_guild: u.primary_guild.as_ref().and_then(|p| p.shown_tag().and(p.identity_guild_id).map(id)),
         nameplate: u.nameplate().map(|(url, pal)| (url.into(), pal.as_deref().and_then(crate::ui::nameplate::palette_dark))),
         name_style: u.display_name_styles.as_ref().map(|s| (s.font_id, s.effect_id, s.colors.clone())),
         decoration: decoration_url(u),
