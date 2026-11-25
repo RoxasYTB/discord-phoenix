@@ -238,3 +238,7 @@ friend) in chat, pins, inbox and search; the top server emoji row with its troph
 badge; the frequent emoji and sticker order (client frecency, checked item for item on the live
 proto). Details and what stays open (event, stream and voice v2 invite cards, the newly added
 emoji block, reaction frecency) are in `message-content.md` (Invite cards) and `pickers.md`.
+
+### wt/unreads (2026-11-25 07:15, int-bin 48c1fe8d)
+
+Inbox "Messages non lus" at 1280×720: popout region 7.0 % mismatch / 2.8 % mean diff (after table above: 18.9 %; before: 29.2 %). The client was on `/channels/@me` during the pass, so the channel list and message regions of that run are not comparable. The 1536×840 client capture was discarded by the driver (view not in the expected state). Same 9 cards in the same order as the client; remaining differences: a user mention of a non-member in an embed shows "@Utilisateur inconnu" where the client shows the username it already knows (the client resolves it from its user cache), and the collapsed state is not persisted (`collapsedInInbox` in the settings proto).
