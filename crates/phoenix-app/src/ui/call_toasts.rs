@@ -15,6 +15,7 @@ const STAGE_TYPES: [u8; 5] = [27, 28, 29, 30, 31];
 struct Toasts {
     channel: Option<Id>,
     ids: Vec<Id>,
+    msgs: Vec<Message>,
     hide_at: Option<Instant>,
     frozen: bool,
 }
@@ -35,6 +36,8 @@ pub fn push(channel: Id, id: Id, now: Instant) {
         t.ids.push(id);
         let extra = t.ids.len().saturating_sub(MAX);
         t.ids.drain(..extra);
+        let keep = t.ids.clone();
+        t.msgs.retain(|m| keep.contains(&m.id));
         t.hide_at = Some(now + LINGER);
     });
 }
@@ -46,6 +49,7 @@ pub fn shown(channel: Id, now: Instant) -> Vec<Id> {
         }
         if !t.frozen && t.hide_at.is_some_and(|h| now >= h) {
             t.ids.clear();
+            t.msgs.clear();
             t.hide_at = None;
         }
         t.ids.clone()
@@ -61,6 +65,7 @@ pub fn on_message(app: &PhoenixApp, m: &Message, cx: &mut Context<PhoenixApp>) {
         return;
     }
     push(m.channel, m.id, Instant::now());
+    TOASTS.with_borrow_mut(|t| t.msgs.push(m.clone()));
     cx.spawn(async move |this, cx| {
         cx.background_executor().timer(LINGER + Duration::from_millis(50)).await;
         let _ = this.update(cx, |_, cx| cx.notify());
@@ -152,8 +157,12 @@ pub fn render(app: &PhoenixApp, channel: Id, cx: &mut Context<PhoenixApp>) -> Op
         return None;
     }
     let ids = shown(channel, Instant::now());
-    let msgs = app.messages.get(&channel)?;
-    let list: Vec<&Message> = ids.iter().filter_map(|id| msgs.msgs.iter().rev().find(|m| m.id == *id)).collect();
+    let kept = TOASTS.with_borrow(|t| t.msgs.clone());
+    let stored = app.messages.get(&channel);
+    let list: Vec<Message> = ids
+        .iter()
+        .filter_map(|id| stored.and_then(|e| e.msgs.iter().rev().find(|m| m.id == *id)).or_else(|| kept.iter().find(|m| m.id == *id)).cloned())
+        .collect();
     if list.is_empty() {
         return None;
     }
@@ -170,7 +179,7 @@ pub fn render(app: &PhoenixApp, channel: Id, cx: &mut Context<PhoenixApp>) -> Op
             .flex_col()
             .gap(z(8.))
             .on_hover(|on, _, _| set_frozen(*on))
-            .children(list.into_iter().map(|m| toast(app, m, cx)))
+            .children(list.iter().map(|m| toast(app, m, cx)))
             .into_any_element(),
     )
 }
