@@ -89,6 +89,7 @@ struct Inner {
     mfa_opts: Mutex<crate::auth::MfaOptions>,
     remote_auth: Mutex<Option<tokio::task::AbortHandle>>,
     pre_rest: Mutex<Option<RestClient>>,
+    pre_session_pages: Mutex<Vec<Vec<api::Message>>>,
     store: Arc<dyn TokenStore>,
     props: ClientProperties,
 }
@@ -101,6 +102,16 @@ impl Inner {
     }
     fn session(&self) -> Result<Arc<Session>, BackendError> {
         self.session.lock().clone().ok_or_else(|| err("Not logged in."))
+    }
+    fn note_pre_session(&self, msgs: &[api::Message]) {
+        let mut pages = self.pre_session_pages.lock();
+        match self.session() {
+            Ok(s) => {
+                drop(pages);
+                ensure_message_authors(self, &s, msgs);
+            }
+            Err(_) => pages.push(msgs.to_vec()),
+        }
     }
 }
 
@@ -140,6 +151,7 @@ impl DiscordBackend {
                 mfa_opts: Mutex::new(Default::default()),
                 remote_auth: Mutex::new(None),
                 pre_rest: Mutex::new(None),
+                pre_session_pages: Mutex::new(Vec::new()),
                 store,
                 props: ClientProperties::current(),
             }),
@@ -283,6 +295,9 @@ fn start_session(
     });
     pins::init(&session.cache);
     *inner.session.lock() = Some(session.clone());
+    for page in std::mem::take(&mut *inner.pre_session_pages.lock()) {
+        ensure_message_authors(inner, &session, &page);
+    }
     if let Some(e) = convert::self_activities(ready) {
         inner.emit(e);
     }
@@ -296,6 +311,42 @@ fn start_session(
     history::warm_recent(inner, &session);
     tokio::spawn(pump(inner.clone(), session, rx));
     data
+}
+
+fn ensure_authors(inner: &Inner, s: &Session, guild: api::Snowflake, users: Vec<api::Snowflake>) {
+    if users.is_empty() {
+        return;
+    }
+    let (events, missing) = s.adapter.lock().note_authors(&s.cache, guild, users);
+    for e in events {
+        inner.emit(e);
+    }
+    for ids in missing.chunks(100) {
+        let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
+            guild_id: vec![guild],
+            user_ids: Some(ids.to_vec()),
+            presences: true,
+            ..Default::default()
+        });
+    }
+}
+
+fn ensure_message_authors(inner: &Inner, s: &Session, msgs: &[api::Message]) {
+    let mut by_guild: Vec<(api::Snowflake, Vec<api::Snowflake>)> = Vec::new();
+    for m in msgs {
+        let Some(g) = m.guild_id.or_else(|| s.cache.channel(m.channel_id).and_then(|c| c.guild_id)) else { continue };
+        let at = match by_guild.iter().position(|(x, _)| *x == g) {
+            Some(i) => i,
+            None => {
+                by_guild.push((g, Vec::new()));
+                by_guild.len() - 1
+            }
+        };
+        convert::message_authors(m, &mut by_guild[at].1);
+    }
+    for (g, ids) in by_guild {
+        ensure_authors(inner, s, g, ids);
+    }
 }
 
 fn tracing_warn(msg: &str) {
@@ -330,10 +381,19 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             crate::commands::set_session_id(&r.session_id);
             let prefs = Prefs::from_ready(r);
             let data = convert::build_ready(&s.cache, r, &prefs);
-            *s.adapter.lock() = Adapter::new(r.user.id, prefs);
+            let authors = {
+                let mut a = s.adapter.lock();
+                let authors = a.take_authors();
+                *a = Adapter::new(r.user.id, prefs);
+                authors
+            };
             s.subscribed.lock().clear();
             inner.emit(AppEvent::Resync(crate::commands::Resync(data)));
             nav::snapshot(&s.cache, r).into_iter().for_each(|e| inner.emit(e));
+            for (g, mut ids) in authors {
+                ids.drain(..ids.len().saturating_sub(100));
+                ensure_authors(&inner, &s, api::Snowflake(g), ids);
+            }
             continue;
         }
         if let Some(e) = crate::commands::from_gateway(&ev) {
@@ -348,6 +408,9 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             schedule_ack(&s, m.channel_id, m.id);
         }
         let events = s.adapter.lock().map(&s.cache, &ev);
+        if let GatewayEvent::MessageCreate(m) = &ev {
+            ensure_message_authors(&inner, &s, std::slice::from_ref(&**m));
+        }
         let fatal = matches!(ev, GatewayEvent::Fatal { .. });
         for e in events {
             inner.emit(e);
@@ -487,23 +550,15 @@ impl Backend for DiscordBackend {
                 let mut by_guild: std::collections::HashMap<api::Snowflake, Vec<api::Snowflake>> = std::collections::HashMap::new();
                 for m in msgs {
                     if let Some(g) = s.cache.channel(sf(m.channel)).and_then(|c| c.guild_id) {
+                        let list = by_guild.entry(g).or_default();
                         let u = sf(m.author);
-                        if s.cache.member(g, u).is_none() {
-                            let list = by_guild.entry(g).or_default();
-                            if !list.contains(&u) {
-                                list.push(u);
-                            }
+                        if !list.contains(&u) {
+                            list.push(u);
                         }
                     }
                 }
-                for (g, mut ids) in by_guild {
-                    ids.truncate(100);
-                    let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
-                        guild_id: vec![g],
-                        user_ids: Some(ids),
-                        presences: true,
-                        ..Default::default()
-                    });
+                for (g, ids) in by_guild {
+                    ensure_authors(&inner, &s, g, ids);
                 }
             }
             Ok(reply)
@@ -626,17 +681,7 @@ impl Backend for DiscordBackend {
 
     fn request_feed_members(&self, guild: Id, users: Vec<Id>) {
         let Ok(s) = self.inner.session() else { return };
-        let g = sf(guild);
-        let mut ids: Vec<phoenix_api::models::Snowflake> = users.into_iter().map(sf).filter(|u| s.cache.member(g, *u).is_none()).collect();
-        ids.truncate(100);
-        if !ids.is_empty() {
-            let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
-                guild_id: vec![g],
-                user_ids: Some(ids),
-                presences: true,
-                ..Default::default()
-            });
-        }
+        ensure_authors(&self.inner, &s, sf(guild), users.into_iter().map(sf).collect());
     }
 
     fn activity_feed_enabled(&self, guild: Id) -> bool {
@@ -962,23 +1007,7 @@ impl Backend for DiscordBackend {
                 convert::message_users(m, &mut users);
             }
             inner.emit(AppEvent::Users(users));
-            if let Some(g) = s.cache.channel(sf(channel)).and_then(|c| c.guild_id) {
-                let mut ids: Vec<api::Snowflake> = Vec::new();
-                for m in &msgs {
-                    if !ids.contains(&m.author.id) && s.cache.member(g, m.author.id).is_none() {
-                        ids.push(m.author.id);
-                    }
-                }
-                if !ids.is_empty() {
-                    ids.truncate(100);
-                    let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
-                        guild_id: vec![g],
-                        user_ids: Some(ids),
-                        presences: true,
-                        ..Default::default()
-                    });
-                }
-            }
+            ensure_message_authors(&inner, &s, &msgs);
             Ok(msgs.iter().map(convert::message).collect())
         })
     }

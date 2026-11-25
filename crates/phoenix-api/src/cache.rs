@@ -381,6 +381,13 @@ impl Cache {
                 if !m.author.username.is_empty() {
                     s.users.insert(m.author.id, Arc::new(m.author.clone()));
                 }
+                if let (Some(g), Some(member), None) = (m.guild_id, &m.member, m.webhook_id) {
+                    let mut member = member.clone();
+                    if member.user.is_none() {
+                        member.user = Some(m.author.clone());
+                    }
+                    s.members.insert((g, m.author.id), Arc::new(member));
+                }
                 if let Some(c) = s.channels.get(&m.channel_id).cloned() {
                     let mut c = (*c).clone();
                     c.last_message_id = Some(m.id);

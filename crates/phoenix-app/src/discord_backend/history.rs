@@ -38,30 +38,10 @@ fn emit_users(inner: &Inner, msgs: &[api::Message]) {
 
 fn after_page(inner: &Inner, s: &Session, channel: Id, msgs: &[api::Message], latest: bool) {
     emit_users(inner, msgs);
+    super::ensure_message_authors(inner, s, msgs);
     if let Some(g) = s.cache.channel(sf(channel)).and_then(|c| c.guild_id) {
-        let mut ids: Vec<api::Snowflake> = Vec::new();
-        for m in msgs {
-            let refd = m.referenced_message.as_deref().map(|r| r.author.id);
-            for u in std::iter::once(m.author.id).chain(refd) {
-                if !ids.contains(&u) && s.cache.member(g, u).is_none() {
-                    ids.push(u);
-                }
-            }
-        }
-        for v in s.cache.voice_states(Some(g)) {
-            if !ids.contains(&v.user_id) && s.cache.member(g, v.user_id).is_none() {
-                ids.push(v.user_id);
-            }
-        }
-        if !ids.is_empty() {
-            ids.truncate(100);
-            let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
-                guild_id: vec![g],
-                user_ids: Some(ids),
-                presences: true,
-                ..Default::default()
-            });
-        }
+        let voice: Vec<api::Snowflake> = s.cache.voice_states(Some(g)).iter().map(|v| v.user_id).collect();
+        super::ensure_authors(inner, s, g, voice);
     }
     if latest {
         let ev = s.adapter.lock().recount_mentions(&s.cache, channel.0, msgs);
@@ -132,6 +112,7 @@ async fn pre_session(inner: &Arc<Inner>, channel: Id, before: Option<Id>, limit:
     let msgs = fetch(&rest, channel, before, limit).await.ok()?;
     crate::perf::mark("messages_pre_session");
     emit_users(inner, &msgs);
+    inner.note_pre_session(&msgs);
     if before.is_none() && limit == PAGE {
         msg_cache::put_with(channel.0, &msgs, false);
     }
@@ -154,7 +135,10 @@ impl DiscordBackend {
                                 tokio::spawn(refresh(inner.clone(), s, channel));
                             }
                         }
-                        Err(_) => emit_users(&inner, &msgs),
+                        Err(_) => {
+                            emit_users(&inner, &msgs);
+                            inner.note_pre_session(&msgs);
+                        }
                     }
                     return Ok(msgs.iter().map(convert::message).collect::<Vec<Message>>());
                 }

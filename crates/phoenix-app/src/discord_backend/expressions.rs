@@ -178,26 +178,7 @@ pub(super) async fn search(inner: Arc<Inner>, s: Arc<Session>, req: SearchReques
                     convert::message_users(m, &mut users);
                 }
                 inner.emit(AppEvent::Users(users));
-                if let Some(g) = req.guild.map(sf) {
-                    let mut ids: Vec<phoenix_api::models::Snowflake> = Vec::new();
-                    for m in &hits {
-                        let refd = m.referenced_message.as_deref().map(|r| r.author.id);
-                        for u in std::iter::once(m.author.id).chain(refd) {
-                            if !ids.contains(&u) && s.cache.member(g, u).is_none() {
-                                ids.push(u);
-                            }
-                        }
-                    }
-                    if !ids.is_empty() {
-                        ids.truncate(100);
-                        let _ = s.gateway.request_guild_members(phoenix_api::gateway::RequestGuildMembers {
-                            guild_id: vec![g],
-                            user_ids: Some(ids),
-                            presences: true,
-                            ..Default::default()
-                        });
-                    }
-                }
+                super::ensure_message_authors(&inner, &s, &hits);
                 return Ok(SearchPage { total: r.total_results, messages: hits.iter().map(convert::message).collect() });
             }
             SearchOutcome::Indexing { retry_after } => tokio::time::sleep(Duration::from_secs_f64(retry_after)).await,

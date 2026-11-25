@@ -870,6 +870,7 @@ impl PhoenixApp {
             }
             AppEvent::GuildMembers { guild, members } => {
                 self.members.insert(guild, members);
+                crate::member_index::invalidate(guild);
                 if self.selected_guild == Some(guild) {
                     self.rebuild_members();
                     self.rebuild_sidebar();

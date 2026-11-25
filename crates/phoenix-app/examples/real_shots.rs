@@ -821,6 +821,19 @@ fn main() -> anyhow::Result<()> {
         pump(&mut cx, 500);
     }
     println!("authors without guild member: {}", missing(&mut cx));
+    cx.update(|cx| {
+        let app = v.read(cx);
+        let (Some(g), Some(c)) = (app.selected_guild, app.selected_channel) else { return };
+        let Some(entry) = app.messages.get(&c) else { return };
+        let mut authors: Vec<Id> = entry.msgs.iter().filter(|m| m.webhook_name.is_none()).map(|m| m.author).collect();
+        authors.sort_unstable_by_key(|a| a.0);
+        authors.dedup();
+        let colored: Vec<&Id> = authors.iter().filter(|a| app.author_color_in(Some(g), **a).is_some()).collect();
+        println!("coloured authors: {}/{}", colored.len(), authors.len());
+        for a in authors.iter().filter(|a| !colored.contains(a)) {
+            println!("  uncoloured {} {:?}", a.0, app.users.get(a).map(|u| u.display_name.clone()));
+        }
+    });
     if std::env::var("PHX_DEBUG_NICKS").is_ok() {
         cx.update(|cx| {
             let app = v.read(cx);

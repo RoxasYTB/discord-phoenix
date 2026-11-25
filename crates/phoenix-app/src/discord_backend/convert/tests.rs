@@ -160,3 +160,85 @@ fn attachment_spoilers_from_flag_or_prefix() {
     let s: Vec<bool> = out.attachments.iter().map(|a| a.is_spoiler()).collect();
     assert_eq!(s, [true, true, false]);
 }
+
+fn members_of(out: &[AppEvent]) -> Option<&Vec<model::Member>> {
+    out.iter().rev().find_map(|x| match x {
+        AppEvent::GuildMembers { members, .. } => Some(members),
+        _ => None,
+    })
+}
+
+#[test]
+fn authors_keep_their_member_through_history_live_messages_and_reconnects() {
+    let (cache, r) = ready_cache();
+    let mut a = Adapter::new(r.user.id, Prefs::from_ready(&r));
+    let g = api::Snowflake(300000000000000001);
+    let bob = api::Snowflake(200000000000000003);
+    let carol = api::Snowflake(200000000000000009);
+    let colored = api::Snowflake(500000000000000001);
+
+    let (out, missing) = a.note_authors(&cache, g, [bob, carol]);
+    assert!(out.is_empty());
+    assert_eq!(missing, vec![bob, carol]);
+
+    let list = ev("GUILD_MEMBER_LIST_UPDATE", "member_list_update.json");
+    cache.apply(&list);
+    let out = a.map(&cache, &list);
+    assert!(members_of(&out).is_none_or(|ms| !ms.iter().any(|m| m.user == id(bob))));
+
+    let create = ev("MESSAGE_CREATE", "message_create.json");
+    cache.apply(&create);
+    assert!(cache.member(g, bob).is_some_and(|m| m.roles.contains(&colored)));
+    a.map(&cache, &create);
+    let (out, missing) = a.note_authors(&cache, g, [bob]);
+    assert!(missing.is_empty());
+    let ms = members_of(&out).expect("bob's member reaches the app");
+    assert!(ms.iter().any(|m| m.user == id(bob) && m.roles.contains(&id(colored))));
+
+    let (out, _) = a.note_authors(&cache, g, [bob]);
+    assert!(out.is_empty());
+
+    let chunk = parse_dispatch(
+        "GUILD_MEMBERS_CHUNK",
+        r#"{"guild_id":"300000000000000001","members":[{"user":{"id":"200000000000000009","username":"carol","discriminator":"0"},"roles":["500000000000000001"],"joined_at":"2021-01-01T00:00:00+00:00","deaf":false,"mute":false}],"chunk_index":0,"chunk_count":1}"#,
+    );
+    cache.apply(&chunk);
+    let out = a.map(&cache, &chunk);
+    let ms = members_of(&out).unwrap();
+    assert!(ms.iter().any(|m| m.user == id(bob)) && ms.iter().any(|m| m.user == id(carol)));
+
+    let out = a.map(&cache, &list);
+    let ms = members_of(&out).unwrap();
+    assert!(ms.iter().any(|m| m.user == id(bob)) && ms.iter().any(|m| m.user == id(carol)));
+
+    let authors = a.take_authors();
+    assert!(authors.get(&g.0).is_some_and(|ids| ids.contains(&bob) && ids.contains(&carol)));
+}
+
+#[test]
+fn webhook_authors_are_not_requested_and_replies_are() {
+    let mut raw: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{FIX}message_create.json")).unwrap()).unwrap();
+    let m: api::Message = serde_json::from_value(raw.clone()).unwrap();
+    let mut ids = Vec::new();
+    message_authors(&m, &mut ids);
+    assert_eq!(ids, vec![api::Snowflake(200000000000000003), api::Snowflake(200000000000000002)]);
+    raw["webhook_id"] = serde_json::json!("800000000000000001");
+    let m: api::Message = serde_json::from_value(raw).unwrap();
+    let mut ids = Vec::new();
+    message_authors(&m, &mut ids);
+    assert_eq!(ids, vec![api::Snowflake(200000000000000002)]);
+}
+
+#[test]
+fn role_colour_falls_back_from_colors_to_color_and_skips_zero() {
+    let rs: Vec<api::Role> = serde_json::from_value(serde_json::json!([
+        {"id": "910000000000000002", "name": "a", "color": 0, "colors": {"primary_color": 0, "secondary_color": null, "tertiary_color": null}, "position": 3},
+        {"id": "910000000000000003", "name": "b", "color": 1234, "colors": {"primary_color": 0, "secondary_color": null, "tertiary_color": null}, "position": 2},
+        {"id": "910000000000000004", "name": "c", "color": 0, "colors": {"primary_color": 5678, "secondary_color": null, "tertiary_color": null}, "position": 1},
+        {"id": "910000000000000005", "name": "d", "color": 42, "position": 0}
+    ]))
+    .unwrap();
+    let g = api::Guild { roles: rs, ..Default::default() };
+    let rs = roles(&g);
+    assert_eq!(rs.iter().map(|r| r.color).collect::<Vec<_>>(), vec![None, Some(1234), Some(5678), Some(42)]);
+}

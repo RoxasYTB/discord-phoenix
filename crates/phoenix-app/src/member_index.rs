@@ -24,6 +24,12 @@ fn rebuild(ix: &mut Index, ms: &[Member]) {
     ix.pos.extend(ms.iter().enumerate().map(|(i, m)| (m.user.0, i)));
 }
 
+pub fn invalidate(guild: Id) {
+    IDX.with_borrow_mut(|all| {
+        all.remove(&guild.0);
+    });
+}
+
 pub fn find(ms: &[Member], guild: Id, user: Id) -> Option<&Member> {
     if ms.len() < SCAN {
         return ms.iter().find(|m| m.user == user);
@@ -77,5 +83,15 @@ mod tests {
         assert_eq!(find(&ms, Id(9), Id(11)).map(|m| m.user), Some(Id(11)));
         ms.push(member(500));
         assert_eq!(find(&ms, Id(9), Id(500)).map(|m| m.user), Some(Id(500)));
+    }
+
+    #[test]
+    fn replaced_list_with_same_ends_finds_new_member() {
+        let ms = list(1..=100);
+        assert!(find(&ms, Id(8), Id(700)).is_none());
+        let mut next = ms.clone();
+        next[50] = member(700);
+        invalidate(Id(8));
+        assert_eq!(find(&next, Id(8), Id(700)).map(|m| m.user), Some(Id(700)));
     }
 }

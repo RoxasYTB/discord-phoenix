@@ -348,6 +348,18 @@ fn message_kind(k: api::MessageType) -> model::MessageKind {
     }
 }
 
+pub fn message_authors(m: &api::Message, out: &mut Vec<api::Snowflake>) {
+    if m.webhook_id.is_none() && !out.contains(&m.author.id) {
+        out.push(m.author.id);
+    }
+    if let Some(r) = &m.referenced_message
+        && r.webhook_id.is_none()
+        && !out.contains(&r.author.id)
+    {
+        out.push(r.author.id);
+    }
+}
+
 pub fn message_users(m: &api::Message, out: &mut Vec<model::User>) {
     if !m.author.username.is_empty() {
         out.push(user(&m.author));
@@ -695,7 +707,7 @@ pub fn roles(g: &api::Guild) -> Vec<model::Role> {
         .map(|r| model::Role {
             id: id(r.id),
             name: r.name.clone().into(),
-            color: (r.color != 0).then_some(r.color),
+            color: Some(r.colors.as_ref().map(|c| c.primary_color).filter(|c| *c != 0).unwrap_or(r.color)).filter(|c| *c != 0),
             position: r.position,
             hoist: r.hoist,
             icon: r
@@ -1023,6 +1035,31 @@ impl Adapter {
         let me = id(self.me);
         out.extend(acts.into_iter().filter(|(user, _)| *user != me).map(|(user, activities)| AppEvent::Activities { user, activities }));
         out.push(AppEvent::MemberListRows { guild: id(guild), rows });
+    }
+
+    pub fn note_authors(&mut self, cache: &Cache, guild: api::GuildId, users: impl IntoIterator<Item = api::Snowflake>) -> (Vec<AppEvent>, Vec<api::Snowflake>) {
+        let mut missing = Vec::new();
+        let mut added = false;
+        for u in users {
+            if cache.member(guild, u).is_some() {
+                let ids = self.chunked.entry(guild.0).or_default();
+                if !ids.contains(&u) {
+                    ids.push(u);
+                    added = true;
+                }
+            } else if !missing.contains(&u) {
+                missing.push(u);
+            }
+        }
+        let mut out = Vec::new();
+        if added {
+            self.emit_members(cache, guild, &mut out);
+        }
+        (out, missing)
+    }
+
+    pub fn take_authors(&mut self) -> HashMap<u64, Vec<api::Snowflake>> {
+        std::mem::take(&mut self.chunked)
     }
 
     fn emit_members(&self, cache: &Cache, guild: api::GuildId, out: &mut Vec<AppEvent>) {
