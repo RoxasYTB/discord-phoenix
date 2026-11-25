@@ -18,8 +18,8 @@ fn main() -> anyhow::Result<()> {
 
     let dir = std::env::temp_dir().join("phoenix-mock-media");
     std::fs::create_dir_all(&dir)?;
-    for (i, (name, w, h)) in [("photo", 1280, 720), ("one", 800, 600), ("two", 800, 600), ("three", 800, 600), ("clip", 1280, 720), ("thumb", 400, 400), ("video", 1280, 720), ("SPOILER_photo", 1280, 720)].into_iter().enumerate() {
-        let hue = i as f32 / 8.;
+    for (i, (name, w, h)) in [("photo", 1280, 720), ("one", 800, 600), ("two", 800, 600), ("three", 800, 600), ("clip", 1280, 720), ("thumb", 400, 400), ("video", 1280, 720), ("SPOILER_photo", 1280, 720), ("four", 1920, 1080), ("five", 1080, 1350), ("SPOILER_clip", 1280, 720)].into_iter().enumerate() {
+        let hue = i as f32 / 11.;
         image::RgbaImage::from_fn(w, h, |x, y| {
             let t = (x as f32 / w as f32 + y as f32 / h as f32) / 2.;
             let r = (60. + 150. * ((hue + t) * std::f32::consts::TAU).sin().abs()) as u8;
@@ -90,6 +90,28 @@ fn main() -> anyhow::Result<()> {
             });
         })?;
         pump(&mut cx, 4);
+        if let Ok(needle) = std::env::var("PHOENIX_SHOT_JUMP") {
+            let above: f32 = std::env::var("PHOENIX_SHOT_JUMP_OFFSET").ok().and_then(|v| v.parse().ok()).unwrap_or(16.);
+            cx.update_window(win.into(), |_, _, cx| {
+                v.update(cx, |app, cx| {
+                    let Some(ch) = app.selected_channel else { return };
+                    let Some(e) = app.messages.get(&ch) else { return };
+                    let hit = |m: &phoenix_app::model::Message| match needle.strip_prefix("type:") {
+                        Some(t) => t.parse::<u8>().is_ok_and(|t| t == m.type_id),
+                        None => {
+                            m.content.contains(needle.as_str())
+                                || m.attachments.iter().any(|a| a.filename.contains(needle.as_str()))
+                                || m.embeds.iter().any(|e| e.title.as_ref().is_some_and(|t| t.contains(needle.as_str())))
+                        }
+                    };
+                    if let Some(ix) = e.msgs.iter().position(hit) {
+                        app.message_list.scroll_to(gpui::ListOffset { item_ix: ix + 1, offset_in_item: px(-above) });
+                        cx.notify();
+                    }
+                });
+            })?;
+            pump(&mut cx, 4);
+        }
     }
     let frames = 10;
     for _ in 0..frames {

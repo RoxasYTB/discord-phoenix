@@ -299,6 +299,19 @@ pub struct Message {
     pub tts: bool,
     pub interaction: Option<CommandUse>,
     pub call: Option<CallInfo>,
+    pub sys: Option<Box<SysData>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SysData {
+    pub app_name: Option<SharedString>,
+    pub tier_name: Option<SharedString>,
+    pub months: u32,
+    pub renewal: bool,
+    pub product: Option<SharedString>,
+    pub ref_channel: Option<Id>,
+    pub ref_guild: Option<Id>,
+    pub mention: Option<Id>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

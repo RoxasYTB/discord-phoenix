@@ -46,6 +46,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("chat/forwarded", &["ArrowAngleRightUpIcon"]),
     ("sys/mic-arrow-right", &["MicrophoneArrowRightIcon"]),
     ("sys/hand-request-speak", &["HandRequestSpeakIcon"]),
+    ("sys/ticket", &["TicketIcon"]),
     ("invite", &["UserPlusIcon"]),
     ("gift", &["GiftIcon"]),
     ("settings/cloud", &["path:M14 4a5 5 0 0 1 5 5v.2A5.5"]),

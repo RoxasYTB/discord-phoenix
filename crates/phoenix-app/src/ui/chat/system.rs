@@ -23,6 +23,7 @@ pub enum SysIcon {
     Asset(&'static str),
     Glyph(ChatIcon, u32),
     Named(&'static str, f32, Option<usize>),
+    Live,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,18 +79,26 @@ pub fn humanize(ms: i64) -> Humanized {
 }
 
 pub fn humanize_text(ms: i64) -> SharedString {
-    match humanize(ms) {
-        Humanized::Seconds => crate::t!("sys.dur.s"),
-        Humanized::Minute => crate::t!("sys.dur.m"),
-        Humanized::Minutes(n) => crate::t!("sys.dur.mm", n = n),
-        Humanized::Hour => crate::t!("sys.dur.h"),
-        Humanized::Hours(n) => crate::t!("sys.dur.hh", n = n),
-        Humanized::Day => crate::t!("sys.dur.d"),
-        Humanized::Days(n) => crate::t!("sys.dur.dd", n = n),
-        Humanized::Month => crate::t!("sys.dur.mo"),
-        Humanized::Months(n) => crate::t!("sys.dur.mos", n = n),
-        Humanized::Year => crate::t!("sys.dur.y"),
-        Humanized::Years(n) => crate::t!("sys.dur.yy", n = n),
+    humanize_in(crate::i18n::locale(), ms)
+}
+
+pub fn humanize_in(code: &str, ms: i64) -> SharedString {
+    let (key, n) = match humanize(ms) {
+        Humanized::Seconds => ("sys.dur.s", None),
+        Humanized::Minute => ("sys.dur.m", None),
+        Humanized::Minutes(n) => ("sys.dur.mm", Some(n)),
+        Humanized::Hour => ("sys.dur.h", None),
+        Humanized::Hours(n) => ("sys.dur.hh", Some(n)),
+        Humanized::Day => ("sys.dur.d", None),
+        Humanized::Days(n) => ("sys.dur.dd", Some(n)),
+        Humanized::Month => ("sys.dur.mo", None),
+        Humanized::Months(n) => ("sys.dur.mos", Some(n)),
+        Humanized::Year => ("sys.dur.y", None),
+        Humanized::Years(n) => ("sys.dur.yy", Some(n)),
+    };
+    match n {
+        Some(n) => crate::i18n::t_in(code, key, &[("n", &n.to_string())]),
+        None => crate::i18n::t_in(code, key, &[]),
     }
 }
 
@@ -113,7 +122,13 @@ pub fn call_state(call: Option<&crate::model::CallInfo>, active: bool, me: crate
 const ASSET_DISCOVERY_OUT: &str = "https://discord.com/assets/49dd33256719a93e.svg";
 const ASSET_DISCOVERY_BACK: &str = "https://discord.com/assets/5c56b22c17556059.svg";
 
-const FALLBACK_TYPES: [u8; 27] = [13, 24, 25, 32, 33, 34, 35, 36, 37, 38, 39, 44, 48, 49, 50, 51, 52, 53, 54, 58, 59, 60, 61, 62, 64, 65, 67];
+const FALLBACK_TYPES: [u8; 8] = [24, 35, 48, 49, 50, 51, 64, 65];
+
+const AUTOMOD_TYPES: [u8; 4] = [36, 37, 38, 39];
+
+const AUTOMOD_AVATAR: &str = "https://discord.com/assets/32336875baac6ac1.png";
+
+pub const INTEGRATIONS_ARTICLE: &str = "15104189280151";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Seg {
@@ -130,6 +145,9 @@ pub enum SysLink {
     Guild,
     GuildSettings,
     Followed,
+    JoinStream,
+    HelpCenter,
+    Inert,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -139,6 +157,18 @@ pub struct SysCtx<'a> {
     pub group_dm: bool,
     pub forum_post: bool,
     pub guild_name: Option<&'a str>,
+    pub data: Option<&'a crate::model::SysData>,
+    pub stream: Option<StreamRef>,
+    pub mine: bool,
+    pub other: Option<String>,
+    pub time: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct StreamRef {
+    pub channel: String,
+    pub activity: Option<String>,
+    pub ended_ms: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -263,6 +293,88 @@ pub fn generic_in(code: &str, ctx: &SysCtx) -> Option<Generic> {
         29 => (SysIcon::Named("sys/mic-arrow-right", 24., None), "sys.stage_speaker", &[], true),
         30 => (SysIcon::Named("sys/hand-request-speak", 24., None), "sys.stage_hand", &[], true),
         31 => (stage(None), "sys.stage_topic", &[], true),
+        13 => {
+            let st = ctx.stream.as_ref()?;
+            vars.push(("ch", st.channel.clone()));
+            match st.ended_ms {
+                Some(ms) => {
+                    vars.push(("d", humanize_in(code, ms).to_string()));
+                    (SysIcon::Named("voice/screen-x", 20., None), "sys.stream_ended", &[], false)
+                }
+                None => {
+                    vars.push(("act", st.activity.clone().unwrap_or_else(|| "unknown".into())));
+                    (SysIcon::Live, "sys.stream_live", &[JoinStream], false)
+                }
+            }
+        }
+        25 => {
+            let d = ctx.data?;
+            vars.push(("t", d.tier_name.as_deref().unwrap_or_default().to_string()));
+            vars.push(("m", d.months.to_string()));
+            let key = match (d.months > 0, d.renewal) {
+                (true, true) if d.months == 1 => "sys.role_sub_renew_months1",
+                (true, true) => "sys.role_sub_renew_months",
+                (true, false) if d.months == 1 => "sys.role_sub_months1",
+                (true, false) => "sys.role_sub_months",
+                (false, true) => "sys.role_sub_renew",
+                (false, false) => "sys.role_sub",
+            };
+            (SysIcon::Asset(ASSET_JOIN), key, &[Inert], false)
+        }
+        32 => match ctx.data.and_then(|d| d.app_name.as_deref()) {
+            Some(a) => {
+                vars.push(("a", a.to_string()));
+                (SysIcon::Named("sys/ticket", 24., None), "sys.app_premium", &[], false)
+            }
+            None => (SysIcon::Named("sys/ticket", 24., None), "sys.app_premium_deleted", &[], false),
+        },
+        33 | 34 => {
+            let added = ctx.type_id == 33;
+            let icon = SysIcon::Asset(if added { ASSET_JOIN } else { ASSET_LEAVE });
+            match ctx.data.and_then(|d| d.app_name.as_deref()) {
+                Some(a) => {
+                    vars.push(("a", a.to_string()));
+                    (icon, if added { "sys.app_added" } else { "sys.app_removed" }, &[Inert, HelpCenter], false)
+                }
+                None => (icon, if added { "sys.app_added_deleted" } else { "sys.app_removed_deleted" }, &[HelpCenter], false),
+            }
+        }
+        36 => {
+            vars.push(("time", ctx.time.clone()));
+            (SysIcon::Asset(AUTOMOD_AVATAR), "sys.alert_on", &[], false)
+        }
+        37 => (SysIcon::Asset(AUTOMOD_AVATAR), "sys.alert_off", &[], false),
+        38 => (SysIcon::Asset(AUTOMOD_AVATAR), "sys.alert_raid", &[], false),
+        39 => (SysIcon::Asset(AUTOMOD_AVATAR), "sys.alert_resolved", &[], false),
+        44 => {
+            vars.push(("p", ctx.data.and_then(|d| d.product.as_deref())?.to_string()));
+            (SysIcon::Asset(ASSET_JOIN), "sys.purchase", &[Inert], false)
+        }
+        52 => (SysIcon::Asset(ASSET_JOIN), "sys.join_request_approved", &[], false),
+        53 => (SysIcon::Asset(ASSET_LEAVE), "sys.join_request_rejected", &[], false),
+        54 => (SysIcon::Asset(ASSET_LEAVE), "sys.join_request_withdrawn", &[], false),
+        58..=62 => {
+            let (icon, key) = match ctx.type_id {
+                58 => ("chat/trash", "sys.report_deleted"),
+                59 => ("mod/clock-warning", "sys.report_timeout"),
+                60 => ("mod/user-minus", "sys.report_kick"),
+                61 => ("mod/hammer", "sys.report_ban"),
+                _ => ("check-small", "sys.report_closed"),
+            };
+            vars.push(("o", ctx.other.clone().unwrap_or_default()));
+            (SysIcon::Named(icon, 20., None), key, &[], false)
+        }
+        67 => {
+            vars.push(("o", ctx.other.clone()?));
+            vars.push(("note", ctx.content.to_string()));
+            let key = match (ctx.mine, ctx.content.is_empty()) {
+                (true, false) => "sys.friend_accepted_by_me_note",
+                (false, false) => "sys.friend_accepted_note",
+                (true, true) => "sys.friend_accepted_by_me",
+                (false, true) => "sys.friend_accepted",
+            };
+            (SysIcon::Named("user-check", 18., Some(idx::STATUS_POSITIVE)), key, &[], false)
+        }
         _ => return None,
     };
     Some(Generic { icon, segs: parse_template(&tr(key), &vars), links, strong_text })
@@ -326,6 +438,30 @@ fn icon_el(glyph: SysIcon) -> AnyElement {
             .into_any_element(),
         SysIcon::Asset(url) => div().absolute().left(z(36.)).top(z(7.)).child(gpui::img(SharedString::new_static(url)).size(z(16.))).into_any_element(),
         SysIcon::Glyph(icon, color) => div().absolute().left(z(36.)).top(z(7.)).child(super::icons::icon(icon, 16., c(color))).into_any_element(),
+        SysIcon::Live => div()
+            .absolute()
+            .left(z(8.))
+            .top(z(2.))
+            .w(z(72.))
+            .h(z(22.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .h(z(16.))
+                    .px(z(4.))
+                    .rounded(z(8.))
+                    .bg(c(crate::theme::tok(crate::theme::generated::idx::STATUS_DANGER)))
+                    .flex()
+                    .items_center()
+                    .text_size(z(12.))
+                    .line_height(z(16.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(gpui::white())
+                    .child(crate::t!("voice.live")),
+            )
+            .into_any_element(),
     }
 }
 
@@ -334,6 +470,7 @@ fn generic_line(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r:
     let text_color = if g.strong_text { c(tok(idx::TEXT_STRONG)) } else { c(Palette::TEXT_MUTED) };
     let guild = app.channel_guild(msg.channel);
     let channel = msg.channel;
+    let stream_key = msg.sys.as_ref().and_then(|d| d.ref_channel).map(|ch| crate::voice::stream::key(msg.sys.as_ref().and_then(|d| d.ref_guild).map(|g| g.0), ch.0, msg.author.0));
     let mut children: Vec<AnyElement> = Vec::new();
     for seg in g.segs {
         match seg {
@@ -347,6 +484,7 @@ fn generic_line(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r:
                 let kind = g.links.get(i).copied();
                 let color = if kind == Some(SysLink::EditGroup) { idx::TEXT_LINK } else { idx::INTERACTIVE_TEXT_ACTIVE };
                 let e = entity.clone();
+                let sk = stream_key.clone();
                 let el = div()
                     .id(("sys-link", msg.id.0.wrapping_mul(8).wrapping_add(i as u64)))
                     .font_weight(FontWeight::MEDIUM)
@@ -367,7 +505,15 @@ fn generic_line(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r:
                                 e.update(cx, |a, cx| a.open_server_settings(gid, section, cx));
                             }
                         }
-                        Some(SysLink::Followed) | None => {}
+                        Some(SysLink::JoinStream) => {
+                            if let Some(key) = sk.clone() {
+                                e.update(cx, |a, cx| crate::ui::voice_row::watch_from_sidebar(a, key, cx));
+                            }
+                        }
+                        Some(SysLink::HelpCenter) => {
+                            cx.open_url(&format!("https://support.discord.com/hc/{}/articles/{INTEGRATIONS_ARTICLE}", crate::i18n::locale().to_lowercase()));
+                        }
+                        Some(SysLink::Followed | SysLink::Inert) | None => {}
                     });
                 children.push(el.into_any_element());
             }
@@ -394,6 +540,41 @@ fn generic_line(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r:
         .into_any_element()
 }
 
+fn automod_line(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &RenderedMessage, g: Generic) -> AnyElement {
+    use crate::theme::{generated::idx, tok};
+    let mut children: Vec<AnyElement> = Vec::new();
+    for seg in g.segs {
+        match seg {
+            Seg::Author => children.push(author_el(app, entity, msg)),
+            Seg::Text(t) | Seg::Strong(t) | Seg::Name(t) | Seg::Link(_, t) => children.extend(split_words(&t).into_iter().map(|w| div().child(w).into_any_element())),
+        }
+    }
+    let header = div()
+        .flex()
+        .items_center()
+        .h(z(22.))
+        .child(div().mr(z(4.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_BRAND))).child(crate::t!("sys.automod")))
+        .child(super::bot_tag_label(true, crate::t!("sys.official")).ml_0().mr(z(2.)).mt(z(2.)))
+        .child(div().ml(z(4.)).text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(r.time_full.clone()));
+    div()
+        .id(("sysmsg", msg.id.0))
+        .relative()
+        .pl(z(80.))
+        .pr(z(48.))
+        .py(z(2.))
+        .mt(z(if r.group_start { 17. } else { 0. }))
+        .min_h(z(44.))
+        .flex()
+        .flex_col()
+        .text_size(z(16.))
+        .line_height(z(22.))
+        .hover(|s| s.bg(c(Palette::BG_MSG_HOVER)))
+        .child(div().absolute().left(z(24.)).top(z(2.)).child(gpui::img(SharedString::new_static(AUTOMOD_AVATAR)).size(z(40.)).rounded_full()))
+        .child(header)
+        .child(div().flex().flex_wrap().items_center().line_height(z(24.)).text_color(c(tok(idx::TEXT_DEFAULT))).children(children))
+        .into_any_element()
+}
+
 fn with_divider(r: &RenderedMessage, line: AnyElement) -> AnyElement {
     match r.day_divider.clone() {
         Some(label) => div().child(super::day_divider(label)).child(line).into_any_element(),
@@ -401,14 +582,60 @@ fn with_divider(r: &RenderedMessage, line: AnyElement) -> AnyElement {
     }
 }
 
+fn user_name(app: &PhoenixApp, uid: crate::model::Id) -> String {
+    app.member_nick(uid).or_else(|| app.users.get(&uid).map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("sys.someone")).to_string()
+}
+
+pub fn format_alert(code: &str, t: chrono::NaiveDateTime) -> String {
+    if code.starts_with("en") { t.format("%m/%d/%Y, %-I:%M %p").to_string() } else { t.format("%d/%m/%Y %H:%M").to_string() }
+}
+
+pub fn alert_time(content: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(content.trim())
+        .ok()
+        .map(|d| format_alert(crate::i18n::locale(), d.with_timezone(&chrono::Local).naive_local()))
+        .unwrap_or_default()
+}
+
 pub fn ctx_of<'a>(app: &'a PhoenixApp, msg: &'a Message) -> SysCtx<'a> {
     let guild = app.channel_guild(msg.channel);
+    let data = msg.sys.as_deref();
+    let type_id = effective_type(msg);
+    let stream = (type_id == 13)
+        .then(|| data.and_then(|d| d.ref_guild.and(d.ref_channel)))
+        .flatten()
+        .and_then(|ch| app.channels.get(&ch))
+        .map(|ch| StreamRef {
+            channel: ch.name.to_string(),
+            activity: app
+                .people
+                .activities
+                .get(&msg.author)
+                .and_then(|v| v.iter().find(|a| matches!(a.kind, crate::presence::ActivityKind::Playing)))
+                .map(|a| a.name.to_string()),
+            ended_ms: msg.call.as_ref().and_then(|c| c.duration_ms),
+        });
+    let other = match type_id {
+        58..=62 => data.and_then(|d| d.mention).map(|u| user_name(app, u)),
+        67 => app
+            .channels
+            .get(&msg.channel)
+            .filter(|c| c.guild.is_none() && c.voice_users.len() == 1)
+            .and_then(|c| c.voice_users.first().copied())
+            .map(|u| user_name(app, u)),
+        _ => None,
+    };
     SysCtx {
-        type_id: effective_type(msg),
+        type_id,
         content: msg.content.as_ref(),
         group_dm: guild.is_none() && crate::ui::dm_profile_panel::is_group_dm(app, msg.channel),
         forum_post: guild.is_some() && app.thread_state(msg.channel).forum_post,
         guild_name: guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.as_ref()),
+        data,
+        stream,
+        mine: msg.author == app.me.id,
+        other,
+        time: if type_id == 36 { alert_time(&msg.content) } else { String::new() },
     }
 }
 
@@ -425,7 +652,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         return Some(with_divider(r, line));
     }
     if let Some(g) = generic_in(crate::i18n::locale(), &ctx_of(app, msg)) {
-        let line = generic_line(app, entity, msg, r, g);
+        let line = if AUTOMOD_TYPES.contains(&msg.type_id) { automod_line(app, entity, msg, r, g) } else { generic_line(app, entity, msg, r, g) };
         return Some(with_divider(r, line));
     }
     if msg.kind == MessageKind::OtherSystem && (msg.content.is_empty() || !FALLBACK_TYPES.contains(&msg.type_id)) {
@@ -951,6 +1178,94 @@ mod tests {
         assert_eq!(sys_gen("en", 30, "").icon, SysIcon::Named("sys/hand-request-speak", 24., None));
         assert_eq!(plain(&sys_gen("fr", 30, "")), "@U a demandé à prendre la parole.");
         assert_eq!(plain(&sys_gen("fr", 31, "Sujet")), "@U a changé le sujet de la conférence : **Sujet**");
+    }
+
+    #[test]
+    fn role_subscription_app_and_purchase_messages_follow_the_client() {
+        let d = crate::model::SysData { app_name: Some("Bot".into()), tier_name: Some("Or".into()), months: 3, product: Some("Pack".into()), ..Default::default() };
+        let one = crate::model::SysData { months: 1, ..d.clone() };
+        let renew = crate::model::SysData { months: 0, renewal: true, ..d.clone() };
+        let bare = crate::model::SysData::default();
+        let g = |code: &str, type_id: u8, data: &crate::model::SysData| generic_in(code, &SysCtx { type_id, guild_name: Some("Aperture"), data: Some(data), ..Default::default() });
+        let sub = g("fr", 25, &d).unwrap();
+        assert_eq!(sub.icon, SysIcon::Asset(ASSET_JOIN));
+        assert_eq!(plain(&sub), "@U a un abonnement **Or** à [0:Aperture] depuis 3 mois !");
+        assert_eq!(plain(&g("en", 25, &one).unwrap()), "@U joined **Or** and has been a subscriber of [0:Aperture] for 1 month!");
+        assert_eq!(plain(&g("en", 25, &renew).unwrap()), "@U renewed **Or** in their [0:Aperture] membership!");
+        assert!(generic_in("fr", &SysCtx { type_id: 25, ..Default::default() }).is_none());
+        let premium = g("fr", 32, &d).unwrap();
+        assert_eq!(premium.icon, SysIcon::Named("sys/ticket", 24., None));
+        assert_eq!(plain(&premium), "@U a fait passer Bot à la version premium sur ce serveur ! 🎉");
+        assert_eq!(plain(&g("en", 32, &bare).unwrap()), "@U upgraded a deleted application to premium for this server! 🎉");
+        let added = g("en", 33, &d).unwrap();
+        assert_eq!(plain(&added), "@U added the [0:Bot] app. See our [1:help center] for more info.");
+        assert_eq!(added.links, &[SysLink::Inert, SysLink::HelpCenter]);
+        let removed = g("fr", 34, &bare).unwrap();
+        assert_eq!(removed.icon, SysIcon::Asset(ASSET_LEAVE));
+        assert_eq!(plain(&removed), "@U a enlevé une application supprimée. Visite notre [0:centre d'aide] pour plus d'informations.");
+        assert_eq!(removed.links, &[SysLink::HelpCenter]);
+        assert_eq!(plain(&g("fr", 44, &d).unwrap()), "@U a acheté [0:Pack] !");
+        assert!(g("fr", 44, &bare).is_none());
+    }
+
+    #[test]
+    fn join_requests_and_reports_follow_the_client() {
+        let ok = sys_gen("fr", 52, "");
+        assert_eq!(ok.icon, SysIcon::Asset(ASSET_JOIN));
+        assert_eq!(plain(&ok), "Cette candidature a été approuvée ! Bienvenue !");
+        assert_eq!(sys_gen("en", 53, "").icon, SysIcon::Asset(ASSET_LEAVE));
+        assert_eq!(plain(&sys_gen("en", 53, "")), "This application was rejected.");
+        assert_eq!(plain(&sys_gen("fr", 54, "")), "Cette candidature a été retirée.");
+        let r = |t: u8| generic_in("en", &SysCtx { type_id: t, other: Some("Bob".into()), ..Default::default() }).unwrap();
+        assert_eq!(plain(&r(61)), "@U banned <Bob>");
+        assert_eq!(r(61).icon, SysIcon::Named("mod/hammer", 20., None));
+        assert_eq!(plain(&r(60)), "@U kicked <Bob>");
+        assert_eq!(r(60).icon, SysIcon::Named("mod/user-minus", 20., None));
+        assert_eq!(plain(&r(59)), "@U timed out <Bob>");
+        assert_eq!(r(59).icon, SysIcon::Named("mod/clock-warning", 20., None));
+        assert_eq!(plain(&r(58)), "@U deleted the message");
+        assert_eq!(r(58).icon, SysIcon::Named("chat/trash", 20., None));
+        assert_eq!(plain(&r(62)), "@U resolved this flag");
+        assert_eq!(r(62).icon, SysIcon::Named("check-small", 20., None));
+    }
+
+    #[test]
+    fn streams_follow_the_client() {
+        assert!(generic_in("en", &SysCtx { type_id: 13, ..Default::default() }).is_none());
+        let live = StreamRef { channel: "Salon".into(), activity: None, ended_ms: None };
+        let g = generic_in("fr", &SysCtx { type_id: 13, stream: Some(live.clone()), ..Default::default() }).unwrap();
+        assert_eq!(g.icon, SysIcon::Live);
+        assert_eq!(plain(&g), "@U is live! Now streaming unknown. [0:Join Stream]");
+        assert_eq!(g.links, &[SysLink::JoinStream]);
+        let game = StreamRef { activity: Some("Portal 2".into()), ..live.clone() };
+        assert_eq!(plain(&generic_in("en", &SysCtx { type_id: 13, stream: Some(game), ..Default::default() }).unwrap()), "@U is live! Now streaming Portal 2. [0:Join Stream]");
+        let ended = StreamRef { ended_ms: Some(23 * 60_000), ..live };
+        let e = generic_in("en", &SysCtx { type_id: 13, stream: Some(ended), ..Default::default() }).unwrap();
+        assert_eq!(e.icon, SysIcon::Named("voice/screen-x", 20., None));
+        assert_eq!(plain(&e), "@U was live for 23 minutes in Salon");
+    }
+
+    #[test]
+    fn safety_alerts_and_friend_requests_follow_the_client() {
+        let on = generic_in("en", &SysCtx { type_id: 36, time: "11/25/2026, 9:30 PM".into(), ..Default::default() }).unwrap();
+        assert_eq!(plain(&on), "@U enabled security actions until 11/25/2026, 9:30 PM.");
+        assert_eq!(plain(&sys_gen("fr", 37, "")), "@U a désactivé les actions de cybersécurité.");
+        assert_eq!(plain(&sys_gen("en", 38, "")), "@U reported a raid in Aperture.");
+        assert_eq!(plain(&sys_gen("fr", 39, "")), "@U a résolu une alerte d'activité.");
+        for t in AUTOMOD_TYPES {
+            assert!(!FALLBACK_TYPES.contains(&t));
+        }
+        let t = chrono::NaiveDate::from_ymd_opt(2026, 11, 25).unwrap().and_hms_opt(21, 30, 0).unwrap();
+        assert_eq!(format_alert("fr", t), "25/11/2026 21:30");
+        assert_eq!(format_alert("en-US", t), "11/25/2026, 9:30 PM");
+        assert_eq!(alert_time("pas une date"), "");
+        let f = |code: &str, mine: bool, content: &str| generic_in(code, &SysCtx { type_id: 67, mine, content, other: Some("Bob".into()), ..Default::default() }).unwrap();
+        assert_eq!(plain(&f("fr", true, "salut")), "Tu as accepté la demande d'ami envoyée par <Bob>. Il/Elle a dit : <salut>");
+        assert_eq!(plain(&f("en", false, "")), "<Bob> accepted your friend request.");
+        assert_eq!(plain(&f("en", true, "")), "You accepted <Bob>'s friend request.");
+        assert_eq!(plain(&f("fr", false, "yo")), "<Bob> a accepté ta demande d'ami. Tu as dit : <yo>");
+        assert_eq!(f("fr", false, "").icon, SysIcon::Named("user-check", 18., Some(crate::theme::generated::idx::STATUS_POSITIVE)));
+        assert!(generic_in("fr", &SysCtx { type_id: 67, ..Default::default() }).is_none());
     }
 
     #[test]

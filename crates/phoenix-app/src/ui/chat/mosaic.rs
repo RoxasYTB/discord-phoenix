@@ -81,11 +81,17 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
                     }
                 }),
         )
-        .when(spoiler, |d| d.child(div().absolute().inset_0().bg(ca(0x000000E6))))
+        .when(spoiler, |d| {
+            let group: gpui::SharedString = format!("mosaic-spoiler-{}", a.url).into();
+            d.group(group.clone())
+                .bg(crate::ui::chat::tk(crate::theme::generated::idx::SPOILER_BACKGROUND_COLOR_HIDDEN))
+                .child(img(crate::ui::chat::spoiler_blur(&a.url, video, (550., 350.))).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
+                .child(div().absolute().inset_0().flex().items_center().justify_center().child(crate::ui::chat::spoiler_pill(group)))
+        })
         .children(alt.map(|t| {
             if video { super::alt_text::video_badge(alt_key, t, group.clone()) } else { super::alt_text::badge(alt_key, t) }
         }))
-        .when(video, |d| {
+        .when(video && !spoiler, |d| {
             d.child(
                 div().absolute().inset_0().flex().items_center().justify_center().child(
                     div()

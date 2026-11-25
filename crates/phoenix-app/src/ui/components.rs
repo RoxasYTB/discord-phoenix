@@ -733,7 +733,7 @@ fn gallery(items: &[api::GalleryItem], msg: Id, ix: usize, cx: &App) -> AnyEleme
         [a] if matches!(a.kind, crate::model::AttachmentKind::Image | crate::model::AttachmentKind::Video) => {
             let size = crate::media::fit(a.width, a.height, 600., 350.);
             if a.spoiler
-                && let Some(cover) = crate::ui::chat::spoiler_cover(a.url.clone(), &a.url, size, cx)
+                && let Some(cover) = crate::ui::chat::spoiler_cover(a.url.clone(), &a.url, a.kind == crate::model::AttachmentKind::Video, size, cx)
             {
                 return cover;
             }

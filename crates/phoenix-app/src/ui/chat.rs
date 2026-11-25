@@ -925,6 +925,10 @@ fn new_member_badge(id: Id) -> gpui::Stateful<gpui::Div> {
 }
 
 pub(crate) fn bot_tag(verified: bool) -> gpui::Div {
+    bot_tag_label(verified, crate::t!("common.app"))
+}
+
+pub(crate) fn bot_tag_label(verified: bool, label: SharedString) -> gpui::Div {
     div()
         .flex_none()
         .ml(z(4.))
@@ -940,7 +944,7 @@ pub(crate) fn bot_tag(verified: bool) -> gpui::Div {
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(gpui::white())
         .when(verified, |d| d.child(crate::ui::members::verified_check().mt(z(-0.32)).ml(z(-3.2))))
-        .child(crate::t!("common.app"))
+        .child(label)
 }
 
 pub(crate) fn message(
@@ -1698,11 +1702,30 @@ pub(crate) fn media_image_with(
         .on_click(move |_, _, cx| media::open_viewer(viewer.clone(), cx))
 }
 
-pub(crate) fn spoiler_cover(key: SharedString, url: &str, (w, h): (f32, f32), cx: &App) -> Option<AnyElement> {
+pub(crate) fn spoiler_pill(group: SharedString) -> gpui::Div {
+    div()
+        .px(z(12.))
+        .py(z(8.))
+        .rounded(z(20.))
+        .bg(tk(idx::SPOILER_WARNING_BACKGROUND_COLOR))
+        .text_size(z(15.))
+        .line_height(z(15.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(tk(idx::SPOILER_WARNING_TEXT_COLOR))
+        .group_hover(group, |s| s.bg(tk(idx::SPOILER_WARNING_BACKGROUND_COLOR_HOVER)).text_color(tk(idx::SPOILER_WARNING_TEXT_COLOR_HOVER)))
+        .child(crate::t!("chat.spoiler"))
+}
+
+pub(crate) fn spoiler_blur(url: &str, video: bool, (w, h): (f32, f32)) -> SharedString {
+    let (tw, th) = (((w / 24.) as u32).max(2), ((h / 24.) as u32).max(2));
+    if video { media::video_poster(url, tw, th) } else { media::resized(url, tw, th) }
+}
+
+pub(crate) fn spoiler_cover(key: SharedString, url: &str, video: bool, (w, h): (f32, f32), cx: &App) -> Option<AnyElement> {
     if media::is_revealed(&key, cx) {
         return None;
     }
-    let tiny = media::resized(url, ((w / 24.) as u32).max(2), ((h / 24.) as u32).max(2));
+    let tiny = spoiler_blur(url, video, (w, h));
     Some(
         div()
             .id(gpui::ElementId::Name(format!("spoiler-{key}").into()))
@@ -1715,23 +1738,7 @@ pub(crate) fn spoiler_cover(key: SharedString, url: &str, (w, h): (f32, f32), cx
             .bg(tk(idx::SPOILER_BACKGROUND_COLOR_HIDDEN))
             .group("spoiler-cover")
             .child(img(tiny).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
-            .child(
-                div().absolute().inset_0().flex().items_center().justify_center().child(
-                    div()
-                        .px(z(12.))
-                        .py(z(6.))
-                        .rounded(z(20.))
-                        .bg(tk(idx::SPOILER_WARNING_BACKGROUND_COLOR))
-                        .text_size(z(15.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(tk(idx::SPOILER_WARNING_TEXT_COLOR))
-                        .group_hover("spoiler-cover", |s| {
-                            s.bg(tk(idx::SPOILER_WARNING_BACKGROUND_COLOR_HOVER))
-                                .text_color(tk(idx::SPOILER_WARNING_TEXT_COLOR_HOVER))
-                        })
-                        .child(crate::t!("chat.spoiler")),
-                ),
-            )
+            .child(div().absolute().inset_0().flex().items_center().justify_center().child(spoiler_pill("spoiler-cover".into())))
             .on_click(move |_, _, cx| media::reveal(key.clone(), cx))
             .into_any_element(),
     )
@@ -1782,7 +1789,7 @@ pub(crate) fn attachment(a: &Attachment, cx: &App) -> AnyElement {
         }
         AttachmentKind::Image | AttachmentKind::Video if remote && inline => {
             let size = media::fit(a.width, a.height, media::MAX_W, media::MAX_H);
-            if spoiler && let Some(cover) = spoiler_cover(a.url.clone(), &a.url, size, cx) {
+            if spoiler && let Some(cover) = spoiler_cover(a.url.clone(), &a.url, a.kind == AttachmentKind::Video, size, cx) {
                 return div().mt(z(4.)).child(cover).into_any_element();
             }
             if a.kind == AttachmentKind::Video {

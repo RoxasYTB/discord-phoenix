@@ -407,6 +407,12 @@ pub struct Message {
     pub interaction: Option<MessageInteraction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub call: Option<MessageCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub application: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_subscription_data: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purchase_notification: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

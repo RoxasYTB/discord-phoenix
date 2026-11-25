@@ -334,7 +334,28 @@ pub fn message(m: &api::Message) -> model::Message {
                 duration_ms: c.ended_timestamp.as_deref().and_then(ms).map(|end| end - ms(m.timestamp.as_str()).unwrap_or(m.id.timestamp_ms() as i64)),
             }
         }),
+        sys: sys_data(m),
     }
+}
+
+fn sys_data(m: &api::Message) -> Option<Box<model::SysData>> {
+    let kind = m.kind.value();
+    if matches!(kind, 0 | 19 | 20 | 23) {
+        return None;
+    }
+    let text = |v: Option<&serde_json::Value>| v.and_then(|v| v.as_str()).map(|s| SharedString::from(s.to_owned()));
+    let role = m.role_subscription_data.as_ref();
+    let data = model::SysData {
+        app_name: text(m.application.as_ref().and_then(|a| a.get("name"))),
+        tier_name: text(role.and_then(|r| r.get("tier_name"))),
+        months: role.and_then(|r| r.get("total_months_subscribed")).and_then(|v| v.as_u64()).map_or(0, |v| v as u32),
+        renewal: role.and_then(|r| r.get("is_renewal")).and_then(|v| v.as_bool()).unwrap_or(false),
+        product: text(m.purchase_notification.as_ref().and_then(|p| p.get("guild_product_purchase")).and_then(|p| p.get("product_name"))),
+        ref_channel: m.message_reference.as_ref().and_then(|r| r.channel_id).map(id),
+        ref_guild: m.message_reference.as_ref().and_then(|r| r.guild_id).map(id),
+        mention: m.mentions.first().map(|x| id(x.user.id)),
+    };
+    Some(Box::new(data))
 }
 
 fn message_kind(k: api::MessageType) -> model::MessageKind {

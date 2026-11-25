@@ -121,7 +121,16 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
         },
         &mut out,
     );
+    push(
+        3,
+        Message {
+            attachments: ["photo.png", "one.png", "two.png", "four.png", "five.png"].iter().map(|n| at(AttachmentKind::Image, n, if *n == "five.png" { 1080 } else { 1920 }, if *n == "five.png" { 1350 } else { 1080 }, 1)).collect(),
+            ..Default::default()
+        },
+        &mut out,
+    );
     push(4, Message { attachments: vec![at(AttachmentKind::Video, "clip.mp4", 1280, 720, 9_800_000)], ..Default::default() }, &mut out);
+    push(4, Message { attachments: vec![at(AttachmentKind::Video, "SPOILER_clip.mp4", 1280, 720, 9_800_000)], ..Default::default() }, &mut out);
     push(4, Message { attachments: vec![at(AttachmentKind::Audio, "voice-note.ogg", 0, 0, 482_000)], ..Default::default() }, &mut out);
     let wave: Vec<u8> = (0..64u32).map(|i| (40 + (i * 37 % 160) + if i % 7 < 3 { 50 } else { 0 }) as u8).collect();
     push(
@@ -201,6 +210,19 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
     push(2, Message { kind: MessageKind::OtherSystem, type_id: 16, ..Default::default() }, &mut out);
     push(6, Message { kind: MessageKind::StageStart, content: "Office hours".into(), ..Default::default() }, &mut out);
     push(7, Message { kind: MessageKind::OtherSystem, type_id: 30, ..Default::default() }, &mut out);
+    let sys = |type_id: u8, data: SysData| Message { kind: MessageKind::OtherSystem, type_id, sys: Some(Box::new(data)), ..Default::default() };
+    push(5, sys(25, SysData { tier_name: Some("Gold".into()), months: 3, ..Default::default() }), &mut out);
+    push(6, sys(32, SysData { app_name: Some("Phoenix Bot".into()), ..Default::default() }), &mut out);
+    push(6, sys(33, SysData { app_name: Some("Phoenix Bot".into()), ..Default::default() }), &mut out);
+    push(6, sys(34, SysData::default()), &mut out);
+    push(4, Message { content: (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339().into(), ..sys(36, SysData::default()) }, &mut out);
+    push(4, sys(38, SysData::default()), &mut out);
+    push(4, sys(39, SysData::default()), &mut out);
+    push(5, sys(44, SysData { product: Some("Wallpaper pack".into()), ..Default::default() }), &mut out);
+    push(2, sys(52, SysData::default()), &mut out);
+    push(2, sys(53, SysData::default()), &mut out);
+    push(3, sys(61, SysData { mention: Some(Id(7)), ..Default::default() }), &mut out);
+    push(3, sys(58, SysData::default()), &mut out);
     push(3, text("<https://example.com/no-embed> · [docs **Phoenix**](https://example.com/docs) · https://en.wikipedia.org/wiki/Rust_(programming_language)"), &mut out);
     out.into_iter()
         .enumerate()
