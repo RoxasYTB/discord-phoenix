@@ -351,7 +351,7 @@ fn button(id: &'static str, label: SharedString, bg: u32, _hover: u32) -> gpui::
 
 fn meter(level_db: f32, active: bool) -> Div {
     let frac = if active { ((level_db - DB_MIN) / -DB_MIN).clamp(0., 1.) } else { 0. };
-    div().flex_1().h(z(20.)).child(
+    div().flex_1().h(z(28.)).child(
         gpui::canvas(
             |_, _, _| {},
             move |b, _, window, _| {

@@ -410,7 +410,7 @@ meantime and CDP was down), so messages, member lists and presences count as tim
 | **Medium** — limited theme pill fixed at "90 JOUR(S) RESTANT(S)" (client 88) | module 211824: `Fg = 2026-12-13T18:00Z` (everyone), `zv = 2027-02-20T18:00Z` (`client_theme` perk, premium TIER_2), picked by module 189916 `E`; pill = module 366999 `SHORT_TIME_LEFT` (`/wnvqA`, `Jsq0XN`, `SBd+Bs`), rounding `d()` (days + 1 when hours are left, hours + 1 past 45 min, > 11 h → 1 day) | `settings/pages.rs` `limited_time_left` + keys `sp.ap.limited_left{,_h,_m}` |
 | **Medium** — default theme swatches: Ash and Dark colours wrong (Ash #2b2b30, Dark #313338, Onyx #0c0c0e), selection ring 2 px `#8ca0fd` | `.ashIcon_IhyaN_` primary-600, `.darkIcon_` plum-20, `.onyxIcon_` black, `.lightIcon_` white; `.defaultThemeSelection_` inset 1 px interactive-text-default; `.selectionCircle_` 2 px outside, inset 4 px brand-500; `.checkmark_` brand-500 | `settings/mod.rs` `AppTheme::swatch`, `settings/view.rs` `theme_card`, sync button border |
 | **Small** — "Thèmes de couleur" without the Nitro icon, 30 px too close to the limited swatch | live capture | `settings/pages.rs` `nitro_themes` |
-| **Small** — mic test meter: 8 px wide grey blocks on a 12 px pitch, 16 px tall | module 782600 `C`: 8 px pattern, pill 4 × (h − 4) inset 2 px with round ends, frame `background-base-low` (`.notches_0EQxEk.gray_`), pills `--gradient-progress-pill-background`, lit part yellow-260 → green-360, size sm = 20 px, width rounded to whole cells | `settings/voice.rs` `meter` (canvas) |
+| **Small** — mic test meter: 8 px wide grey blocks on a 12 px pitch, 16 px tall | module 782600 `C`: 8 px pattern, pill 4 × (h − 4) inset 2 px with round ends, frame `background-base-low` (`.notches_0EQxEk.gray_`), pills `--gradient-progress-pill-background`, lit part yellow-260 → green-360, size md = 28 px in Voice settings (pills 24 px), width rounded to whole cells | `settings/voice.rs` `meter` (canvas) |
 | **Small** — search results cards 8 px wider than the client, no scrollbar | the results list is a thin scroller (`::-webkit-scrollbar{width:8px}`): the track takes layout width when it overflows | `search.rs` gutter + `thin_scrollbar_div`, back to top on page change |
 | test — `/proc` scan test used `std::os::unix::fs::symlink` without a guard (CI builds `--all-targets` on Windows) | — | `streamer.rs` test behind `#[cfg(unix)]` |
 
@@ -434,3 +434,9 @@ vendored `gpui-pre` rich text (no new platform trait method), `gpui-base` (pinne
 origin). Runtime-only differences, no build break: `snapshot::other_owner` checks `/proc/<pid>`
 (always "not running" on Windows/macOS), `fonts/fallback` and `tts` call Linux tools and fail
 quietly, `diagnostics` reads `/proc`.
+
+Re-check with int-bin 4e8677a5 (same captures): Appearance content 4.5 → 3.9 % (pill "88 JOUR(S)
+RESTANT(S)", swatches and ring line up), Voice content 3.3 → 3.0 %, Discover cards now read
+"4 625 124 membres" (the third card changed with the live featured list). Follow-up: Discover dots
+`.dotOnline_9dea1c` green-360 / `.dotOffline_9dea1c` primary-300 (the member dot was text-muted),
+mic meter height 28 (size md in Voice settings, measured 24 px pills).
