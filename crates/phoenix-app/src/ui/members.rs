@@ -175,7 +175,6 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
     }
     let nobody = open_thread(app).and_then(|t| app.people.thread_lists.get(&t)).is_some_and(|v| v.is_empty());
     div()
-        .w(z(m::member_list_w()) + px(1.))
         .flex_none()
         .h_full()
         .relative()
@@ -188,7 +187,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
             div()
                 .flex_1()
                 .min_h_0()
-                .w_full()
+                .w(z(m::member_list_w()))
                 .relative()
                 .group(crate::ui::chat::scrollbar::THIN_FADE_GROUP)
                 .child(

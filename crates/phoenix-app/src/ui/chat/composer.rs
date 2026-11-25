@@ -460,7 +460,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                             .child(
                                 div()
                                     .when(blocked, |d| d.invisible())
-                                    .mr(z(13.))
+                                    .mr(z(12.))
                                     .h(z(56.))
                                     .flex()
                                     .gap(z(8.))

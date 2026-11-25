@@ -92,19 +92,23 @@ pub fn members_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
     });
     Some(
         div()
-            .id("group-members")
-            .w(z(m::member_list_w()) + px(1.))
             .flex_none()
             .h_full()
-            .flex()
-            .flex_col()
-            .overflow_y_scroll()
             .bg(c(Palette::BG_SECONDARY))
             .border_l_1()
             .border_color(c(Palette::DIVIDER))
-            .pb(z(10.))
-            .child(crate::ui::members::header(header))
-            .children(rows)
+            .child(
+                div()
+                    .id("group-members")
+                    .w(z(m::member_list_w()))
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .overflow_y_scroll()
+                    .pb(z(10.))
+                    .child(crate::ui::members::header(header))
+                    .children(rows),
+            )
             .into_any_element(),
     )
 }
