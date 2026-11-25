@@ -14,6 +14,7 @@ Scores only: the captures show the user's real account and stay in
   `Network.enable` logs every non-GET request of the pass.
 - Phoenix: int-bin `real_shots` at the same W×H, `PHX_SCALE=1.5`, rendered after the pass
   from the saved state (`PHX_SCROLL`, `PHX_SIDEBAR_W`, …) so the client is not held.
+  `PHX_INBOX_COLLAPSE=<n>` collapses the n-th Unreads card (with `PHX_VIEW=inbox PHX_TAB=unreads`).
   `PHX_JUMP=<message id>` jumps to an older message (`?around=` page, read only) before the shot.
 - Score: `scripts/compare/compare.py --discord … --phoenix … --regions boxes.json`,
   `mismatch_pct` = share of pixels whose difference exceeds 24/255, per region.
