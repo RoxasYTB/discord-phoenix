@@ -209,6 +209,7 @@ fn svg_for(path: &str) -> Option<&'static str> {
             "</svg>"
         ),
         "icons/plus.svg" => s!(r#"<path d="M12 5v14M5 12h14"/>"#),
+        "icons/sys/mic-arrow-right.svg" => s!(r#"<rect x="6" y="2" width="7" height="12" rx="3.5"/><path d="M3 11a6.5 6.5 0 0 0 13 0M9.5 17.5V21M15 18h7m-3-3 3 3-3 3"/>"#),
         "icons/mic.svg" => f!(r#"<rect x="8" y="2" width="8" height="13" rx="4"/><path d="M5 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-7 7.9V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.1A8 8 0 0 1 4 12a1 1 0 0 1 1-1z"/>"#),
         "icons/mic-off.svg" | "icons/mic-deny.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">"#,
