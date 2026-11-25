@@ -40,6 +40,10 @@ Source: `~/discord-phoenix-ref/current-client/css` (Nov 2026 client). Density de
 | toast | `container_W6gbBa top_W6gbBa`, `wrapper_O41c2-` | position / box / motion | centred, top --space-8; --background-surface-highest, --radius-md, --shadow-high, 1px --border-normal, padding 12, max 280, body-md --text-strong 2 lines; slide in from -100% + fade, 300ms linear | ui/components.rs toast (09e2dff) | ✅ |
 | profile popout | 253781 `outer_P1YEjQ.user-profile-popout` | width / bg / radius / max-height | --custom-user-profile-popout-width 300 / --background-surface-high / --radius-sm / 100vh-20 | ui/profile.rs popout_card | ✅ (was 300 / floating / fixed height) |
 | profile popout | 253781 `inner_P1YEjQ` | gap / padding-bottom | 8px / 4px | ui/profile.rs popout_card | ✅ |
+| profile popout | live `outer_P1YEjQ` (25/11, Nyxie) | box-shadow / border | `0 0 0 1px rgba(255,255,255,.08), 0 12px 24px rgba(0,0,0,.24)`, no border | ui/profile.rs `popout_shadow` | ✅ (was a 1px --border-subtle border and shadow_lg) |
+| popout banner image | live `fill_vNEdYY banner_s9bWOi` radius 8 8 0 0 | clip | image clipped to the top radius | ui/profile.rs banner `img.rounded_t` | ✅ (GPUI overflow_hidden does not clip to rounded corners) |
+| popout mutuals | live `section_PXYMZ1` role=button, cursor pointer | click | opens the full profile on Mutual Friends / Mutual Servers | ui/profile.rs `mutuals_row` → `open_profile_modal_at` | ✅ (also the DM profile panel) |
+| popout mutual counts | live "1 serveur en commun", "10 amis en commun" | plural | singular at 1 | locales `profile.mutual_*_one` | ✅ (was "1 serveurs") |
 | popout banner | 253781 `.user-profile-popout` + 58495 `banner_s9bWOi` | height / radius / bottom line | 105px / 8px 8px 0 0 / 1px --border-muted | ui/profile.rs banner | ✅ |
 | popout header | 352421 `header_NOlkhE` | min-height | banner + 35px | ui/profile.rs popout_card | ✅ |
 | popout avatar | 875762 `avatar_WRLIGC` | inset-start / top | 16px / 61px (80px avatar + 6px ring) | ui/profile.rs popout_card | ✅ (was banner-40) |

@@ -170,7 +170,40 @@ logical pixel, so "APP" in gg sans 12px/600 (23.16px, CDP `getBoundingClientRect
 never rounds down, so a text given its own measured width does not re-wrap. Unit test
 `text_width_rounds_up_to_a_layout_unit`. Search `PHOENIX PATCH (text width)`.
 
-Rev: `265d2211` on `gpui-marks` (patches 4 to 7).
+## 8. Underline geometry (`src/text_system/line.rs` `paint_line`, `src/text_system.rs`, `src/text_system/line_layout.rs`)
+
+**Problem.** Underlines (hovered names, links) followed the height of each piece of text:
+"霜氷冷 | 冰雪 ❄" showed one line per glyph group at different heights. `paint_line` placed
+the underline from `LineLayout::ascent`/`descent`, the maximum over every font the line
+used, so a CJK or emoji fallback moved it, and labels made of several shaped pieces (emoji
+labels, gradient names painted grapheme by grapheme) each drew their own line. GPUI also
+kept the caller's 1px thickness, thinner than the client's.
+
+**Reference.** Blink draws one `text-decoration: underline` per decorating box from its
+primary font. Headless Chrome 158 with the client's gg sans and Journal (from the local
+Discord cache), 12/14/16/20px, line-height 11/8, scale 1, 1.1, 1.2, 1.25, 1.3, 1.4, 1.5,
+1.75 and 2: 72 probes, all matched by (device pixels):
+- ascent A and descent D of the primary font, each rounded;
+- half leading `floor((line_height - A - D) / 2)`;
+- thickness `max(1, floor(font_size / 10))`;
+- gap below the baseline `max(1, ceil(font_size / 20))`;
+- top of the line `round(row_top + half_leading + A + gap)`.
+CJK text in a gg sans span puts the line exactly where Latin text does (probe
+`霜氷冷 | 冰雪 ❄` = `catapulteur2daronnes`: row 17 at scale 1, 21-22 at 1.25).
+
+**Patch.** `LineLayout` gets `decoration_ascent`/`decoration_descent`, the metrics of the
+font requested by the first run (set by `LineLayoutCache::layout_line`, zero when unknown),
+and `decoration_metrics()` falls back to the line maximum. `underline_geometry()` is the
+formula above; `paint_line` uses it for the position of every non-wavy underline and its
+thickness, per wrapped row. Wavy underlines keep their style. Search
+`PHOENIX PATCH (underline geometry)`. Unit test `underline_geometry_matches_chromium`; the
+three underline handler tests compute their expectation with it.
+
+Phoenix's `NameText` (gradient and letter-spaced names, painted one grapheme at a time)
+draws its single underline with the same function and the metrics of a space in the
+primary font.
+
+Rev: `533b56fe` on `gpui-underline` (patches 4 to 8). Previous: `265d2211` on `gpui-marks`.
 
 ## Running the vendored tests
 

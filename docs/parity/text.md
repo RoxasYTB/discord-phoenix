@@ -21,6 +21,8 @@ Values come from the live vanilla client (CDP computed styles, cached in
 | Member group header | `membersGroup_86es0b` | padding / height | 24 4 4 20 / 46 | ui/members.rs `group_header` | ✅ |
 | Letter-spacing in chat, sidebar, members, headers | – | letter-spacing | normal everywhere on the main screen (live scan); only styled display names have tracking | fonts::name_text | ✅ |
 | Ellipsis of letter-spaced styled names | `userName_` text-overflow | ellipsis | "…" | fonts::name_paint `NameText` measures and ends with "…" | ✅ |
+| Underline (hovered names, links, mentions) | Blink `text-decoration: underline` auto, headless Chrome 158 probes with gg sans / Journal (72 points, scale 1–2) | position / thickness | one line per box from the primary font: round(top + floor(half leading) + A + max(1, ceil(size/20))), thickness max(1, floor(size/10)) dp | GPUI patch 8 `underline_geometry`, fonts::name_paint `NameText` | ✅ (was one line per glyph group, at the height of its fallback font, 1 dp) |
+| Fallback for 𝐍𝐲𝐱𝐢𝐞 (U+1D400 math bold) | CDP `CSS.getPlatformFontsForNode` on the live mention | family | FreeSans (client) | fonts/fallback.rs chain (fc-match sans-serif) | ❌ Phoenix picks a serif math font |
 | Channel list label baseline | `name_` 16/20 | baseline | – | side-by-side crop: same baseline | ✅ |
 
 Scores on the same guild/channel:

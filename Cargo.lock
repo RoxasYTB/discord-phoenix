@@ -2810,7 +2810,7 @@ dependencies = [
 [[package]]
 name = "gpui-pre"
 version = "0.3.12"
-source = "git+https://github.com/RoxasYTB/project-phoenix?rev=265d221153834585e61151baf6bd6dbd0c8a2ea7#265d221153834585e61151baf6bd6dbd0c8a2ea7"
+source = "git+https://github.com/RoxasYTB/project-phoenix?rev=533b56fea4dbdf4f200e877a29b4edb335eb9774#533b56fea4dbdf4f200e877a29b4edb335eb9774"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -3251,7 +3251,7 @@ dependencies = [
 [[package]]
 name = "gpui-pre-wgpu"
 version = "0.3.12"
-source = "git+https://github.com/RoxasYTB/project-phoenix?rev=265d221153834585e61151baf6bd6dbd0c8a2ea7#265d221153834585e61151baf6bd6dbd0c8a2ea7"
+source = "git+https://github.com/RoxasYTB/project-phoenix?rev=533b56fea4dbdf4f200e877a29b4edb335eb9774#533b56fea4dbdf4f200e877a29b4edb335eb9774"
 dependencies = [
  "anyhow",
  "bytemuck",

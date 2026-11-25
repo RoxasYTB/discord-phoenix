@@ -21,6 +21,7 @@ CSS under ~/discord-phoenix-ref/current-client/css. Tokens are from `theme::gene
 | reply compact | 738015 compact_ .repliedMessage_ | margin/padding start | -24px / .625rem | chat.rs reply | ✅ |
 | reply spine | 738015 messageSpine_:before | color/geometry | 2px --spine-default, r 6px, top 50% | chat.rs reply | ✅ |
 | reply avatar | 738015 replyAvatar_ | size/margin | 16px / 4px | chat.rs | ✅ |
+| reply author name | live `username_2i8Bfm … clickable_2i8Bfm` role=button aria-expanded; CSS `.username_2i8Bfm.clickable_2i8Bfm:hover{cursor:pointer;text-decoration:underline}` | click / hover | opens the profile popout; pointer + underline | chat.rs reply (`reply-author`, message_ext::open_user) | ✅ (was not clickable) |
 | hover bg | 524434 message_:hover | background | --message-background-hover | chat.rs | ✅ (was mod-muted) |
 | mention | 524434 mentioned_ | bg / hover / bar | --message-mentioned-background-default/-hover, 2px --icon-feedback-warning | chat.rs | ✅ |
 | replying | 524434 replying_ | bg / hover / bar | --message-highlight-background-default, --brand-10a, --brand-500 | chat.rs | ✅ (was mention colours) |

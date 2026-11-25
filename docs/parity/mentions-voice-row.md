@@ -5,7 +5,10 @@ ref-cache/mention-pill-default.json, voice-user-row-default.json, voice-user-row
 
 | element / state | CSS source | property | CSS value | our code | status |
 |---|---|---|---|---|---|
-| mention pill default | `.mention` / `wrapper_NDaLCQ` | bg / color / radius / padding / weight | --mention-background / --mention-foreground / 3px / 0 2px / 500 | richtext.rs run_for | ✅ live computed match (radius+padding not expressible on text runs) |
+| mention pill default | `.mention` / `wrapper_NDaLCQ` | bg / color / radius / padding / weight / box | --mention-background / --mention-foreground / 3px / 0 2px / 500 / content area 1.3em (20.8 at 16px, live rect 552,659 173.8x20.8) | ui/chat/message_ext.rs `mention_box` | ✅ one pill per mention with radius and padding (was a bare run background, cut around emoji images) |
+| mention across lines | `box-decoration-break: slice` (computed) | edges | radius and padding only on the first and last fragment | message_ext.rs `pill` (first/last cell) | ✅ |
+| emoji inside a mention | live DOM `@🌸˖𓂃❀𝐍𝐲𝐱𝐢𝐞❀𓂃˖🌸`: plain text, no `<img class=emoji>`; CDP platform fonts: Noto Color Emoji | rendering | font glyphs | richtext.rs `rich_inline` skips emoji ranges inside mentions | ✅ (were 22px images outside the pill) |
+| mention hover target | `.interactive:hover` on the whole span | hover | every fragment of the mention highlights together | ui/chat/mention.rs `hover_pill` / `pill_runs` | ✅ |
 | mention pill hover | `.interactive:hover` | bg / color | --brand-500 / --white (50ms) | ui/chat/mention.rs hovered_runs | ✅ CSS (no transition) |
 | role mention | `roleMention_ku1OHH wrapper_NDaLCQ interactive` + inline style | color / bg | role color / role color 10 %; a role without colour has no inline style and looks like a user mention | richtext.rs color_role_mentions | ✅ live (inbox Mentions tab, 2026-11-24): radius 3, padding 0 2, 500 16/22 |
 | role mention hover | same, transition background-color/color 0.05s | bg / color | coloured: role color 30 %, text unchanged; uncoloured: --brand-500 / white | ui/chat/mention.rs hovered_runs | ✅ live (used to skip role mentions) |
