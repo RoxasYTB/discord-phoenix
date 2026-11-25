@@ -326,7 +326,7 @@ pub fn edit_box_probe() -> impl IntoElement {
 pub const COMPOSER_MIN_H: f32 = 44.;
 
 pub fn max_height(small: bool, layered: bool, emoji_and_stickers: bool, window_h: f32, textarea_h: f32) -> f32 {
-    let base = match (layered, small) {
+    let base: f32 = match (layered, small) {
         (false, _) => 490.,
         (true, true) => 200.,
         (true, false) if emoji_and_stickers => 490.,
