@@ -120,7 +120,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         } else {
             div().absolute().left(z(36.)).top(z(7.)).child(super::icons::icon(icon, 16., c(color)))
         })
-        .child(before)
+        .children(flow(before))
         .child({
             let author = app.users.get(&msg.author);
             crate::fonts::styled_name(
@@ -132,7 +132,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
             .child(crate::fonts::role_name_text(name, author, 16., app.selected_guild.is_some(), name_gradient))
         })
-        .child(after)
+        .children(flow(after))
         .when_some(thread.clone(), |d, t| {
             let (e1, e2) = (entity.clone(), entity.clone());
             let link = |id: (&'static str, u64), text: SharedString| {
@@ -149,11 +149,30 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
                 let t = t2.clone();
                 e1.update(cx, |a, cx| a.open_thread_link(t, w, cx));
             }))
-            .child(crate::t!("sys.thread_see_all"))
+            .children(flow(crate::t!("sys.thread_see_all")))
             .child(link(("sys-thread-all", msg.id.0), crate::t!("sys.thread_all_link")).on_click(move |_, _, cx| {
                 e2.update(cx, |a, cx| a.toggle_threads_popout(cx));
             }))
             .child(".")
+        })
+        .when(thread.is_none() && msg.kind == MessageKind::ThreadCreated && !msg.content.is_empty(), |d| {
+            let e2 = entity.clone();
+            let active = c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_TEXT_ACTIVE));
+            d.child(div().font_weight(FontWeight::MEDIUM).text_color(active).child(msg.content.clone()))
+                .children(flow(crate::t!("sys.thread_see_all")))
+                .child(
+                    div()
+                        .id(("sys-thread-all", msg.id.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(active)
+                        .cursor_pointer()
+                        .hover(|s| s.underline())
+                        .child(crate::t!("sys.thread_all_link"))
+                        .on_click(move |_, _, cx| {
+                            e2.update(cx, |a, cx| a.toggle_threads_popout(cx));
+                        }),
+                )
+                .child(".")
         })
         .when(msg.kind == MessageKind::Pin, |d| {
             let (e1, e2) = (entity.clone(), entity.clone());
@@ -172,7 +191,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
                     e1.update(cx, |a, cx| a.jump_to_message(ch, id, cx));
                 }
             }))
-            .child(crate::t!("sys.pin_tail"))
+            .children(flow(crate::t!("sys.pin_tail")))
             .child(link(("sys-pin-all", msg.id.0), crate::t!("sys.pin_all")).on_click(move |_, _, cx| {
                 e2.update(cx, |a, cx| a.toggle_pins(cx));
             }))
@@ -189,7 +208,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
                     .hover(|s| s.underline())
                     .child(n),
             )
-            .child(tail)
+            .children(flow(tail))
         })
         .child(
             div()
@@ -419,6 +438,10 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         .child(line)
         .child(div().flex().pr(z(48.)).child(card))
         .into_any_element()
+}
+
+fn flow(text: SharedString) -> Vec<SharedString> {
+    super::message_ext::words(&text, 0..text.len()).into_iter().map(|r| SharedString::from(text[r].to_owned())).collect()
 }
 
 #[cfg(test)]
