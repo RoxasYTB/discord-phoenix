@@ -93,7 +93,7 @@ Menus réservés au personnel, aux propriétaires d'applications ou à des fonct
 | Profil complet | profil | `open_profile_modal` | ✅ |
 | Vue modérateur, exclusion, expulsion, bannissement | menu membre | `modals/member.rs` | ✅ |
 | Inviter sur le serveur | menus | `ui/invite.rs` | ✅ |
-| Rejoindre un serveur | « + » du rail | `ui/add_server.rs` (Modèles, Intention, Personnaliser, Rejoindre) | ✅ l'étape « Créer mon serveur » et les modèles existent depuis a65e0a58 (la ligne était périmée) ; rendu `real_shots PHX_OPEN=addserver` |
+| Rejoindre un serveur | « + » du rail | `ui/add_server.rs` (Modèles, Intention, Personnaliser, Rejoindre) | ⚠ l'étape « Créer ton serveur » et les modèles existent depuis a65e0a58 (la ligne disait qu'ils manquaient) ; rendu wt/real-modals `real_shots PHX_OPEN=addserver` : la carte n'a pas de fond (le chat se voit à travers) et les icônes de Gaming, Groupe d'étude et Communauté locale sont vides ; pas encore comparée au client |
 | Quitter le serveur | menu serveur | `Overlay::LeaveGuild` | ✅ |
 | Notifications du serveur | menu serveur | `modals/guild_notify.rs` | ✅ |
 | Confidentialité du serveur | menu serveur | `modals/privacy.rs` | ✅ |
