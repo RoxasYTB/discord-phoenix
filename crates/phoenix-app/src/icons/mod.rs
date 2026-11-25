@@ -143,7 +143,7 @@ fn extract_all(entries: &[(String, PathBuf)]) -> HashMap<&'static str, String> {
                 }
                 for (name, candidates) in todo {
                     let usable = |c: &&str| exports || c.starts_with("path:");
-                    if let Some((rank, svg)) = candidates.iter().enumerate().filter(|(_, c)| usable(*c)).find_map(|(ci, c)| extract::icon_svg(&js, c).map(|s| ((ci, i), s))) {
+                    if let Some((rank, svg)) = candidates.iter().enumerate().filter(|(_, c)| usable(c)).find_map(|(ci, c)| extract::icon_svg(&js, c).map(|s| ((ci, i), s))) {
                         let mut f = found.lock().unwrap_or_else(|e| e.into_inner());
                         if f.get(name).is_none_or(|(r, _)| *r > rank) {
                             f.insert(*name, (rank, svg));
