@@ -130,6 +130,7 @@ struct Geom {
     cap: f32,
 }
 
+#[cfg(test)]
 impl Geom {
     fn height(self) -> f32 {
         self.content.min(self.cap)
