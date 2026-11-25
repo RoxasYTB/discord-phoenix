@@ -39,6 +39,23 @@ $EX pin avances 1574898068434714644
 
 `check` only runs the GET guards and validates the text and images. To update the tracking message after a milestone, rewrite the three lists from the README status and the `docs/parity/` tables, then `edit` it.
 
+## Automatic changelog posts
+
+Dashboard changelog entries (`phoenix-log`) that are marked `--public` are posted to `📋・changelogs` by a user service, `phoenix-changelog-post` (`Restart=always`), which runs a small script next to the `community_post` binary, outside the repository.
+
+- It reads the dashboard changelog every 30 seconds and posts each new public entry as one message: the title in bold, then the text, with at most 10 PNG screenshots.
+- It goes through `community_post send changelogs`, so the same guard applies: this guild and channel only, no mentions, `allowed_mentions` empty, at most 2000 characters, images only from a local `reviewed-screenshots/` folder.
+- Before posting, it strips internal wording: `wt/` branch names, file paths, `real_shots`, `PHX_*` switches, "agent", "MERGED", em dashes. The entry's author still writes the text for users.
+- It skips the automatic "Intégration …" entries, waits a random 5 to 13 seconds between two posts, and keeps the ids it has posted, so an entry is never posted twice. On first start, every existing entry is marked as already seen.
+- A post that fails three times is given up and logged.
+
+```sh
+systemctl --user status phoenix-changelog-post
+systemctl --user restart phoenix-changelog-post
+```
+
+Only mark an entry `--public` after checking each screenshot against the README rules (no DMs, no account page, no email or phone, no server other than Aperture Sciences, no third-party profile or stream, third-party names blurred on a copy). A posted entry is never deleted.
+
 ## History
 
 | Date | Channel | Message |
@@ -46,3 +63,4 @@ $EX pin avances 1574898068434714644
 | 2026-11-25 | `📢・annonces` | `1575061609292890135` (4 screenshots) |
 | 2026-11-25 | `📸・captures` | `1575061633758134332` (10 screenshots) |
 | 2026-11-25 | `⚙️・avancés` | `1574898068434714644` (edited and pinned) |
+| 2026-11-25 | `📋・changelogs` | catch-up since v0.1.0-beta.1: intro `1575142678163628053`, then 18 entries up to `1575143479523414159` |
