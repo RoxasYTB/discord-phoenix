@@ -97,7 +97,7 @@ with the bar's clear button (route and bar text checked unchanged). No non-GET r
 | Jump | buttonsContainer_ > button_ | hover | "Y aller", 24px, padding 4, radius 3, 12/16 medium, top-right on hover; jumps to the message | result_card (jump_to_message) | ✅ |
 | pager | paginationDock_ / pageControl_ | layout | 56px dock, padding 0 16; 40px "Précédent" / "Suivant" (caret 16, 16/18 semibold, radius 8); 28px round pages 8px apart, current --brand-500 + white; "1 2 3 … 164" | pager, page_items | ✅ |
 | empty | emptyResultsWrap_ | layout | 280px column centred, 160px illustration, text 16/24 medium --text-default | empty_state | ✅ layout (our own illustration and wording) |
-| error | — | — | not reproducible on the client with a GET | empty_state(error) | ⚠ |
+| error | — | — | not reproducible on the client with a GET | empty_state(error) | ➖ the client's error state only shows when the search request fails; making it fail on the live account would mean breaking its network or sending malformed requests |
 
 # DM search (live CDP 2026-11-24, 1536×840 @1.25, Onyx, cross-DM setting off)
 
