@@ -219,7 +219,7 @@ type Row = (AnyElement, SharedString, Option<SharedString>, Option<SharedString>
 pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let empty_query = sw.input.read(cx).value().trim().is_empty();
     let fg = tk(idx::INTERACTIVE_TEXT_DEFAULT);
-    let mut rows = div().id("switcher-results").mt(px(16.)).h(px(236.)).overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("switcher-results")).flex().flex_col();
+    let mut rows = div().id("switcher-results").mt(px(16.)).h(px(236.)).pr(px(16.)).overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("switcher-results")).flex().flex_col();
     if sw.results.is_empty() {
         rows = rows.child(
             div()
@@ -415,7 +415,7 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                         .text_color(tk(idx::TEXT_DEFAULT))
                         .child(Input::new(&sw.input).appearance(false).bordered(false).text_size(px(22.))),
                 )
-                .child(div().h(px(262.)).flex_none().child(crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto).child(rows).children(crate::ui::chat::scrollbar::bar_for("switcher-results", crate::ui::chat::scrollbar::Bar::Auto))))
+                .child(div().h(px(262.)).flex_none().child(crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto).mr(px(-17.)).child(rows).children(crate::ui::chat::scrollbar::bar_for("switcher-results", crate::ui::chat::scrollbar::Bar::Auto))))
                 .child(protip.pb(px(1.))),
         )
 }
