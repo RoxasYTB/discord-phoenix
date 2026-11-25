@@ -14,7 +14,7 @@ use crate::{
 pub fn other_requests(rels: &[Relationship]) -> Vec<Relationship> {
     let pick = |f: &dyn Fn(&Relationship) -> bool| {
         let mut v: Vec<Relationship> = rels.iter().filter(|r| r.kind == RelationshipKind::Incoming && f(r)).cloned().collect();
-        v.sort_by(|a, b| b.since.cmp(&a.since));
+        v.sort_by_key(|b| std::cmp::Reverse(b.since));
         v
     };
     let mut out = pick(&|r| r.ignored);
