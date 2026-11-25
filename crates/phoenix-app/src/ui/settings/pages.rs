@@ -1628,10 +1628,11 @@ static SYSTEM: &[B] = &[
 ];
 
 fn language_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
-    let cur = app.prefs.synced.locale.clone();
-    let ix = super::view::LOCALES.iter().position(|(c, _)| *c == cur.as_ref()).unwrap_or(0);
-    let opts: Vec<SharedString> = super::view::LOCALES.iter().map(|(_, n)| SharedString::from(*n)).collect();
-    let name = opts.get(ix).cloned().unwrap_or_default();
+    let cur = crate::i18n::languages::normalize(&app.prefs.synced.locale);
+    let langs = crate::i18n::languages::LANGUAGES;
+    let ix = crate::i18n::languages::index_of(cur);
+    let opts: Vec<SharedString> = langs.iter().map(|l| SharedString::from(l.native)).collect();
+    let active = &langs[ix];
     let field = div()
         .id(eid("sel-language"))
         .h(z(40.))
@@ -1644,8 +1645,8 @@ fn language_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElemen
         .hover(|s| s.border_color(c(tok(idx::INPUT_BORDER_HOVER))))
         .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
         .cursor_pointer()
-        .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(name.clone()))
-        .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).whitespace_nowrap().child(name))
+        .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(active.native))
+        .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).whitespace_nowrap().child(active.english))
         .child(
             div().w(z(36.)).h_full().flex().items_center().justify_center().pr(z(4.))
                 .child(gpui::svg().path("icons/chevron.svg").size(z(20.)).text_color(c(tok(idx::TEXT_STRONG)))),
@@ -1661,7 +1662,7 @@ fn language_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElemen
             if let Some(s) = a.settings.as_mut() {
                 s.open_select = None;
             }
-            save(a, SettingsPatch::Locale(super::view::LOCALES[i].0.into()), cx)
+            save(a, SettingsPatch::Locale(crate::i18n::languages::LANGUAGES[i].code.into()), cx)
         },
         cx,
     );

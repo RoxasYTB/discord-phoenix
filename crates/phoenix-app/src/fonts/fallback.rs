@@ -26,10 +26,17 @@ const EMOJI_SEQUENCE_PARTS: [(u32, u32); 7] = [
     (0x23, 0x23), (0x2A, 0x2A), (0x30, 0x39), (0x200D, 0x200D), (0x20E3, 0x20E3), (0xFE0F, 0xFE0F), (0xE0020, 0xE007F),
 ];
 
-static CHAIN: OnceLock<gpui::FontFallbacks> = OnceLock::new();
+static CHAINS: OnceLock<parking_lot::RwLock<std::collections::HashMap<&'static str, gpui::FontFallbacks>>> = OnceLock::new();
 
 pub fn ui_fallbacks() -> gpui::FontFallbacks {
-    CHAIN.get_or_init(|| gpui::FontFallbacks::from_fonts(plain_chain())).clone()
+    let loc = crate::i18n::locale();
+    let cache = CHAINS.get_or_init(|| parking_lot::RwLock::new(std::collections::HashMap::new()));
+    if let Some(fb) = cache.read().get(loc) {
+        return fb.clone();
+    }
+    let fb = gpui::FontFallbacks::from_fonts(plain_chain_for(loc));
+    cache.write().insert(loc, fb.clone());
+    fb
 }
 
 fn fc(args: &[&str], format: &str) -> Vec<String> {
@@ -42,13 +49,38 @@ fn fc(args: &[&str], format: &str) -> Vec<String> {
     String::from_utf8_lossy(&out.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()
 }
 
+fn preferred_script_fonts(locale: &str) -> &'static [&'static str] {
+    match locale {
+        "ja" => &["Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic"],
+        "ko" => &["Noto Sans CJK KR", "Apple SD Gothic Neo", "Malgun Gothic"],
+        "zh-CN" => &["Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei"],
+        "zh-TW" => &["Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei"],
+        "th" => &["Noto Sans Thai", "Thonburi", "Leelawadee UI"],
+        "hi" => &["Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI"],
+        _ => &[],
+    }
+}
+
 fn plain_chain() -> Vec<String> {
-    let sorted = fc(&["-s", "sans-serif"], "%{family[0]}\n");
+    plain_chain_for(crate::i18n::locale())
+}
+
+fn plain_chain_for(locale: &str) -> Vec<String> {
+    let query = format!("sans-serif:lang={locale}");
+    let sorted = fc(&["-s", &query], "%{family[0]}\n");
     let mut chain: Vec<String> = Vec::new();
     for name in STACK {
         let metric_ok = |f: &str| f == name || (name == "Arial" && matches!(f, "Arimo" | "Liberation Sans"));
         if let Some(f) = fc(&[name], "%{family[0]}\n").into_iter().next()
             && metric_ok(&f)
+            && !chain.contains(&f)
+        {
+            chain.push(f);
+        }
+    }
+    for name in preferred_script_fonts(locale) {
+        if let Some(f) = fc(&[name], "%{family[0]}\n").into_iter().next()
+            && f == *name
             && !chain.contains(&f)
         {
             chain.push(f);

@@ -1,0 +1,864 @@
+@bg
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|2
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}.{MM}.{yy} г.
+ll	{d}.{MM}.{y} г.
+LL	{d} {MMM} {y} г.
+LLL	{d} {MMM} {y} г. в {h}:{mm}
+LLL.h12	{d} {MMM} {y} г. в {h}:{mm} ч. {a}
+LLLL	{E}, {d} {MMM} {y} г. в {h}:{mm}
+LLLL.h12	{E}, {d} {MMM} {y} г. в {h}:{mm} ч. {a}
+LT	{h}:{mm}
+LT.h12	{h}:{mm} ч. {a}
+LTS	{h}:{mm}:{ss}
+LTS.h12	{h}:{mm}:{ss} ч. {a}
+L LT	{d}.{MM}.{yy} г., {h}:{mm}
+L LT.h12	{d}.{MM}.{yy} г., {h}:{mm} ч. {a}
+L LTS	{d}.{MM}.{yy} г., {h}:{mm}:{ss}
+L LTS.h12	{d}.{MM}.{yy} г., {h}:{mm}:{ss} ч. {a}
+ll.months	01|02|03|04|05|06|07|08|09|10|11|12
+LL.months	януари|февруари|март|април|май|юни|юли|август|септември|октомври|ноември|декември
+LLLL.months	януари|февруари|март|април|май|юни|юли|август|септември|октомври|ноември|декември
+weekdays	понеделник|вторник|сряда|четвъртък|петък|събота|неделя
+periods.auto	|||||||||||||||||||||||
+periods.h12	am|am|am|am|am|am|am|am|am|am|am|am|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm
+@cs
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	xofffxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}.{MM}.{yy}
+ll	{d}. {M}. {y}
+LL	{d}. {MMM} {y}
+LLL	{d}. {MMM} {y} v {h}:{mm}
+LLL.h12	{d}. {MMM} {y} v {h}:{mm} {a}
+LLLL	{E} {d}. {MMM} {y} v {h}:{mm}
+LLLL.h12	{E} {d}. {MMM} {y} v {h}:{mm} {a}
+LT	{h}:{mm}
+LT.h12	{h}:{mm} {a}
+LTS	{h}:{mm}:{ss}
+LTS.h12	{h}:{mm}:{ss} {a}
+L LT	{dd}.{MM}.{yy} {h}:{mm}
+L LT.h12	{dd}. {MM}. {yy} {h}:{mm} {a}
+L LTS	{dd}.{MM}.{yy} {h}:{mm}:{ss}
+L LTS.h12	{dd}. {MM}. {yy} {h}:{mm}:{ss} {a}
+ll.months	1|2|3|4|5|6|7|8|9|10|11|12
+LL.months	ledna|února|března|dubna|května|června|července|srpna|září|října|listopadu|prosince
+LLLL.months	ledna|února|března|dubna|května|června|července|srpna|září|října|listopadu|prosince
+weekdays	pondělí|úterý|středa|čtvrtek|pátek|sobota|neděle
+periods.auto	|||||||||||||||||||||||
+periods.h12	dop.|dop.|dop.|dop.|dop.|dop.|dop.|dop.|dop.|dop.|dop.|dop.|odp.|odp.|odp.|odp.|odp.|odp.|odp.|odp.|odp.|odp.|odp.|odp.
+@da
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}.{MM}.{y}
+ll	{d}. {MMM} {y}
+LL	{d}. {MMM} {y}
+LLL	{d}. {MMM} {y} kl. {hh}.{mm}
+LLL.h12	{d}. {MMM} {y} kl. {hh}.{mm} {a}
+LLLL	{E} den {d}. {MMM} {y} kl. {hh}.{mm}
+LLLL.h12	{E} den {d}. {MMM} {y} kl. {hh}.{mm} {a}
+LT	{hh}.{mm}
+LT.h12	{hh}.{mm} {a}
+LTS	{hh}.{mm}.{ss}
+LTS.h12	{hh}.{mm}.{ss} {a}
+L LT	{dd}.{MM}.{y}, {hh}.{mm}
+L LT.h12	{dd}.{MM}.{y}, {hh}.{mm} {a}
+L LTS	{dd}.{MM}.{y}, {hh}.{mm}.{ss}
+L LTS.h12	{dd}.{MM}.{y}, {hh}.{mm}.{ss} {a}
+ll.months	jan.|feb.|mar.|apr.|maj|jun.|jul.|aug.|sep.|okt.|nov.|dec.
+LL.months	januar|februar|marts|april|maj|juni|juli|august|september|oktober|november|december
+LLLL.months	januar|februar|marts|april|maj|juni|juli|august|september|oktober|november|december
+weekdays	mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@de
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}.{MM}.{yy}
+ll	{dd}.{MM}.{y}
+LL	{d}. {MMM} {y}
+LLL	{d}. {MMM} {y} um {hh}:{mm}
+LLL.h12	{d}. {MMM} {y} um {hh}:{mm} {a}
+LLLL	{E}, {d}. {MMM} {y} um {hh}:{mm}
+LLLL.h12	{E}, {d}. {MMM} {y} um {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}.{MM}.{yy}, {hh}:{mm}
+L LT.h12	{dd}.{MM}.{yy}, {hh}:{mm} {a}
+L LTS	{dd}.{MM}.{yy}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}.{MM}.{yy}, {hh}:{mm}:{ss} {a}
+ll.months	01|02|03|04|05|06|07|08|09|10|11|12
+LL.months	Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember
+LLLL.months	Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember
+weekdays	Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@el
+hc	h12
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}/{M}/{yy}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} στις {h}:{mm} {a}
+LLL.h23	{d} {MMM} {y} στις {hh}:{mm}
+LLLL	{E} {d} {MMM} {y} στις {h}:{mm} {a}
+LLLL.h23	{E} {d} {MMM} {y} στις {hh}:{mm}
+LT	{h}:{mm} {a}
+LT.h23	{hh}:{mm}
+LTS	{h}:{mm}:{ss} {a}
+LTS.h23	{hh}:{mm}:{ss}
+L LT	{d}/{M}/{yy}, {h}:{mm} {a}
+L LT.h23	{d}/{M}/{yy}, {hh}:{mm}
+L LTS	{d}/{M}/{yy}, {h}:{mm}:{ss} {a}
+L LTS.h23	{d}/{M}/{yy}, {hh}:{mm}:{ss}
+ll.months	Ιαν|Φεβ|Μαρ|Απρ|Μαΐ|Ιουν|Ιουλ|Αυγ|Σεπ|Οκτ|Νοε|Δεκ
+LL.months	Ιανουαρίου|Φεβρουαρίου|Μαρτίου|Απριλίου|Μαΐου|Ιουνίου|Ιουλίου|Αυγούστου|Σεπτεμβρίου|Οκτωβρίου|Νοεμβρίου|Δεκεμβρίου
+LLLL.months	Ιανουαρίου|Φεβρουαρίου|Μαρτίου|Απριλίου|Μαΐου|Ιουνίου|Ιουλίου|Αυγούστου|Σεπτεμβρίου|Οκτωβρίου|Νοεμβρίου|Δεκεμβρίου
+weekdays	Δευτέρα|Τρίτη|Τετάρτη|Πέμπτη|Παρασκευή|Σάββατο|Κυριακή
+periods.auto	π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.
+periods.h12	π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|π.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.|μ.μ.
+@en-GB
+hc	h23
+first	1
+dir	ltr
+num	,|.|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}/{MM}/{y}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} at {hh}:{mm}
+LLL.h12	{d} {MMM} {y} at {hh}:{mm} {a}
+LLLL	{E}, {d} {MMM} {y} at {hh}:{mm}
+LLLL.h12	{E}, {d} {MMM} {y} at {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}/{MM}/{y}, {hh}:{mm}
+L LT.h12	{dd}/{MM}/{y}, {hh}:{mm} {a}
+L LTS	{dd}/{MM}/{y}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}/{MM}/{y}, {hh}:{mm}:{ss} {a}
+ll.months	Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept|Oct|Nov|Dec
+LL.months	January|February|March|April|May|June|July|August|September|October|November|December
+LLLL.months	January|February|March|April|May|June|July|August|September|October|November|December
+weekdays	Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday
+periods.auto	|||||||||||||||||||||||
+periods.h12	am|am|am|am|am|am|am|am|am|am|am|am|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm
+@en-US
+hc	h12
+first	7
+dir	ltr
+num	,|.|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{M}/{d}/{yy}
+ll	{MMM} {d}, {y}
+LL	{MMM} {d}, {y}
+LLL	{MMM} {d}, {y} at {h}:{mm} {a}
+LLL.h23	{MMM} {d}, {y} at {hh}:{mm}
+LLLL	{E}, {MMM} {d}, {y} at {h}:{mm} {a}
+LLLL.h23	{E}, {MMM} {d}, {y} at {hh}:{mm}
+LT	{h}:{mm} {a}
+LT.h23	{hh}:{mm}
+LTS	{h}:{mm}:{ss} {a}
+LTS.h23	{hh}:{mm}:{ss}
+L LT	{M}/{d}/{yy}, {h}:{mm} {a}
+L LT.h23	{M}/{d}/{yy}, {hh}:{mm}
+L LTS	{M}/{d}/{yy}, {h}:{mm}:{ss} {a}
+L LTS.h23	{M}/{d}/{yy}, {hh}:{mm}:{ss}
+ll.months	Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec
+LL.months	January|February|March|April|May|June|July|August|September|October|November|December
+LLLL.months	January|February|March|April|May|June|July|August|September|October|November|December
+weekdays	Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday
+periods.auto	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@es-419
+hc	h12
+first	1
+dir	ltr
+num	,|.|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}/{M}/{yy}
+ll	{d} {MMM} {y}
+LL	{d} de {MMM} de {y}
+LLL	{d} de {MMM} de {y} a las {h}:{mm} {a}
+LLL.h23	{d} de {MMM} de {y} a las {hh}:{mm}
+LLLL	{E}, {d} de {MMM} de {y}, {h}:{mm} {a}
+LLLL.h23	{E}, {d} de {MMM} de {y}, {hh}:{mm}
+LT	{h}:{mm} {a}
+LT.h23	{hh}:{mm}
+LTS	{h}:{mm}:{ss} {a}
+LTS.h23	{hh}:{mm}:{ss}
+L LT	{d}/{M}/{yy}, {h}:{mm} {a}
+L LT.h23	{d}/{M}/{yy}, {hh}:{mm}
+L LTS	{d}/{M}/{yy}, {h}:{mm}:{ss} {a}
+L LTS.h23	{d}/{M}/{yy}, {hh}:{mm}:{ss}
+ll.months	ene|feb|mar|abr|may|jun|jul|ago|sept|oct|nov|dic
+LL.months	enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre
+LLLL.months	enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre
+weekdays	lunes|martes|miércoles|jueves|viernes|sábado|domingo
+periods.auto	a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.
+periods.h12	a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.
+@es-ES
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|2
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}/{M}/{yy}
+ll	{d} {MMM} {y}
+LL	{d} de {MMM} de {y}
+LLL	{d} de {MMM} de {y} a las {h}:{mm}
+LLL.h12	{d} de {MMM} de {y} a las {h}:{mm} {a}
+LLLL	{E}, {d} de {MMM} de {y}, {h}:{mm}
+LLLL.h12	{E}, {d} de {MMM} de {y}, {h}:{mm} {a}
+LT	{h}:{mm}
+LT.h12	{h}:{mm} {a}
+LTS	{h}:{mm}:{ss}
+LTS.h12	{h}:{mm}:{ss} {a}
+L LT	{d}/{M}/{yy}, {h}:{mm}
+L LT.h12	{d}/{M}/{yy}, {h}:{mm} {a}
+L LTS	{d}/{M}/{yy}, {h}:{mm}:{ss}
+L LTS.h12	{d}/{M}/{yy}, {h}:{mm}:{ss} {a}
+ll.months	ene|feb|mar|abr|may|jun|jul|ago|sept|oct|nov|dic
+LL.months	enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre
+LLLL.months	enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre
+weekdays	lunes|martes|miércoles|jueves|viernes|sábado|domingo
+periods.auto	|||||||||||||||||||||||
+periods.h12	a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|a. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.|p. m.
+@fi
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}.{M}.{y}
+ll	{d}.{M}.{y}
+LL	{d}. {MMM} {y}
+LLL	{d}. {MMM} {y} klo {h}.{mm}
+LLL.h12	{d}. {MMM} {y} klo {h}.{mm} {a}
+LLLL	{E} {d}. {MMM} {y} klo {h}.{mm}
+LLLL.h12	{E} {d}. {MMM} {y} klo {h}.{mm} {a}
+LT	{h}.{mm}
+LT.h12	{h}.{mm} {a}
+LTS	{h}.{mm}.{ss}
+LTS.h12	{h}.{mm}.{ss} {a}
+L LT	{d}.{M}.{y} klo {h}.{mm}
+L LT.h12	{d}.{M}.{y} klo {h}.{mm} {a}
+L LTS	{d}.{M}.{y} klo {h}.{mm}.{ss}
+L LTS.h12	{d}.{M}.{y} klo {h}.{mm}.{ss} {a}
+ll.months	1|2|3|4|5|6|7|8|9|10|11|12
+LL.months	tammikuuta|helmikuuta|maaliskuuta|huhtikuuta|toukokuuta|kesäkuuta|heinäkuuta|elokuuta|syyskuuta|lokakuuta|marraskuuta|joulukuuta
+LLLL.months	tammikuuta|helmikuuta|maaliskuuta|huhtikuuta|toukokuuta|kesäkuuta|heinäkuuta|elokuuta|syyskuuta|lokakuuta|marraskuuta|joulukuuta
+weekdays	maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai
+periods.auto	|||||||||||||||||||||||
+periods.h12	ap.|ap.|ap.|ap.|ap.|ap.|ap.|ap.|ap.|ap.|ap.|ap.|ip.|ip.|ip.|ip.|ip.|ip.|ip.|ip.|ip.|ip.|ip.|ip.
+@fr
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	ooxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}/{MM}/{y}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} à {hh}:{mm}
+LLL.h12	{d} {MMM} {y} à {hh}:{mm} {a}
+LLLL	{E} {d} {MMM} {y} à {hh}:{mm}
+LLLL.h12	{E} {d} {MMM} {y} à {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}/{MM}/{y} {hh}:{mm}
+L LT.h12	{dd}/{MM}/{y} {hh}:{mm} {a}
+L LTS	{dd}/{MM}/{y} {hh}:{mm}:{ss}
+L LTS.h12	{dd}/{MM}/{y} {hh}:{mm}:{ss} {a}
+ll.months	janv.|févr.|mars|avr.|mai|juin|juil.|août|sept.|oct.|nov.|déc.
+LL.months	janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre
+LLLL.months	janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre
+weekdays	lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@hi
+hc	h12
+first	7
+dir	ltr
+num	,|.|3,2|1
+plural	ooxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}/{M}/{yy}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} को {h}:{mm} {a} बजे
+LLL.h23	{d} {MMM} {y} को {hh}:{mm} बजे
+LLLL	{E}, {d} {MMM} {y} को {h}:{mm} {a} बजे
+LLLL.h23	{E}, {d} {MMM} {y} को {hh}:{mm} बजे
+LT	{h}:{mm} {a}
+LT.h23	{hh}:{mm}
+LTS	{h}:{mm}:{ss} {a}
+LTS.h23	{hh}:{mm}:{ss}
+L LT	{d}/{M}/{yy}, {h}:{mm} {a}
+L LT.h23	{d}/{M}/{yy}, {hh}:{mm}
+L LTS	{d}/{M}/{yy}, {h}:{mm}:{ss} {a}
+L LTS.h23	{d}/{M}/{yy}, {hh}:{mm}:{ss}
+ll.months	जन॰|फ़र॰|मार्च|अप्रैल|मई|जून|जुल॰|अग॰|सित॰|अक्टू॰|नव॰|दिस॰
+LL.months	जनवरी|फ़रवरी|मार्च|अप्रैल|मई|जून|जुलाई|अगस्त|सितंबर|अक्टूबर|नवंबर|दिसंबर
+LLLL.months	जनवरी|फ़रवरी|मार्च|अप्रैल|मई|जून|जुलाई|अगस्त|सितंबर|अक्टूबर|नवंबर|दिसंबर
+weekdays	सोमवार|मंगलवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार
+periods.auto	am|am|am|am|am|am|am|am|am|am|am|am|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm
+periods.h12	am|am|am|am|am|am|am|am|am|am|am|am|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm|pm
+@hr
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xofffxxxxxxxxxxxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxxxxxxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxxofffxxxxxx
+L	{dd}. {MM}. {y}.
+ll	{d}. {MMM} {y}.
+LL	{d}. {MMM} {y}.
+LLL	{d}. {MMM} {y}. u {hh}:{mm}
+LLL.h12	{d}. {MMM} {y}. u {hh}:{mm} {a}
+LLLL	{E}, {d}. {MMM} {y}. u {hh}:{mm}
+LLLL.h12	{E}, {d}. {MMM} {y}. u {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}. {MM}. {y}. {hh}:{mm}
+L LT.h12	{dd}. {MM}. {y}. {hh}:{mm} {a}
+L LTS	{dd}. {MM}. {y}. {hh}:{mm}:{ss}
+L LTS.h12	{dd}. {MM}. {y}. {hh}:{mm}:{ss} {a}
+ll.months	sij|velj|ožu|tra|svi|lip|srp|kol|ruj|lis|stu|pro
+LL.months	siječnja|veljače|ožujka|travnja|svibnja|lipnja|srpnja|kolovoza|rujna|listopada|studenoga|prosinca
+LLLL.months	siječnja|veljače|ožujka|travnja|svibnja|lipnja|srpnja|kolovoza|rujna|listopada|studenoga|prosinca
+weekdays	ponedjeljak|utorak|srijeda|četvrtak|petak|subota|nedjelja
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@hu
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|2
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{y}. {MM}. {dd}.
+ll	{y}. {MMM} {d}.
+LL	{y}. {MMM} {d}.
+LLL	{y}. {MMM} {d}. {h}:{mm}
+LLL.h12	{y}. {MMM} {d}. {a} {h}:{mm}
+LLLL	{y}. {MMM} {d}., {E} {h}:{mm}
+LLLL.h12	{y}. {MMM} {d}., {E} {a} {h}:{mm}
+LT	{h}:{mm}
+LT.h12	{a} {h}:{mm}
+LTS	{h}:{mm}:{ss}
+LTS.h12	{a} {h}:{mm}:{ss}
+L LT	{y}. {MM}. {dd}. {h}:{mm}
+L LT.h12	{y}. {MM}. {dd}. {a} {h}:{mm}
+L LTS	{y}. {MM}. {dd}. {h}:{mm}:{ss}
+L LTS.h12	{y}. {MM}. {dd}. {a} {h}:{mm}:{ss}
+ll.months	jan.|febr.|márc.|ápr.|máj.|jún.|júl.|aug.|szept.|okt.|nov.|dec.
+LL.months	január|február|március|április|május|június|július|augusztus|szeptember|október|november|december
+LLLL.months	január|február|március|április|május|június|július|augusztus|szeptember|október|november|december
+weekdays	hétfő|kedd|szerda|csütörtök|péntek|szombat|vasárnap
+periods.auto	|||||||||||||||||||||||
+periods.h12	de.|de.|de.|de.|de.|de.|de.|de.|de.|de.|de.|de.|du.|du.|du.|du.|du.|du.|du.|du.|du.|du.|du.|du.
+@id
+hc	h23
+first	7
+dir	ltr
+num	.|,|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}/{MM}/{yy}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} pukul {hh}.{mm}
+LLL.h12	{d} {MMM} {y} pukul {hh}.{mm} {a}
+LLLL	{E}, {dd} {MMM} {y} pukul {hh}.{mm}
+LLLL.h12	{E}, {dd} {MMM} {y} pukul {hh}.{mm} {a}
+LT	{hh}.{mm}
+LT.h12	{hh}.{mm} {a}
+LTS	{hh}.{mm}.{ss}
+LTS.h12	{hh}.{mm}.{ss} {a}
+L LT	{dd}/{MM}/{yy}, {hh}.{mm}
+L LT.h12	{dd}/{MM}/{yy}, {hh}.{mm} {a}
+L LTS	{dd}/{MM}/{yy}, {hh}.{mm}.{ss}
+L LTS.h12	{dd}/{MM}/{yy}, {hh}.{mm}.{ss} {a}
+ll.months	Jan|Feb|Mar|Apr|Mei|Jun|Jul|Agu|Sep|Okt|Nov|Des
+LL.months	Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember
+LLLL.months	Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember
+weekdays	Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@it
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|2
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}/{MM}/{yy}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} alle ore {hh}:{mm}
+LLL.h12	{d} {MMM} {y} alle ore {hh}:{mm} {a}
+LLLL	{E} {d} {MMM} {y} alle ore {hh}:{mm}
+LLLL.h12	{E} {d} {MMM} {y} alle ore {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}/{MM}/{yy}, {hh}:{mm}
+L LT.h12	{dd}/{MM}/{yy}, {hh}:{mm} {a}
+L LTS	{dd}/{MM}/{yy}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}/{MM}/{yy}, {hh}:{mm}:{ss} {a}
+ll.months	gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic
+LL.months	gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre
+LLLL.months	gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre
+weekdays	lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@ja
+hc	h23
+first	7
+dir	ltr
+num	,|.|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{y}/{MM}/{dd}
+ll	{y}/{MM}/{dd}
+LL	{y}年{M}月{d}日
+LLL	{y}年{M}月{d}日 {h}:{mm}
+LLL.h12	{y}/{M}/{d} {a}{h}:{mm}
+LLLL	{y}年{M}月{d}日{E} {h}:{mm}
+LLLL.h12	{y}/{M}/{d}{E} {a}{h}:{mm}
+LT	{h}:{mm}
+LT.h12	{a}{h}:{mm}
+LTS	{h}:{mm}:{ss}
+LTS.h12	{a}{h}:{mm}:{ss}
+L LT	{y}/{MM}/{dd} {h}:{mm}
+L LT.h12	{y}/{MM}/{dd} {a}{h}:{mm}
+L LTS	{y}/{MM}/{dd} {h}:{mm}:{ss}
+L LTS.h12	{y}/{MM}/{dd} {a}{h}:{mm}:{ss}
+ll.months	01|02|03|04|05|06|07|08|09|10|11|12
+LL.months	1|2|3|4|5|6|7|8|9|10|11|12
+LLLL.months	1|2|3|4|5|6|7|8|9|10|11|12
+weekdays	月曜日|火曜日|水曜日|木曜日|金曜日|土曜日|日曜日
+periods.auto	|||||||||||||||||||||||
+periods.h12	午前|午前|午前|午前|午前|午前|午前|午前|午前|午前|午前|午前|午後|午後|午後|午後|午後|午後|午後|午後|午後|午後|午後|午後
+@ko
+hc	h12
+first	7
+dir	ltr
+num	,|.|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{yy}. {M}. {d}.
+ll	{y}. {M}. {d}.
+LL	{y}년 {MMM} {d}일
+LLL	{y}년 {MMM} {d}일 {a} {h}:{mm}
+LLL.h23	{y}년 {MMM} {d}일 {hh}:{mm}
+LLLL	{y}년 {MMM} {d}일 {E} {a} {h}:{mm}
+LLLL.h23	{y}년 {MMM} {d}일 {E} {hh}:{mm}
+LT	{a} {h}:{mm}
+LT.h23	{hh}:{mm}
+LTS	{a} {h}:{mm}:{ss}
+LTS.h23	{h}:{mm}:{ss}
+L LT	{yy}. {M}. {d}. {a} {h}:{mm}
+L LT.h23	{yy}. {M}. {d}. {hh}:{mm}
+L LTS	{yy}. {M}. {d}. {a} {h}:{mm}:{ss}
+L LTS.h23	{yy}. {M}. {d}. {h}:{mm}:{ss}
+ll.months	1|2|3|4|5|6|7|8|9|10|11|12
+LL.months	1월|2월|3월|4월|5월|6월|7월|8월|9월|10월|11월|12월
+LLLL.months	1월|2월|3월|4월|5월|6월|7월|8월|9월|10월|11월|12월
+weekdays	월요일|화요일|수요일|목요일|금요일|토요일|일요일
+periods.auto	오전|오전|오전|오전|오전|오전|오전|오전|오전|오전|오전|오전|오후|오후|오후|오후|오후|오후|오후|오후|오후|오후|오후|오후
+periods.h12	오전|오전|오전|오전|오전|오전|오전|오전|오전|오전|오전|오전|오후|오후|오후|오후|오후|오후|오후|오후|오후|오후|오후|오후
+@lt
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	xoffffffffxxxxxxxxxxxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxxxxxxxxxxxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffxoffffffffx
+L	{y}-{MM}-{dd}
+ll	{y}-{MM}-{dd}
+LL	{y} m. {MMM} {d} d.
+LLL	{y} m. {MMM} {d} d. {hh}:{mm}
+LLL.h12	{y} m. {MMM} {d} d. {hh}:{mm} {a}
+LLLL	{y} m. {MMM} {d} d., {E} {hh}:{mm}
+LLLL.h12	{y} m. {MMM} {d} d., {E} {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{y}-{MM}-{dd} {hh}:{mm}
+L LT.h12	{y}-{MM}-{dd} {hh}:{mm} {a}
+L LTS	{y}-{MM}-{dd} {hh}:{mm}:{ss}
+L LTS.h12	{y}-{MM}-{dd} {hh}:{mm}:{ss} {a}
+ll.months	01|02|03|04|05|06|07|08|09|10|11|12
+LL.months	sausio|vasario|kovo|balandžio|gegužės|birželio|liepos|rugpjūčio|rugsėjo|spalio|lapkričio|gruodžio
+LLLL.months	sausio|vasario|kovo|balandžio|gegužės|birželio|liepos|rugpjūčio|rugsėjo|spalio|lapkričio|gruodžio
+weekdays	pirmadienis|antradienis|trečiadienis|ketvirtadienis|penktadienis|šeštadienis|sekmadienis
+periods.auto	|||||||||||||||||||||||
+periods.h12	priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|priešpiet|popiet|popiet|popiet|popiet|popiet|popiet|popiet|popiet|popiet|popiet|popiet|popiet
+@nl
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}-{MM}-{y}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} om {hh}:{mm}
+LLL.h12	{d} {MMM} {y} om {hh}:{mm} {a}
+LLLL	{E} {d} {MMM} {y} om {hh}:{mm}
+LLLL.h12	{E} {d} {MMM} {y} om {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}-{MM}-{y}, {hh}:{mm}
+L LT.h12	{dd}-{MM}-{y}, {hh}:{mm} {a}
+L LTS	{dd}-{MM}-{y}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}-{MM}-{y}, {hh}:{mm}:{ss} {a}
+ll.months	jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec
+LL.months	januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december
+LLLL.months	januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december
+weekdays	maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag
+periods.auto	|||||||||||||||||||||||
+periods.h12	a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.
+@no
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}.{MM}.{y}
+ll	{d}. {MMM} {y}
+LL	{d}. {MMM} {y}
+LLL	{d}. {MMM} {y} kl. {hh}:{mm}
+LLL.h12	{d}. {MMM} {y} kl. {hh}:{mm} {a}
+LLLL	{E} {d}. {MMM} {y} kl. {hh}:{mm}
+LLLL.h12	{E} {d}. {MMM} {y} kl. {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}.{MM}.{y}, {hh}:{mm}
+L LT.h12	{dd}.{MM}.{y}, {hh}:{mm} {a}
+L LTS	{dd}.{MM}.{y}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}.{MM}.{y}, {hh}:{mm}:{ss} {a}
+ll.months	jan.|feb.|mars|apr.|mai|juni|juli|aug.|sep.|okt.|nov.|des.
+LL.months	januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember
+LLLL.months	januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember
+weekdays	mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag
+periods.auto	|||||||||||||||||||||||
+periods.h12	a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.
+@pl
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|2
+plural	mofffmmmmmmmmmmmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmmmmmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmmmfffmmmmmm
+L	{d}.{MM}.{y}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} {hh}:{mm}
+LLL.h12	{d} {MMM} {y} {hh}:{mm} {a}
+LLLL	{E}, {d} {MMM} {y} {hh}:{mm}
+LLLL.h12	{E}, {d} {MMM} {y} {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{d}.{MM}.{y}, {hh}:{mm}
+L LT.h12	{d}.{MM}.{y}, {hh}:{mm} {a}
+L LTS	{d}.{MM}.{y}, {hh}:{mm}:{ss}
+L LTS.h12	{d}.{MM}.{y}, {hh}:{mm}:{ss} {a}
+ll.months	sty|lut|mar|kwi|maj|cze|lip|sie|wrz|paź|lis|gru
+LL.months	stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia
+LLLL.months	stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia
+weekdays	poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@pt-BR
+hc	h23
+first	7
+dir	ltr
+num	.|,|3|1
+plural	ooxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}/{MM}/{y}
+ll	{d} de {MMM} de {y}
+LL	{d} de {MMM} de {y}
+LLL	{d} de {MMM} de {y} às {hh}:{mm}
+LLL.h12	{d} de {MMM} de {y} às {hh}:{mm} {a}
+LLLL	{E}, {d} de {MMM} de {y} às {hh}:{mm}
+LLLL.h12	{E}, {d} de {MMM} de {y} às {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}/{MM}/{y}, {hh}:{mm}
+L LT.h12	{dd}/{MM}/{y}, {hh}:{mm} {a}
+L LTS	{dd}/{MM}/{y}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}/{MM}/{y}, {hh}:{mm}:{ss} {a}
+ll.months	jan.|fev.|mar.|abr.|mai.|jun.|jul.|ago.|set.|out.|nov.|dez.
+LL.months	janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro
+LLLL.months	janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro
+weekdays	segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|domingo
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@ro
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	foffffffffffffffffffxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxfffffffffffffffffffxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{dd}.{MM}.{y}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} la {hh}:{mm}
+LLL.h12	{d} {MMM} {y} la {hh}:{mm} {a}
+LLLL	{E}, {d} {MMM} {y} la {hh}:{mm}
+LLLL.h12	{E}, {d} {MMM} {y} la {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}.{MM}.{y}, {hh}:{mm}
+L LT.h12	{dd}.{MM}.{y}, {hh}:{mm} {a}
+L LTS	{dd}.{MM}.{y}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}.{MM}.{y}, {hh}:{mm}:{ss} {a}
+ll.months	ian.|feb.|mar.|apr.|mai|iun.|iul.|aug.|sept.|oct.|nov.|dec.
+LL.months	ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|septembrie|octombrie|noiembrie|decembrie
+LLLL.months	ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|septembrie|octombrie|noiembrie|decembrie
+weekdays	luni|marți|miercuri|joi|vineri|sâmbătă|duminică
+periods.auto	|||||||||||||||||||||||
+periods.h12	a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|a.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.|p.m.
+@ru
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	mofffmmmmmmmmmmmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmmmmmmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmm
+L	{dd}.{MM}.{y}
+ll	{d} {MMM} {y} г.
+LL	{d} {MMM} {y} г.
+LLL	{d} {MMM} {y} г. в {hh}:{mm}
+LLL.h12	{d} {MMM} {y} г. в {hh}:{mm} {a}
+LLLL	{E}, {d} {MMM} {y} г. в {hh}:{mm}
+LLLL.h12	{E}, {d} {MMM} {y} г. в {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}.{MM}.{y}, {hh}:{mm}
+L LT.h12	{dd}.{MM}.{y}, {hh}:{mm} {a}
+L LTS	{dd}.{MM}.{y}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}.{MM}.{y}, {hh}:{mm}:{ss} {a}
+ll.months	янв.|февр.|мар.|апр.|мая|июн.|июл.|авг.|сент.|окт.|нояб.|дек.
+LL.months	января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря
+LLLL.months	января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря
+weekdays	понедельник|вторник|среда|четверг|пятница|суббота|воскресенье
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@sv-SE
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{y}-{MM}-{dd}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} kl. {hh}:{mm}
+LLL.h12	{d} {MMM} {y} kl. {hh}:{mm} {a}
+LLLL	{E} {d} {MMM} {y} kl. {hh}:{mm}
+LLLL.h12	{E} {d} {MMM} {y} kl. {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{y}-{MM}-{dd} {hh}:{mm}
+L LT.h12	{y}-{MM}-{dd} {hh}:{mm} {a}
+L LTS	{y}-{MM}-{dd} {hh}:{mm}:{ss}
+L LTS.h12	{y}-{MM}-{dd} {hh}:{mm}:{ss} {a}
+ll.months	jan.|feb.|mars|apr.|maj|juni|juli|aug.|sep.|okt.|nov.|dec.
+LL.months	januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december
+LLLL.months	januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december
+weekdays	måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag
+periods.auto	|||||||||||||||||||||||
+periods.h12	fm|fm|fm|fm|fm|fm|fm|fm|fm|fm|fm|fm|em|em|em|em|em|em|em|em|em|em|em|em
+@th
+hc	h23
+first	7
+dir	ltr
+num	,|.|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}/{M}/{byy}
+ll	{d} {MMM} {by}
+LL	{d} {MMM} {by}
+LLL	{d} {MMM} {by} เวลา {hh}:{mm}
+LLL.h12	{d} {MMM} {by} เวลา {hh}:{mm} {a}
+LLLL	{E}ที่ {d} {MMM} พ.ศ. {by} เวลา {hh}:{mm}
+LLLL.h12	{E}ที่ {d} {MMM} พ.ศ. {by} เวลา {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{d}/{M}/{byy} {hh}:{mm}
+L LT.h12	{d}/{M}/{byy} {hh}:{mm} {a}
+L LTS	{d}/{M}/{byy} {hh}:{mm}:{ss}
+L LTS.h12	{d}/{M}/{byy} {hh}:{mm}:{ss} {a}
+ll.months	ม.ค.|ก.พ.|มี.ค.|เม.ย.|พ.ค.|มิ.ย.|ก.ค.|ส.ค.|ก.ย.|ต.ค.|พ.ย.|ธ.ค.
+LL.months	มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม
+LLLL.months	มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม
+weekdays	วันจันทร์|วันอังคาร|วันพุธ|วันพฤหัสบดี|วันศุกร์|วันเสาร์|วันอาทิตย์
+periods.auto	|||||||||||||||||||||||
+periods.h12	AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|AM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM|PM
+@tr
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}.{MM}.{y}
+ll	{d} {MMM} {y}
+LL	{d} {MMM} {y}
+LLL	{d} {MMM} {y} {hh}:{mm}
+LLL.h12	{d} {MMM} {y} {a} {hh}:{mm}
+LLLL	{d} {MMM} {y} {E} {hh}:{mm}
+LLLL.h12	{d} {MMM} {y} {E} {a} {hh}:{mm}
+LT	{hh}:{mm}
+LT.h12	{a} {hh}:{mm}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{a} {hh}:{mm}:{ss}
+L LT	{d}.{MM}.{y} {hh}:{mm}
+L LT.h12	{d}.{MM}.{y} {a} {hh}:{mm}
+L LTS	{d}.{MM}.{y} {hh}:{mm}:{ss}
+L LTS.h12	{d}.{MM}.{y} {a} {hh}:{mm}:{ss}
+ll.months	Oca|Şub|Mar|Nis|May|Haz|Tem|Ağu|Eyl|Eki|Kas|Ara
+LL.months	Ocak|Şubat|Mart|Nisan|Mayıs|Haziran|Temmuz|Ağustos|Eylül|Ekim|Kasım|Aralık
+LLLL.months	Ocak|Şubat|Mart|Nisan|Mayıs|Haziran|Temmuz|Ağustos|Eylül|Ekim|Kasım|Aralık
+weekdays	Pazartesi|Salı|Çarşamba|Perşembe|Cuma|Cumartesi|Pazar
+periods.auto	|||||||||||||||||||||||
+periods.h12	ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖÖ|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS|ÖS
+@uk
+hc	h23
+first	1
+dir	ltr
+num	 |,|3|1
+plural	mofffmmmmmmmmmmmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmmmmmmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmmofffmmmmmm
+L	{dd}.{MM}.{yy}
+ll	{d} {MMM} {y} р.
+LL	{d} {MMM} {y} р.
+LLL	{d} {MMM} {y} р. о {hh}:{mm}
+LLL.h12	{d} {MMM} {y} р. о {hh}:{mm} {a}
+LLLL	{E}, {d} {MMM} {y} р. о {hh}:{mm}
+LLLL.h12	{E}, {d} {MMM} {y} р. о {hh}:{mm} {a}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{dd}.{MM}.{yy}, {hh}:{mm}
+L LT.h12	{dd}.{MM}.{yy}, {hh}:{mm} {a}
+L LTS	{dd}.{MM}.{yy}, {hh}:{mm}:{ss}
+L LTS.h12	{dd}.{MM}.{yy}, {hh}:{mm}:{ss} {a}
+ll.months	січ.|лют.|бер.|квіт.|трав.|черв.|лип.|серп.|вер.|жовт.|лист.|груд.
+LL.months	січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня
+LLLL.months	січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня
+weekdays	понеділок|вівторок|середа|четвер|пʼятниця|субота|неділя
+periods.auto	|||||||||||||||||||||||
+periods.h12	дп|дп|дп|дп|дп|дп|дп|дп|дп|дп|дп|дп|пп|пп|пп|пп|пп|пп|пп|пп|пп|пп|пп|пп
+@vi
+hc	h23
+first	1
+dir	ltr
+num	.|,|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{d}/{M}/{yy}
+ll	{d} {MMM}, {y}
+LL	{d} {MMM}, {y}
+LLL	lúc {hh}:{mm} {d} {MMM}, {y}
+LLL.h12	lúc {hh}:{mm} {a} {d} {MMM}, {y}
+LLLL	lúc {hh}:{mm} {E}, {d} {MMM}, {y}
+LLLL.h12	lúc {hh}:{mm} {a} {E}, {d} {MMM}, {y}
+LT	{hh}:{mm}
+LT.h12	{hh}:{mm} {a}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{hh}:{mm}:{ss} {a}
+L LT	{hh}:{mm} {d}/{M}/{yy}
+L LT.h12	{hh}:{mm} {a} {d}/{M}/{yy}
+L LTS	{hh}:{mm}:{ss} {d}/{M}/{yy}
+L LTS.h12	{hh}:{mm}:{ss} {a} {d}/{M}/{yy}
+ll.months	thg 1|thg 2|thg 3|thg 4|thg 5|thg 6|thg 7|thg 8|thg 9|thg 10|thg 11|thg 12
+LL.months	tháng 1|tháng 2|tháng 3|tháng 4|tháng 5|tháng 6|tháng 7|tháng 8|tháng 9|tháng 10|tháng 11|tháng 12
+LLLL.months	tháng 1|tháng 2|tháng 3|tháng 4|tháng 5|tháng 6|tháng 7|tháng 8|tháng 9|tháng 10|tháng 11|tháng 12
+weekdays	Thứ Hai|Thứ Ba|Thứ Tư|Thứ Năm|Thứ Sáu|Thứ Bảy|Chủ Nhật
+periods.auto	|||||||||||||||||||||||
+periods.h12	SA|SA|SA|SA|SA|SA|SA|SA|SA|SA|SA|SA|CH|CH|CH|CH|CH|CH|CH|CH|CH|CH|CH|CH
+@zh-CN
+hc	h23
+first	1
+dir	ltr
+num	,|.|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{y}/{M}/{d}
+ll	{y}年{M}月{d}日
+LL	{y}年{M}月{d}日
+LLL	{y}年{M}月{d}日 {hh}:{mm}
+LLL.h12	{y}/{M}/{d} {a}{hh}:{mm}
+LLLL	{y}年{M}月{d}日{E} {hh}:{mm}
+LLLL.h12	{y}年{M}月{d}日{E} {a}{hh}:{mm}
+LT	{hh}:{mm}
+LT.h12	{a}{hh}:{mm}
+LTS	{hh}:{mm}:{ss}
+LTS.h12	{a}{hh}:{mm}:{ss}
+L LT	{y}/{M}/{d} {hh}:{mm}
+L LT.h12	{y}/{M}/{d} {a}{hh}:{mm}
+L LTS	{y}/{M}/{d} {hh}:{mm}:{ss}
+L LTS.h12	{y}/{M}/{d} {a}{hh}:{mm}:{ss}
+ll.months	1|2|3|4|5|6|7|8|9|10|11|12
+LL.months	1|2|3|4|5|6|7|8|9|10|11|12
+LLLL.months	1|2|3|4|5|6|7|8|9|10|11|12
+weekdays	星期一|星期二|星期三|星期四|星期五|星期六|星期日
+periods.auto	|||||||||||||||||||||||
+periods.h12	上午|上午|上午|上午|上午|上午|上午|上午|上午|上午|上午|上午|下午|下午|下午|下午|下午|下午|下午|下午|下午|下午|下午|下午
+@zh-TW
+hc	h12
+first	7
+dir	ltr
+num	,|.|3|1
+plural	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+L	{y}/{M}/{d}
+ll	{y}年{M}月{d}日
+LL	{y}年{M}月{d}日
+LLL	{y}年{M}月{d}日 {a}{h}:{mm}
+LLL.h23	{y}/{M}/{d} {hh}:{mm}
+LLLL	{y}年{M}月{d}日 {E} {a}{h}:{mm}
+LLLL.h23	{y}年{M}月{d}日 {E} {hh}:{mm}
+LT	{a}{h}:{mm}
+LT.h23	{hh}:{mm}
+LTS	{a}{h}:{mm}:{ss}
+LTS.h23	{hh}:{mm}:{ss}
+L LT	{y}/{M}/{d} {a}{h}:{mm}
+L LT.h23	{y}/{M}/{d} {hh}:{mm}
+L LTS	{y}/{M}/{d} {a}{h}:{mm}:{ss}
+L LTS.h23	{y}/{M}/{d} {hh}:{mm}:{ss}
+ll.months	1|2|3|4|5|6|7|8|9|10|11|12
+LL.months	1|2|3|4|5|6|7|8|9|10|11|12
+LLLL.months	1|2|3|4|5|6|7|8|9|10|11|12
+weekdays	星期一|星期二|星期三|星期四|星期五|星期六|星期日
+periods.auto	凌晨|凌晨|凌晨|凌晨|凌晨|清晨|清晨|清晨|上午|上午|上午|上午|中午|下午|下午|下午|下午|下午|下午|晚上|晚上|晚上|晚上|晚上
+periods.h12	凌晨|凌晨|凌晨|凌晨|凌晨|清晨|清晨|清晨|上午|上午|上午|上午|中午|下午|下午|下午|下午|下午|下午|晚上|晚上|晚上|晚上|晚上
