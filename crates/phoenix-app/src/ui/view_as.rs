@@ -96,7 +96,7 @@ pub fn notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     let back = button("viewas-back")
         .ml(z(0.))
         .on_click(cx.listener(|a, _, _, cx| stop(a, true, cx)))
-        .child(svg().path(crate::icons::path("chevron-left")).size(z(16.)).text_color(white))
+        .child(svg().path(crate::icons::path("arrow-left")).size(z(16.)).text_color(white))
         .child(crate::t!("viewas.back"));
     let select = button("viewas-select")
         .on_click(cx.listener(|_, _, _, cx| {
