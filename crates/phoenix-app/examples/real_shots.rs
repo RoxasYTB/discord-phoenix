@@ -1323,7 +1323,7 @@ fn main() -> anyhow::Result<()> {
                             let f = af::Failure { status: 400, code: code.parse().ok(), note_rejected: false };
                             app.nav.add_friend.on_error(af::inline_error(&f, "wumpus"));
                         }
-                        _ => app.nav.add_friend.on_change(arg),
+                        _ => app.nav.add_friend.on_change(&arg),
                     }
                     cx.notify();
                 }
