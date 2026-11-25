@@ -1407,7 +1407,7 @@ impl Render for PhoenixApp {
         if ui::chat::rich_input::needs_sync(self, cx) {
             let e = cx.entity().downgrade();
             cx.defer(move |cx| {
-                let _ = e.update(cx, |a, cx| ui::chat::rich_input::sync(a, cx));
+                let _ = e.update(cx, ui::chat::rich_input::sync);
             });
         }
         self.chat_sync_style();
