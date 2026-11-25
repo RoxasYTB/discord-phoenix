@@ -209,13 +209,13 @@ fn svg_for(path: &str) -> Option<&'static str> {
         ),
         "icons/plus.svg" => s!(r#"<path d="M12 5v14M5 12h14"/>"#),
         "icons/mic.svg" => f!(r#"<rect x="8" y="2" width="8" height="13" rx="4"/><path d="M5 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-7 7.9V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.1A8 8 0 0 1 4 12a1 1 0 0 1 1-1z"/>"#),
-        "icons/mic-off.svg" => concat!(
+        "icons/mic-off.svg" | "icons/mic-deny.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">"#,
             r#"<rect x="8" y="2" width="8" height="13" rx="4" fill="black"/><path d="M5 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-7 7.9V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.1A8 8 0 0 1 4 12a1 1 0 0 1 1-1z" fill="black"/>"#,
             r#"<path d="M3 2 21 22" stroke="black" stroke-width="2.4" stroke-linecap="round"/></svg>"#
         ),
         "icons/headphones.svg" => f!(r#"<path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z"/>"#),
-        "icons/headphones-off.svg" => concat!(
+        "icons/headphones-off.svg" | "icons/headphones-deny.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">"#,
             r#"<path fill="black" d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z"/>"#,
             r#"<path d="M3 2 21 22" stroke="black" stroke-width="2.4" stroke-linecap="round"/></svg>"#
