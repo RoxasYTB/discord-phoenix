@@ -96,7 +96,7 @@ pub fn refresh(dir: &Path) -> bool {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     entries.iter().for_each(|(k, _)| k.hash(&mut h));
     NAMES.hash(&mut h);
-    3u8.hash(&mut h);
+    4u8.hash(&mut h);
     let stamp = format!("{:016x}", h.finish());
     let stamp_file = dir.join(".build");
     if std::fs::read_to_string(&stamp_file).is_ok_and(|s| s.trim() == stamp) {
@@ -137,11 +137,13 @@ fn extract_all(entries: &[(String, PathBuf)]) -> HashMap<&'static str, String> {
                     break;
                 }
                 let Some(js) = cache::read_body(p) else { continue };
-                if !js.contains("Icon:function(") {
+                let exports = js.contains("Icon:function(");
+                if !exports && !js.contains("(\"svg\",{") {
                     continue;
                 }
                 for (name, candidates) in todo {
-                    if let Some((rank, svg)) = candidates.iter().enumerate().find_map(|(ci, c)| extract::icon_svg(&js, c).map(|s| ((ci, i), s))) {
+                    let usable = |c: &&str| exports || c.starts_with("path:");
+                    if let Some((rank, svg)) = candidates.iter().enumerate().filter(|(_, c)| usable(*c)).find_map(|(ci, c)| extract::icon_svg(&js, c).map(|s| ((ci, i), s))) {
                         let mut f = found.lock().unwrap_or_else(|e| e.into_inner());
                         if f.get(name).is_none_or(|(r, _)| *r > rank) {
                             f.insert(*name, (rank, svg));
