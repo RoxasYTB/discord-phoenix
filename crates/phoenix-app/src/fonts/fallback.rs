@@ -62,8 +62,10 @@ pub fn ui_fallbacks() -> gpui::FontFallbacks {
     fb
 }
 
+const NATIVE_FALLBACK: bool = cfg!(any(windows, target_os = "macos"));
+
 fn fc(args: &[&str], format: &str) -> Vec<String> {
-    if crate::paths::is_sandboxed() {
+    if NATIVE_FALLBACK || crate::paths::is_sandboxed() {
         return Vec::new();
     }
     let Ok(out) = std::process::Command::new("fc-match").args(args).arg(format!("--format={format}")).output() else {
@@ -102,7 +104,9 @@ fn plain_chain_for(locale: &str) -> Vec<String> {
         }
     }
     for name in preferred_script_fonts(locale) {
-        if let Some(f) = fc(&[name], "%{family[0]}\n").into_iter().next()
+        if NATIVE_FALLBACK {
+            chain.push((*name).to_owned());
+        } else if let Some(f) = fc(&[name], "%{family[0]}\n").into_iter().next()
             && f == *name
             && !chain.contains(&f)
         {
