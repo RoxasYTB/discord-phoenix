@@ -1398,8 +1398,7 @@ impl PhoenixApp {
         } else if self.escape_header_popouts(cx) {
         } else if self.switcher.is_some() {
             self.close_switcher(window, cx);
-        } else if crate::ui::mod_view::escape() {
-        } else if self.chat_escape(window, cx) {
+        } else if crate::ui::mod_view::escape() || self.chat_escape(window, cx) {
         } else if self.editing.take().is_some() {
             self.composer.update(cx, |s, cx| s.set_value("", window, cx));
         } else if self.replying_to.take().is_none() {
