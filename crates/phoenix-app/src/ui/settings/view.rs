@@ -469,7 +469,7 @@ fn footer(cx: &mut Cx) -> Div {
         .flex_col()
         .gap(z(4.))
         .child(note(line.into(), idx::TEXT_MUTED))
-        .child(note(crate::diagnostics::version_line().into(), idx::TEXT_MUTED).id("settings-phoenix-version"))
+        .child(note(crate::diagnostics::version_line().into(), idx::TEXT_MUTED))
         .child(
             div()
                 .flex()
