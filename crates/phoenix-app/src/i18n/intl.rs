@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(format("de", "L", &d, None), "25.11.09");
         assert_eq!(format("th", "LL", &d, None), "25 พฤศจิกายน 2552");
         assert_eq!(format("zh-TW", "LT", &p(2009, 2, 5, 3, 4), None), "凌晨3:04");
-        assert_eq!(format("ru", "LL", &d, None), "25 ноября 2009\u{a0}г.");
+        assert_eq!(format("ru", "LL", &d, None), "25 ноября 2009 г.");
     }
 
     #[test]
