@@ -172,7 +172,7 @@ Fait (code, tests unitaires, aucune écriture réelle) :
 
 Lot 2 (wt/inventory) :
 
-- Messages programmés, reproduits d'après les modules 970244 (sous-menu et modale), 566908 (règles) et 151282 (appels) : créneaux `FF` (9 h et 13 h aujourd'hui si c'est dans plus de 10 minutes, sinon demain ; lundi suivant à 9 h), heure par défaut = heure pleine suivante (+1 h si à moins de 10 min), bornes 10 minutes – 8 jours (`691200` s), corps `POST` identique au client (`channel_id`, `content`, `scheduled_timestamp` ISO en millisecondes, `flags`, `attachments: []`, plus `message_reference` / `allowed_mentions` pour une réponse). Le modèle `ScheduledMessage` suit maintenant la réponse lue par le client (`scheduled_message_id`, `send_at_timestamp`, `create_args`, `state`) : l'ancien modèle (`id`, `channel_id`, `content`, `scheduled_timestamp`) n'aurait pas lu une liste non vide. Sonde gardée `examples/schedule_probe.rs` (Aperture Sciences / #phoenix uniquement) pour créer, lister, reprogrammer puis annuler ou envoyer.
+- Messages programmés, reproduits d'après les modules 970244 (sous-menu et modale), 566908 (règles) et 151282 (appels) : créneaux `FF` (9 h et 13 h aujourd'hui si c'est dans plus de 10 minutes, sinon demain ; lundi suivant à 9 h), heure par défaut = heure pleine suivante (+1 h si à moins de 10 min), bornes 10 minutes – 8 jours (`691200` s), corps `POST` identique au client (`channel_id`, `content`, `scheduled_timestamp` ISO en millisecondes, `flags`, `attachments: []`, plus `message_reference` / `allowed_mentions` pour une réponse). Le modèle `ScheduledMessage` suit maintenant la réponse lue par le client (`scheduled_message_id`, `send_at_timestamp`, `create_args`, `state`) : l'ancien modèle (`id`, `channel_id`, `content`, `scheduled_timestamp`) n'aurait pas lu une liste non vide. Sonde gardée `examples/schedule_probe.rs` (Aperture Sciences / #phoenix uniquement) pour créer, lister, reprogrammer puis annuler ou envoyer : ⚠ pas encore exécutée, l'intégrateur ne compile pas cet exemple (liste `EX` de `phoenix-integrate`).
 - « Déplacer vers… » des serveurs et des dossiers (module 816581 / 865815) : sous-menu « Dossier » (Aucun dossier, puis les dossiers ; l'actuel est grisé), « Premier / Dernier dans la liste » ou « dans le dossier », grisés en tête et en fin, absents s'il n'y a qu'un élément. Le déplacement réécrit l'arbre (`gdm::move_tree`, testé) puis l'enregistre comme le glisser-déposer.
 - Le glisser-déposer du rail et les dossiers enregistrent désormais `guild_folders` dans `settings-proto/1` comme le client (`saveGuildFolders`), au lieu du `PATCH /users/@me/settings` JSON hérité.
 
@@ -183,3 +183,16 @@ Reste, par ordre de visibilité :
 3. Calendrier et champ d'heure de la modale « Programmer un message », « Modifier le message » programmé.
 4. Nettoyage des Groupes privés, Changer de compte, modale de statut personnalisé, confirmation « Ignorer ».
 5. Menus vidéo (vitesse, transcription), aperçu des fichiers texte, menu « … » des paramètres.
+
+## Vérifications sur le vrai compte (25/11, `real_shots` 1536×840 @1,5, #phoenix ; client CDP sur #général)
+
+| vue | client (CDP) | Phoenix | écart restant |
+|---|---|---|---|
+| Paramètres du dossier | `folder-modal.png` : 480 × 385, libellés 16/20 medium, pastilles 70 × 50 et 20 × 20, grille sous les grandes pastilles, pastille personnalisée = couleur courante + pipette | `phx-foldermodal.png` | grille passée à la ligne après la première capture (lot 3) ; retrait du texte du champ (gpui-component) |
+| Programmer un message | `sched-modal.png` : Date « 25 nov. 2026 » + calendrier, Heure + chevron, astérisques rouges, 16 px sous les champs | `phx-schedmodal.png` | espace sous les champs ajouté (lot 3) ; calendrier non reproduit |
+| « + » › Programmer un message › | `sched-submenu.png` : 3 créneaux / Personnalisé..., sous-menu remonté pour tenir dans la fenêtre | `phx-schedmenu.png` | sous-menus recalés dans la fenêtre (marge 12) au lot 3 |
+| Menu de la zone de texte | relevé CDP | `phx-textmenu.png` | « Langues › » absent |
+| Menu du dossier | relevé CDP (4 entrées) | `phx-foldermenu.png` | aucun |
+| Bandeau programmé | non capturé (cliquer un créneau modifie le brouillon du client) | `phx-schedbar.png` | — |
+
+Captures privées dans `/mnt/windata/project-phoenix/compare/inventory/`.

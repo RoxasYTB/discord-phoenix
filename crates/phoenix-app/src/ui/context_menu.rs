@@ -334,7 +334,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                             .top(z(top))
                             .left_full()
                             .ml(z(-SUB_OVERLAP))
-                            .child(panel_at("context-submenu", 1, items, dismiss.clone())),
+                            .child(gpui::anchored().snap_to_window_with_margin(z(VIEWPORT_PAD)).child(panel_at("context-submenu", 1, items, dismiss.clone()))),
                     );
                 }
                 row(("menu-sub", ix), open || lit, false)

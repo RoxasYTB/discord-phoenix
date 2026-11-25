@@ -300,7 +300,7 @@ pub fn render(p: &Picker, cx: &mut Context<PhoenixApp>) -> AnyElement {
             d.child(div().mt(z(8.)).text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child(crate::t!(k)))
         })
         .when(p.open == Some(1), |d| d.child(div().relative().child(list(time_opts, cx))));
-    let body = div().flex().gap(z(16.)).child(date).child(time);
+    let body = div().flex().gap(z(16.)).pb(z(16.)).child(date).child(time);
     let (channel, at, editing, existing) = (p.channel, p.at, p.editing && p.existing.is_none(), p.existing);
     let close = close_action(cx);
     let secondary = if editing { crate::t!("sched.clear") } else { crate::t!("common.cancel") };

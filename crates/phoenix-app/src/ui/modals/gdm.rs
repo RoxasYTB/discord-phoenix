@@ -567,7 +567,7 @@ pub fn render_folder(f: &Folder, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let big = |n: usize, color: u32, sel: bool, cx: &mut Context<PhoenixApp>| {
         div().relative().flex_1().mt(z(10.)).mr(z(10.)).min_w(z(60.)).max_w(z(70.)).child(swatch(("folder-big", n), color, (70., 50.), sel, cx).w_full())
     };
-    let mut rows = div().flex_1().flex().flex_col();
+    let mut rows = div().w_full().flex_none().flex().flex_col();
     for (r, chunk) in FOLDER_COLORS.chunks(10).enumerate() {
         let mut row = div().flex().mt(z(10.)).h(z(20.));
         for (i, col) in chunk.iter().enumerate() {
