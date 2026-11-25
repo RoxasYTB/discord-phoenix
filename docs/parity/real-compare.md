@@ -67,3 +67,21 @@ Open:
 - Ellipsis one glyph early on texts with an emoji (composer placeholder « hone… » vs « honey… », member group « Dé… » vs « Dév… »): same box widths and glyph positions within 1 device px, so the budget of `truncate_line_end_shaped` (vendor GPUI patch) is a few px smaller than Chromium's. Left to the text owners.
 - Mentioned message background: the token is `--message-mentioned-background-default` = yellow 8 % (computed 0.078 in every dump), but the `vanilla-announcement` capture shows half that on screen (10,6,0 vs Phoenix 19,13,0). Not changed until a live capture of a mentioned message.
 - Hover screenshots: `Page.captureScreenshot` of the live client does not show `:hover` states while the window is not repainted (the DOM shows the bar). Hover values above come from the DOM.
+
+### After (25/11 22:10, same guild route, int-bin 4ea4227b)
+
+| region | before | after |
+|---|---|---|
+| guild rail | 2.2 % | 1.4 % |
+| channel list | 8.2 % | 5.6 % |
+
+The remaining channel list difference is live state: the client's Go Live panel (Phoenix is not streaming), the speaking rings and the voice members joining or leaving between the two captures.
+
+### Still open
+
+| item | client reference | status |
+|---|---|---|
+| DM name with a friend nickname | the 20:55 capture showed "oopi" in the client and "Initial" in Phoenix for the same avatar; the DM row (`tl`, 1b94b2e83f586720.js) reads `RelationshipStore.getNickname(otherUser.id)` | ❌ not checked live (the client left `/channels/@me`) |
+| Group DM status dot | the 20:55 capture shows a status dot on the front avatar of a group DM | ❌ DOM not read |
+| Soundboard "new sounds" dot | blue dot on the panel soundboard button, aria-label "de nouveaux sons sont disponibles" | ❌ needs the seen-sounds state; do not scroll the soundboard popout (it writes settings-proto/1) |
+| Hover roll slide | `.full-motion .default/.hovered { transition: all .22s ease }`, translateY ±107 % | ❌ static swap only |
