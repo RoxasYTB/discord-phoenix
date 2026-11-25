@@ -223,6 +223,14 @@ impl RichDecorations {
         self.spans.is_empty() && self.lines.is_empty()
     }
 
+    pub fn spans(&self) -> &[RichSpan] {
+        &self.spans
+    }
+
+    pub fn lines(&self) -> &[LineStyle] {
+        &self.lines
+    }
+
     pub(crate) fn new(
         text: &Rope,
         mut spans: Vec<RichSpan>,
