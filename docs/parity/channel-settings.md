@@ -15,7 +15,7 @@ Renders: `PHX_OPEN=chansettings[:perms|invites|integrations|webhooks] PHX_CS_CHA
 
 | element | source | values | status |
 |---|---|---|---|
-| regions | `standardSidebarView_jnk11m`, `sidebarRegion_` / `contentRegion_` | sidebar `flex: 1 0 264px` --background-base-lowest, content `flex: 1 1 800px` --background-base-low; < 780px the 30/70 split is not done | ✅ (≥ 780) / ❌ narrow split |
+| regions | `standardSidebarView_jnk11m`, `sidebarRegion_` / `contentRegion_` | sidebar `flex: 1 0 264px` --background-base-lowest, content `flex: 1 1 800px` --background-base-low; below 780 CSS px (measured at 779/760/640 in `dumps/finset/narrow-*.json`) sidebar 30 % / content 70 %, nav = region − 8, column `flex: 0 0 100%` minus the 16px gutter, close tools absolute 16px from the right | ✅ (`settings_layout::is_narrow`) |
 | sidebar nav | `sidebar_jnk11m` | padding 60 6 60 20, width 264 | ✅ |
 | header | `header_6zZYhF`, `header_EMttMj` | 10 10 8, channel icon 12 + mr 4, name body-sm/medium --text-muted, category body-xs/semibold --text-default ml 4 | ✅ |
 | items | `item_6zZYhF side` + `leadingIconRow_QdesSd` | 40 high, p10, mb4, r8, icon 20 gap 10, 16/20 500; --text-subtle, hover --background-mod-subtle/--text-strong, active and selected --background-mod-strong; destructive --text-feedback-critical, hover --background-feedback-mod-critical | ✅ |
@@ -29,8 +29,8 @@ Renders: `PHX_OPEN=chansettings[:perms|invites|integrations|webhooks] PHX_CS_CHA
 
 | field | types | source | status |
 |---|---|---|---|
-| name | all | `container_VhFsFg` label 16/20 500, input 40 r8 | ✅ (emoji button missing ❌) |
-| topic / post guidelines | text, news, forum | `staticToolbar_hPmUPu` 32 (Bold, Italic, Underline, Strike, [Quote, Code for forum], Spoiler), area 202 high, counter 1024 / 4096 body-sm/semibold | ✅ toolbar wraps the selection |
+| name | all | `container_VhFsFg` label 16/20 500, input 40 r8, trailing `emojiButton_ETPWMZ` 30×18 pr 12 in a 32×30 icon box | ✅ emoji button opens the picker (`EmojiTarget::Field(ChannelName)`, unicode inserted at the cursor) |
+| topic / post guidelines | text, news, forum | `staticToolbar_hPmUPu` 32 (Bold, Italic, Underline, Strike, [Quote, Code for forum], Spoiler), trailing emoji button 26×32 pr 8, area 202 high, counter 1024 / 4096 body-sm/semibold | ✅ toolbar wraps the selection, emoji inserted at the cursor (custom emoji as `<:name:id>`) |
 | slowmode | text, voice, stage | select, 14 values (Off … 6 h), helper body-xs | ✅ |
 | forum slowmode | forum | legend 20/24 + Posts / Messages selects (`rate_limit_per_user`, `default_thread_rate_limit_per_user`) | ✅ |
 | content visibility | all but category | radio group: Default / Spoiler (flag `IS_SPOILER_CHANNEL` 1<<21) / Age-restricted (`nsfw`) | ✅ |
@@ -40,9 +40,9 @@ Renders: `PHX_OPEN=chansettings[:perms|invites|integrations|webhooks] PHX_CS_CHA
 | video quality | voice, stage | radio Auto / 720p (`video_quality_mode`) | ✅ |
 | user limit | voice (0–99), stage (0–10000) | slider ∞ … max | ✅ |
 | region override | voice | select Automatic + 12 regions from `GET /voice/regions` | ✅ |
-| forum tags / default reaction | forum | tag chips, "Create Tag", "Require tags" checkbox (flag 1<<4), emoji buttons | ⚠ tag editor and emoji picker not wired |
-| default layout / sort / tag matching | forum | selects | ✅ (the preview image next to the layout is missing) |
-| bottom illustration | text | 280×165 image under the form | ❌ asset not loaded |
+| forum tags / default reaction | forum | `pill_snX-u4` chips (32, r20, control-secondary, 14/18 600), `addTags_EHey4f` 30 round brand + PlusIcon, "Require tags" checkbox (flag 1<<4); Create/Edit Tag modal (`dumps/finset/tag-create.json`, `tag-edit.json`: 480, subtitle, emoji + name input max 20, "moderated" checkbox, Remove Tag critical-secondary in edit); default reaction: Select Emoji (primary) + Remove text button, preview card `container_oEcaml` 360 (placeholder lines 254/204/127/153, media 64, reaction chip + count) | ✅ `available_tags` / `default_reaction_emoji` sent in the PATCH only when changed (`forum_extras`, tested); not executed live (no forum among the test channels) |
+| default layout / sort / tag matching | forum | selects; layout preview `defaultImageView_ETPWMZ` 272×143 = the client's inline SVGs `nU` (list) / `nk` (gallery) from `e751ad05577cfaf5.js`, drawn as an SVG image in --text-subtle | ✅ |
+| bottom illustration | all but voice | `assets/b00bbf36ff21d401.svg` 280×165, centred, mt 60 (live `img.src`, 2026-11-25) | ✅ loaded from discord.com/assets at runtime |
 
 Save: `PATCH /channels/{id}` with the client's body, measured live on #phoenix (slowmode 0 → 5 → 0):
 `{"name","type","topic","bitrate","user_limit","nsfw","flags","rate_limit_per_user"}` plus the changed extras
@@ -66,16 +66,16 @@ Save: `PATCH /channels/{id}` with the client's body, measured live on #phoenix (
 
 | element | status |
 |---|---|
-| Invites: description with link, Pause Invites (sm critical), divider, table (inviter, code, uses, expiry, revoke) | ✅ (empty on #phoenix; pause modal not done ❌) |
+| Invites: description with link, Pause Invites (sm critical), divider, table (inviter, code, uses, expiry, revoke) | ✅ Pause Invites opens the client's Security Actions modal (`fc9b8e4a746831a7.js`, dump `dumps/finset/pause-invites.json`): 480, duration select 1/2/4/6/12/24 h (default 2 or the incident's `lockdownDurationHours`), two `pauseContainer__lF4Mf` cards with switches, Cancel / Save (disabled until changed); `PUT /guilds/{id}/incident-actions {invites_disabled_until, dms_disabled_until, lockdown_duration_hours}` coded and tested, never executed (server-level write) |
 | Integrations: description, divider 32, Webhooks / Channels Followed cards (`card_ZjaEbs` surface-high r8 p 20 16, icon 48 round, 16/20 500 + 12/16 count) | ✅ |
-| Webhooks page: breadcrumb, description, New Webhook, "Posting to #channel", collapsible rows (avatar 48, name, ClockIcon + "Created on … by …"), expanded avatar 100 + min size, Name / Channel, Copy URL, Delete | ✅ (avatar upload and channel move ❌) |
+| Webhooks page: breadcrumb, description, New Webhook, "Posting to #channel", collapsible rows (avatar 48, name, ClockIcon + "Created on … by …"), expanded avatar uploader (`imageUploaderInner_zIVMHF` 100 r12, default `2ccd8ae8b2379360.png`, 28px badge `6ca913b246a05ffc.svg`, hover hint "Changer\nl'avatar" on --opacity-black-76, "Minimum size: **128 x 128**"), Name / Channel, Copy URL, Delete | ✅ avatar picked through the xdg portal, sent as a data URI with the name in `PATCH /webhooks/{id}`; ❌ channel move |
 | create / rename / delete | `POST /channels/{c}/webhooks {name}`, `PATCH /webhooks/{id} {name}`, `DELETE /webhooks/{id}` | ✅ tested live (below) |
 
 ## Delete, category, create
 
 | element | status |
 |---|---|
-| delete channel modal: 400 wide, title 20/24 600, body 16/20, Cancel / Delete (critical) full width | ✅ never confirmed live |
+| delete channel modal: 400 wide, title 20/24 600, body 16/20 with the `#name` in a 600 `<strong>`, Cancel / Delete (critical) full width | ✅ never confirmed live |
 | category settings: Overview (name only) + Permissions ("Category permissions", category matrix, private category texts) | ✅ read-only live |
 | create channel: 480 card, "in <category>", Channel Type radios with leading icons (radio 0, icon 32, label 56, description ml −24), name with type icon, Private (lock 16) + description, Discoverable "None", Cancel / Create (Next when private), member step (shared picker, Back / Skip) | ✅ creation never executed live |
 | menus: Edit Channel, Clone, Create Text Channel, Edit Category, Delete | ✅ (already wired, see context-menus.md) |
@@ -93,7 +93,4 @@ members modal and the delete modal were rendered and compared by eye with the du
 positions within a few px. `real_shots` lets the read-only admin GETs through (`ReadOnly::action`), everything
 else stays denied. `PHX_CS_ADD=1`, `PHX_CS_DELETE=1`, `PHX_CS_HOOK=<id>` open the sub-views.
 
-Still open: the < 780 px 30/70 split, the name emoji button, the topic emoji button, the forum tag editor and
-default reaction picker, the forum layout preview image, the text-channel illustration, the expanded webhook
-avatar (client: 100px square r12, Phoenix: round) and its upload, Pause Invites modal, the bold channel name in
-the delete body. The followed-channels page was not seen live (no followed channel on the test channels).
+Still open: moving a webhook to another channel; the tag editor and default reaction were not saved live (no forum test channel). The followed-channels page was not seen live (no followed channel on the test channels).

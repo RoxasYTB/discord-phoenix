@@ -59,6 +59,8 @@ fn trend(delta: Option<f64>) -> gpui::Div {
 fn stat(title_key: &str, value: String, delta: Option<f64>, info: bool, left: bool) -> gpui::Div {
     div()
         .flex_1()
+        .flex_basis(z(0.))
+        .min_w_0()
         .mt(z(16.))
         .when(!left, |d| d.ml(z(16.)))
         .p(z(16.))
