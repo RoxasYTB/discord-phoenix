@@ -175,7 +175,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
     }
     let nobody = open_thread(app).and_then(|t| app.people.thread_lists.get(&t)).is_some_and(|v| v.is_empty());
     div()
-        .w(z(m::member_list_w()))
+        .w(z(m::member_list_w()) + px(1.))
         .flex_none()
         .h_full()
         .relative()
