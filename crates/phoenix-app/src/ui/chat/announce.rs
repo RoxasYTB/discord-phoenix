@@ -444,7 +444,13 @@ pub fn render(app: &PhoenixApp, channel: Id, window: &mut Window, cx: &mut Conte
                 .line_height(z(28.))
                 .font_weight(FontWeight::BOLD)
                 .text_color(c(tok(idx::TEXT_STRONG)))
-                .child(gpui_component::input::Input::new(&title_box).appearance(false).bordered(false)),
+                .child(
+                    gpui_component::input::Input::new(&title_box)
+                        .appearance(false)
+                        .bordered(false)
+                        .text_size(z(20.))
+                        .line_height(z(28.)),
+                ),
         );
     let header = if open {
         header

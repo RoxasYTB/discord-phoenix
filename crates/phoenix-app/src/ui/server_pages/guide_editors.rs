@@ -29,10 +29,11 @@ pub const MAX_RESOURCES: usize = 7;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Editor {
     Welcome { author: Option<String> },
-    Task { index: Option<usize>, channel: Option<String>, action: Option<u64>, emoji: Value },
-    Resource { index: Option<usize>, channel: Option<String> },
+    Task { index: Option<usize>, channel: Option<String>, action: Option<u64>, emoji: Value, icon_path: Option<std::path::PathBuf>, icon_data: Option<String>, thumb_menu: bool },
+    Resource { index: Option<usize>, channel: Option<String>, icon_path: Option<std::path::PathBuf>, icon_data: Option<String> },
     Answer { prompt: String, index: Option<usize>, channels: Vec<String>, roles: Vec<String>, emoji: Value, title_error: bool },
     Unlock { review: bool, selected: Vec<String> },
+    BoostUpsell,
 }
 
 thread_local! {
@@ -124,13 +125,43 @@ pub fn open_task(guild: Id, home: &Value, index: Option<usize>) {
             channel: a.get("channel_id").and_then(Value::as_str).map(str::to_owned),
             action: a.get("action_type").and_then(Value::as_u64),
             emoji: a.get("emoji").cloned().unwrap_or(Value::Null),
+            icon_path: None,
+            icon_data: None,
+            thumb_menu: false,
         },
     );
 }
 
 pub fn open_resource(guild: Id, home: &Value, index: Option<usize>) {
     let r = index.and_then(|i| home.get("resource_channels")?.get(i).cloned()).unwrap_or(Value::Null);
-    open(guild, Editor::Resource { index, channel: r.get("channel_id").and_then(Value::as_str).map(str::to_owned) });
+    open(
+        guild,
+        Editor::Resource {
+            index,
+            channel: r.get("channel_id").and_then(Value::as_str).map(str::to_owned),
+            icon_path: None,
+            icon_data: None,
+        },
+    );
+}
+
+pub fn open_boost_upsell(guild: Id) {
+    open(guild, Editor::BoostUpsell);
+}
+
+pub fn pick_emoji(val: Value) {
+    update(|e| match e {
+        Editor::Task { emoji, icon_path, icon_data, thumb_menu, .. } => {
+            *emoji = val;
+            *icon_path = None;
+            *icon_data = None;
+            *thumb_menu = false;
+        }
+        Editor::Answer { emoji, .. } => {
+            *emoji = val;
+        }
+        _ => {}
+    });
 }
 
 pub fn open_answer(guild: Id, prompt: &ob::Prompt, index: Option<usize>) {
@@ -435,31 +466,108 @@ pub fn modal(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> Optio
     let d = data(app, guild, cx)?;
     Some(match ed {
         Editor::Welcome { author } => welcome(app, guild, &d, author, cx),
-        Editor::Task { index, channel, action, emoji } => task(guild, &d, index, channel, action, emoji, cx),
-        Editor::Resource { index, channel } => resource(guild, &d, index, channel, cx),
+        Editor::Task { index, channel, action, emoji, icon_path, icon_data, thumb_menu } => task(guild, &d, index, channel, action, emoji, icon_path, icon_data, thumb_menu, cx),
+        Editor::Resource { index, channel, icon_path, icon_data } => resource(guild, &d, index, channel, icon_path, icon_data, cx),
         Editor::Answer { prompt, index, channels, roles, emoji, title_error } => answer(guild, &d, &prompt, index, channels, roles, emoji, title_error, cx),
         Editor::Unlock { review, selected } => unlock(&d, review, selected, cx),
+        Editor::BoostUpsell => boost_upsell(cx),
     })
 }
 
-fn author_options(app: &PhoenixApp, d: &Data) -> Vec<(String, SharedString, Option<&'static str>)> {
-    let owner = str_of(&d.guild, "owner_id").to_owned();
-    let mut ids = vec![owner];
-    let me = app.me.id.0.to_string();
-    if !ids.contains(&me) && ob::can_manage(app, &d.guild) {
-        ids.push(me);
+pub const DANGEROUS_PERMS: &[(u64, &str)] = &[
+    (1 << 3, "Administrator"),
+    (1 << 1, "Kick Members"),
+    (1 << 2, "Ban Members"),
+    (1 << 5, "Manage Server"),
+    (1 << 4, "Manage Channels"),
+    (1 << 28, "Manage Roles"),
+    (1 << 13, "Manage Messages"),
+    (1 << 30, "Manage Expressions"),
+    (1 << 43, "Create Expressions"),
+    (1 << 33, "Manage Events"),
+    (1 << 44, "Create Events"),
+    (1 << 40, "Timeout Members"),
+    (1 << 17, "Mention @everyone"),
+    (1 << 49, "Manage Official Messages"),
+];
+
+fn role_perm_bits(v: &Value) -> u64 {
+    v.get("permissions")
+        .and_then(|p| p.as_str().and_then(|s| s.parse().ok()).or_else(|| p.as_u64()))
+        .unwrap_or(0)
+}
+
+pub fn dangerous_role_perms(guild: &Value, role_ids: &[String]) -> Option<Vec<&'static str>> {
+    let roles = guild.get("roles").and_then(Value::as_array)?;
+    let mask: u64 = DANGEROUS_PERMS.iter().fold(0, |acc, (b, _)| acc | b);
+    for id in role_ids {
+        let Some(role) = roles.iter().find(|r| str_of(r, "id") == id) else { continue };
+        let bits = role_perm_bits(role);
+        if bits & mask != 0 {
+            let names: Vec<&'static str> = DANGEROUS_PERMS.iter().filter(|(b, _)| bits & b != 0).map(|(_, n)| *n).collect();
+            if !names.is_empty() {
+                return Some(names);
+            }
+        }
     }
-    ids.into_iter()
-        .filter(|i| !i.is_empty())
-        .map(|i| {
-            let name = i
-                .parse::<u64>()
-                .ok()
-                .and_then(|n| if n == app.me.id.0 { Some(app.me.display_name.clone()) } else { app.users.get(&Id(n)).map(|u| u.display_name.clone()) })
-                .unwrap_or_else(|| SharedString::from(i.clone()));
-            (i, name, None)
-        })
-        .collect()
+    None
+}
+
+pub fn member_can_author(guild: &Value, user_id: &str, role_ids: &[Id]) -> bool {
+    use crate::actions::{MANAGE_GUILD, MANAGE_ROLES};
+    if !user_id.is_empty() && str_of(guild, "owner_id") == user_id {
+        return true;
+    }
+    let mut perms = ob::everyone_perms(guild);
+    if let Some(roles) = guild.get("roles").and_then(Value::as_array) {
+        for rid in role_ids {
+            let rstr = rid.0.to_string();
+            if let Some(role) = roles.iter().find(|r| str_of(r, "id") == rstr) {
+                perms |= role_perm_bits(role);
+            }
+        }
+    }
+    perms & ob::ADMINISTRATOR != 0 || (perms & MANAGE_GUILD != 0 && perms & MANAGE_ROLES != 0)
+}
+
+fn author_options(app: &PhoenixApp, d: &Data) -> Vec<(String, SharedString, Option<&'static str>)> {
+    let gid = str_of(&d.guild, "id").parse::<u64>().ok().map(Id);
+    let mut out: Vec<(String, SharedString, Option<&'static str>)> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let push = |out: &mut Vec<(String, SharedString, Option<&'static str>)>, seen: &mut std::collections::HashSet<String>, id: String, label: SharedString| {
+        if !id.is_empty() && seen.insert(id.clone()) {
+            out.push((id, label, None));
+        }
+    };
+    if let Some(g) = gid
+        && let Some(members) = app.members.get(&g)
+    {
+        for m in members {
+            let uid = m.user.0.to_string();
+            if member_can_author(&d.guild, &uid, &m.roles) {
+                let label = m
+                    .nick
+                    .clone()
+                    .or_else(|| if m.user == app.me.id { Some(app.me.display_name.clone()) } else { app.users.get(&m.user).map(|u| u.display_name.clone()) })
+                    .unwrap_or_else(|| SharedString::from(uid.clone()));
+                push(&mut out, &mut seen, uid, label);
+            }
+        }
+    }
+    let owner = str_of(&d.guild, "owner_id").to_owned();
+    if !owner.is_empty() && !seen.contains(&owner) {
+        let name = owner
+            .parse::<u64>()
+            .ok()
+            .and_then(|n| if n == app.me.id.0 { Some(app.me.display_name.clone()) } else { app.users.get(&Id(n)).map(|u| u.display_name.clone()) })
+            .unwrap_or_else(|| SharedString::from(owner.clone()));
+        push(&mut out, &mut seen, owner, name);
+    }
+    let me = app.me.id.0.to_string();
+    if !seen.contains(&me) && ob::can_manage(app, &d.guild) {
+        push(&mut out, &mut seen, me, app.me.display_name.clone());
+    }
+    out
 }
 
 fn welcome(app: &PhoenixApp, guild: Id, d: &Data, author: Option<String>, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -516,8 +624,60 @@ fn welcome(app: &PhoenixApp, guild: Id, d: &Data, author: Option<String>, cx: &m
     crate::ui::modals::card_with(480., crate::t!("obe.welcome_title"), None, body.into_any_element(), Some(footer), close_action(cx))
 }
 
+fn prompt_thumb_image(is_task: bool, cx: &mut Context<PhoenixApp>) {
+    let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+        files: true,
+        directories: false,
+        multiple: false,
+        prompt: Some(crate::t!("obe.thumb_upload_image")),
+    });
+    cx.spawn(async move |this, cx| {
+        let Ok(Ok(Some(paths))) = rx.await else { return };
+        let Some(path) = paths.into_iter().next() else { return };
+        let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            "gif" => "image/gif",
+            _ => return,
+        };
+        let Ok(bytes) = std::fs::read(&path) else { return };
+        use base64::Engine as _;
+        let data_uri = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+        let _ = this.update(cx, |_, cx| {
+            update(|e| match e {
+                Editor::Task { emoji, icon_path, icon_data, thumb_menu, .. } if is_task => {
+                    *emoji = Value::Null;
+                    *icon_path = Some(path);
+                    *icon_data = Some(data_uri);
+                    *thumb_menu = false;
+                }
+                Editor::Resource { icon_path, icon_data, .. } if !is_task => {
+                    *icon_path = Some(path);
+                    *icon_data = Some(data_uri);
+                }
+                _ => {}
+            });
+            cx.notify();
+        });
+    })
+    .detach();
+}
+
 #[allow(clippy::too_many_arguments)]
-fn task(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, action: Option<u64>, emoji: Value, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn task(
+    guild: Id,
+    d: &Data,
+    index: Option<usize>,
+    channel: Option<String>,
+    action: Option<u64>,
+    emoji: Value,
+    icon_path: Option<std::path::PathBuf>,
+    _icon_data: Option<String>,
+    thumb_menu: bool,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let existing = index.and_then(|i| d.home.get("new_member_actions")?.get(i).cloned());
     let initial = existing.as_ref().map(|a| str_of(a, "title").to_owned()).unwrap_or_default();
     let title = super::value(guild, "obe-task-title", cx).unwrap_or_else(|| initial.clone());
@@ -578,18 +738,139 @@ fn task(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, acti
     };
     let title_err = task_title_error(&title);
     let ok = !title.is_empty() && action.is_some() && channel.is_some() && !title_err && action_err.is_none();
+    let has_thumb = !emoji.is_null() || icon_path.is_some();
+    let thumb_btn = div()
+        .id("obe-task-thumb")
+        .relative()
+        .cursor_pointer()
+        .when(has_thumb, |dv| {
+            dv.p(z(8.))
+                .rounded(z(12.))
+                .bg(t(idx::BACKGROUND_MOD_SUBTLE))
+                .child(
+                    div()
+                        .size(z(56.))
+                        .rounded(z(8.))
+                        .overflow_hidden()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(if let Some(p) = icon_path.clone() {
+                            gpui::img(p).size(z(56.)).object_fit(gpui::ObjectFit::Cover).into_any_element()
+                        } else {
+                            ob::emoji_el(&emoji)
+                        }),
+                )
+        })
+        .when(!has_thumb, |dv| {
+            dv.size(z(40.))
+                .rounded(z(8.))
+                .border_1()
+                .border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
+                .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(icon("image-plus", 20., idx::CONTROL_SECONDARY_TEXT_DEFAULT))
+        })
+        .on_click(cx.listener(|_, _, _, cx| {
+            update(|e| {
+                if let Editor::Task { thumb_menu, .. } = e {
+                    *thumb_menu = !*thumb_menu;
+                }
+            });
+            cx.notify();
+        }));
+    let mut thumb_wrap = div().relative().child(thumb_btn);
+    if thumb_menu {
+        let mut menu = div()
+            .id("obe-task-thumb-menu")
+            .occlude()
+            .w(z(180.))
+            .p(z(6.))
+            .rounded(z(8.))
+            .border_1()
+            .border_color(t(idx::BORDER_SUBTLE))
+            .bg(t(idx::BACKGROUND_SURFACE_HIGHER))
+            .shadow(vec![gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.24), offset: gpui::point(z(0.), z(4.)), blur_radius: z(12.), spread_radius: z(0.), inset: false }])
+            .flex()
+            .flex_col()
+            .gap(z(2.))
+            .child(
+                div()
+                    .id("obe-thumb-emoji")
+                    .px(z(8.))
+                    .py(z(6.))
+                    .rounded(z(4.))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(t(idx::BACKGROUND_MOD_SUBTLE)))
+                    .flex()
+                    .items_center()
+                    .gap(z(8.))
+                    .child(icon("emoji", 16., idx::INTERACTIVE_TEXT_DEFAULT))
+                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("obe.thumb_choose_emoji")))
+                    .on_click(cx.listener(|a, _, w, cx| {
+                        update(|e| {
+                            if let Editor::Task { thumb_menu, .. } = e {
+                                *thumb_menu = false;
+                            }
+                        });
+                        crate::ui::pickers::open(a, crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::GuideTask, w, cx);
+                    })),
+            )
+            .child(
+                div()
+                    .id("obe-thumb-upload")
+                    .px(z(8.))
+                    .py(z(6.))
+                    .rounded(z(4.))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(t(idx::BACKGROUND_MOD_SUBTLE)))
+                    .flex()
+                    .items_center()
+                    .gap(z(8.))
+                    .child(icon("chat/upload", 16., idx::INTERACTIVE_TEXT_DEFAULT))
+                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("obe.thumb_upload_image")))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        prompt_thumb_image(true, cx);
+                    })),
+            );
+        if has_thumb {
+            menu = menu.child(
+                div()
+                    .id("obe-thumb-clear")
+                    .px(z(8.))
+                    .py(z(6.))
+                    .rounded(z(4.))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(t(idx::BACKGROUND_MOD_SUBTLE)))
+                    .flex()
+                    .items_center()
+                    .gap(z(8.))
+                    .child(icon("chat/trash", 16., idx::TEXT_FEEDBACK_CRITICAL))
+                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_FEEDBACK_CRITICAL, crate::t!("obe.remove")))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        update(|e| {
+                            if let Editor::Task { emoji, icon_path, icon_data, thumb_menu, .. } = e {
+                                *emoji = Value::Null;
+                                *icon_path = None;
+                                *icon_data = None;
+                                *thumb_menu = false;
+                            }
+                        });
+                        cx.notify();
+                    })),
+            );
+        }
+        thumb_wrap = thumb_wrap.child(deferred(div().absolute().top(z(44.)).right_0().child(menu)).with_priority(45));
+    }
     let thumb = div()
         .flex()
         .justify_between()
+        .items_center()
         .child(group().gap(z(0.)).child(heading(crate::t!("obe.task_thumb"), false)).child(hint(crate::t!("obe.thumb_hint"))))
-        .child(
-            div()
-                .id("obe-task-thumb")
-                .when(!emoji.is_null(), |dv| dv.p(z(8.)).rounded(z(12.)).bg(t(idx::BACKGROUND_MOD_SUBTLE)).child(div().size(z(56.)).flex().items_center().justify_center().child(ob::emoji_el(&emoji))))
-                .when(emoji.is_null(), |dv| {
-                    dv.size(z(40.)).rounded(z(8.)).border_1().border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT)).bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT)).flex().items_center().justify_center().child(icon("image-plus", 20., idx::CONTROL_SECONDARY_TEXT_DEFAULT))
-                }),
-        );
+        .child(thumb_wrap);
     let body = div()
         .flex()
         .flex_col()
@@ -625,10 +906,12 @@ fn task(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, acti
     });
     let prev = existing.clone();
     let save = move |_: &mut PhoenixApp, cx: &mut Context<PhoenixApp>| {
-        let Some((_, Editor::Task { channel: Some(ch), action: Some(act), emoji, .. })) = current() else { return };
+        let Some((_, Editor::Task { channel: Some(ch), action: Some(act), emoji, icon_data, .. })) = current() else { return };
         let title = clip(&super::value(guild, "obe-task-title", cx).unwrap_or_default(), TASK_TITLE_MAX);
         let mut entry = json!({ "channel_id": ch, "action_type": act, "title": title, "description": "", "emoji": emoji });
-        if let Some(icon) = prev.as_ref().and_then(|p| p.get("icon")).filter(|i| !i.is_null()) {
+        if let Some(icon) = icon_data {
+            entry["icon"] = json!(icon);
+        } else if let Some(icon) = prev.as_ref().and_then(|p| p.get("icon")).filter(|i| !i.is_null()) {
             entry["icon"] = icon.clone();
         }
         ob::edit_home(guild, |h| {
@@ -648,7 +931,15 @@ fn task(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, acti
     crate::ui::modals::card_with(480., crate::t!("obe.task_title"), None, body.into_any_element(), Some(footer), close_action(cx))
 }
 
-fn resource(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn resource(
+    guild: Id,
+    d: &Data,
+    index: Option<usize>,
+    channel: Option<String>,
+    icon_path: Option<std::path::PathBuf>,
+    _icon_data: Option<String>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let existing = index.and_then(|i| d.home.get("resource_channels")?.get(i).cloned());
     let init_title = existing.as_ref().map(|r| str_of(r, "title").to_owned()).unwrap_or_default();
     let init_desc = existing.as_ref().map(|r| str_of(r, "description").to_owned()).unwrap_or_default();
@@ -670,31 +961,46 @@ fn resource(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, 
             *channel = Some(id);
         }
     }));
+    let existing_icon_url = existing.as_ref().and_then(|r| {
+        let ch_id = str_of(r, "channel_id");
+        let ic = r.get("icon").and_then(Value::as_str)?;
+        (!ch_id.is_empty() && !ic.is_empty() && !ic.starts_with("data:")).then(|| SharedString::from(format!("https://cdn.discordapp.com/channel-icons/{ch_id}/{ic}.webp?size=96")))
+    });
+    let mut thumb_box = div()
+        .id("obe-res-thumb")
+        .group("obe-res-thumb")
+        .relative()
+        .overflow_hidden()
+        .size(z(72.))
+        .rounded(z(4.))
+        .border_1()
+        .border_color(t(idx::BACKGROUND_BASE_LOWEST))
+        .bg(t(idx::BACKGROUND_MOD_NORMAL))
+        .cursor_pointer()
+        .on_click(cx.listener(|_, _, _, cx| {
+            prompt_thumb_image(false, cx);
+        }));
+    if let Some(p) = icon_path {
+        thumb_box = thumb_box.child(gpui::img(p).size(z(72.)).object_fit(gpui::ObjectFit::Cover));
+    } else if let Some(u) = existing_icon_url {
+        thumb_box = thumb_box.child(gpui::img(u).size(z(72.)).object_fit(gpui::ObjectFit::Cover));
+    }
+    thumb_box = thumb_box.child(
+        div()
+            .absolute()
+            .top(z(24.))
+            .left(z(24.))
+            .size(z(24.))
+            .rounded(z(4.))
+            .bg(t(idx::BACKGROUND_MOD_NORMAL))
+            .group_hover("obe-res-thumb", |s| s.bg(t(idx::BACKGROUND_SURFACE_HIGH)))
+            .child(icon("chat/upload", 24., idx::INTERACTIVE_TEXT_DEFAULT)),
+    );
     let thumb = div()
         .flex()
         .justify_between()
         .child(group().gap(z(0.)).child(heading(crate::t!("obe.res_thumb"), false)).child(hint(crate::t!("obe.thumb_hint"))))
-        .child(
-            div()
-                .id("obe-res-thumb")
-                .group("obe-res-thumb")
-                .relative()
-                .size(z(72.))
-                .rounded(z(4.))
-                .border_1()
-                .border_color(t(idx::BACKGROUND_BASE_LOWEST))
-                .bg(t(idx::BACKGROUND_MOD_NORMAL))
-                .child(
-                    div()
-                        .absolute()
-                        .top(z(24.))
-                        .left(z(24.))
-                        .size(z(24.))
-                        .bg(t(idx::BACKGROUND_MOD_NORMAL))
-                        .group_hover("obe-res-thumb", |s| s.bg(t(idx::BACKGROUND_SURFACE_HIGH)))
-                        .child(icon("chat/upload", 24., idx::INTERACTIVE_TEXT_DEFAULT)),
-                ),
-        );
+        .child(thumb_box);
     let body = div()
         .flex()
         .flex_col()
@@ -726,11 +1032,13 @@ fn resource(guild: Id, d: &Data, index: Option<usize>, channel: Option<String>, 
     });
     let prev = existing.clone();
     let save = move |_: &mut PhoenixApp, cx: &mut Context<PhoenixApp>| {
-        let Some((_, Editor::Resource { channel: Some(ch), .. })) = current() else { return };
+        let Some((_, Editor::Resource { channel: Some(ch), icon_data, .. })) = current() else { return };
         let title = clip(&super::value(guild, "obe-res-title", cx).unwrap_or_default(), RES_TITLE_MAX);
         let desc = clip(&super::area_value(guild, "obe-res-desc", cx).unwrap_or_default(), RES_DESC_MAX);
         let mut entry = json!({ "channel_id": ch, "title": title, "description": desc, "emoji": Value::Null });
-        if let Some(icon) = prev.as_ref().and_then(|p| p.get("icon")).filter(|i| !i.is_null()) {
+        if let Some(icon) = icon_data {
+            entry["icon"] = json!(icon);
+        } else if let Some(icon) = prev.as_ref().and_then(|p| p.get("icon")).filter(|i| !i.is_null()) {
             entry["icon"] = icon.clone();
         }
         ob::edit_home(guild, |h| {
@@ -787,20 +1095,63 @@ fn answer(guild: Id, d: &Data, prompt: &str, index: Option<usize>, channels: Vec
         }
     }));
     let subtitle = if p.title.is_empty() { crate::t!("obe.answer_default_q") } else { SharedString::from(p.title.clone()) };
+    let dangerous = dangerous_role_perms(&d.guild, &roles);
+    let has_emoji = !emoji.is_null();
     let emoji_box = div()
-        .id("obe-answer-emoji")
+        .id("obe-answer-emoji-wrap")
+        .group("obe-answer-emoji-wrap")
         .relative()
         .flex_none()
-        .overflow_hidden()
-        .size(z(40.))
-        .rounded(z(4.))
-        .border_1()
-        .border_color(t(idx::BACKGROUND_BASE_LOWEST))
-        .bg(t(idx::BACKGROUND_MOD_NORMAL))
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(if emoji.is_null() { icon("emoji", 20., idx::INTERACTIVE_TEXT_DEFAULT).into_any_element() } else { ob::emoji_el(&emoji) });
+        .child(
+            div()
+                .id("obe-answer-emoji")
+                .relative()
+                .flex_none()
+                .overflow_hidden()
+                .size(z(40.))
+                .rounded(z(4.))
+                .border_1()
+                .border_color(t(idx::BACKGROUND_BASE_LOWEST))
+                .bg(t(idx::BACKGROUND_MOD_NORMAL))
+                .hover(|s| s.bg(t(idx::BACKGROUND_SURFACE_HIGH)))
+                .cursor_pointer()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(if !has_emoji { icon("emoji", 20., idx::INTERACTIVE_TEXT_DEFAULT).into_any_element() } else { ob::emoji_el(&emoji) })
+                .on_click(cx.listener(|a, _, w, cx| {
+                    crate::ui::pickers::open(a, crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::GuideAnswer, w, cx);
+                })),
+        )
+        .when(has_emoji, |dv| {
+            dv.child(
+                div()
+                    .id("obe-answer-emoji-clear")
+                    .absolute()
+                    .top(z(-6.))
+                    .right(z(-6.))
+                    .size(z(18.))
+                    .rounded_full()
+                    .bg(t(idx::BACKGROUND_SURFACE_HIGHEST))
+                    .border_1()
+                    .border_color(t(idx::BORDER_SUBTLE))
+                    .invisible()
+                    .group_hover("obe-answer-emoji-wrap", |s| s.visible())
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(icon("close", 10., idx::INTERACTIVE_TEXT_DEFAULT))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        update(|e| {
+                            if let Editor::Answer { emoji, .. } = e {
+                                *emoji = Value::Null;
+                            }
+                        });
+                        cx.notify();
+                    })),
+            )
+        });
     let body = div()
         .flex()
         .flex_col()
@@ -820,7 +1171,31 @@ fn answer(guild: Id, d: &Data, prompt: &str, index: Option<usize>, channels: Vec
                 .child(select("ans-channels", channel_opts, &channels, true, crate::t!("obe.answer_channels"), pick_ch, cx))
                 .child(hint(crate::t!("obe.answer_channels_hint")))
                 .child(select("ans-roles", role_opts, &roles, true, crate::t!("obe.answer_roles"), pick_role, cx))
-                .child(hint(crate::t!("obe.answer_roles_hint"))),
+                .child(hint(crate::t!("obe.answer_roles_hint")))
+                .when_some(dangerous, |dv, perms| {
+                    dv.child(
+                        div()
+                            .mt(z(8.))
+                            .p(z(12.))
+                            .rounded(z(8.))
+                            .border_1()
+                            .border_color(t(idx::STATUS_DANGER_BACKGROUND))
+                            .bg(t(idx::BACKGROUND_MOD_SUBTLE))
+                            .flex()
+                            .items_start()
+                            .gap(z(8.))
+                            .child(div().flex_none().pt(z(1.)).child(icon("circle-error", 20., idx::TEXT_FEEDBACK_CRITICAL)))
+                            .child(
+                                div().flex_1().min_w_0().child(text(
+                                    14.,
+                                    18.,
+                                    FontWeight::NORMAL,
+                                    idx::TEXT_DEFAULT,
+                                    crate::t!("obe.answer_dangerous_role", permissions = perms.join(", ")),
+                                )),
+                            ),
+                    )
+                }),
         )
         .child(div().w_full().h(z(1.)).bg(t(idx::BORDER_SUBTLE)))
         .child(
@@ -1049,6 +1424,42 @@ fn unlock(d: &Data, review: bool, selected: Vec<String>, cx: &mut Context<Phoeni
     crate::ui::modals::card_with(480., crate::t!("obe.unlock_review_title"), Some(crate::t!("obe.unlock_review_sub")), body.into_any_element(), Some(footer.into_any_element()), close_action(cx))
 }
 
+fn boost_upsell(cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let body = div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(z(16.))
+        .py(z(16.))
+        .child(
+            div()
+                .size(z(64.))
+                .rounded_full()
+                .bg(t(idx::BACKGROUND_MOD_SUBTLE))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(icon("boost", 32., idx::GUILD_BOOSTING_PINK)),
+        )
+        .child(div().text_center().child(text(14., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("obe.boost_upsell_body"))));
+    let footer = div()
+        .w_full()
+        .flex()
+        .justify_end()
+        .gap(z(8.))
+        .child(button("obe-boost-close", crate::t!("common.close"), BtnKind::Secondary).on_click(cx.listener(|_, _, _, cx| {
+            close();
+            cx.notify();
+        })))
+        .child(
+            crate::ui::controls::button_icon("obe-boost-cta", "boost", crate::t!("obe.boost_upsell_cta"), BtnKind::Expressive).on_click(cx.listener(|_, _, _, cx| {
+                close();
+                cx.notify();
+            })),
+        );
+    crate::ui::modals::card_with(440., crate::t!("obe.boost_upsell_title"), None, body.into_any_element(), Some(footer.into_any_element()), close_action(cx))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1112,5 +1523,37 @@ mod tests {
                 "enabled": false
             })
         );
+    }
+
+    #[test]
+    fn member_author_eligibility_matches_client_569944() {
+        let g = json!({
+            "id": "1",
+            "owner_id": "100",
+            "roles": [
+                { "id": "1", "permissions": "0" },
+                { "id": "10", "permissions": (1u64 << 3).to_string() },
+                { "id": "11", "permissions": (1u64 << 5).to_string() },
+                { "id": "12", "permissions": (1u64 << 28).to_string() }
+            ]
+        });
+        assert!(member_can_author(&g, "100", &[]));
+        assert!(member_can_author(&g, "200", &[Id(10)]));
+        assert!(!member_can_author(&g, "201", &[Id(11)]));
+        assert!(!member_can_author(&g, "202", &[Id(12)]));
+        assert!(member_can_author(&g, "203", &[Id(11), Id(12)]));
+    }
+
+    #[test]
+    fn dangerous_role_permissions_detected() {
+        let g = json!({
+            "id": "1",
+            "roles": [
+                { "id": "10", "permissions": "0" },
+                { "id": "11", "permissions": ((1u64 << 1) | (1u64 << 2)).to_string() }
+            ]
+        });
+        assert_eq!(dangerous_role_perms(&g, &["10".into()]), None);
+        assert_eq!(dangerous_role_perms(&g, &["10".into(), "11".into()]), Some(vec!["Kick Members", "Ban Members"]));
     }
 }

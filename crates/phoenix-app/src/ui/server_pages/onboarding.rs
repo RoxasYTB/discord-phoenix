@@ -1792,6 +1792,64 @@ fn dashed_add(id: &'static str, label: SharedString) -> gpui::Stateful<gpui::Div
 
 type TaskRow = (AnyElement, SharedString, Option<(usize, SharedString)>);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GuideDragKind {
+    Task,
+    Resource,
+}
+
+#[derive(Clone, Debug)]
+struct GuideDrag {
+    kind: GuideDragKind,
+    index: usize,
+    title: SharedString,
+}
+
+struct GuideDragView {
+    title: SharedString,
+}
+
+impl gpui::Render for GuideDragView {
+    fn render(&mut self, _: &mut gpui::Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px(z(16.))
+            .py(z(10.))
+            .rounded(z(12.))
+            .bg(t(idx::BACKGROUND_SURFACE_HIGHER))
+            .border_1()
+            .border_color(t(idx::BORDER_SUBTLE))
+            .shadow(vec![gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.28),
+                offset: gpui::point(z(0.), z(4.)),
+                blur_radius: z(12.),
+                spread_radius: z(0.),
+                inset: false,
+            }])
+            .flex()
+            .items_center()
+            .gap(z(8.))
+            .child(icon("server/drag", 14., idx::INTERACTIVE_TEXT_DEFAULT))
+            .child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG, self.title.clone()))
+    }
+}
+
+pub fn reorder_vec<T>(items: &mut Vec<T>, from: usize, to: usize) -> bool {
+    if from == to || from >= items.len() || to >= items.len() {
+        return false;
+    }
+    let item = items.remove(from);
+    items.insert(to, item);
+    true
+}
+
+fn reorder_home_list(guild: Id, key: &str, from: usize, to: usize) {
+    edit_home(guild, |h| {
+        if let Some(arr) = h.get_mut(key).and_then(Value::as_array_mut) {
+            reorder_vec(arr, from, to);
+        }
+    });
+}
+
 fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let guild = c.guild;
     let h = &c.home;
@@ -1930,45 +1988,86 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
     }
     for (e, title, edit) in items {
         let home_t = h.clone();
-        actions = actions.child(
-            div().mt(z(12.)).child(
+        let drag_idx = edit.as_ref().map(|(i, _)| *i);
+        let row_title = title.clone();
+        let row = div()
+            .id(SharedString::from(format!("obw-task-row-{}", drag_idx.unwrap_or(999))))
+            .group(SharedString::from(format!("obw-task-row-{}", drag_idx.unwrap_or(999))))
+            .relative()
+            .w_full()
+            .px(z(16.))
+            .py(z(12.))
+            .rounded(z(12.))
+            .bg(t(idx::BACKGROUND_BASE_LOWER))
+            .flex()
+            .items_center()
+            .gap(z(16.))
+            .when_some(drag_idx, |d, idx_i| {
+                let grp = SharedString::from(format!("obw-task-row-{idx_i}"));
+                let dt = row_title.clone();
+                d.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .left_0()
+                        .w(z(16.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_grab()
+                        .invisible()
+                        .group_hover(grp, |s| s.visible())
+                        .child(icon("server/drag", 14., idx::INTERACTIVE_TEXT_DEFAULT)),
+                )
+                .on_drag(GuideDrag { kind: GuideDragKind::Task, index: idx_i, title: dt }, |drag, _, _, cx| {
+                    cx.new(|_| GuideDragView { title: drag.title.clone() })
+                })
+                .drag_over::<GuideDrag>(move |style, drag, _, _| {
+                    if drag.kind == GuideDragKind::Task && drag.index != idx_i {
+                        if idx_i < drag.index {
+                            style.border_t_2().border_color(t(idx::BRAND_500))
+                        } else {
+                            style.border_b_2().border_color(t(idx::BRAND_500))
+                        }
+                    } else {
+                        style
+                    }
+                })
+                .on_drop(cx.listener(move |_, drag: &GuideDrag, _, cx| {
+                    if drag.kind == GuideDragKind::Task && drag.index != idx_i {
+                        reorder_home_list(guild, "new_member_actions", drag.index, idx_i);
+                        cx.notify();
+                    }
+                }))
+            })
+            .child(emoji_disc(e))
+            .child(
                 div()
-                    .w_full()
-                    .px(z(16.))
-                    .py(z(12.))
-                    .rounded(z(12.))
-                    .bg(t(idx::BACKGROUND_BASE_LOWER))
+                    .flex_1()
+                    .min_w_0()
                     .flex()
-                    .items_center()
-                    .gap(z(16.))
-                    .child(emoji_disc(e))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title).truncate())
-                            .when_some(edit.clone(), |d, (_, where_)| {
-                                d.child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_DEFAULT, where_).truncate())
-                            }),
-                    )
-                    .when_some(edit, |d, (i, _)| {
-                        d.child(
-                            button_sm(("obw-task-edit", i), SharedString::default(), BtnKind::Primary)
-                                .min_w(z(32.))
-                                .w(z(32.))
-                                .px(z(0.))
-                                .tooltip(crate::ui::tooltip::tip(crate::t!("gs2.obw.edit")))
-                                .child(icon("pen", 16., idx::WHITE))
-                                .on_click(cx.listener(move |_, _, _, cx| {
-                                    super::guide_editors::open_task(guild, &home_t, Some(i));
-                                    cx.notify();
-                                })),
-                        )
+                    .flex_col()
+                    .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title).truncate())
+                    .when_some(edit.clone(), |d, (_, where_)| {
+                        d.child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_DEFAULT, where_).truncate())
                     }),
-            ),
-        );
+            )
+            .when_some(edit, |d, (i, _)| {
+                d.child(
+                    button_sm(("obw-task-edit", i), SharedString::default(), BtnKind::Primary)
+                        .min_w(z(32.))
+                        .w(z(32.))
+                        .px(z(0.))
+                        .tooltip(crate::ui::tooltip::tip(crate::t!("gs2.obw.edit")))
+                        .child(icon("pen", 16., idx::WHITE))
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            super::guide_editors::open_task(guild, &home_t, Some(i));
+                            cx.notify();
+                        })),
+                )
+            });
+        actions = actions.child(div().mt(z(12.)).child(row));
     }
     if list.len() < super::guide_editors::MAX_TASKS {
         let home_t = h.clone();
@@ -2037,11 +2136,16 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
         } else {
             str_of(r, "title").to_owned()
         };
+        let grp = SharedString::from(format!("obw-res-row-{i}"));
+        let dt = SharedString::from(title.clone());
         res = res.child(
             div()
                 .mt(z(12.))
                 .child(
                     div()
+                        .id(grp.clone())
+                        .group(grp.clone())
+                        .relative()
                         .w_full()
                         .px(z(16.))
                         .py(z(12.))
@@ -2053,6 +2157,41 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         .flex()
                         .items_center()
                         .gap(z(16.))
+                        .child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .bottom_0()
+                                .left_0()
+                                .w(z(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_grab()
+                                .invisible()
+                                .group_hover(grp, |s| s.visible())
+                                .child(icon("server/drag", 14., idx::INTERACTIVE_TEXT_DEFAULT)),
+                        )
+                        .on_drag(GuideDrag { kind: GuideDragKind::Resource, index: i, title: dt }, |drag, _, _, cx| {
+                            cx.new(|_| GuideDragView { title: drag.title.clone() })
+                        })
+                        .drag_over::<GuideDrag>(move |style, drag, _, _| {
+                            if drag.kind == GuideDragKind::Resource && drag.index != i {
+                                if i < drag.index {
+                                    style.border_t_2().border_color(t(idx::BRAND_500))
+                                } else {
+                                    style.border_b_2().border_color(t(idx::BRAND_500))
+                                }
+                            } else {
+                                style
+                            }
+                        })
+                        .on_drop(cx.listener(move |_, drag: &GuideDrag, _, cx| {
+                            if drag.kind == GuideDragKind::Resource && drag.index != i {
+                                reorder_home_list(guild, "resource_channels", drag.index, i);
+                                cx.notify();
+                            }
+                        }))
                         .child(
                             div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(
                                 text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title)
@@ -2095,7 +2234,7 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
         })));
     }
     left = left.child(res);
-    left = left.child(section_sep()).child(banner_section(c.banner));
+    left = left.child(section_sep()).child(banner_section(guild, c.banner, cx));
     let tab = super::flag(guild, "obw-preview-member").unwrap_or(false);
     let right = div()
         .w(z(264.))
@@ -2166,7 +2305,7 @@ pub fn banner_fill(enabled: bool) -> gpui::Background {
     }
 }
 
-fn banner_section(enabled: bool) -> gpui::Div {
+fn banner_section(guild: Id, enabled: bool, cx: &mut Context<PhoenixApp>) -> gpui::Div {
     let indicator = if enabled {
         div()
             .id("obw-banner-level")
@@ -2195,6 +2334,10 @@ fn banner_section(enabled: bool) -> gpui::Div {
             .tooltip(crate::ui::tooltip::tip(crate::t!("gs2.obw.learn_more")))
             .child(icon("boost", 12., idx::INTERACTIVE_TEXT_DEFAULT))
             .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_SUBTLE, crate::t!("gs2.obw.level2")))
+            .on_click(cx.listener(move |_, _, _, cx| {
+                super::guide_editors::open_boost_upsell(guild);
+                cx.notify();
+            }))
     };
     let action = if enabled {
         div().mt(z(8.)).flex().child(button(
@@ -2203,12 +2346,18 @@ fn banner_section(enabled: bool) -> gpui::Div {
             BtnKind::Primary,
         ))
     } else {
-        div().mt(z(8.)).flex().child(crate::ui::controls::button_icon(
-            "obw-banner-boost",
-            "boost",
-            crate::t!("gs2.obw.unlock_boost"),
-            BtnKind::Expressive,
-        ))
+        div().mt(z(8.)).flex().child(
+            crate::ui::controls::button_icon(
+                "obw-banner-boost",
+                "boost",
+                crate::t!("gs2.obw.unlock_boost"),
+                BtnKind::Expressive,
+            )
+            .on_click(cx.listener(move |_, _, _, cx| {
+                super::guide_editors::open_boost_upsell(guild);
+                cx.notify();
+            })),
+        )
     };
     div()
         .flex()
