@@ -173,14 +173,19 @@ fn ctrl_slash_toggles_the_shortcuts_modal(cx: &mut TestAppContext) {
 #[gpui::test]
 fn page_keys_scroll_the_chat(cx: &mut TestAppContext) {
     let mut h = setup(cx);
+    h.act(|a, _, _| a.message_list.scroll_to_end());
+    h.act(|_, _, cx| cx.notify());
+    h.act(|_, _, cx| cx.notify());
     let before = h.read(|a| a.message_list.logical_scroll_top());
-    let height = h.read(|a| a.message_list.viewport_bounds().size.height);
     h.keys("pageup");
+    h.act(|_, _, cx| cx.notify());
     let up = h.read(|a| a.message_list.logical_scroll_top());
-    assert!(height == gpui::px(0.) || up != before, "Page Up did not scroll");
+    let scrollable = before != gpui::ListOffset::default();
+    assert!(!scrollable || up != before, "Page Up did not scroll: {before:?}");
     h.keys("pagedown");
+    h.act(|_, _, cx| cx.notify());
     let down = h.read(|a| a.message_list.logical_scroll_top());
-    assert!(height == gpui::px(0.) || down != up, "Page Down did not scroll");
+    assert!(!scrollable || down != up, "Page Down did not scroll: {up:?}");
 }
 
 #[gpui::test]
