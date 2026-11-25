@@ -48,6 +48,7 @@ pub(crate) fn tk(i: usize) -> gpui::Hsla {
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let entity = cx.entity();
     let show_members = app.show_members && app.selected_guild.is_some();
+    let show_members = show_members && !crate::ui::title_bar::compact_members(crate::ui::title_bar::viewport_w_css());
     let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
     let show_members = show_members && !crate::ui::call_view::active(app);
     let search_results = crate::ui::search::results_shown(cx);

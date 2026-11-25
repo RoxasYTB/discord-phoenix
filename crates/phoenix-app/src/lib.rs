@@ -73,7 +73,7 @@ pub fn window_options(cx: &App) -> WindowOptions {
         window_decorations: Some(WindowDecorations::Client),
         app_id: Some(APP_ID.into()),
         icon: window_icon(),
-        window_min_size: Some(size(px(940.), px(500.))),
+        window_min_size: Some(size(px(500.), px(400.))),
         ..Default::default()
     }
 }

@@ -56,3 +56,10 @@ instead, on purpose:
 
 So the close button minimises when the tray is up (KWin keeps the task bar entry), and the tray Open
 action raises it with the token above. Revisit if GPUI gains `hide`/`show` for Wayland windows.
+
+## Floating PiP, Call Popout & Compact Window Mode
+
+- **Floating Voice/Video PiP** (`ui/pip.rs`): shown when connected to a voice channel while viewing another channel (and not popped out). 320×180 16:9 card, draggable into all 4 corners with snap-to-corner and viewport clamping, showing active stream/camera/speaker, hover controls (mic, deafen, disconnect, return to call, popout).
+- **Multi-window Call Popout** (`ui/call_popout.rs`): `call-popout` button in `call_view.rs` and `pip.rs` opens a secondary frameless GPUI window (`cx.open_window`) observing `PhoenixApp` for live state sync (tiles, video/stream, mute/deafen/disconnect), with clean return to the main window on close.
+- **Compact Window Mode** (`ui/title_bar.rs`, `ui/chat.rs`, `app.rs`): `< 940 px` CSS width hides the member list smoothly; `< 720 px` collapses the sidebar into a slide-over drawer toggled from the title bar; title bar text max width clamps dynamically so it never overlaps window buttons.
+- **Window Shortcuts** (`shortcuts.rs`): `F11` toggles fullscreen (`ToggleFullscreen`), `Ctrl+`/`Ctrl-`/`Ctrl+0` step page zoom (50–200 %).

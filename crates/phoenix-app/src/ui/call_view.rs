@@ -182,6 +182,48 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     }
     let ch_id = app.voice_channel?;
     let ch = app.channels.get(&ch_id)?;
+    if crate::ui::call_popout::is_open() {
+        return Some(
+            div()
+                .id("call-popped-out")
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap(z(16.))
+                .bg(t(idx::BLACK))
+                .child(glyph(POPOUT, 40., t(idx::INTERACTIVE_TEXT_DEFAULT)))
+                .child(
+                    div()
+                        .text_size(z(16.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t(idx::TEXT_STRONG))
+                        .child(crate::t!("call.popped_out_notice")),
+                )
+                .child(
+                    div()
+                        .id("call-bring-back")
+                        .px(z(16.))
+                        .py(z(8.))
+                        .rounded(z(8.))
+                        .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                        .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
+                        .text_size(z(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))
+                        .cursor_pointer()
+                        .child(crate::t!("call.return_main"))
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.defer(|cx| crate::ui::call_popout::close(cx));
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+        );
+    }
     let zoom = crate::theme::zoom();
 
     let mut tiles = Vec::new();
@@ -912,7 +954,7 @@ fn section() -> gpui::Div {
         .bg(t(idx::BACKGROUND_SURFACE_HIGH))
 }
 
-fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) -> AnyElement {
+fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .size(z(24.))
@@ -923,7 +965,6 @@ fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) -> AnyElement
         .cursor_pointer()
         .tip(tip)
         .child(icon)
-        .into_any_element()
 }
 
 fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
@@ -1050,8 +1091,17 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                 .flex()
                 .justify_end()
                 .gap(z(24.))
-                .child(tray_icon("call-popout", glyph(POPOUT, 24., tray), crate::t!("call.popout")))
-                .child(tray_icon("call-fullscreen", glyph(FULLSCREEN, 24., tray), crate::t!("call.fullscreen"))),
+                .child(
+                    tray_icon("call-popout", glyph(POPOUT, 24., tray), crate::t!("call.popout")).on_click(cx.listener(|_, _, _, cx| {
+                        let app_entity = cx.entity();
+                        cx.defer(move |cx| crate::ui::call_popout::open(app_entity, cx));
+                        cx.notify();
+                    })),
+                )
+                .child(
+                    tray_icon("call-fullscreen", glyph(FULLSCREEN, 24., tray), crate::t!("call.fullscreen"))
+                        .on_click(cx.listener(|_, _, w, _| w.toggle_fullscreen())),
+                ),
         )
 }
 

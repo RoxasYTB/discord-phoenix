@@ -55,6 +55,7 @@ actions!(
         ZoomIn,
         ZoomOut,
         ZoomReset,
+        ToggleFullscreen,
     ]
 );
 
@@ -131,6 +132,7 @@ pub const SHORTCUTS: &[Shortcut] = &[
     sc!(Chat, "shortcuts.copy_link", ["ctrl-shift-l"]),
     sc!(Misc, "shortcuts.help", ["ctrl-shift-h"]),
     sc!(Misc, "shortcuts.search", ["ctrl-f"]),
+    sc!(Misc, "shortcuts.fullscreen", ["f11"]),
     sc!(Misc, "shortcuts.modal", ["ctrl-/"]),
 ];
 
@@ -189,6 +191,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-0", ZoomReset, ctx),
         KeyBinding::new("ctrl-shift-0", ZoomReset, ctx),
         KeyBinding::new("ctrl-à", ZoomReset, ctx),
+        KeyBinding::new("f11", ToggleFullscreen, ctx),
     ]);
 }
 
@@ -481,6 +484,7 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
     .on_action(cx.listener(|a, _: &ZoomIn, _, cx| ui::settings::update_local(a, |p| p.zoom = zoom_step(p.zoom, 1), cx)))
     .on_action(cx.listener(|a, _: &ZoomOut, _, cx| ui::settings::update_local(a, |p| p.zoom = zoom_step(p.zoom, -1), cx)))
     .on_action(cx.listener(|a, _: &ZoomReset, _, cx| ui::settings::update_local(a, |p| p.zoom = 100, cx)))
+    .on_action(cx.listener(|_, _: &ToggleFullscreen, w, _| w.toggle_fullscreen()))
     .on_action(cx.listener(|a, _: &RecordVoiceMessage, _, cx| crate::ui::chat::voice_message::start(a, cx)))
     .on_action(cx.listener(|a, _: &ToggleSoundboard, w, cx| {
         if a.voice_channel.is_some() {

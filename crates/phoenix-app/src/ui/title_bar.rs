@@ -85,6 +85,10 @@ pub fn inbox_right_inset() -> f32 {
 
 static VIEWPORT_H_CSS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static VIEWPORT_W_CSS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static DRAWER_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub const COMPACT_MEMBERS_W: f32 = 940.;
+pub const COMPACT_SIDEBAR_W: f32 = 720.;
 
 pub fn viewport_w_css() -> f32 {
     f32::from_bits(VIEWPORT_W_CSS.load(std::sync::atomic::Ordering::Relaxed))
@@ -92,6 +96,29 @@ pub fn viewport_w_css() -> f32 {
 
 pub fn viewport_h_css() -> f32 {
     f32::from_bits(VIEWPORT_H_CSS.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+pub fn compact_members(vw: f32) -> bool {
+    vw > 0. && vw < COMPACT_MEMBERS_W
+}
+
+pub fn compact_sidebar(vw: f32) -> bool {
+    vw > 0. && vw < COMPACT_SIDEBAR_W
+}
+
+pub fn drawer_open() -> bool {
+    DRAWER_OPEN.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_drawer_open(open: bool) {
+    DRAWER_OPEN.store(open, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn title_max_w(vw: f32) -> f32 {
+    if vw <= 0. {
+        return 480.;
+    }
+    (vw - 280.).clamp(80., 480.)
 }
 
 pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
@@ -128,18 +155,35 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                     ),
                     None => d.child(icon(glyph, 16. * zoom(), c(tok(idx::INTERACTIVE_ICON_DEFAULT)))),
                 })
-                .child(div().max_w(z(480.)).text_ellipsis().child(text)),
+                .child(div().max_w(z(title_max_w(vw))).text_ellipsis().child(text)),
         )
         .child(
             div()
                 .relative()
-                .w(z(80.))
                 .h(z(24.))
+                .pl(z(8.))
                 .flex()
-                .justify_center()
-                .gap(z(2.))
-                .child(nav_arrow("title-back", "nav/back", true, true))
-                .child(nav_arrow("title-forward", "nav/forward", false, false)),
+                .items_center()
+                .gap(z(4.))
+                .when(compact_sidebar(vw), |d| {
+                    d.child(
+                        bar_button("title-drawer", Icon::Hash, drawer_open(), crate::t!("title.toggle_sidebar"))
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                set_drawer_open(!drawer_open());
+                                cx.notify();
+                            })),
+                    )
+                })
+                .child(
+                    div()
+                        .w(z(64.))
+                        .h(z(24.))
+                        .flex()
+                        .justify_center()
+                        .gap(z(2.))
+                        .child(nav_arrow("title-back", "nav/back", true, true))
+                        .child(nav_arrow("title-forward", "nav/forward", false, false)),
+                ),
         )
         .child(
             div()
@@ -251,4 +295,27 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                     }
                 })),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compact_members, compact_sidebar, title_max_w};
+
+    #[test]
+    fn compact_breakpoints_match_narrow_thresholds() {
+        assert!(!compact_members(0.));
+        assert!(compact_members(939.));
+        assert!(!compact_members(940.));
+        assert!(!compact_sidebar(0.));
+        assert!(compact_sidebar(719.));
+        assert!(!compact_sidebar(720.));
+    }
+
+    #[test]
+    fn title_max_width_clamps_for_narrow_windows() {
+        assert_eq!(title_max_w(0.), 480.);
+        assert_eq!(title_max_w(1280.), 480.);
+        assert_eq!(title_max_w(500.), 220.);
+        assert_eq!(title_max_w(300.), 80.);
+    }
 }

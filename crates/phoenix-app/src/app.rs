@@ -1461,6 +1461,16 @@ impl Render for PhoenixApp {
                 let sidebar = below_notice(ui::sidebar::render(self, cx).into_any_element(), false);
                 let panels = ui::sidebar::panels(self, cx).into_any_element();
                 let pane = below_notice(ui::home::main_pane(self, window, cx), true);
+                let vw = f32::from(window.viewport_size().width) / crate::theme::zoom();
+                let narrow = ui::title_bar::compact_sidebar(vw);
+                let drawer = narrow && ui::title_bar::drawer_open();
+                let left_col = div()
+                    .flex_none()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .child(div().flex_1().min_h_0().flex().flex_row().child(rail).child(sidebar))
+                    .child(panels);
                 div()
                     .size_full()
                     .flex()
@@ -1473,16 +1483,36 @@ impl Render for PhoenixApp {
                             .flex()
                             .flex_row()
                             .relative()
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .h_full()
-                                    .flex()
-                                    .flex_col()
-                                    .child(div().flex_1().min_h_0().flex().flex_row().child(rail).child(sidebar))
-                                    .child(panels),
-                            )
+                            .when(!narrow, |d| d.child(left_col))
                             .child(pane)
+                            .when(drawer, |d| {
+                                let rail_d = ui::server_bar::render(self, cx).into_any_element();
+                                let sidebar_d = below_notice(ui::sidebar::render(self, cx).into_any_element(), false);
+                                let panels_d = ui::sidebar::panels(self, cx).into_any_element();
+                                d.child(
+                                    div()
+                                        .id("compact-drawer-backdrop")
+                                        .absolute()
+                                        .inset_0()
+                                        .bg(gpui::hsla(0., 0., 0., 0.5))
+                                        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _, _, cx| {
+                                            ui::title_bar::set_drawer_open(false);
+                                            cx.notify();
+                                        }))
+                                        .child(
+                                            div()
+                                                .id("compact-drawer-panel")
+                                                .h_full()
+                                                .flex()
+                                                .flex_col()
+                                                .bg(c(Palette::BG_TERTIARY))
+                                                .shadow(ui::inbox::popout_shadow())
+                                                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                                .child(div().flex_1().min_h_0().flex().flex_row().child(rail_d).child(sidebar_d))
+                                                .child(panels_d),
+                                        ),
+                                )
+                            })
                             .children(notice),
                     )
                     .into_any_element()
@@ -1538,6 +1568,7 @@ impl Render for PhoenixApp {
             .children(ui::profile::overlays(self, window, cx))
             .children(ui::components::overlays(self, window, cx))
             .children(ui::voice_panel::overlays(self, window, cx))
+            .children(ui::pip::render(self, window, cx))
             .children(crate::actions::overlays(self, window, cx))
             .children(ui::pickers::render_status_picker(self, window, cx))
             .children(crate::shortcuts::render_help(self, window, cx))
