@@ -725,12 +725,14 @@ impl WindowTextSystem {
             });
         }
 
+        let primary_font = runs.first().map(|run| self.resolve_font(&run.font));
         let layout = self.layout_line(&text, font_size, runs, force_width);
 
         ShapedLine {
             layout,
             text,
             decoration_runs,
+            primary_font,
         }
     }
 
@@ -818,6 +820,7 @@ impl WindowTextSystem {
                 layout,
                 decoration_runs,
                 text: line_text,
+                primary_font: font_runs.first().map(|run| run.font_id),
             });
 
             // Skip `\n` character.

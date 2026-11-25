@@ -1700,8 +1700,6 @@ impl PlatformTextSystem for NoopTextSystem {
             descent: font_size * (metrics.descent / metrics.units_per_em as f32),
             runs,
             len: text.len(),
-            decoration_ascent: Pixels::ZERO,
-            decoration_descent: Pixels::ZERO,
         }
     }
 

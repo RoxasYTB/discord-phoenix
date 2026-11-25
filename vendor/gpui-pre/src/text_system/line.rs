@@ -1,7 +1,7 @@
 use crate::{
     App, Bounds, DevicePixels, Half, Hsla, LineLayout, Pixels, Point, RenderGlyphParams, Result,
     SharedString, StrikethroughStyle, TextAlign, UnderlineStyle, Window, WrapBoundary,
-    WrappedLineLayout, black, fill, point, px, size, underline_geometry,
+    FontId, WrappedLineLayout, black, fill, point, px, size, underline_geometry,
 };
 use derive_more::{Deref, DerefMut};
 use smallvec::SmallVec;
@@ -47,6 +47,9 @@ pub struct ShapedLine {
     /// The text that was shaped for this line.
     pub text: SharedString,
     pub(crate) decoration_runs: SmallVec<[DecorationRun; 32]>,
+    /// PHOENIX PATCH (underline geometry, docs/gpui-patches.md): the font the first run asked
+    /// for, before fallback. Underlines are placed from its metrics.
+    pub(crate) primary_font: Option<FontId>,
 }
 
 impl ShapedLine {
@@ -100,8 +103,6 @@ impl ShapedLine {
             descent: layout.descent,
             runs: layout.runs.clone(),
             len,
-            decoration_ascent: layout.decoration_ascent,
-            decoration_descent: layout.decoration_descent,
         });
         self
     }
@@ -152,6 +153,7 @@ impl ShapedLine {
             align_width,
             &self.decoration_runs,
             &[],
+            self.primary_font,
             window,
             cx,
             &mut paint_underline,
@@ -246,12 +248,14 @@ impl ShapedLine {
             layout: Arc::new(left_layout),
             text: left_text,
             decoration_runs: left_decorations,
+            primary_font: self.primary_font,
         };
 
         let right = ShapedLine {
             layout: Arc::new(right_layout),
             text: right_text,
             decoration_runs: right_decorations,
+            primary_font: self.primary_font,
         };
 
         (left, right)
@@ -369,11 +373,10 @@ impl<'a> ShapedLineCursor<'a> {
                 descent: self.line.layout.descent,
                 runs,
                 len: byte_index - previous_index,
-                decoration_ascent: self.line.layout.decoration_ascent,
-                decoration_descent: self.line.layout.decoration_descent,
             }),
             text: SharedString::new(&self.line.text[previous_index..byte_index]),
             decoration_runs: decorations,
+            primary_font: self.line.primary_font,
         }
     }
 
@@ -407,6 +410,7 @@ impl LineLayout {
             align_width,
             decoration_runs,
             &[],
+            None,
             window,
             cx,
             &mut |_, origin, width, style, window| window.paint_underline(origin, width, style),
@@ -451,6 +455,8 @@ pub struct WrappedLine {
     /// The text that was shaped for this line.
     pub text: SharedString,
     pub(crate) decoration_runs: Vec<DecorationRun>,
+    /// PHOENIX PATCH (underline geometry): see [`ShapedLine`].
+    pub(crate) primary_font: Option<FontId>,
 }
 
 impl WrappedLine {
@@ -483,6 +489,7 @@ impl WrappedLine {
             align_width,
             &self.decoration_runs,
             &self.wrap_boundaries,
+            self.primary_font,
             window,
             cx,
             &mut |_, origin, width, style, window| window.paint_underline(origin, width, style),
@@ -530,6 +537,7 @@ fn paint_line(
     align_width: Option<Pixels>,
     decoration_runs: &[DecorationRun],
     wrap_boundaries: &[WrapBoundary],
+    primary_font: Option<FontId>,
     window: &mut Window,
     cx: &mut App,
     paint_underline: &mut dyn FnMut(
@@ -551,7 +559,13 @@ fn paint_line(
     window.paint_layer(line_bounds, |window| {
         let padding_top = (line_height - layout.ascent - layout.descent) / 2.;
         let baseline_offset = point(px(0.), padding_top + layout.ascent);
-        let (deco_ascent, deco_descent) = layout.decoration_metrics();
+        let (deco_ascent, deco_descent) = primary_font.map_or((layout.ascent, layout.descent), |font_id| {
+            let text_system = cx.text_system();
+            (
+                text_system.ascent(font_id, layout.font_size),
+                text_system.descent(font_id, layout.font_size),
+            )
+        });
         let scale_factor = window.scale_factor();
         let underline_at = |row_top: Pixels| {
             underline_geometry(
@@ -1069,11 +1083,10 @@ mod tests {
                     glyphs: shaped_glyphs,
                 }],
                 len: text.len(),
-                decoration_ascent: Pixels::ZERO,
-                decoration_descent: Pixels::ZERO,
             }),
             text: SharedString::new(text),
             decoration_runs: SmallVec::from(decorations.to_vec()),
+            primary_font: None,
         }
     }
 
@@ -1240,7 +1253,7 @@ mod tests {
                     )
                     .unwrap();
                     let start = px(origin_x + offset);
-                    let (y, thickness) = expected_underline(&line, origin.y, line_height, window);
+                    let (y, thickness) = expected_underline(&line, origin.y, line_height, window, cx);
                     let last_style = UnderlineStyle {
                         thickness,
                         ..last_style
@@ -1330,7 +1343,7 @@ mod tests {
                 / 2.;
             let origin = point(px(40.25), px(10.25));
             let line_height = px(20.);
-            let (y, thickness) = expected_underline(&line, origin.y, line_height, window);
+            let (y, thickness) = expected_underline(&line, origin.y, line_height, window, cx);
             let last_style = UnderlineStyle {
                 thickness,
                 ..last_style
@@ -1403,8 +1416,9 @@ mod tests {
                     / 2.;
                 let origin = point(px(40.25), px(10.25));
                 let line_height = px(20.);
-                let (y, _) = expected_underline(&line, origin.y, line_height, window);
-                let (y2, _) = expected_underline(&line, origin.y + line_height, line_height, window);
+                let (y, _) = expected_underline(&line, origin.y, line_height, window, cx);
+                let (y2, _) =
+                    expected_underline(&line, origin.y + line_height, line_height, window, cx);
                 let wrapped = WrappedLine {
                     layout: Arc::new(WrappedLineLayout {
                         unwrapped_layout: line.layout,
@@ -1416,6 +1430,7 @@ mod tests {
                     }),
                     text: line.text,
                     decoration_runs: line.decoration_runs.into_vec(),
+                    primary_font: line.primary_font,
                 };
                 window.next_frame.scene.clear();
                 wrapped
@@ -1432,6 +1447,7 @@ mod tests {
                     Some(px(16.)),
                     &wrapped.decoration_runs,
                     &wrapped.wrap_boundaries,
+                    wrapped.primary_font,
                     window,
                     cx,
                     &mut |range, origin, width, style, window| {
@@ -1570,11 +1586,10 @@ mod tests {
                     },
                 ],
                 len: 6,
-                decoration_ascent: Pixels::ZERO,
-                decoration_descent: Pixels::ZERO,
             }),
             text: "abcdef".into(),
             decoration_runs: SmallVec::new(),
+            primary_font: None,
         };
 
         // First split at byte 2 — mid-run in run A
@@ -1704,14 +1719,15 @@ mod tests {
         row_top: Pixels,
         line_height: Pixels,
         window: &Window,
+        cx: &App,
     ) -> (Pixels, Pixels) {
-        let (ascent, descent) = line.decoration_metrics();
+        let font_id = line.primary_font.expect("shaped lines know their primary font");
         underline_geometry(
             row_top,
             line_height,
             line.font_size,
-            ascent,
-            descent,
+            cx.text_system().ascent(font_id, line.font_size),
+            cx.text_system().descent(font_id, line.font_size),
             window.scale_factor(),
         )
     }
@@ -1738,7 +1754,11 @@ mod tests {
                 descent,
                 scale,
             );
-            assert_eq!((y.0 * scale, t.0 * scale), (top, thickness), "{size}px at {scale}");
+            assert_eq!(
+                (f32::from(y) * scale, f32::from(t) * scale),
+                (top, thickness),
+                "{size}px at {scale}"
+            );
         }
     }
 
@@ -1787,8 +1807,6 @@ mod tests {
             descent: layout.descent,
             runs,
             len: layout.len,
-            decoration_ascent: layout.decoration_ascent,
-            decoration_descent: layout.decoration_descent,
         });
         line
     }
@@ -1857,11 +1875,10 @@ mod tests {
                     },
                 ],
                 len: 10,
-                decoration_ascent: Pixels::ZERO,
-                decoration_descent: Pixels::ZERO,
             }),
             text: "a😀bcdef".into(),
             decoration_runs: SmallVec::new(),
+            primary_font: None,
         };
         let mut cursor = line.cursor();
         let first = cursor.take_until(5);
