@@ -6122,7 +6122,7 @@ dependencies = [
 name = "phoenix-api"
 version = "0.1.0-beta.2"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "bitflags 2.13.2",
  "flate2",
  "futures-util",
@@ -6148,7 +6148,7 @@ name = "phoenix-app"
 version = "0.1.0-beta.2"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
+ "base64 0.23.1",
  "brotli-decompressor 4.0.3",
  "chrono",
  "flate2",
