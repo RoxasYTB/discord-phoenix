@@ -1024,7 +1024,7 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
         .filter_map(|r| app.nav.activities.get(&r.user).map(|a| (r.user, a.clone())))
         .filter(|(u, _)| app.presence_of(*u) != Presence::Offline)
         .collect();
-    let in_voice = |u: Id| app.channels.iter().any(|c| c.voice_users.contains(&u));
+    let in_voice = |u: Id| app.channels.values().any(|c| c.voice_users.contains(&u));
     let start_of = |u: Id| {
         app.people
             .activities

@@ -465,7 +465,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                     .child({
                                         let emoji_open = matches!(
                                             crate::ui::pickers::open_tab(cx),
-                                            Some((crate::ui::pickers::Tab::Emoji, EmojiTarget::Composer))
+                                            Some((crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::Composer))
                                         );
                                         crate::ui::states::composer_button_ext("emoji", Icon::Emoji, 18., true)
                                             .when(emoji_open, |d| d.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
