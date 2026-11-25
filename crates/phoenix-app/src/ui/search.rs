@@ -836,7 +836,7 @@ fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div
         .flex()
         .items_center()
         .child(div().w(z(20.)).flex_none().pr(z(4.)).child(gpui::svg().path(glyph).size(z(16.)).text_color(tk(idx::TEXT_STRONG))))
-        .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(highlight_plain(name, hl)))
+        .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(header_name(name, hl)))
         .when_some(parent, |d, p| {
             d.child(
                 div()
@@ -848,6 +848,27 @@ fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div
                     .child(div().min_w_0().truncate().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(p)),
             )
         })
+}
+
+fn header_name(name: SharedString, hl: &Highlighter) -> AnyElement {
+    let emoji: Vec<_> = crate::richtext::emoji_ranges(&name).into_iter().map(|(r, _)| r).filter(|r| !name[r.clone()].starts_with('<')).collect();
+    if emoji.is_empty() {
+        return highlight_plain(name, hl).into_any_element();
+    }
+    let size = 22. * crate::theme::zoom();
+    let mut row = div().flex().items_center().min_w_0().overflow_hidden().whitespace_nowrap();
+    let mut at = 0;
+    for r in emoji {
+        if r.start > at {
+            row = row.child(div().flex_none().child(highlight_plain(name[at..r.start].to_string().into(), hl)));
+        }
+        row = row.child(div().flex_none().mx(px(1.)).child(crate::media::emoji::emoji_element(&name[r.clone()], size)));
+        at = r.end;
+    }
+    if at < name.len() {
+        row = row.child(div().min_w_0().truncate().child(highlight_plain(name[at..].to_string().into(), hl)));
+    }
+    row.into_any_element()
 }
 
 fn empty_state(text: SharedString, error: bool) -> gpui::Div {
