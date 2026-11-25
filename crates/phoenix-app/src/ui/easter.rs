@@ -9,6 +9,58 @@ use crate::sounds::assets::asset_file;
 
 const D: f32 = 0.15;
 
+const RAYS: [(f32, bool); 14] = [
+    (90., true),
+    (82., false),
+    (67., true),
+    (52., false),
+    (37., true),
+    (22., false),
+    (7., true),
+    (-8., false),
+    (-23., true),
+    (-38., false),
+    (-53., true),
+    (-68., false),
+    (-83., true),
+    (-90., false),
+];
+
+fn rays(alpha: f32) -> gpui::Canvas<()> {
+    gpui::canvas(
+        |_, _, _| {},
+        move |b, (), window, _| {
+            if alpha <= 0. {
+                return;
+            }
+            let c = b.center();
+            let r = f32::from(b.size.width).hypot(f32::from(b.size.height));
+            let at = |deg: f32| {
+                let a = deg.to_radians();
+                gpui::point(c.x + px(r * a.sin()), c.y - px(r * a.cos()))
+            };
+            for w in RAYS.windows(2) {
+                let (hi, lo) = (w[0].0 - 90., w[1].0 - 90.);
+                let col = if w[1].1 { gpui::hsla(0., 0., 1., alpha) } else { gpui::hsla(0., 0., 221. / 255., alpha) };
+                for turn in [0., 180.] {
+                    let mut pb = gpui::PathBuilder::fill();
+                    pb.move_to(c);
+                    pb.line_to(at(lo + turn));
+                    pb.line_to(at(hi + turn));
+                    pb.close();
+                    if let Ok(path) = pb.build() {
+                        window.paint_path(path, col);
+                    }
+                }
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+}
+
 const SYMBOL: &str = "a53fe63d4b568d70.svg";
 const PRIMARY: [&str; 4] = ["3e4d5e236f62c4ba.png", "c385ef9dd294be87.png", "ec22204197211dc7.png", "47b5cca448b07ece.png"];
 const SECONDARY: [&str; 4] = ["f3cbcdad40b7140d.png", "65e38691f7c05321.png", "3f93966b676ef0fb.png", "2063fc2ef0c778bf.png"];
@@ -268,7 +320,7 @@ pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> 
         let w = (cw * 0.8).min(ch * 0.6 * 360. / 280.) * s;
         let h = w * 280. / 360.;
         layer = layer
-            .child(div().absolute().top_0().left_0().size_full().bg(gpui::white()).opacity(bg))
+            .child(rays(bg))
             .child(div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().child(img(path).w(px(w)).h(px(h)).opacity(o)));
     }
     Some(
