@@ -37,12 +37,30 @@ fn journal_path() -> Option<PathBuf> {
 }
 
 fn owner_path() -> Option<PathBuf> {
-    Some(dir()?.join("owner.pid"))
+    Some(dir()?.join("owner.lock"))
 }
 
-fn other_owner() -> Option<u32> {
-    let pid: u32 = fs::read_to_string(owner_path()?).ok()?.trim().parse().ok()?;
-    (pid != std::process::id() && std::path::Path::new(&format!("/proc/{pid}")).exists()).then_some(pid)
+fn try_own(p: &std::path::Path) -> Option<fs::File> {
+    let mut o = fs::OpenOptions::new();
+    o.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    o.mode(0o600);
+    let f = o.open(p).ok()?;
+    match f.try_lock() {
+        Ok(()) => Some(f),
+        Err(fs::TryLockError::WouldBlock) => None,
+        Err(fs::TryLockError::Error(e)) if e.kind() == std::io::ErrorKind::Unsupported => Some(f),
+        Err(fs::TryLockError::Error(_)) => None,
+    }
+}
+
+fn other_owner() -> bool {
+    static HELD: Mutex<Option<fs::File>> = Mutex::new(None);
+    let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+    if held.is_none() {
+        *held = owner_path().and_then(|p| try_own(&p));
+    }
+    held.is_none()
 }
 
 fn open_private(p: &std::path::Path, append: bool) -> std::io::Result<fs::File> {
@@ -119,11 +137,10 @@ fn writer(rx: mpsc::Receiver<Rec>) {
     db.recursive(true);
     #[cfg(unix)]
     db.mode(0o700);
-    if db.create(&d).is_err() || other_owner().is_some() {
+    if db.create(&d).is_err() || other_owner() {
         return;
     }
-    let (Some(jp), Some(op)) = (journal_path(), owner_path()) else { return };
-    write_atomic(&op, std::process::id().to_string().as_bytes());
+    let Some(jp) = journal_path() else { return };
     let mut files = Files { jp, journal: None, size: 0 };
     while let Ok(first) = rx.recv() {
         let mut next = Some(first);
@@ -160,8 +177,11 @@ pub fn clear() {
             let _ = fs::remove_file(p);
         }
     }
-    for p in [journal_path(), owner_path()].into_iter().flatten() {
+    if let Some(p) = journal_path() {
         let _ = fs::remove_file(p);
+    }
+    if let Some(d) = dir() {
+        let _ = fs::remove_file(d.join("owner.pid"));
     }
 }
 
@@ -203,7 +223,7 @@ fn load() -> Option<(Ui, Core)> {
     events.extend(convert::self_status(&ready));
     events.extend(nav::snapshot(&cache, &ready));
     events.extend(people);
-    let resume = (fresh && other_owner().is_none())
+    let resume = (fresh && !other_owner())
         .then_some(last_seq)
         .flatten()
         .map(|seq| ResumeState { session_id: ready.session_id.clone(), resume_url: ready.resume_gateway_url.clone(), seq });
@@ -289,4 +309,46 @@ pub fn take() -> Option<Ui> {
 
 pub fn take_core() -> Option<Core> {
     with_loaded(|s| s.core.take()).filter(|c| c.resume.is_some())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("phoenix-owner-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn second_owner_is_refused_while_first_holds_the_lock() {
+        let d = scratch("held");
+        let p = d.join("owner.lock");
+        let first = try_own(&p).expect("first owner");
+        assert!(try_own(&p).is_none());
+        drop(first);
+        assert!(try_own(&p).is_some());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn stale_lock_file_does_not_block_a_new_owner() {
+        let d = scratch("stale");
+        let p = d.join("owner.lock");
+        fs::write(&p, b"12345").unwrap();
+        assert!(try_own(&p).is_some());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn lock_survives_its_file_being_reopened() {
+        let d = scratch("reopen");
+        let p = d.join("owner.lock");
+        let _first = try_own(&p).expect("first owner");
+        let again = fs::OpenOptions::new().read(true).write(true).open(&p).unwrap();
+        assert!(matches!(again.try_lock(), Err(fs::TryLockError::WouldBlock)));
+        let _ = fs::remove_dir_all(&d);
+    }
 }
