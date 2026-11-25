@@ -386,7 +386,14 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             crate::ui::shop_look::prefetch(app, *user, cx);
             profile_items(app, &e, *user, *guild)
         }
-        Target::ShopLook(u) => crate::ui::shop_look::button_items(app, &e, *u),
+        Target::ShopLook(u) => {
+            crate::ui::shop_look::prefetch(app, *u, cx);
+            let items = crate::ui::shop_look::button_items(app, &e, *u);
+            if items.is_empty() {
+                return None;
+            }
+            items
+        }
         Target::FriendActions(u) => crate::ui::profile_toolbar::friend_action_items(app, &e, *u),
         Target::EditProfile(g) => crate::ui::profile_toolbar::edit_profile_items(&e, *g),
         Target::Viewer => {

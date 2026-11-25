@@ -1230,7 +1230,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         crate::ui::shop_look::prefetch(app, uid, cx);
         crate::ui::shop_look::state(&crate::ui::shop_look::skus(app, uid))
     });
-    let shop_look = shop_look.filter(crate::ui::shop_look::renderable).map(|_| {
+    let shop_look = shop_look.filter(|l| crate::ui::shop_look::button_shown(true, l)).map(|_| {
         let es = e.clone();
         icon_btn(("profile-modal-shop-look", uid.0), "shop-sparkle").tooltip(crate::ui::tooltip::tip(crate::t!("shop_look.title"))).on_click(move |ev, w, cx| {
             crate::ui::extra_menus::open(crate::ui::extra_menus::Target::ShopLook(uid), ev.position(), w);

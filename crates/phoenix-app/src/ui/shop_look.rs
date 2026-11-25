@@ -231,8 +231,16 @@ pub fn menu_item(app: &PhoenixApp, e: &gpui::Entity<PhoenixApp>, user: Id) -> Op
     Some(MenuItem::submenu(crate::t!("shop_look.title"), items))
 }
 
+pub fn button_shown(experiment: bool, look: &Look) -> bool {
+    experiment && renderable(look)
+}
+
 pub fn button_items(app: &PhoenixApp, e: &gpui::Entity<PhoenixApp>, user: Id) -> Vec<MenuItem> {
-    contents(e, &state(&skus(app, user))).into_iter().map(MenuItem::Custom).collect()
+    let look = state(&skus(app, user));
+    if !renderable(&look) {
+        return Vec::new();
+    }
+    contents(e, &look).into_iter().map(MenuItem::Custom).collect()
 }
 
 impl PhoenixApp {
@@ -261,6 +269,16 @@ mod tests {
         assert!(renderable(&state(&[901, 902])));
         set_loaded(vec![903], Vec::new());
         assert!(!renderable(&state(&[903])));
+    }
+
+    #[test]
+    fn nothing_to_buy_draws_no_button_or_menu() {
+        assert!(!button_shown(true, &Look::Hidden));
+        set_loaded(vec![904], Vec::new());
+        assert!(!button_shown(true, &state(&[904])));
+        assert!(!button_shown(false, &Look::Ready(vec![sku(905, 0, true)])));
+        assert!(button_shown(true, &Look::Ready(vec![sku(905, 0, true)])));
+        assert!(button_shown(true, &Look::Loading(1)));
     }
 
     #[test]
