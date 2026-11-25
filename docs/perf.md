@@ -184,3 +184,177 @@ Baseline measured before phase 2 (`int-bin/bench 5000`, headless 1280×800):
 | `rss_after_scroll_kib` | 388,568 KiB |
 
 Unit tests also verify 5,000 synthetic messages through `richtext::build` (`richtext::emoji_tests::builds_five_thousand_synthetic_messages`) and strict LRU budget enforcement (`media::lru::tests`).
+
+## Phoenix vs official Discord 1.0.171 (2026-11-25, main ac72344d)
+
+Same machine (8 threads, NVIDIA 580 on Wayland), load average 5–16 during
+the runs because other builds were going on. Every Phoenix run went through
+`phoenix-nice` (SCHED_IDLE), which changes nothing in the CPU seconds counted
+per process. Scripts and raw outputs are kept outside the repo; the method
+below is enough to redo them.
+
+### Method
+
+- **Memory, threads, CPU, wakeups**: every process of the tree is summed
+  from `/proc/<pid>/smaps_rollup` (Rss, Pss, Private = USS), `/proc/<pid>/stat`
+  (utime + stime over 60 s, thread count) and
+  `/proc/<pid>/task/*/status` (voluntary + involuntary context switches over
+  60 s = wakeups/s). For Discord, the tree is the main process and all its
+  children (zygotes, GPU, broker, network, renderer, audio) plus
+  `chrome_crashpad_handler`.
+- **Discord**: the instance the user had open with CDP (`--remote-debugging-port`),
+  logged in, window open, not driven during the runs. Three 60 s samples.
+- **Phoenix, real account**: `int-bin/real_shots` (dev profile) offscreen,
+  read-only, `PHX_WAIT=125`, sampled from t = 55 s to 115 s, with `HOME`,
+  `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` pointed at an empty scratch directory
+  (with `.config/discord` linked to the real install for fonts). So there is
+  no CDP probe and the user's own session journal is never touched. A first
+  run fills that scratch cache (IDENTIFY); the run that was measured is the
+  second one, which resumes (RESUME) from it.
+- **Phoenix, window**: the published release binary (v0.1.0-beta.1, LTO,
+  stripped) with `PHOENIX_MOCK=1 PHX_TIMINGS=1 PHOENIX_BENCH_EXIT_MS=…`
+  inside `dbus-run-session -- kwin_wayland --virtual --width 1280 --height 800`.
+  The window lives in a private compositor: nothing appears on the user's
+  screen and the account is not touched.
+- **Scroll**: `bench 5000` (MockBackend, headless 1280×800), built at
+  ac72344d. Each binary was run twice, with runs alternating
+  new/old/new/old.
+
+### Side by side
+
+| | Discord 1.0.171 (Electron) | Phoenix, real account (dev build, headless) | Phoenix, window (release, mock data) |
+|---|---|---|---|
+| processes | 9 + crashpad | 1 | 1 |
+| threads | 135 + 3 | 18 | 23 |
+| RSS (sum) | 1,427–1,504 MiB | 423 MiB | 287 MiB |
+| PSS (sum) | 880–963 MiB | **342 MiB** | **202 MiB** |
+| USS (private) | 699–783 MiB | 328 MiB | 187 MiB |
+| CPU at rest, 60 s | 8.2 / 8.4 / 11.5 % of one core (13 % and 51 % in two earlier busy samples) | 4.1 % (5.1 % on the cold run, media still loading) | **0.45 %** |
+| wakeups/s at rest | 243–303 (1,819 in the busy sample) | 186 | 127, of which 100 come from one NVIDIA driver thread (`libnvidia-eglcore`) |
+| on disk | 560 MB install (`Discord` 208 MB, `modules` 293 MB) + 708 MB profile (`Cache` 175 MB) | — | **55.9 MB** binary (23.9 MB tar.gz) |
+
+For memory, PSS is the number to compare: the shared Chromium pages are
+counted once instead of once per process. With the real account Phoenix
+uses **2.6–2.8× less PSS** than Discord, in a dev build that still holds a
+128 MiB decoded-image budget. With the mock data and the release binary the
+ratio is 4.4–4.8×.
+
+The CPU numbers do not compare like for like. The real-account Phoenix run
+is a dev build (phoenix crates at `opt-level` 0), headless, with the example
+polling every 50 ms. The release run receives no gateway traffic. So the
+real figure in a release build is somewhere between 0.45 % and 4 %, against
+8–11 % for Discord.
+
+### Start-up
+
+| | runs |
+|---|---|
+| release, mock, process start → `first_frame` | 2,056 / 2,188 / 2,271 ms, then 1,442 / 1,603 ms |
+| same, `PHX_NO_FONT_FALLBACK=1` | **428 / 495 / 500 ms** |
+| dev build (`int-bin/discord-phoenix`), mock | 6,767 / 7,146 ms |
+| real account, RESUME: `connect_start` → `snapshot_applied` | 118 ms (`resume_session_built` 240 ms) |
+| real account, cold cache (IDENTIFY): `connect_start` → READY / first channel frame | 1,274 ms / +367 ms |
+
+**1.0–1.8 s of the release start-up goes into building the font fallback
+chain**, before the window opens. `strace` shows 52 `fc-match` processes
+spawned one after the other (811 ms on their own, measured with a shell
+loop) and 2,672 font files opened. Discord's own time to first frame was not
+measured: that needs a restart of the user's client.
+
+### `bench 5000`, 24/11 binary vs ac72344d
+
+The old binary is `int-bin/bench` from 2026-11-24 09:39 (before phase 2).
+The new one was built at ac72344d. In between there is a whole day of
+parity work, so this measures main as it is, not phase 2 on its own. Both
+are dev builds and the load average was 6–13.
+
+| metric | 24/11 (2 runs) | ac72344d (2 runs) | change |
+|---|---|---|---|
+| `markdown_ns_per_msg` | 27,553 / 34,140 | 28,118 / 26,528 | noise |
+| `markdown_allocs_per_msg` | 18.1 | **16.8** | −7 % |
+| `channel_load_ms` (5,000 msgs) | 19,481 / 19,525 | 21,349 / 19,635 | noise |
+| `scroll_frame_us_p50` | 27,697 / 29,427 | 33,108 / 30,180 | +3–20 % (load) |
+| `scroll_frame_us_p95` | 37,746 / 41,508 | 48,891 / 40,916 | noise |
+| `scroll_allocs_per_frame` | 10,770 / 10,775 | **12,551 / 12,556** | **+17 %** |
+| `scroll_bytes_per_frame` | 20.7 MB | 21.8 MB | +5 % |
+| `idle_allocs_per_frame` | 8,804 / 8,889 | 10,095 | +14 % |
+| `rss_main_view_kib` | 405,716 / 374,136 | 369,016 / 350,688 | −7 % |
+| `rss_after_scroll_kib` | 424,884 / 397,036 | 386,620 / 357,920 | **−9 %** |
+
+Phase 2 shows up in the markdown allocations and in memory: the strict LRU
+pass and dropping the per-message `HashMap` clones save 30–40 MB after the
+scroll. The allocations per scroll frame went up, though. The parity work
+added since 24/11 (role gradients, nameplates, decorations, reactions,
+components) builds more elements per message than phase 2 saved. Times are
+dominated by the load on the machine and by the dev profile. Allocation
+counts do not depend on load, so they are the number to follow.
+
+### Next targets (opti + refacto phase), by expected gain
+
+1. **Font fallback off the start-up path.** It costs 1.0–1.8 s out of
+   1.4–2.3 s, measured with `PHX_NO_FONT_FALLBACK`. Ask fontconfig once
+   (`fc-match -s` for each locale gives the whole sorted list) or link
+   libfontconfig instead of spawning 52 processes. Cache the chain on disk,
+   keyed by locale and the mtime of `/var/cache/fontconfig`. Register the
+   faces lazily, on the first glyph that misses. Expected: **first frame
+   about 0.5 s instead of 1.5–2.3 s**.
+2. **Allocations per scroll frame.** 12.5k allocations and 21.8 MB
+   allocated per frame for about 15 visible messages, so roughly 800
+   allocations per message per frame. Keep the element inputs of a message
+   (author line, shaped text runs, reaction row, decoration lookups) on its
+   `RenderedMessage` and rebuild them only when the message or the theme
+   changes. Use `SharedString`/`Arc` instead of `String` clones in `ui/chat`.
+   Expected: −50 to −70 % allocations per frame and −30 to −40 % frame time.
+   This is what makes long channels smooth.
+3. **Idle frames.** `idle_allocs_per_frame` = 10k, so a frame with nothing
+   moving still rebuilds the whole tree. Find the `cx.notify()` calls that
+   fire with no state change: the 1 s app tick in `app.rs` only needs to run
+   while typing indicators, the slowmode cooldown or a call timer are active.
+   Expected: CPU at rest towards 0 % outside the driver, and −1 wakeup/s.
+4. **Timers and wakeups.** The tray polls the whole app state every 500 ms
+   (`tray.rs`, 2 Hz on the two `blocking-*` threads plus the `Timer`
+   thread). Push it from the places that change unread, mention or voice
+   state. Turn the 1 s tick into a one-shot timer. Expected: Phoenix's own
+   wakeups at rest from about 27/s to under 5/s. The 100/s of
+   `libnvidia-eglcore` come from the driver and Discord's GPU process pays
+   them too. Check whether they stop when the window is hidden or occluded
+   (no frame requested).
+5. **One runtime, one HTTP client.** Today there is a 2-worker tokio runtime
+   in `discord_backend.rs`, plus 8 separate current-thread runtimes, each
+   with its own thread and often its own reqwest/rustls client (updater ×2,
+   sound assets, soundboard, i18n, font fallback, voice effects, D-Bus
+   notifications). On top of that come about 40 ad-hoc `std::thread::spawn`
+   calls for one-shot jobs. Move them all to the backend runtime (or GPUI's
+   background executor) with one shared client: TLS sessions and HTTP/2
+   connections get reused, and there are fewer threads. Expected: −5 to −15
+   MB RSS, −8 short-lived threads, and fewer TLS handshakes to
+   `discord.com`/CDN on start-up.
+6. **Binary snapshot for RESUME.** `snapshot_parsed` 165 ms +
+   `snapshot_replayed` 288 ms on the preload thread. A compact binary format
+   (see "What's next" above) would cut both. Expected: −200 to −300 ms
+   before the cached session is on screen.
+7. **Decoded media budget.** The real-account run sits 140 MiB of PSS
+   above the mock window (342 vs 202 MiB). Part of that gap is the dev build
+   (a 195 MB binary mapped instead of 56 MB), and the rest is account state
+   plus decoded avatars, emoji and GIF frames. To split the two, run a
+   release `real_shots`, then:
+   - decode at the size actually displayed;
+   - keep only the first frame of an animation that is not hovered;
+   - lower `BUDGET_BYTES` from 128 MiB to 64 MiB.
+   Expected: −50 to −100 MB on a large account.
+8. **Heavy dependencies.** The release binary is 55.9 MB. To check with
+   `cargo bloat --release --crates` on the integrator:
+   - `symphonia` (mp3 only, for the client sounds);
+   - `image` with gif + webp, already needed;
+   - `regex` (8 call sites in phoenix-app), where `memchr` or hand parsers
+     may do;
+   - `tracing-subscriber` with `env-filter`;
+   - `keyring` with `crypto-rust`;
+   - two async stacks (tokio, plus smol/async-io from GPUI and zbus).
+   Expected: −5 to −10 MB binary and a shorter link time.
+9. **Measure in an optimised profile.** `int-bin` is the dev profile:
+   phoenix crates at `opt-level` 0, so frame times are 5–10× what users
+   get. A `[profile.bench]` (or `profile.dev.package.phoenix-app.opt-level =
+   1` only for `bench`/`frames`) would give numbers that mean something
+   without a full LTO build. Cost: one more build of phoenix-app in the
+   shared target dir, so check `df -h /home` first.
