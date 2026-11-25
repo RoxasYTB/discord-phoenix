@@ -472,7 +472,7 @@ fn voice_avatar(app: &PhoenixApp, user: Id, size: f32) -> AnyElement {
         f.self_mute = app.mic_muted;
         f.self_deaf = app.deafened;
     }
-    let local_muted = !me && crate::ui::voice_panel::prefs().lock().user(user).muted;
+    let local_muted = !me && crate::voice::prefs::prefs().lock().user(user).muted;
     let muted = f.self_mute || f.server_mute;
     let deaf = f.self_deaf || f.server_deaf;
     let can_ring = !muted && !deaf && !local_muted;
@@ -1158,7 +1158,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
                     .child(pill(Some(glyph("icons/voice/screen.svg", 16., white).into_any_element()), Some(name))),
             )
     } else {
-        let local_muted = !me && crate::ui::voice_panel::prefs().lock().user(tile.user).muted;
+        let local_muted = !me && crate::voice::prefs::prefs().lock().user(tile.user).muted;
         let state_icon = voice_status_icon(f, local_muted).map(|(name, critical)| {
             let color = if critical { t(idx::ICON_FEEDBACK_CRITICAL) } else { white };
             named(name, 16., color).into_any_element()
