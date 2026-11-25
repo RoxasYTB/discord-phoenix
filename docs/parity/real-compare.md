@@ -653,3 +653,37 @@ References: dumps `vanilla-menu-thread`, `vanilla-group-dm`, `vanilla-guild-chat
 | Server tag chips | `tagText_k8jyN7` on one line (« GLAD », « Zzz ») | « GLA » + « D », « Zz » + « z » painted over the status line: the text rewrapped at its snapped paint width | GPUI patch 15 (rewrap slack, docs/gpui-patches.md) | ✅ int-bin 60857fbf: « GLAD », « Zzzz » on one line; the custom status reads « Repose en paix Happy 03/1… » like the client |
 
 Sweep on the same capture (client dump vs Phoenix): member group « 💻 ─ ☲☲ Responsable du Dév… — 2 », names « Hopinett… », statuses « "Moin de paprasse, plus de terr… », header topic « Honeypot — … », channel names and the user panel cut at the same glyph. Not swept here: thread and forum titles, server names in tooltips (no `real_shots` view on the same data).
+
+## Glitch hunt 7 (2026-11-26, wt/glitch7)
+
+Offscreen renders only, no CDP pass (int-bin 60857fbf, then 594490f1 for the after shots): `real_shots` on `#phoenix`
+with a `node` stub first in `PATH`, Onyx / dark / light, 1536×840 at dpr 1.5, 1920×1080, 1280×800 at dpr 1,
+940×700 and 1024×1100; `PHX_OPEN` modview, createevent, addserver, follow, followok, statuspicker, guildmenu,
+profilemenu, profileoverflow, 11 user settings pages; member profile popout and modal; hover on a message, the mic
+(Lottie frames 120 / 400 ms) and the rail; the #phoenix test message 1575263335010799749 (text previews, audio,
+spoilers). Demo: `content_shots` at 150 % (AutoMod, system, call, spoiler, mosaic, audio jumps), `call_view dm chat`,
+`call_view`, `views` (profile-modal, members, dm-profile, events, boost, guild-menu), `component_shots`.
+Renders stay in `/mnt/windata/project-phoenix/compare/glitch7`. References: CSS and JS of the local client cache.
+
+### Fixed
+
+| Zone | Glitch | Client reference | Fix |
+|---|---|---|---|
+| Audio player | tinted generic file glyph instead of the audio file icon | `.audioMetadata_FJ99sr:before{background-image:url(/assets/a6db1d05d35f13d0.svg);background-size:100% auto;height:40px;width:24px}`, opacity .6 | `chat/attach.rs` `audio_card`: the asset, 24 wide in a 24×40 box |
+| Audio player | control bar too light (black 28 %), worst in light theme | `.audioControls_FJ99sr{background-color:var(--opacity-black-40)}`; black 28 only under `.background-opacity-*`, the in-game overlay classes (`web.*.js` `LOW/MEDIUM/HIGH/FULL`) | `chat/voice_message.rs` `attachment_controls` |
+| Mod View | action tiles drawn edge to edge, so disabled tiles (Kick / Ban / Timeout) filled the whole cell | `.bottomRowAction_ebzPvR .innerBottomRowAction_ebzPvR{width:calc(100% - 16px)}` | `mod_view.rs` `action`: outer `px 8` |
+| Text file preview | in a narrow chat (940 px window, or 150 % zoom) the card shrank below its footer: file name and size vanished, the ⋯ button was cut | `.container_BOOBu-{max-width:50vw;min-width:302px;width:100%}` (min wins over max) | `chat/plaintext.rs` `render`: `min_w 302` |
+
+Verified on new renders (int-bin 594490f1).
+
+### Checked, not bugs
+
+- AutoMod footer « Actions · Jump to Surrounding · Report Issue » runs past a very narrow column: `.centeredRowContainer_bbJCi7{display:flex;flex-direction:row}` has no wrap in the client either.
+- Audio seek bar shrinks to nothing in a very narrow column: `.mediaBarWrapper_s1cr3c{flex:1 1 auto}` has no minimum.
+- Mod View in the light theme sits in a dark frame: the member's profile theme (themed container, `profile_theme::composite`), like the client.
+- YouTube embed play / open pill: `.wrapper_lj7V-K` black 60 %, 48 px, icons at .6 opacity, as drawn.
+- `PHX_OPEN=settings:keybinds` shows the System page under the « Raccourcis clavier » title: the 2026 sidebar has no Keybinds entry, the page is only an internal alias.
+
+### Open
+
+- Profile role pills put the role icon after the name; the client chunk of the profile role list is not in the cache, so not changed.
