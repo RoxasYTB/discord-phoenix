@@ -868,7 +868,7 @@ mod tests {
     fn voice_and_text_channel_locks_match_client() {
         let ow = |allow: api::Permissions, deny: api::Permissions| api::PermissionOverwrite {
             id: api::Snowflake(1),
-            kind: 0,
+            kind: api::OverwriteType::Role,
             allow,
             deny,
         };
