@@ -51,6 +51,7 @@ pub struct ShapedLine {
     /// for, before fallback. The baseline and the underlines are placed from its metrics, like
     /// Chromium's strut: a fallback font with a larger ascent does not move the glyphs.
     pub(crate) primary_font: Option<FontId>,
+    pub(crate) rich: Option<Arc<super::rich::RichPaint>>,
 }
 
 impl ShapedLine {
@@ -154,6 +155,7 @@ impl ShapedLine {
             align_width,
             &self.decoration_runs,
             &[],
+            self.rich.as_ref().map_or(&[][..], |rich| &rich.run_sizes[..]),
             self.primary_font,
             window,
             cx,
@@ -171,6 +173,20 @@ impl ShapedLine {
         window: &mut Window,
         cx: &mut App,
     ) -> Result<()> {
+        if let Some(rich) = self.rich.as_ref()
+            && !rich.boxes.is_empty()
+        {
+            let x = aligned_origin_x(
+                origin,
+                align_width.unwrap_or(self.layout.width),
+                px(0.),
+                &align,
+                &self.layout,
+                None,
+            );
+            let baseline = primary_baseline(&self.layout, self.primary_font, line_height, cx);
+            super::rich::paint_boxes(point(x, origin.y), baseline, &rich.boxes, window);
+        }
         paint_line_background(
             origin,
             &self.layout,
@@ -250,6 +266,7 @@ impl ShapedLine {
             text: left_text,
             decoration_runs: left_decorations,
             primary_font: self.primary_font,
+            rich: None,
         };
 
         let right = ShapedLine {
@@ -257,6 +274,7 @@ impl ShapedLine {
             text: right_text,
             decoration_runs: right_decorations,
             primary_font: self.primary_font,
+            rich: None,
         };
 
         (left, right)
@@ -378,6 +396,7 @@ impl<'a> ShapedLineCursor<'a> {
             text: SharedString::new(&self.line.text[previous_index..byte_index]),
             decoration_runs: decorations,
             primary_font: self.line.primary_font,
+            rich: None,
         }
     }
 
@@ -410,6 +429,7 @@ impl LineLayout {
             align,
             align_width,
             decoration_runs,
+            &[],
             &[],
             None,
             window,
@@ -490,6 +510,7 @@ impl WrappedLine {
             align_width,
             &self.decoration_runs,
             &self.wrap_boundaries,
+            &[],
             self.primary_font,
             window,
             cx,
@@ -538,6 +559,7 @@ fn paint_line(
     align_width: Option<Pixels>,
     decoration_runs: &[DecorationRun],
     wrap_boundaries: &[WrapBoundary],
+    run_sizes: &[Pixels],
     primary_font: Option<FontId>,
     window: &mut Window,
     cx: &mut App,
@@ -612,7 +634,8 @@ fn paint_line(
         let mut max_glyph_size = size(px(0.), px(0.));
         let mut first_glyph_x = origin.x;
         for (run_ix, run) in layout.runs.iter().enumerate() {
-            max_glyph_size = text_system.bounding_box(run.font_id, layout.font_size).size;
+            let run_size = run_sizes.get(run_ix).copied().unwrap_or(layout.font_size);
+            max_glyph_size = text_system.bounding_box(run.font_id, run_size).size;
 
             for (glyph_ix, glyph) in run.glyphs.iter().enumerate() {
                 glyph_origin.x += glyph.position.x - prev_glyph_position.x;
@@ -778,14 +801,14 @@ fn paint_line(
                             glyph_origin + baseline_offset + vertical_offset,
                             run.font_id,
                             glyph.id,
-                            layout.font_size,
+                            run_size,
                         )?;
                     } else {
                         window.paint_glyph(
                             glyph_origin + baseline_offset + vertical_offset,
                             run.font_id,
                             glyph.id,
-                            layout.font_size,
+                            run_size,
                             color,
                         )?;
                     }
@@ -828,6 +851,22 @@ fn paint_line(
 
         Ok(())
     })
+}
+
+fn primary_baseline(
+    layout: &LineLayout,
+    primary_font: Option<FontId>,
+    line_height: Pixels,
+    cx: &App,
+) -> Pixels {
+    let (ascent, descent) = primary_font.map_or((layout.ascent, layout.descent), |font_id| {
+        let text_system = cx.text_system();
+        (
+            text_system.ascent(font_id, layout.font_size).abs(),
+            text_system.descent(font_id, layout.font_size).abs(),
+        )
+    });
+    (line_height - ascent - descent) / 2. + ascent
 }
 
 fn paint_line_background(
@@ -1090,6 +1129,7 @@ mod tests {
             text: SharedString::new(text),
             decoration_runs: SmallVec::from(decorations.to_vec()),
             primary_font: None,
+            rich: None,
         }
     }
 
@@ -1450,6 +1490,7 @@ mod tests {
                     Some(px(16.)),
                     &wrapped.decoration_runs,
                     &wrapped.wrap_boundaries,
+                    &[],
                     wrapped.primary_font,
                     window,
                     cx,
@@ -1593,6 +1634,7 @@ mod tests {
             text: "abcdef".into(),
             decoration_runs: SmallVec::new(),
             primary_font: None,
+            rich: None,
         };
 
         // First split at byte 2 — mid-run in run A
@@ -1882,6 +1924,7 @@ mod tests {
             text: "a😀bcdef".into(),
             decoration_runs: SmallVec::new(),
             primary_font: None,
+            rich: None,
         };
         let mut cursor = line.cursor();
         let first = cursor.take_until(5);

@@ -3,12 +3,14 @@ mod font_features;
 mod line;
 mod line_layout;
 mod line_wrapper;
+mod rich;
 
 pub use font_fallbacks::*;
 pub use font_features::*;
 pub use line::*;
 pub use line_layout::*;
 pub use line_wrapper::*;
+pub use rich::{RichText, TextBox};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -733,7 +735,121 @@ impl WindowTextSystem {
             text,
             decoration_runs,
             primary_font,
+            rich: None,
         }
+    }
+
+    #[allow(missing_docs)]
+    pub fn shape_line_rich(
+        &self,
+        text: SharedString,
+        font_size: Pixels,
+        runs: &[TextRun],
+        rich: &RichText,
+        force_width: Option<Pixels>,
+    ) -> ShapedLine {
+        if rich.is_empty() {
+            return self.shape_line(text, font_size, runs, force_width);
+        }
+        let (layout, paint) = self.layout_rich(&text, font_size, runs, rich);
+        ShapedLine {
+            layout: Arc::new(layout),
+            text,
+            decoration_runs: Self::decoration_runs(runs),
+            primary_font: runs.first().map(|run| self.resolve_font(&run.font)),
+            rich: Some(Arc::new(paint)),
+        }
+    }
+
+    #[allow(missing_docs)]
+    pub fn layout_line_rich(
+        &self,
+        text: &str,
+        font_size: Pixels,
+        runs: &[TextRun],
+        rich: &RichText,
+    ) -> Arc<LineLayout> {
+        if rich.is_empty() {
+            return self.layout_line(text, font_size, runs, None);
+        }
+        Arc::new(self.layout_rich(text, font_size, runs, rich).0)
+    }
+
+    fn decoration_runs(runs: &[TextRun]) -> SmallVec<[DecorationRun; 32]> {
+        let mut decoration_runs = SmallVec::<[DecorationRun; 32]>::new();
+        for run in runs {
+            if let Some(last_run) = decoration_runs.last_mut()
+                && last_run.color == run.color
+                && last_run.underline == run.underline
+                && last_run.strikethrough == run.strikethrough
+                && last_run.background_color == run.background_color
+            {
+                last_run.len += run.len as u32;
+                continue;
+            }
+            decoration_runs.push(DecorationRun {
+                len: run.len as u32,
+                color: run.color,
+                background_color: run.background_color,
+                underline: run.underline,
+                strikethrough: run.strikethrough,
+            });
+        }
+        decoration_runs
+    }
+
+    fn layout_rich(
+        &self,
+        text: &str,
+        font_size: Pixels,
+        runs: &[TextRun],
+        rich: &RichText,
+    ) -> (LineLayout, rich::RichPaint) {
+        let mut merged = LineLayout {
+            font_size,
+            ..Default::default()
+        };
+        let mut run_sizes = Vec::new();
+        let mut piece_runs: Vec<TextRun> = Vec::new();
+        for segment in rich::segments(text.len(), font_size, rich) {
+            piece_runs.clear();
+            let mut offset = 0;
+            for run in runs {
+                let start = offset.max(segment.range.start);
+                let end = (offset + run.len).min(segment.range.end);
+                if start < end {
+                    piece_runs.push(TextRun {
+                        len: end - start,
+                        ..run.clone()
+                    });
+                }
+                offset += run.len;
+                if offset >= segment.range.end {
+                    break;
+                }
+            }
+            let piece = self.layout_line(
+                &text[segment.range.clone()],
+                segment.font_size,
+                &piece_runs,
+                None,
+            );
+            rich::append_segment(
+                &mut merged,
+                &mut run_sizes,
+                &piece,
+                segment.range.start,
+                segment.font_size,
+            );
+        }
+        merged.len = text.len();
+        let boxes = rich::apply_spacing(&mut merged, &mut run_sizes, rich, |font_id, size| {
+            (
+                self.ascent(font_id, size).abs(),
+                self.descent(font_id, size).abs(),
+            )
+        });
+        (merged, rich::RichPaint { run_sizes, boxes })
     }
 
     /// Shape a multi line string of text, at the given font_size, for painting to the screen.
