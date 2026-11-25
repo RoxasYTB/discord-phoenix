@@ -323,10 +323,29 @@ pub fn edit_box_probe() -> impl IntoElement {
     gpui::canvas(|b, _, _| EDIT_BOX.with(|c| c.set(Some(b))), |_, _, _, _| {}).absolute().inset_0()
 }
 
-pub fn render_for_edit(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub const COMPOSER_MIN_H: f32 = 44.;
+
+pub fn max_height(small: bool, layered: bool, emoji_and_stickers: bool, window_h: f32, textarea_h: f32) -> f32 {
+    let base = match (layered, small) {
+        (false, _) => 490.,
+        (true, true) => 200.,
+        (true, false) if emoji_and_stickers => 490.,
+        (true, false) => 245.,
+    };
+    base.min(window_h - 120. - (0.5 * window_h).min(textarea_h))
+}
+
+thread_local! {
+    static SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
+    static LAST_SELECTED: std::cell::Cell<Option<(usize, usize)>> = const { std::cell::Cell::new(None) };
+}
+
+pub fn render_for_edit(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let edit = cx.try_global::<Autocomplete>()?.active.as_ref()?.edit;
     let b = EDIT_BOX.with(std::cell::Cell::get).filter(|_| edit && app.chat.edit.is_some())?;
-    let list = popup(app, cx)?;
+    let zoom = crate::theme::zoom();
+    let max = max_height(true, true, false, f32::from(window.viewport_size().height) / zoom, f32::from(b.size.height) / zoom);
+    let list = popup(app, max, cx)?;
     Some(
         gpui::deferred(
             div()
@@ -342,14 +361,16 @@ pub fn render_for_edit(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option
     )
 }
 
-pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if cx.try_global::<Autocomplete>()?.active.as_ref()?.edit {
         return None;
     }
-    popup(app, cx)
+    let zoom = crate::theme::zoom();
+    let max = max_height(false, false, false, f32::from(window.viewport_size().height) / zoom, COMPOSER_MIN_H);
+    popup(app, max, cx)
 }
 
-fn popup(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+fn popup(app: &PhoenixApp, max_h: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let a = cx.try_global::<Autocomplete>()?.active.as_ref()?;
     let tone = cx.try_global::<Pickers>().map(|p| p.prefs.tone).unwrap_or(0);
     let title: SharedString = match a.kind {
@@ -357,7 +378,8 @@ fn popup(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
         Kind::Mention => if a.query.is_empty() { crate::t!("members.members") } else { crate::t!("ac.members", q = a.query) },
         Kind::Channel => if a.query.is_empty() { crate::t!("ac.text_channels") } else { crate::t!("ac.channels", q = a.query) },
     };
-    let mut rows = div().flex().flex_col().pb(z(8.));
+    let mut rows: Vec<AnyElement> = Vec::new();
+    let mut selected_child = 0;
     let mut stickers_started = false;
     for (i, item) in a.items.iter().enumerate() {
         let selected = i == a.selected;
@@ -365,16 +387,17 @@ fn popup(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
         if matches!(item, Item::Sticker { .. }) && !stickers_started {
             stickers_started = true;
             if i > 0 {
-                rows = rows.child(div().px(z(16.)).py(z(8.)).child(div().h(z(1.)).bg(tk(idx::BORDER_SUBTLE))));
+                rows.push(div().px(z(16.)).py(z(8.)).child(div().h(z(1.)).bg(tk(idx::BORDER_SUBTLE))).into_any_element());
             }
-            rows = rows.child(
+            rows.push(
                 div()
                     .px(z(8.))
                     .py(z(12.))
                     .text_size(z(14.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
-                    .child(crate::t!("ac.stickers", q = a.query)),
+                    .child(crate::t!("ac.stickers", q = a.query))
+                    .into_any_element(),
             );
         }
         let small = matches!(item, Item::Emoji(_) | Item::Sticker { .. });
@@ -415,7 +438,10 @@ fn popup(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 )
             }
         };
-        rows = rows.child(
+        if selected {
+            selected_child = rows.len() + 1;
+        }
+        rows.push(
             div().px(z(8.)).child(
                 div()
                     .id(("ac", i))
@@ -448,8 +474,14 @@ fn popup(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                     .when_some(hint, |d, h| {
                         d.child(div().flex_1().ml(z(16.)).min_w_0().overflow_hidden().whitespace_nowrap().flex().justify_end().child(h))
                     }),
-            ),
+            )
+            .into_any_element(),
         );
+    }
+    let key = (a.items.len(), a.selected);
+    let handle = SCROLL.with(Clone::clone);
+    if LAST_SELECTED.with(|l| l.replace(Some(key))) != Some(key) {
+        handle.scroll_to_item(selected_child);
     }
     Some(
         div()
@@ -467,14 +499,24 @@ fn popup(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                     .overflow_hidden()
                     .child(
                         div()
-                            .px(z(8.))
-                            .py(z(12.))
-                            .text_size(z(14.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
-                            .child(title),
-                    )
-                    .child(rows),
+                            .id("ac-scroller")
+                            .max_h(z(max_h.max(0.)))
+                            .overflow_y_scroll()
+                            .track_scroll(&handle)
+                            .flex()
+                            .flex_col()
+                            .pb(z(8.))
+                            .child(
+                                div()
+                                    .px(z(8.))
+                                    .py(z(12.))
+                                    .text_size(z(14.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
+                                    .child(title),
+                            )
+                            .children(rows),
+                    ),
             )
             .into_any_element(),
     )
@@ -504,6 +546,15 @@ mod tests {
         assert_eq!((v.len() - count(&v), count(&v)), (6, 4));
         let v = with_stickers((0..2).map(em).collect(), (0..9).map(st).collect());
         assert_eq!((v.len() - count(&v), count(&v)), (2, 6));
+    }
+
+    #[test]
+    fn small_variant_caps_the_list_like_the_edit_box() {
+        assert_eq!(max_height(true, true, false, 1000., 56.), 200.);
+        assert_eq!(max_height(false, true, false, 1000., 56.), 245.);
+        assert_eq!(max_height(false, true, true, 1000., 56.), 490.);
+        assert_eq!(max_height(false, false, false, 1000., 44.), 490.);
+        assert_eq!(max_height(true, true, false, 400., 300.), 80.);
     }
 
     #[test]

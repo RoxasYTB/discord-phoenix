@@ -347,7 +347,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                         d.child(crate::ui::focus_ring::ring_box(8., 0., 0.))
                     })
                     .child(super::width_probe(&TEXT_AREA_W))
-                    .children(crate::ui::autocomplete::render(app, cx))
+                    .children(crate::ui::autocomplete::render(app, window, cx))
                     .children(reply)
                     .children(sched)
                     .children(tray)

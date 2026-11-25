@@ -330,6 +330,39 @@ mod tests {
     }
 
     #[test]
+    fn previews_enter_and_leave_with_the_default_spring() {
+        assert_eq!(spring(Duration::ZERO), 0.);
+        assert!(spring(Duration::from_millis(100)) > 0.3 && spring(Duration::from_millis(100)) < 0.5);
+        assert!(spring(Duration::from_millis(400)) > 0.95);
+        assert_eq!(spring(SPRING_DONE), 1.);
+        let (ch, t0) = (Id(40), Instant::now());
+        for i in 0..3 {
+            push(ch, Id(50 + i), t0);
+            TOASTS.with_borrow_mut(|t| t.msgs.push(Message { id: Id(50 + i), channel: ch, ..Default::default() }));
+        }
+        push(ch, Id(60), t0);
+        assert_eq!(TOASTS.with_borrow(|t| t.leaving.iter().map(|(m, _)| m.id).collect::<Vec<_>>()), vec![Id(50)]);
+        assert_eq!(shown(ch, t0 + Duration::from_millis(700)), vec![Id(51), Id(52), Id(60)]);
+        assert!(TOASTS.with_borrow(|t| t.leaving.is_empty()));
+        assert!(shown(ch, t0 + LINGER).is_empty());
+        assert!(TOASTS.with_borrow(|t| t.fading.as_ref().is_some_and(|(m, _)| m.len() == 2)));
+        let _ = shown(ch, t0 + LINGER + SPRING_DONE);
+        assert!(TOASTS.with_borrow(|t| t.fading.is_none()));
+    }
+
+    #[test]
+    fn preview_joins_blocks_on_one_line_with_their_styles() {
+        let blocks = crate::markdown::parse("# Titre\n_italique_ et **gras**\n```\ncode\n```", &crate::markdown::NoResolve);
+        let i = joined_inline(&blocks);
+        assert_eq!(i.text, "Titre italique et gras code");
+        let covered: usize = i.spans.iter().map(|s| s.range.len()).sum();
+        assert_eq!(covered, i.text.len());
+        let italic = i.spans.iter().find(|s| s.style.has(Style::ITALIC)).unwrap();
+        assert_eq!(&i.text[italic.range.clone()], "italique");
+        assert!(i.spans.iter().any(|s| s.style.has(Style::CODE) && &i.text[s.range.clone()] == "code"));
+    }
+
+    #[test]
     fn only_messages_of_the_call_channel() {
         let m = Message { channel: Id(5), ..Default::default() };
         assert!(accepts(&m, Some(Id(5))));

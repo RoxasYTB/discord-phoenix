@@ -1544,7 +1544,7 @@ impl Render for PhoenixApp {
             .children(ui::home::overlay(self, window, cx))
             .when_some(self.switcher.as_ref(), |d, sw| d.child(ui::switcher::render(self, sw, cx)))
             .children(ui::image_viewer::render(window, cx))
-            .children(ui::autocomplete::render_for_edit(self, cx))
+            .children(ui::autocomplete::render_for_edit(self, window, cx))
             .children(ui::pickers::render_overlays(self, window, cx))
             .children(ui::chat::app_launcher::render(self, window, cx))
             .children(ui::profile::overlays(self, window, cx))
