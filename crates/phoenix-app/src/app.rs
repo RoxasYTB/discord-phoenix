@@ -1078,6 +1078,7 @@ impl PhoenixApp {
     }
 
     fn on_composer_change(&mut self, cx: &mut Context<Self>) {
+        ui::chat::rich_input::sync(self, cx);
         if let Some(ch) = self.selected_channel
             && !self.composer.read(cx).value().is_empty()
         {
@@ -1090,7 +1091,7 @@ impl PhoenixApp {
             return;
         }
         let Some(ch) = self.selected_channel else { return };
-        let text = self.composer.read(cx).value().trim().to_string();
+        let text = ui::chat::rich_input::take_plain(self.composer.read(cx).value().trim());
         if text.is_empty() {
             return;
         }
@@ -1402,6 +1403,12 @@ impl Render for PhoenixApp {
         crate::media::emoji::sync_motion(self.prefs.synced.flag("anim-emoji"), window.is_window_active());
         crate::ui::settings::effects::sync(self, cx.reduce_motion());
         crate::tts::sync(self);
+        if ui::chat::rich_input::needs_sync(self, cx) {
+            let e = cx.entity().downgrade();
+            cx.defer(move |cx| {
+                let _ = e.update(cx, |a, cx| ui::chat::rich_input::sync(a, cx));
+            });
+        }
         self.chat_sync_style();
         if ui::focus_ring::sync(window, cx) {
             cx.notify();

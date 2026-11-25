@@ -22,6 +22,8 @@ pub mod inbox;
 pub mod inbox_unreads;
 #[cfg(test)]
 mod popout_tests;
+#[cfg(test)]
+mod settings_fx_tests;
 pub mod context_menu;
 pub mod controls;
 pub mod guild_menu;

@@ -147,6 +147,9 @@ fn fill(app: &mut PhoenixApp, cmd: &SlashCommand, window: &mut Window, cx: &mut 
 }
 
 pub fn on_key(app: &mut PhoenixApp, key: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) -> bool {
+    if super::rich_input::legacy(app) {
+        return false;
+    }
     let Some((t, items)) = list_open(app, cx) else { return false };
     let n = items.len();
     let sel = state(cx).selected.min(n - 1);
@@ -166,6 +169,9 @@ pub fn submit(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     let Some((name, args)) = slash::split_invocation(t.trim()) else { return false };
     let Some(cmd) = find(app, name, cx) else { return false };
     let Some(ch) = app.selected_channel else { return false };
+    if super::rich_input::legacy(app) && !is_builtin(&cmd) {
+        return false;
+    }
     if is_builtin(&cmd) {
         let message = args.trim().to_owned();
         if message.is_empty() {
@@ -265,7 +271,7 @@ fn popup() -> gpui::Div {
 
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let t = text(app, cx);
-    if !t.starts_with('/') {
+    if !t.starts_with('/') || super::rich_input::legacy(app) {
         return None;
     }
     ensure_loaded(app, cx);

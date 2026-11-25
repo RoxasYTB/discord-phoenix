@@ -404,6 +404,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                     .child(
                                         div().mx(z(-4.)).child(
                                             gpui_component::input::Textarea::new(&app.composer)
+                                                .token(super::rich_input::render_token)
                                                 .on_paste({
                                                     let this = cx.entity().downgrade();
                                                     move |item, _, cx| this.update(cx, |a, cx| a.paste_clipboard(item, cx)).unwrap_or(false)

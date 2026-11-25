@@ -221,6 +221,14 @@ impl PhoenixApp {
         self.open_thread(ThreadRef { id: thread, name, message_count: 0 }, window, cx);
     }
 
+    pub fn open_thread_link(&mut self, thread: ThreadRef, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if self.prefs.synced.flag("split-threads") {
+            self.open_thread(thread, window, cx);
+        } else {
+            self.open_thread_full(thread.id, cx);
+        }
+    }
+
     pub fn open_thread_full(&mut self, thread: Id, cx: &mut Context<Self>) {
         self.close_thread(cx);
         if self.channels.contains_key(&thread) {

@@ -147,7 +147,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             let t2 = t.clone();
             d.child(link(("sys-thread-name", msg.id.0), t.name.clone()).on_click(move |_, w, cx| {
                 let t = t2.clone();
-                e1.update(cx, |a, cx| a.open_thread(t, w, cx));
+                e1.update(cx, |a, cx| a.open_thread_link(t, w, cx));
             }))
             .child(crate::t!("sys.thread_see_all"))
             .child(link(("sys-thread-all", msg.id.0), crate::t!("sys.thread_all_link")).on_click(move |_, _, cx| {

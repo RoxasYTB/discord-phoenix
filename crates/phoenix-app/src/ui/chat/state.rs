@@ -848,6 +848,7 @@ impl PhoenixApp {
             return true;
         }
         super::composer::note_sent(ch);
+        let text = super::rich_input::take_plain(&text);
         self.composer.update(cx, |s, cx| s.set_value("", window, cx));
         let reply = self.replying_to.take().map(|r| (r, self.chat.reply_mention));
         self.chat.reply_mention = true;

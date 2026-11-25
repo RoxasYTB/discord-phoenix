@@ -264,7 +264,7 @@ pub fn accept(app: &mut PhoenixApp, index: usize, window: &mut Window, cx: &mut 
     }
     let text = match &item {
         Item::Sticker { .. } => String::new(),
-        _ => format!("{} ", insertion(app, &item, tone)),
+        _ => format!("{} ", crate::ui::chat::rich_input::insertion(app, insertion(app, &item, tone))),
     };
     cx.global_mut::<Autocomplete>().active = None;
     app.composer.update(cx, |s, cx| {

@@ -357,7 +357,7 @@ pub fn thread_chip(app: &PhoenixApp, entity: &Entity<PhoenixApp>, t: &ThreadRef,
         .children(bottom)
         .on_click(move |_, w, cx| {
             let t = t2.clone();
-            e.update(cx, |a, cx| a.open_thread(t, w, cx));
+            e.update(cx, |a, cx| a.open_thread_link(t, w, cx));
         })
         .into_any_element()
 }
