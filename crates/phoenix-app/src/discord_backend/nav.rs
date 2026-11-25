@@ -184,23 +184,32 @@ fn thread(c: &api::Channel) -> Option<model::Channel> {
     })
 }
 
+pub(crate) fn is_everyone_denied(
+    kind: ChannelType,
+    everyone_base: api::Permissions,
+    everyone_ow: Option<&api::PermissionOverwrite>,
+) -> bool {
+    if kind.is_voice() {
+        let mut p = everyone_base;
+        if let Some(o) = everyone_ow {
+            p = (p - o.deny) | o.allow;
+        }
+        if !p.contains(api::Permissions::CONNECT) {
+            return true;
+        }
+    }
+    everyone_ow.is_some_and(|o| o.deny.contains(api::Permissions::VIEW_CHANNEL))
+}
+
 fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
     let everyone_denied = |ch: &api::Channel| {
         ch.guild_id.is_some_and(|g| {
             let ow = ch.permission_overwrites.iter().find(|o| o.id == g);
-            if ch.kind.is_voice() {
-                let mut p = cache
-                    .guild(g)
-                    .and_then(|gd| gd.roles.iter().find(|r| r.id == g).map(|r| r.permissions))
-                    .unwrap_or_default();
-                if let Some(o) = ow {
-                    p = (p - o.deny) | o.allow;
-                }
-                if !p.contains(api::Permissions::CONNECT) {
-                    return true;
-                }
-            }
-            ow.is_some_and(|o| o.deny.contains(api::Permissions::VIEW_CHANNEL))
+            let base = cache
+                .guild(g)
+                .and_then(|gd| gd.roles.iter().find(|r| r.id == g).map(|r| r.permissions))
+                .unwrap_or_default();
+            is_everyone_denied(ch.kind, base, ow)
         })
     };
     let group = c.kind == ChannelType::GroupDm;
@@ -853,5 +862,27 @@ mod tests {
     fn top_emojis_sorted_by_rank() {
         let v = json!({"items":[{"emoji_id":"30","emoji_rank":3},{"emoji_id":"10","emoji_rank":1},{"emoji_id":"20","emoji_rank":2}]});
         assert_eq!(top_emoji_ids(&v), vec![Id(10), Id(20), Id(30)]);
+    }
+
+    #[test]
+    fn voice_and_text_channel_locks_match_client() {
+        let ow = |allow: api::Permissions, deny: api::Permissions| api::PermissionOverwrite {
+            id: api::Snowflake(1),
+            kind: 0,
+            allow,
+            deny,
+        };
+        let connect = api::Permissions::CONNECT;
+        let view = api::Permissions::VIEW_CHANNEL;
+
+        assert!(!is_everyone_denied(ChannelType::GuildVoice, connect | view, None));
+        assert!(is_everyone_denied(ChannelType::GuildVoice, view, None));
+        assert!(!is_everyone_denied(ChannelType::GuildVoice, view, Some(&ow(connect, api::Permissions::empty()))));
+        assert!(is_everyone_denied(ChannelType::GuildVoice, connect | view, Some(&ow(api::Permissions::empty(), connect))));
+        assert!(is_everyone_denied(ChannelType::GuildVoice, connect | view, Some(&ow(api::Permissions::empty(), view))));
+        assert!(is_everyone_denied(ChannelType::GuildStageVoice, view, None));
+        assert!(!is_everyone_denied(ChannelType::GuildStageVoice, connect | view, None));
+        assert!(!is_everyone_denied(ChannelType::GuildText, view, None));
+        assert!(is_everyone_denied(ChannelType::GuildText, view, Some(&ow(api::Permissions::empty(), view))));
     }
 }

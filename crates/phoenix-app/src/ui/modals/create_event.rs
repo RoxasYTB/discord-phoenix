@@ -22,8 +22,62 @@ pub const LOCATION_MAX: usize = 100;
 pub const DESCRIPTION_MAX: usize = 1000;
 const CREATE_EVENTS: u64 = 1 << 44;
 const MANAGE_EVENTS: u64 = 1 << 33;
+const MANAGE_CHANNELS: u64 = 1 << 4;
 const CREATE_INVITE: u64 = 1;
 pub const COVER_EDIT_ICON: &str = "https://discord.com/assets/8f18dfd4baacebf4.svg";
+pub const COVER_ASPECT_W: f32 = 5.0;
+pub const COVER_ASPECT_H: f32 = 2.0;
+pub const COVER_OUT_W: u32 = 800;
+pub const COVER_OUT_H: u32 = 320;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CoverCrop {
+    pub path: std::path::PathBuf,
+    pub zoom: f32,
+    pub offset_x: f32,
+    pub offset_y: f32,
+}
+
+impl CoverCrop {
+    pub fn new(path: std::path::PathBuf) -> Self {
+        Self { path, zoom: 1.0, offset_x: 0.0, offset_y: 0.0 }
+    }
+}
+
+pub fn crop_cover_rect(img_w: u32, img_h: u32, zoom: f32, offset_x: f32, offset_y: f32) -> (u32, u32, u32, u32) {
+    if img_w == 0 || img_h == 0 {
+        return (0, 0, 0, 0);
+    }
+    let aspect = COVER_ASPECT_W / COVER_ASPECT_H;
+    let wf = img_w as f32;
+    let hf = img_h as f32;
+    let (base_w, base_h) = if wf / hf > aspect { (hf * aspect, hf) } else { (wf, wf / aspect) };
+    let z = zoom.clamp(1.0, 2.0);
+    let cw = (base_w / z).round().clamp(1.0, wf);
+    let ch = (base_h / z).round().clamp(1.0, hf);
+    let max_x = (wf - cw).max(0.0);
+    let max_y = (hf - ch).max(0.0);
+    let x = ((max_x * 0.5) + offset_x.clamp(-1.0, 1.0) * (max_x * 0.5)).round().clamp(0.0, max_x) as u32;
+    let y = ((max_y * 0.5) + offset_y.clamp(-1.0, 1.0) * (max_y * 0.5)).round().clamp(0.0, max_y) as u32;
+    (x, y, cw as u32, ch as u32)
+}
+
+pub fn crop_cover_png(path: &std::path::Path, zoom: f32, offset_x: f32, offset_y: f32) -> Option<Vec<u8>> {
+    let img = image::open(path).ok()?;
+    let (x, y, w, h) = crop_cover_rect(img.width(), img.height(), zoom, offset_x, offset_y);
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let cropped = img.crop_imm(x, y, w, h);
+    let resized = if w > COVER_OUT_W || h > COVER_OUT_H {
+        cropped.resize_exact(COVER_OUT_W, COVER_OUT_H, image::imageops::FilterType::Triangle)
+    } else {
+        cropped
+    };
+    let mut out = std::io::Cursor::new(Vec::new());
+    resized.write_to(&mut out, image::ImageFormat::Png).ok()?;
+    Some(out.into_inner())
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -69,6 +123,9 @@ pub struct State {
     pub saving: bool,
     pub error: Option<SharedString>,
     pub cover: Option<std::path::PathBuf>,
+    pub cover_bytes: Option<Vec<u8>>,
+    pub crop: Option<CoverCrop>,
+    pub stage_upsell_dismissed: bool,
     pub done: bool,
     pub link: Option<SharedString>,
 }
@@ -336,9 +393,12 @@ fn toggle(which: Open) -> impl Fn(&mut PhoenixApp, &gpui::ClickEvent, &mut Windo
 fn location_step(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let perms = app.backend.guild_permissions(s.guild);
     let can = crate::ui::inbox::has_perm(perms, CREATE_EVENTS) || crate::ui::inbox::has_perm(perms, MANAGE_EVENTS);
+    let can_manage_channels = crate::ui::inbox::has_perm(perms, MANAGE_CHANNELS);
     let community = app.guilds.iter().find(|g| g.id == s.guild).is_some_and(|g| g.community);
     let voices = voice_channels(app, s.guild, ChannelKind::Voice);
     let stages = voice_channels(app, s.guild, ChannelKind::Stage);
+    let show_stage_upsell = community && s.kind == Some(Kind::Voice) && stages.is_empty() && can_manage_channels && !s.stage_upsell_dismissed;
+    let show_age_notice = s.kind == Some(Kind::Stage);
     let missing = |list: &Vec<(Id, SharedString)>| if can && list.is_empty() { crate::t!("event.no_channels") } else { crate::t!("event.no_permission") };
     let mut options: Vec<KindOption> = Vec::new();
     if community {
@@ -392,7 +452,93 @@ fn location_step(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> A
         }
         None => {}
     }
+    if show_stage_upsell {
+        col = col.child(stage_callout(cx));
+    }
+    if show_age_notice {
+        col = col.child(age_notice());
+    }
     col.into_any_element()
+}
+
+fn stage_callout(cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let chips = [
+        crate::t!("event.stage_upsell_qa"),
+        crate::t!("event.stage_upsell_ama"),
+        crate::t!("event.stage_upsell_panel"),
+        crate::t!("event.stage_upsell_discussion"),
+    ];
+    let mut row = div().mt(z(8.)).flex().flex_wrap().items_center().gap(z(6.)).child(text(crate::t!("event.stage_upsell_good_for"), 12., 16., idx::TEXT_DEFAULT));
+    for chip in chips {
+        row = row.child(
+            div()
+                .px(z(6.))
+                .py(z(2.))
+                .rounded(z(4.))
+                .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
+                .text_size(z(12.))
+                .line_height(z(16.))
+                .text_color(c(tok(idx::TEXT_STRONG)))
+                .child(chip),
+        );
+    }
+    div()
+        .p(z(16.))
+        .rounded(z(8.))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+        .flex()
+        .flex_col()
+        .child(text(crate::t!("event.stage_upsell_title"), 14., 18., idx::TEXT_STRONG).font_weight(FontWeight::SEMIBOLD))
+        .child(text(crate::t!("event.stage_upsell_body"), 12., 16., idx::TEXT_DEFAULT).mt(z(4.)))
+        .child(row)
+        .child(
+            div()
+                .mt(z(12.))
+                .flex()
+                .items_center()
+                .gap(z(12.))
+                .child(
+                    button("event-stage-upsell-create", crate::t!("event.stage_upsell_create"), BtnKind::Secondary)
+                        .h(z(32.))
+                        .text_size(z(14.))
+                        .on_click(cx.listener(|a, _, _, cx| {
+                            a.set_event_kind(Kind::Stage, cx);
+                        })),
+                )
+                .child(
+                    div()
+                        .id("event-stage-upsell-dismiss")
+                        .cursor_pointer()
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_SUBTLE)))
+                        .hover(|d| d.text_color(c(tok(idx::TEXT_DEFAULT))))
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            set_state(|s| s.stage_upsell_dismissed = true);
+                            cx.notify();
+                        }))
+                        .child(crate::t!("event.stage_upsell_dismiss")),
+                ),
+        )
+        .into_any_element()
+}
+
+fn age_notice() -> AnyElement {
+    div()
+        .p(z(12.))
+        .rounded(z(8.))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+        .flex()
+        .items_start()
+        .gap(z(8.))
+        .child(gpui::svg().path(crate::icons::path("warning")).size(z(18.)).flex_none().mt(z(1.)).text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))
+        .child(text(crate::t!("event.age_notice"), 14., 18., idx::TEXT_DEFAULT).flex_1())
+        .into_any_element()
 }
 
 fn channel_field(current: Option<(&'static str, SharedString)>) -> gpui::Stateful<gpui::Div> {
@@ -460,7 +606,191 @@ fn channel_list(options: Vec<(&'static str, SharedString, i64, bool)>, pick: Rc<
 }
 
 fn pick_cover(cx: &mut Context<PhoenixApp>) {
-    crate::ui::file_pick::pick(&crate::ui::file_pick::IMAGES, cx, |_, path, _| set_state(|s| s.cover = Some(path)));
+    crate::ui::file_pick::pick(&crate::ui::file_pick::IMAGES, cx, |_, path, _| set_state(|s| s.crop = Some(CoverCrop::new(path))));
+}
+
+fn cover_crop_modal(crop: &CoverCrop, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let pct = (crop.zoom * 100.0).round() as u32;
+    let zoom = crop.zoom;
+    let ox = crop.offset_x;
+    let oy = crop.offset_y;
+    let path = crop.path.clone();
+    let close = crate::ui::modals::close_action(cx);
+    let viewport_w = 440.0_f32;
+    let viewport_h = viewport_w * COVER_ASPECT_H / COVER_ASPECT_W;
+    let shift_x = -ox * viewport_w * (zoom - 1.0) * 0.5;
+    let shift_y = -oy * viewport_h * (zoom - 1.0) * 0.5;
+    let el = div()
+        .relative()
+        .w(z(482.))
+        .rounded(z(12.))
+        .bg(c(tok(idx::MODAL_BACKGROUND)))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_NORMAL)))
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .p(z(16.))
+                .flex()
+                .flex_col()
+                .gap(z(16.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(text(crate::t!("event.crop_title"), 20., 26., idx::TEXT_STRONG).font_weight(FontWeight::SEMIBOLD))
+                        .child(
+                            div()
+                                .id("event-crop-close")
+                                .cursor_pointer()
+                                .on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| s.crop = None);
+                                    cx.notify();
+                                }))
+                                .child(gpui::svg().path(crate::icons::path("close-small")).size(z(24.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
+                        ),
+                )
+                .child(
+                    div()
+                        .relative()
+                        .w(z(viewport_w))
+                        .h(z(viewport_h))
+                        .rounded(z(8.))
+                        .overflow_hidden()
+                        .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                        .border_2()
+                        .border_color(c(tok(idx::TEXT_BRAND)))
+                        .child(
+                            div()
+                                .absolute()
+                                .left(z(shift_x))
+                                .top(z(shift_y))
+                                .w(z(viewport_w * zoom))
+                                .h(z(viewport_h * zoom))
+                                .child(gpui::img(path).size_full().object_fit(gpui::ObjectFit::Cover)),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(z(8.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(z(6.))
+                                .child(button("event-crop-left", "←", BtnKind::Secondary).h(z(28.)).on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| {
+                                        if let Some(c) = &mut s.crop {
+                                            c.offset_x = (c.offset_x - 0.2).clamp(-1.0, 1.0);
+                                        }
+                                    });
+                                    cx.notify();
+                                })))
+                                .child(button("event-crop-right", "→", BtnKind::Secondary).h(z(28.)).on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| {
+                                        if let Some(c) = &mut s.crop {
+                                            c.offset_x = (c.offset_x + 0.2).clamp(-1.0, 1.0);
+                                        }
+                                    });
+                                    cx.notify();
+                                })))
+                                .child(button("event-crop-up", "↑", BtnKind::Secondary).h(z(28.)).on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| {
+                                        if let Some(c) = &mut s.crop {
+                                            c.offset_y = (c.offset_y - 0.2).clamp(-1.0, 1.0);
+                                        }
+                                    });
+                                    cx.notify();
+                                })))
+                                .child(button("event-crop-down", "↓", BtnKind::Secondary).h(z(28.)).on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| {
+                                        if let Some(c) = &mut s.crop {
+                                            c.offset_y = (c.offset_y + 0.2).clamp(-1.0, 1.0);
+                                        }
+                                    });
+                                    cx.notify();
+                                }))),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(z(6.))
+                                .child(button("event-crop-zout", "-", BtnKind::Secondary).h(z(28.)).on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| {
+                                        if let Some(c) = &mut s.crop {
+                                            c.zoom = (c.zoom - 0.1).clamp(1.0, 2.0);
+                                        }
+                                    });
+                                    cx.notify();
+                                })))
+                                .child(text(format!("{pct}%"), 12., 16., idx::TEXT_DEFAULT).min_w(z(38.)).text_center())
+                                .child(button("event-crop-zin", "+", BtnKind::Secondary).h(z(28.)).on_click(cx.listener(|_, _, _, cx| {
+                                    set_state(|s| {
+                                        if let Some(c) = &mut s.crop {
+                                            c.zoom = (c.zoom + 0.1).clamp(1.0, 2.0);
+                                        }
+                                    });
+                                    cx.notify();
+                                }))),
+                        ),
+                ),
+        )
+        .child(
+            div()
+                .px(z(24.))
+                .py(z(16.))
+                .rounded_b(z(12.))
+                .bg(c(tok(idx::MODAL_FOOTER_BACKGROUND)))
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .id("event-crop-reset")
+                        .cursor_pointer()
+                        .text_size(z(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .hover(|d| d.underline())
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            set_state(|s| {
+                                if let Some(c) = &mut s.crop {
+                                    c.zoom = 1.0;
+                                    c.offset_x = 0.0;
+                                    c.offset_y = 0.0;
+                                }
+                            });
+                            cx.notify();
+                        }))
+                        .child(crate::t!("event.crop_reset")),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(z(8.))
+                        .child(button("event-crop-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click(cx.listener(|_, _, _, cx| {
+                            set_state(|s| s.crop = None);
+                            cx.notify();
+                        })))
+                        .child(button("event-crop-apply", crate::t!("event.crop_apply"), BtnKind::Primary).on_click(cx.listener(|_, _, _, cx| {
+                            set_state(|s| {
+                                if let Some(c) = s.crop.take() {
+                                    s.cover_bytes = crop_cover_png(&c.path, c.zoom, c.offset_x, c.offset_y);
+                                    s.cover = Some(c.path);
+                                }
+                            });
+                            cx.notify();
+                        }))),
+                ),
+        );
+    crate::ui::modal::frame("event-crop-backdrop", close, el)
 }
 
 fn cover_field(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -517,7 +847,10 @@ fn cover_field(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .child(
             div().flex().child(
                 button("event-cover-remove", crate::t!("event.cover_remove"), BtnKind::Primary).h(z(32.)).text_size(z(14.)).on_click(cx.listener(|_, _, _, cx| {
-                    set_state(|s| s.cover = None);
+                    set_state(|s| {
+                        s.cover = None;
+                        s.cover_bytes = None;
+                    });
                     cx.notify();
                 })),
             ),
@@ -815,7 +1148,15 @@ fn success_slide(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
 }
 
 const CONFETTI: usize = 160;
-const CONFETTI_COLORS: [usize; 4] = [idx::TEXT_BRAND, idx::TEXT_FEEDBACK_POSITIVE, idx::TEXT_FEEDBACK_WARNING, idx::TEXT_FEEDBACK_CRITICAL];
+pub const CONFETTI_COLORS: [u32; 8] = [0xFF73FA, 0xFFC0FF, 0xFFD836, 0xFF9A15, 0xA5F7DE, 0x51BC9D, 0xAEC7FF, 0x3E70DD];
+
+pub fn confetti_size(n: usize) -> f32 {
+    let mut seed = (n as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0x517C_C1B7_2722_0A95;
+    seed ^= seed << 13;
+    seed ^= seed >> 7;
+    seed ^= seed << 17;
+    14. + ((seed % 10_000) as f32 / 10_000.) * 14.
+}
 
 pub fn confetti_at(n: usize, width: f32, frame: f32) -> (f32, f32) {
     let mut seed = (n as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
@@ -855,15 +1196,15 @@ fn confetti(width: f32) -> AnyElement {
             let fade = if t > 0.8 { (1. - t) / 0.2 } else { 1. };
             d.children((0..CONFETTI).map(|n| {
                 let (x, y) = confetti_at(n, width, frame);
-                let size = if n % 3 == 0 { 6. } else { 8. };
+                let size = confetti_size(n) * 0.5;
                 div()
                     .absolute()
                     .left(z(x))
                     .top(z(y))
                     .w(z(size))
-                    .h(z(if n % 2 == 0 { size } else { size / 2. }))
+                    .h(z(if n % 2 == 0 { size } else { size * 0.55 }))
                     .when(n % 4 == 0, |d| d.rounded_full())
-                    .bg(c(tok(CONFETTI_COLORS[n % CONFETTI_COLORS.len()])))
+                    .bg(c(CONFETTI_COLORS[n % CONFETTI_COLORS.len()]))
                     .opacity(fade)
             }))
         })
@@ -871,6 +1212,9 @@ fn confetti(width: f32) -> AnyElement {
 }
 
 pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    if let Some(crop) = &s.crop {
+        return cover_crop_modal(crop, cx);
+    }
     if s.done {
         let close = crate::ui::modals::close_action(cx);
         let el = div()
@@ -980,6 +1324,9 @@ impl PhoenixApp {
             saving: false,
             error: None,
             cover: None,
+            cover_bytes: None,
+            crop: None,
+            stage_upsell_dismissed: false,
             done: false,
             link: None,
         };
@@ -1090,7 +1437,11 @@ pub fn create_request(s: &State, cx: &gpui::App) -> Option<ActionRequest> {
         end_unix: s.end.map(|e| e.max(0) as u64),
         place,
         recurrence: recurrence_rule(s.recur, s.start),
-        image: s.cover.as_deref().and_then(crate::ui::file_pick::data_uri),
+        image: s
+            .cover_bytes
+            .as_deref()
+            .map(|b| crate::ui::file_pick::encode(b, "image/png"))
+            .or_else(|| s.cover.as_deref().and_then(crate::ui::file_pick::data_uri)),
     })
 }
 
@@ -1132,6 +1483,17 @@ mod tests {
         assert!(lx2 < lx && ly2 < ly);
         let (_, ly3) = confetti_at(0, 482., 180.);
         assert!(ly3 > ly2);
+        assert_eq!(CONFETTI_COLORS.len(), 8);
+        assert!((14.0..=28.0).contains(&confetti_size(0)));
+    }
+
+    #[test]
+    fn cover_crop_enforces_five_by_two_ratio_and_zoom() {
+        assert_eq!(crop_cover_rect(1000, 1000, 1.0, 0.0, 0.0), (0, 300, 1000, 400));
+        assert_eq!(crop_cover_rect(1000, 1000, 2.0, 0.0, 0.0), (250, 400, 500, 200));
+        assert_eq!(crop_cover_rect(1000, 1000, 2.0, -1.0, -1.0), (0, 0, 500, 200));
+        assert_eq!(crop_cover_rect(1000, 1000, 2.0, 1.0, 1.0), (500, 800, 500, 200));
+        assert_eq!(crop_cover_rect(2000, 400, 1.0, 0.0, 0.0), (500, 0, 1000, 400));
     }
 
     #[test]

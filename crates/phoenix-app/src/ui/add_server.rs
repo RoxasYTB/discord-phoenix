@@ -86,19 +86,188 @@ pub fn default_server_name(username: &str, is_fr: bool) -> String {
     }
 }
 
-pub fn create_guild_body(
+const TEMPLATE_EVERYONE_PERMS: &str = "1720707884502593";
+const TEMPLATE_OFFICER_PERMS: &str = "1720709360909911";
+
+fn tpl_ch(id: &str, parent_id: Option<&str>, name: &str, kind: u8) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "parent_id": parent_id,
+        "name": name,
+        "type": kind,
+    })
+}
+
+fn template_spec_payload(code: &str, is_fr: bool) -> (Vec<serde_json::Value>, Option<&'static str>, Option<serde_json::Value>) {
+    let text_cat = if is_fr { "Salons textuels" } else { "Text Channels" };
+    let voice_cat = if is_fr { "Salons vocaux" } else { "Voice Channels" };
+    let info_cat = if is_fr { "Informations" } else { "Information" };
+    let general = if is_fr { "général" } else { "general" };
+    let welcome = if is_fr { "bienvenue-et-règles" } else { "welcome-and-rules" };
+    let announcements = if is_fr { "annonces" } else { "announcements" };
+    let off_topic = if is_fr { "hors-sujet" } else { "off-topic" };
+    let meeting_plans = if is_fr { "réunions-planifiées" } else { "meeting-plans" };
+    let stream_room = if is_fr { "Salle de stream" } else { "Stream Room" };
+    let meeting_room = if is_fr { "Salle de réunion" } else { "Meeting Room" };
+    let resources = if is_fr { "ressources" } else { "resources" };
+
+    match code {
+        "hvtBQMfw6uSJ" => (
+            vec![
+                tpl_ch("00", None, text_cat, 4),
+                tpl_ch("01", Some("00"), general, 0),
+                tpl_ch("02", Some("00"), if is_fr { "clips-vidéos-et-temps-forts" } else { "clips-and-highlights" }, 0),
+                tpl_ch("10", None, voice_cat, 4),
+                tpl_ch("11", Some("10"), "Lobby", 2),
+                tpl_ch("12", Some("10"), "Gaming", 2),
+            ],
+            Some("01"),
+            None,
+        ),
+        "hgM48av5Q69A" => (
+            vec![
+                tpl_ch("00", None, text_cat, 4),
+                tpl_ch("01", Some("00"), general, 0),
+                tpl_ch("02", Some("00"), if is_fr { "jeux" } else { "games" }, 0),
+                tpl_ch("03", Some("00"), if is_fr { "musique" } else { "music" }, 0),
+                tpl_ch("10", None, voice_cat, 4),
+                tpl_ch("11", Some("10"), "Lounge", 2),
+                tpl_ch("12", Some("10"), stream_room, 2),
+            ],
+            Some("01"),
+            None,
+        ),
+        "FbwUwRp4j8Es" => (
+            vec![
+                tpl_ch("00", None, info_cat, 4),
+                tpl_ch("01", Some("00"), welcome, 0),
+                tpl_ch("02", Some("00"), if is_fr { "notes-et-ressources" } else { "notes-resources" }, 0),
+                tpl_ch("10", None, text_cat, 4),
+                tpl_ch("11", Some("10"), general, 0),
+                tpl_ch("12", Some("10"), if is_fr { "aide-aux-devoirs" } else { "homework-help" }, 0),
+                tpl_ch("13", Some("10"), if is_fr { "planification-de-sessions" } else { "session-planning" }, 0),
+                tpl_ch("14", Some("10"), off_topic, 0),
+                tpl_ch("20", None, voice_cat, 4),
+                tpl_ch("21", Some("20"), "Lounge", 2),
+                tpl_ch("22", Some("20"), if is_fr { "Salle d'étude 1" } else { "Study Room 1" }, 2),
+                tpl_ch("23", Some("20"), if is_fr { "Salle d'étude 2" } else { "Study Room 2" }, 2),
+            ],
+            Some("11"),
+            None,
+        ),
+        "Ctg7PUHcQmZu" => (
+            vec![
+                tpl_ch("00", None, info_cat, 4),
+                tpl_ch("01", Some("00"), welcome, 0),
+                tpl_ch("02", Some("00"), announcements, 0),
+                tpl_ch("03", Some("00"), resources, 0),
+                tpl_ch("10", None, text_cat, 4),
+                tpl_ch("11", Some("10"), general, 0),
+                tpl_ch("12", Some("10"), meeting_plans, 0),
+                tpl_ch("13", Some("10"), off_topic, 0),
+                tpl_ch("20", None, voice_cat, 4),
+                tpl_ch("21", Some("20"), "Lounge", 2),
+                tpl_ch("22", Some("20"), if is_fr { "Salle de réunion\u{a0}1" } else { "Meeting Room 1" }, 2),
+                tpl_ch("22", Some("20"), if is_fr { "Salle de réunion\u{a0}2" } else { "Meeting Room 2" }, 2),
+            ],
+            Some("11"),
+            Some(serde_json::json!([
+                {
+                    "id": "00",
+                    "name": "@everyone",
+                    "permissions": TEMPLATE_EVERYONE_PERMS,
+                },
+                {
+                    "id": "01",
+                    "name": "officers (example)",
+                    "mentionable": true,
+                    "hoist": true,
+                    "permissions": TEMPLATE_OFFICER_PERMS,
+                    "color": 3066993,
+                },
+            ])),
+        ),
+        "64UDvRNCC52Y" => (
+            vec![
+                tpl_ch("00", None, info_cat, 4),
+                tpl_ch("01", Some("00"), welcome, 0),
+                tpl_ch("02", Some("00"), announcements, 0),
+                tpl_ch("03", Some("00"), resources, 0),
+                tpl_ch("10", None, text_cat, 4),
+                tpl_ch("11", Some("10"), general, 0),
+                tpl_ch("12", Some("10"), meeting_plans, 0),
+                tpl_ch("13", Some("10"), off_topic, 0),
+                tpl_ch("20", None, voice_cat, 4),
+                tpl_ch("21", Some("20"), "Lounge", 2),
+                tpl_ch("22", Some("20"), meeting_room, 2),
+            ],
+            Some("11"),
+            None,
+        ),
+        "6exdzMgjZgah" => (
+            vec![
+                tpl_ch("00", None, info_cat, 4),
+                tpl_ch("01", Some("00"), welcome, 0),
+                tpl_ch("02", Some("00"), announcements, 0),
+                tpl_ch("10", None, text_cat, 4),
+                tpl_ch("11", Some("10"), general, 0),
+                tpl_ch("12", Some("10"), if is_fr { "événements" } else { "events" }, 0),
+                tpl_ch("13", Some("10"), if is_fr { "idées-et-commentaires" } else { "ideas-and-feedback" }, 0),
+                tpl_ch("20", None, voice_cat, 4),
+                tpl_ch("21", Some("20"), "Lounge", 2),
+                tpl_ch("22", Some("20"), if is_fr { "Repaire de la communauté" } else { "Community Hangout" }, 2),
+                tpl_ch("23", Some("20"), stream_room, 2),
+            ],
+            Some("11"),
+            None,
+        ),
+        "s4WNnBxTDPsY" => (
+            vec![
+                tpl_ch("00", None, info_cat, 4),
+                tpl_ch("01", Some("00"), welcome, 0),
+                tpl_ch("02", Some("00"), announcements, 0),
+                tpl_ch("10", None, text_cat, 4),
+                tpl_ch("11", Some("10"), general, 0),
+                tpl_ch("12", Some("10"), meeting_plans, 0),
+                tpl_ch("20", None, voice_cat, 4),
+                tpl_ch("21", Some("20"), "Lounge", 2),
+                tpl_ch("22", Some("20"), meeting_room, 2),
+            ],
+            Some("11"),
+            None,
+        ),
+        _ => (Vec::new(), None, None),
+    }
+}
+
+pub fn create_guild_body_for_locale(
     name: &str,
     icon: Option<&str>,
     template: Option<&str>,
     _community: Option<bool>,
+    is_fr: bool,
 ) -> serde_json::Value {
-    serde_json::json!({
-        "name": name.trim(),
-        "icon": icon,
-        "channels": [],
-        "system_channel_id": null,
-        "guild_template_code": template.unwrap_or(CREATE.code),
-    })
+    let code = template.unwrap_or(CREATE.code);
+    let (channels, system_channel_id, roles) = template_spec_payload(code, is_fr);
+    let mut obj = serde_json::Map::new();
+    obj.insert("name".into(), serde_json::json!(name.trim()));
+    obj.insert("icon".into(), serde_json::json!(icon));
+    obj.insert("channels".into(), serde_json::Value::Array(channels));
+    obj.insert("system_channel_id".into(), serde_json::json!(system_channel_id));
+    if let Some(r) = roles {
+        obj.insert("roles".into(), r);
+    }
+    obj.insert("guild_template_code".into(), serde_json::json!(code));
+    serde_json::Value::Object(obj)
+}
+
+pub fn create_guild_body(
+    name: &str,
+    icon: Option<&str>,
+    template: Option<&str>,
+    community: Option<bool>,
+) -> serde_json::Value {
+    create_guild_body_for_locale(name, icon, template, community, crate::i18n::locale() == "fr")
 }
 
 fn ensure_name_input(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Entity<InputState> {
@@ -728,15 +897,94 @@ mod tests {
     }
 
     #[test]
-    fn create_guild_payload_shapes() {
-        let body = create_guild_body("  Phoenix Lab ", None, Some(TEMPLATES[0].code), Some(true));
-        assert_eq!(body["name"], "Phoenix Lab");
-        assert_eq!(body["guild_template_code"], "hvtBQMfw6uSJ");
-        assert!(body.get("community").is_none());
-        assert!(body["channels"].is_array());
+    fn create_guild_payload_matches_client_templates_in_fr_and_en() {
+        let gaming_fr = create_guild_body_for_locale("  Phoenix Lab ", None, Some("hvtBQMfw6uSJ"), Some(true), true);
+        assert_eq!(
+            gaming_fr,
+            serde_json::json!({
+                "name": "Phoenix Lab",
+                "icon": null,
+                "channels": [
+                    { "id": "00", "parent_id": null, "name": "Salons textuels", "type": 4 },
+                    { "id": "01", "parent_id": "00", "name": "général", "type": 0 },
+                    { "id": "02", "parent_id": "00", "name": "clips-vidéos-et-temps-forts", "type": 0 },
+                    { "id": "10", "parent_id": null, "name": "Salons vocaux", "type": 4 },
+                    { "id": "11", "parent_id": "10", "name": "Lobby", "type": 2 },
+                    { "id": "12", "parent_id": "10", "name": "Gaming", "type": 2 },
+                ],
+                "system_channel_id": "01",
+                "guild_template_code": "hvtBQMfw6uSJ",
+            })
+        );
 
-        let minimal = create_guild_body("Friends", None, None, None);
+        let gaming_en = create_guild_body_for_locale("Phoenix Lab", None, Some("hvtBQMfw6uSJ"), None, false);
+        assert_eq!(
+            gaming_en,
+            serde_json::json!({
+                "name": "Phoenix Lab",
+                "icon": null,
+                "channels": [
+                    { "id": "00", "parent_id": null, "name": "Text Channels", "type": 4 },
+                    { "id": "01", "parent_id": "00", "name": "general", "type": 0 },
+                    { "id": "02", "parent_id": "00", "name": "clips-and-highlights", "type": 0 },
+                    { "id": "10", "parent_id": null, "name": "Voice Channels", "type": 4 },
+                    { "id": "11", "parent_id": "10", "name": "Lobby", "type": 2 },
+                    { "id": "12", "parent_id": "10", "name": "Gaming", "type": 2 },
+                ],
+                "system_channel_id": "01",
+                "guild_template_code": "hvtBQMfw6uSJ",
+            })
+        );
+
+        let school_fr = create_guild_body_for_locale("Club", None, Some("Ctg7PUHcQmZu"), Some(true), true);
+        assert_eq!(
+            school_fr,
+            serde_json::json!({
+                "name": "Club",
+                "icon": null,
+                "channels": [
+                    { "id": "00", "parent_id": null, "name": "Informations", "type": 4 },
+                    { "id": "01", "parent_id": "00", "name": "bienvenue-et-règles", "type": 0 },
+                    { "id": "02", "parent_id": "00", "name": "annonces", "type": 0 },
+                    { "id": "03", "parent_id": "00", "name": "ressources", "type": 0 },
+                    { "id": "10", "parent_id": null, "name": "Salons textuels", "type": 4 },
+                    { "id": "11", "parent_id": "10", "name": "général", "type": 0 },
+                    { "id": "12", "parent_id": "10", "name": "réunions-planifiées", "type": 0 },
+                    { "id": "13", "parent_id": "10", "name": "hors-sujet", "type": 0 },
+                    { "id": "20", "parent_id": null, "name": "Salons vocaux", "type": 4 },
+                    { "id": "21", "parent_id": "20", "name": "Lounge", "type": 2 },
+                    { "id": "22", "parent_id": "20", "name": "Salle de réunion\u{a0}1", "type": 2 },
+                    { "id": "22", "parent_id": "20", "name": "Salle de réunion\u{a0}2", "type": 2 },
+                ],
+                "system_channel_id": "11",
+                "roles": [
+                    { "id": "00", "name": "@everyone", "permissions": "1720707884502593" },
+                    {
+                        "id": "01",
+                        "name": "officers (example)",
+                        "mentionable": true,
+                        "hoist": true,
+                        "permissions": "1720709360909911",
+                        "color": 3066993,
+                    },
+                ],
+                "guild_template_code": "Ctg7PUHcQmZu",
+            })
+        );
+
+        let school_en = create_guild_body_for_locale("Club", None, Some("Ctg7PUHcQmZu"), None, false);
+        assert_eq!(school_en["channels"][0]["name"], "Information");
+        assert_eq!(school_en["channels"][1]["name"], "welcome-and-rules");
+        assert_eq!(school_en["channels"][10]["name"], "Meeting Room 1");
+        assert_eq!(school_en["channels"][11]["name"], "Meeting Room 2");
+        assert_eq!(school_en["roles"][1]["name"], "officers (example)");
+        assert_eq!(school_en["system_channel_id"], "11");
+
+        let minimal = create_guild_body_for_locale("Friends", None, None, None, false);
         assert_eq!(minimal["name"], "Friends");
+        assert_eq!(minimal["channels"], serde_json::json!([]));
+        assert_eq!(minimal["system_channel_id"], serde_json::Value::Null);
+        assert!(minimal.get("roles").is_none());
         assert_eq!(minimal["guild_template_code"], CREATE.code);
     }
 
