@@ -14,7 +14,7 @@ use crate::{
 const POPOUT_W: f32 = 300.;
 const POPOUT_H: f32 = 360.;
 
-fn tk(i: usize) -> gpui::Rgba {
+fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
@@ -255,13 +255,14 @@ fn render_fallback(pop: &TagPopout, msg: SharedString, is_error: bool, cx: &mut 
         )
         .child(
             div()
+                .id("tag-popout-retry")
                 .px(z(16.))
                 .pb(z(16.))
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .text_color(tk(if is_error { idx::TEXT_FEEDBACK_WARNING } else { idx::TEXT_SUBTLE }))
                 .when(is_error, |d| {
-                    d.id("tag-popout-retry").cursor_pointer().on_click(cx.listener(move |a, _, w, cx| {
+                    d.cursor_pointer().on_click(cx.listener(move |a, _, w, cx| {
                         a.people.tag_popout = None;
                         a.open_tag_popout(gid, tag.clone(), badge.clone(), at, w, cx);
                     }))
@@ -354,7 +355,7 @@ fn render_profile(app: &PhoenixApp, pop: &TagPopout, p: &GuildProfile, cx: &mut 
         .when(is_member, |d| {
             d.cursor_pointer().hover(|s| s.underline()).on_click(cx.listener(move |a, _, _, cx| {
                 a.people.tag_popout = None;
-                a.select_guild(gid, cx);
+                a.select_guild(Some(gid), cx);
             }))
         })
         .child(p.name.clone());
@@ -449,7 +450,7 @@ fn render_profile(app: &PhoenixApp, pop: &TagPopout, p: &GuildProfile, cx: &mut 
             .on_click(cx.listener(move |a, _, window, cx| {
                 if is_member {
                     a.people.tag_popout = None;
-                    a.select_guild(gid, cx);
+                    a.select_guild(Some(gid), cx);
                 } else {
                     let fut = a.backend.join_guild(gid);
                     cx.spawn_in(window, async move |this, cx| {

@@ -306,7 +306,7 @@ pub trait Backend: Send + Sync + 'static {
         Box::pin(async { Err(BackendError(crate::t!("backend.profiles_unavailable").to_string())) })
     }
     fn join_guild(&self, guild: Id) -> BoxFuture<()> {
-        let err = phoenix_api::rest::GuardedWrite::join_guild(guild.0).refusal().to_string();
+        let err = phoenix_api::rest::guard::GuardedWrite::join_guild(guild.0).refusal().to_string();
         Box::pin(async move { Err(BackendError(err)) })
     }
     fn set_note(&self, _user: Id, _note: String) -> BoxFuture<()> {

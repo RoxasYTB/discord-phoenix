@@ -653,7 +653,7 @@ fn header_card(app: &PhoenixApp, x: &Ctx, cx: &mut Context<PhoenixApp>) -> Div {
                                             .hover(|s| s.bg(tk(idx::BACKGROUND_MOD_MUTED)))
                                             .tooltip(crate::ui::tooltip::tip(tip))
                                             .when_some(gid, |el, gid| {
-                                                el.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()).on_click(cx.listener(move |a, ev, w, cx| {
+                                                el.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()).on_click(cx.listener(move |a, ev: &gpui::ClickEvent, w, cx| {
                                                     cx.stop_propagation();
                                                     a.open_tag_popout(gid, tag_s.clone(), badge_s.clone(), ev.position(), w, cx);
                                                 }))

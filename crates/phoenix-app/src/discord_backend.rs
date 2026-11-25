@@ -1127,7 +1127,7 @@ impl Backend for DiscordBackend {
     }
     fn join_guild(&self, guild: Id) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
-            s.rest.guarded_write(&phoenix_api::rest::GuardedWrite::join_guild(guild.0)).await.map(|_| ()).map_err(api_err)
+            s.rest.guarded_write(&phoenix_api::rest::guard::GuardedWrite::join_guild(guild.0)).await.map(|_| ()).map_err(api_err)
         })
     }
     fn set_note(&self, user: Id, note: String) -> BoxFuture<()> {

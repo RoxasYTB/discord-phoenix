@@ -917,7 +917,7 @@ impl Backend for MockBackend {
                     g.banner_color.map(|c| format!("#{c:06x}")),
                 )
             } else {
-                let p = crate::demo_media::NAMES.iter().find(|p| p.tag.is_some_and(|t| t.0 == guild.0));
+                let p = NAMES.iter().find(|p| p.tag.is_some_and(|t| t.0 == guild.0));
                 let tag_str = p.and_then(|p| p.tag).map(|t| t.1.to_owned()).unwrap_or_else(|| "TAG".to_owned());
                 let badge_str = p.and_then(|p| p.tag).map(|t| t.2.to_owned());
                 return Ok(GuildProfile {
