@@ -10,6 +10,7 @@ pub mod forward;
 pub mod friend_requests;
 pub mod gdm;
 pub mod gdm_cleanup;
+pub mod gift_nitro;
 pub mod go_live;
 pub mod ignore;
 pub mod guild_notify;
@@ -117,6 +118,7 @@ pub enum Modal {
     SpamRequests,
     ClearPending(usize),
     AcceptStranger(crate::model::Id),
+    GiftNitro(gift_nitro::State),
 }
 
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -239,6 +241,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::SpamRequests => friend_requests::render_spam(app, cx),
             Modal::ClearPending(n) => friend_requests::render_clear(*n, cx),
             Modal::AcceptStranger(u) => friend_requests::render_stranger(*u, cx),
+            Modal::GiftNitro(s) => gift_nitro::render(app, s, cx),
         })
     })
 }

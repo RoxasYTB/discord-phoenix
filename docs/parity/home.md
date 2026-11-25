@@ -61,6 +61,7 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 |---|---|---|---|---|
 | Message Requests list | rest, hover, accept / ignore | vanilla-message-requests | ui/home/friends.rs `message_requests` | ✅ |
 | Nitro home (`/store`) | rest, hover | `vanilla-nitro-home` (49px `navBarContent_jHfUxk`, hero gradient + "BONJOUR," + avatar/name, 330×380 `card_ualTdV` grid) | ui/home/nitro.rs | ✅ |
+| Gift Nitro modal | open, plan select, no-purchase notice | `804439.f0ff1c535e7be47b.css` (`selectionBox_rvSze9`, `selectedPlan_rvSze9`, `planOptionDiscount_rvSze9`, `card_w20Das`, `stepBody_HYpJ9I`) | ui/modals/gift_nitro.rs, ui/chat/composer.rs, ui/home/nitro.rs | ✅ |
 | Shop (`/shop`) | rest, hover | `vanilla-shop` / `vanilla-shop-hover` (`headerBar_ViLURN`, tabs, search, wishlist/orbs pills, 246px `productCardContainer_UGbKo5`, hover lift + buy/gift swap) | ui/shop_page.rs | ✅ |
 
 ## DM channel

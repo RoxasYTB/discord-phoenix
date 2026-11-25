@@ -76,7 +76,7 @@ fn card(ix: usize, pill: Option<SharedString>, title: SharedString, desc: Shared
         .into_any_element()
 }
 
-pub fn render(app: &mut PhoenixApp, _window: &mut Window, _cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let me = app.me.clone();
     let overlay_btn = |id: &'static str| {
         div()
@@ -117,7 +117,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, _cx: &mut Context<Phoe
                 .flex()
                 .gap(z(8.))
                 .child(overlay_btn("nitro-heart").text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child("\u{2665}"))
-                .child(overlay_btn("nitro-gift").child(icon(Icon::Gift, 16., gpui::white())).child(crate::t!("nitro.gift"))),
+                .child(overlay_btn("nitro-gift").child(icon(Icon::Gift, 16., gpui::white())).child(crate::t!("nitro.gift")).on_click(cx.listener(|a, _, _, cx| a.open_gift_nitro(None, cx)))),
         );
     let hello = div()
         .flex()

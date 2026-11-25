@@ -454,7 +454,10 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                     .flex()
                                     .gap(z(8.))
                                     .items_center()
-                                    .child(crate::ui::states::composer_button_ext("gift", Icon::Gift, 20., false))
+                                    .child(crate::ui::states::composer_button_ext("gift", Icon::Gift, 20., false).on_click(cx.listener(|a, _, _, cx| {
+                                        let recipient = crate::ui::dm_profile_panel::peer(a);
+                                        a.open_gift_nitro(recipient, cx);
+                                    })))
                                     .when(full_buttons(), |d| {
                                         d.child(crate::ui::states::composer_button("gif", Icon::Gif).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Gif, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
                                             .child(crate::ui::states::composer_button("sticker", Icon::Sticker).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Sticker, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
