@@ -1021,6 +1021,20 @@ fn main() -> anyhow::Result<()> {
         apply_scroll(&mut cx, win.into(), &v, &sc, &pump)?;
         eprintln!("[{:.1}s] scrolled", t0.elapsed().as_secs_f32());
     }
+    if let Some(id) = std::env::var("PHX_JUMP").ok().and_then(|v| parse_id(&v)) {
+        cx.update(|cx| {
+            v.update(cx, |app, cx| {
+                if let Some(ch) = app.selected_channel {
+                    app.jump_to_message(ch, id, cx);
+                }
+            })
+        });
+        for _ in 0..60 {
+            cx.update_window(win.into(), |_, window, _| window.refresh())?;
+            pump(&mut cx, 100);
+        }
+        eprintln!("[{:.1}s] jumped", t0.elapsed().as_secs_f32());
+    }
     if std::env::var_os("PHX_NO_FX").is_some() {
         phoenix_app::ui::profile_fx::DISABLED.store(true, std::sync::atomic::Ordering::Relaxed);
     }
