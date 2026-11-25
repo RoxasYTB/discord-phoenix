@@ -127,5 +127,10 @@ Engine: GPUI patches 12 and 13 (`docs/gpui-patches.md`).
 
 Typing cost (`shortcuts_shot bench`: 2219-character draft with every style, 60 keystrokes, median and p90):
 before the rich engine (main 17384941) edit+sync 0.82 / 1.0 ms with the preview off, 1.35-1.46 / 1.75 ms on;
-frame 21.6-21.9 / 24.5 ms off, 18.2-21.9 / 24.3-24.6 ms on (whole window, debug build). Real-account render: `real_shots` with `PHX_DRAFT='…'`
+frame 21.6-21.9 / 24.5 ms off, 18.2-21.9 / 24.3-24.6 ms on (whole window, debug build).
+After (main aef0164a): edit+sync 0.86 / 1.0 ms off, 3.0 / 4.2 ms on; frame 22.5-23.5 / 27.6-28.6 ms off,
+23.7-24.2 / 27.1-28.2 ms on. The frame moved the same with the preview off (machine load), so the rich layout
+itself costs no visible frame time; the extra 1.6 ms per keystroke is the Markdown/blocks/highlight pass plus
+the wrapper's per-row diff of the rich views. Real-account render checked with `real_shots` + `PHX_DRAFT` in
+#phoenix (private, `compare/richinput`). Real-account render: `real_shots` with `PHX_DRAFT='…'`
 (`\n` for new lines; nothing is sent, the read-only backend also drops typing).
