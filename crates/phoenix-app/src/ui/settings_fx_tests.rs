@@ -69,7 +69,10 @@ fn reads_messages_in_the_viewed_channel_only(cx: &mut TestAppContext) {
     let (here, there) = (h.channels[0], h.channels[1]);
     h.act(|a, _, cx| {
         a.prefs.local.ui.insert("read-all".into(), 1);
-        let author = a.users.keys().copied().find(|u| *u != a.me.id).unwrap();
+        a.selected_channel = Some(here);
+        let mut users: Vec<_> = a.users.keys().copied().filter(|u| *u != a.me.id && !a.nav.is_blocked(*u) && !a.nav.is_ignored(*u)).collect();
+        users.sort_by_key(|u| u.0);
+        let author = users[0];
         a.append_message(Message { id: Id(9_100_001), channel: here, author, content: "bonjour".into(), ..Default::default() }, cx);
         a.append_message(Message { id: Id(9_100_002), channel: there, author, content: "ailleurs".into(), ..Default::default() }, cx);
         a.prefs.local.ui.insert("read-all".into(), 2);
