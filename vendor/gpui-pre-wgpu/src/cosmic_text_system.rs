@@ -54,6 +54,7 @@ struct CosmicTextSystemState {
     /// Contains all already loaded fonts, including all faces. Indexed by `FontId`.
     loaded_fonts: Vec<LoadedFont>,
     loaded_font_ids_by_key: HashMap<LoadedFontKey, FontId>,
+    synthetic_bold_twins: HashMap<FontId, FontId>,
     /// Caches the `FontId`s associated with a specific family to avoid iterating the font database
     /// for every font face in a family.
     font_ids_by_family_cache: HashMap<FontKey, SmallVec<[FontId; 4]>>,
@@ -68,6 +69,7 @@ struct LoadedFont {
     /// resolved at load time so `layout_line` shares one chain across faces.
     /// `Arc` keeps clone cheap on the per-run hot path.
     user_fallback_chain: Arc<[(FontId, SharedString)]>,
+    synthetic_bold: bool,
 }
 
 struct FontMatchProperties {
@@ -138,6 +140,7 @@ impl CosmicTextSystem {
             pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             loaded_font_ids_by_key: HashMap::default(),
+            synthetic_bold_twins: HashMap::default(),
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_string(),
             missing_glyph_sink: None,
@@ -157,6 +160,7 @@ impl CosmicTextSystem {
             pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             loaded_font_ids_by_key: HashMap::default(),
+            synthetic_bold_twins: HashMap::default(),
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_string(),
             missing_glyph_sink: None,
@@ -439,6 +443,7 @@ impl CosmicTextSystemState {
                 features: cosmic_features.clone(),
                 is_known_emoji_font: check_is_known_emoji_font(&postscript_name),
                 user_fallback_chain: Arc::clone(&user_fallback_chain),
+                synthetic_bold: false,
             });
             self.loaded_font_ids_by_key.insert(key, font_id);
         }
@@ -541,6 +546,9 @@ impl CosmicTextSystemState {
         };
 
         let mut renderer = Render::new(sources);
+        if loaded_font.synthetic_bold {
+            renderer.embolden(synthetic_bold_strength(pixel_size * params.scale_factor));
+        }
         if params.subpixel_rendering {
             // There seems to be a bug in Swash where the B and R values are swapped.
             renderer
@@ -588,10 +596,36 @@ impl CosmicTextSystemState {
                 features: CosmicFontFeatures::new(),
                 is_known_emoji_font: check_is_known_emoji_font(&face.post_script_name),
                 user_fallback_chain: Arc::from(Vec::new()),
+                synthetic_bold: false,
             });
 
             Ok(font_id)
         }
+    }
+
+    fn face_weight(&self, font_id: FontId) -> u16 {
+        self.font_system
+            .db()
+            .face(self.loaded_font(font_id).font.id())
+            .map_or(400, |face| face.weight.0)
+    }
+
+    fn synthetic_bold_twin(&mut self, font_id: FontId) -> FontId {
+        if let Some(&twin) = self.synthetic_bold_twins.get(&font_id) {
+            return twin;
+        }
+        let base = self.loaded_font(font_id);
+        let twin = LoadedFont {
+            font: Arc::clone(&base.font),
+            features: base.features.clone(),
+            is_known_emoji_font: base.is_known_emoji_font,
+            user_fallback_chain: Arc::clone(&base.user_fallback_chain),
+            synthetic_bold: true,
+        };
+        let twin_id = FontId(self.loaded_fonts.len());
+        self.loaded_fonts.push(twin);
+        self.synthetic_bold_twins.insert(font_id, twin_id);
+        twin_id
     }
 
     #[profiling::function]
@@ -698,6 +732,7 @@ impl CosmicTextSystemState {
     ) -> LineLayout {
         let mut attrs_list = AttrsList::new(&Attrs::new());
         let mut offs = 0;
+        let mut run_weights: SmallVec<[(usize, u16); 4]> = SmallVec::new();
         for run in font_runs {
             let run_end = offs + run.len;
 
@@ -705,6 +740,7 @@ impl CosmicTextSystemState {
                 offs = run_end;
                 continue;
             };
+            run_weights.push((run_end, properties.weight.0));
 
             let primary_attrs = properties.attributes(run.font_id, &properties.primary_family_name);
             let fallback_attrs: SmallVec<[Attrs<'_>; 4]> = properties
@@ -725,6 +761,11 @@ impl CosmicTextSystemState {
             } else {
                 let loaded_fonts = &self.loaded_fonts;
                 let covers = |id: FontId, ch: char| charmap_covers(loaded_fonts, id, ch);
+                let is_emoji = |id: FontId| {
+                    loaded_fonts
+                        .get(id.0)
+                        .is_some_and(|loaded| loaded.is_known_emoji_font)
+                };
                 compute_run_spans(
                     text,
                     offs,
@@ -732,6 +773,7 @@ impl CosmicTextSystemState {
                     run.font_id,
                     &properties.fallback_chain,
                     &covers,
+                    &is_emoji,
                 )
             };
 
@@ -812,6 +854,14 @@ impl CosmicTextSystemState {
             // HACK: Prevent crash caused by variation selectors.
             if glyph.glyph_id == 3 && is_emoji {
                 continue;
+            }
+
+            let requested_weight = run_weights
+                .iter()
+                .find(|(end, _)| glyph.start < *end)
+                .map_or(400, |(_, weight)| *weight);
+            if needs_synthetic_bold(requested_weight, self.face_weight(font_id), is_emoji) {
+                font_id = self.synthetic_bold_twin(font_id);
             }
 
             let shaped_glyph = ShapedGlyph {
@@ -1062,6 +1112,7 @@ fn compute_run_spans(
     primary: FontId,
     fallback_chain: &[(FontId, SharedString)],
     covers: &impl Fn(FontId, char) -> bool,
+    is_emoji: &impl Fn(FontId) -> bool,
 ) -> SmallVec<[RunSpan; 4]> {
     let mut spans = SmallVec::new();
     let run_end = run_offset + run_len;
@@ -1083,7 +1134,14 @@ fn compute_run_spans(
     let mut span_font_id = primary;
     for (grapheme_idx, grapheme) in run_text.grapheme_indices(true) {
         let abs = run_offset + grapheme_idx;
-        let next_slot = pick_grapheme_slot(grapheme, span_slot, primary, fallback_chain, covers);
+        let next_slot = pick_grapheme_slot(
+            grapheme,
+            span_slot,
+            primary,
+            fallback_chain,
+            covers,
+            is_emoji,
+        );
         if next_slot == span_slot {
             continue;
         }
@@ -1133,6 +1191,7 @@ fn pick_grapheme_slot(
     primary: FontId,
     fallback_chain: &[(FontId, SharedString)],
     covers: &impl Fn(FontId, char) -> bool,
+    is_emoji: &impl Fn(FontId) -> bool,
 ) -> Option<usize> {
     let needed: SmallVec<[char; 4]> = grapheme
         .chars()
@@ -1142,7 +1201,38 @@ fn pick_grapheme_slot(
         .first()
         .copied()
         .unwrap_or_else(|| grapheme.chars().next().unwrap_or('\0'));
+    match requested_presentation(grapheme, first) {
+        Some(Presentation::Emoji) => {
+            let emoji_covers_all =
+                |id: FontId| is_emoji(id) && needed.iter().all(|&ch| covers(id, ch));
+            if emoji_covers_all(primary) {
+                return None;
+            }
+            if let Some(ix) = fallback_chain
+                .iter()
+                .position(|(id, _)| emoji_covers_all(*id))
+            {
+                return Some(ix);
+            }
+        }
+        Some(Presentation::Text) => {
+            let text_covers = |id: FontId, ch: char| !is_emoji(id) && covers(id, ch);
+            if let Some(slot) = covering_slot(&needed, current, primary, fallback_chain, &text_covers) {
+                return slot;
+            }
+        }
+        None => {}
+    }
     if needed.len() <= 1 {
+        if !first.is_ascii()
+            && !covers(primary, first)
+            && let Some(ix) = fallback_chain
+                .iter()
+                .position(|(id, _)| covers(*id, first))
+            && is_emoji(fallback_chain[ix].0)
+        {
+            return Some(ix);
+        }
         return pick_covering_slot(first, current, primary, fallback_chain, covers);
     }
     if needed.iter().all(|&ch| (ch as u32) <= 0x7F) {
@@ -1156,6 +1246,51 @@ fn pick_grapheme_slot(
         return Some(ix);
     }
     pick_covering_slot(first, current, primary, fallback_chain, covers)
+}
+
+// PHOENIX PATCH (emoji presentation, docs/gpui-patches.md): like Chromium, U+FE0F asks
+// for the colour emoji font even when an earlier font has the base character ("❄️",
+// "↔️"), and U+FE0E asks for a text font ("🔊︎"). Without a selector, a character whose
+// first covering font in the chain is an emoji font goes there, before the sticky
+// current fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Presentation {
+    Emoji,
+    Text,
+}
+
+fn requested_presentation(grapheme: &str, base: char) -> Option<Presentation> {
+    let emoji_capable = !base.is_ascii() || matches!(base, '#' | '*' | '0'..='9');
+    if !emoji_capable {
+        return None;
+    }
+    if grapheme.contains('\u{FE0F}') {
+        Some(Presentation::Emoji)
+    } else if grapheme.contains('\u{FE0E}') {
+        Some(Presentation::Text)
+    } else {
+        None
+    }
+}
+
+fn covering_slot(
+    needed: &[char],
+    current: Option<usize>,
+    primary: FontId,
+    fallback_chain: &[(FontId, SharedString)],
+    covers: &impl Fn(FontId, char) -> bool,
+) -> Option<Option<usize>> {
+    let covers_all = |id: FontId| needed.iter().all(|&ch| covers(id, ch));
+    if covers_all(primary) {
+        return Some(None);
+    }
+    if current.is_some() && covers_all(slot_font_id(current, primary, fallback_chain)) {
+        return Some(current);
+    }
+    fallback_chain
+        .iter()
+        .position(|(id, _)| covers_all(*id))
+        .map(Some)
 }
 
 fn is_default_ignorable(ch: char) -> bool {
@@ -1264,6 +1399,18 @@ fn face_info_into_properties(
     }
 }
 
+// PHOENIX PATCH (synthetic bold, docs/gpui-patches.md): Chromium on Linux draws a
+// fallback face lighter than 600 with FreeType's FT_Outline_Embolden when the text asks
+// for 600 or more (DejaVu Sans Book under gg sans 600). The outline grows by ppem / 24
+// device pixels and advances stay the same. swash's `embolden` skips FreeType's halving.
+fn needs_synthetic_bold(requested_weight: u16, face_weight: u16, is_emoji: bool) -> bool {
+    !is_emoji && requested_weight >= 600 && face_weight < 600
+}
+
+fn synthetic_bold_strength(device_ppem: f32) -> f32 {
+    device_ppem / 24. / 2.
+}
+
 fn check_is_known_emoji_font(postscript_name: &str) -> bool {
     // TODO: Include other common emoji fonts
     postscript_name == "NotoColorEmoji"
@@ -1303,6 +1450,55 @@ mod tests {
 
     fn fid(i: usize) -> FontId {
         FontId(i)
+    }
+
+    fn text_only(_: FontId) -> bool {
+        false
+    }
+
+    #[test]
+    fn vs16_goes_to_the_emoji_font_before_text_fonts() {
+        let primary = fid(0);
+        let fb = chain(&[1, 2]);
+        let covers = |id: FontId, ch: char| match id.0 {
+            0 => ch.is_ascii() || ch == '\u{2194}',
+            1 => matches!(ch, '\u{2744}' | '\u{2194}'),
+            _ => matches!(ch, '\u{2744}' | '\u{2194}' | 'm'),
+        };
+        let emoji = |id: FontId| id == fid(2);
+        let pick = |g: &str, current| pick_grapheme_slot(g, current, primary, &fb, &covers, &emoji);
+        assert_eq!(pick("\u{2744}\u{FE0F}", None), Some(1));
+        assert_eq!(pick("\u{2194}\u{FE0F}", None), Some(1));
+        assert_eq!(pick("\u{2744}", None), Some(0));
+        assert_eq!(pick("\u{2194}", None), None);
+        assert_eq!(pick("m\u{FE0F}", None), None);
+    }
+
+    #[test]
+    fn vs15_goes_to_a_text_font_and_bare_emoji_skips_the_sticky_one() {
+        let primary = fid(0);
+        let fb = chain(&[1, 2]);
+        let covers = |id: FontId, ch: char| match id.0 {
+            0 => ch.is_ascii(),
+            1 => ch == '\u{1F50A}',
+            _ => matches!(ch, '\u{1F50A}' | '\u{1D4E2}'),
+        };
+        let emoji = |id: FontId| id == fid(1);
+        let pick = |g: &str, current| pick_grapheme_slot(g, current, primary, &fb, &covers, &emoji);
+        assert_eq!(pick("\u{1F50A}", None), Some(0));
+        assert_eq!(pick("\u{1F50A}", Some(1)), Some(0));
+        assert_eq!(pick("\u{1F50A}\u{FE0E}", None), Some(1));
+        assert_eq!(pick("\u{1D4E2}", Some(1)), Some(1));
+    }
+
+    #[test]
+    fn synthetic_bold_follows_chromium() {
+        assert!(needs_synthetic_bold(600, 400, false));
+        assert!(needs_synthetic_bold(700, 500, false));
+        assert!(!needs_synthetic_bold(550, 400, false));
+        assert!(!needs_synthetic_bold(700, 700, false));
+        assert!(!needs_synthetic_bold(700, 400, true));
+        assert_eq!(synthetic_bold_strength(24.), 0.5);
     }
 
     fn chain(ids: &[usize]) -> SmallVec<[(FontId, SharedString); 4]> {
@@ -1821,17 +2017,17 @@ mod tests {
         let fb = chain(&[1, 2]);
         let covers = |id: FontId, ch: char| id != fid(0) || ch.is_ascii();
         assert_eq!(
-            pick_grapheme_slot("a\u{320}\u{320}", None, primary, &fb, &covers),
+            pick_grapheme_slot("a\u{320}\u{320}", None, primary, &fb, &covers, &text_only),
             Some(0)
         );
         assert_eq!(
-            pick_grapheme_slot("~\u{33d}\u{353}", Some(1), primary, &fb, &covers),
+            pick_grapheme_slot("~\u{33d}\u{353}", Some(1), primary, &fb, &covers, &text_only),
             Some(0)
         );
-        assert_eq!(pick_grapheme_slot("a", Some(1), primary, &fb, &covers), None);
+        assert_eq!(pick_grapheme_slot("a", Some(1), primary, &fb, &covers, &text_only), None);
         let primary_has_marks = |_: FontId, _: char| true;
         assert_eq!(
-            pick_grapheme_slot("a\u{320}", Some(1), primary, &fb, &primary_has_marks),
+            pick_grapheme_slot("a\u{320}", Some(1), primary, &fb, &primary_has_marks, &text_only),
             None
         );
     }
@@ -1842,7 +2038,7 @@ mod tests {
         let fb = chain(&[1]);
         let covers = |id: FontId, ch: char| id == fid(1) && ch == '\u{2764}';
         assert_eq!(
-            pick_grapheme_slot("\u{2764}\u{FE0F}", None, primary, &fb, &covers),
+            pick_grapheme_slot("\u{2764}\u{FE0F}", None, primary, &fb, &covers, &text_only),
             Some(0)
         );
     }
@@ -1853,7 +2049,7 @@ mod tests {
         let fb = chain(&[1]);
         let covers = |id: FontId, ch: char| id == fid(0) && ch == 'a';
         assert_eq!(
-            pick_grapheme_slot("a\u{320}", None, primary, &fb, &covers),
+            pick_grapheme_slot("a\u{320}", None, primary, &fb, &covers, &text_only),
             None
         );
     }
@@ -1873,7 +2069,7 @@ mod tests {
         let fb: SmallVec<[(FontId, SharedString); 4]> = SmallVec::new();
         let covers = |_: FontId, _: char| false;
         let text = "hello";
-        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers);
+        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers, &text_only);
         assert_eq!(spans.as_slice(), &[span(0, text.len(), None, primary)]);
     }
 
@@ -1890,7 +2086,7 @@ mod tests {
             }
         };
         let text = "a字b";
-        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers);
+        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers, &text_only);
         // '字' is 3 bytes so split is at 1 then 4.
         assert_eq!(
             spans.as_slice(),
@@ -1917,7 +2113,7 @@ mod tests {
         let text = "xx字y";
         let run_offset = 2;
         let run_len = text.len() - run_offset;
-        let spans = compute_run_spans(text, run_offset, run_len, primary, &fb, &covers);
+        let spans = compute_run_spans(text, run_offset, run_len, primary, &fb, &covers, &text_only);
         assert_eq!(
             spans.as_slice(),
             &[span(2, 5, Some(0), fid(1)), span(5, 6, None, primary)]
@@ -1940,7 +2136,7 @@ mod tests {
         };
         // \u{0905} devanagari short a + \u{0902} candrabindu mark.
         let text = "\u{0905}\u{0902}";
-        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers);
+        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers, &text_only);
         assert_eq!(spans.as_slice(), &[span(0, text.len(), Some(0), fid(1))]);
     }
 
@@ -1952,7 +2148,7 @@ mod tests {
         let covers = |id: FontId, ch: char| id == fid(1) && ch != '\u{200D}';
         // family zwj sequence woman zwj girl.
         let text = "\u{1F469}\u{200D}\u{1F467}";
-        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers);
+        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers, &text_only);
         assert_eq!(spans.as_slice(), &[span(0, text.len(), Some(0), fid(1))]);
     }
 
@@ -1968,7 +2164,7 @@ mod tests {
             }
         };
         let text = "字字字";
-        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers);
+        let spans = compute_run_spans(text, 0, text.len(), primary, &fb, &covers, &text_only);
         assert_eq!(spans.as_slice(), &[span(0, text.len(), Some(0), fid(1))]);
     }
 
@@ -1977,7 +2173,7 @@ mod tests {
         let primary = fid(0);
         let fb = chain(&[1]);
         let covers = |_: FontId, _: char| true;
-        let spans = compute_run_spans("anything", 3, 0, primary, &fb, &covers);
+        let spans = compute_run_spans("anything", 3, 0, primary, &fb, &covers, &text_only);
         assert!(spans.is_empty());
     }
 }

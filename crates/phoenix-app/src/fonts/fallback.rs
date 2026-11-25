@@ -4,6 +4,7 @@ const PREFIX: &str = "Phx ";
 pub const EMOJI_FAMILY: &str = "Noto Color Emoji";
 const STACK: [&str; 4] = ["Noto Sans", "Helvetica Neue", "Helvetica", "Arial"];
 const RENAMED: usize = 24;
+const SELECTOR_SUFFIX: &str = "Selector";
 
 const EMOJI_PRESENTATION: [(u32, u32); 81] = [
     (0x231A, 0x231B), (0x23E9, 0x23EC), (0x23F0, 0x23F0), (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615),
@@ -240,21 +241,28 @@ fn keep_loadable(map: &mut std::collections::BTreeMap<u32, u16>, space: Option<u
 pub fn text_face(font: &[u8], family: &str) -> Option<Vec<u8>> {
     let face = ttf_parser::Face::parse(font, 0).ok()?;
     let mut map = unicode_map(&face)?;
-    if !map.keys().any(|&c| emoji_presentation(c)) && map.contains_key(&('m' as u32)) {
+    if map.contains_key(&('m' as u32)) {
         return rename(font, family);
     }
     let space = map.get(&0x20).copied();
-    map.retain(|&c, _| !emoji_presentation(c));
     keep_loadable(&mut map, space);
     let kept: Vec<(u32, u16)> = map.into_iter().collect();
     rebuild(font, family, None, Some(cmap_format12(&kept)))
 }
 
 pub fn emoji_presentation_font(font: &[u8], family: &str) -> Option<Vec<u8>> {
+    emoji_copy(font, family, emoji_keeps)
+}
+
+pub fn emoji_selector_font(font: &[u8], family: &str) -> Option<Vec<u8>> {
+    emoji_copy(font, family, |c| c > 0x7F || EMOJI_SEQUENCE_PARTS.iter().any(|&(a, b)| (a..=b).contains(&c)))
+}
+
+fn emoji_copy(font: &[u8], family: &str, keep: impl Fn(u32) -> bool) -> Option<Vec<u8>> {
     let face = ttf_parser::Face::parse(font, 0).ok()?;
     let mut map = unicode_map(&face)?;
     let space = map.get(&0x20).copied();
-    map.retain(|&c, _| emoji_keeps(c));
+    map.retain(|&c, _| keep(c));
     if map.is_empty() {
         return None;
     }
@@ -339,6 +347,11 @@ pub fn register(cx: &mut gpui::App) {
         if let Some(only) = emoji_presentation_font(&bytes, &name) {
             blobs.push(only.into());
             chain.insert(after_stack, name);
+        }
+        let selector = format!("{PREFIX}{EMOJI_FAMILY} {SELECTOR_SUFFIX}");
+        if let Some(all) = emoji_selector_font(&bytes, &selector) {
+            blobs.push(all.into());
+            chain.push(selector);
         }
         blobs.push(bytes.into());
     }
@@ -559,11 +572,25 @@ mod tests {
     }
 
     #[test]
-    fn text_faces_lose_emoji_presentation_code_points() {
+    fn emoji_selector_copy_keeps_text_default_emoji() {
+        let Ok(b) = std::fs::read("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf") else { return };
+        let r = super::emoji_selector_font(&b, "Phx Noto Color Emoji Selector").expect("built");
+        let face = ttf_parser::Face::parse(&r, 0).expect("parses");
+        for c in ['❄', '❤', '☃', '↔', '©', '🔊', '#', '1', '\u{20E3}'] {
+            assert!(face.glyph_index(c).is_some(), "{c}");
+        }
+        assert!(face.glyph_index('m').is_some());
+        assert!(face.glyph_index('a').is_none());
+        let ps = face.names().into_iter().find(|n| n.name_id == 6 && n.is_unicode()).and_then(|n| n.to_string());
+        assert_eq!(ps.as_deref(), Some("NotoColorEmoji"));
+    }
+
+    #[test]
+    fn text_faces_keep_emoji_code_points_for_vs15() {
         let Ok(b) = std::fs::read("/usr/share/fonts/opentype/freefont/FreeSerif.otf") else { return };
         let r = super::text_face(&b, "Phx FreeSerif").expect("built");
         let face = ttf_parser::Face::parse(&r, 0).expect("parses");
-        assert!(face.glyph_index('🔊').is_none());
+        assert!(face.glyph_index('🔊').is_some());
         assert!(face.glyph_index('❄').is_some());
         assert!(face.glyph_index('𝓢').is_some());
         assert_eq!(crate::fonts::ttf_family(&r).as_deref(), Some("Phx FreeSerif"));

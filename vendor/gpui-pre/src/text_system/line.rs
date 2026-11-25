@@ -48,7 +48,8 @@ pub struct ShapedLine {
     pub text: SharedString,
     pub(crate) decoration_runs: SmallVec<[DecorationRun; 32]>,
     /// PHOENIX PATCH (underline geometry, docs/gpui-patches.md): the font the first run asked
-    /// for, before fallback. Underlines are placed from its metrics.
+    /// for, before fallback. The baseline and the underlines are placed from its metrics, like
+    /// Chromium's strut: a fallback font with a larger ascent does not move the glyphs.
     pub(crate) primary_font: Option<FontId>,
 }
 
@@ -557,8 +558,6 @@ fn paint_line(
         wrap_boundaries,
     );
     window.paint_layer(line_bounds, |window| {
-        let padding_top = (line_height - layout.ascent - layout.descent) / 2.;
-        let baseline_offset = point(px(0.), padding_top + layout.ascent);
         let (deco_ascent, deco_descent) = primary_font.map_or((layout.ascent, layout.descent), |font_id| {
             let text_system = cx.text_system();
             (
@@ -566,6 +565,10 @@ fn paint_line(
                 text_system.descent(font_id, layout.font_size),
             )
         });
+        // PHOENIX PATCH (primary baseline, docs/gpui-patches.md): the baseline comes from the
+        // primary font, not from the largest ascent and descent of the fallback fonts.
+        let padding_top = (line_height - deco_ascent - deco_descent) / 2.;
+        let baseline_offset = point(px(0.), padding_top + deco_ascent);
         let scale_factor = window.scale_factor();
         let underline_at = |row_top: Pixels| {
             underline_geometry(
@@ -716,7 +719,7 @@ fn paint_line(
                                 point(
                                     glyph_origin.x,
                                     glyph_origin.y
-                                        + (((layout.ascent * 0.5) + baseline_offset.y) * 0.5),
+                                        + (((deco_ascent * 0.5) + baseline_offset.y) * 0.5),
                                 ),
                                 StrikethroughStyle {
                                     color: Some(run_strikethrough.color.unwrap_or(style_run.color)),
