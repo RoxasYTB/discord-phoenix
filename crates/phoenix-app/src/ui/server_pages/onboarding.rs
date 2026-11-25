@@ -23,6 +23,7 @@ pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const SEND_MESSAGES: u64 = 1 << 11;
 pub const SEND_IN_THREADS: u64 = 1 << 38;
 pub const ADMINISTRATOR: u64 = 1 << 3;
+pub const CONNECT: u64 = 1 << 20;
 pub const MAX_PREJOIN: usize = 4;
 pub const MAX_OPTIONS: usize = 50;
 pub const STEPS: usize = 5;
@@ -66,6 +67,7 @@ pub struct Chan {
     pub parent: Option<String>,
     pub position: i64,
     pub public: bool,
+    pub private: bool,
     pub chattable: bool,
 }
 
@@ -278,7 +280,16 @@ pub fn chans(list: &Value, guild_id: &str, everyone: u64) -> Vec<Chan> {
         .map(|c| {
             let kind = c.get("type").and_then(Value::as_u64).unwrap_or(0);
             let p = channel_perms(c, guild_id, everyone);
-            let public = p & VIEW_CHANNEL != 0;
+            let need = if is_voice(kind) { VIEW_CHANNEL | CONNECT } else { VIEW_CHANNEL };
+            let public = p & need == need;
+            let denied = c
+                .get("permission_overwrites")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|o| str_of(o, "id") == guild_id)
+                .is_some_and(|o| perm(o.get("deny")) & VIEW_CHANNEL != 0);
+            let private = (is_voice(kind) && p & CONNECT == 0) || denied;
             let send = if matches!(kind, 15 | 16) {
                 SEND_IN_THREADS
             } else {
@@ -294,6 +305,7 @@ pub fn chans(list: &Value, guild_id: &str, everyone: u64) -> Vec<Chan> {
                     .map(str::to_owned),
                 position: c.get("position").and_then(Value::as_i64).unwrap_or(0),
                 public,
+                private,
                 chattable: public && p & send != 0,
             }
         })
@@ -388,7 +400,7 @@ pub fn coverage<'a>(
             set.extend(o.channel_ids.iter().map(String::as_str));
         }
     }
-    let pool: Vec<&Chan> = list.iter().filter(|c| c.kind != 4 && c.public).collect();
+    let pool: Vec<&Chan> = list.iter().filter(|c| c.kind != 4 && !c.private).collect();
     let hit = |c: &&Chan| {
         set.contains(c.id.as_str()) || c.parent.as_deref().is_some_and(|p| set.contains(p))
     };
@@ -881,19 +893,14 @@ fn browser(c: &Ctx, cx: &mut Context<PhoenixApp>) -> gpui::Div {
             Some(k) => {
                 let on = c.draft.defaults.contains(&k.id);
                 let kid = k.id.clone();
-                let ctl: AnyElement = if k.public {
-                    div()
-                        .id(SharedString::from(format!("obw-cat-{}", k.id)))
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |_, _, _, cx| {
-                            toggle_default(guild, kid.clone());
-                            cx.notify();
-                        }))
-                        .child(checkbox(on))
-                        .into_any_element()
-                } else {
-                    div().into_any_element()
-                };
+                let ctl = div()
+                    .id(SharedString::from(format!("obw-cat-{}", k.id)))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        toggle_default(guild, kid.clone());
+                        cx.notify();
+                    }))
+                    .child(checkbox(on));
                 div()
                     .w_full()
                     .pt(z(24.))
@@ -1704,7 +1711,7 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .child(h2(crate::t!("gs2.obw.welcome_title")))
         .child(desc_md(crate::t!("gs2.obw.welcome_desc")));
     left = if welcome.is_empty() {
-        left.child(div().my(z(8.)).child(button_sm(
+        left.child(div().my(z(8.)).flex().child(button_sm(
             "obw-welcome",
             crate::t!("gs2.obw.welcome_setup"),
             BtnKind::Primary,
@@ -1968,7 +1975,7 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         .items_start()
                         .gap(z(8.))
                         .child(body_sm(crate::t!("gs2.obw.banner_desc")))
-                        .child(div().mt(z(8.)).child(button(
+                        .child(div().mt(z(8.)).flex().child(button(
                             "obw-banner-up",
                             crate::t!("gs2.obw.banner_upload"),
                             BtnKind::Primary,
@@ -2235,27 +2242,10 @@ fn review_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
     } else {
         a as f32 / total as f32 * 100.
     };
-    let desc2 = div()
-        .flex()
-        .flex_wrap()
-        .child(text(
-            12.,
-            16.,
-            FontWeight::NORMAL,
-            if pct > 85. {
-                idx::TEXT_STRONG
-            } else {
-                idx::STATUS_WARNING
-            },
-            crate::t!("gs2.obw.r_of", n = a, of = total),
-        ))
-        .child(text(
-            12.,
-            16.,
-            FontWeight::NORMAL,
-            idx::TEXT_DEFAULT,
-            crate::t!("gs2.obw.r_assignable"),
-        ));
+    let lead = crate::t!("gs2.obw.r_of", n = a, of = total);
+    let full: SharedString = format!("{lead}{}", crate::t!("gs2.obw.r_assignable")).into();
+    let hl = t(if pct > 85. { idx::TEXT_STRONG } else { idx::STATUS_WARNING });
+    let desc2 = div().text_size(z(12.)).line_height(z(16.)).text_color(t(idx::TEXT_DEFAULT)).child(gpui::StyledText::new(full).with_highlights([(0..lead.len(), gpui::HighlightStyle { color: Some(hl), ..Default::default() })]));
     let (st3, k3) = home_status(&c.home, &c.list);
     let started3 = home_configured(&c.home);
     let desc3 = text(
@@ -2600,7 +2590,7 @@ mod tests {
     use super::*;
 
     fn guild() -> Value {
-        json!({ "id": "1", "roles": [{ "id": "1", "permissions": "3072" }, { "id": "9", "permissions": "0" }] })
+        json!({ "id": "1", "roles": [{ "id": "1", "permissions": "1051648" }, { "id": "9", "permissions": "0" }] })
     }
 
     fn channels() -> Value {
@@ -2625,6 +2615,10 @@ mod tests {
         assert!(get("10").public && get("10").chattable);
         assert!(get("21").public && !get("21").chattable);
         assert!(!get("22").public);
+        assert!(get("22").private && !get("10").private);
+        let muted = json!([{ "id": "40", "type": 2, "name": "afk", "position": 0, "permission_overwrites": [{ "id": "1", "type": 0, "allow": "0", "deny": "1048576" }] }]);
+        let afk = chans(&muted, "1", everyone_perms(&guild()));
+        assert!(!afk[0].public && afk[0].private);
         assert!(l.iter().all(|c| c.id != "30"));
         let g = groups(&l);
         assert_eq!(
