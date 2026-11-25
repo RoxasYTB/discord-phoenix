@@ -28,8 +28,8 @@ impl Default for BuildInfo {
 }
 
 pub fn discord_config_dirs() -> Vec<PathBuf> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return Vec::new() };
-    let xdg = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
+    let Some(home) = crate::paths::home() else { return Vec::new() };
+    let xdg = crate::paths::env_dir("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
     [
         xdg.join("discord"),
         home.join(".var/app/com.discordapp.Discord/config/discord"),
@@ -41,9 +41,7 @@ pub fn discord_config_dirs() -> Vec<PathBuf> {
 }
 
 fn cache_file() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from)?;
-    let base = std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".cache"));
-    Some(base.join("discord-phoenix/build_info.json"))
+    Some(crate::paths::cache_dir()?.join("build_info.json"))
 }
 
 fn version_key(v: &str) -> Vec<u64> {

@@ -231,11 +231,14 @@ fn language() -> &'static str {
 }
 
 fn spd(args: &[&str]) -> Option<std::process::Child> {
+    if crate::paths::is_sandboxed() {
+        return None;
+    }
     Command::new("spd-say").args(args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().ok()
 }
 
 fn sink_file(u: &Utterance) -> bool {
-    let Some(path) = std::env::var_os("PHOENIX_TTS_SINK") else { return false };
+    let Some(path) = crate::paths::env_dir("PHOENIX_TTS_SINK") else { return false };
     use std::io::Write as _;
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "{}{}", if u.interrupt { "! " } else { "" }, u.text);

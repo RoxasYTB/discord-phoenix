@@ -77,10 +77,7 @@ impl Default for VoicePrefs {
 }
 
 fn path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(base.join(crate::APP_ID).join("voice.json"))
+    crate::paths::config_file("voice.json")
 }
 
 impl VoicePrefs {

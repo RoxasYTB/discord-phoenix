@@ -24,6 +24,9 @@ pub fn speak(text: &str) -> bool {
     if text.trim().is_empty() {
         return false;
     }
+    if crate::paths::is_sandboxed() {
+        return false;
+    }
     let Some(bin) = tts_binary() else { return false };
     std::process::Command::new(bin)
         .arg("--")

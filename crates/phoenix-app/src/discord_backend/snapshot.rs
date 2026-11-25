@@ -24,11 +24,7 @@ const RESUME_WINDOW: Duration = Duration::from_secs(150);
 const JOURNAL_CAP: u64 = 48 * 1024 * 1024;
 
 pub fn dir() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
-    Some(base.join("discord-phoenix").join("session"))
+    Some(crate::paths::cache_dir()?.join("session"))
 }
 
 fn file(name: &str) -> Option<PathBuf> {

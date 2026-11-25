@@ -38,6 +38,9 @@ impl KeyringStore {
 
 impl TokenStore for KeyringStore {
     fn load(&self) -> Result<Option<Secret>, String> {
+        if crate::paths::is_sandboxed() {
+            return Ok(None);
+        }
         match Self::entry()?.get_password() {
             Ok(t) if !t.is_empty() => Ok(Some(Secret(t))),
             Ok(_) | Err(keyring::Error::NoEntry) => Ok(None),
@@ -45,9 +48,15 @@ impl TokenStore for KeyringStore {
         }
     }
     fn save(&self, token: &Secret) -> Result<(), String> {
+        if crate::paths::is_sandboxed() {
+            return Err("keyring disabled in sandbox".into());
+        }
         Self::entry()?.set_password(token.expose()).map_err(|e| e.to_string())
     }
     fn clear(&self) -> Result<(), String> {
+        if crate::paths::is_sandboxed() {
+            return Ok(());
+        }
         match Self::entry()?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(e.to_string()),
@@ -75,6 +84,14 @@ impl TokenStore for MemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyring_is_never_touched_in_tests() {
+        let k = KeyringStore;
+        assert_eq!(k.load(), Ok(None));
+        assert!(k.save(&Secret::new("x")).is_err());
+        assert_eq!(k.clear(), Ok(()));
+    }
 
     #[test]
     fn secret_debug_is_redacted() {

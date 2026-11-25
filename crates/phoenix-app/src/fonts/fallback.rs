@@ -33,6 +33,9 @@ pub fn ui_fallbacks() -> gpui::FontFallbacks {
 }
 
 fn fc(args: &[&str], format: &str) -> Vec<String> {
+    if crate::paths::is_sandboxed() {
+        return Vec::new();
+    }
     let Ok(out) = std::process::Command::new("fc-match").args(args).arg(format!("--format={format}")).output() else {
         return Vec::new();
     };

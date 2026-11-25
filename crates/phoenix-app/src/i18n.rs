@@ -44,6 +44,9 @@ pub fn set_locale(code: &str) {
 }
 
 fn env_locale() -> Option<String> {
+    if cfg!(test) {
+        return None;
+    }
     std::env::var("PHOENIX_LOCALE").ok().filter(|s| !s.is_empty())
 }
 

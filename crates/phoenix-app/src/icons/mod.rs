@@ -32,25 +32,21 @@ pub fn extracted_names() -> Vec<String> {
 }
 
 pub fn out_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
-    Some(base.join("discord-phoenix").join("icons"))
+    Some(crate::paths::cache_dir()?.join("icons"))
 }
 
 pub fn discord_caches() -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    if let Some(h) = std::env::var_os("HOME").map(PathBuf::from) {
+    if let Some(h) = crate::paths::home() {
         roots.push(h.join(".config"));
         roots.push(h.join(".var/app/com.discordapp.Discord/config"));
         roots.push(h.join(".var/app/com.discordapp.DiscordCanary/config"));
         roots.push(h.join("Library/Application Support"));
     }
-    if let Some(x) = std::env::var_os("XDG_CONFIG_HOME") {
+    if let Some(x) = crate::paths::env_dir("XDG_CONFIG_HOME") {
         roots.insert(0, PathBuf::from(x));
     }
-    if let Some(a) = std::env::var_os("APPDATA") {
+    if let Some(a) = crate::paths::env_dir("APPDATA") {
         roots.push(PathBuf::from(a));
     }
     let mut out = Vec::new();

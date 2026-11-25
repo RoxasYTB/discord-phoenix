@@ -5,14 +5,10 @@ pub const FILE_NAME: &str = "discord-phoenix.desktop";
 pub const DIR_ENV: &str = "PHOENIX_AUTOSTART_DIR";
 
 pub fn dir() -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os(DIR_ENV).filter(|d| !d.is_empty()) {
+    if let Some(d) = crate::paths::env_dir(DIR_ENV).filter(|d| !d.is_empty()) {
         return Some(PathBuf::from(d));
     }
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(base.join("autostart"))
+    Some(crate::paths::config_home()?.join("autostart"))
 }
 
 fn exec_arg(exe: &Path) -> String {

@@ -15,11 +15,7 @@ use gpui::http_client::{AsyncBody, HttpClient, Request, Response, Url, http::Hea
 pub const CAP_BYTES: u64 = 300 * 1024 * 1024;
 
 pub fn default_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
-    Some(base.join("discord-phoenix").join("media"))
+    Some(crate::paths::cache_dir()?.join("media"))
 }
 
 fn key(url: &str) -> String {

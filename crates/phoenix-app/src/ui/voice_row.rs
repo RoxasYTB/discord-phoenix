@@ -17,10 +17,7 @@ thread_local! {
 }
 
 fn hidden_path() -> Option<std::path::PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))?;
-    Some(base.join(crate::APP_ID).join("voice-hidden-names.txt"))
+    crate::paths::config_file("voice-hidden-names.txt")
 }
 
 fn with_hidden<R>(f: impl FnOnce(&mut std::collections::BTreeSet<u64>) -> R) -> R {

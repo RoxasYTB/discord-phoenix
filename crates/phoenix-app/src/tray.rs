@@ -107,7 +107,7 @@ struct Labels {
 }
 
 fn client_tray_dirs() -> Vec<PathBuf> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return Vec::new() };
+    let Some(home) = crate::paths::home() else { return Vec::new() };
     let mut out = Vec::new();
     for root in [home.join(".config/discord"), home.join(".var/app/com.discordapp.Discord/config/discord")] {
         let Ok(entries) = std::fs::read_dir(&root) else { continue };

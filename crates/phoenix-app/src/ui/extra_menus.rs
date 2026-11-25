@@ -318,11 +318,7 @@ pub fn file_name(url: &str) -> String {
 }
 
 fn dirs_download() -> std::path::PathBuf {
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_default();
-    std::env::var_os("XDG_DOWNLOAD_DIR")
-        .map(std::path::PathBuf::from)
-        .or_else(|| ["Téléchargements", "Downloads"].iter().map(|d| home.join(d)).find(|p| p.is_dir()))
-        .unwrap_or(home)
+    crate::paths::downloads_dir()
 }
 
 #[cfg(test)]
