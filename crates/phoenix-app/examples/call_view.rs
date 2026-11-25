@@ -144,6 +144,45 @@ fn main() -> anyhow::Result<()> {
         })?;
         pump(&mut cx, 10);
     }
+    let point = |name: &str| {
+        std::env::var(name).ok().and_then(|v| {
+            let (x, y) = v.split_once(',')?;
+            Some(gpui::point(px(x.trim().parse::<f32>().ok()?), px(y.trim().parse::<f32>().ok()?)))
+        })
+    };
+    let move_to = |cx: &mut HeadlessAppContext, at: gpui::Point<gpui::Pixels>| -> anyhow::Result<()> {
+        let ev = gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent { position: at, pressed_button: None, modifiers: gpui::Modifiers::default() });
+        cx.update_window(win.into(), |_, window, cx| {
+            window.dispatch_event(ev, cx);
+        })?;
+        Ok(())
+    };
+    let snap = |cx: &mut HeadlessAppContext, path: &str| -> anyhow::Result<()> {
+        for _ in 0..2 {
+            cx.update_window(win.into(), |_, window, _| window.refresh())?;
+            pump(cx, 2);
+        }
+        let img = cx.capture_screenshot(win.into())?;
+        img.save(path)?;
+        println!("wrote {path}");
+        Ok(())
+    };
+    if let Some(at) = point("PHX_MOUSE") {
+        move_to(&mut cx, at)?;
+        pump(&mut cx, 4);
+        if let Ok(spec) = std::env::var("PHX_HOVER_ANIM") {
+            for ms in spec.split(',').filter_map(|v| v.trim().parse::<u64>().ok()) {
+                phoenix_app::ui::hover_icon::freeze(Some(std::time::Duration::from_millis(ms)));
+                snap(&mut cx, &format!("{}-t{ms:04}.png", out.trim_end_matches(".png")))?;
+            }
+            phoenix_app::ui::hover_icon::freeze(None);
+        }
+        if let Some(away) = point("PHX_MOUSE_LEAVE") {
+            move_to(&mut cx, away)?;
+            pump(&mut cx, 4);
+            snap(&mut cx, &format!("{}-leave.png", out.trim_end_matches(".png")))?;
+        }
+    }
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
     cx.advance_clock(std::time::Duration::from_secs(2));

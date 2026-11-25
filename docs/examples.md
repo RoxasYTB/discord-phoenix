@@ -44,6 +44,7 @@ Prints `key=value` lines that scripts/bench/run.sh collects.
 
 Offscreen render of the voice call view with mock voice state (never joins voice).
 `cargo run -p phoenix-app --example call_view -- out.png [chat] [grid] [nostrip]`
+`PHX_MOUSE=x,y PHX_HOVER_ANIM=0,100,… [PHX_MOUSE_LEAVE=x,y]` writes one frame per instant of the hover animation (`out-t0100.png`, `out-leave.png`), see docs/parity/hover-animations.md.
 
 ## `component_shots`
 
