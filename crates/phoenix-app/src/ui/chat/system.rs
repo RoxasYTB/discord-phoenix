@@ -13,6 +13,103 @@ fn join_text(id: u64) -> (SharedString, SharedString) {
     (crate::i18n::t(&format!("sys.join{n}.before"), &[]), crate::i18n::t(&format!("sys.join{n}.after"), &[]))
 }
 
+const ASSET_JOIN: &str = "https://discord.com/assets/8b9de960da063cb9.svg";
+const ASSET_LEAVE: &str = "https://discord.com/assets/53e42368b1409f1a.svg";
+const ASSET_CALL: &str = "https://discord.com/assets/61ccab047dad737a.svg";
+const ASSET_CALL_MISSED: &str = "https://discord.com/assets/6f076a64de25de4b.svg";
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SysIcon {
+    Asset(&'static str),
+    Glyph(ChatIcon, u32),
+    Named(&'static str, f32, Option<usize>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Humanized {
+    Seconds,
+    Minute,
+    Minutes(i64),
+    Hour,
+    Hours(i64),
+    Day,
+    Days(i64),
+    Month,
+    Months(i64),
+    Year,
+    Years(i64),
+}
+
+pub fn humanize(ms: i64) -> Humanized {
+    let ms = ms.abs() as f64;
+    let days_f = ms / 86_400_000.;
+    let months_f = days_f * 4800. / 146_097.;
+    let (s, m, h, d, mo, y) = (
+        (ms / 1000.).round() as i64,
+        (ms / 60_000.).round() as i64,
+        (ms / 3_600_000.).round() as i64,
+        days_f.round() as i64,
+        months_f.round() as i64,
+        (months_f / 12.).round() as i64,
+    );
+    if s <= 44 {
+        Humanized::Seconds
+    } else if m <= 1 {
+        Humanized::Minute
+    } else if m < 45 {
+        Humanized::Minutes(m)
+    } else if h <= 1 {
+        Humanized::Hour
+    } else if h < 22 {
+        Humanized::Hours(h)
+    } else if d <= 1 {
+        Humanized::Day
+    } else if d < 26 {
+        Humanized::Days(d)
+    } else if mo <= 1 {
+        Humanized::Month
+    } else if mo < 11 {
+        Humanized::Months(mo)
+    } else if y <= 1 {
+        Humanized::Year
+    } else {
+        Humanized::Years(y)
+    }
+}
+
+pub fn humanize_text(ms: i64) -> SharedString {
+    match humanize(ms) {
+        Humanized::Seconds => crate::t!("sys.dur.s"),
+        Humanized::Minute => crate::t!("sys.dur.m"),
+        Humanized::Minutes(n) => crate::t!("sys.dur.mm", n = n),
+        Humanized::Hour => crate::t!("sys.dur.h"),
+        Humanized::Hours(n) => crate::t!("sys.dur.hh", n = n),
+        Humanized::Day => crate::t!("sys.dur.d"),
+        Humanized::Days(n) => crate::t!("sys.dur.dd", n = n),
+        Humanized::Month => crate::t!("sys.dur.mo"),
+        Humanized::Months(n) => crate::t!("sys.dur.mos", n = n),
+        Humanized::Year => crate::t!("sys.dur.y"),
+        Humanized::Years(n) => crate::t!("sys.dur.yy", n = n),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallState {
+    Missed,
+    Started,
+    Joinable,
+}
+
+pub fn call_state(call: Option<&crate::model::CallInfo>, active: bool, me: crate::model::Id, in_this_call: bool) -> CallState {
+    if !active && call.is_some_and(|c| !c.participants.contains(&me)) {
+        CallState::Missed
+    } else if active && !in_this_call {
+        CallState::Joinable
+    } else {
+        CallState::Started
+    }
+}
+
 pub fn is_system(kind: MessageKind) -> bool {
     !matches!(kind, MessageKind::Default | MessageKind::Reply)
 }
@@ -51,6 +148,10 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         }),
         _ => None,
     };
+    let call = (msg.kind == MessageKind::Call).then(|| {
+        let active = app.parity.call_messages.get(&msg.channel) == Some(&msg.id);
+        call_state(msg.call.as_ref(), active, app.me.id, app.voice_channel == Some(msg.channel))
+    });
     let (icon, color, before, after): (ChatIcon, u32, SharedString, SharedString) = match msg.kind {
         MessageKind::Join => {
             let (b, a) = join_text(msg.id.0);
@@ -78,7 +179,15 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             Some(_) => (ChatIcon::Join, Palette::RED, "".into(), crate::t!("sys.recipient_kick_named")),
             None => (ChatIcon::Join, Palette::RED, "".into(), crate::t!("sys.recipient_remove")),
         },
-        MessageKind::Call => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.call")),
+        MessageKind::Call => {
+            let dur = msg.call.as_ref().and_then(|c| c.duration_ms).map(humanize_text);
+            match (call, dur) {
+                (Some(CallState::Missed), Some(d)) => (ChatIcon::Join, Palette::GREEN, crate::t!("sys.call_missed_lead"), crate::t!("sys.call_missed_lasted", d = d)),
+                (Some(CallState::Missed), None) => (ChatIcon::Join, Palette::GREEN, crate::t!("sys.call_missed_lead"), ".".into()),
+                (_, Some(d)) => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.call_lasted", d = d)),
+                (_, None) => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.call")),
+            }
+        }
         MessageKind::ChannelNameChange => (
             ChatIcon::Edit,
             Palette::INTERACTIVE,
@@ -96,6 +205,18 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             if msg.content.is_empty() { "".into() } else { format!(": {}", msg.content).into() },
         ),
     };
+    let glyph = match msg.kind {
+        MessageKind::Pin => SysIcon::Named("pin", 18., None),
+        MessageKind::Join | MessageKind::RecipientAdd(_) => SysIcon::Asset(ASSET_JOIN),
+        MessageKind::RecipientRemove(_) => SysIcon::Asset(ASSET_LEAVE),
+        MessageKind::Call if call == Some(CallState::Missed) => SysIcon::Asset(ASSET_CALL_MISSED),
+        MessageKind::Call => SysIcon::Asset(ASSET_CALL),
+        MessageKind::StageStart => SysIcon::Named("stage", 24., Some(crate::theme::generated::idx::GREEN_360)),
+        MessageKind::StageEnd | MessageKind::StageTopic => SysIcon::Named("stage", 24., None),
+        MessageKind::StageSpeaker => SysIcon::Named("sys/mic-arrow-right", 24., None),
+        _ => SysIcon::Glyph(icon, color),
+    };
+    let joinable = call == Some(CallState::Joinable);
     let thread = msg.thread.clone().filter(|_| msg.kind == MessageKind::ThreadCreated);
     let line = div()
         .id(("sysmsg", msg.id.0))
@@ -111,14 +232,19 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         .text_size(z(16.))
         .text_color(c(Palette::TEXT_MUTED))
         .hover(|s| s.bg(c(Palette::BG_MSG_HOVER)))
-        .child(if msg.kind == MessageKind::Pin {
-            div()
+        .child(match glyph {
+            SysIcon::Named(name, size, tint) => div()
                 .absolute()
-                .left(z(35.))
-                .top(z(6.))
-                .child(gpui::svg().path(crate::icons::path("pin")).size(z(18.)).text_color(c(Palette::TEXT_MUTED)))
-        } else {
-            div().absolute().left(z(36.)).top(z(7.)).child(super::icons::icon(icon, 16., c(color)))
+                .left(z(44. - size / 2.))
+                .top(z(13. - size / 2.))
+                .child(
+                    gpui::svg()
+                        .path(crate::icons::path(name))
+                        .size(z(size))
+                        .text_color(tint.map_or_else(|| c(Palette::TEXT_MUTED), |t| c(crate::theme::tok(t)))),
+                ),
+            SysIcon::Asset(url) => div().absolute().left(z(36.)).top(z(7.)).child(gpui::img(SharedString::new_static(url)).size(z(16.))),
+            SysIcon::Glyph(icon, color) => div().absolute().left(z(36.)).top(z(7.)).child(super::icons::icon(icon, 16., c(color))),
         })
         .children(flow(before))
         .child({
@@ -209,6 +335,27 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
                     .child(n),
             )
             .children(flow(tail))
+        })
+        .when(joinable, |d| {
+            let e = entity.clone();
+            let ch = msg.channel;
+            d.child(div().ml(z(3.)).child("\u{2014}")).child(
+                div()
+                    .id(("sys-join-call", msg.id.0))
+                    .ml(z(3.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(c(crate::theme::tok(crate::theme::generated::idx::TEXT_LINK)))
+                    .cursor_pointer()
+                    .hover(|s| s.underline())
+                    .child(crate::t!("sys.call_join"))
+                    .on_click(move |_, _, cx| {
+                        e.update(cx, |a, cx| {
+                            a.join_voice(Some(ch), cx);
+                            crate::ui::call_view::show(ch);
+                            cx.notify();
+                        });
+                    }),
+            )
         })
         .child(
             div()
@@ -447,6 +594,46 @@ fn flow(text: SharedString) -> Vec<SharedString> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn call_durations_follow_moment_humanize() {
+        let s = 1000;
+        let m = 60 * s;
+        let h = 60 * m;
+        let d = 24 * h;
+        assert_eq!(humanize(0), Humanized::Seconds);
+        assert_eq!(humanize(44 * s + 499), Humanized::Seconds);
+        assert_eq!(humanize(44 * s + 500), Humanized::Minute);
+        assert_eq!(humanize(89 * s), Humanized::Minute);
+        assert_eq!(humanize(90 * s), Humanized::Minutes(2));
+        assert_eq!(humanize(44 * m + 29 * s), Humanized::Minutes(44));
+        assert_eq!(humanize(44 * m + 30 * s), Humanized::Hour);
+        assert_eq!(humanize(89 * m), Humanized::Hour);
+        assert_eq!(humanize(90 * m), Humanized::Hours(2));
+        assert_eq!(humanize(21 * h + 29 * m), Humanized::Hours(21));
+        assert_eq!(humanize(21 * h + 30 * m), Humanized::Day);
+        assert_eq!(humanize(36 * h), Humanized::Days(2));
+        assert_eq!(humanize(25 * d + 11 * h), Humanized::Days(25));
+        assert_eq!(humanize(26 * d), Humanized::Month);
+        assert_eq!(humanize(46 * d), Humanized::Months(2));
+        assert_eq!(humanize(320 * d), Humanized::Year);
+        assert_eq!(humanize(600 * d), Humanized::Years(2));
+        assert_eq!(humanize(-5 * s), Humanized::Seconds);
+    }
+
+    #[test]
+    fn call_states_follow_the_client() {
+        use crate::model::{CallInfo, Id};
+        let me = Id(1);
+        let ended = CallInfo { participants: vec![Id(2)], duration_ms: Some(5000) };
+        assert_eq!(call_state(Some(&ended), false, me, false), CallState::Missed);
+        let joined = CallInfo { participants: vec![Id(2), me], duration_ms: Some(5000) };
+        assert_eq!(call_state(Some(&joined), false, me, false), CallState::Started);
+        assert_eq!(call_state(None, false, me, false), CallState::Started);
+        let ongoing = CallInfo { participants: vec![Id(2)], duration_ms: None };
+        assert_eq!(call_state(Some(&ongoing), true, me, false), CallState::Joinable);
+        assert_eq!(call_state(Some(&ongoing), true, me, true), CallState::Started);
+    }
 
     #[test]
     fn poll_result_title_is_cut_like_the_client() {

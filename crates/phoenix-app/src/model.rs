@@ -298,6 +298,13 @@ pub struct Message {
     pub has_mentions: bool,
     pub tts: bool,
     pub interaction: Option<CommandUse>,
+    pub call: Option<CallInfo>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CallInfo {
+    pub participants: Vec<Id>,
+    pub duration_ms: Option<i64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

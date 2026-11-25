@@ -405,6 +405,16 @@ pub struct Message {
     pub interaction_metadata: Option<InteractionMetadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interaction: Option<MessageInteraction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call: Option<MessageCall>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct MessageCall {
+    #[serde(default, deserialize_with = "null_default")]
+    pub participants: Vec<Snowflake>,
+    #[serde(default)]
+    pub ended_timestamp: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

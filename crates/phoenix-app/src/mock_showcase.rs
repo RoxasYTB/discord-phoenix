@@ -192,6 +192,10 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
         let content = if kind == MessageKind::ThreadCreated { "Release planning" } else { "" };
         push(author, Message { kind, content: content.into(), ..Default::default() }, &mut out);
     }
+    push(6, Message { kind: MessageKind::Call, call: Some(CallInfo { participants: vec![Id(6), Id(1)], duration_ms: Some(23 * 60_000) }), ..Default::default() }, &mut out);
+    push(7, Message { kind: MessageKind::Call, call: Some(CallInfo { participants: vec![Id(7)], duration_ms: Some(12_000) }), ..Default::default() }, &mut out);
+    push(5, Message { kind: MessageKind::RecipientRemove(None), ..Default::default() }, &mut out);
+    push(3, text("<https://example.com/no-embed> · [docs **Phoenix**](https://example.com/docs) · https://en.wikipedia.org/wiki/Rust_(programming_language)"), &mut out);
     out.into_iter()
         .enumerate()
         .map(|(i, (author, m))| Message { id: Id(*next_id + 1 + i as u64), channel, author: Id(author), timestamp: ts + 60 * (i as i64 + 1), ..m })

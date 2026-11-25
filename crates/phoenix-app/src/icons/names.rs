@@ -44,6 +44,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("nav/up", &["ArrowLargeUpIcon"]),
     ("forum/tag", &["TagIcon"]),
     ("chat/forwarded", &["ArrowAngleRightUpIcon"]),
+    ("sys/mic-arrow-right", &["MicrophoneArrowRightIcon"]),
     ("invite", &["UserPlusIcon"]),
     ("gift", &["GiftIcon"]),
     ("gif", &["GifIcon"]),
