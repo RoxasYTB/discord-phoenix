@@ -110,7 +110,6 @@ These are real, unedited renders of Phoenix logged into a real account on the pr
 <table>
 <tr>
 <td width="50%" valign="top"><a href="docs/screenshots/2026-11-25/member-list-nameplates.png"><img src="docs/screenshots/2026-11-25/member-list-nameplates.png" alt="The member list with role groups, role icons, activities and nameplates."></a><br><sub>The member list with role groups, role icons, activities and nameplates.</sub></td>
-<td width="50%" valign="top"><a href="docs/screenshots/2026-11-25/profile-popout.png"><img src="docs/screenshots/2026-11-25/profile-popout.png" alt="A member's profile popout with mutual friends, roles and the message field."></a><br><sub>A member's profile popout with mutual friends, roles and the message field.</sub></td>
 </tr>
 </table>
 
