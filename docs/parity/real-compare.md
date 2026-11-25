@@ -625,16 +625,16 @@ Client shots taken in the live settings overlay (non-GET requests blocked), Phoe
 | Nitro | 4.8 % | 4.8 % |
 | Boost de serveur | 8.2 % | 4.4 % |
 | Abonnements | 7.6 % | 3.6 % |
-| Inventaire des cadeaux | 10.2 % | 5.4 % |
-| Facturation | 2.2 % | 3.8 % |
+| Inventaire des cadeaux | 10.2 % | 4.7 % |
+| Facturation | 2.2 % | 2.2 % |
 | Voix & Vidéo | 3.0 % | 3.0 % |
 | Apparence | 3.7 % | 3.7 % |
 | Accessibilité | 5.0 % | 4.9 % |
 | Système | 4.8 % | 4.1 % |
 | Langue et heure | 1.0 % | 1.0 % |
-| Jeux enregistrés | 3.9 % | 3.9 % |
+| Jeux enregistrés | 3.9 % | 3.8 % |
 | Confidentialité des activités | 5.0 % | 3.7 % |
 | Applications connectées | 9.1 % | 8.0 % |
 | Développeur | 1.2 % | 1.2 % |
 
-Header 0.6–1.9 % on every page. Sidebar 3–6 % when the active page is near the top; 12–14 % for the lower pages only because Phoenix scrolls the nav to the active item while the client shot was taken with the nav reset to the top. Facturation went up because its two custom blocks still compensated the old 24px title padding (country line 9px too high); fixed after this table, see the next line. What is left: gg sans vs Noto Sans wrapping, the Nitro rewards offer card on Connected apps (dynamic offer, not reproduced), the gift card Lottie art, the Notifications select width (client grid `auto auto`).
+Header 0.6–1.9 % on every page. Sidebar 3–6 % when the active page is near the top; 12–14 % for the lower pages only because Phoenix scrolls the nav to the active item while the client shot was taken with the nav reset to the top. Facturation briefly went to 3.8 % (its custom blocks still compensated the old 24px title padding) and is back to 2.2 % at 00dbe8b9; dividers lost their extra 10px at a0a8a436. What is left: gg sans vs Noto Sans wrapping, the Nitro rewards offer card on Connected apps (dynamic offer, not reproduced), the gift card Lottie art, the Notifications select width (client grid `auto auto`).
