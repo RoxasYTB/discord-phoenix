@@ -561,8 +561,8 @@ fn paint_line(
         let (deco_ascent, deco_descent) = primary_font.map_or((layout.ascent, layout.descent), |font_id| {
             let text_system = cx.text_system();
             (
-                text_system.ascent(font_id, layout.font_size),
-                text_system.descent(font_id, layout.font_size),
+                text_system.ascent(font_id, layout.font_size).abs(),
+                text_system.descent(font_id, layout.font_size).abs(),
             )
         });
         // PHOENIX PATCH (primary baseline, docs/gpui-patches.md): the baseline comes from the
