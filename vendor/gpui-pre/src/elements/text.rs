@@ -831,12 +831,17 @@ impl TextLayout {
         // the width it was finally given.
         let width = bounds.size.width;
         if let Some(old) = element_state.wrap_width
-            && width > Pixels::ZERO
-            && (old > width + crate::px(0.5) || width > old + crate::px(0.5))
+            && needs_rewrap(old, width, window.scale_factor())
             && let Some((text, runs, font_size, clamp)) = element_state.rewrap.clone()
             && let Some(lines) = window
                 .text_system()
-                .shape_text(text, font_size, &runs, Some(width), clamp)
+                .shape_text(
+                    text,
+                    font_size,
+                    &runs,
+                    Some(width + device_pixel(window.scale_factor())),
+                    clamp,
+                )
                 .log_err()
         {
             let line_height = element_state.line_height;
@@ -1378,9 +1383,35 @@ pub(crate) fn ceil_to_layout_unit(width: Pixels, scale_factor: f32) -> Pixels {
     crate::px((f32::from(width) * units).ceil() / units)
 }
 
+// PHOENIX PATCH (rewrap slack, docs/gpui-patches.md): `layout_bounds` rounds both edges to
+// device pixels, so a box can paint up to one device pixel narrower than its measured width
+// (0.667px at 1.5x). Rewrapping on that difference broke chips sized to their own text
+// ("GLA" + "D" in the member list). Only a real change of the layout width rewraps.
+// The rewrap itself wraps at the painted width plus one device pixel, the most the snapping
+// can take, so a text whose last measure was a wider probe still fits on its line.
+pub(crate) fn needs_rewrap(old: Pixels, width: Pixels, scale_factor: f32) -> bool {
+    let slack = crate::px(0.5).max(device_pixel(scale_factor));
+    width > Pixels::ZERO && (old > width + slack || width > old + slack)
+}
+
+fn device_pixel(scale_factor: f32) -> Pixels {
+    crate::px(1. / scale_factor.max(f32::EPSILON))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapping_to_device_pixels_does_not_rewrap() {
+        assert!(!needs_rewrap(crate::px(18.229), crate::px(17.6), 1.5));
+        assert!(!needs_rewrap(crate::px(18.229), crate::px(17.5), 1.25));
+        assert!(needs_rewrap(crate::px(18.229), crate::px(17.5), 1.5));
+        assert!(needs_rewrap(crate::px(18.229), crate::px(17.), 2.));
+        assert!(!needs_rewrap(crate::px(18.229), crate::px(17.8), 2.));
+        assert!(needs_rewrap(crate::px(120.), crate::px(80.), 1.));
+        assert!(!needs_rewrap(crate::px(120.), crate::px(0.), 1.));
+    }
 
     #[test]
     fn text_width_rounds_up_to_a_layout_unit() {
