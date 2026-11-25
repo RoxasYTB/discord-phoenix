@@ -70,6 +70,7 @@ fn reads_messages_in_the_viewed_channel_only(cx: &mut TestAppContext) {
     h.act(|a, _, cx| {
         a.prefs.local.ui.insert("read-all".into(), 1);
         a.selected_channel = Some(here);
+        a.deafened = false;
         let mut users: Vec<_> = a.users.keys().copied().filter(|u| *u != a.me.id && !a.nav.is_blocked(*u) && !a.nav.is_ignored(*u)).collect();
         users.sort_by_key(|u| u.0);
         let author = users[0];
