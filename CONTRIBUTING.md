@@ -42,6 +42,23 @@ Workspace layout:
 - `crates/phoenix-voice`: voice/RTC
 - `crates/phoenix-app`: GPUI desktop app
 
+## AI-assisted contributions and quality control
+
+Contributions written with the help of AI tools are welcome. The same rules apply to them as to everything else:
+
+- **Every contribution is reviewed again by a maintainer** before it is merged, whoever or whatever wrote it. Expect questions and change requests.
+- **You are responsible for what you publish.** You must understand every line you submit and be able to explain it. "The AI wrote it" is not an answer to a review comment.
+- **Do your own quality check before opening a PR**:
+  - it builds, and `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` pass;
+  - you ran the app and tried the change yourself, including the edge cases (empty states, long names, narrow window, other themes);
+  - for UI changes, you compared the result with the official client at the same window size and zoom, and attached before/after screenshots;
+  - measured values have their source recorded in `docs/parity/`;
+  - the diff only touches what the change needs: no unrelated reformatting, no dead code, no code comments (only `// SAFETY:` is allowed);
+  - no tokens, personal data or private screenshots anywhere in the diff;
+  - for AI-generated code, you checked that APIs, endpoints and fields really exist and behave as claimed, and did not just trust the tool's output.
+
+PRs that skip these checks will be sent back.
+
 ## Pull requests
 
 - Keep PRs focused; one topic each.
