@@ -26,6 +26,7 @@ fn main() -> anyhow::Result<()> {
     cx.update(|cx| {
         let _ = cx.text_system().add_fonts(fonts);
         phoenix_app::init(cx);
+        phoenix_app::demo_media::install(cx);
     });
     let view: Rc<RefCell<Option<Entity<PhoenixApp>>>> = Rc::default();
     let v2 = view.clone();

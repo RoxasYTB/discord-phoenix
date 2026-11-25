@@ -14,6 +14,7 @@ fn main() {
             phoenix_app::init(cx);
             phoenix_app::sounds::init();
             let backend: Arc<dyn Backend> = if mock {
+                cx.set_http_client(phoenix_app::demo_media::client());
                 Arc::new(MockBackend::new())
             } else {
                 let b = DiscordBackend::new();

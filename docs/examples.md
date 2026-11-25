@@ -3,6 +3,19 @@
 Offscreen renderers, probes and benchmarks in `crates/phoenix-app/examples/`.
 Run them from `int-bin/` (see `docs/BUILD.md`).
 
+## Demo people (MockBackend)
+
+The demo users in `crates/phoenix-app/src/demo_media.rs` carry real avatars
+(user id + hash) and real production server tags (identity guild id, tag,
+badge hash) of current users, picked neutral (no staff, no photos of people),
+as allowed by the project owner on 2026-11-25. Only ids and hashes are in the
+repo: the images are never committed. `demo_media::install` sets the caching
+CDN client in the mock examples and preloads every avatar and badge into the
+local media cache (`~/.cache/.../media`, outside git), so a later run works
+offline. `PHX_DEMO_NO_PREFETCH=1` skips the preload. The badge URL is built by
+`PrimaryGuild::badge_url`, the same as on the real account, and every demo tag
+has its badge. Demo messages and servers stay fictional.
+
 ## `anim_emoji_shot`
 
 Offscreen frames of animated custom emoji as Phoenix draws them (message size,

@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     backend::*,
+    demo_media::PEOPLE as NAMES,
     model::*,
 };
 
@@ -21,32 +22,6 @@ impl Lcg {
         &v[(self.next() as usize) % v.len()]
     }
 }
-
-const NAMES: &[(&str, &str)] = &[
-    ("phoenix", "Phoenix"),
-    ("wumpus", "Wumpus"),
-    ("clyde", "Clyde"),
-    ("ferris", "Ferris 🦀"),
-    ("nelly", "Nelly"),
-    ("lester", "Lester"),
-    ("aiko", "Aiko"),
-    ("kaze", "kaze"),
-    ("mira", "Mira"),
-    ("toast", "toast"),
-    ("orbit", "Orbit"),
-    ("pixel", "pixel.dev"),
-    ("quartz", "Quartz"),
-    ("rune", "Rune"),
-    ("sable", "Sable"),
-    ("tidal", "Tidal"),
-    ("umbra", "Umbra"),
-    ("vexel", "Vexel"),
-    ("willow", "Willow"),
-    ("xeno", "xeno"),
-    ("yuzu", "Yuzu"),
-    ("zephyr", "Zephyr"),
-    ("gpui-bot", "GPUI Bot"),
-];
 
 const LINES: &[&str] = &[
     "hey everyone 👋",
@@ -105,15 +80,16 @@ pub fn now() -> i64 {
 }
 
 fn user(i: usize) -> User {
-    let (n, d) = NAMES[i % NAMES.len()];
+    let p = &NAMES[i % NAMES.len()];
+    let (n, d) = (p.name, p.display);
     User {
         id: Id(i as u64 + 1),
         name: n.into(),
         display_name: d.into(),
-        avatar: ImageRef::Default((i % 5) as u8),
+        avatar: ImageRef::Url(p.avatar_url().into()),
         bot: n.ends_with("bot") || n == "clyde",
         verified_bot: n == "clyde",
-        tag: ["GLAD", "RUST", "PNX"].get(i % 4).map(|t| ((*t).into(), None)),
+        tag: p.tag.map(|t| (t.1.into(), p.badge_url().map(Into::into))),
         nameplate: None,
         name_style: (i % 5 == 1).then(|| (17, 1, Vec::new())),
         decoration: std::env::var("PHX_MOCK_DECO").ok().map(Into::into),
