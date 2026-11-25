@@ -1907,6 +1907,17 @@ fn main() -> anyhow::Result<()> {
         })?;
         pump(&mut cx, 200);
     }
+    if let Some(only) = std::env::var("PHX_ONLY_GUILD").ok().and_then(|v| parse_id(&v)) {
+        cx.update(|cx| {
+            v.update(cx, |app, cx| {
+                app.guilds.retain(|g| g.id == only);
+                app.nav.folders.clear();
+                app.dms.clear();
+                cx.notify();
+            })
+        });
+        pump(&mut cx, 300);
+    }
     let shoot = |cx: &mut HeadlessAppContext, path: &str| -> anyhow::Result<()> {
         let mut img = None;
         for _ in 0..2 {
