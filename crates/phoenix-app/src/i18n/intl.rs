@@ -269,7 +269,7 @@ mod tests {
     fn dates_match_the_client_dump() {
         let d = p(2009, 11, 25, 15, 44);
         assert_eq!(format("de", "LLL", &d, None), "25. November 2009 um 15:44");
-        assert_eq!(format("en-US", "LT", &d, None), "3:44\u{202f}PM");
+        assert_eq!(format("en-US", "LT", &d, None), "3:44 PM");
         assert_eq!(format("en-US", "LT", &d, Some(true)), "15:44");
         assert_eq!(format("ja", "LL", &d, None), "2009年11月25日");
         assert_eq!(format("pt-BR", "L", &d, None), "25/11/2009");

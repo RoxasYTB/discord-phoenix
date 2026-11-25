@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn extracts_json_parse_blocks() {
-        let js = r#"e.exports=JSON.parse('{"60kAzo":["Online"],"foo":["Caf\\xe9 \\u2014 \\\'ok\\\'"]}')}"#;
+        let js = r#"e.exports=JSON.parse('{"60kAzo":["Online"],"foo":["Caf\xe9 \u2014 \'ok\'"]}')}"#;
         let mut m = HashMap::new();
         extract_messages(js, &mut m);
         assert_eq!(m.get("60kAzo").and_then(|v| v[0].as_str()), Some("Online"));
