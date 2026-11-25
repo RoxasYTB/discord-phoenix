@@ -38,10 +38,17 @@ fn emit_users(inner: &Inner, msgs: &[api::Message]) {
 
 fn after_page(inner: &Inner, s: &Session, channel: Id, msgs: &[api::Message], latest: bool) {
     emit_users(inner, msgs);
-    super::ensure_message_authors(inner, s, msgs);
     if let Some(g) = s.cache.channel(sf(channel)).and_then(|c| c.guild_id) {
-        let voice: Vec<api::Snowflake> = s.cache.voice_states(Some(g)).iter().map(|v| v.user_id).collect();
-        super::ensure_authors(inner, s, g, voice);
+        let mut ids = Vec::new();
+        for m in msgs {
+            convert::message_authors(m, &mut ids);
+        }
+        for v in s.cache.voice_states(Some(g)) {
+            if !ids.contains(&v.user_id) {
+                ids.push(v.user_id);
+            }
+        }
+        super::ensure_authors(inner, s, g, ids);
     }
     if latest {
         let ev = s.adapter.lock().recount_mentions(&s.cache, channel.0, msgs);
