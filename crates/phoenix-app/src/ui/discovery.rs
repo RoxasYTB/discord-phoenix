@@ -518,8 +518,8 @@ fn card(g: &DiscoverableGuild, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .flex()
                 .items_end()
                 .gap(z(16.))
-                .child(count(rgb(0x3d9e60).into(), crate::t!("discovery.online", n = group_digits(g.online))))
-                .child(count(tk(idx::TEXT_MUTED), crate::t!("discovery.members", n = group_digits(g.members)))),
+                .child(count(tk(idx::GREEN_360), crate::t!("discovery.online", n = group_digits(g.online))))
+                .child(count(tk(idx::PRIMARY_300), crate::t!("discovery.members", n = group_digits(g.members)))),
         );
     let id = g.id;
     div()
