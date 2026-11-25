@@ -85,7 +85,10 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                             a.add_paths(paths.paths().to_vec(), cx)
                         }))
                         .children(thread_banner::render(app, cx))
+                        .children(crate::ui::join_flow::lurker_banner(app, cx))
+                        .children(crate::ui::join_flow::verification_banner(app, cx))
                         .children(discovery_notice(app, cx))
+                        .children(crate::ui::join_flow::nsfw_gate(app, cx))
                         .child(
                             div()
                                 .flex_1()

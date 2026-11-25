@@ -125,6 +125,11 @@ pub enum NavRequest {
     TopEmojis(Id),
     AcceptInvite(String),
     CreateGuild { name: String, icon: Option<String>, template: Option<String>, community: Option<bool> },
+    FetchOnboarding(Id),
+    SubmitOnboarding { guild: Id, options: Vec<String>, prompts: Vec<String> },
+    FetchMemberVerification(Id),
+    SubmitMemberVerification { guild: Id, version: String, rules: Vec<String> },
+    JoinGuild(Id),
     CreateInvite(Id),
     LeaveGuild(Id),
     Relationship { user: Id, action: RelAction },
@@ -144,6 +149,7 @@ pub enum NavReply {
     Ids(Vec<Id>),
     Text(SharedString),
     Channel(Channel),
+    Json(serde_json::Value),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

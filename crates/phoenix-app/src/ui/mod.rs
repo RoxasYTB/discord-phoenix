@@ -1,4 +1,5 @@
 pub mod add_server;
+pub mod join_flow;
 pub mod autocomplete;
 pub mod avatar_deco;
 pub mod mobile_status;

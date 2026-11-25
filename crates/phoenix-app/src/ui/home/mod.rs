@@ -62,6 +62,9 @@ fn page_content(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
 }
 
 pub fn overlay(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    if let Some(screen) = crate::ui::join_flow::render_screen(app, cx) {
+        return Some(screen);
+    }
     let ov = app.nav.overlay.clone()?;
     Some(match ov {
         Overlay::Topic(ch) => topic::render(app, ch, cx),

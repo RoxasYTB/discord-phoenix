@@ -544,6 +544,32 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             call(Method::POST, "/guilds".into(), Some(body)).await?;
             NavReply::Done
         }
+        NavRequest::FetchOnboarding(g) => {
+            let v = call(Method::GET, format!("/guilds/{}/onboarding", sf(g)), None).await?;
+            NavReply::Json(v)
+        }
+        NavRequest::SubmitOnboarding { guild, options, prompts } => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let body = crate::ui::join_flow::onboarding_response_body(&options, &prompts, now);
+            call(Method::POST, format!("/guilds/{}/onboarding-responses", sf(guild)), Some(body)).await?;
+            NavReply::Done
+        }
+        NavRequest::FetchMemberVerification(g) => {
+            let v = call(Method::GET, format!("/guilds/{}/member-verification?with_guild=false", sf(g)), None).await?;
+            NavReply::Json(v)
+        }
+        NavRequest::SubmitMemberVerification { guild, version, rules } => {
+            let body = crate::ui::join_flow::member_verification_submit_body(&version, &rules);
+            call(Method::PUT, format!("/guilds/{}/requests/@me", sf(guild)), Some(body)).await?;
+            NavReply::Done
+        }
+        NavRequest::JoinGuild(g) => {
+            call(Method::PUT, format!("/guilds/{}/members/@me", sf(g)), Some(json!({}))).await?;
+            NavReply::Done
+        }
         NavRequest::CreateInvite(ch) => {
             let v = call(
                 Method::POST,

@@ -360,6 +360,7 @@ pub fn lurk(app: &mut PhoenixApp, id: u64, cx: &mut Context<PhoenixApp>) {
             let found = this.update(cx, |a, cx| {
                 if a.guilds.iter().any(|g| g.id == guild) {
                     close();
+                    crate::ui::join_flow::mark_lurking(guild);
                     a.select_guild(Some(guild), cx);
                     cx.notify();
                     true
