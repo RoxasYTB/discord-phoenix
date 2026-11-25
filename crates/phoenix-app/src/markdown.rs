@@ -613,6 +613,22 @@ fn custom_emoji_len(s: &str) -> Option<usize> {
     crate::media::emoji::parse_custom(&s[..=end]).map(|_| end + 1)
 }
 
+pub fn is_single_link(src: &str) -> bool {
+    let blocks = parse(src, &NoResolve);
+    let [Block::Paragraph(i)] = blocks.as_slice() else { return false };
+    let mut spans: Vec<&Span> = i.spans.iter().filter(|s| !s.range.is_empty()).collect();
+    spans.sort_by_key(|s| s.range.start);
+    let Some(link) = spans.first().and_then(|s| s.link.as_deref()) else { return false };
+    let mut at = 0;
+    for s in spans {
+        if s.range.start != at || s.link.as_deref() != Some(link) {
+            return false;
+        }
+        at = s.range.end;
+    }
+    at == i.text.len()
+}
+
 pub fn clickable(inline: &Inline) -> impl Iterator<Item = &Span> {
     inline
         .spans
@@ -882,6 +898,18 @@ mod tests {
         assert!(i.spans.iter().any(|s| s.link.as_deref() == Some("https://a.b")));
         assert_eq!(relative(-120), "2 minutes ago");
         assert_eq!(relative(3600), "in an hour");
+    }
+
+    #[test]
+    fn single_link_content() {
+        assert!(is_single_link("https://tenor.com/view/cat-gif-123"));
+        assert!(is_single_link("[**chat**](https://tenor.com/view/cat-gif-123)"));
+        assert!(!is_single_link("https://tenor.com/a https://tenor.com/b"));
+        assert!(!is_single_link("https://tenor.com/a\nhttps://tenor.com/b"));
+        assert!(!is_single_link("regarde https://tenor.com/a"));
+        assert!(!is_single_link(" https://tenor.com/a"));
+        assert!(!is_single_link("`https://tenor.com/a`"));
+        assert!(!is_single_link(""));
     }
 
     #[test]

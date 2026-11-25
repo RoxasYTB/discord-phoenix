@@ -186,7 +186,7 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         ee.update(cx, |a, cx| a.start_reply(id, w, cx))
     }));
     let ee = e.clone();
-    items.push(MenuItem::action(crate::t!("msg.forward"), Some(crate::icons::path("nav/forward")), move |_, _, cx| {
+    items.push(MenuItem::action(crate::t!("msg.forward"), Some(crate::icons::path("chat/forwarded")), move |_, _, cx| {
         ee.update(cx, |a, cx| a.open_forward(ch, id, cx))
     }));
     if in_guild && msg.is_some_and(|m| m.thread.is_none()) {

@@ -995,7 +995,7 @@ pub(crate) fn message(
         let media = matches!(e.kind.as_deref(), Some("image" | "gifv" | "video"));
         sy.flag("embeds") && (!media || sy.flag("media-links"))
     };
-    let gif_only = matches!(msg.embeds.as_slice(), [e] if e.kind.as_deref() == Some("gifv") && e.url.as_deref() == Some(msg.content.trim()) && show_embed(&e));
+    let gif_only = msg.embeds.iter().all(|e| show_embed(&e)) && crate::model::hides_simple_embed_content(&msg.content, &msg.embeds);
     for (bi, b) in r.blocks.iter().enumerate().filter(|_| !gif_only) {
         let edited_here = (msg.edited && last_text == Some(bi) && bi + 1 == n_blocks).then_some(edited_at);
         match b {

@@ -114,7 +114,7 @@ pub fn toolbar(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, shi
             move |_, w, cx| e.update(cx, |a, cx| a.start_reply(id, w, cx))
         }));
     }
-    bar = bar.child(tool_button("tb-forward", id.0, crate::icons::path("nav/forward"), 20.).on_click({
+    bar = bar.child(tool_button("tb-forward", id.0, crate::icons::path("chat/forwarded"), 20.).on_click({
         let e = e.clone();
         move |_, _, cx| e.update(cx, |a, cx| a.open_forward(ch, id, cx))
     }));

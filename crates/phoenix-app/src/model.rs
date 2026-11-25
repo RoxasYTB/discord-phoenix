@@ -128,6 +128,15 @@ pub fn merge_embeds_on_url(embeds: Vec<Embed>) -> Vec<Embed> {
     out
 }
 
+pub fn hides_simple_embed_content(content: &str, embeds: &[Embed]) -> bool {
+    let [e] = embeds else { return false };
+    let kind = e.kind.as_deref();
+    matches!(kind, Some("image" | "gifv"))
+        && (e.image.is_some() || e.video.is_some())
+        && (kind == Some("gifv") || (e.author.is_none() && e.title.is_none()))
+        && crate::markdown::is_single_link(content)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct EmbedAuthor {
     pub name: SharedString,
@@ -380,6 +389,27 @@ mod tests {
         assert_eq!(acronym("gpui").as_ref(), "g");
         assert_eq!(acronym("La Retaudière").as_ref(), "LRèr");
         assert_eq!(acronym("Roxas's World").as_ref(), "RW");
+    }
+
+    #[test]
+    fn simple_media_embed_hides_its_link() {
+        let media = || Some(EmbedMedia { url: "https://media.tenor.com/a.mp4".into(), width: 10, height: 10 });
+        let gif = Embed { kind: Some("gifv".into()), url: Some("https://tenor.com/view/a".into()), video: media(), ..Default::default() };
+        let tenor = "https://tenor.com/view/a";
+        assert!(hides_simple_embed_content(tenor, std::slice::from_ref(&gif)));
+        assert!(hides_simple_embed_content("https://klipy.com/gifs/b", std::slice::from_ref(&gif)));
+        assert!(!hides_simple_embed_content("trop bien https://tenor.com/view/a", std::slice::from_ref(&gif)));
+        assert!(!hides_simple_embed_content("https://tenor.com/view/a https://tenor.com/view/b", &[gif.clone(), gif.clone()]));
+        assert!(!hides_simple_embed_content("https://tenor.com/view/a https://tenor.com/view/b", std::slice::from_ref(&gif)));
+        let image = Embed { kind: Some("image".into()), image: media(), ..Default::default() };
+        assert!(hides_simple_embed_content("https://i.imgur.com/a.png", std::slice::from_ref(&image)));
+        let titled = Embed { title: Some("Titre".into()), ..image.clone() };
+        assert!(!hides_simple_embed_content("https://i.imgur.com/a.png", &[titled]));
+        let bare = Embed { kind: Some("gifv".into()), ..Default::default() };
+        assert!(!hides_simple_embed_content(tenor, &[bare]));
+        let rich = Embed { kind: Some("rich".into()), image: media(), ..Default::default() };
+        assert!(!hides_simple_embed_content(tenor, &[rich]));
+        assert!(!hides_simple_embed_content(tenor, &[]));
     }
 
     #[test]

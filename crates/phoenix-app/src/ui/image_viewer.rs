@@ -81,7 +81,7 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
         .border_color(tk(idx::BORDER_SUBTLE))
         .on_click(|_, _, cx| cx.stop_propagation())
         .child(action("viewer-zoom", "viewer/zoom"))
-        .child(action("viewer-forward", "nav/forward"))
+        .child(action("viewer-forward", "chat/forwarded"))
         .child(action("viewer-save", "download").on_click(move |_, _, cx| {
             cx.stop_propagation();
             cx.open_url(&save);
