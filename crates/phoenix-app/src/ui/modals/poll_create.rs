@@ -324,6 +324,8 @@ pub fn render(_app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> Any
                 .child(
                     button("poll-schedule", SharedString::default(), if scheduled.is_some() { BtnKind::Active } else { BtnKind::Secondary })
                         .w(z(40.))
+                        .min_w(z(40.))
+                        .px(z(0.))
                         .child(gpui::svg().path(crate::icons::path("inbox/schedule")).size(z(20.)).text_color(c(tok(if scheduled.is_some() {
                             idx::CONTROL_CONNECTED_TEXT_DEFAULT
                         } else {
