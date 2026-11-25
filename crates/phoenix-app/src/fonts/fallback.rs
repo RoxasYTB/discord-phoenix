@@ -26,6 +26,7 @@ const EMOJI_SEQUENCE_PARTS: [(u32, u32); 7] = [
     (0x23, 0x23), (0x2A, 0x2A), (0x30, 0x39), (0x200D, 0x200D), (0x20E3, 0x20E3), (0xFE0F, 0xFE0F), (0xE0020, 0xE007F),
 ];
 
+static REGISTERED: OnceLock<Vec<String>> = OnceLock::new();
 static CHAINS: OnceLock<parking_lot::RwLock<std::collections::HashMap<&'static str, gpui::FontFallbacks>>> = OnceLock::new();
 
 pub fn ui_fallbacks() -> gpui::FontFallbacks {
@@ -34,7 +35,29 @@ pub fn ui_fallbacks() -> gpui::FontFallbacks {
     if let Some(fb) = cache.read().get(loc) {
         return fb.clone();
     }
-    let fb = gpui::FontFallbacks::from_fonts(plain_chain_for(loc));
+    let mut chain = if let Some(base) = REGISTERED.get() {
+        let mut out = Vec::new();
+        for name in preferred_script_fonts(loc) {
+            if let Some(f) = fc(&[name], "%{family[0]}\n").into_iter().next()
+                && f == *name
+                && !out.contains(&f)
+            {
+                out.push(f);
+            }
+        }
+        for f in base {
+            if !out.contains(f) {
+                out.push(f.clone());
+            }
+        }
+        out
+    } else {
+        plain_chain_for(loc)
+    };
+    if chain.is_empty() {
+        chain = plain_chain_for(loc);
+    }
+    let fb = gpui::FontFallbacks::from_fonts(chain);
     cache.write().insert(loc, fb.clone());
     fb
 }
@@ -313,11 +336,11 @@ fn emoji_copy(font: &[u8], family: &str, keep: impl Fn(u32) -> bool) -> Option<V
 }
 
 pub fn register(cx: &mut gpui::App) {
-    if CHAIN.get().is_some() {
+    if REGISTERED.get().is_some() {
         return;
     }
     if std::env::var_os("PHX_NO_FONT_FALLBACK").is_some() {
-        let _ = CHAIN.set(gpui::FontFallbacks::from_fonts(Vec::new()));
+        let _ = REGISTERED.set(Vec::new());
         return;
     }
     let mut blobs: Vec<std::borrow::Cow<'static, [u8]>> = Vec::new();
@@ -393,7 +416,10 @@ pub fn register(cx: &mut gpui::App) {
     if chain.is_empty() || (!blobs.is_empty() && cx.text_system().add_fonts(blobs).is_err()) {
         chain = plain_chain();
     }
-    let _ = CHAIN.set(gpui::FontFallbacks::from_fonts(chain));
+    let _ = REGISTERED.set(chain);
+    if let Some(cache) = CHAINS.get() {
+        cache.write().clear();
+    }
 }
 
 fn download_web_noto() {
