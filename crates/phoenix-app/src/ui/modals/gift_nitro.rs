@@ -3,11 +3,10 @@ use gpui::{AnyElement, Context, FontWeight, ParentElement, SharedString, Styled,
 use crate::{
     actions::with_modal,
     app::PhoenixApp,
-    icons::Icon,
     model::Id,
     theme::{c, generated::idx, tok, z},
     ui::{
-        avatar,
+        Icon, avatar,
         controls::{BtnKind, button},
         modals::{Modal, card},
     },
@@ -75,7 +74,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
     if let Some(uid) = s.recipient {
         let u = app.users.get(&uid);
         let name = u.map(|u| u.display_name.clone()).unwrap_or_else(|| SharedString::from(uid.0.to_string()));
-        let handle = u.map(|u| u.username.clone()).unwrap_or_default();
+        let handle = u.map(|u| u.name.clone()).unwrap_or_default();
         body = body.child(
             div()
                 .mb(z(12.))
@@ -120,7 +119,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
             .hover(|st| st.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
             .on_click(cx.listener(move |_, _, _, cx| {
                 with_modal(|m| {
-                    if let Modal::GiftNitro(st) = m {
+                    if let Some(Modal::GiftNitro(st)) = m {
                         st.select(plan);
                     }
                 });
@@ -208,7 +207,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         .child(
             button("gift-next", crate::t!("gift.next"), BtnKind::Primary).flex_1().on_click(cx.listener(|_, _, _, cx| {
                 with_modal(|m| {
-                    if let Modal::GiftNitro(st) = m {
+                    if let Some(Modal::GiftNitro(st)) = m {
                         st.notice = true;
                     }
                 });

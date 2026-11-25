@@ -1,7 +1,7 @@
 use crate::ui::tooltip::Tipped as _;
 use crate::theme::z;
 use gpui::{
-    AnyElement, Context, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, Window, div,
+    AnyElement, Context, Focusable, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*, px,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -147,7 +147,7 @@ fn send_request(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         return;
     }
     let note = af::clean_note(&raw_note);
-    app.nav_request(NavRequest::Relationship { user: Id(0), action: RelAction::AddByTag { tag: tag.clone(), note } }, cx, move |this, res, cx| {
+    app.nav_request(NavRequest::Relationship { user: Id(0), action: RelAction::AddByTag { tag: tag.clone(), note } }, cx, move |this, res, _cx| {
         match res {
             Ok(_) => {
                 this.nav.add_friend.on_success(&tag);
