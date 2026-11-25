@@ -418,8 +418,6 @@ meantime and CDP was down), so messages, member lists and presences count as tim
 
 | Gap | Probable cause | Where |
 |---|---|---|
-| Settings sidebar not scrolled to the open page (client scrolls Apparence / Voix & Vidéo into view) | to check: client scrollIntoView of the selected tab vs the sweep driver's click | `ui/settings/view.rs` sidebar |
-| Search group headers: client draws channel-name emoji as Twemoji images (blue 💬), Phoenix as a text glyph | emoji in channel names inside search results | `ui/search.rs` `channel_group_header` |
 | Speaker device / volume in Voice settings | local client settings (device "Logitech G PRO X", output volume), not synced | — |
 
 ### Cross-platform review (static, no Windows/macOS target installed)
@@ -434,6 +432,26 @@ vendored `gpui-pre` rich text (no new platform trait method), `gpui-base` (pinne
 origin). Runtime-only differences, no build break: `snapshot::other_owner` checks `/proc/<pid>`
 (always "not running" on Windows/macOS), `fonts/fallback` and `tts` call Linux tools and fail
 quietly, `diagnostics` reads `/proc`.
+
+### Closed by wt/ci-ready (2026-11-25)
+
+| Gap | Client reference / check | Fix |
+|---|---|---|
+| ✅ Settings sidebar not scrolled to the open page | web.js settings scroll manager: `scrollSidebarNodeIntoView(node, {animate, block: "nearest"})`, `padding: 12`, on every navigation; also after an accordion sub-list mounts (`onMount` → nearest). The user settings sidebar has done this since wt/details2 (`settings/view.rs` `reveal_probe`); the sweep shots were scrolled by the driver's `scrollIntoView({block:'center'})`. The server / channel settings sidebar (`standardSidebarView_jnk11m`, `sidebarRegionScroller`) has no scroll logic in the client | no change |
+| ✅ Search group headers: channel-name emoji drawn as a text glyph | client capture `compare/sweep4/1536x840/search`: 💬 is a 22 px Twemoji image (1.375 em of the 16 px name) | `ui/search.rs` `header_name`: unicode emoji as `emoji_element` 22 px with 1 px side margins, highlights kept per text run |
+| ✅ Session cache owner check used `/proc/<pid>` (always "dead" on Windows/macOS, two instances could write the journal) | — | `discord_backend/snapshot.rs`: `owner.lock` held with `std::fs::File::try_lock` (Rust ≥ 1.89) for the process lifetime; unsupported locking falls back to owning; tests for a held lock, a stale file and a reopened handle |
+| ✅ `fc-match` spawned on Windows / macOS | a Homebrew fontconfig on macOS rebuilds its cache on first run, on the UI thread | `fonts/fallback.rs`: no `fc-match` on Windows / macOS, the locale's native script fonts (Yu Gothic, PingFang…) are put in the chain directly |
+
+Cross-platform guards re-read: `tts` and `shortcuts/message` spawn `spd-say` / `espeak-ng`
+(spawn error → `None`, waits on background threads), `diagnostics` uses `cfg!(target_os)`
+branches and `Option` reads, `updater::open_path_in_os` is per-OS, `pulse` / `soundshare` are
+feature-gated and return `None` without `pactl`. No `x86_64-pc-windows-gnu` check: no mingw and
+/home at 92 %, so the review stayed static.
+
+rustfmt: `cargo fmt --check` fails on main. Best `rustfmt.toml` is `max_width = 160` +
+`use_small_heuristics = "Max"` (57 641 check lines, 2 086 hunks; 120 → 131 715, 200 → 69 804,
+160 default → 88 635). Applied, it touches 331 files (+12 191 −30 916), 20 744 of them in
+`theme/generated.rs`. Kept on branch `wt/ci-ready-fmt`, not submitted.
 
 Re-check with int-bin 4e8677a5 (same captures): Appearance content 4.5 → 3.9 % (pill "88 JOUR(S)
 RESTANT(S)", swatches and ring line up), Voice content 3.3 → 3.0 %, Discover cards now read
