@@ -1545,6 +1545,8 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 "favadd" => phoenix_app::ui::favorites::open_add_modal(),
+                "favthreads" => phoenix_app::ui::favorites::open_thread_settings(app, cx),
+                "favlistmenu" => phoenix_app::ui::nav_menus::open(phoenix_app::ui::nav_menus::Target::FavoritesAdd, gpui::point(gpui::px(120.), gpui::px(420.)), window),
                 "events" => {
                     if let Some(g) = app.selected_guild {
                         phoenix_app::ui::events::open(app, g, cx);

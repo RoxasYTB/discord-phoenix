@@ -185,6 +185,11 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .min_h_0()
                 .relative()
                 .group(crate::ui::chat::scrollbar::THIN_FADE_GROUP)
+                .when(app.favorites_view, |d| {
+                    d.on_mouse_down(gpui::MouseButton::Right, |ev, w, _| {
+                        crate::ui::nav_menus::open(crate::ui::nav_menus::Target::FavoritesAdd, ev.position, w)
+                    })
+                })
                 .child(list(app.sidebar_list.clone(), move |ix, _w, cx| row(&entity, ix, cx)).size_full())
                 .children(crate::ui::chat::scrollbar::thin_fade_scrollbar(&app.sidebar_list))
                 .children(crate::ui::channel_unread_bar::render(app)),
@@ -498,7 +503,8 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
                 .hover(|s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_category_saved(id, cx)))
                 .when(!fav_cat, |d| {
-                    d.on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
+                    d.on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
+                        cx.stop_propagation();
                         crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
                     })
                 })
@@ -1012,7 +1018,8 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     }
                 })
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_channel(id, cx)))
-                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
+                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
+                    cx.stop_propagation();
                     crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
                 })
                 .relative()
@@ -1192,7 +1199,8 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
                         .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_thread(id, cx)))
-                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
+                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
+                    cx.stop_propagation();
                     crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Thread(id), ev.position, w)
                 })
                 .child(div().flex_1().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(th.name.clone(), 14.)))

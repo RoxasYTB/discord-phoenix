@@ -277,7 +277,7 @@ pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> 
 pub fn favorites_items(e: &Ent) -> Vec<MenuItem> {
     let hide = e.clone();
     vec![
-        stub(e, "fav.thread_settings"),
+        act(e, crate::t!("fav.thread_settings"), |a, _, cx| crate::ui::favorites::open_thread_settings(a, cx)),
         MenuItem::Separator,
         MenuItem::danger(crate::t!("fav.hide"), None, move |_, _, cx: &mut App| hide.update(cx, crate::ui::favorites::hide)),
     ]

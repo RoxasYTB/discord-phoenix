@@ -372,9 +372,270 @@ pub fn toggle(app: &mut PhoenixApp, channel: Id, cx: &mut Context<PhoenixApp>) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutoAdd {
+    PerGuild,
+    OwnCategory,
+    Never,
+}
+
+pub const PRUNE_DAYS: [u32; 3] = [0, 7, 14];
+pub const AUTO_ADDED: &str = "Auto-Added Threads";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThreadPrefs {
+    pub auto_add: AutoAdd,
+    pub prune: bool,
+    pub days: u32,
+    pub all: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThreadSettings {
+    pub initial: ThreadPrefs,
+    pub draft: ThreadPrefs,
+    pub error: bool,
+}
+
+pub fn thread_prefs(f: &Favorites) -> ThreadPrefs {
+    let enabled = f.guild_enabled();
+    let auto_add = match (enabled, f.auto_add_joined_threads, f.auto_add_joined_threads_per_guild) {
+        (true, true, true) => AutoAdd::PerGuild,
+        (true, true, false) => AutoAdd::OwnCategory,
+        _ => AutoAdd::Never,
+    };
+    ThreadPrefs {
+        auto_add,
+        prune: f.prune_inactive_threads.as_ref().is_none_or(|b| b.value) && enabled,
+        days: f.prune_inactive_threads_days,
+        all: f.prune_all_favorited_threads,
+    }
+}
+
+impl ThreadSettings {
+    pub fn can_save(&self) -> bool {
+        let (a, b) = (self.initial, self.draft);
+        a.auto_add != b.auto_add || a.prune != b.prune || (b.prune && (a.days != b.days || a.all != b.all))
+    }
+}
+
+pub fn apply_thread_prefs(f: &mut Favorites, initial: ThreadPrefs, p: ThreadPrefs, new_category: u64, nitro: bool) -> Result<(), usize> {
+    let on = p.auto_add != AutoAdd::Never;
+    let per_guild = p.auto_add == AutoAdd::PerGuild;
+    if p.auto_add != initial.auto_add || f.auto_add_joined_threads != on || f.auto_add_joined_threads_per_guild != per_guild {
+        if p.auto_add == AutoAdd::OwnCategory && f.category_named(AUTO_ADDED).is_none() {
+            if let Some(limit) = f.limit_reached(phoenix_api::rest::favorites::CATEGORY, nitro) {
+                return Err(limit);
+            }
+            f.create_category(AUTO_ADDED, new_category);
+        }
+        f.auto_add_joined_threads = on;
+        f.auto_add_joined_threads_per_guild = per_guild;
+    }
+    f.prune_inactive_threads = Some(phoenix_api::rest::settings::BoolValue { value: p.prune });
+    if p.prune {
+        f.prune_inactive_threads_days = p.days;
+        f.prune_all_favorited_threads = p.all;
+    }
+    Ok(())
+}
+
+pub fn open_thread_settings(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
+    let initial = thread_prefs(data(app));
+    crate::actions::open_modal(crate::ui::modals::Modal::FavThreads(ThreadSettings { initial, draft: initial, error: false }), None);
+    cx.notify();
+}
+
+fn set_draft(f: impl FnOnce(&mut ThreadSettings)) {
+    crate::actions::with_modal(|m| {
+        if let Some(crate::ui::modals::Modal::FavThreads(s)) = m {
+            f(s);
+        }
+    });
+}
+
+pub fn save_thread_settings(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
+    let Some(st) = crate::actions::with_modal(|m| match m {
+        Some(crate::ui::modals::Modal::FavThreads(s)) => Some(s.clone()),
+        _ => None,
+    }) else {
+        return;
+    };
+    if !st.can_save() {
+        return;
+    }
+    let mut fav = data(app).clone();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    if let Err(limit) = apply_thread_prefs(&mut fav, st.initial, st.draft, snowflake_at(now), app.backend.premium_tier2()) {
+        app.parity_toast(crate::t!("fav.limit", count = limit), cx);
+        return;
+    }
+    save(app, fav, cx);
+    crate::actions::close_modal();
+    cx.notify();
+}
+
+fn radio_field(
+    id: &'static str,
+    label: SharedString,
+    desc: Option<SharedString>,
+    options: Vec<(SharedString, Option<SharedString>, bool)>,
+    disabled: bool,
+    pick: std::rc::Rc<dyn Fn(usize)>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
+    use crate::theme::{c, generated::idx, tok, z};
+    let mut group = div().pt(z(8.)).flex().flex_col().gap(z(16.));
+    for (n, (name, sub, on)) in options.into_iter().enumerate() {
+        let pick = pick.clone();
+        group = group.child(
+            div()
+                .id((id, n))
+                .relative()
+                .pl(z(32.))
+                .when(disabled, |d| d.opacity(0.5))
+                .when(!disabled, |d| {
+                    d.cursor_pointer().on_click(cx.listener(move |_, _, _, cx| {
+                        pick(n);
+                        cx.notify();
+                    }))
+                })
+                .child(div().absolute().top_0().left_0().child(crate::ui::controls::radio_indicator(on)))
+                .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(name))
+                .children(sub.map(|d| div().mt(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(d))),
+        );
+    }
+    div()
+        .flex()
+        .flex_col()
+        .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(label))
+        .children(desc.map(|d| div().mt(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(d)))
+        .child(group)
+        .into_any_element()
+}
+
+pub fn render_thread_settings(s: &ThreadSettings, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    use crate::theme::{c, generated::idx, tok, z};
+    use crate::ui::controls::{BtnKind, button};
+    let d = s.draft;
+    let modes = [AutoAdd::PerGuild, AutoAdd::OwnCategory, AutoAdd::Never];
+    let auto = radio_field(
+        "fav-auto-add",
+        crate::t!("fav.auto_add"),
+        None,
+        vec![
+            (crate::t!("fav.auto_per_guild"), Some(crate::t!("fav.auto_per_guild_desc")), d.auto_add == AutoAdd::PerGuild),
+            (crate::t!("fav.auto_own"), Some(crate::t!("fav.auto_own_desc")), d.auto_add == AutoAdd::OwnCategory),
+            (crate::t!("fav.auto_never"), None, d.auto_add == AutoAdd::Never),
+        ],
+        false,
+        std::rc::Rc::new(move |n| set_draft(|s| s.draft.auto_add = modes[n])),
+        cx,
+    );
+    let timing = if d.prune { Some(d.days) } else { None };
+    let mut prune_opts: Vec<(SharedString, Option<SharedString>, bool)> = PRUNE_DAYS
+        .iter()
+        .map(|&n| (if n == 0 { crate::t!("fav.prune_archived") } else { crate::t!("fav.prune_days", days = n) }, None, timing == Some(n)))
+        .collect();
+    prune_opts.push((crate::t!("fav.prune_never"), None, timing.is_none()));
+    let prune = radio_field(
+        "fav-prune",
+        crate::t!("fav.prune"),
+        Some(crate::t!("fav.prune_desc")),
+        prune_opts,
+        false,
+        std::rc::Rc::new(|n| {
+            set_draft(|s| match PRUNE_DAYS.get(n) {
+                Some(&days) => {
+                    s.draft.prune = true;
+                    s.draft.days = days;
+                }
+                None => s.draft.prune = false,
+            })
+        }),
+        cx,
+    );
+    let scope = radio_field(
+        "fav-scope",
+        crate::t!("fav.scope"),
+        None,
+        vec![(crate::t!("fav.scope_auto"), None, !d.all), (crate::t!("fav.scope_all"), None, d.all)],
+        !d.prune,
+        std::rc::Rc::new(|n| set_draft(|s| s.draft.all = n == 1)),
+        cx,
+    );
+    let body = div()
+        .flex()
+        .flex_col()
+        .gap(z(16.))
+        .child(auto)
+        .child(div().h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))))
+        .child(prune)
+        .child(scope)
+        .when(s.error, |d| d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child(crate::t!("fav.update_failed"))))
+        .into_any_element();
+    let can = s.can_save();
+    let footer = div()
+        .flex()
+        .gap(z(8.))
+        .child(button("fav-threads-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click(cx.listener(|_, _, _, cx| {
+            crate::actions::close_modal();
+            cx.notify();
+        })))
+        .child(
+            button("fav-threads-save", crate::t!("common.save"), BtnKind::Primary)
+                .when(!can, |d| d.opacity(0.5).cursor_default())
+                .on_click(cx.listener(|a, _, _, cx| save_thread_settings(a, cx))),
+        )
+        .into_any_element();
+    crate::ui::modals::card(480., crate::t!("fav.thread_settings"), None, body, Some(footer), cx)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thread_prefs_follow_the_favorite_store() {
+        let mut f = Favorites::default();
+        assert_eq!(thread_prefs(&f), ThreadPrefs { auto_add: AutoAdd::Never, prune: false, days: 0, all: false });
+        f.set_guild_visible(true);
+        f.auto_add_joined_threads = true;
+        assert_eq!(thread_prefs(&f).auto_add, AutoAdd::OwnCategory);
+        assert!(thread_prefs(&f).prune);
+        f.auto_add_joined_threads_per_guild = true;
+        assert_eq!(thread_prefs(&f).auto_add, AutoAdd::PerGuild);
+    }
+
+    #[test]
+    fn own_category_mode_creates_the_auto_added_category_once() {
+        let mut f = Favorites::default();
+        f.set_guild_visible(true);
+        let init = thread_prefs(&f);
+        let want = ThreadPrefs { auto_add: AutoAdd::OwnCategory, prune: true, days: 7, all: true };
+        apply_thread_prefs(&mut f, init, want, 42, true).unwrap();
+        assert!(f.auto_add_joined_threads && !f.auto_add_joined_threads_per_guild);
+        assert_eq!(f.category_named(AUTO_ADDED), Some(42));
+        assert_eq!((f.prune_inactive_threads_days, f.prune_all_favorited_threads), (7, true));
+        apply_thread_prefs(&mut f, init, want, 43, true).unwrap();
+        assert_eq!(f.favorite_channels.len(), 1);
+        let off = ThreadPrefs { prune: false, days: 14, ..want };
+        apply_thread_prefs(&mut f, want, off, 44, true).unwrap();
+        assert_eq!(f.prune_inactive_threads.as_ref().map(|b| b.value), Some(false));
+        assert_eq!(f.prune_inactive_threads_days, 7);
+    }
+
+    #[test]
+    fn save_needs_a_change() {
+        let p = ThreadPrefs { auto_add: AutoAdd::Never, prune: false, days: 0, all: false };
+        let mut s = ThreadSettings { initial: p, draft: p, error: false };
+        assert!(!s.can_save());
+        s.draft.days = 7;
+        assert!(!s.can_save());
+        s.draft.prune = true;
+        assert!(s.can_save());
+    }
+
 
     #[test]
     fn wire_types_follow_the_client_enum() {
