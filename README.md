@@ -35,19 +35,42 @@ as a native application with the goals of:
 
 ## Status
 
-Beta: under active development. Expect missing features and bugs.
+Beta, under active development. The goal is a 1:1 visual and functional replica of the official 2026 desktop client. Every area is compared against the real client on a real account: same window size, zoom and states (hover, focus, pressed, open menus). The per-area tables in [docs/parity/](docs/parity/) currently list about 1,450 verified rows, 95 partial and 24 missing.
 
-| Area | State |
-|---|---|
-| Login (token, email/password, TOTP) | In progress |
-| Gateway (compression, resume, reconnect) | In progress |
-| Servers, channels, DMs, messages, replies, reactions | In progress |
-| Markdown, embeds, attachments | In progress |
-| Member list, presence | In progress |
-| Voice (Opus) | In progress |
-| Camera and screen share | In progress |
-| End-to-end encryption for calls (DAVE) | In progress |
-| Settings, themes, notifications | In progress |
+### Done
+
+- **Core**: token login with the token kept in the system keyring, gateway with compression, resume and reconnect, REST with rate limiting, local state cache.
+- **Navigation**: server rail with folders, unread and mention badges, Favorites server, channel list with categories, threads and mute rules, DMs and group DMs, Friends page, message requests, Nitro home, Shop.
+- **Chat**:
+  - the message list with grouping rules, date and "new messages" dividers, jump to a message with a highlight, and the detached history view;
+  - the send lifecycle: pending message, failed state, retry, slowmode;
+  - editing and deleting messages, replies and reactions.
+- **Message content**: Discord markdown (masked links, code blocks with highlighting, spoilers), mentions, Twemoji 16.0 emoji, animated emoji, GIFs and stickers, embeds and provider layouts, attachments with an image viewer, polls, components v2, voice messages, system messages.
+- **Composer**: the + menu, uploads (picker, drag and drop, paste) with progress and spoiler/description, emoji, GIF and sticker pickers, the app launcher, typing indicator.
+- **Members and profiles**: member list identical to the client (per-channel lists, Activity section, role groups, nameplates), profile popout and modal, avatar decorations above the status mask.
+- **Search**: server and DM search with filters, sort, pagination and highlighted hits.
+- **Threads and forums**: create, join, leave, rename, archive, lock, private threads, thread browser, forum sort and tag filters.
+- **Settings**: account, privacy and data, notifications, appearance (themes Light, Ash, Dark, Onyx, high contrast, density, font size, zoom), synced and local settings wired like the client, subscriptions.
+- **Voice**: voice channels with mute and deafen states, soundboard, camera (sending), notification and call sounds.
+- **Desktop**: custom title bar, tray icon, autostart, hardware acceleration toggle, keyboard shortcuts, responsive layout down to narrow windows.
+- **Reporting**: the multi-step report flow for messages.
+
+### Still to do
+
+- [ ] Screen share (Go Live): sending and watching streams (in progress)
+- [ ] Receiving other people's camera video, tested with a second account
+- [ ] Activities: they are web apps, and Phoenix has no web engine yet
+- [ ] End-to-end encrypted calls (DAVE), tested in a channel that has it enabled
+- [ ] Mentions that contain emoji should render as one continuous pill
+- [ ] Underlines over mixed-height glyphs (CJK, emoji) should be one uniform line
+- [ ] Clickable names in replies; mutual friends and servers that open the full profile
+- [ ] Rounded profile popout corners
+- [ ] Fades on a few voice message controls
+- [ ] Empty states and scrollbars of some popouts and modals
+- [ ] Settings that are stored but have no effect yet, such as streamer mode detection and text-to-speech (see [settings-wiring](docs/parity/settings-wiring.md))
+- [ ] The remaining ⚠ and ❌ rows in [docs/parity/](docs/parity/)
+
+Contributions are very welcome, especially on the items above. Pick an unchecked item or a ❌ row, compare it with the official client, and open a PR; see [Contributing](#contributing).
 
 ## Development progress
 
@@ -117,7 +140,7 @@ See [SECURITY.md](SECURITY.md) for how credentials are handled and how to report
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first. In short: everything is
+Contributions are welcome, from a one-pixel fix to a whole feature. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; the parity tables in [docs/parity/](docs/parity/) show what is missing and how each value was measured. In short: everything is
 aimed at 1:1 parity with the official client. The real client's CSS, behaviour and assets are the reference.
 Binary assets are loaded from your local Discord install and are not shipped in this repository.
 
