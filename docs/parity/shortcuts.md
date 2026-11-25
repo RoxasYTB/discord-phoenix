@@ -14,8 +14,9 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 | Ctrl+Shift+Alt+Up / Down | Previous / next channel with mentions | ✅ |
 | Ctrl+Shift+Alt+V | Jump to the current call | ✅ |
 | Ctrl+Alt+Right | Toggle between the last server and DMs | ✅ |
-| Ctrl+K | Quick Switcher | ✅ |
+| Ctrl+K | Quick Switcher | ✅ sections, prefixes, scores and arrows from the client store, see `accessibility.md` |
 | Ctrl+Shift+N | Create or join a server | ✅ |
+| F6 / Shift+F6 | Next / previous section (back button, servers, channels, account, messages, members; wraps) | ✅ see `accessibility.md` |
 | Ctrl+1..9 | Nth rail item: 1 = Home (bound in the client as `mod+${n}`, not listed in the modal) | ✅ |
 
 ## Voice and video
@@ -74,3 +75,5 @@ We have not checked how the client itself enters message focus (CDP can't send r
 | Ctrl+Alt+Shift+W | Lo-fi Wumpus | ⚠ (wt/sounds) the music part: `vibing_wumpus` (`/assets/f4b4eb5a3dd2dbff.mp3`, runtime) looped and faded to .5 in 100 ms steps of .2 × (target − start), like `VIBING_WUMPUS_PLAY_MUSIC`; the same keys fade it out and stop it. ❌ the modal: it is a Rive animation (`VibingWumpusRive`, .riv) that GPUI cannot draw, and its chunk is not in the local cache |
 
 The composer lets the app-wide combos through, as the client's textarea does: Page Up/Down, Alt+arrows, Ctrl+Alt+…, Ctrl+Shift+… (except the editing ones), and Ctrl+I/P/U/K/S//. Text-editing keys stay with the input. See `shortcuts/message.rs::passes_through_composer`.
+
+GPUI tests driving real keystrokes: `shortcuts/keyboard_tests.rs` (Ctrl+K, Alt+Up/Down, Ctrl+Alt+Up/Down, Alt+Shift+Up/Down, Ctrl+Shift+Alt+Down, Esc, Shift+Esc, Ctrl+/, Page Up/Down, F6, Shift+F6).

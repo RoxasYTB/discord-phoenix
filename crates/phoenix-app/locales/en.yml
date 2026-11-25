@@ -3726,3 +3726,8 @@ settings.standing.at_risk_d: "You broke Discord's rules. You will be permanently
 settings.standing.suspended_d: "Due to serious policy violations, your account is permanently suspended. You can no longer use Discord."
 sp.auth.deauth_title: "Deauthorize Application"
 sp.auth.deauth_body: "This action will remove the link between your Discord account and {name}"
+a11y.messages_in: "Messages in {channel}"
+a11y.members: "Members"
+a11y.back: "Go back"
+a11y.account: "Manage profile and status"
+a11y.message_deleted: "message deleted"

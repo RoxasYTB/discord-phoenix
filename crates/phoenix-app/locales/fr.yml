@@ -3726,3 +3726,8 @@ settings.standing.at_risk_d: "Tu as enfreint les règles de Discord. Tu seras su
 settings.standing.suspended_d: "En raison de graves violations de la politique, ton compte est suspendu de manière permanente. Tu ne peux plus utiliser Discord."
 sp.auth.deauth_title: "Retirer l'autorisation à l'application"
 sp.auth.deauth_body: "Cette action supprimera le lien entre ton compte Discord et {name}"
+a11y.messages_in: "Messages sur {channel}"
+a11y.members: "Membres"
+a11y.back: "Retour"
+a11y.account: "Gérer le profil et le statut"
+a11y.message_deleted: "message supprimé"

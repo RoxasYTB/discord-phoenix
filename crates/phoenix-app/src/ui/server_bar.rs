@@ -661,6 +661,9 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, _nested: bool
         .text_color(if active && !has_icon { gpui::white() } else { c(Palette::TEXT_NORMAL) })
         .child(guild_inner(g, ICON));
     row(("guild", id.0), id.0, entity)
+        .role(gpui::Role::TreeItem)
+        .aria_label(g.name.clone())
+        .aria_selected(selected)
         .on_click(move |_, _, cx| e.update(cx, |app, cx| app.select_guild(Some(id), cx)))
         .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
             crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Guild(id), ev.position, w)

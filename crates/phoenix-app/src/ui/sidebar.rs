@@ -943,6 +943,9 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         .child(
             div()
                 .id(("chrow", id.0))
+                .role(gpui::Role::Link)
+                .aria_label(ch.name.clone())
+                .aria_selected(selected)
                 .group(group)
                 .h(z(if is_dm { 48. } else if connected { space::channels_name_lh() + 24. } else { space::channels_name_lh() + 8. }))
                 .pl(z(10.))
@@ -1221,6 +1224,8 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .child(
             div()
                 .id("me")
+                .role(gpui::Role::Button)
+                .aria_label(crate::t!("a11y.account"))
                 .flex_1()
                 .min_w(z(112.))
                 .ml(z(-6.))

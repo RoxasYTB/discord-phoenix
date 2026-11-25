@@ -1528,6 +1528,7 @@ impl Render for PhoenixApp {
                 let (dx, dy) = ui::easter::shake_offset(window);
                 div().size_full().relative().left(gpui::px(dx)).top(gpui::px(dy)).child(body)
             })
+            .child(ui::a11y::announcer())
             .children(ui::settings::render(self, window, cx))
             .children(ui::boost_layer::render(self, window, cx))
             .children(ui::chat::panels::overlays(self, window, cx))

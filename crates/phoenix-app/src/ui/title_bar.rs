@@ -138,7 +138,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .flex()
                 .justify_center()
                 .gap(z(2.))
-                .child(crate::ui::focus_ring::ring(nav_arrow("title-back", "nav/back", true, true), crate::shortcuts::BACK_KEY, 6.))
+                .child(crate::ui::focus_ring::ring(nav_arrow("title-back", "nav/back", true, true).role(gpui::Role::Button).aria_label(crate::t!("a11y.back")), crate::shortcuts::BACK_KEY, 6.))
                 .child(nav_arrow("title-forward", "nav/forward", false, false)),
         )
         .child(

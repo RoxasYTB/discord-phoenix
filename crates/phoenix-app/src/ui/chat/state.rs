@@ -447,6 +447,7 @@ impl PhoenixApp {
         }
         if skip_confirm {
             self.backend.delete_message(channel, id).detach_ok_chat();
+            crate::ui::a11y::announce(crate::t!("a11y.message_deleted"), false);
         } else {
             self.chat.confirm_delete = Some((channel, id));
         }
@@ -456,6 +457,7 @@ impl PhoenixApp {
     pub fn confirm_delete(&mut self, cx: &mut Context<Self>) {
         if let Some((channel, id)) = self.chat.confirm_delete.take() {
             self.backend.delete_message(channel, id).detach_ok_chat();
+            crate::ui::a11y::announce(crate::t!("a11y.message_deleted"), false);
         }
         cx.notify();
     }

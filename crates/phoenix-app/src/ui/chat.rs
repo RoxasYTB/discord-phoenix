@@ -88,6 +88,9 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                         .children(discovery_notice(app, cx))
                         .child(
                             div()
+                                .id("chat-messages")
+                                .role(gpui::Role::List)
+                                .aria_label(crate::t!("a11y.messages_in", channel = app.selected_channel.and_then(|c| app.channels.get(&c)).map(|c| c.name.clone()).unwrap_or_default()))
                                 .flex_1()
                                 .min_h_0()
                                 .relative()
@@ -925,6 +928,7 @@ pub(crate) fn message(
     let author_cow = app.member_user(app.selected_guild, msg.author);
     let author = author_cow.as_deref();
     let name = msg.author_nick.clone().or_else(|| app.member_nick(msg.author)).or_else(|| author.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
+    let a11y_label: SharedString = format!("{name}, {}", msg.content).into();
     let color = app.author_color(msg.author).map(c).unwrap_or_else(|| tk(idx::TEXT_STRONG));
     let id = msg.id;
     if let Some(sys) = system::render(app, entity, msg, r) {
@@ -1190,6 +1194,8 @@ pub(crate) fn message(
 
     let base = div()
         .id(("msg", id.0))
+        .role(gpui::Role::Article)
+        .aria_label(a11y_label)
         .group("msg")
         .on_hover({
             let e = entity.clone();

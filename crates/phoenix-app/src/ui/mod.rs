@@ -17,6 +17,7 @@ pub mod events;
 pub mod focus_ring;
 pub mod favorites;
 pub mod forum;
+pub mod a11y;
 pub mod group_dm;
 pub mod inbox;
 pub mod inbox_unreads;
