@@ -1,8 +1,4 @@
-use phoenix_api::{
-    RestClient,
-    models as api,
-    rest::guild_admin,
-};
+use phoenix_api::{RestClient, models as api, rest::guild_admin};
 
 use super::{ActionReply, ActionRequest, EventPlace};
 use crate::{
@@ -95,12 +91,7 @@ pub async fn request(rest: RestClient, req: ActionRequest, emit: EventSink) -> R
             ActionReply::Done
         }
         R::SetRole { guild, user: u, role, add } => {
-            if add {
-                rest.add_member_role(sf(guild), sf(u), sf(role)).await
-            } else {
-                rest.remove_member_role(sf(guild), sf(u), sf(role)).await
-            }
-            .map_err(e)?;
+            if add { rest.add_member_role(sf(guild), sf(u), sf(role)).await } else { rest.remove_member_role(sf(guild), sf(u), sf(role)).await }.map_err(e)?;
             ActionReply::Done
         }
         R::SetMemberRoles { guild, user: u, roles } => {

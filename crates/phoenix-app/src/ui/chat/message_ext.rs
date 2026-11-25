@@ -1,7 +1,4 @@
-use gpui::{
-    AnyElement, App, Div, Entity, FontWeight, IntoElement, MouseDownEvent, ParentElement,
-    SharedString, Styled, Window, div, prelude::*,
-};
+use gpui::{AnyElement, App, Div, Entity, FontWeight, IntoElement, MouseDownEvent, ParentElement, SharedString, Styled, Window, div, prelude::*};
 use gpui_component::input::Input;
 
 use super::{
@@ -119,17 +116,13 @@ pub fn toolbar(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, shi
         move |_, _, cx| e.update(cx, |a, cx| a.open_forward(ch, id, cx))
     }));
     if shift && own {
-        bar = bar.child(
-            bar_button("tb-delete")
-                .child(icon(ChatIcon::Trash, 20., tk(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
-                .on_click({
-                    let e = e.clone();
-                    move |ev, _, cx| {
-                        let skip = ev.modifiers().shift;
-                        e.update(cx, |a, cx| a.request_delete(ch, id, skip, cx))
-                    }
-                }),
-        );
+        bar = bar.child(bar_button("tb-delete").child(icon(ChatIcon::Trash, 20., tk(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT))).on_click({
+            let e = e.clone();
+            move |ev, _, cx| {
+                let skip = ev.modifiers().shift;
+                e.update(cx, |a, cx| a.request_delete(ch, id, skip, cx))
+            }
+        }));
     }
     bar.child(tool_button("tb-more", id.0, ChatIcon::More.path(), 20.).on_click(move |ev, _, cx| {
         let pos = ev.position();
@@ -171,8 +164,7 @@ pub fn reactions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -
                     if crate::theme::is_light() {
                         d.bg(tk(idx::BRAND_160)).border_color(tk(idx::BRAND_500))
                     } else {
-                        d.bg(tk(idx::REACTION_BACKGROUND_REACTED_DEFAULT))
-                            .border_color(tk(idx::REACTION_BORDER_REACTED_DEFAULT))
+                        d.bg(tk(idx::REACTION_BACKGROUND_REACTED_DEFAULT)).border_color(tk(idx::REACTION_BORDER_REACTED_DEFAULT))
                     }
                 })
                 .when(!r.me, |d| {
@@ -186,9 +178,7 @@ pub fn reactions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -
                     ))
                     .border_color(gpui::transparent_black())
                     .hover(|s| s.border_color(tk(idx::REACTION_BORDER_HOVER)))
-                    .when(crate::theme::high_contrast(), |d| {
-                        d.border_color(tk(idx::BORDER_SUBTLE)).hover(|s| s.border_color(tk(idx::BORDER_STRONG)))
-                    })
+                    .when(crate::theme::high_contrast(), |d| d.border_color(tk(idx::BORDER_SUBTLE)).hover(|s| s.border_color(tk(idx::BORDER_STRONG))))
                 })
                 .active(|s| s.bg(tk(idx::REACTION_BACKGROUND_ACTIVE)).border_color(tk(idx::REACTION_BORDER_ACTIVE)))
                 .cursor_pointer()
@@ -229,13 +219,9 @@ pub fn reactions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -
             .cursor_pointer()
             .hover(|s| s.bg(tk(idx::REACTION_BACKGROUND_HOVER)).border_color(tk(idx::REACTION_BORDER_HOVER)))
             .active(|s| s.bg(tk(idx::REACTION_BACKGROUND_ACTIVE)).border_color(tk(idx::REACTION_BORDER_ACTIVE)))
-            .when(crate::theme::high_contrast(), |d| {
-                d.border_color(tk(idx::BORDER_SUBTLE)).hover(|s| s.border_color(tk(idx::BORDER_STRONG)))
-            })
+            .when(crate::theme::high_contrast(), |d| d.border_color(tk(idx::BORDER_SUBTLE)).hover(|s| s.border_color(tk(idx::BORDER_STRONG))))
             .child(icon(ChatIcon::AddReaction, 18., tk(idx::REACTION_TEXT_DEFAULT)))
-            .on_click(move |_, _, cx| {
-                e.update(cx, |a, cx| a.open_emoji_picker(EmojiTarget::Reaction { channel: ch, msg: id }, cx))
-            }),
+            .on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_emoji_picker(EmojiTarget::Reaction { channel: ch, msg: id }, cx))),
     )
     .into_any_element()
 }
@@ -254,14 +240,7 @@ pub fn edit_frame(
     let e1 = entity.clone();
     let e2 = entity.clone();
     let cancel2 = cancel.clone();
-    let link = |id: &'static str, label: gpui::SharedString| {
-        div()
-            .id(id)
-            .text_color(tk(idx::TEXT_LINK))
-            .cursor_pointer()
-            .hover(|s| s.underline())
-            .child(label)
-    };
+    let link = |id: &'static str, label: gpui::SharedString| div().id(id).text_color(tk(idx::TEXT_LINK)).cursor_pointer().hover(|s| s.underline()).child(label);
     div()
         .flex()
         .flex_col()
@@ -422,11 +401,7 @@ pub fn open_author(entity: &Entity<PhoenixApp>, msg: &Message) -> impl Fn(&gpui:
     open_user(entity, msg.author, msg.channel)
 }
 
-pub fn open_user(
-    entity: &Entity<PhoenixApp>,
-    user: crate::model::Id,
-    ch: crate::model::Id,
-) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static {
+pub fn open_user(entity: &Entity<PhoenixApp>, user: crate::model::Id, ch: crate::model::Id) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static {
     let e = entity.clone();
     move |ev, w, cx| {
         cx.stop_propagation();
@@ -536,22 +511,11 @@ pub(crate) fn slice_runs(runs: &[gpui::TextRun], range: std::ops::Range<usize>) 
     out
 }
 
-pub fn rich_with_emoji(
-    entity: &Entity<PhoenixApp>,
-    msg: crate::model::Id,
-    bi: usize,
-    t: &crate::richtext::RichText,
-) -> AnyElement {
+pub fn rich_with_emoji(entity: &Entity<PhoenixApp>, msg: crate::model::Id, bi: usize, t: &crate::richtext::RichText) -> AnyElement {
     rich_with_emoji_scaled(entity, msg, bi, t, 1.)
 }
 
-pub fn rich_with_emoji_scaled(
-    entity: &Entity<PhoenixApp>,
-    msg: crate::model::Id,
-    bi: usize,
-    t: &crate::richtext::RichText,
-    k: f32,
-) -> AnyElement {
+pub fn rich_with_emoji_scaled(entity: &Entity<PhoenixApp>, msg: crate::model::Id, bi: usize, t: &crate::richtext::RichText, k: f32) -> AnyElement {
     let jumbo = crate::richtext::is_jumbo_text(t);
     let k = k * crate::theme::font_scale();
     let size = k * if jumbo { 48. } else { 22. };
@@ -630,18 +594,15 @@ pub fn rich_with_emoji_scaled(
         let el = cell(
             gpui::InteractiveText::new(("rte", msg.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | *seg as u64)), styled)
                 .on_hover(move |ix, _ev, w, _cx| super::mention::on_hover(msg, bi, sd, &hr, &ht, ix, w))
-                .on_click(
-                ranges,
-                move |ix, w, cx| match &targets[ix] {
+                .on_click(ranges, move |ix, w, cx| match &targets[ix] {
                     crate::richtext::ClickTarget::Link(url) => e.update(cx, |a, cx| crate::ui::modals::leave_link::click(a, &shown[ix], url, w, cx)),
                     crate::richtext::ClickTarget::Spoiler(sp) => {
                         let sp = *sp;
                         e.update(cx, |a, cx| a.reveal_spoiler(msg, sp, cx));
                     }
                     crate::richtext::ClickTarget::Mention(m) => super::mention::click(&e, m, w, cx),
-                },
-            )
-            .into_any_element(),
+                })
+                .into_any_element(),
         )
         .into_any_element();
         row.child(pill(el, &range, part))
@@ -680,12 +641,7 @@ pub fn rich_with_emoji_scaled(
         }
         row = push_lines(row, last..r.start, &mut seg);
         if token.as_ref() == crate::richtext::CHANNEL_ICON_TOKEN {
-            let icon = div()
-                .h(z(22. * k))
-                .flex()
-                .items_center()
-                .pr(z(4.))
-                .child(crate::ui::icon(crate::assets::Icon::Hash, 16. * k, runs_fg_at(runs, r.end)));
+            let icon = div().h(z(22. * k)).flex().items_center().pr(z(4.)).child(crate::ui::icon(crate::assets::Icon::Hash, 16. * k, runs_fg_at(runs, r.end)));
             seg += 1;
             row = row.child(pill(icon.into_any_element(), r, seg as u64));
             last = r.end;
@@ -713,11 +669,12 @@ const MENTION_BOX_EM: f32 = 1.3;
 
 fn run_bg_at(runs: &[gpui::TextRun], ix: usize) -> Option<gpui::Hsla> {
     let mut at = 0;
-    runs.iter().find(|r| {
-        at += r.len;
-        at > ix
-    })?
-    .background_color
+    runs.iter()
+        .find(|r| {
+            at += r.len;
+            at > ix
+        })?
+        .background_color
 }
 
 fn runs_fg_at(runs: &[gpui::TextRun], ix: usize) -> gpui::Hsla {

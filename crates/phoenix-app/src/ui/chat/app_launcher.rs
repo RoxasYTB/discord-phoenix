@@ -237,7 +237,12 @@ fn pick(a: &LauncherApp, cx: &mut Context<PhoenixApp>) -> impl Fn(&gpui::ClickEv
 }
 
 fn card(a: &LauncherApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let banner = div().w_full().h(px(126.)).flex_none().bg(tk(idx::BACKGROUND_SURFACE_HIGHEST)).when_some(a.cover.clone(), |d, u| d.child(img(u).size_full().object_fit(gpui::ObjectFit::Cover)));
+    let banner = div()
+        .w_full()
+        .h(px(126.))
+        .flex_none()
+        .bg(tk(idx::BACKGROUND_SURFACE_HIGHEST))
+        .when_some(a.cover.clone(), |d, u| d.child(img(u).size_full().object_fit(gpui::ObjectFit::Cover)));
     div()
         .id(SharedString::from(format!("launcher-card-{}", a.id)))
         .w(px(224.))
@@ -271,8 +276,8 @@ fn rows(apps: &[LauncherApp], cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .items_center()
                 .gap(px(12.))
                 .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
-        .hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
-        .active(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
+                .hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
+                .active(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 .when(first, |d| d.rounded_tl(px(12.)).rounded_tr(px(12.)))
                 .when(last, |d| d.rounded_bl(px(12.)).rounded_br(px(12.)))
                 .when(!last, |d| d.border_b_1().border_color(tk(idx::BACKGROUND_MOD_SUBTLE)))
@@ -365,8 +370,8 @@ fn command_rows(cmds: &[SlashCommand], cx: &mut Context<PhoenixApp>) -> AnyEleme
                 .items_center()
                 .gap(px(12.))
                 .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
-        .hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
-        .active(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
+                .hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
+                .active(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 .when(first, |d| d.rounded_tl(px(12.)).rounded_tr(px(12.)))
                 .when(last, |d| d.rounded_bl(px(12.)).rounded_br(px(12.)))
                 .when(!last, |d| d.border_b_1().border_color(tk(idx::BACKGROUND_MOD_SUBTLE)))
@@ -393,23 +398,10 @@ fn command_rows(cmds: &[SlashCommand], cx: &mut Context<PhoenixApp>) -> AnyEleme
                                         .truncate()
                                         .child(format!("/{}", cmd.name)),
                                 )
-                                .child(
-                                    div()
-                                        .flex_none()
-                                        .text_size(px(12.))
-                                        .line_height(px(16.))
-                                        .text_color(tk(idx::TEXT_MUTED))
-                                        .child(cmd.app_name.clone()),
-                                ),
+                                .child(div().flex_none().text_size(px(12.)).line_height(px(16.)).text_color(tk(idx::TEXT_MUTED)).child(cmd.app_name.clone())),
                         )
                         .child(
-                            div()
-                                .h(px(18.))
-                                .text_size(px(14.))
-                                .line_height(px(18.))
-                                .text_color(tk(idx::TEXT_SUBTLE))
-                                .truncate()
-                                .child(cmd.description.clone()),
+                            div().h(px(18.)).text_size(px(14.)).line_height(px(18.)).text_color(tk(idx::TEXT_SUBTLE)).truncate().child(cmd.description.clone()),
                         ),
                 )
                 .on_click(cx.listener(move |app, _, window, cx| {
@@ -433,29 +425,44 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let left = (right - W).max(8.);
     let q = input.read(cx).value().to_string();
     let cmds = crate::ui::chat::slash::cached_commands(app, cx);
-    let freq_ids: Vec<u64> = cx
-        .try_global::<crate::ui::pickers::Pickers>()
-        .and_then(|p| p.frecency.as_ref())
-        .map(|f| f.applications.clone())
-        .unwrap_or_default();
+    let freq_ids: Vec<u64> =
+        cx.try_global::<crate::ui::pickers::Pickers>().and_then(|p| p.frecency.as_ref()).map(|f| f.applications.clone()).unwrap_or_default();
     let content: Vec<AnyElement> = DATA.with(|d| match d.borrow().as_ref() {
         None => vec![],
         Some(cols) if !q.trim().is_empty() => {
             let app_hits = search(cols, &q);
             let cmd_hits = search_commands(&cmds, &q);
             if app_hits.is_empty() && cmd_hits.is_empty() {
-                vec![div().pt(px(24.)).text_center().text_size(px(16.)).text_color(tk(idx::TEXT_SUBTLE)).child(crate::t!("launcher.no_results")).into_any_element()]
+                vec![
+                    div()
+                        .pt(px(24.))
+                        .text_center()
+                        .text_size(px(16.))
+                        .text_color(tk(idx::TEXT_SUBTLE))
+                        .child(crate::t!("launcher.no_results"))
+                        .into_any_element(),
+                ]
             } else {
                 let mut sections = Vec::new();
                 if !app_hits.is_empty() {
                     if !cmd_hits.is_empty() {
-                        sections.push(div().flex().flex_col().gap(px(8.)).child(header(crate::t!("launcher.apps"), None)).child(rows(&app_hits, cx)).into_any_element());
+                        sections.push(
+                            div().flex().flex_col().gap(px(8.)).child(header(crate::t!("launcher.apps"), None)).child(rows(&app_hits, cx)).into_any_element(),
+                        );
                     } else {
                         sections.push(rows(&app_hits, cx));
                     }
                 }
                 if !cmd_hits.is_empty() {
-                    sections.push(div().flex().flex_col().gap(px(8.)).child(header(crate::t!("launcher.commands"), None)).child(command_rows(&cmd_hits, cx)).into_any_element());
+                    sections.push(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(header(crate::t!("launcher.commands"), None))
+                            .child(command_rows(&cmd_hits, cx))
+                            .into_any_element(),
+                    );
                 }
                 sections
             }
@@ -587,11 +594,7 @@ mod tests {
             raw: Value::Null,
             ..Default::default()
         };
-        let cmds = vec![
-            cmd("superplay", "desc", "Music"),
-            cmd("play", "start music", "Music"),
-            cmd("queue", "play list", "Music"),
-        ];
+        let cmds = vec![cmd("superplay", "desc", "Music"), cmd("play", "start music", "Music"), cmd("queue", "play list", "Music")];
         let names: Vec<String> = search_commands(&cmds, "play").into_iter().map(|c| c.name).collect();
         assert_eq!(names, ["play", "superplay", "queue"]);
     }

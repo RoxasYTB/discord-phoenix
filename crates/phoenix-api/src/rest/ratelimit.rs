@@ -20,10 +20,7 @@ impl RateLimitInfo {
         Self {
             limit: get("x-ratelimit-limit").and_then(|v| v.parse().ok()),
             remaining: get("x-ratelimit-remaining").and_then(|v| v.parse().ok()),
-            reset_after: get("x-ratelimit-reset-after")
-                .and_then(|v| v.parse::<f64>().ok())
-                .filter(|v| v.is_finite() && *v >= 0.0)
-                .map(Duration::from_secs_f64),
+            reset_after: get("x-ratelimit-reset-after").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite() && *v >= 0.0).map(Duration::from_secs_f64),
             bucket: get("x-ratelimit-bucket").map(str::to_owned),
             global: get("x-ratelimit-global").is_some_and(|v| v.eq_ignore_ascii_case("true")),
             scope: get("x-ratelimit-scope").map(str::to_owned),
@@ -121,9 +118,7 @@ impl RateLimiter {
         if let Some(hash) = &info.bucket {
             inner.hashes.insert(route.to_owned(), hash.clone());
         }
-        let (Some(limit), Some(remaining), Some(reset_after)) =
-            (info.limit, info.remaining, info.reset_after)
-        else {
+        let (Some(limit), Some(remaining), Some(reset_after)) = (info.limit, info.remaining, info.reset_after) else {
             return;
         };
         let id = Self::bucket_id(&inner, route, major);
@@ -150,14 +145,8 @@ mod tests {
 
     #[test]
     fn route_keys() {
-        assert_eq!(
-            route_key("PATCH", "/channels/123/messages/456"),
-            "PATCH /channels/123/messages/:id"
-        );
-        assert_eq!(
-            route_key("PUT", "/channels/1/messages/2/reactions/%F0%9F%91%8D/@me"),
-            "PUT /channels/1/messages/:id/reactions/*"
-        );
+        assert_eq!(route_key("PATCH", "/channels/123/messages/456"), "PATCH /channels/123/messages/:id");
+        assert_eq!(route_key("PUT", "/channels/1/messages/2/reactions/%F0%9F%91%8D/@me"), "PUT /channels/1/messages/:id/reactions/*");
         assert_eq!(route_key("GET", "/users/@me/guilds?limit=200"), "GET /users/@me/guilds");
         assert_eq!(route_key("GET", "/users/42"), "GET /users/:id");
         assert_eq!(major_param("/channels/99/typing"), "99");
@@ -167,12 +156,7 @@ mod tests {
     #[test]
     fn parse_headers() {
         let mut h = HeaderMap::new();
-        for (k, v) in [
-            ("x-ratelimit-limit", "5"),
-            ("x-ratelimit-remaining", "0"),
-            ("x-ratelimit-reset-after", "1.250"),
-            ("x-ratelimit-bucket", "abcd"),
-        ] {
+        for (k, v) in [("x-ratelimit-limit", "5"), ("x-ratelimit-remaining", "0"), ("x-ratelimit-reset-after", "1.250"), ("x-ratelimit-bucket", "abcd")] {
             h.insert(HeaderName::from_static(k), HeaderValue::from_static(v));
         }
         let info = RateLimitInfo::from_headers(&h);
@@ -189,13 +173,8 @@ mod tests {
         let t0 = Instant::now();
         let route = "POST /channels/1/messages";
         assert_eq!(rl.acquire(route, "1", t0), None);
-        let info = RateLimitInfo {
-            limit: Some(2),
-            remaining: Some(1),
-            reset_after: Some(Duration::from_secs(2)),
-            bucket: Some("h".into()),
-            ..Default::default()
-        };
+        let info =
+            RateLimitInfo { limit: Some(2), remaining: Some(1), reset_after: Some(Duration::from_secs(2)), bucket: Some("h".into()), ..Default::default() };
         rl.update(route, "1", &info, t0);
         assert_eq!(rl.acquire(route, "1", t0), None);
         assert_eq!(rl.acquire(route, "1", t0), Some(Duration::from_secs(2)));
@@ -218,12 +197,7 @@ mod tests {
             ..Default::default()
         };
         rl.update("PATCH /channels/1/messages/:id", "1", &info, t0);
-        rl.update(
-            "DELETE /channels/1/messages/:id",
-            "1",
-            &RateLimitInfo { bucket: Some("shared".into()), ..Default::default() },
-            t0,
-        );
+        rl.update("DELETE /channels/1/messages/:id", "1", &RateLimitInfo { bucket: Some("shared".into()), ..Default::default() }, t0);
         assert!(rl.acquire("DELETE /channels/1/messages/:id", "1", t0).is_some());
     }
 

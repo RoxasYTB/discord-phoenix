@@ -68,8 +68,7 @@ thread_local! {
 fn probe(card: bool) -> impl IntoElement {
     gpui::canvas(
         move |b, window, _| {
-            let changed =
-                if card { CARD.with(|c| c.replace(Some(b.origin))) != Some(b.origin) } else { ANCHOR.with(|c| c.replace(Some(b))) != Some(b) };
+            let changed = if card { CARD.with(|c| c.replace(Some(b.origin))) != Some(b.origin) } else { ANCHOR.with(|c| c.replace(Some(b))) != Some(b) };
             if changed {
                 window.refresh();
             }
@@ -134,15 +133,8 @@ pub fn open(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         }));
         fields.push(input);
     }
-    cx.default_global::<Filters>().0 = Some(FiltersModal {
-        fields,
-        picks: vec![Vec::new(); FIELDS.len()],
-        list: None,
-        _subs: subs,
-        dates: Vec::new(),
-        calendar: None,
-        op_menu: None,
-    });
+    cx.default_global::<Filters>().0 =
+        Some(FiltersModal { fields, picks: vec![Vec::new(); FIELDS.len()], list: None, _subs: subs, dates: Vec::new(), calendar: None, op_menu: None });
     cx.notify();
 }
 
@@ -178,7 +170,6 @@ pub fn close(cx: &mut Context<PhoenixApp>) {
     cx.default_global::<Filters>().0 = None;
     cx.notify();
 }
-
 
 fn quoted(v: &str) -> String {
     let v = v.trim();
@@ -255,9 +246,7 @@ fn options(app: &PhoenixApp, key: &str, query: &str) -> Vec<Opt> {
             if let Some(msgs) = app.selected_channel.and_then(|c| app.messages.get(&c)) {
                 ids.extend(msgs.msgs.iter().rev().take(200).map(|m| m.author));
             }
-            let nick = |u: Id| {
-                app.selected_guild.and_then(|g| app.members.get(&g)).and_then(|ms| ms.iter().find(|m| m.user == u)).and_then(|m| m.nick.clone())
-            };
+            let nick = |u: Id| app.selected_guild.and_then(|g| app.members.get(&g)).and_then(|ms| ms.iter().find(|m| m.user == u)).and_then(|m| m.nick.clone());
             if let Some(g) = app.selected_guild {
                 ids.extend(app.members.get(&g).into_iter().flatten().map(|m| m.user));
             }
@@ -284,7 +273,11 @@ fn options(app: &PhoenixApp, key: &str, query: &str) -> Vec<Opt> {
                 }
                 let Some(sc) = score(&ch.name, &q) else { continue };
                 let first = Some(ch.id) == app.selected_channel;
-                list.push((sc, if first { 0 } else { order + 1 }, Opt { value: ch.name.to_string(), label: ch.name.clone(), sub: None, lead: Lead::Channel(ch.kind) }));
+                list.push((
+                    sc,
+                    if first { 0 } else { order + 1 },
+                    Opt { value: ch.name.to_string(), label: ch.name.clone(), sub: None, lead: Lead::Channel(ch.kind) },
+                ));
             }
             list.sort_by_key(|(sc, order, _)| (*sc, *order));
             list.into_iter().map(|(_, _, o)| o).collect()
@@ -352,18 +345,22 @@ fn field(app: &PhoenixApp, i: usize, input: &Entity<InputState>, picks: &[String
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(tok(idx::TEXT_STRONG)))
                     .whitespace_nowrap()
-                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |_, _, _, cx| {
-                        with_modal(cx, |m| {
-                            m.picks[i].retain(|x| x != &val);
-                        });
-                        cx.stop_propagation();
-                        cx.notify();
-                    }))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(move |_, _, _, cx| {
+                            with_modal(cx, |m| {
+                                m.picks[i].retain(|x| x != &val);
+                            });
+                            cx.stop_propagation();
+                            cx.notify();
+                        }),
+                    )
                     .child(pick_label(app, key, v))
                     .child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child("×")),
             );
         }
-        content = content.child(div().flex_1().min_w(z(40.)).child(Input::new(input).appearance(false).bordered(false).px(z(0.)).text_size(z(16.)).line_height(z(20.))));
+        content = content
+            .child(div().flex_1().min_w(z(40.)).child(Input::new(input).appearance(false).bordered(false).px(z(0.)).text_size(z(16.)).line_height(z(20.))));
     }
     let wrap = div()
         .id(gpui::ElementId::Name(format!("search-field-{i}").into()))
@@ -376,11 +373,14 @@ fn field(app: &PhoenixApp, i: usize, input: &Entity<InputState>, picks: &[String
         .border_color(c(tok(if open { idx::INPUT_BORDER_ACTIVE } else { idx::INPUT_BORDER_DEFAULT })))
         .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
         .when(select, |d| d.cursor_pointer())
-        .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |_, _, _, cx| {
-            with_modal(cx, |m| if select && m.list == Some(i) { m.list = None } else { open_list(m, i) });
-            cx.stop_propagation();
-            cx.notify();
-        }))
+        .on_mouse_down(
+            gpui::MouseButton::Left,
+            cx.listener(move |_, _, _, cx| {
+                with_modal(cx, |m| if select && m.list == Some(i) { m.list = None } else { open_list(m, i) });
+                cx.stop_propagation();
+                cx.notify();
+            }),
+        )
         .child(content)
         .child(
             div()
@@ -410,14 +410,28 @@ fn option_list(app: &PhoenixApp, i: usize, width: gpui::Pixels, cx: &mut Context
             let lead: Option<AnyElement> = match o.lead {
                 Lead::Avatar(u) => Some(crate::ui::avatar(if u == app.me.id { Some(&app.me) } else { app.users.get(&u) }, 24.)),
                 Lead::Channel(kind) => Some(
-                    gpui::svg().path(crate::ui::sidebar::channel_icon(kind).path()).flex_none().size(z(20.)).text_color(c(tok(idx::CHANNEL_ICON))).into_any_element(),
+                    gpui::svg()
+                        .path(crate::ui::sidebar::channel_icon(kind).path())
+                        .flex_none()
+                        .size(z(20.))
+                        .text_color(c(tok(idx::CHANNEL_ICON)))
+                        .into_any_element(),
                 ),
-                Lead::Glyph(g) => Some(gpui::svg().path(crate::icons::path(g)).flex_none().size(z(20.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).into_any_element()),
+                Lead::Glyph(g) => {
+                    Some(gpui::svg().path(crate::icons::path(g)).flex_none().size(z(20.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).into_any_element())
+                }
                 Lead::None => None,
             };
             let value = o.value.clone();
             let check = if single {
-                on.then(|| gpui::svg().path(crate::icons::path("check")).flex_none().size(z(16.)).text_color(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW))).into_any_element())
+                on.then(|| {
+                    gpui::svg()
+                        .path(crate::icons::path("check"))
+                        .flex_none()
+                        .size(z(16.))
+                        .text_color(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW)))
+                        .into_any_element()
+                })
             } else {
                 Some(
                     div()
@@ -477,9 +491,25 @@ fn option_list(app: &PhoenixApp, i: usize, width: gpui::Pixels, cx: &mut Context
         .collect();
     let n = rows.len();
     let body: AnyElement = if n == 0 {
-        div().h(z(40.)).px(z(8.)).flex().items_center().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("search.m_no_options")).into_any_element()
+        div()
+            .h(z(40.))
+            .px(z(8.))
+            .flex()
+            .items_center()
+            .text_size(z(16.))
+            .line_height(z(20.))
+            .text_color(c(tok(idx::TEXT_MUTED)))
+            .child(crate::t!("search.m_no_options"))
+            .into_any_element()
     } else {
-        div().id(gpui::ElementId::Name(format!("search-opts-{i}").into())).max_h(z(200.)).overflow_y_scroll().flex().flex_col().children(rows).into_any_element()
+        div()
+            .id(gpui::ElementId::Name(format!("search-opts-{i}").into()))
+            .max_h(z(200.))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .children(rows)
+            .into_any_element()
     };
     Some(
         div()
@@ -517,12 +547,12 @@ fn date_section(dates: &[DateRow], calendar: Option<(usize, NaiveDate)>, op_menu
         sec = sec.child(date_row(i, *row, op_menu == Some(i), calendar.is_some_and(|c| c.0 == i), cx));
     }
     sec.child(div().mt(z(if dates.is_empty() { 8. } else { 12. })).child(
-        button_icon("search-filters-date", "plus", crate::t!("search.m_add_date"), BtnKind::Secondary).w_full().justify_center().on_click(
-            cx.listener(|_, _, _, cx| {
+        button_icon("search-filters-date", "plus", crate::t!("search.m_add_date"), BtnKind::Secondary).w_full().justify_center().on_click(cx.listener(
+            |_, _, _, cx| {
                 add_date(cx, false);
                 cx.notify();
-            }),
-        ),
+            },
+        )),
     ))
 }
 
@@ -551,17 +581,7 @@ fn date_row(i: usize, row: DateRow, menu_open: bool, cal: bool, cx: &mut Context
             });
             cx.notify();
         }))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .pl(z(12.))
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(c(tok(idx::TEXT_STRONG)))
-                .truncate()
-                .child(row.op.label()),
-        )
+        .child(div().flex_1().min_w_0().pl(z(12.)).text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).truncate().child(row.op.label()))
         .child(
             div()
                 .w(z(36.))
@@ -705,15 +725,7 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
     let names = div().mb(z(10.)).flex().children((0..7u64).map(|k| {
         let wd = (first_wd + Days::new(k)).weekday().num_days_from_monday();
         let name: String = crate::t!(&format!("weekday.{wd}")).chars().take(2).collect::<String>().to_uppercase();
-        div()
-            .w(z(40.))
-            .flex()
-            .justify_center()
-            .text_size(z(13.))
-            .line_height(z(13.))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(ink.opacity(0.6))
-            .child(name)
+        div().w(z(40.)).flex().justify_center().text_size(z(13.)).line_height(z(13.)).font_weight(FontWeight::MEDIUM).text_color(ink.opacity(0.6)).child(name)
     }));
     let mut grid = div().flex().flex_col();
     for (wi, week) in weeks.into_iter().enumerate() {
@@ -761,17 +773,15 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
                 .when(last_row, |e| e.child(div().absolute().left_0().right_0().bottom_0().h(z(1.)).bg(edge)))
                 .when(d == selected, |e| e.child(div().absolute().left_0().right_0().bottom_0().h(z(3.)).bg(c(tok(idx::BRAND_500)))))
                 .when(!disabled, |e| {
-                    e.cursor_pointer().hover(|s| s.bg(c(tok(idx::BRAND_500))).text_color(c(tok(idx::WHITE)))).on_click(cx.listener(
-                        move |_, _, _, cx| {
-                            with_modal(cx, |m| {
-                                if let Some(r) = m.dates.get_mut(i) {
-                                    r.day = d;
-                                }
-                                m.calendar = None;
-                            });
-                            cx.notify();
-                        },
-                    ))
+                    e.cursor_pointer().hover(|s| s.bg(c(tok(idx::BRAND_500))).text_color(c(tok(idx::WHITE)))).on_click(cx.listener(move |_, _, _, cx| {
+                        with_modal(cx, |m| {
+                            if let Some(r) = m.dates.get_mut(i) {
+                                r.day = d;
+                            }
+                            m.calendar = None;
+                        });
+                        cx.notify();
+                    }))
                 });
             row = row.child(cell);
         }
@@ -795,13 +805,7 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
                 spread_radius: z(1.),
                 inset: false,
             },
-            gpui::BoxShadow {
-                color: gpui::hsla(0., 0., 0., 0.2),
-                offset: gpui::point(z(0.), z(2.)),
-                blur_radius: z(10.),
-                spread_radius: z(0.),
-                inset: false,
-            },
+            gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.2), offset: gpui::point(z(0.), z(2.)), blur_radius: z(10.), spread_radius: z(0.), inset: false },
         ])
         .occlude()
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -842,9 +846,14 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
             body = body.child(date_section(&dates, calendar, op_menu, cx));
         }
         let last = i + 1 == FIELDS.len();
-        body = body.child(
-            div().pb(z(if last { 0. } else { 20. })).flex().flex_col().child(label(crate::t!(title), crate::t!(desc))).child(field(app, i, f, &picks[i], list == Some(i), cx)),
-        );
+        body = body.child(div().pb(z(if last { 0. } else { 20. })).flex().flex_col().child(label(crate::t!(title), crate::t!(desc))).child(field(
+            app,
+            i,
+            f,
+            &picks[i],
+            list == Some(i),
+            cx,
+        )));
     }
     let pop: Option<AnyElement> = match (calendar, op_menu, ANCHOR.with(|c| c.get()), CARD.with(|c| c.get())) {
         (Some((i, month)), _, Some(b), Some(o)) => dates.get(i).map(|r| {
@@ -874,13 +883,16 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
         .id("search-filters-card")
         .relative()
         .child(probe(true))
-        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _, _, cx| {
-            let mut was = false;
-            with_modal(cx, |m| was = m.list.take().is_some());
-            if was {
-                cx.notify();
-            }
-        }))
+        .on_mouse_down(
+            gpui::MouseButton::Left,
+            cx.listener(|_, _, _, cx| {
+                let mut was = false;
+                with_modal(cx, |m| was = m.list.take().is_some());
+                if was {
+                    cx.notify();
+                }
+            }),
+        )
         .w(z(480.))
         .max_h(z(728.))
         .rounded(z(12.))
@@ -914,7 +926,17 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
             crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
                 .flex_1()
                 .min_h_0()
-                .child(div().id("search-filters-body").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("search-filters-body")).pl(z(24.)).pr(z(8.)).child(div().pr(z(16.)).child(body)))
+                .child(
+                    div()
+                        .id("search-filters-body")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .track_scroll(&crate::ui::chat::scrollbar::handle("search-filters-body"))
+                        .pl(z(24.))
+                        .pr(z(8.))
+                        .child(div().pr(z(16.)).child(body)),
+                )
                 .children(crate::ui::chat::scrollbar::bar_for("search-filters-body", crate::ui::chat::scrollbar::Bar::Auto)),
         )
         .child(div().h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))))

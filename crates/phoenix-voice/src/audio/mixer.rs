@@ -24,13 +24,7 @@ struct Track {
 
 impl Track {
     fn new() -> Option<Self> {
-        Some(Self {
-            jitter: JitterBuffer::new(4, 64),
-            decoder: OpusDecoder::new(true).ok()?,
-            playing: false,
-            plc_run: 0,
-            last_push: Instant::now(),
-        })
+        Some(Self { jitter: JitterBuffer::new(4, 64), decoder: OpusDecoder::new(true).ok()?, playing: false, plc_run: 0, last_push: Instant::now() })
     }
 
     fn next_frame(&mut self) -> Option<Vec<i16>> {

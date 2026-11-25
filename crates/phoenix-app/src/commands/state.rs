@@ -78,12 +78,8 @@ impl ModalSpec {
         let mut inputs = Vec::new();
         for row in v.get("components").and_then(Value::as_array)? {
             match row.get("type").and_then(Value::as_u64) {
-                Some(1) => inputs.extend(
-                    row.get("components").and_then(Value::as_array).into_iter().flatten().filter_map(|c| text_input(c, None, None)),
-                ),
-                Some(18) => inputs.extend(
-                    row.get("component").and_then(|c| text_input(c, row.get("label"), row.get("description"))),
-                ),
+                Some(1) => inputs.extend(row.get("components").and_then(Value::as_array).into_iter().flatten().filter_map(|c| text_input(c, None, None))),
+                Some(18) => inputs.extend(row.get("component").and_then(|c| text_input(c, row.get("label"), row.get("description")))),
                 _ => {}
             }
         }
@@ -113,11 +109,7 @@ pub fn from_gateway(ev: &GatewayEvent) -> Option<ParityEvent> {
             choices: data
                 .get("choices")
                 .and_then(Value::as_array)
-                .map(|a| {
-                    a.iter()
-                        .map(|c| (crate::commands::slash::choice_name(c).to_owned(), c.get("value").cloned().unwrap_or(Value::Null)))
-                        .collect()
-                })
+                .map(|a| a.iter().map(|c| (crate::commands::slash::choice_name(c).to_owned(), c.get("value").cloned().unwrap_or(Value::Null))).collect())
                 .unwrap_or_default(),
         }),
         "CALL_CREATE" | "CALL_UPDATE" | "CALL_DELETE" => Some(ParityEvent::Call {
@@ -350,7 +342,10 @@ pub fn on_event(app: &mut App, ev: ParityEvent, cx: &mut Context<App>) {
             app.parity.pending.clear();
             let cmd = nonce.and_then(|n| {
                 let app_name = crate::ui::chat::command_msg::get(n)?.app_name;
-                crate::ui::chat::command_msg::set_phase(n, crate::ui::chat::command_msg::Phase::Failed(Some(crate::t!("slash.late", app = app_name).to_string())))
+                crate::ui::chat::command_msg::set_phase(
+                    n,
+                    crate::ui::chat::command_msg::Phase::Failed(Some(crate::t!("slash.late", app = app_name).to_string())),
+                )
             });
             if let Some(p) = cmd {
                 app.refresh_message(p.channel, Id(nonce.unwrap_or(0)));
@@ -449,11 +444,11 @@ mod tests {
     #[test]
     fn modal_both_layouts() {
         let v = json!({"id":"7","custom_id":"form","title":"Report","application":{"id":"9","name":"Bot"},
-            "channel_id":"3",
-            "components":[
-                {"type":1,"components":[{"type":4,"custom_id":"a","label":"Name","style":1}]},
-                {"type":18,"label":"Why","description":"Tell us","component":{"type":4,"custom_id":"b","style":2,"required":false,"max_length":400}}
-            ]});
+        "channel_id":"3",
+        "components":[
+            {"type":1,"components":[{"type":4,"custom_id":"a","label":"Name","style":1}]},
+            {"type":18,"label":"Why","description":"Tell us","component":{"type":4,"custom_id":"b","style":2,"required":false,"max_length":400}}
+        ]});
         let m = ModalSpec::from_value(&v).unwrap();
         assert_eq!((m.id, m.app, m.channel), (Id(7), Id(9), Some(Id(3))));
         assert_eq!(m.inputs.len(), 2);
@@ -466,14 +461,9 @@ mod tests {
 
     #[test]
     fn gateway_poll_vote() {
-        let ev = GatewayEvent::Unknown {
-            name: "MESSAGE_POLL_VOTE_REMOVE".into(),
-            data: json!({"channel_id":"1","message_id":"2","user_id":"3","answer_id":4}),
-        };
-        assert!(matches!(
-            from_gateway(&ev),
-            Some(ParityEvent::PollVote { message: Id(2), answer: 4, add: false, .. })
-        ));
+        let ev =
+            GatewayEvent::Unknown { name: "MESSAGE_POLL_VOTE_REMOVE".into(), data: json!({"channel_id":"1","message_id":"2","user_id":"3","answer_id":4}) };
+        assert!(matches!(from_gateway(&ev), Some(ParityEvent::PollVote { message: Id(2), answer: 4, add: false, .. })));
     }
 
     #[test]

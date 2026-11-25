@@ -486,10 +486,14 @@ mod tests {
         let types: Vec<u8> = c.iter().map(Component::type_id).collect();
         assert_eq!(types, [1, 1, 1, 1, 1, 1, 17, 17, 99]);
         let Component::ActionRow(r) = &c[0] else { panic!() };
-        let styles: Vec<ButtonStyle> = r.components.iter().map(|b| match b {
-            Component::Button(b) => b.style,
-            _ => panic!(),
-        }).collect();
+        let styles: Vec<ButtonStyle> = r
+            .components
+            .iter()
+            .map(|b| match b {
+                Component::Button(b) => b.style,
+                _ => panic!(),
+            })
+            .collect();
         use ButtonStyle::*;
         assert_eq!(styles, [Primary, Secondary, Success, Danger, Link, Premium]);
         let Component::Button(b) = &r.components[0] else { panic!() };
@@ -560,15 +564,9 @@ mod tests {
 
     #[test]
     fn file_name_from_url() {
-        let f = FileComponent {
-            file: UnfurledMedia { url: "attachment://log.txt".into(), ..Default::default() },
-            ..Default::default()
-        };
+        let f = FileComponent { file: UnfurledMedia { url: "attachment://log.txt".into(), ..Default::default() }, ..Default::default() };
         assert_eq!(f.file_name(), "log.txt");
-        let f = FileComponent {
-            file: UnfurledMedia { url: "https://cdn.example/a/b/c.zip?ex=1".into(), ..Default::default() },
-            ..Default::default()
-        };
+        let f = FileComponent { file: UnfurledMedia { url: "https://cdn.example/a/b/c.zip?ex=1".into(), ..Default::default() }, ..Default::default() };
         assert_eq!(f.file_name(), "c.zip");
     }
 }

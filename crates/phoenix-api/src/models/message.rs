@@ -44,10 +44,7 @@ impl Default for MessageType {
 
 impl MessageType {
     pub fn is_regular(self) -> bool {
-        matches!(
-            self,
-            Self::Default | Self::Reply | Self::ChatInputCommand | Self::ContextMenuCommand | Self::ThreadStarterMessage
-        )
+        matches!(self, Self::Default | Self::Reply | Self::ChatInputCommand | Self::ContextMenuCommand | Self::ThreadStarterMessage)
     }
 }
 
@@ -197,10 +194,8 @@ mod soundboard_tests {
 
     #[test]
     fn message_soundboard_metadata_defaults_and_ignores_extra_fields() {
-        let sound: MessageSoundboardSound = serde_json::from_str(
-            r#"{"sound_id":"77","guild_id":"9","name":"Chime","emoji_name":"🎵","volume":0.4,"available":true}"#,
-        )
-        .unwrap();
+        let sound: MessageSoundboardSound =
+            serde_json::from_str(r#"{"sound_id":"77","guild_id":"9","name":"Chime","emoji_name":"🎵","volume":0.4,"available":true}"#).unwrap();
         assert_eq!(sound.sound_id, Snowflake(77));
         assert_eq!(sound.guild_id, Some(Snowflake(9)));
         assert_eq!(sound.name.as_deref(), Some("Chime"));
@@ -463,8 +458,14 @@ impl Message {
             (Some(i), true) => {
                 let r = &mut self.reactions[i];
                 r.count += 1;
-                if burst { r.count_details.burst += 1 } else { r.count_details.normal += 1 }
-                if me { if burst { r.me_burst = true } else { r.me = true } }
+                if burst {
+                    r.count_details.burst += 1
+                } else {
+                    r.count_details.normal += 1
+                }
+                if me {
+                    if burst { r.me_burst = true } else { r.me = true }
+                }
             }
             (None, true) => self.reactions.push(Reaction {
                 count: 1,
@@ -482,7 +483,9 @@ impl Message {
                 } else {
                     r.count_details.normal = r.count_details.normal.saturating_sub(1);
                 }
-                if me { if burst { r.me_burst = false } else { r.me = false } }
+                if me {
+                    if burst { r.me_burst = false } else { r.me = false }
+                }
                 if r.count == 0 {
                     self.reactions.remove(i);
                 }

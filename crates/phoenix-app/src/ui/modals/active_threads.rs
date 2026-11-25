@@ -36,7 +36,10 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
         })));
     }
     let close = close_action(cx);
-    let footer = div().w_full().flex().child(button("active-threads-close", crate::t!("common.close"), BtnKind::Primary).flex_1().on_click(move |_, w, cx| close(w, cx)));
+    let footer = div()
+        .w_full()
+        .flex()
+        .child(button("active-threads-close", crate::t!("common.close"), BtnKind::Primary).flex_1().on_click(move |_, w, cx| close(w, cx)));
     card(480., crate::t!("threads.all_active"), None, list.into_any_element(), Some(footer.into_any_element()), cx)
 }
 

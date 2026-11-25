@@ -1,5 +1,5 @@
 use super::{Depacketizer, Packetizer};
-use crate::{leb128, Error, Result};
+use crate::{Error, Result, leb128};
 
 pub const OBU_SEQUENCE_HEADER: u8 = 1;
 pub const OBU_TEMPORAL_DELIMITER: u8 = 2;
@@ -45,10 +45,7 @@ pub fn parse_obus(data: &[u8]) -> Result<Vec<Obu<'_>>> {
 }
 
 pub fn strip_last_obu_size(frame: &[u8]) -> Result<Vec<u8>> {
-    let obus: Vec<Obu<'_>> = parse_obus(frame)?
-        .into_iter()
-        .filter(|o| !matches!(o.obu_type(), OBU_TEMPORAL_DELIMITER | OBU_TILE_LIST | OBU_PADDING))
-        .collect();
+    let obus: Vec<Obu<'_>> = parse_obus(frame)?.into_iter().filter(|o| !matches!(o.obu_type(), OBU_TEMPORAL_DELIMITER | OBU_TILE_LIST | OBU_PADDING)).collect();
     let mut out = Vec::with_capacity(frame.len());
     let n = obus.len();
     for (i, o) in obus.iter().enumerate() {

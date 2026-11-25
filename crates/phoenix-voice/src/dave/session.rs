@@ -3,9 +3,9 @@ use std::time::{Duration, Instant};
 
 use super::frame::{FrameDecryptor, FrameEncryptor, is_encrypted};
 use super::mls::{CommitWelcome, MlsSession, sender_ratchet};
+use crate::Result;
 use crate::codec::Codec;
 use crate::gateway::DaveServerMessage;
-use crate::Result;
 
 pub const KEY_RETENTION: Duration = Duration::from_secs(10);
 
@@ -201,18 +201,16 @@ impl DaveSession {
                     }
                 }
             }
-            DaveServerMessage::Welcome { transition_id, welcome } => {
-                match self.mls.process_welcome(*transition_id, welcome, &self.recognized_vec()) {
-                    Ok(()) => {
-                        let v = self.negotiated_version.max(1);
-                        self.stage(*transition_id, v, &mut out);
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "dave: invalid welcome");
-                        self.fail(*transition_id, &mut out);
-                    }
+            DaveServerMessage::Welcome { transition_id, welcome } => match self.mls.process_welcome(*transition_id, welcome, &self.recognized_vec()) {
+                Ok(()) => {
+                    let v = self.negotiated_version.max(1);
+                    self.stage(*transition_id, v, &mut out);
                 }
-            }
+                Err(e) => {
+                    tracing::warn!(error = %e, "dave: invalid welcome");
+                    self.fail(*transition_id, &mut out);
+                }
+            },
         }
         out
     }
@@ -287,10 +285,16 @@ mod tests {
         a.on_session_description(1);
         let DaveAction::KeyPackage(kb) = b.on_session_description(1).remove(0) else { panic!() };
         let kp = KeyPackageIn::tls_deserialize_exact(&kb).unwrap().validate(sp.crypto(), ProtocolVersion::Mls10).unwrap();
-        let prop = ExternalProposal::new_add::<OpenMlsRustCrypto>(kp, GroupId::from_slice(&9u64.to_be_bytes()), GroupEpoch::from(0), &ss, SenderExtensionIndex::new(0))
-            .unwrap()
-            .to_bytes()
-            .unwrap();
+        let prop = ExternalProposal::new_add::<OpenMlsRustCrypto>(
+            kp,
+            GroupId::from_slice(&9u64.to_be_bytes()),
+            GroupEpoch::from(0),
+            &ss,
+            SenderExtensionIndex::new(0),
+        )
+        .unwrap()
+        .to_bytes()
+        .unwrap();
         let mut payload = vec![0u8];
         payload.extend_from_slice(&((prop.len() as u16) | 0x4000).to_be_bytes());
         payload.extend_from_slice(&prop);

@@ -194,7 +194,8 @@ impl Favorites {
 
     pub fn create_category(&mut self, name: &str, id: u64) -> u64 {
         let position = self.next_position();
-        self.favorite_channels.insert(id, FavoriteChannel { nickname: name.to_owned(), kind: CATEGORY, position, parent_id: 0, channel_type: None, collapsed: false });
+        self.favorite_channels
+            .insert(id, FavoriteChannel { nickname: name.to_owned(), kind: CATEGORY, position, parent_id: 0, channel_type: None, collapsed: false });
         id
     }
 
@@ -349,7 +350,14 @@ mod tests {
         let mut f = Favorites::default();
         f.favorite_channels.insert(
             0x0102_0304_0506_0708,
-            FavoriteChannel { nickname: "a".into(), kind: REFERENCE_ORIGINAL, position: 3, parent_id: 9, channel_type: Some(UInt32Value { value: 2 }), collapsed: true },
+            FavoriteChannel {
+                nickname: "a".into(),
+                kind: REFERENCE_ORIGINAL,
+                position: 3,
+                parent_id: 9,
+                channel_type: Some(UInt32Value { value: 2 }),
+                collapsed: true,
+            },
         );
         f.guild_visible = Some(BoolValue { value: true });
         let bytes = prost::Message::encode_to_vec(&f);

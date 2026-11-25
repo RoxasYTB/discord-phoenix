@@ -129,13 +129,11 @@ fn row(app: &PhoenixApp, ch: Id, selected: bool, disabled: bool, n: usize, cx: &
                         .text_color(tk(idx::TEXT_STRONG))
                         .child(name),
                 )
-                .child(
-                    div()
-                        .text_size(z(14.))
-                        .line_height(z(18.))
-                        .text_color(tk(idx::TEXT_MUTED))
-                        .child(if members == 1 { crate::t!("gdm.cleanup.member", n = members) } else { crate::t!("gdm.cleanup.members", n = members) }),
-                ),
+                .child(div().text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::TEXT_MUTED)).child(if members == 1 {
+                    crate::t!("gdm.cleanup.member", n = members)
+                } else {
+                    crate::t!("gdm.cleanup.members", n = members)
+                })),
         )
         .child(check(selected, disabled))
         .into_any_element()
@@ -155,8 +153,22 @@ pub fn render(app: &PhoenixApp, s: &Cleanup, cx: &mut Context<PhoenixApp>) -> An
             .items_center()
             .justify_center()
             .gap(z(4.))
-            .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("gdm.cleanup.empty_title")))
-            .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("gdm.cleanup.empty_body")))
+            .child(
+                div()
+                    .text_size(z(16.))
+                    .line_height(z(20.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(tk(idx::TEXT_DEFAULT))
+                    .child(crate::t!("gdm.cleanup.empty_title")),
+            )
+            .child(
+                div()
+                    .text_size(z(14.))
+                    .line_height(z(18.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(tk(idx::TEXT_MUTED))
+                    .child(crate::t!("gdm.cleanup.empty_body")),
+            )
             .into_any_element()
     } else {
         let toggle_label = if all {
@@ -211,13 +223,7 @@ pub fn render(app: &PhoenixApp, s: &Cleanup, cx: &mut Context<PhoenixApp>) -> An
             let sel = s.selected.contains(ch);
             list = list.child(row(app, *ch, sel, full && !sel, n, cx));
         }
-        div()
-            .flex()
-            .flex_col()
-            .gap(z(8.))
-            .child(div().flex().items_center().justify_between().child(sort).child(toggle))
-            .child(list)
-            .into_any_element()
+        div().flex().flex_col().gap(z(8.)).child(div().flex().items_center().justify_between().child(sort).child(toggle)).child(list).into_any_element()
     };
     let close = crate::ui::modals::close_action(cx);
     let footer = if empty {

@@ -2,10 +2,7 @@ use std::ops::Range;
 
 pub mod highlight;
 
-use gpui::{
-    Font, FontStyle, FontWeight, Hsla, SharedString, StrikethroughStyle, TextRun, UnderlineStyle,
-    font, px,
-};
+use gpui::{Font, FontStyle, FontWeight, Hsla, SharedString, StrikethroughStyle, TextRun, UnderlineStyle, font, px};
 
 use crate::{
     markdown::{self, Block, Inline, Mention, MentionResolver, Style},
@@ -71,14 +68,7 @@ impl RBlock {
 pub fn code_runs(code: &str, lang: Option<&str>) -> Vec<TextRun> {
     highlight::highlight(code, lang)
         .into_iter()
-        .map(|(r, t)| TextRun {
-            len: r.len(),
-            font: font(FONT_MONO()),
-            color: c(t.color()),
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        })
+        .map(|(r, t)| TextRun { len: r.len(), font: font(FONT_MONO()), color: c(t.color()), background_color: None, underline: None, strikethrough: None })
         .collect()
 }
 
@@ -116,11 +106,7 @@ fn run_for(len: usize, style: Style, revealed: bool, base: Hsla, ui: &Font) -> T
         color = c(tok(idx::TEXT_LINK));
     }
     let link_ul = style.has(Style::LINK) && crate::ui::settings::effects::underline_links();
-    let underline = (style.has(Style::UNDERLINE) || link_ul).then(|| UnderlineStyle {
-        thickness: px(1.),
-        color: Some(color),
-        wavy: false,
-    });
+    let underline = (style.has(Style::UNDERLINE) || link_ul).then(|| UnderlineStyle { thickness: px(1.), color: Some(color), wavy: false });
     if style.has(Style::SPOILER) {
         if revealed {
             background_color = Some(c(tok(idx::SPOILER_REVEALED_BACKGROUND)));
@@ -135,10 +121,7 @@ fn run_for(len: usize, style: Style, revealed: bool, base: Hsla, ui: &Font) -> T
         color,
         background_color,
         underline,
-        strikethrough: style.has(Style::STRIKE).then(|| StrikethroughStyle {
-            thickness: px(1.),
-            color: Some(color),
-        }),
+        strikethrough: style.has(Style::STRIKE).then(|| StrikethroughStyle { thickness: px(1.), color: Some(color) }),
     }
 }
 
@@ -163,43 +146,27 @@ pub fn rich_inline(inline: &Inline, revealed: &dyn Fn(usize) -> bool, base: Hsla
             click_targets.push(ClickTarget::Mention(m.clone()));
         }
     }
-    let in_code = |r: &Range<usize>| {
-        inline.spans.iter().any(|s| s.style.has(Style::CODE) && s.range.start <= r.start && r.end <= s.range.end)
-    };
-    let in_mention =
-        |r: &Range<usize>| inline.spans.iter().any(|s| s.mention.is_some() && s.range.start <= r.start && r.end <= s.range.end);
-    let mut emoji: Vec<(Range<usize>, SharedString)> =
-        emoji_ranges(&inline.text).into_iter().filter(|(r, _)| !in_code(r) && !in_mention(r)).collect();
+    let in_code = |r: &Range<usize>| inline.spans.iter().any(|s| s.style.has(Style::CODE) && s.range.start <= r.start && r.end <= s.range.end);
+    let in_mention = |r: &Range<usize>| inline.spans.iter().any(|s| s.mention.is_some() && s.range.start <= r.start && r.end <= s.range.end);
+    let mut emoji: Vec<(Range<usize>, SharedString)> = emoji_ranges(&inline.text).into_iter().filter(|(r, _)| !in_code(r) && !in_mention(r)).collect();
     for s in &inline.spans {
         if matches!(s.mention, Some(Mention::Channel(_))) && inline.text[s.range.clone()].starts_with('#') {
             emoji.push((s.range.start..s.range.start + 1, CHANNEL_ICON_TOKEN.into()));
         }
     }
     emoji.sort_by_key(|(r, _)| r.start);
-    RichText {
-        text: inline.text.clone().into(),
-        runs,
-        click_ranges,
-        click_targets,
-        emoji,
-    }
+    RichText { text: inline.text.clone().into(), runs, click_ranges, click_targets, emoji }
 }
 
-pub fn render_blocks(
-    blocks: &[Block],
-    revealed: &dyn Fn(usize) -> bool,
-    base: Hsla,
-) -> Vec<RBlock> {
+pub fn render_blocks(blocks: &[Block], revealed: &dyn Fn(usize) -> bool, base: Hsla) -> Vec<RBlock> {
     blocks
         .iter()
         .map(|b| match b {
             Block::Paragraph(i) => RBlock::Text(rich_inline(i, revealed, base)),
             Block::Quote(i) => RBlock::Quote(rich_inline(i, revealed, c(tok(idx::TEXT_SUBTLE)))),
-            Block::Code { lang, code } => RBlock::Code {
-                lang: lang.clone().map(Into::into),
-                code: code.clone().into(),
-                runs: code_runs(code, lang.as_deref()),
-            },
+            Block::Code { lang, code } => {
+                RBlock::Code { lang: lang.clone().map(Into::into), code: code.clone().into(), runs: code_runs(code, lang.as_deref()) }
+            }
             Block::Heading(l, i) => {
                 let mut t = rich_inline(i, revealed, c(Palette::TEXT_HEADER));
                 for r in &mut t.runs {
@@ -208,11 +175,7 @@ pub fn render_blocks(
                 RBlock::Heading(*l, t)
             }
             Block::Subtext(i) => RBlock::Subtext(rich_inline(i, revealed, c(tok(idx::TEXT_SUBTLE)))),
-            Block::ListItem { ordered, depth, inline } => RBlock::ListItem {
-                ordered: *ordered,
-                depth: *depth,
-                text: rich_inline(inline, revealed, base),
-            },
+            Block::ListItem { ordered, depth, inline } => RBlock::ListItem { ordered: *ordered, depth: *depth, text: rich_inline(inline, revealed, base) },
         })
         .collect()
 }
@@ -311,11 +274,7 @@ pub fn apply_highlights(parsed: &[Block], blocks: &mut [RBlock], hl: &crate::sea
             .map(|s| s.range.clone())
             .chain(t.emoji.iter().map(|(r, _)| r.clone()))
             .collect();
-        let ranges: Vec<Range<usize>> = hl
-            .ranges(&t.text)
-            .into_iter()
-            .filter(|r| !skip.iter().any(|s| s.start < r.end && r.start < s.end))
-            .collect();
+        let ranges: Vec<Range<usize>> = hl.ranges(&t.text).into_iter().filter(|r| !skip.iter().any(|s| s.start < r.end && r.start < s.end)).collect();
         if !ranges.is_empty() {
             t.runs = split_runs(&t.runs, &ranges, bg);
         }
@@ -435,7 +394,8 @@ mod emoji_tests {
             }
         }
         let hl = crate::search_highlight::Highlighter::new("serveur", false);
-        let (parsed, mut blocks, _, _, _) = build("le **serveur** <@1> [serveur](https://x.y) `serveur` <:serveur:12>\n```\nserveur\n```", &R, Id(9), &|_| true);
+        let (parsed, mut blocks, _, _, _) =
+            build("le **serveur** <@1> [serveur](https://x.y) `serveur` <:serveur:12>\n```\nserveur\n```", &R, Id(9), &|_| true);
         apply_highlights(&parsed, &mut blocks, &hl);
         let lit = |b: &RBlock| -> Vec<String> {
             let t = b.text().unwrap();

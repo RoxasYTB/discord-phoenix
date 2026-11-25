@@ -279,7 +279,15 @@ pub fn render(app: &PhoenixApp, s: &CustomStatus, cx: &mut Context<PhoenixApp>) 
             div()
                 .mb(z(20.))
                 .relative()
-                .child(div().w_full().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("cstatus.label")))
+                .child(
+                    div()
+                        .w_full()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(tk(idx::TEXT_STRONG))
+                        .child(crate::t!("cstatus.label")),
+                )
                 .child(field),
         );
     let select = div()
@@ -325,7 +333,17 @@ fn clear_after_menu(current: ClearAfter, cx: &mut Context<PhoenixApp>) -> AnyEle
         .shadow_lg()
         .flex()
         .flex_col()
-        .child(div().min_w(z(200.)).px(z(8.)).py(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("cstatus.clear_after")));
+        .child(
+            div()
+                .min_w(z(200.))
+                .px(z(8.))
+                .py(z(8.))
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(tk(idx::TEXT_MUTED))
+                .child(crate::t!("cstatus.clear_after")),
+        );
     for (n, ch) in CHOICES.into_iter().enumerate() {
         let sel = ch == current;
         menu = menu.child(

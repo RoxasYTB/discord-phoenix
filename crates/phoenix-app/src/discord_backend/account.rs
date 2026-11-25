@@ -12,17 +12,11 @@ use crate::{
 
 pub(super) fn mfa_required(inner: &Inner, ticket: String, totp: bool, sms: bool, backup: bool) -> Result<ReadyData, BackendError> {
     if !totp && !sms && !backup {
-        return Err(err(
-            "This account only allows a security key for 2FA, which Phoenix can't use. Log in with the QR code or a token instead.",
-        ));
+        return Err(err("This account only allows a security key for 2FA, which Phoenix can't use. Log in with the QR code or a token instead."));
     }
     *inner.mfa_ticket.lock() = Some(Secret::new(ticket));
     *inner.mfa_opts.lock() = MfaOptions { totp, sms, backup };
-    Err(err(if totp {
-        "Enter the 6-digit code from your authenticator app."
-    } else {
-        "Choose how to receive your login code below."
-    }))
+    Err(err(if totp { "Enter the 6-digit code from your authenticator app." } else { "Choose how to receive your login code below." }))
 }
 
 impl DiscordBackend {
@@ -73,9 +67,7 @@ impl DiscordBackend {
             while let Some(ev) = rx.recv().await {
                 match ev {
                     RemoteAuthEvent::Qr(url) => inner.emit(AppEvent::RemoteAuth(RemoteAuthUpdate::Qr(url))),
-                    RemoteAuthEvent::Scanned { username, .. } => {
-                        inner.emit(AppEvent::RemoteAuth(RemoteAuthUpdate::Scanned { username }))
-                    }
+                    RemoteAuthEvent::Scanned { username, .. } => inner.emit(AppEvent::RemoteAuth(RemoteAuthUpdate::Scanned { username })),
                     RemoteAuthEvent::Token(t) => {
                         inner.remote_auth.lock().take();
                         return connect(inner, Secret::new(t), true).await;
@@ -132,9 +124,7 @@ impl DiscordBackend {
                 SettingsPatch::Locale(l) => SettingChange::Locale(l.to_string()),
                 SettingsPatch::AllowServerDms(b) => SettingChange::DefaultGuildsRestricted(!*b),
                 SettingsPatch::Rest(..) | SettingsPatch::Favorites(..) => unreachable!("handled above"),
-                SettingsPatch::Proto(id, v) => {
-                    crate::ui::settings::synced_map::change(id, *v).ok_or_else(|| err(format!("unknown setting {id}")))?
-                }
+                SettingsPatch::Proto(id, v) => crate::ui::settings::synced_map::change(id, *v).ok_or_else(|| err(format!("unknown setting {id}")))?,
                 SettingsPatch::Density(d) => SettingChange::UiDensity(density_to_proto(*d)),
             };
             let raw = s.rest.patch_setting_raw(&change).await.map_err(api_err)?;
@@ -292,9 +282,7 @@ impl DiscordBackend {
             let raw_sources = get("/users/@me/billing/payment-sources").await.unwrap_or(serde_json::Value::Null);
             let sources = b::mark_default(b::parse_sources(&raw_sources));
             let payments = get("/users/@me/billing/payments?limit=10").await.map(|v| b::parse_payments(&v)).unwrap_or_default();
-            let code = get("/users/@me/billing/country-code")
-                .await
-                .and_then(|v| v.get("country_code").and_then(serde_json::Value::as_str).map(str::to_owned));
+            let code = get("/users/@me/billing/country-code").await.and_then(|v| v.get("country_code").and_then(serde_json::Value::as_str).map(str::to_owned));
             let country = b::source_country(&raw_sources, code);
             Ok(Some(b::Billing { country, sources, payments }))
         })

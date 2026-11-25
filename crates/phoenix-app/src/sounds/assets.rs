@@ -166,11 +166,7 @@ pub fn entry_body(bytes: &[u8]) -> Option<Vec<u8>> {
     let mut off = 24 + kl;
     let head = |o: usize| -> Option<(u64, i64, i64)> {
         let b = bytes.get(o..o + 32)?;
-        Some((
-            u64::from_le_bytes(b[0..8].try_into().ok()?),
-            i64::from_le_bytes(b[8..16].try_into().ok()?),
-            i64::from_le_bytes(b[16..24].try_into().ok()?),
-        ))
+        Some((u64::from_le_bytes(b[0..8].try_into().ok()?), i64::from_le_bytes(b[8..16].try_into().ok()?), i64::from_le_bytes(b[16..24].try_into().ok()?)))
     };
     if head(off).is_some_and(|(m, _, _)| m == SPARSE_MAGIC) {
         let mut ranges = Vec::new();
@@ -250,11 +246,7 @@ fn download_any(file: &str) -> Option<Vec<u8>> {
 
 fn fetch_into(dir: &Path, name: &str, cached: &HashMap<String, PathBuf>) -> Option<Vec<u8>> {
     let file = table().get(name)?;
-    let bytes = cached
-        .get(file)
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|b| entry_body(&b))
-        .or_else(|| download(file))?;
+    let bytes = cached.get(file).and_then(|p| std::fs::read(p).ok()).and_then(|b| entry_body(&b)).or_else(|| download(file))?;
     let _ = std::fs::create_dir_all(dir);
     let _ = std::fs::write(dir.join(format!("{name}.mp3")), &bytes);
     Some(bytes)
@@ -285,11 +277,7 @@ pub fn asset_file(file: &str) -> Option<PathBuf> {
     let file = file.to_owned();
     let _ = std::thread::Builder::new().name("asset-fetch".into()).spawn(move || {
         let ext = file.rsplit_once('.').map_or(String::new(), |(_, e)| format!(".{e}"));
-        let bytes = cached_with(&ext)
-            .get(&file)
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|b| entry_body_any(&b))
-            .or_else(|| download_any(&file));
+        let bytes = cached_with(&ext).get(&file).and_then(|p| std::fs::read(p).ok()).and_then(|b| entry_body_any(&b)).or_else(|| download_any(&file));
         if let Some(b) = bytes {
             let _ = std::fs::create_dir_all(&dir);
             let _ = std::fs::write(dir.join(&file), b);
@@ -334,8 +322,7 @@ pub fn init() {
 
 pub fn decode(bytes: &[u8]) -> Option<Pcm> {
     use symphonia::core::{
-        audio::SampleBuffer, codecs::DecoderOptions, errors::Error, formats::FormatOptions, io::MediaSourceStream,
-        meta::MetadataOptions, probe::Hint,
+        audio::SampleBuffer, codecs::DecoderOptions, errors::Error, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions, probe::Hint,
     };
     let mss = MediaSourceStream::new(Box::new(std::io::Cursor::new(bytes.to_vec())), Default::default());
     let mut hint = Hint::new();

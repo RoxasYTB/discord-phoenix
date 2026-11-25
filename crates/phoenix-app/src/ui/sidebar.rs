@@ -2,16 +2,15 @@ const ROW_RADIUS: f32 = 8.;
 
 use crate::ui::tooltip::Tipped as _;
 use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled,
-    Transformation, div, list, percentage, prelude::*, px,
+    AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Transformation, div, list, percentage, prelude::*, px,
 };
 
 use crate::{
     app::{PhoenixApp, SidebarRow},
-    ui::home::data::HomeView,
     assets::Icon,
     model::{ChannelKind, Id},
     theme::{Palette, c, generated::idx, m, space, tok, z},
+    ui::home::data::HomeView,
     ui::{badge, icon},
 };
 
@@ -52,8 +51,7 @@ pub fn build_rows(app: &mut PhoenixApp) {
         }
         None => {
             let (reqs, spam) = (&app.nav.message_requests, &app.nav.spam_requests);
-            let rows: Vec<SidebarRow> =
-                app.dms.iter().filter(|d| !reqs.contains(d) && !spam.contains(d)).map(|id| SidebarRow::Channel(*id)).collect();
+            let rows: Vec<SidebarRow> = app.dms.iter().filter(|d| !reqs.contains(d) && !spam.contains(d)).map(|id| SidebarRow::Channel(*id)).collect();
             let mut rows = rows;
             crate::actions::pins::apply(&mut rows);
             app.sidebar_rows = rows;
@@ -70,8 +68,7 @@ pub fn build_rows(app: &mut PhoenixApp) {
                     rows.push(SidebarRow::Category(id));
                     continue;
                 }
-                let selected = Some(id) == app.selected_channel
-                    || app.selected_channel.and_then(|s| app.nav.thread_parent(s)) == Some(id);
+                let selected = Some(id) == app.selected_channel || app.selected_channel.and_then(|s| app.nav.thread_parent(s)) == Some(id);
                 if !crate::ui::view_as::visible(app, g, id) {
                     continue;
                 }
@@ -113,9 +110,7 @@ pub fn build_rows(app: &mut PhoenixApp) {
                     .iter()
                     .enumerate()
                     .filter(|(i, r)| match r {
-                        SidebarRow::Category(cat) => {
-                            app.collapsed.contains(cat) || matches!(rows.get(i + 1), Some(SidebarRow::Channel(_)))
-                        }
+                        SidebarRow::Category(cat) => app.collapsed.contains(cat) || matches!(rows.get(i + 1), Some(SidebarRow::Channel(_))),
                         _ => true,
                     })
                     .map(|(_, r)| *r)
@@ -142,9 +137,7 @@ pub fn build_rows(app: &mut PhoenixApp) {
 }
 
 pub fn voice_user_name(app: &PhoenixApp, user: Id) -> SharedString {
-    app.member_nick(user)
-        .or_else(|| app.users.get(&user).map(|u| u.display_name.clone()))
-        .unwrap_or_default()
+    app.member_nick(user).or_else(|| app.users.get(&user).map(|u| u.display_name.clone())).unwrap_or_default()
 }
 
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -189,18 +182,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .children(crate::ui::chat::scrollbar::thin_fade_scrollbar(&app.sidebar_list))
                 .children(crate::ui::channel_unread_bar::render(app)),
         )
-        .when_some(app.selected_guild.filter(|_| app.nav.guild_menu), |d, g| {
-            d.child(crate::ui::guild_menu::render(app, g, m::HEADER_H + 4., cx))
-        })
-        .child(
-            div()
-                .absolute()
-                .inset_0()
-                .border_l_1()
-                .border_t_1()
-                .border_color(c(Palette::APP_FRAME_BORDER))
-                .rounded_tl(z(m::FRAME_RADIUS)),
-        )
+        .when_some(app.selected_guild.filter(|_| app.nav.guild_menu), |d, g| d.child(crate::ui::guild_menu::render(app, g, m::HEADER_H + 4., cx)))
+        .child(div().absolute().inset_0().border_l_1().border_t_1().border_color(c(Palette::APP_FRAME_BORDER)).rounded_tl(z(m::FRAME_RADIUS)))
         .child(crate::ui::sidebar_resize::handle(cx))
         .into_any_element()
 }
@@ -272,10 +255,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
             let top = app.sidebar_list.logical_scroll_top();
             let scrolled = if top.item_ix > 0 { f32::MAX } else { f32::from(top.offset_in_item) };
             let banner_h = full_h - scrolled.min(full_h);
-            let banner = hash
-                .as_ref()
-                .filter(|_| banner_h > m::HEADER_H)
-                .map(|_| g.banner_color.unwrap_or(Palette::BG_SECONDARY));
+            let banner = hash.as_ref().filter(|_| banner_h > m::HEADER_H).map(|_| g.banner_color.unwrap_or(Palette::BG_SECONDARY));
             let menu_open = app.nav.guild_menu;
             let gid = g.id.0;
             div()
@@ -288,9 +268,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         .bg(c(col))
                         .overflow_hidden()
                         .when_some(hash.clone(), |d, hash| {
-                            let url = |ext: &str| -> SharedString {
-                                format!("https://cdn.discordapp.com/banners/{gid}/{hash}.{ext}?size=480").into()
-                            };
+                            let url = |ext: &str| -> SharedString { format!("https://cdn.discordapp.com/banners/{gid}/{hash}.{ext}?size=480").into() };
                             let animated = hash.starts_with("a_");
                             d.child(gpui::img(url("png")).absolute().bottom_0().left_0().right_0().w_full().h(px(full_h)).object_fit(gpui::ObjectFit::Cover))
                                 .when(animated, |d| {
@@ -304,20 +282,16 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                     )
                                 })
                         })
-                        .child(
-                            div().absolute().top_0().left_0().right_0().h(z(56.)).bg(gpui::linear_gradient(
-                                180.,
-                                gpui::linear_color_stop(gpui::black().opacity(0.4), 0.),
-                                gpui::linear_color_stop(gpui::transparent_black(), 1.),
-                            )),
-                        )
-                        .child(
-                            div().absolute().bottom_0().left_0().right_0().h(z(40.)).bg(gpui::linear_gradient(
-                                180.,
-                                gpui::linear_color_stop(gpui::transparent_black(), 0.),
-                                gpui::linear_color_stop(c(Palette::BG_TERTIARY).opacity(0.8), 1.),
-                            )),
-                        )
+                        .child(div().absolute().top_0().left_0().right_0().h(z(56.)).bg(gpui::linear_gradient(
+                            180.,
+                            gpui::linear_color_stop(gpui::black().opacity(0.4), 0.),
+                            gpui::linear_color_stop(gpui::transparent_black(), 1.),
+                        )))
+                        .child(div().absolute().bottom_0().left_0().right_0().h(z(40.)).bg(gpui::linear_gradient(
+                            180.,
+                            gpui::linear_color_stop(gpui::transparent_black(), 0.),
+                            gpui::linear_color_stop(c(Palette::BG_TERTIARY).opacity(0.8), 1.),
+                        )))
                 })
                 .child({
                     let fg = if banner.is_some() { gpui::white() } else { t(idx::TEXT_STRONG) };
@@ -380,16 +354,16 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                             )
                                         })
                                         .child(
-                                    div()
-                                        .min_w_0()
-                                        .text_size(z(16.))
-                                        .line_height(z(20.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(fg)
-                                        .whitespace_nowrap()
-                                        .overflow_hidden()
-                                        .text_ellipsis()
-                                        .child(g.name.clone()),
+                                            div()
+                                                .min_w_0()
+                                                .text_size(z(16.))
+                                                .line_height(z(20.))
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(fg)
+                                                .whitespace_nowrap()
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .child(g.name.clone()),
                                         ),
                                 )
                                 .child(icon(if menu_open { Icon::Close } else { Icon::Chevron }, 16. * crate::theme::zoom(), fg)),
@@ -406,13 +380,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                 .rounded(z(8.))
                                 .cursor_pointer()
                                 .hover(|s| s.bg(t(idx::BACKGROUND_MOD_NORMAL)))
-                                .child(
-                                    gpui::svg()
-                                        .path(crate::icons::path("invite"))
-                                        .size(z(20.))
-                                        .flex_none()
-                                        .text_color(fg),
-                                ),
+                                .child(gpui::svg().path(crate::icons::path("invite")).size(z(20.)).flex_none().text_color(fg)),
                         )
                 })
                 .when(banner.is_none(), |d| d.h(px(m::HEADER_H + 1.)))
@@ -479,27 +447,25 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
                         .child(
                             icon(Icon::Chevron, 12., t(idx::CHANNELS_DEFAULT))
                                 .group_hover("cat", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
-                                .with_transformation(Transformation::rotate(percentage(if collapsed {
-                                    -0.25
-                                } else {
-                                    0.
-                                }))),
+                                .with_transformation(Transformation::rotate(percentage(if collapsed { -0.25 } else { 0. }))),
                         ),
                 )
-                .when(!fav_cat, |d| d.child(
-                    div()
-                        .size(z(24.))
-                        .flex_none()
-                        .p(z(4.))
-                        .id(("cat-add", id.0))
-                        .tooltip(crate::ui::tooltip::tip(crate::t!("menu.create_channel")))
-                        .group("cat-add")
-                        .active(|s| s.pt(z(4.5)))
-                        .child(
-                            icon(Icon::Plus, 16. * crate::theme::zoom(), t(idx::CHANNELS_DEFAULT))
-                                .group_hover("cat-add", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))),
-                        ),
-                ))
+                .when(!fav_cat, |d| {
+                    d.child(
+                        div()
+                            .size(z(24.))
+                            .flex_none()
+                            .p(z(4.))
+                            .id(("cat-add", id.0))
+                            .tooltip(crate::ui::tooltip::tip(crate::t!("menu.create_channel")))
+                            .group("cat-add")
+                            .active(|s| s.pt(z(4.5)))
+                            .child(
+                                icon(Icon::Plus, 16. * crate::theme::zoom(), t(idx::CHANNELS_DEFAULT))
+                                    .group_hover("cat-add", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))),
+                            ),
+                    )
+                })
                 .into_any_element()
         }
         SidebarRow::Channel(id) => channel_row(app, entity, id),
@@ -508,8 +474,7 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
         SidebarRow::VoiceUser { user } => {
             let hidden = app.channels.values().find(|c| c.voice_users.contains(&user) && crate::ui::voice_row::names_hidden(c.id));
             if let Some(ch) = hidden {
-                let mut vu: Vec<(String, Id)> =
-                    ch.voice_users.iter().map(|u| (voice_user_name(app, *u).to_lowercase(), *u)).collect();
+                let mut vu: Vec<(String, Id)> = ch.voice_users.iter().map(|u| (voice_user_name(app, *u).to_lowercase(), *u)).collect();
                 vu.sort();
                 let users: Vec<Id> = vu.into_iter().map(|(_, u)| u).collect();
                 return crate::ui::voice_row::collapsed_list(app, &users);
@@ -548,8 +513,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                 .when(selected, |d| d.bg(t(idx::BACKGROUND_MOD_STRONG)))
                 .when(!selected, |d| {
                     let hover_fg = if id == "quests" { idx::TEXT_STRONG } else { idx::INTERACTIVE_TEXT_HOVER };
-                    d.hover(move |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(hover_fg)))
-                        .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
+                    d.hover(move |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(hover_fg))).active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
                 .on_click(move |_, _, cx| {
                     e.update(cx, |a, cx| match view {
@@ -569,9 +533,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
         .flex()
         .flex_col()
         .child(nav("friends", Icon::Friends, crate::t!("friends.title"), Some(HomeView::Friends), pending))
-        .when(requests > 0, |d| {
-            d.child(nav("msg-requests", Icon::Inbox, crate::t!("friends.message_requests"), Some(HomeView::MessageRequests), requests))
-        })
+        .when(requests > 0, |d| d.child(nav("msg-requests", Icon::Inbox, crate::t!("friends.message_requests"), Some(HomeView::MessageRequests), requests)))
         .child(nav("nitro", Icon::Nitro, crate::t!("dm.nitro"), Some(HomeView::Nitro), 0))
         .child(nav("shop", Icon::Gift, crate::t!("dm.shop"), Some(HomeView::Shop), 0))
         .child(nav("quests", Icon::Quests, crate::t!("dm.quests"), Some(HomeView::Quests), 0))
@@ -615,7 +577,11 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                                 .tip(crate::t!("header.more"))
                                 .on_click(move |ev, w, cx| {
                                     let p = ev.position();
-                                    crate::ui::extra_menus::open(crate::ui::extra_menus::Target::DmMore, gpui::point(p.x - gpui::px(12.), p.y + gpui::px(20.)), w);
+                                    crate::ui::extra_menus::open(
+                                        crate::ui::extra_menus::Target::DmMore,
+                                        gpui::point(p.x - gpui::px(12.), p.y + gpui::px(20.)),
+                                        w,
+                                    );
                                     e2.update(cx, |_, cx| cx.notify());
                                 }),
                         )
@@ -756,9 +722,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     let lead: AnyElement = if is_dm && is_group {
         let ex = extra.cloned().unwrap_or_default();
         match ex.group_icon {
-            Some(crate::model::ImageRef::Url(u)) => {
-                gpui::img(u).size(z(32.)).rounded_full().flex_none().into_any_element()
-            }
+            Some(crate::model::ImageRef::Url(u)) => gpui::img(u).size(z(32.)).rounded_full().flex_none().into_any_element(),
             _ if !ex.members.is_empty() => crate::ui::group_dm::group_avatar(
                 app,
                 id,
@@ -787,11 +751,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             p,
             c(Palette::BG_TERTIARY),
             move |d| {
-                if selected {
-                    d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED))
-                } else {
-                    d.group_hover(g, |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)))
-                }
+                if selected { d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED)) } else { d.group_hover(g, |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER))) }
             },
             deco,
         )
@@ -817,20 +777,12 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             (!selected && app.voice_channel != Some(id)).then(|| SharedString::from(format!("chrow{}", id.0))),
         )
     };
-    let name: SharedString = extra
-        .and_then(|e| e.group_name.clone())
-        .filter(|_| is_dm)
-        .or_else(|| crate::ui::favorites::nickname(app, id))
-        .unwrap_or_else(|| ch.name.clone());
-    let members: Option<SharedString> =
-        (is_dm && is_group).then(|| crate::t!("invite.members", n = extra.map(|e| e.recipients + 1).unwrap_or(1)));
-    let dm_tag = (is_dm && !is_group)
-        .then(|| ch.voice_users.first().and_then(|u| app.users.get(u)).and_then(|u| u.tag.clone()))
-        .flatten();
+    let name: SharedString =
+        extra.and_then(|e| e.group_name.clone()).filter(|_| is_dm).or_else(|| crate::ui::favorites::nickname(app, id)).unwrap_or_else(|| ch.name.clone());
+    let members: Option<SharedString> = (is_dm && is_group).then(|| crate::t!("invite.members", n = extra.map(|e| e.recipients + 1).unwrap_or(1)));
+    let dm_tag = (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u)).and_then(|u| u.tag.clone())).flatten();
     let group = SharedString::from(format!("chrow{}", id.0));
-    let plated = is_dm
-        && !is_group
-        && ch.voice_users.first().and_then(|u| app.users.get(u)).is_some_and(|u| u.nameplate.is_some());
+    let plated = is_dm && !is_group && ch.voice_users.first().and_then(|u| app.users.get(u)).is_some_and(|u| u.nameplate.is_some());
     let close = is_dm.then(|| {
         let e = entity.clone();
         let fg = if plated { gpui::hsla(0., 0., 1., 0.9) } else { c(fg) };
@@ -839,47 +791,41 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         } else {
             (gpui::hsla(0., 0., 0., 0.22), gpui::hsla(0., 0., 0., 0.33))
         };
-        div()
-            .flex()
-            .flex_none()
-            .justify_end()
-            .items_center()
-            .pl(z(4.))
-            .when(plated, |d| d.min_w(z(32.)))
-            .child(
-                div()
-                    .id(("dm-close", id.0))
-                    .hidden()
-                    .group_hover(group.clone(), |s| s.flex())
-                    .size(z(24.))
-                    .p(z(3.))
-                    .mr(z(6.))
-                    .when(!plated, |d| d.opacity(0.7).hover(|s| s.opacity(1.)))
-                    .tip(if is_group { crate::t!("menu.leave_group") } else { crate::t!("menu.close_dm") })
-                    .on_click(move |_, _, cx| {
-                        cx.stop_propagation();
-                        e.update(cx, |a, cx| a.close_dm(id, cx));
-                    })
-                    .child(
-                        div()
-                            .p(z(1.))
-                            .rounded_full()
-                            .when(plated, |d| d.bg(plate_bg).hover(|s| s.bg(plate_hover)))
-                            .child(icon(Icon::Close, 16., fg)),
-                    ),
-            )
+        div().flex().flex_none().justify_end().items_center().pl(z(4.)).when(plated, |d| d.min_w(z(32.))).child(
+            div()
+                .id(("dm-close", id.0))
+                .hidden()
+                .group_hover(group.clone(), |s| s.flex())
+                .size(z(24.))
+                .p(z(3.))
+                .mr(z(6.))
+                .when(!plated, |d| d.opacity(0.7).hover(|s| s.opacity(1.)))
+                .tip(if is_group { crate::t!("menu.leave_group") } else { crate::t!("menu.close_dm") })
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    e.update(cx, |a, cx| a.close_dm(id, cx));
+                })
+                .child(div().p(z(1.)).rounded_full().when(plated, |d| d.bg(plate_bg).hover(|s| s.bg(plate_hover))).child(icon(Icon::Close, 16., fg))),
+        )
     });
-    let can_edit = ch.guild.is_some_and(|g| {
-        crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4)
-    });
+    let can_edit = ch.guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4));
     let action = |i: Icon, path: Option<&'static str>| {
         let col = t(if selected { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT });
         let hov = |s: gpui::StyleRefinement| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER));
         let act = |s: gpui::StyleRefinement| s.text_color(t(idx::INTERACTIVE_TEXT_ACTIVE)).mt(z(0.5));
-        div().id(gpui::ElementId::Name(format!("ch-act-{}", path.unwrap_or("gear")).into())).size(z(24.)).p(z(4.)).flex_none().group("ch-action").child(match path {
-            Some(p) => gpui::svg().path(crate::icons::path(p)).size(z(16.)).text_color(col).group_hover("ch-action", hov).id("g").group_active("ch-action", act).into_any_element(),
-            None => icon(i, 16., col).group_hover("ch-action", hov).id("g").group_active("ch-action", act).into_any_element(),
-        })
+        div().id(gpui::ElementId::Name(format!("ch-act-{}", path.unwrap_or("gear")).into())).size(z(24.)).p(z(4.)).flex_none().group("ch-action").child(
+            match path {
+                Some(p) => gpui::svg()
+                    .path(crate::icons::path(p))
+                    .size(z(16.))
+                    .text_color(col)
+                    .group_hover("ch-action", hov)
+                    .id("g")
+                    .group_active("ch-action", act)
+                    .into_any_element(),
+                None => icon(i, 16., col).group_hover("ch-action", hov).id("g").group_active("ch-action", act).into_any_element(),
+            },
+        )
     };
     let is_voice = matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage);
     let chat_entity = entity.clone();
@@ -944,7 +890,13 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             div()
                 .id(("chrow", id.0))
                 .group(group)
-                .h(z(if is_dm { 48. } else if connected { space::channels_name_lh() + 24. } else { space::channels_name_lh() + 8. }))
+                .h(z(if is_dm {
+                    48.
+                } else if connected {
+                    space::channels_name_lh() + 24.
+                } else {
+                    space::channels_name_lh() + 8.
+                }))
                 .pl(z(10.))
                 .pr(z(if is_dm { 0. } else { 10. }))
                 .rounded(z(ROW_RADIUS))
@@ -971,23 +923,18 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     }
                 })
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_channel(id, cx)))
-                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
-                    crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
-                })
+                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w))
                 .relative()
                 .when_some(
-                    (is_dm && !is_group)
-                        .then(|| ch.voice_users.first().and_then(|u| app.users.get(u)))
-                        .flatten()
-                        .and_then(|u| {
-                            let fade = crate::ui::nameplate::Fade::Measured {
-                                place: crate::ui::nameplate::Place::Channel,
-                                id: id.0,
-                                offset: 32. + 12. - 5.,
-                                fallback: 220.,
-                            };
-                            crate::ui::nameplate::layer_with_fade(u, 48., crate::ui::nameplate::Place::Channel, !selected, selected, fade)
-                        }),
+                    (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u))).flatten().and_then(|u| {
+                        let fade = crate::ui::nameplate::Fade::Measured {
+                            place: crate::ui::nameplate::Place::Channel,
+                            id: id.0,
+                            offset: 32. + 12. - 5.,
+                            fallback: 220.,
+                        };
+                        crate::ui::nameplate::layer_with_fade(u, 48., crate::ui::nameplate::Place::Channel, !selected, selected, fade)
+                    }),
                     |d, l| {
                         d.child(
                             div()
@@ -1000,13 +947,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         )
                     },
                 )
-                .child(
-                    if guild_dim {
-                        div().flex_none().opacity(0.5).child(top_line(lead, connected)).into_any_element()
-                    } else {
-                        top_line(lead, connected)
-                    },
-                )
+                .child(if guild_dim { div().flex_none().opacity(0.5).child(top_line(lead, connected)).into_any_element() } else { top_line(lead, connected) })
                 .child(
                     div()
                         .when(guild_dim, |d| d.opacity(0.5))
@@ -1036,9 +977,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                             .child(crate::ui::emoji_text::label(name, 16.)),
                                         )
                                         .when_some(dm_tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
-                                        .when(plated, |d| {
-                                            d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Channel, id.0))
-                                        }),
+                                        .when(plated, |d| d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Channel, id.0))),
                                 ),
                         )
                         .when(connected, |d| {
@@ -1051,25 +990,10 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(t(idx::CHANNELS_DEFAULT))
                                     .child(div().min_w_0().text_ellipsis().child(crate::t!("voice.set_status")))
-                                    .child(
-                                        gpui::svg()
-                                            .path(crate::icons::path("pen"))
-                                            .ml(z(4.))
-                                            .size(z(12.))
-                                            .flex_none()
-                                            .text_color(t(idx::CHANNELS_DEFAULT)),
-                                    ),
+                                    .child(gpui::svg().path(crate::icons::path("pen")).ml(z(4.)).size(z(12.)).flex_none().text_color(t(idx::CHANNELS_DEFAULT))),
                             )
                         })
-                        .when_some(members, |d, m| {
-                            d.child(
-                                div()
-                                    .text_size(z(12.))
-                                    .line_height(z(14.))
-                                    .text_color(c(Palette::TEXT_MUTED))
-                                    .child(m),
-                            )
-                        }),
+                        .when_some(members, |d, m| d.child(div().text_size(z(12.)).line_height(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(m))),
                 )
                 .when(ch.mentions > 0, |d| d.child(badge(ch.mentions).bg(c(Palette::NOTIFICATION))))
                 .when(ch.mentions == 0, |d| d.children(invite_hover.map(|h| top_line(h, connected))))
@@ -1109,16 +1033,7 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
         .pl(z(space::xs()))
         .pr(z(8.))
         .py(z(1.))
-        .child(
-            div()
-                .absolute()
-                .left(z(1.))
-                .top(z(15.))
-                .w(z(4.))
-                .h(z(8.))
-                .rounded_r(z(4.))
-                .when(unread && !selected, |d| d.bg(t(idx::INTERACTIVE_TEXT_ACTIVE))),
-        )
+        .child(div().absolute().left(z(1.)).top(z(15.)).w(z(4.)).h(z(8.)).rounded_r(z(4.)).when(unread && !selected, |d| d.bg(t(idx::INTERACTIVE_TEXT_ACTIVE))))
         .child(
             div()
                 .absolute()
@@ -1151,9 +1066,7 @@ fn thread_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEleme
                         .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_thread(id, cx)))
-                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
-                    crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Thread(id), ev.position, w)
-                })
+                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Thread(id), ev.position, w))
                 .child(div().flex_1().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(th.name.clone(), 14.)))
                 .when(mentions > 0, |d| d.child(badge(mentions).bg(c(Palette::NOTIFICATION)))),
         )
@@ -1214,10 +1127,7 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .flex()
         .items_center()
         .gap(z(10.))
-        .when_some(
-            crate::ui::nameplate::layer(&app.me, m::USER_PANEL_H, crate::ui::nameplate::Place::Account, false, false),
-            |d, l| d.child(l),
-        )
+        .when_some(crate::ui::nameplate::layer(&app.me, m::USER_PANEL_H, crate::ui::nameplate::Place::Account, false, false), |d, l| d.child(l))
         .child(
             div()
                 .id("me")
@@ -1278,9 +1188,11 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                                 .text_ellipsis()
                                 .child(crate::ui::emoji_text::status_label(
                                     {
-                                        let act = app.people.activities.get(&app.me.id).and_then(|v| {
-                                            v.iter().find(|a| a.kind == crate::presence::ActivityKind::Custom)
-                                        });
+                                        let act = app
+                                            .people
+                                            .activities
+                                            .get(&app.me.id)
+                                            .and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Custom));
                                         match (&app.people.custom_status, act) {
                                             (Some(c), Some(a)) if a.state.as_ref() == Some(c) => a.headline(),
                                             (Some(c), _) => c.clone(),
@@ -1344,98 +1256,90 @@ fn boost_goal(count: u32, enabled: bool, max: u32) -> Option<gpui::AnyElement> {
     let pct = (count as f32 / max as f32).min(1.);
     let pink = t(idx::GUILD_BOOSTING_PINK_REFRESH);
     let text = |s: SharedString| {
-        div()
-            .text_size(z(12.))
-            .line_height(z(16.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(t(idx::TEXT_DEFAULT))
-            .text_ellipsis()
-            .child(s)
+        div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_DEFAULT)).text_ellipsis().child(s)
     };
-    let count_text: SharedString = if count >= max {
-        crate::t!("guild.boost_goal.count_done", n = count)
-    } else {
-        crate::t!("guild.boost_goal.count", n = count, max = max)
-    };
+    let count_text: SharedString =
+        if count >= max { crate::t!("guild.boost_goal.count_done", n = count) } else { crate::t!("guild.boost_goal.count", n = count, max = max) };
     Some(
-        div().w_full().pl(z(8.)).pr(z(8.)).mb(z(12.)).child(
         div()
-            .id("boost-goal")
-            .group("boost-goal")
             .w_full()
-            .pt(z(4.))
-            .px(z(4.))
-            .pb(z(16.))
-            .border_b_1()
-            .border_color(t(idx::BORDER_SUBTLE))
-            .cursor_pointer()
+            .pl(z(8.))
+            .pr(z(8.))
+            .mb(z(12.))
             .child(
                 div()
-                    .relative()
-                    .h(z(26.))
-                    .rounded_full()
-                    .bg(t(idx::BACKGROUND_BASE_LOW))
+                    .id("boost-goal")
+                    .group("boost-goal")
+                    .w_full()
+                    .pt(z(4.))
+                    .px(z(4.))
+                    .pb(z(16.))
+                    .border_b_1()
+                    .border_color(t(idx::BORDER_SUBTLE))
+                    .cursor_pointer()
                     .child(
-                        div().absolute().top_0().bottom_0().left_0().w(gpui::relative(pct)).p(z(2.)).child(
                         div()
-                            .size_full()
+                            .relative()
+                            .h(z(26.))
                             .rounded_full()
-                            .bg(gpui::linear_gradient(
-                                270.,
-                                gpui::linear_color_stop(pink.opacity(0.4), 0.),
-                                gpui::linear_color_stop(pink.opacity(0.1), 1.),
-                            ))
-                            .group_hover("boost-goal", |s| {
-                                s.bg(gpui::linear_gradient(
-                                    270.,
-                                    gpui::linear_color_stop(pink.opacity(0.7), 0.),
-                                    gpui::linear_color_stop(pink.opacity(0.25), 1.),
-                                ))
-                            })
-                            .shadow(crate::ui::inbox::low_shadow()),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .top_0()
-                            .bottom_0()
-                            .left(z(8.))
-                            .right(z(8.))
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(z(8.))
+                            .bg(t(idx::BACKGROUND_BASE_LOW))
                             .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(z(2.))
-                                    .min_w_0()
-                                    .child(text(crate::t!("guild.boost_goal.title")))
-                                    .when(count >= max, |d| d.child(text("\u{1F389}".into()))),
+                                div().absolute().top_0().bottom_0().left_0().w(gpui::relative(pct)).p(z(2.)).child(
+                                    div()
+                                        .size_full()
+                                        .rounded_full()
+                                        .bg(gpui::linear_gradient(
+                                            270.,
+                                            gpui::linear_color_stop(pink.opacity(0.4), 0.),
+                                            gpui::linear_color_stop(pink.opacity(0.1), 1.),
+                                        ))
+                                        .group_hover("boost-goal", |s| {
+                                            s.bg(gpui::linear_gradient(
+                                                270.,
+                                                gpui::linear_color_stop(pink.opacity(0.7), 0.),
+                                                gpui::linear_color_stop(pink.opacity(0.25), 1.),
+                                            ))
+                                        })
+                                        .shadow(crate::ui::inbox::low_shadow()),
+                                ),
                             )
                             .child(
                                 div()
+                                    .absolute()
+                                    .top_0()
+                                    .bottom_0()
+                                    .left(z(8.))
+                                    .right(z(8.))
                                     .flex()
                                     .items_center()
-                                    .gap(z(2.))
-                                    .flex_none()
-                                    .opacity(0.7)
-                                    .group_hover("boost-goal", |s| s.opacity(1.))
-                                    .child(text(count_text))
+                                    .justify_between()
+                                    .gap(z(8.))
                                     .child(
-                                        gpui::svg()
-                                            .path(crate::icons::path("chevron-right"))
-                                            .size(z(12.))
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(z(2.))
+                                            .min_w_0()
+                                            .child(text(crate::t!("guild.boost_goal.title")))
+                                            .when(count >= max, |d| d.child(text("\u{1F389}".into()))),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(z(2.))
                                             .flex_none()
-                                            .text_color(t(idx::TEXT_DEFAULT)),
+                                            .opacity(0.7)
+                                            .group_hover("boost-goal", |s| s.opacity(1.))
+                                            .child(text(count_text))
+                                            .child(
+                                                gpui::svg().path(crate::icons::path("chevron-right")).size(z(12.)).flex_none().text_color(t(idx::TEXT_DEFAULT)),
+                                            ),
                                     ),
                             ),
                     ),
-            ),
-        )
-        .into_any_element(),
+            )
+            .into_any_element(),
     )
 }
 
@@ -1469,17 +1373,12 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
                 .text_color(t(if on { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::CHANNELS_DEFAULT }))
                 .when(on, |d| d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED)))
                 .when(!on, |d| d.hover(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(idx::INTERACTIVE_TEXT_HOVER))))
-                .child(gpui::svg().path(crate::icons::path(glyph)).size(z(20.)).flex_none().text_color(t(if on { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::CHANNEL_ICON })))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .text_size(z(16.))
-                        .line_height(z(28.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_ellipsis()
-                        .child(label),
-                ),
+                .child(gpui::svg().path(crate::icons::path(glyph)).size(z(20.)).flex_none().text_color(t(if on {
+                    idx::INTERACTIVE_TEXT_ACTIVE
+                } else {
+                    idx::CHANNEL_ICON
+                })))
+                .child(div().flex_1().min_w_0().text_size(z(16.)).line_height(z(28.)).font_weight(FontWeight::MEDIUM).text_ellipsis().child(label)),
         )
     };
     div()

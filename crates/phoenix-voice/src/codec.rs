@@ -155,18 +155,13 @@ impl LocalCapabilities {
 }
 
 pub fn select_send_codec(local: &LocalCapabilities, remote_accepts: &[Codec]) -> Option<Codec> {
-    local
-        .send_preference()
-        .into_iter()
-        .find(|c| c.sendable() && remote_accepts.contains(c))
+    local.send_preference().into_iter().find(|c| c.sendable() && remote_accepts.contains(c))
 }
 
 pub fn fallback_after(local: &LocalCapabilities, remote_accepts: &[Codec], current: Codec) -> Option<Codec> {
     let pref = local.send_preference();
     let pos = pref.iter().position(|c| *c == current)?;
-    pref.into_iter()
-        .skip(pos + 1)
-        .find(|c| c.sendable() && remote_accepts.contains(c))
+    pref.into_iter().skip(pos + 1).find(|c| c.sendable() && remote_accepts.contains(c))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,20 +177,8 @@ pub struct VideoEncoderConfig {
 
 impl VideoEncoderConfig {
     pub fn new(codec: Codec, width: u32, height: u32, fps: u32, bitrate_bps: u32, screen: bool) -> Self {
-        let h264_profile = (codec == Codec::H264).then_some(if screen {
-            H264Profile::Main
-        } else {
-            H264Profile::ConstrainedBaseline
-        });
-        VideoEncoderConfig {
-            codec,
-            width: width & !1,
-            height: height & !1,
-            fps,
-            bitrate_bps,
-            h264_profile,
-            keyframe_interval: fps.saturating_mul(4),
-        }
+        let h264_profile = (codec == Codec::H264).then_some(if screen { H264Profile::Main } else { H264Profile::ConstrainedBaseline });
+        VideoEncoderConfig { codec, width: width & !1, height: height & !1, fps, bitrate_bps, h264_profile, keyframe_interval: fps.saturating_mul(4) }
     }
 }
 

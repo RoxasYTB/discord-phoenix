@@ -108,7 +108,9 @@ pub fn parse_overwrites(v: &Value) -> Vec<Overwrite> {
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|o| Some(Overwrite { id: Id(num(o.get("id")).max(1)), kind: o.get("type")?.as_u64()? as u8, allow: num(o.get("allow")), deny: num(o.get("deny")) }))
+        .filter_map(|o| {
+            Some(Overwrite { id: Id(num(o.get("id")).max(1)), kind: o.get("type")?.as_u64()? as u8, allow: num(o.get("allow")), deny: num(o.get("deny")) })
+        })
         .collect()
 }
 
@@ -536,7 +538,8 @@ pub fn prepare(s: &mut State, mk: &mut dyn FnMut(SharedString, &str, bool) -> En
     }
     if s.webhook_name.is_none()
         && let Some(id) = s.open_webhook.as_deref().and_then(|x| x.parse::<u64>().ok())
-        && let Some(name) = s.webhooks.iter().flatten().find(|w| super::webhooks::webhook_id(w) == Some(id)).and_then(|w| w.get("name")?.as_str().map(str::to_owned))
+        && let Some(name) =
+            s.webhooks.iter().flatten().find(|w| super::webhooks::webhook_id(w) == Some(id)).and_then(|w| w.get("name")?.as_str().map(str::to_owned))
     {
         s.webhook_name = Some(mk(SharedString::default(), &name, false));
     }
@@ -560,7 +563,9 @@ pub fn pick_section(a: &mut PhoenixApp, sec: Section, cx: &mut Context<PhoenixAp
         s.open_select = None;
         match sec {
             Section::Invites if s.invites.is_none() => need.push(AdminCall::ChannelInvites { channel: sf(s.channel) }),
-            Section::Integrations | Section::Webhooks | Section::Followed if s.webhooks.is_none() => need.push(AdminCall::ChannelWebhooks { channel: sf(s.channel) }),
+            Section::Integrations | Section::Webhooks | Section::Followed if s.webhooks.is_none() => {
+                need.push(AdminCall::ChannelWebhooks { channel: sf(s.channel) })
+            }
             Section::Permissions => {
                 if s.roles.is_none()
                     && let Some(g) = s.guild
@@ -626,7 +631,9 @@ fn label(t: SharedString) -> gpui::Div {
 fn thread_overview(s: &State, t: &ThreadFields, cx: &mut Context<PhoenixApp>) -> gpui::Div {
     use super::settings_form::{OnPick, description, dropdown};
     let e = cx.entity();
-    let toggle = |which: u8| -> Rc<dyn Fn(&mut gpui::App)> { Rc::new(move |_| with_state(|s| s.open_select = if s.open_select == Some(which) { None } else { Some(which) })) };
+    let toggle = |which: u8| -> Rc<dyn Fn(&mut gpui::App)> {
+        Rc::new(move |_| with_state(|s| s.open_select = if s.open_select == Some(which) { None } else { Some(which) }))
+    };
     let slow_pick: OnPick = {
         let e = e.clone();
         Rc::new(move |k, _, cx| {
@@ -882,7 +889,8 @@ pub fn save(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
                 s.v0 = s.v.clone();
                 (body, name, topic)
             });
-            let removed: Vec<Id> = s.overwrites0.iter().filter(|o| !s.overwrites.iter().any(|x| x.id == o.id && (x.allow != 0 || x.deny != 0))).map(|o| o.id).collect();
+            let removed: Vec<Id> =
+                s.overwrites0.iter().filter(|o| !s.overwrites.iter().any(|x| x.id == o.id && (x.allow != 0 || x.deny != 0))).map(|o| o.id).collect();
             let changed: Vec<Overwrite> = s.overwrites.iter().filter(|o| (o.allow != 0 || o.deny != 0) && !s.overwrites0.contains(o)).cloned().collect();
             s.overwrites.retain(|o| o.allow != 0 || o.deny != 0 || Some(o.id) == s.guild);
             s.overwrites0 = s.overwrites.clone();

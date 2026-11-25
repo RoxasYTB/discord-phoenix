@@ -219,7 +219,11 @@ pub fn start(app: &PhoenixApp, e: &Effect, cx: &mut Context<PhoenixApp>) {
                 let dur = crate::media::lottie::duration(&v).div_f64(speed);
                 let img = crate::media::lottie::rasterize_speed(&v, &renderer, RENDER_PX, speed);
                 if log {
-                    eprintln!("phoenix-soundboard: effect frames {:?} after {:?}, lasts {dur:?}", img.as_ref().map(gpui::RenderImage::frame_count), t.elapsed());
+                    eprintln!(
+                        "phoenix-soundboard: effect frames {:?} after {:?}, lasts {dur:?}",
+                        img.as_ref().map(gpui::RenderImage::frame_count),
+                        t.elapsed()
+                    );
                 }
                 Some((Arc::new(img?), dur))
             })
@@ -249,8 +253,7 @@ pub fn has_effects() -> bool {
 
 pub fn overlay(user: Id, w: f32, h: f32) -> Option<AnyElement> {
     let now = Instant::now();
-    let imgs: Vec<Arc<RenderImage>> =
-        ACTIVE.with(|a| a.borrow().iter().filter(|x| x.user == user && x.until > now).filter_map(|x| x.img.clone()).collect());
+    let imgs: Vec<Arc<RenderImage>> = ACTIVE.with(|a| a.borrow().iter().filter(|x| x.user == user && x.until > now).filter_map(|x| x.img.clone()).collect());
     if imgs.is_empty() {
         return None;
     }

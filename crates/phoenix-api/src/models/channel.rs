@@ -193,18 +193,10 @@ impl Channel {
             return n.to_owned();
         }
         let names: Vec<&str> = self.recipients.iter().map(|u| u.display_name()).collect();
-        if names.is_empty() {
-            "Unnamed".to_owned()
-        } else {
-            names.join(", ")
-        }
+        if names.is_empty() { "Unnamed".to_owned() } else { names.join(", ") }
     }
 
     pub fn recipient_user_ids(&self) -> Vec<UserId> {
-        if self.recipients.is_empty() {
-            self.recipient_ids.clone()
-        } else {
-            self.recipients.iter().map(|u| u.id).collect()
-        }
+        if self.recipients.is_empty() { self.recipient_ids.clone() } else { self.recipients.iter().map(|u| u.id).collect() }
     }
 }

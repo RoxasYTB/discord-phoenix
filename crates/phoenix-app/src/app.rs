@@ -7,9 +7,8 @@ use std::{
 use chrono::{Local, TimeZone};
 use futures::StreamExt;
 use gpui::{
-    App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, KeyBinding,
-    ListAlignment, ListState, ParentElement, Render, SharedString, Styled, Subscription, Window,
-    actions, div, prelude::*, px,
+    App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, KeyBinding, ListAlignment, ListState, ParentElement, Render, SharedString, Styled,
+    Subscription, Window, actions, div, prelude::*, px,
 };
 use gpui_component::input::{InputEvent, InputState};
 
@@ -173,25 +172,17 @@ impl MentionResolver for Resolver<'_> {
     }
     fn has_role(&self, id: u64) -> bool {
         let Some((g, _)) = self.roles.iter().find(|(_, rs)| rs.iter().any(|r| r.id.0 == id)) else { return false };
-        self.members
-            .get(g)
-            .and_then(|ms| ms.iter().find(|m| m.user == self.me))
-            .is_some_and(|m| m.roles.contains(&Id(id)))
+        self.members.get(g).and_then(|ms| ms.iter().find(|m| m.user == self.me)).is_some_and(|m| m.roles.contains(&Id(id)))
     }
     fn user(&self, id: u64) -> Option<String> {
-        let nick = self
-            .guild
-            .and_then(|g| crate::member_index::find(self.members.get(&g)?, g, Id(id)))
-            .and_then(|m| m.nick.as_ref().map(ToString::to_string));
+        let nick = self.guild.and_then(|g| crate::member_index::find(self.members.get(&g)?, g, Id(id))).and_then(|m| m.nick.as_ref().map(ToString::to_string));
         nick.or_else(|| self.users.get(&Id(id)).map(|u| u.display_name.to_string()))
     }
     fn channel(&self, id: u64) -> Option<String> {
         self.channels.get(&Id(id)).map(|c| c.name.to_string())
     }
     fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<crate::markdown::SoundboardMention> {
-        let sound = self.soundboard_sounds.iter().find(|s| {
-            s.id.0 == sound_id && s.guild.is_none_or(|guild| guild.0 == guild_id)
-        })?;
+        let sound = self.soundboard_sounds.iter().find(|s| s.id.0 == sound_id && s.guild.is_none_or(|guild| guild.0 == guild_id))?;
         Some(crate::markdown::SoundboardMention {
             name: sound.name.as_ref().map(ToString::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| "Unknown".into()),
             emoji_name: sound.emoji_name.as_ref().map(ToString::to_string),
@@ -205,19 +196,11 @@ pub fn format_time_full(ts: i64) -> SharedString {
 }
 
 pub(crate) fn format_time_short(ts: i64) -> SharedString {
-    Local
-        .timestamp_opt(ts, 0)
-        .single()
-        .map(|d| crate::i18n::clock(d).into())
-        .unwrap_or_default()
+    Local.timestamp_opt(ts, 0).single().map(|d| crate::i18n::clock(d).into()).unwrap_or_default()
 }
 
 pub(crate) fn format_day(ts: i64) -> SharedString {
-    Local
-        .timestamp_opt(ts, 0)
-        .single()
-        .map(|d| crate::i18n::long_date(d.date_naive()).into())
-        .unwrap_or_default()
+    Local.timestamp_opt(ts, 0).single().map(|d| crate::i18n::long_date(d.date_naive()).into()).unwrap_or_default()
 }
 
 impl PhoenixApp {
@@ -231,12 +214,10 @@ impl PhoenixApp {
 
         let mut subs = Vec::new();
         subs.extend(ui::pickers::install(&composer, window, cx));
-        subs.push(cx.subscribe_in(&composer, window, |this, _, ev: &InputEvent, window, cx| {
-            match ev {
-                InputEvent::PressEnter { shift: false, .. } => this.submit_composer(window, cx),
-                InputEvent::Change => this.on_composer_change(cx),
-                _ => {}
-            }
+        subs.push(cx.subscribe_in(&composer, window, |this, _, ev: &InputEvent, window, cx| match ev {
+            InputEvent::PressEnter { shift: false, .. } => this.submit_composer(window, cx),
+            InputEvent::Change => this.on_composer_change(cx),
+            _ => {}
         }));
         for input in [&login_email, &login_password, &login_token, &login_mfa] {
             subs.push(cx.subscribe_in(input, window, |this, _, ev: &InputEvent, window, cx| {
@@ -267,7 +248,15 @@ impl PhoenixApp {
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
-                if this.update(cx, |this, cx| { this.expire_typing(cx); if crate::voice::start_time::ticking() || crate::ui::chat::composer::cooling() { cx.notify(); } }).is_err() {
+                if this
+                    .update(cx, |this, cx| {
+                        this.expire_typing(cx);
+                        if crate::voice::start_time::ticking() || crate::ui::chat::composer::cooling() {
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -317,9 +306,7 @@ impl PhoenixApp {
                 let _ = this.update(cx, |this, cx| {
                     this.logging_in = false;
                     match res {
-                        Ok(ready) if this.screen == Screen::Main => {
-                            crate::commands::on_resync(this, crate::commands::Resync(ready), cx)
-                        }
+                        Ok(ready) if this.screen == Screen::Main => crate::commands::on_resync(this, crate::commands::Resync(ready), cx),
                         Ok(ready) => this.apply_ready(ready, cx),
                         Err(e) => {
                             if this.screen == Screen::Main {
@@ -430,10 +417,7 @@ impl PhoenixApp {
         } else if self.login_with_token {
             Credentials::Token(self.login_token.read(cx).value().to_string())
         } else {
-            Credentials::Password {
-                login: self.login_email.read(cx).value().to_string(),
-                password: self.login_password.read(cx).value().to_string(),
-            }
+            Credentials::Password { login: self.login_email.read(cx).value().to_string(), password: self.login_password.read(cx).value().to_string() }
         };
         self.logging_in = true;
         self.login_error = None;
@@ -505,12 +489,8 @@ impl PhoenixApp {
         let mine = self.people.activities.remove(&r.me.id);
         let known_presences = std::mem::take(&mut self.presences);
         let known_activities = std::mem::take(&mut self.people.activities);
-        let old_voice: HashMap<Id, Vec<Id>> = self
-            .channels
-            .values()
-            .filter(|c| c.guild.is_some() && !c.voice_users.is_empty())
-            .map(|c| (c.id, c.voice_users.clone()))
-            .collect();
+        let old_voice: HashMap<Id, Vec<Id>> =
+            self.channels.values().filter(|c| c.guild.is_some() && !c.voice_users.is_empty()).map(|c| (c.id, c.voice_users.clone())).collect();
         let in_call = self.voice_channel;
         self.clear_session();
         if let Some(a) = mine {
@@ -575,13 +555,10 @@ impl PhoenixApp {
         self.backend.select_guild(guild).detach_ok();
         let target = self.last_channel.get(&guild).copied().or_else(|| match guild {
             Some(g) => self.guild_channels.get(&g).and_then(|l| {
-                l.iter().copied().find(|id| {
-                    matches!(self.channels[id].kind, ChannelKind::Text | ChannelKind::Announcement)
-                        && self.channels[id].name.as_ref() == "general"
-                })
-                .or_else(|| {
-                    l.iter().copied().find(|id| self.channels[id].kind == ChannelKind::Text)
-                })
+                l.iter()
+                    .copied()
+                    .find(|id| matches!(self.channels[id].kind, ChannelKind::Text | ChannelKind::Announcement) && self.channels[id].name.as_ref() == "general")
+                    .or_else(|| l.iter().copied().find(|id| self.channels[id].kind == ChannelKind::Text))
             }),
             None => None,
         });
@@ -659,15 +636,21 @@ impl PhoenixApp {
         let fut = self.backend.load_messages(id, before, 50);
         cx.spawn(async move |this, cx| {
             let res = fut.await;
-            let _ = this.update(cx, |this, cx| {
-                this.insert_history(id, res.unwrap_or_default(), true, cx)
-            });
+            let _ = this.update(cx, |this, cx| this.insert_history(id, res.unwrap_or_default(), true, cx));
         })
         .detach();
     }
 
     pub(crate) fn resolver(&self) -> Resolver<'_> {
-        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: &[], me: self.me.id, guild: self.selected_guild }
+        Resolver {
+            users: &self.users,
+            channels: &self.channels,
+            roles: &self.roles,
+            members: &self.members,
+            soundboard_sounds: &[],
+            me: self.me.id,
+            guild: self.selected_guild,
+        }
     }
 
     pub(crate) fn resolver_with_sounds<'a>(&'a self, sounds: &'a [crate::model::SoundboardSound], channel: Id) -> Resolver<'a> {
@@ -684,8 +667,7 @@ impl PhoenixApp {
         }
         RenderedMessage {
             group_start: grouping::starts_group(prev, m, self.utc_offset),
-            day_divider: (prev.is_none() || grouping::day_divider(prev, m, self.utc_offset))
-                .then(|| format_day(m.timestamp)),
+            day_divider: (prev.is_none() || grouping::day_divider(prev, m, self.utc_offset)).then(|| format_day(m.timestamp)),
             time_full: format_time_full(m.timestamp),
             time_short: format_time_short(m.timestamp),
             blocks,
@@ -712,9 +694,7 @@ impl PhoenixApp {
             all.extend(std::mem::take(&mut entry.msgs));
         }
         let rendered: Vec<RenderedMessage> = if older {
-            let mut r: Vec<_> = (0..n.min(all.len()))
-                .map(|i| self.render_msg(&all[i], i.checked_sub(1).map(|p| &all[p])))
-                .collect();
+            let mut r: Vec<_> = (0..n.min(all.len())).map(|i| self.render_msg(&all[i], i.checked_sub(1).map(|p| &all[p]))).collect();
             let mut old = std::mem::take(&mut entry.rendered);
             if let Some(first) = old.first_mut()
                 && n < all.len()
@@ -724,9 +704,7 @@ impl PhoenixApp {
             r.extend(old);
             r
         } else {
-            (0..all.len())
-                .map(|i| self.render_msg(&all[i], i.checked_sub(1).map(|p| &all[p])))
-                .collect()
+            (0..all.len()).map(|i| self.render_msg(&all[i], i.checked_sub(1).map(|p| &all[p]))).collect()
         };
         entry.msgs = all;
         entry.rendered = rendered;
@@ -829,11 +807,7 @@ impl PhoenixApp {
     pub fn reveal_spoiler(&mut self, msg: Id, spoiler: usize, cx: &mut Context<Self>) {
         self.revealed.insert((msg, spoiler));
         let Some(ch) = self.selected_channel else { return };
-        if let Some(m) = self
-            .messages
-            .get(&ch)
-            .and_then(|e| e.msgs.iter().find(|x| x.id == msg).cloned())
-        {
+        if let Some(m) = self.messages.get(&ch).and_then(|e| e.msgs.iter().find(|x| x.id == msg).cloned()) {
             self.replace_message(m, cx);
         }
     }
@@ -871,8 +845,12 @@ impl PhoenixApp {
             AppEvent::TypingStart { channel, user, nick } => {
                 if user != self.me.id {
                     match nick {
-                        Some(n) => { self.typing_nicks.insert((channel, user), n); }
-                        None => { self.typing_nicks.remove(&(channel, user)); }
+                        Some(n) => {
+                            self.typing_nicks.insert((channel, user), n);
+                        }
+                        None => {
+                            self.typing_nicks.remove(&(channel, user));
+                        }
                     }
                     let list = self.typing.entry(channel).or_default();
                     list.retain(|(u, _)| *u != user);
@@ -1095,11 +1073,7 @@ impl PhoenixApp {
         if self.nav.is_blocked(user) || self.nav.is_ignored(user) {
             return None;
         }
-        self.typing_nicks
-            .get(&(channel, user))
-            .cloned()
-            .or_else(|| self.member_nick(user))
-            .or_else(|| self.users.get(&user).map(|u| u.display_name.clone()))
+        self.typing_nicks.get(&(channel, user)).cloned().or_else(|| self.member_nick(user)).or_else(|| self.users.get(&user).map(|u| u.display_name.clone()))
     }
 
     fn update_typing_label(&mut self) {
@@ -1169,11 +1143,7 @@ impl PhoenixApp {
             return false;
         }
         let Some(ch) = self.selected_channel else { return false };
-        let Some(m) = self
-            .messages
-            .get(&ch)
-            .and_then(|e| e.msgs.iter().rev().find(|m| m.author == self.me.id && !ui::chat::pending::is_local(m)))
-        else {
+        let Some(m) = self.messages.get(&ch).and_then(|e| e.msgs.iter().rev().find(|m| m.author == self.me.id && !ui::chat::pending::is_local(m))) else {
             return false;
         };
         let id = m.id;
@@ -1228,14 +1198,8 @@ impl PhoenixApp {
         hoisted.sort_by_key(|r| -r.position);
         let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); hoisted.len() + 2];
         for (i, m) in members.iter().enumerate() {
-            let b = if m.presence == Presence::Offline {
-                hoisted.len() + 1
-            } else {
-                hoisted
-                    .iter()
-                    .position(|r| m.roles.contains(&r.id))
-                    .unwrap_or(hoisted.len())
-            };
+            let b =
+                if m.presence == Presence::Offline { hoisted.len() + 1 } else { hoisted.iter().position(|r| m.roles.contains(&r.id)).unwrap_or(hoisted.len()) };
             buckets[b].push(i);
         }
         let users = &self.users;
@@ -1255,8 +1219,7 @@ impl PhoenixApp {
             } else {
                 crate::t!("members.h_offline").to_string()
             };
-            self.member_rows
-                .push(MemberRow::Header(format!("{title} — {}", b.len()).into()));
+            self.member_rows.push(MemberRow::Header(format!("{title} — {}", b.len()).into()));
             self.member_rows.extend(b.into_iter().map(MemberRow::Member));
         }
         self.member_list.reset(self.member_rows.len() + 1);
@@ -1324,9 +1287,7 @@ impl PhoenixApp {
     }
 
     pub fn author_role_style_in(&self, guild: Option<Id>, user: Id) -> (Option<u32>, Option<crate::ui::role_gradient::RoleGradient>) {
-        guild
-            .and_then(|g| Some((g, crate::member_index::find(self.members.get(&g)?, g, user)?)))
-            .map_or((None, None), |(g, m)| self.member_role_style(g, m))
+        guild.and_then(|g| Some((g, crate::member_index::find(self.members.get(&g)?, g, user)?))).map_or((None, None), |(g, m)| self.member_role_style(g, m))
     }
 
     pub fn author_role_style(&self, user: Id) -> (Option<u32>, Option<crate::ui::role_gradient::RoleGradient>) {
@@ -1473,13 +1434,8 @@ impl Render for PhoenixApp {
                 let vw = f32::from(window.viewport_size().width) / crate::theme::zoom();
                 let narrow = ui::title_bar::compact_sidebar(vw);
                 let drawer = narrow && ui::title_bar::drawer_open();
-                let left_col = div()
-                    .flex_none()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .child(div().flex_1().min_h_0().flex().flex_row().child(rail).child(sidebar))
-                    .child(panels);
+                let left_col =
+                    div().flex_none().h_full().flex().flex_col().child(div().flex_1().min_h_0().flex().flex_row().child(rail).child(sidebar)).child(panels);
                 div()
                     .size_full()
                     .flex()
@@ -1504,10 +1460,13 @@ impl Render for PhoenixApp {
                                         .absolute()
                                         .inset_0()
                                         .bg(gpui::hsla(0., 0., 0., 0.5))
-                                        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _, _, cx| {
-                                            ui::title_bar::set_drawer_open(false);
-                                            cx.notify();
-                                        }))
+                                        .on_mouse_down(
+                                            gpui::MouseButton::Left,
+                                            cx.listener(|_, _, _, cx| {
+                                                ui::title_bar::set_drawer_open(false);
+                                                cx.notify();
+                                            }),
+                                        )
                                         .child(
                                             div()
                                                 .id("compact-drawer-panel")

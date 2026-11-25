@@ -11,34 +11,28 @@ impl Render for Tip {
         for i in 0..5 {
             pointer = pointer.child(div().w(px(1. + 2. * i as f32)).h(z(1.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))));
         }
-        div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .pt(z(4.))
-            .child(pointer)
-            .child(
-                div()
-                    .max_w(z(200.))
-                    .px(z(12.))
-                    .py(z(8.))
-                    .rounded(z(8.))
-                    .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
-                    .border_1()
-                    .border_color(c(tok(idx::BORDER_SUBTLE)))
-                    .shadow(vec![gpui::BoxShadow {
-                        color: gpui::hsla(0., 0., 0., 0.24),
-                        offset: gpui::point(z(0.), z(12.)),
-                        blur_radius: z(24.),
-                        spread_radius: z(0.),
-                        inset: false,
-                    }])
-                    .text_size(z(14.))
-                    .line_height(z(18.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(c(tok(idx::TEXT_DEFAULT)))
-                    .child(self.0.clone()),
-            )
+        div().flex().flex_col().items_center().pt(z(4.)).child(pointer).child(
+            div()
+                .max_w(z(200.))
+                .px(z(12.))
+                .py(z(8.))
+                .rounded(z(8.))
+                .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+                .border_1()
+                .border_color(c(tok(idx::BORDER_SUBTLE)))
+                .shadow(vec![gpui::BoxShadow {
+                    color: gpui::hsla(0., 0., 0., 0.24),
+                    offset: gpui::point(z(0.), z(12.)),
+                    blur_radius: z(24.),
+                    spread_radius: z(0.),
+                    inset: false,
+                }])
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(self.0.clone()),
+        )
     }
 }
 

@@ -42,14 +42,7 @@ fn card(ix: usize, pill: Option<SharedString>, title: SharedString, desc: Shared
         .relative()
         .flex()
         .flex_col()
-        .child(
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(icon(Icon::Nitro, 96., c(tok(idx::TEXT_BRAND)))),
-        )
+        .child(div().flex_1().flex().items_center().justify_center().child(icon(Icon::Nitro, 96., c(tok(idx::TEXT_BRAND)))))
         .children(pill.map(|p| {
             div()
                 .absolute()
@@ -113,17 +106,26 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
         )
         .child(div().flex_1())
         .child(
-            div()
-                .flex()
-                .gap(z(8.))
-                .child(overlay_btn("nitro-heart").text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child("\u{2665}"))
-                .child(overlay_btn("nitro-gift").child(icon(Icon::Gift, 16., gpui::white())).child(crate::t!("nitro.gift")).on_click(cx.listener(|a, _, _, cx| a.open_gift_nitro(None, cx)))),
+            div().flex().gap(z(8.)).child(overlay_btn("nitro-heart").text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child("\u{2665}")).child(
+                overlay_btn("nitro-gift")
+                    .child(icon(Icon::Gift, 16., gpui::white()))
+                    .child(crate::t!("nitro.gift"))
+                    .on_click(cx.listener(|a, _, _, cx| a.open_gift_nitro(None, cx))),
+            ),
         );
     let hello = div()
         .flex()
         .flex_col()
         .gap(z(12.))
-        .child(div().text_size(z(32.)).line_height(z(34.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(gpui::white()).child(SharedString::from(crate::t!("nitro.hello").to_uppercase())))
+        .child(
+            div()
+                .text_size(z(32.))
+                .line_height(z(34.))
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .italic()
+                .text_color(gpui::white())
+                .child(SharedString::from(crate::t!("nitro.hello").to_uppercase())),
+        )
         .child(
             div()
                 .flex()
@@ -166,15 +168,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
                         .child(nav)
                         .child(div().px(z(32.)).pt(z(64.)).pb(z(48.)).child(hello)),
                 )
-                .child(
-                    div()
-                        .px(z(32.))
-                        .pb(z(32.))
-                        .flex()
-                        .flex_col()
-                        .child(section_title(crate::t!("nitro.whats_new")))
-                        .child(grid),
-                ),
+                .child(div().px(z(32.)).pb(z(32.)).flex().flex_col().child(section_title(crate::t!("nitro.whats_new"))).child(grid)),
         )
         .children(crate::ui::chat::scrollbar::bar_for("nitro-scroll", crate::ui::chat::scrollbar::Bar::Auto))
         .into_any_element()

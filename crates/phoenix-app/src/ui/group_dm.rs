@@ -29,15 +29,7 @@ pub fn group_avatar(app: &PhoenixApp, ch: Id, size: f32, ring: Hsla) -> AnyEleme
         .flex_none()
         .size(gpui::px(size))
         .child(div().absolute().left_0().top_0().child(avatar(Some(users[0]), s)))
-        .child(
-            div()
-                .absolute()
-                .left(gpui::px(off - gap))
-                .top(gpui::px(off - gap))
-                .size(gpui::px(s + 2. * gap))
-                .rounded_full()
-                .bg(ring),
-        )
+        .child(div().absolute().left(gpui::px(off - gap)).top(gpui::px(off - gap)).size(gpui::px(s + 2. * gap)).rounded_full().bg(ring))
         .child(div().absolute().left(gpui::px(off)).top(gpui::px(off)).child(avatar(Some(users[1]), s)))
         .into_any_element()
 }

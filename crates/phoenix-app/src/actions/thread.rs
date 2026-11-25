@@ -3,10 +3,7 @@ use std::rc::Rc;
 use gpui::Context;
 use phoenix_api::rest::guild_manage::{AdminCall, ThreadEdit, ThreadMemberPatch};
 
-use super::{
-    admin::sf,
-    open_modal,
-};
+use super::{admin::sf, open_modal};
 use crate::{
     app::PhoenixApp,
     model::{Id, ThreadInfo, ThreadRef},

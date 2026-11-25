@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use gpui::{AnyElement, App, Context, ElementId, FontWeight, IntoElement, MouseButton, ParentElement, SharedString, Styled, Window, deferred, div, prelude::*, relative};
+use gpui::{
+    AnyElement, App, Context, ElementId, FontWeight, IntoElement, MouseButton, ParentElement, SharedString, Styled, Window, deferred, div, prelude::*, relative,
+};
 
 use crate::{
     app::PhoenixApp,
@@ -46,7 +48,14 @@ pub fn inline_field(title: SharedString, desc: Option<AnyElement>, control: impl
         .child(div().flex_none().flex().flex_col().items_end().child(control))
 }
 
-pub fn switch_field(id: &'static str, title: SharedString, desc: Option<AnyElement>, on: bool, toggle: Rc<dyn Fn(&mut App)>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn switch_field(
+    id: &'static str,
+    title: SharedString,
+    desc: Option<AnyElement>,
+    on: bool,
+    toggle: Rc<dyn Fn(&mut App)>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     div()
         .id(id)
         .cursor_pointer()
@@ -72,31 +81,27 @@ pub fn select_box(id: impl Into<ElementId>, value: impl Into<SharedString>, open
         .hover(move |s| if open { s } else { s.border_color(c(tok(idx::INPUT_BORDER_HOVER))) })
         .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
         .cursor_pointer()
+        .child(div().flex_1().min_w_0().pl(z(12.)).truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(value.into()))
         .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .pl(z(12.))
-                .truncate()
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(c(tok(idx::TEXT_STRONG)))
-                .child(value.into()),
-        )
-        .child(
-            div()
-                .flex_none()
-                .w(z(36.))
-                .h_full()
-                .pr(z(4.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(gpui::svg().path(crate::icons::path("settings/chevron-down")).size(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).when(open, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI))))),
+            div().flex_none().w(z(36.)).h_full().pr(z(4.)).flex().items_center().justify_center().child(
+                gpui::svg()
+                    .path(crate::icons::path("settings/chevron-down"))
+                    .size(z(20.))
+                    .text_color(c(tok(idx::TEXT_STRONG)))
+                    .when(open, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI)))),
+            ),
         )
 }
 
-pub fn dropdown(id: &'static str, options: Vec<SharedString>, selected: usize, open: bool, toggle: Rc<dyn Fn(&mut App)>, pick: OnPick, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn dropdown(
+    id: &'static str,
+    options: Vec<SharedString>,
+    selected: usize,
+    open: bool,
+    toggle: Rc<dyn Fn(&mut App)>,
+    pick: OnPick,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let cur = options.get(selected).cloned().unwrap_or_default();
     let mut wrap = div().relative().w_full().child(select_box(SharedString::from(format!("{id}-box")), cur, open).on_click(cx.listener(move |_, _, _, cx| {
         toggle(cx);
@@ -113,7 +118,13 @@ pub fn dropdown(id: &'static str, options: Vec<SharedString>, selected: usize, o
             .border_1()
             .border_color(c(tok(idx::BORDER_SUBTLE)))
             .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
-            .shadow(vec![gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.16), offset: gpui::point(z(0.), z(2.)), blur_radius: z(8.), spread_radius: z(0.), inset: false }])
+            .shadow(vec![gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.16),
+                offset: gpui::point(z(0.), z(2.)),
+                blur_radius: z(8.),
+                spread_radius: z(0.),
+                inset: false,
+            }])
             .flex()
             .flex_col();
         for (k, l) in options.into_iter().enumerate() {
@@ -260,13 +271,16 @@ pub fn info_notice(t: impl Into<SharedString>) -> AnyElement {
         .flex()
         .items_start()
         .gap(z(8.))
-        .child(div().h(z(18.)).flex().items_center().child(gpui::svg().path(crate::icons::path("info")).size(z(16.)).text_color(c(tok(idx::ICON_FEEDBACK_INFO)))))
+        .child(
+            div().h(z(18.)).flex().items_center().child(gpui::svg().path(crate::icons::path("info")).size(z(16.)).text_color(c(tok(idx::ICON_FEEDBACK_INFO)))),
+        )
         .child(div().flex_1().min_w_0().child(text(t, 14., 18., idx::TEXT_STRONG)))
         .into_any_element()
 }
 
 pub fn format_toolbar(id: &'static str, extra: bool, on_wrap: OnWrap, trailing: Option<AnyElement>) -> AnyElement {
-    let mut tools: Vec<(&'static str, &'static str)> = vec![("settings/bold", "**"), ("settings/italic", "*"), ("settings/underline", "__"), ("settings/strike", "~~")];
+    let mut tools: Vec<(&'static str, &'static str)> =
+        vec![("settings/bold", "**"), ("settings/italic", "*"), ("settings/underline", "__"), ("settings/strike", "~~")];
     if extra {
         tools.push(("settings/quote", "> "));
         tools.push(("angle-brackets", "`"));

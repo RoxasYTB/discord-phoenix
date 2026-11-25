@@ -92,9 +92,7 @@ pub fn friend_row_items(e: &Ent, user: Id) -> Vec<MenuItem> {
     vec![
         act(e, crate::t!("friends.start_video_call"), move |a, _, cx| a.open_call_ui(user, cx)),
         act(e, crate::t!("friends.start_voice_call"), move |a, _, cx| a.open_call_ui(user, cx)),
-        MenuItem::danger(crate::t!("menu.remove_friend"), None, move |_, _, cx: &mut App| {
-            rm.update(cx, |a, cx| a.confirm_remove_friend(user, cx))
-        }),
+        MenuItem::danger(crate::t!("menu.remove_friend"), None, move |_, _, cx: &mut App| rm.update(cx, |a, cx| a.confirm_remove_friend(user, cx))),
     ]
 }
 
@@ -133,14 +131,10 @@ pub fn profile_items(app: &PhoenixApp, e: &Ent, user: Id, guild: Option<Id>) -> 
             items.push(act(e, crate::t!("friends.unblock"), move |a, _, cx| a.relationship_action(user, RelAction::Remove, cx)));
         } else {
             let eb = e.clone();
-            items.push(MenuItem::danger(crate::t!("menu.block"), None, move |_, _, cx: &mut App| {
-                eb.update(cx, |a, cx| a.confirm_block(user, cx))
-            }));
+            items.push(MenuItem::danger(crate::t!("menu.block"), None, move |_, _, cx: &mut App| eb.update(cx, |a, cx| a.confirm_block(user, cx))));
         }
         let er = e.clone();
-        items.push(MenuItem::danger(crate::t!("profile.report_user"), None, move |_, _, cx: &mut App| {
-            er.update(cx, |a, cx| a.report_user(user, guild, cx))
-        }));
+        items.push(MenuItem::danger(crate::t!("profile.report_user"), None, move |_, _, cx: &mut App| er.update(cx, |a, cx| a.report_user(user, guild, cx))));
     }
     if app.prefs.synced.developer_mode {
         items.push(MenuItem::Separator);

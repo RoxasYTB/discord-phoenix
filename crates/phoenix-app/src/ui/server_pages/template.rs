@@ -56,7 +56,13 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
         );
     let Some(list) = list else { return p.child(super::loading()).into_any_element() };
     let existing: Option<Value> = list.as_array().and_then(|a| a.first().cloned());
-    let mut p = p.child(div().mt(z(40.)).flex().gap(z(4.)).child(label(crate::t!("gs2.tpl_title"))).child(text(16., 20., FontWeight::NORMAL, idx::TEXT_FEEDBACK_CRITICAL, "*")));
+    let mut p = p.child(div().mt(z(40.)).flex().gap(z(4.)).child(label(crate::t!("gs2.tpl_title"))).child(text(
+        16.,
+        20.,
+        FontWeight::NORMAL,
+        idx::TEXT_FEEDBACK_CRITICAL,
+        "*",
+    )));
     match existing {
         Some(tpl) => {
             let code = str_of(&tpl, "code").to_owned();
@@ -86,15 +92,17 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                 .child(super::field(guild, "tpl-name", "", cx).mt(z(8.)))
                 .child(div().mt(z(20.)).child(label(crate::t!("gs2.tpl_desc"))))
                 .child(super::field(guild, "tpl-desc", "", cx).mt(z(8.)))
-                .child(div().mt(z(20.)).flex().child(button("gs2-tpl-create", crate::t!("gs2.tpl_generate"), BtnKind::Primary).when(!ok, |b| b.opacity(0.5)).on_click(cx.listener(
-                    move |a, _, _, cx| {
-                        let name = super::value(guild, "tpl-name", cx).unwrap_or_default();
-                        let description = super::value(guild, "tpl-desc", cx).unwrap_or_default();
-                        if !name.trim().is_empty() {
-                            write(a, ServerCall::CreateTemplate { guild: sf(guild), name, description }, None, cx);
-                        }
-                    },
-                ))));
+                .child(div().mt(z(20.)).flex().child(
+                    button("gs2-tpl-create", crate::t!("gs2.tpl_generate"), BtnKind::Primary).when(!ok, |b| b.opacity(0.5)).on_click(cx.listener(
+                        move |a, _, _, cx| {
+                            let name = super::value(guild, "tpl-name", cx).unwrap_or_default();
+                            let description = super::value(guild, "tpl-desc", cx).unwrap_or_default();
+                            if !name.trim().is_empty() {
+                                write(a, ServerCall::CreateTemplate { guild: sf(guild), name, description }, None, cx);
+                            }
+                        },
+                    )),
+                ));
         }
     }
     p.into_any_element()

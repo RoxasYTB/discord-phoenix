@@ -18,7 +18,17 @@ pub enum SideItem {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn side_item(n: usize, label: SharedString, index: usize, danger: bool, icon: Option<&'static str>, external: bool, on: bool, pick: Pick, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn side_item(
+    n: usize,
+    label: SharedString,
+    index: usize,
+    danger: bool,
+    icon: Option<&'static str>,
+    external: bool,
+    on: bool,
+    pick: Pick,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let fg = if danger {
         idx::TEXT_FEEDBACK_CRITICAL
     } else if on {
@@ -92,7 +102,9 @@ fn side_header(icon: Option<&'static str>, name: SharedString, category: Option<
                 .line_height(z(18.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(c(tok(idx::TEXT_MUTED)))
-                .children(icon.map(|i| gpui::svg().path(crate::icons::path(i)).flex_none().self_center().mr(z(4.)).size(z(12.)).text_color(c(tok(idx::TEXT_MUTED)))))
+                .children(
+                    icon.map(|i| gpui::svg().path(crate::icons::path(i)).flex_none().self_center().mr(z(4.)).size(z(12.)).text_color(c(tok(idx::TEXT_MUTED)))),
+                )
                 .child(div().flex_shrink(1.).min_w_0().truncate().child(name))
                 .children(category.map(|cat| {
                     div()
@@ -129,13 +141,27 @@ pub fn close_tools(cx: &mut Context<PhoenixApp>) -> gpui::Div {
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))).border_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))).text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))))
-                .active(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))).border_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE))).text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE))))
+                .hover(|s| {
+                    s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER)))
+                        .border_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))
+                        .text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))
+                })
+                .active(|s| {
+                    s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
+                        .border_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
+                        .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
+                })
                 .on_click(cx.listener(|_, _, _, cx| {
                     close_modal();
                     cx.notify();
                 }))
-                .child(gpui::svg().path(crate::icons::path("close-small")).size(z(18.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).group_hover("settings-close", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))))),
+                .child(
+                    gpui::svg()
+                        .path(crate::icons::path("close-small"))
+                        .size(z(18.))
+                        .text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))
+                        .group_hover("settings-close", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))),
+                ),
         )
         .child(
             div()
@@ -154,22 +180,57 @@ pub fn page_title(t: SharedString) -> gpui::Div {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn overlay(id: &'static str, side_items: Vec<SideItem>, selected: usize, pick: Pick, title: SharedString, content: AnyElement, notice: Option<AnyElement>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn overlay(
+    id: &'static str,
+    side_items: Vec<SideItem>,
+    selected: usize,
+    pick: Pick,
+    title: SharedString,
+    content: AnyElement,
+    notice: Option<AnyElement>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     overlay_ex(id, side_items, selected, pick, title, content, notice, false, None, false, cx)
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn overlay_fixed(id: &'static str, side_items: Vec<SideItem>, selected: usize, pick: Pick, content: AnyElement, notice: Option<AnyElement>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn overlay_fixed(
+    id: &'static str,
+    side_items: Vec<SideItem>,
+    selected: usize,
+    pick: Pick,
+    content: AnyElement,
+    notice: Option<AnyElement>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     overlay_ex(id, side_items, selected, pick, SharedString::default(), content, notice, true, None, true, cx)
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn overlay_with(id: &'static str, side_items: Vec<SideItem>, selected: usize, pick: Pick, title: SharedString, content: AnyElement, notice: Option<AnyElement>, extra: Option<AnyElement>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn overlay_with(
+    id: &'static str,
+    side_items: Vec<SideItem>,
+    selected: usize,
+    pick: Pick,
+    title: SharedString,
+    content: AnyElement,
+    notice: Option<AnyElement>,
+    extra: Option<AnyElement>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     overlay_ex(id, side_items, selected, pick, title, content, notice, false, extra, false, cx)
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn overlay_wide(id: &'static str, side_items: Vec<SideItem>, selected: usize, pick: Pick, content: AnyElement, notice: Option<AnyElement>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn overlay_wide(
+    id: &'static str,
+    side_items: Vec<SideItem>,
+    selected: usize,
+    pick: Pick,
+    content: AnyElement,
+    notice: Option<AnyElement>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     overlay_ex(id, side_items, selected, pick, SharedString::default(), content, notice, true, None, false, cx)
 }
 
@@ -302,7 +363,13 @@ pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyEl
         .border_color(c(tok(idx::BORDER_SUBTLE)))
         .overflow_hidden()
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST)))
-        .shadow(vec![gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.2), offset: gpui::point(z(0.), z(2.)), blur_radius: z(10.), spread_radius: z(0.), inset: false }])
+        .shadow(vec![gpui::BoxShadow {
+            color: gpui::hsla(0., 0., 0., 0.2),
+            offset: gpui::point(z(0.), z(2.)),
+            blur_radius: z(10.),
+            spread_radius: z(0.),
+            inset: false,
+        }])
         .flex()
         .items_center()
         .justify_between()

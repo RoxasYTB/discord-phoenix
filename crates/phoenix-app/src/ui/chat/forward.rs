@@ -26,9 +26,7 @@ pub fn wrap(app: &PhoenixApp, f: &Forward, body: gpui::Div) -> AnyElement {
     div()
         .flex()
         .w_full()
-        .child(
-            div().flex_none().w(z(4.)).rounded(z(2.)).mr(z(12.)).bg(tk(idx::BORDER_SUBTLE)),
-        )
+        .child(div().flex_none().w(z(4.)).rounded(z(2.)).mr(z(12.)).bg(tk(idx::BORDER_SUBTLE)))
         .child(
             div()
                 .flex()

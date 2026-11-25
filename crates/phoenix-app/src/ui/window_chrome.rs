@@ -1,9 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use gpui::{
-    CursorStyle, Decorations, InteractiveElement, IntoElement, MouseButton, ParentElement, ResizeEdge, Styled, Window, div,
-    prelude::*, px,
-};
+use gpui::{CursorStyle, Decorations, InteractiveElement, IntoElement, MouseButton, ParentElement, ResizeEdge, Styled, Window, div, prelude::*, px};
 
 const EDGE: f32 = 5.;
 const CORNER: f32 = 16.;
@@ -29,15 +26,10 @@ pub fn drag_region<E: InteractiveElement>(el: E) -> E {
 }
 
 fn strip(id: &'static str, edge: ResizeEdge, cursor: CursorStyle) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .absolute()
-        .occlude()
-        .cursor(cursor)
-        .on_mouse_down(MouseButton::Left, move |_, w, cx| {
-            cx.stop_propagation();
-            w.start_window_resize(edge);
-        })
+    div().id(id).absolute().occlude().cursor(cursor).on_mouse_down(MouseButton::Left, move |_, w, cx| {
+        cx.stop_propagation();
+        w.start_window_resize(edge);
+    })
 }
 
 pub fn resize_handles(window: &Window) -> Option<impl IntoElement> {

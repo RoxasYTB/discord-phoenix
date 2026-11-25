@@ -216,7 +216,11 @@ pub struct PresenceUpdate {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MemberListItem {
-    Group { id: String, #[serde(default)] count: u32 },
+    Group {
+        id: String,
+        #[serde(default)]
+        count: u32,
+    },
     Member(Box<MemberListMember>),
 }
 
@@ -231,11 +235,25 @@ pub struct MemberListMember {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "op", rename_all = "UPPERCASE")]
 pub enum MemberListOp {
-    Sync { range: [u32; 2], #[serde(default)] items: Vec<MemberListItem> },
-    Insert { index: u32, item: MemberListItem },
-    Update { index: u32, item: MemberListItem },
-    Delete { index: u32 },
-    Invalidate { range: [u32; 2] },
+    Sync {
+        range: [u32; 2],
+        #[serde(default)]
+        items: Vec<MemberListItem>,
+    },
+    Insert {
+        index: u32,
+        item: MemberListItem,
+    },
+    Update {
+        index: u32,
+        item: MemberListItem,
+    },
+    Delete {
+        index: u32,
+    },
+    Invalidate {
+        range: [u32; 2],
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]

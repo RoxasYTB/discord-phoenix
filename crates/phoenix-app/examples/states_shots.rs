@@ -1,8 +1,6 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
-use gpui::{
-    AppContext, Entity, HeadlessAppContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, px, size,
-};
+use gpui::{AppContext, Entity, HeadlessAppContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, px, size};
 use gpui_component::Root;
 use phoenix_app::{app::PhoenixApp, assets::Assets, mock::MockBackend};
 
@@ -13,9 +11,7 @@ fn main() -> anyhow::Result<()> {
     let login_only = false;
 
     let text = gpui_platform::current_platform(true).text_system();
-    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
-        gpui_platform::current_headless_renderer()
-    });
+    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || gpui_platform::current_headless_renderer());
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -114,20 +110,11 @@ fn main() -> anyhow::Result<()> {
         let right = parts.get(2) == Some(&"right");
         let position = gpui::point(px(x), px(y));
         cx.update_window(win.into(), |_, window, cx| {
-            window.dispatch_event(
-                PlatformInput::MouseMove(MouseMoveEvent { position, pressed_button: None, modifiers: Modifiers::default() }),
-                cx,
-            );
+            window.dispatch_event(PlatformInput::MouseMove(MouseMoveEvent { position, pressed_button: None, modifiers: Modifiers::default() }), cx);
             if down || right {
                 let button = if right { MouseButton::Right } else { MouseButton::Left };
                 window.dispatch_event(
-                    PlatformInput::MouseDown(MouseDownEvent {
-                        button,
-                        position,
-                        modifiers: Modifiers::default(),
-                        click_count: 1,
-                        first_mouse: false,
-                    }),
+                    PlatformInput::MouseDown(MouseDownEvent { button, position, modifiers: Modifiers::default(), click_count: 1, first_mouse: false }),
                     cx,
                 );
             }

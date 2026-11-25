@@ -52,11 +52,7 @@ pub fn presets(now: DateTime<Local>) -> Vec<(&'static str, i64)> {
     };
     let monday = now.date_naive() - Duration::days(now.weekday().num_days_from_monday() as i64) + Duration::weeks(1);
     let monday = Local.from_local_datetime(&monday.and_hms_opt(9, 0, 0).unwrap_or_default()).earliest().map(|d| d.timestamp()).unwrap_or_default();
-    vec![
-        pick(9, "sched.today_9", "sched.tomorrow_9"),
-        pick(13, "sched.today_13", "sched.tomorrow_13"),
-        ("sched.monday_9", monday),
-    ]
+    vec![pick(9, "sched.today_9", "sched.tomorrow_9"), pick(13, "sched.today_13", "sched.tomorrow_13"), ("sched.monday_9", monday)]
 }
 
 pub fn default_at(now: DateTime<Local>) -> i64 {
@@ -250,22 +246,21 @@ fn date_field(value: SharedString) -> gpui::Stateful<gpui::Div> {
 
 fn field(id: &'static str, value: SharedString, open: bool, which: u8, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     let base = if which == 0 { date_field(value) } else { crate::ui::controls::select_field(id, value) };
-    base.when(open, |d| d.border_color(c(tok(idx::INPUT_BORDER_ACTIVE))))
-        .on_click(cx.listener(move |_, _, _, cx| {
-            let mut at = None;
-            with_modal(|m| {
-                if let Some(Modal::Schedule(p)) = m {
-                    p.open = if p.open == Some(which) { None } else { Some(which) };
-                    p.month = None;
-                    at = (p.open == Some(1)).then_some(p.at);
-                }
-            });
-            if let Some(at) = at {
-                let ix = slots(local(at).date_naive()).iter().position(|t| *t == at).unwrap_or(0);
-                LIST_SCROLL.with(|h| h.scroll_to_top_of_item(ix));
+    base.when(open, |d| d.border_color(c(tok(idx::INPUT_BORDER_ACTIVE)))).on_click(cx.listener(move |_, _, _, cx| {
+        let mut at = None;
+        with_modal(|m| {
+            if let Some(Modal::Schedule(p)) = m {
+                p.open = if p.open == Some(which) { None } else { Some(which) };
+                p.month = None;
+                at = (p.open == Some(1)).then_some(p.at);
             }
-            cx.notify();
-        }))
+        });
+        if let Some(at) = at {
+            let ix = slots(local(at).date_naive()).iter().position(|t| *t == at).unwrap_or(0);
+            LIST_SCROLL.with(|h| h.scroll_to_top_of_item(ix));
+        }
+        cx.notify();
+    }))
 }
 
 fn list(options: Vec<(SharedString, i64, bool)>, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -483,7 +478,8 @@ pub fn render(p: &Picker, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let (channel, at, editing, existing) = (p.channel, p.at, p.editing && p.existing.is_none(), p.existing);
     let close = close_action(cx);
     let secondary = if editing { crate::t!("sched.clear") } else { crate::t!("common.cancel") };
-    let (title, primary) = if existing.is_some() { (crate::t!("sched.update_title"), crate::t!("sched.update")) } else { (crate::t!("sched.title"), crate::t!("sched.set")) };
+    let (title, primary) =
+        if existing.is_some() { (crate::t!("sched.update_title"), crate::t!("sched.update")) } else { (crate::t!("sched.title"), crate::t!("sched.set")) };
     let footer = div()
         .w_full()
         .flex()
@@ -494,21 +490,18 @@ pub fn render(p: &Picker, cx: &mut Context<PhoenixApp>) -> AnyElement {
             }
             close(w, cx)
         }))
-        .child(
-            button("sched-set", primary, BtnKind::Primary)
-                .flex_1()
-                .when(err.is_some(), |d| d.opacity(0.5).cursor_default())
-                .on_click(cx.listener(move |a, _, _, cx| {
-                    if problem(at, Local::now().timestamp()).is_none() {
-                        crate::actions::close_modal();
-                        match existing {
-                            Some(id) => a.reschedule(id, at, cx),
-                            None => set_draft(channel, Some(at)),
-                        }
+        .child(button("sched-set", primary, BtnKind::Primary).flex_1().when(err.is_some(), |d| d.opacity(0.5).cursor_default()).on_click(cx.listener(
+            move |a, _, _, cx| {
+                if problem(at, Local::now().timestamp()).is_none() {
+                    crate::actions::close_modal();
+                    match existing {
+                        Some(id) => a.reschedule(id, at, cx),
+                        None => set_draft(channel, Some(at)),
                     }
-                    cx.notify();
-                })),
-        );
+                }
+                cx.notify();
+            },
+        )));
     card(480., title, None, body.into_any_element(), Some(footer.into_any_element()), cx)
 }
 

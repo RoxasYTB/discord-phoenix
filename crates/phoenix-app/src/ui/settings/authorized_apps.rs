@@ -137,9 +137,7 @@ fn scope_key(s: &str) -> Option<&'static str> {
 
 fn date(id: u64) -> String {
     let ms = (id >> 22) as i64 + 1_420_070_400_000;
-    chrono::DateTime::from_timestamp_millis(ms)
-        .map(|d| d.with_timezone(&chrono::Local).format(&crate::t!("sp.auth.date_fmt")).to_string())
-        .unwrap_or_default()
+    chrono::DateTime::from_timestamp_millis(ms).map(|d| d.with_timezone(&chrono::Local).format(&crate::t!("sp.auth.date_fmt")).to_string()).unwrap_or_default()
 }
 
 fn small(t: impl Into<SharedString>, col: usize) -> gpui::Div {
@@ -163,9 +161,7 @@ pub fn render(_: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(
-                    div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(title),
-                )
+                .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(title))
                 .child(gpui::svg().path("icons/chevron.svg").size(z(24.)).text_color(c(tok(idx::TEXT_DEFAULT))))
         };
         let perms: Vec<SharedString> = a.scopes.iter().filter_map(|s| scope_key(s)).map(|k| crate::t!(k)).collect();
@@ -192,12 +188,25 @@ pub fn render(_: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                             .flex()
                             .flex_col()
                             .gap(z(4.))
-                            .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).truncate().child(a.name.clone()))
+                            .child(
+                                div()
+                                    .text_size(z(16.))
+                                    .line_height(z(20.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(c(tok(idx::TEXT_STRONG)))
+                                    .truncate()
+                                    .child(a.name.clone()),
+                            )
                             .child(small(crate::t!("sp.auth.date", date = date(a.token_id)), idx::TEXT_DEFAULT)),
                     )
-                    .child(div().size(z(32.)).flex().items_center().justify_center().child(
-                        gpui::svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))),
-                    )),
+                    .child(
+                        div()
+                            .size(z(32.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(gpui::svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT)))),
+                    ),
             )
             .child(
                 div()
@@ -246,15 +255,19 @@ pub fn render(_: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                     )
                     .child(
                         div().flex().justify_end().child(
-                            controls::button_sm(gpui::ElementId::Name(format!("deauth-{}", a.token_id).into()), crate::t!("sp.auth.deauth"), BtnKind::Secondary)
-                                .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
-                                .on_click({
-                                    let (token, name) = (a.token_id, a.name.clone());
-                                    cx.listener(move |_, _, _, cx| {
-                                        *CONFIRM.write() = Some((token, name.clone()));
-                                        cx.notify();
-                                    })
-                                }),
+                            controls::button_sm(
+                                gpui::ElementId::Name(format!("deauth-{}", a.token_id).into()),
+                                crate::t!("sp.auth.deauth"),
+                                BtnKind::Secondary,
+                            )
+                            .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
+                            .on_click({
+                                let (token, name) = (a.token_id, a.name.clone());
+                                cx.listener(move |_, _, _, cx| {
+                                    *CONFIRM.write() = Some((token, name.clone()));
+                                    cx.notify();
+                                })
+                            }),
                         ),
                     ),
             )

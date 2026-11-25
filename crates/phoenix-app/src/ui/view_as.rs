@@ -142,7 +142,8 @@ pub fn notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
 }
 
 fn picker(app: &PhoenixApp, v: &ViewAs, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let mut roles: Vec<crate::model::Role> = app.roles.get(&v.guild).cloned().unwrap_or_default().into_iter().filter(|r| r.id != v.guild && !r.managed).collect();
+    let mut roles: Vec<crate::model::Role> =
+        app.roles.get(&v.guild).cloned().unwrap_or_default().into_iter().filter(|r| r.id != v.guild && !r.managed).collect();
     roles.sort_by_key(|r| std::cmp::Reverse(r.position));
     let mut list = div().flex().flex_col();
     for (n, r) in roles.into_iter().enumerate() {

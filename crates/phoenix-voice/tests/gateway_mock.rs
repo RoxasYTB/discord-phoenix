@@ -4,9 +4,9 @@ use futures_util::{SinkExt, StreamExt};
 use phoenix_voice::gateway::{self, DaveServerMessage, GatewayEvent, ReconnectPolicy, ServerMessage, VoiceConnectInfo};
 use serde_json::Value;
 use tokio::net::TcpListener;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
-use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 
 fn op_of(m: &Message) -> Option<(u64, Value)> {
     let Message::Text(t) = m else { return None };
@@ -31,7 +31,9 @@ async fn identify_heartbeat_dave_binary_resume() {
         assert_eq!(op, 0);
         assert_eq!(d["session_id"], "sess");
         assert_eq!(d["max_dave_protocol_version"], 1);
-        ws.send(Message::Text(r#"{"op":2,"seq":1,"d":{"ssrc":11,"ip":"127.0.0.1","port":4000,"modes":["aead_aes256_gcm_rtpsize"],"streams":[]}}"#.into())).await.unwrap();
+        ws.send(Message::Text(r#"{"op":2,"seq":1,"d":{"ssrc":11,"ip":"127.0.0.1","port":4000,"modes":["aead_aes256_gcm_rtpsize"],"streams":[]}}"#.into()))
+            .await
+            .unwrap();
         ws.send(Message::Binary(vec![0, 2, 25, 0xde, 0xad].into())).await.unwrap();
         let mut got_hb = false;
         let mut got_kp = false;
@@ -88,19 +90,12 @@ async fn identify_heartbeat_dave_binary_resume() {
         max_dave_protocol_version: 1,
         stream: false,
     };
-    let (h, mut rx, task) = gateway::spawn(
-        info,
-        Some(format!("ws://{addr}")),
-        ReconnectPolicy { max_attempts: 2, backoff: Duration::from_millis(10) },
-    );
+    let (h, mut rx, task) = gateway::spawn(info, Some(format!("ws://{addr}")), ReconnectPolicy { max_attempts: 2, backoff: Duration::from_millis(10) });
 
     assert!(matches!(next_event(&mut rx).await, GatewayEvent::Message(ServerMessage::Hello { .. })));
     let GatewayEvent::Message(ServerMessage::Ready(r)) = next_event(&mut rx).await else { panic!("ready") };
     assert_eq!(r.ssrc, 11);
-    assert_eq!(
-        next_event(&mut rx).await,
-        GatewayEvent::Message(ServerMessage::Dave(DaveServerMessage::ExternalSender(vec![0xde, 0xad])))
-    );
+    assert_eq!(next_event(&mut rx).await, GatewayEvent::Message(ServerMessage::Dave(DaveServerMessage::ExternalSender(vec![0xde, 0xad]))));
     h.dave_key_package(vec![1, 2, 3]).unwrap();
     h.video(&phoenix_voice::gateway::VideoPayload {
         user_id: None,

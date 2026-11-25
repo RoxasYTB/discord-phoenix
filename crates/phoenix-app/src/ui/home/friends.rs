@@ -1,9 +1,6 @@
-use crate::ui::tooltip::Tipped as _;
 use crate::theme::z;
-use gpui::{
-    AnyElement, Context, Focusable, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    prelude::*, px,
-};
+use crate::ui::tooltip::Tipped as _;
+use gpui::{AnyElement, Context, Focusable, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*, px};
 use gpui_component::input::{Input, InputEvent, InputState};
 
 use crate::{
@@ -12,8 +9,9 @@ use crate::{
     model::{Id, Presence},
     theme::{Palette, c, generated::idx, m, tok},
     ui::{
-        badge, icon,
+        badge,
         home::data::{FriendsTab, HomeView, NavRequest, RelAction, Relationship, RelationshipKind},
+        icon,
     },
 };
 
@@ -63,15 +61,7 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
         .flex_col()
         .bg(c(Palette::BG_PRIMARY))
         .child(header(app, cx))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .flex_row()
-                .child(div().flex_1().min_w_0().h_full().child(body))
-                .child(active_now(app, cx)),
-        )
+        .child(div().flex_1().min_h_0().flex().flex_row().child(div().flex_1().min_w_0().h_full().child(body)).child(active_now(app, cx)))
         .into_any_element()
 }
 
@@ -106,9 +96,7 @@ fn ensure_add_input(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<
     });
     app.nav.subs.push(sub);
     app.nav.add_friend_input = Some(input);
-    let note = cx.new(|cx| {
-        gpui_component::input::TextareaState::new(window, cx).auto_grow(2, 2).placeholder(crate::t!("friends.add_note_placeholder"))
-    });
+    let note = cx.new(|cx| gpui_component::input::TextareaState::new(window, cx).auto_grow(2, 2).placeholder(crate::t!("friends.add_note_placeholder")));
     let last = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
     let sub = cx.subscribe_in(&note, window, move |_: &mut PhoenixApp, st, ev: &InputEvent, window, cx| {
         if !matches!(ev, InputEvent::Change) {
@@ -147,20 +135,18 @@ fn send_request(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         return;
     }
     let note = af::clean_note(&raw_note);
-    app.nav_request(NavRequest::Relationship { user: Id(0), action: RelAction::AddByTag { tag: tag.clone(), note } }, cx, move |this, res, _cx| {
-        match res {
-            Ok(_) => {
-                this.nav.add_friend.on_success(&tag);
-                this.nav.add_friend_success_tag = Some(tag.clone().into());
-                this.nav.add_friend_reset = true;
+    app.nav_request(NavRequest::Relationship { user: Id(0), action: RelAction::AddByTag { tag: tag.clone(), note } }, cx, move |this, res, _cx| match res {
+        Ok(_) => {
+            this.nav.add_friend.on_success(&tag);
+            this.nav.add_friend_success_tag = Some(tag.clone().into());
+            this.nav.add_friend_reset = true;
+        }
+        Err(e) => {
+            let f = af::Failure::decode(&e.0).unwrap_or(af::Failure { status: 0, code: None, note_rejected: false });
+            if let Some(d) = af::dialog(&f, &tag) {
+                open_failure_dialog(d);
             }
-            Err(e) => {
-                let f = af::Failure::decode(&e.0).unwrap_or(af::Failure { status: 0, code: None, note_rejected: false });
-                if let Some(d) = af::dialog(&f, &tag) {
-                    open_failure_dialog(d);
-                }
-                this.nav.add_friend.on_error(af::inline_error(&f, &tag));
-            }
+            this.nav.add_friend.on_error(af::inline_error(&f, &tag));
         }
     });
 }
@@ -211,18 +197,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let online = app.nav.relationships.iter().any(|r| r.kind == RelationshipKind::Friend && app.presence_of(r.user) != Presence::Offline);
     let has_pending = app.nav.count(RelationshipKind::Incoming) + app.nav.count(RelationshipKind::Outgoing) > 0;
     let pill = || {
-        div()
-            .mx(z(8.))
-            .px(z(12.))
-            .py(z(4.))
-            .h(z(32.))
-            .rounded(z(8.))
-            .flex()
-            .items_center()
-            .gap(z(6.))
-            .cursor_pointer()
-            .text_size(z(16.))
-            .line_height(z(20.))
+        div().mx(z(8.)).px(z(12.)).py(z(4.)).h(z(32.)).rounded(z(8.)).flex().items_center().gap(z(6.)).cursor_pointer().text_size(z(16.)).line_height(z(20.))
     };
     let tab = |id: &'static str, label: SharedString, t: FriendsTab, cx: &mut Context<PhoenixApp>| {
         let sel = app.nav.friends_tab == t;
@@ -284,27 +259,24 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         )
         .child(div().flex_1())
         .child(
-            div()
-                .pl(z(10.))
-                .pr(z(8.))
-                .child(
-                    div()
-                        .id("fr-new-group-dm")
-                        .group("fr-new-group-dm")
-                        .size(z(32.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .tip(crate::t!("friends.new_group_dm"))
-                        .child(
-                            gpui::svg()
-                                .path(crate::icons::path("new-group-dm"))
-                                .size(z(20.))
-                                .text_color(c(tok(idx::ICON_MUTED)))
-                                .group_hover("fr-new-group-dm", |s| s.text_color(c(tok(idx::ICON_SUBTLE)))),
-                        ),
-                ),
+            div().pl(z(10.)).pr(z(8.)).child(
+                div()
+                    .id("fr-new-group-dm")
+                    .group("fr-new-group-dm")
+                    .size(z(32.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .tip(crate::t!("friends.new_group_dm"))
+                    .child(
+                        gpui::svg()
+                            .path(crate::icons::path("new-group-dm"))
+                            .size(z(20.))
+                            .text_color(c(tok(idx::ICON_MUTED)))
+                            .group_hover("fr-new-group-dm", |s| s.text_color(c(tok(idx::ICON_SUBTLE)))),
+                    ),
+            ),
         )
 }
 
@@ -335,8 +307,7 @@ pub fn order(rows: &mut [Relationship], key: impl Fn(&Relationship) -> String, t
 }
 
 pub fn matches_query(r: &Relationship, username: &str, global: Option<&str>, q: &str) -> bool {
-    q.is_empty()
-        || [Some(username), r.nickname.as_deref(), global].into_iter().flatten().any(|v| v.to_lowercase().contains(q))
+    q.is_empty() || [Some(username), r.nickname.as_deref(), global].into_iter().flatten().any(|v| v.to_lowercase().contains(q))
 }
 
 fn visible(app: &PhoenixApp, tab: FriendsTab) -> Vec<Relationship> {
@@ -351,10 +322,7 @@ fn visible(app: &PhoenixApp, tab: FriendsTab) -> Vec<Relationship> {
         &mut v,
         |r| {
             let u = app.users.get(&r.user);
-            r.nickname
-                .as_ref()
-                .map(|n| n.to_lowercase())
-                .unwrap_or_else(|| u.map(|u| u.display_name.to_lowercase()).unwrap_or_default())
+            r.nickname.as_ref().map(|n| n.to_lowercase()).unwrap_or_else(|| u.map(|u| u.display_name.to_lowercase()).unwrap_or_default())
         },
         tab,
     );
@@ -367,8 +335,7 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
         .into_iter()
         .filter(|r| app.users.get(&r.user).is_some_and(|u| matches_query(r, &u.name, Some(u.display_name.as_ref()), &q)))
         .collect();
-    let others = tab == FriendsTab::Pending
-        && app.nav.relationships.iter().any(|r| r.kind == RelationshipKind::Incoming && (r.spam || r.ignored));
+    let others = tab == FriendsTab::Pending && app.nav.relationships.iter().any(|r| r.kind == RelationshipKind::Incoming && (r.spam || r.ignored));
     let search = div()
         .flex_none()
         .mt(z(12.))
@@ -392,8 +359,7 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
         return empty_state(tab, others, cx).into_any_element();
     }
     let scroll = FRIENDS_SCROLL.with(|h| h.clone());
-    let mut col =
-        div().id("friends-list").size_full().overflow_y_scroll().track_scroll(&scroll).pb(z(8.)).pr(z(16.)).flex().flex_col();
+    let mut col = div().id("friends-list").size_full().overflow_y_scroll().track_scroll(&scroll).pb(z(8.)).pr(z(16.)).flex().flex_col();
     if rows.is_empty() {
         col = col.child(
             div().flex_1().flex().items_center().justify_center().child(
@@ -472,14 +438,7 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
         .flex()
         .flex_col()
         .child(search)
-        .child(
-            div()
-                .relative()
-                .flex_1()
-                .min_h_0()
-                .child(col)
-                .children(crate::ui::chat::scrollbar::auto_scrollbar_div(&scroll)),
-        )
+        .child(div().relative().flex_1().min_h_0().child(col).children(crate::ui::chat::scrollbar::auto_scrollbar_div(&scroll)))
         .into_any_element()
 }
 
@@ -579,24 +538,18 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
     let user = r.user;
     let u = app.users.get(&user);
     let p = app.presence_of(user);
-    let name = r
-        .nickname
-        .clone()
-        .or_else(|| u.map(|u| u.display_name.clone()))
-        .unwrap_or_else(|| SharedString::from(user.0.to_string()));
+    let name = r.nickname.clone().or_else(|| u.map(|u| u.display_name.clone())).unwrap_or_else(|| SharedString::from(user.0.to_string()));
     let username = u.map(|u| u.name.clone()).unwrap_or_default();
     let sub: SharedString = match r.kind {
         RelationshipKind::None => SharedString::default(),
         RelationshipKind::Incoming | RelationshipKind::Outgoing => username.clone(),
         RelationshipKind::Blocked => crate::t!("friends.blocked"),
         RelationshipKind::Friend if r.ignored => crate::t!("friends.ignored"),
-        RelationshipKind::Friend => app.nav.activities.get(&user).cloned().unwrap_or_else(|| {
-            match p {
-                Presence::Online => crate::t!("status.online"),
-                Presence::Idle => crate::t!("status.idle"),
-                Presence::Dnd => crate::t!("status.dnd"),
-                Presence::Offline => crate::t!("status.offline"),
-            }
+        RelationshipKind::Friend => app.nav.activities.get(&user).cloned().unwrap_or_else(|| match p {
+            Presence::Online => crate::t!("status.online"),
+            Presence::Idle => crate::t!("status.idle"),
+            Presence::Dnd => crate::t!("status.dnd"),
+            Presence::Offline => crate::t!("status.offline"),
         }),
     };
     let pending = matches!(r.kind, RelationshipKind::Incoming | RelationshipKind::Outgoing);
@@ -730,17 +683,19 @@ fn friend_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) 
                                 .child(name),
                         )
                         .when_some(tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
-                        .when(!pending, |d| d.child(
-                            div()
-                                .ml(z(5.))
-                                .text_size(z(14.))
-                                .line_height(z(16.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(c(Palette::TEXT_NORMAL))
-                                .opacity(0.)
-                                .group_hover("friend-row", |s| s.opacity(1.))
-                                .child(username),
-                        )),
+                        .when(!pending, |d| {
+                            d.child(
+                                div()
+                                    .ml(z(5.))
+                                    .text_size(z(14.))
+                                    .line_height(z(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(c(Palette::TEXT_NORMAL))
+                                    .opacity(0.)
+                                    .group_hover("friend-row", |s| s.opacity(1.))
+                                    .child(username),
+                            )
+                        }),
                 )
                 .map(|d| match note_line {
                     Some(n) => d.child(n),
@@ -773,7 +728,9 @@ fn friend_activity(app: &PhoenixApp, user: Id, kind: RelationshipKind) -> Option
     if main.is_none() && custom.is_none() {
         return None;
     }
-    let label = |t: SharedString| div().min_w_0().text_ellipsis().whitespace_nowrap().overflow_hidden().child(crate::ui::emoji_text::status_label(t, 16. * crate::theme::zoom() / 1.375));
+    let label = |t: SharedString| {
+        div().min_w_0().text_ellipsis().whitespace_nowrap().overflow_hidden().child(crate::ui::emoji_text::status_label(t, 16. * crate::theme::zoom() / 1.375))
+    };
     let mut row = div().min_w_0().flex().items_center().gap(z(4.)).overflow_hidden();
     if let Some(a) = main {
         if let Some(icon) = crate::ui::members::activity_icon(a) {
@@ -841,15 +798,10 @@ fn add_friend(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
             );
             status_line(div().text_color(c(tok(idx::TEXT_FEEDBACK_POSITIVE))).child(text).into_any_element()).into_any_element()
         }
-        (None, None) => status_line(div().text_color(c(tok(idx::TEXT_SUBTLE))).child(crate::t!("friends.add_note_hint")).into_any_element())
-            .into_any_element(),
+        (None, None) => status_line(div().text_color(c(tok(idx::TEXT_SUBTLE))).child(crate::t!("friends.add_note_hint")).into_any_element()).into_any_element(),
     };
-    let heading = |t: SharedString| {
-        div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(t)
-    };
-    let lead = |t: SharedString| {
-        div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(t)
-    };
+    let heading = |t: SharedString| div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(t);
+    let lead = |t: SharedString| div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(t);
     let form_box = div()
         .mt(z(16.))
         .px(z(12.))
@@ -1018,19 +970,13 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
         .relationships
         .iter()
         .filter(|r| r.kind == RelationshipKind::Friend)
-        .filter(|r| {
-            app.people.activities.get(&r.user).is_some_and(|v| v.iter().any(|a| a.kind != crate::presence::ActivityKind::Custom))
-        })
+        .filter(|r| app.people.activities.get(&r.user).is_some_and(|v| v.iter().any(|a| a.kind != crate::presence::ActivityKind::Custom)))
         .filter_map(|r| app.nav.activities.get(&r.user).map(|a| (r.user, a.clone())))
         .filter(|(u, _)| app.presence_of(*u) != Presence::Offline)
         .collect();
     let in_voice = |u: Id| app.channels.values().any(|c| c.voice_users.contains(&u));
-    let start_of = |u: Id| {
-        app.people
-            .activities
-            .get(&u)
-            .and_then(|v| v.iter().filter(|a| a.kind != crate::presence::ActivityKind::Custom).filter_map(|a| a.start).max())
-    };
+    let start_of =
+        |u: Id| app.people.activities.get(&u).and_then(|v| v.iter().filter(|a| a.kind != crate::presence::ActivityKind::Custom).filter_map(|a| a.start).max());
     active.sort_by_key(|(u, _)| (!in_voice(*u), std::cmp::Reverse(start_of(*u)), u.0));
     let mut col = div()
         .id("active-now")
@@ -1087,12 +1033,7 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
     }
     let now = crate::mock::now();
     let thumb = |img: Option<SharedString>, size: f32| {
-        div()
-            .size(z(size))
-            .flex_none()
-            .rounded(z(4.))
-            .overflow_hidden()
-            .when_some(img, |d, url| d.child(gpui::img(url).size_full()))
+        div().size(z(size)).flex_none().rounded(z(4.)).overflow_hidden().when_some(img, |d, url| d.child(gpui::img(url).size_full()))
     };
     for (user, activity) in active {
         let u = app.users.get(&user);
@@ -1263,8 +1204,7 @@ mod tests {
         ignored.ignored = true;
         let plain = rel(3, RelationshipKind::Incoming, 0);
         let out = rel(4, RelationshipKind::Outgoing, 0);
-        let shown: Vec<u64> =
-            [&spam, &ignored, &plain, &out].iter().filter(|r| in_tab(r, FriendsTab::Pending, false)).map(|r| r.user.0).collect();
+        let shown: Vec<u64> = [&spam, &ignored, &plain, &out].iter().filter(|r| in_tab(r, FriendsTab::Pending, false)).map(|r| r.user.0).collect();
         assert_eq!(shown, vec![3, 4]);
         assert_eq!(pending_badge(&[spam, ignored, plain, out]), 1);
     }

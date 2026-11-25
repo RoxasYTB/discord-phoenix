@@ -1,95 +1,92 @@
+pub mod activity_traits;
 pub mod add_server;
-pub mod join_flow;
+pub mod app_profile;
 pub mod autocomplete;
+pub mod avatar_color;
 pub mod avatar_deco;
-pub mod mobile_status;
-pub mod profile_theme;
-pub mod profile_games;
-pub mod profile_board;
-pub mod profile_wishlist;
+pub mod boost_layer;
 pub mod call_popout;
 pub mod call_view;
-pub mod incoming_call;
-pub mod dm_call;
-pub mod pip;
+pub mod channel_unread_bar;
 pub mod chat;
 pub mod code_copy;
-pub mod components;
 pub mod community;
-pub mod guide;
-pub mod events;
-pub mod focus_ring;
-pub mod favorites;
-pub mod forum;
-pub mod group_dm;
-pub mod inbox;
-pub mod inbox_unreads;
-#[cfg(test)]
-mod popout_tests;
-#[cfg(test)]
-mod settings_fx_tests;
+pub mod components;
 pub mod context_menu;
 pub mod controls;
+pub mod discovery;
+pub mod dm_call;
+pub mod dm_profile_panel;
+pub mod easter;
+pub mod emoji_text;
+pub mod events;
+pub mod extra_menus;
+pub mod favorites;
+pub mod file_pick;
+pub mod focus_ring;
+pub mod forum;
+pub mod go_live;
+pub mod group_dm;
+pub mod guide;
 pub mod guild_menu;
 pub mod home;
-pub mod locale_inputs;
-pub mod invite;
 pub mod image_viewer;
+pub mod inbox;
+pub mod inbox_unreads;
+pub mod incoming_call;
+pub mod invite;
+pub mod join_flow;
+pub mod locale_inputs;
 pub mod login;
-pub mod settings;
-pub mod easter;
-pub mod extra_menus;
 pub mod members;
-pub mod activity_traits;
-pub mod nameplate;
-pub mod profile_fx;
+pub mod mobile_status;
 pub mod modal;
-pub mod pickers;
 pub mod modals;
+pub mod nameplate;
+pub mod nav_menus;
+pub mod pickers;
+pub mod pip;
+#[cfg(test)]
+mod popout_tests;
 pub mod profile;
-pub mod dm_profile_panel;
-pub mod avatar_color;
 pub mod profile_bg;
-pub mod profile_note;
 pub mod profile_bio;
+pub mod profile_board;
+pub mod profile_fx;
+pub mod profile_games;
+pub mod profile_note;
+pub mod profile_theme;
+pub mod profile_wishlist;
+pub mod quests_page;
+pub mod role_gradient;
 pub mod search;
 pub mod search_filters;
 pub mod server_bar;
 pub mod server_pages;
+pub mod settings;
+#[cfg(test)]
+mod settings_fx_tests;
+pub mod shake;
+pub mod shop_page;
 pub mod sidebar;
 pub mod sidebar_resize;
 pub mod states;
 pub mod status_picker;
 pub mod status_svg;
-pub mod role_gradient;
 pub mod switcher;
-pub mod nav_menus;
-pub mod thread_menu;
 pub mod thread_create;
+pub mod thread_menu;
 pub mod title_bar;
-pub mod window_chrome;
 pub mod tooltip;
-pub mod channel_unread_bar;
 pub mod user_menu;
 pub mod view_as;
 pub mod voice_effects;
 pub mod voice_panel;
-pub mod go_live;
 pub mod voice_row;
-pub mod boost_layer;
-pub mod app_profile;
-pub mod discovery;
-pub mod quests_page;
-pub mod shop_page;
-pub mod emoji_text;
-pub mod file_pick;
-pub mod shake;
+pub mod window_chrome;
 
 use crate::theme::z;
-use gpui::{
-    AnyElement, Div, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, div,
-    prelude::*, px, svg,
-};
+use gpui::{AnyElement, Div, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, px, svg};
 
 use crate::{
     assets::Icon,
@@ -142,14 +139,7 @@ pub fn avatar_with_status_overlay(user: Option<&User>, size: f32, p: Presence, r
     avatar_with_status_deco(user, size, p, ring, overlay, None)
 }
 
-pub fn avatar_with_status_deco(
-    user: Option<&User>,
-    size: f32,
-    p: Presence,
-    ring: Hsla,
-    overlay: impl FnOnce(Div) -> Div,
-    deco: Option<SharedString>,
-) -> Div {
+pub fn avatar_with_status_deco(user: Option<&User>, size: f32, p: Presence, ring: Hsla, overlay: impl FnOnce(Div) -> Div, deco: Option<SharedString>) -> Div {
     avatar_with_status_deco_hover(user, size, p, ring, overlay, deco, false)
 }
 
@@ -169,16 +159,7 @@ pub fn avatar_with_status_deco_hover(
         .size(px(size))
         .child(avatar_hover(user, size, play))
         .when_some(deco, |d, src| d.child(avatar_deco::layer(src, size)))
-        .child(
-            div()
-                .absolute()
-                .left(px(cx - r))
-                .top(px(cx - r))
-                .size(px(2. * r))
-                .rounded_full()
-                .bg(ring)
-                .child(overlay(div().size_full().rounded_full())),
-        )
+        .child(div().absolute().left(px(cx - r)).top(px(cx - r)).size(px(2. * r)).rounded_full().bg(ring).child(overlay(div().size_full().rounded_full())))
         .child(div().absolute().left(px(cx - s / 2.)).top(px(cx - s / 2.)).child(status_dot(p, s, ring)))
 }
 

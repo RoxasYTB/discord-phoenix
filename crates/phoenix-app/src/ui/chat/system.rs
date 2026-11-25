@@ -58,18 +58,8 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         }
         MessageKind::Pin => (ChatIcon::Join, Palette::INTERACTIVE, "".into(), crate::t!("sys.pin_lead")),
         MessageKind::Boost(0) => (ChatIcon::Boost, 0xFF73FA, "".into(), crate::t!("sys.boost")),
-        MessageKind::Boost(t) => (
-            ChatIcon::Boost,
-            0xFF73FA,
-            "".into(),
-            crate::t!("sys.boost_level", t = t),
-        ),
-        MessageKind::ThreadCreated => (
-            ChatIcon::Thread,
-            Palette::INTERACTIVE,
-            "".into(),
-            crate::t!("sys.thread_prefix"),
-        ),
+        MessageKind::Boost(t) => (ChatIcon::Boost, 0xFF73FA, "".into(), crate::t!("sys.boost_level", t = t)),
+        MessageKind::ThreadCreated => (ChatIcon::Thread, Palette::INTERACTIVE, "".into(), crate::t!("sys.thread_prefix")),
         MessageKind::RecipientAdd(t) => match target(t) {
             Some(_) => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.recipient_add_named")),
             None => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.recipient_add")),
@@ -79,22 +69,12 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             None => (ChatIcon::Join, Palette::RED, "".into(), crate::t!("sys.recipient_remove")),
         },
         MessageKind::Call => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.call")),
-        MessageKind::ChannelNameChange => (
-            ChatIcon::Edit,
-            Palette::INTERACTIVE,
-            "".into(),
-            crate::t!("sys.rename", c = msg.content),
-        ),
+        MessageKind::ChannelNameChange => (ChatIcon::Edit, Palette::INTERACTIVE, "".into(), crate::t!("sys.rename", c = msg.content)),
         MessageKind::StageStart => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.stage_start", c = msg.content)),
         MessageKind::StageEnd => (ChatIcon::Join, Palette::RED, "".into(), crate::t!("sys.stage_end", c = msg.content)),
         MessageKind::StageSpeaker => (ChatIcon::Join, Palette::GREEN, "".into(), crate::t!("sys.stage_speaker")),
         MessageKind::StageTopic => (ChatIcon::Edit, Palette::INTERACTIVE, "".into(), crate::t!("sys.stage_topic", c = msg.content)),
-        _ => (
-            ChatIcon::More,
-            Palette::INTERACTIVE,
-            "".into(),
-            if msg.content.is_empty() { "".into() } else { format!(": {}", msg.content).into() },
-        ),
+        _ => (ChatIcon::More, Palette::INTERACTIVE, "".into(), if msg.content.is_empty() { "".into() } else { format!(": {}", msg.content).into() }),
     };
     let thread = msg.thread.clone().filter(|_| msg.kind == MessageKind::ThreadCreated);
     let line = div()
@@ -112,25 +92,17 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         .text_color(c(Palette::TEXT_MUTED))
         .hover(|s| s.bg(c(Palette::BG_MSG_HOVER)))
         .child(if msg.kind == MessageKind::Pin {
-            div()
-                .absolute()
-                .left(z(35.))
-                .top(z(6.))
-                .child(gpui::svg().path(crate::icons::path("pin")).size(z(18.)).text_color(c(Palette::TEXT_MUTED)))
+            div().absolute().left(z(35.)).top(z(6.)).child(gpui::svg().path(crate::icons::path("pin")).size(z(18.)).text_color(c(Palette::TEXT_MUTED)))
         } else {
             div().absolute().left(z(36.)).top(z(7.)).child(super::icons::icon(icon, 16., c(color)))
         })
         .child(before)
         .child({
             let author = app.users.get(&msg.author);
-            crate::fonts::styled_name(
-                div().font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()),
-                author,
-                false,
-            )
-            .id(("sys-author", msg.id.0))
-            .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
-            .child(crate::fonts::role_name_text(name, author, 16., app.selected_guild.is_some(), name_gradient))
+            crate::fonts::styled_name(div().font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()), author, false)
+                .id(("sys-author", msg.id.0))
+                .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
+                .child(crate::fonts::role_name_text(name, author, 16., app.selected_guild.is_some(), name_gradient))
         })
         .child(after)
         .when_some(thread.clone(), |d, t| {
@@ -191,13 +163,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             )
             .child(tail)
         })
-        .child(
-            div()
-                .ml(z(6.))
-                .text_size(z(12.))
-                .text_color(c(Palette::TEXT_MUTED))
-                .child(r.time_full.clone()),
-        );
+        .child(div().ml(z(6.)).text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(r.time_full.clone()));
     let cta = if msg.kind == MessageKind::Join { welcome_cta(app, entity, msg) } else { None };
     let line: AnyElement = match (cta, thread) {
         (Some(b), _) => div().child(line).child(b).into_any_element(),
@@ -305,7 +271,11 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         .line_height(z(22.))
         .text_color(c(Palette::TEXT_MUTED))
         .child(
-            div().absolute().left(z(36.)).top(z(7.)).child(gpui::svg().path(crate::icons::path("attach/poll")).size(z(16.)).text_color(tk(idx::INTERACTIVE_ICON_DEFAULT))),
+            div()
+                .absolute()
+                .left(z(36.))
+                .top(z(7.))
+                .child(gpui::svg().path(crate::icons::path("attach/poll")).size(z(16.)).text_color(tk(idx::INTERACTIVE_ICON_DEFAULT))),
         )
         .children({
             let q = link(("sys-poll-q", msg.id.0), question.into(), tk(idx::INTERACTIVE_TEXT_ACTIVE))
@@ -373,7 +343,14 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                     )
                     .child(crate::ui::components::voted_check(16. * crate::theme::zoom(), true, true)),
             )
-            .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("sys.poll_winner", pct = pct)))
+            .child(
+                div()
+                    .text_size(z(12.))
+                    .line_height(z(16.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(tk(idx::TEXT_MUTED))
+                    .child(crate::t!("sys.poll_winner", pct = pct)),
+            )
     } else {
         div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("sys.poll_no_winner"))
     };
@@ -395,11 +372,13 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
         .gap(z(8.))
         .children(emoji_el)
         .child(div().flex_1().min_w_0().overflow_hidden().child(description))
-        .child(crate::ui::controls::button_sm(("sys-poll-view", msg.id.0), crate::t!("sys.poll_view"), crate::ui::controls::BtnKind::Secondary).on_click(move |_, _, cx| {
-            if let Some(p) = poll {
-                e2.update(cx, |a, cx| a.jump_to_message(ch, p, cx));
-            }
-        }));
+        .child(crate::ui::controls::button_sm(("sys-poll-view", msg.id.0), crate::t!("sys.poll_view"), crate::ui::controls::BtnKind::Secondary).on_click(
+            move |_, _, cx| {
+                if let Some(p) = poll {
+                    e2.update(cx, |a, cx| a.jump_to_message(ch, p, cx));
+                }
+            },
+        ));
     let mentioned = msg.author == app.me.id;
     let (bg, hover) = if mentioned {
         (Some(idx::MESSAGE_MENTIONED_BACKGROUND_DEFAULT), idx::MESSAGE_MENTIONED_BACKGROUND_HOVER)

@@ -1,6 +1,4 @@
-use gpui::{
-    AnyElement, InteractiveElement, IntoElement, ListState, ParentElement, ScrollHandle, Styled, div, px,
-};
+use gpui::{AnyElement, InteractiveElement, IntoElement, ListState, ParentElement, ScrollHandle, Styled, div, px};
 
 use crate::theme::{c, generated::idx, tok, z};
 
@@ -61,21 +59,9 @@ fn auto(vh: f32, max: f32, off: f32, track_margin_bottom: f32, thumb_on_hover: b
     }
     let track = (vh - track_margin_bottom).max(0.);
     let border = f32::from(z(4.));
-    let bar = div()
-        .absolute()
-        .top_0()
-        .right_0()
-        .bottom_0()
-        .w(z(16.))
-        .child(
-            div()
-                .absolute()
-                .top(px(border))
-                .h(px((track - 2. * border).max(0.)))
-                .left(z(4.))
-                .w(z(8.))
-                .rounded(z(4.))
-                .bg(c(tok(idx::SCROLLBAR_AUTO_TRACK))),
+    let bar =
+        div().absolute().top_0().right_0().bottom_0().w(z(16.)).child(
+            div().absolute().top(px(border)).h(px((track - 2. * border).max(0.))).left(z(4.)).w(z(8.)).rounded(z(4.)).bg(c(tok(idx::SCROLLBAR_AUTO_TRACK))),
         );
     if max <= 0. {
         return Some(bar.into_any_element());
@@ -83,19 +69,9 @@ fn auto(vh: f32, max: f32, off: f32, track_margin_bottom: f32, thumb_on_hover: b
     let off = off.clamp(0., max);
     let thumb = (track * vh / (vh + max)).max(f32::from(z(40.))).min(track);
     let top = (track - thumb) * off / max;
-    let thumb_el = div()
-        .absolute()
-        .top(px(top + border))
-        .h(px((thumb - 2. * border).max(0.)))
-        .left(z(4.))
-        .w(z(8.))
-        .rounded(z(4.))
-        .bg(c(tok(idx::SCROLLBAR_AUTO_THUMB)));
-    let thumb_el = if thumb_on_hover {
-        thumb_el.opacity(0.).group_hover(AUTO_HOVER_GROUP, |s| s.opacity(1.))
-    } else {
-        thumb_el
-    };
+    let thumb_el =
+        div().absolute().top(px(top + border)).h(px((thumb - 2. * border).max(0.))).left(z(4.)).w(z(8.)).rounded(z(4.)).bg(c(tok(idx::SCROLLBAR_AUTO_THUMB)));
+    let thumb_el = if thumb_on_hover { thumb_el.opacity(0.).group_hover(AUTO_HOVER_GROUP, |s| s.opacity(1.)) } else { thumb_el };
     Some(bar.child(thumb_el).into_any_element())
 }
 
@@ -146,17 +122,7 @@ fn thin(vh: f32, max: f32, off: f32, fade: bool) -> Option<AnyElement> {
     let bar = div().absolute().top_0().right_0().bottom_0().w(z(8.)).bg(c(tok(idx::SCROLLBAR_THIN_TRACK)));
     let bar = if fade { bar.opacity(0.).group_hover(THIN_FADE_GROUP, |s| s.opacity(1.)) } else { bar };
     Some(
-        bar
-            .child(
-                div()
-                    .absolute()
-                    .top(px(top) + z(2.))
-                    .h(px(thumb) - z(4.))
-                    .left(z(2.))
-                    .w(z(4.))
-                    .rounded(z(2.))
-                    .bg(c(tok(idx::SCROLLBAR_THIN_THUMB))),
-            )
+        bar.child(div().absolute().top(px(top) + z(2.)).h(px(thumb) - z(4.)).left(z(2.)).w(z(4.)).rounded(z(2.)).bg(c(tok(idx::SCROLLBAR_THIN_THUMB))))
             .into_any_element(),
     )
 }

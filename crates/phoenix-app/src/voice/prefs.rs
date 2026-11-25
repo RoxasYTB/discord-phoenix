@@ -154,11 +154,7 @@ impl VoicePrefs {
     }
 
     fn load() -> Self {
-        path()
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-            .map(|v| Self::from_json(&v))
-            .unwrap_or_default()
+        path().and_then(|p| std::fs::read(p).ok()).and_then(|b| serde_json::from_slice::<Value>(&b).ok()).map(|v| Self::from_json(&v)).unwrap_or_default()
     }
 
     pub fn save(&self) {

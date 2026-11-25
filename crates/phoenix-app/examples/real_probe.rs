@@ -3,15 +3,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use phoenix_app::discord_backend::{
-    convert::{self, Prefs},
-    store::{KeyringStore, TokenStore},
-};
 use phoenix_api::{
+    Cache, ClientProperties, Gateway, GatewayConfig, GatewayEvent, RestClient,
     gateway::{GuildSubscription, events},
     models as api,
     rest::{MessageQuery, forum::ThreadSort},
-    ClientProperties, Cache, Gateway, GatewayConfig, GatewayEvent, RestClient,
+};
+use phoenix_app::discord_backend::{
+    convert::{self, Prefs},
+    store::{KeyringStore, TokenStore},
 };
 use serde_json::Value;
 
@@ -34,9 +34,7 @@ fn explain(name: &str, data: &Value) -> Option<String> {
         "GUILD_MEMBER_ADD" | "GUILD_MEMBER_UPDATE" => f::<api::Member>(d).map(drop),
         "GUILD_MEMBER_LIST_UPDATE" => f::<events::GuildMemberListUpdate>(d).map(drop),
         "GUILD_MEMBERS_CHUNK" => f::<events::GuildMembersChunk>(d).map(drop),
-        "CHANNEL_CREATE" | "CHANNEL_UPDATE" | "CHANNEL_DELETE" | "THREAD_CREATE" | "THREAD_UPDATE" | "THREAD_DELETE" => {
-            f::<api::Channel>(d).map(drop)
-        }
+        "CHANNEL_CREATE" | "CHANNEL_UPDATE" | "CHANNEL_DELETE" | "THREAD_CREATE" | "THREAD_UPDATE" | "THREAD_DELETE" => f::<api::Channel>(d).map(drop),
         "MESSAGE_CREATE" => f::<api::Message>(d).map(drop),
         "MESSAGE_DELETE" => f::<events::MessageDelete>(d).map(drop),
         "MESSAGE_REACTION_ADD" | "MESSAGE_REACTION_REMOVE" => f::<events::ReactionEvent>(d).map(drop),
@@ -90,8 +88,7 @@ fn name_of(ev: &GatewayEvent) -> String {
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let secs: u64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(150);
-    let live: Option<Vec<Value>> =
-        args.get(1).and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str(&s).ok());
+    let live: Option<Vec<Value>> = args.get(1).and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str(&s).ok());
     if let Some(p) = args.get(2) {
         // SAFETY: single-threaded at this point.
         unsafe { std::env::set_var("PROBE_DMS", p) };
@@ -101,10 +98,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
-    let token = tokio::task::spawn_blocking(|| KeyringStore.load())
-        .await?
-        .map_err(anyhow::Error::msg)?
-        .ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
+    let token =
+        tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
     let props = ClientProperties::linux_desktop();
     let rest = RestClient::new(token.expose(), props.clone());
     let http = reqwest::Client::builder().user_agent(props.user_agent()).build()?;
@@ -146,7 +141,13 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
             _ => {}
         }
     };
-    info!("READY in {:?}: {} guilds, {} private channels, {} relationships", t0.elapsed(), ready.guilds.len(), ready.private_channels.len(), ready.relationships.len());
+    info!(
+        "READY in {:?}: {} guilds, {} private channels, {} relationships",
+        t0.elapsed(),
+        ready.guilds.len(),
+        ready.private_channels.len(),
+        ready.relationships.len()
+    );
 
     for g in &ready.guilds {
         if g.unavailable {
@@ -169,7 +170,14 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
     let prefs = Prefs::from_ready(&ready);
     let t = Instant::now();
     let data = convert::build_ready(&cache, &ready, &prefs);
-    info!("build_ready {:?}: {} guilds, {} channels, {} dms, {} users", t.elapsed(), data.guilds.len(), data.channels.len(), data.dm_channels.len(), data.users.len());
+    info!(
+        "build_ready {:?}: {} guilds, {} channels, {} dms, {} users",
+        t.elapsed(),
+        data.guilds.len(),
+        data.channels.len(),
+        data.dm_channels.len(),
+        data.users.len()
+    );
     if data.guilds.len() != ready.guilds.iter().filter(|g| !g.unavailable).count() {
         bug!("build_ready guild count {} != READY {}", data.guilds.len(), ready.guilds.len());
     }
@@ -198,7 +206,14 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
     for (cid, r) in &prefs.reads {
         if r.mentions > 0 {
             let c = cache.channel(api::Snowflake(*cid));
-            info!("mention entry ch {cid} n={} known={} guild={:?} kind={:?} parent={:?}", r.mentions, c.is_some(), c.as_ref().and_then(|c| c.guild_id), c.as_ref().map(|c| c.kind), c.as_ref().and_then(|c| c.parent_id));
+            info!(
+                "mention entry ch {cid} n={} known={} guild={:?} kind={:?} parent={:?}",
+                r.mentions,
+                c.is_some(),
+                c.as_ref().and_then(|c| c.guild_id),
+                c.as_ref().map(|c| c.kind),
+                c.as_ref().and_then(|c| c.parent_id)
+            );
         }
     }
     if rs_entries > 0 && prefs.reads.is_empty() {
@@ -242,7 +257,13 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
                     let r = prefs.reads.get(&c.id.0);
                     println!(
                         "     channel {} kind={:?} unread={} mentions={} muted={} last_msg={:?} read={:?} parent_muted={}",
-                        c.id.0, c.kind, c.unread, c.mentions, c.muted, raw.as_ref().and_then(|c| c.last_message_id), r,
+                        c.id.0,
+                        c.kind,
+                        c.unread,
+                        c.mentions,
+                        c.muted,
+                        raw.as_ref().and_then(|c| c.last_message_id),
+                        r,
                         c.parent.is_some_and(|p| prefs.mutes.channels.contains(&p.0))
                     );
                     if let Ok((code, v, _)) = raw_get(format!("/channels/{}", c.id.0)).await {
@@ -256,7 +277,8 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
         }
     }
 
-    if let Some(live) = std::env::var("PROBE_DMS").ok().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok()) {
+    if let Some(live) = std::env::var("PROBE_DMS").ok().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+    {
         let theirs: Vec<u64> = live.iter().filter_map(|s| s.parse().ok()).collect();
         let ours: Vec<u64> = data.dm_channels.iter().map(|c| c.id.0).take(theirs.len() + 3).collect();
         let raw: HashMap<u64, Value> = ready.private_channels.iter().map(|c| (c.id.0, serde_json::to_value(c).unwrap_or_default())).collect();
@@ -264,7 +286,9 @@ async fn run(secs: u64, live: Option<Vec<Value>>) -> anyhow::Result<()> {
             let c = cache.channel(api::Snowflake(*id));
             format!(
                 "{id} type={:?} req={:?} last={:?} flags={:?}",
-                c.as_ref().map(|c| c.kind), c.as_ref().map(|c| c.is_message_request), c.as_ref().and_then(|c| c.last_message_id),
+                c.as_ref().map(|c| c.kind),
+                c.as_ref().map(|c| c.is_message_request),
+                c.as_ref().and_then(|c| c.last_message_id),
                 raw.get(id).map(|v| v["flags"].clone())
             )
         };
@@ -460,9 +484,11 @@ fn probe_targets(cache: &Cache, ready: &events::Ready, data: &phoenix_app::backe
         }
     }
     for g in ready.guilds.iter().take(8) {
-        if let Some(c) = cache.guild_channels(g.id).into_iter().find(|c| {
-            c.kind == api::ChannelType::GuildText && !cache.permissions_in(c.id).contains(api::Permissions::VIEW_CHANNEL)
-        }) {
+        if let Some(c) = cache
+            .guild_channels(g.id)
+            .into_iter()
+            .find(|c| c.kind == api::ChannelType::GuildText && !cache.permissions_in(c.id).contains(api::Permissions::VIEW_CHANNEL))
+        {
             out.push(c.id);
         }
     }

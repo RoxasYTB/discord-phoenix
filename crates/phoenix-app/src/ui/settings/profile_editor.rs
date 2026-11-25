@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use gpui::{
-    AnyElement, Context, Div, Entity, FontWeight, IntoElement, ParentElement, SharedString, Stateful, Styled, Window,
-    div, img, prelude::*, px,
-};
+use gpui::{AnyElement, Context, Div, Entity, FontWeight, IntoElement, ParentElement, SharedString, Stateful, Styled, Window, div, img, prelude::*, px};
 use gpui_component::input::{Input, InputState, Textarea, TextareaState};
 
 use super::Page;
@@ -118,11 +115,7 @@ impl EditorState {
     pub fn current(&self, cx: &gpui::App) -> Draft {
         Draft {
             name: self.name.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_else(|| self.original.name.clone()),
-            pronouns: self
-                .pronouns
-                .as_ref()
-                .map(|i| i.read(cx).value().to_string())
-                .unwrap_or_else(|| self.original.pronouns.clone()),
+            pronouns: self.pronouns.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_else(|| self.original.pronouns.clone()),
             bio: self.bio.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_else(|| self.original.bio.clone()),
             theme: self.theme,
         }
@@ -326,8 +319,7 @@ fn ensure_inputs(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) {
         }
         let o = e.original.clone();
         let name = cx.new(|cx| InputState::new(window, cx).default_value(o.name.clone()));
-        let pronouns =
-            cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("pe.add_pronouns")).default_value(o.pronouns.clone()));
+        let pronouns = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("pe.add_pronouns")).default_value(o.pronouns.clone()));
         let bio = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 10).default_value(o.bio.clone()));
         let subs = vec![cx.observe(&name, |_, _, cx| cx.notify()), cx.observe(&pronouns, |_, _, cx| cx.notify()), cx.observe(&bio, |_, _, cx| cx.notify())];
         let Some(e) = ed(a) else { return };
@@ -419,53 +411,46 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
     let nitro = app.backend.has_premium();
     let locked = !nitro;
     let me = &app.me;
-    let header = div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .px(z(8.))
-        .py(z(4.))
-        .gap(z(4.))
-        .border_b_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE)))
-        .child(
-            div().py(z(4.)).child(
-                div()
-                    .id("pe-scope")
-                    .flex()
-                    .items_center()
-                    .gap(z(4.))
-                    .pt(z(8.))
-                    .pr(z(4.))
-                    .pb(z(4.))
-                    .pl(z(8.))
-                    .rounded(z(8.))
-                    .cursor_pointer()
-                    .when(e.switcher_open, |d| d.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
-                    .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
-                    .text_size(z(16.))
-                    .line_height(z(20.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(c(tok(idx::TEXT_STRONG)))
-                    .children(e.scope.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| {
-                        div().flex_none().rounded(z(4.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 20.))
-                    }))
-                    .child(div().max_w(z(150.)).truncate().child(scope_name(app, e.scope)))
-                    .child(
-                        gpui::svg()
-                            .path(crate::icons::path("chevron"))
-                            .size(z(16.))
-                            .text_color(c(tok(idx::ICON_STRONG)))
-                            .when(e.switcher_open, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI)))),
-                    )
-                    .on_click(cx.listener(|a, _, _, cx| {
-                        if let Some(e) = ed(a) {
-                            e.switcher_open = !e.switcher_open;
-                        }
-                        cx.notify();
-                    })),
-            ),
-        );
+    let header = div().flex().items_center().justify_between().px(z(8.)).py(z(4.)).gap(z(4.)).border_b_1().border_color(c(tok(idx::BORDER_SUBTLE))).child(
+        div().py(z(4.)).child(
+            div()
+                .id("pe-scope")
+                .flex()
+                .items_center()
+                .gap(z(4.))
+                .pt(z(8.))
+                .pr(z(4.))
+                .pb(z(4.))
+                .pl(z(8.))
+                .rounded(z(8.))
+                .cursor_pointer()
+                .when(e.switcher_open, |d| d.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
+                .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_STRONG)))
+                .children(
+                    e.scope
+                        .and_then(|g| app.guilds.iter().find(|x| x.id == g))
+                        .map(|g| div().flex_none().rounded(z(4.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 20.))),
+                )
+                .child(div().max_w(z(150.)).truncate().child(scope_name(app, e.scope)))
+                .child(
+                    gpui::svg()
+                        .path(crate::icons::path("chevron"))
+                        .size(z(16.))
+                        .text_color(c(tok(idx::ICON_STRONG)))
+                        .when(e.switcher_open, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI)))),
+                )
+                .on_click(cx.listener(|a, _, _, cx| {
+                    if let Some(e) = ed(a) {
+                        e.switcher_open = !e.switcher_open;
+                    }
+                    cx.notify();
+                })),
+        ),
+    );
 
     let group = |label: Div, body: AnyElement| div().flex().flex_col().gap(z(8.)).child(label).child(body);
     let avatar_preview: AnyElement = match &e.avatar {
@@ -538,33 +523,64 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
         }))
     });
     let plate = nameplate_url(app, e).map(|u| {
-        div().absolute().top_0().left_0().size_full().rounded(z(8.)).overflow_hidden().child(img(u).absolute().top_0().right_0().h_full().w(z(48. * 213. / 40.)).opacity(0.6))
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .rounded(z(8.))
+            .overflow_hidden()
+            .child(img(u).absolute().top_0().right_0().h_full().w(z(48. * 213. / 40.)).opacity(0.6))
     });
     let nameplate = div().relative().flex().items_center().justify_between().w_full().px(z(8.)).children(plate).child(
-        div().flex().items_center().gap(z(8.)).child(avatar(Some(me), 32.)).child(div().w(z(110.)).h(z(10.)).rounded_full().bg(c(tok(idx::BACKGROUND_MOD_STRONG)))),
+        div()
+            .flex()
+            .items_center()
+            .gap(z(8.))
+            .child(avatar(Some(me), 32.))
+            .child(div().w(z(110.)).h(z(10.)).rounded_full().bg(c(tok(idx::BACKGROUND_MOD_STRONG)))),
     );
     let content = div()
         .flex()
         .flex_col()
         .gap(z(24.))
         .p(z(16.))
-        .child(group(group_label("sp.pf.nameplate", false), tile("nameplate", 208., 42., false).child(nameplate.child(plus_icon(20.))).on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Nameplate, cx))).into_any_element()))
+        .child(group(
+            group_label("sp.pf.nameplate", false),
+            tile("nameplate", 208., 42., false)
+                .child(nameplate.child(plus_icon(20.)))
+                .on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Nameplate, cx)))
+                .into_any_element(),
+        ))
         .child(group(
             group_label("sp.pf.avatar", false),
             div()
                 .flex()
                 .gap(z(8.))
                 .child(tile("avatar", 100., 100., false).child(avatar_preview).on_click(cx.listener(|_, _, _, cx| pick_image(false, cx))))
-                .child(tile("decoration", 100., 100., false).map(|t| match decoration_url(e) {
-                    Some(d) => t.child(div().relative().size(z(72.)).child(avatar(Some(me), 72.)).child(img(d).absolute().size(z(86.4)).left(z(-7.2)).top(z(-7.2)))),
-                    None => t.child(plus_icon(24.)),
-                }).on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Decoration, cx))))
+                .child(
+                    tile("decoration", 100., 100., false)
+                        .map(|t| match decoration_url(e) {
+                            Some(d) => t.child(
+                                div().relative().size(z(72.)).child(avatar(Some(me), 72.)).child(img(d).absolute().size(z(86.4)).left(z(-7.2)).top(z(-7.2))),
+                            ),
+                            None => t.child(plus_icon(24.)),
+                        })
+                        .on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Decoration, cx))),
+                )
                 .into_any_element(),
         ))
         .child(group(
             group_label("sp.pf.name_style", true),
             tile("name-style", 208., 42., locked)
-                .child(crate::fonts::styled_name(div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))), Some(me), true).child(crate::fonts::name_text(me.display_name.clone(), Some(me), 24.)))
+                .child(
+                    crate::fonts::styled_name(
+                        div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))),
+                        Some(me),
+                        true,
+                    )
+                    .child(crate::fonts::name_text(me.display_name.clone(), Some(me), 24.)),
+                )
                 .into_any_element(),
         ))
         .child(group(
@@ -573,13 +589,13 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 .flex()
                 .flex_col()
                 .gap(z(8.))
-                .child(
-                    div().flex().gap(z(8.)).child(theme_tile).child(tile("banner", 100., 100., locked).child(banner_tile).on_click(cx.listener(|a, _, _, cx| {
+                .child(div().flex().gap(z(8.)).child(theme_tile).child(tile("banner", 100., 100., locked).child(banner_tile).on_click(cx.listener(
+                    |a, _, _, cx| {
                         if a.backend.has_premium() {
                             pick_image(true, cx)
                         }
-                    }))),
-                )
+                    },
+                ))))
                 .children(palette)
                 .into_any_element(),
         ))
@@ -588,8 +604,16 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
             div()
                 .flex()
                 .gap(z(8.))
-                .child(tile("effect", 100., 100., false).child(plus_icon(24.)).on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Effect, cx))))
-                .child(tile("frame", 100., 100., false).child(plus_icon(24.)).on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Frame, cx))))
+                .child(
+                    tile("effect", 100., 100., false)
+                        .child(plus_icon(24.))
+                        .on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Effect, cx))),
+                )
+                .child(
+                    tile("frame", 100., 100., false)
+                        .child(plus_icon(24.))
+                        .on_click(cx.listener(|a, _, _, cx| super::collectible_picker::open(a, super::collectibles::Kind::Frame, cx))),
+                )
                 .into_any_element(),
         ));
     div()
@@ -605,45 +629,48 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
         .border_r_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
         .child(header)
-        .child(div().id("pe-styles").flex_1().min_h_0().overflow_y_scroll().children((e.scope.is_some() && !e.notice_hidden).then(|| {
-            let notice = div()
-                .flex()
-                .p(z(8.))
-                .rounded(z(8.))
-                .border_1()
-                .border_color(c(tok(idx::ICON_FEEDBACK_INFO)))
-                .bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_INFO)))
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(z(14.))
-                        .line_height(z(18.))
-                        .text_color(c(tok(idx::TEXT_DEFAULT)))
-                        .child(crate::t!("sp.pf.server_notice")),
-                )
-                .child(
-                    div()
-                        .id("pe-notice-x")
-                        .flex_none()
-                        .size(z(24.))
-                        .mt(z(-2.))
-                        .mr(z(-2.))
+        .child(
+            div()
+                .id("pe-styles")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .children((e.scope.is_some() && !e.notice_hidden).then(|| {
+                    let notice = div()
                         .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .text_color(c(tok(idx::ICON_SUBTLE)))
-                        .hover(|s| s.text_color(c(tok(idx::ICON_STRONG))))
-                        .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::ICON_SUBTLE))))
-                        .on_click(cx.listener(|a, _, _, cx| {
-                            if let Some(e) = ed(a) {
-                                e.notice_hidden = true;
-                            }
-                            cx.notify();
-                        })),
-                );
-            div().px(z(16.)).pt(z(16.)).child(notice)
-        })).child(content))
+                        .p(z(8.))
+                        .rounded(z(8.))
+                        .border_1()
+                        .border_color(c(tok(idx::ICON_FEEDBACK_INFO)))
+                        .bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_INFO)))
+                        .child(
+                            div().flex_1().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("sp.pf.server_notice")),
+                        )
+                        .child(
+                            div()
+                                .id("pe-notice-x")
+                                .flex_none()
+                                .size(z(24.))
+                                .mt(z(-2.))
+                                .mr(z(-2.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_pointer()
+                                .text_color(c(tok(idx::ICON_SUBTLE)))
+                                .hover(|s| s.text_color(c(tok(idx::ICON_STRONG))))
+                                .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::ICON_SUBTLE))))
+                                .on_click(cx.listener(|a, _, _, cx| {
+                                    if let Some(e) = ed(a) {
+                                        e.notice_hidden = true;
+                                    }
+                                    cx.notify();
+                                })),
+                        );
+                    div().px(z(16.)).pt(z(16.)).child(notice)
+                }))
+                .child(content),
+        )
 }
 
 fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
@@ -669,7 +696,9 @@ fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                     .child(div().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(name))
                     .children(sub.map(|s| div().truncate().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(s))),
             )
-            .when(sel, |d| d.child(div().flex_none().px(z(4.)).child(gpui::svg().path(crate::icons::path("check")).size(z(20.)).text_color(c(tok(idx::ICON_STRONG))))))
+            .when(sel, |d| {
+                d.child(div().flex_none().px(z(4.)).child(gpui::svg().path(crate::icons::path("check")).size(z(20.)).text_color(c(tok(idx::ICON_STRONG)))))
+            })
     };
     let main = row(
         "pe-scope-main".into(),
@@ -701,7 +730,13 @@ fn switcher(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
         .border_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
-        .shadow(vec![gpui::BoxShadow { color: c(tok(idx::OPACITY_BLACK_16)), offset: gpui::point(z(0.), z(2.)), blur_radius: z(8.), spread_radius: z(0.), inset: false }])
+        .shadow(vec![gpui::BoxShadow {
+            color: c(tok(idx::OPACITY_BLACK_16)),
+            offset: gpui::point(z(0.), z(2.)),
+            blur_radius: z(8.),
+            spread_radius: z(0.),
+            inset: false,
+        }])
         .child(div().id("pe-scope-list").max_h(z(212.)).overflow_y_scroll().flex().flex_col().child(main).children(guilds))
 }
 
@@ -738,13 +773,11 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
     let card_layers: Vec<Div> = match e.theme {
         Some(t) => vec![
             div().absolute().top_0().left_0().right_0().h(z(140.)).bg(hex(t.0)),
-            div()
-                .absolute()
-                .top(z(140.))
-                .left_0()
-                .right_0()
-                .bottom_0()
-                .bg(gpui::linear_gradient(180., gpui::linear_color_stop(hex(t.0), 0.), gpui::linear_color_stop(hex(t.1), 1.))),
+            div().absolute().top(z(140.)).left_0().right_0().bottom_0().bg(gpui::linear_gradient(
+                180.,
+                gpui::linear_color_stop(hex(t.0), 0.),
+                gpui::linear_color_stop(hex(t.1), 1.),
+            )),
             div().absolute().inset_0().bg(gpui::hsla(0., 0., 0., 0.6)),
         ],
         None => vec![div().absolute().inset_0().bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))],
@@ -764,12 +797,7 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
         Some(i) if bio_focused || bio_text.is_empty() => Textarea::new(i).appearance(false).bordered(false).into_any_element(),
         Some(i) => {
             let fh = gpui::Focusable::focus_handle(i.read(cx), cx);
-            div()
-                .id("pe-bio-preview")
-                .cursor_text()
-                .on_click(move |_, window, cx| window.focus(&fh, cx))
-                .child(bio_markup(bio_text))
-                .into_any_element()
+            div().id("pe-bio-preview").cursor_text().on_click(move |_, window, cx| window.focus(&fh, cx)).child(bio_markup(bio_text)).into_any_element()
         }
         None => bio_markup(bio_text).into_any_element(),
     };
@@ -836,12 +864,12 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .child(sec_btn("shop", "shop"))
                 .child(sec_btn("more", "more-vertical")),
         )
-        .child(section("pe.bio", heading, inline_field(div().mt(z(-8.)).pt(z(5.)).pb(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(strong).child(bio).into_any_element())))
         .child(section(
-            "pe.member_since",
+            "pe.bio",
             heading,
-            div().text_size(z(14.)).line_height(z(18.)).text_color(strong).child(crate::presence::format_date(created)),
+            inline_field(div().mt(z(-8.)).pt(z(5.)).pb(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(strong).child(bio).into_any_element()),
         ))
+        .child(section("pe.member_since", heading, div().text_size(z(14.)).line_height(z(18.)).text_color(strong).child(crate::presence::format_date(created))))
         .child(section(
             "pe.connections",
             heading,
@@ -859,18 +887,12 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
         .child(section(
             "pe.note",
             heading,
-            div()
-                .mt(z(-4.))
-                .ml(z(-7.))
-                .px(z(7.))
-                .rounded(z(8.))
-                .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
-                .text_size(z(14.))
-                .line_height(z(18.))
-                .map(|d| match e.profile.as_ref().map(|p| p.note.clone()).filter(|n| !n.is_empty()) {
+            div().mt(z(-4.)).ml(z(-7.)).px(z(7.)).rounded(z(8.)).hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))).text_size(z(14.)).line_height(z(18.)).map(
+                |d| match e.profile.as_ref().map(|p| p.note.clone()).filter(|n| !n.is_empty()) {
                     Some(n) => d.text_color(strong).child(n),
                     None => d.text_color(if themed { white(0.6) } else { c(tok(idx::TEXT_MUTED)) }).child(crate::t!("profile.note_placeholder")),
-                }),
+                },
+            ),
         ));
     let effect = applied(app, e, super::collectibles::Kind::Effect, cx).and_then(|c| crate::ui::profile_fx::effect(&c, 400., cx));
     let frame = applied(app, e, super::collectibles::Kind::Frame, cx).and_then(|c| c.frame);
@@ -909,7 +931,13 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                         .child(av)
                         .children(decoration_url(e).map(|d| img(d).absolute().size(z(134.4)).left(z(-7.2)).top(z(-7.2))))
                         .child(
-                            div().absolute().top(z(44.)).left(z(44.)).opacity(0.).group_hover("pe-avatar", |s| s.opacity(1.)).child(overlay_button("avatar", "pen")),
+                            div()
+                                .absolute()
+                                .top(z(44.))
+                                .left(z(44.))
+                                .opacity(0.)
+                                .group_hover("pe-avatar", |s| s.opacity(1.))
+                                .child(overlay_button("avatar", "pen")),
                         ),
                 ),
         )
@@ -1135,11 +1163,17 @@ fn tabs(e: &EditorState, cx: &mut Cx) -> Div {
             .items_center()
             .justify_between()
             .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(dim).child(crate::t!("pe.widgets")))
-            .child(controls::button_icon("pe-add-widget", "plus", crate::t!("pe.add_widget"), BtnKind::Secondary).h(z(31.)).min_w(z(0.)).px(z(11.)).text_size(z(14.)).line_height(z(18.))),
-        1 if !e.recent.is_empty() => super::profile_activity::render(
-            &e.recent,
-            &super::profile_activity::Colors { strong, muted: dim, card: wcol.card, link: c(tok(idx::TEXT_LINK)) },
-        ),
+            .child(
+                controls::button_icon("pe-add-widget", "plus", crate::t!("pe.add_widget"), BtnKind::Secondary)
+                    .h(z(31.))
+                    .min_w(z(0.))
+                    .px(z(11.))
+                    .text_size(z(14.))
+                    .line_height(z(18.)),
+            ),
+        1 if !e.recent.is_empty() => {
+            super::profile_activity::render(&e.recent, &super::profile_activity::Colors { strong, muted: dim, card: wcol.card, link: c(tok(idx::TEXT_LINK)) })
+        }
         1 => div().text_size(z(14.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("pe.no_activity")),
         _ => div().text_size(z(14.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("pe.empty_wishlist")),
     };
@@ -1244,7 +1278,9 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
             let banner = e.profile.as_ref().and_then(|p| p.banner.clone()).map(|u| SharedString::from(u.replace("size=600", "size=1536")));
             let mut v: Vec<AnyElement> = vec![div().absolute().inset_0().bg(m).into_any_element()];
             if let Some(u) = banner {
-                v.push(div().absolute().top_0().left_0().right_0().h(z(376.)).opacity(0.3).child(img(u).w_full().h(z(376.)).grayscale(false)).into_any_element());
+                v.push(
+                    div().absolute().top_0().left_0().right_0().h(z(376.)).opacity(0.3).child(img(u).w_full().h(z(376.)).grayscale(false)).into_any_element(),
+                );
                 v.push(
                     div()
                         .absolute()
@@ -1263,13 +1299,19 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
                     .left_0()
                     .right_0()
                     .h(z(300.))
-                    .bg(gpui::linear_gradient(180., gpui::linear_color_stop(gpui::hsla(0., 0., 0., 0.48), 0.), gpui::linear_color_stop(gpui::hsla(0., 0., 0., 0.12), 1.)))
+                    .bg(gpui::linear_gradient(
+                        180.,
+                        gpui::linear_color_stop(gpui::hsla(0., 0., 0., 0.48), 0.),
+                        gpui::linear_color_stop(gpui::hsla(0., 0., 0., 0.12), 1.),
+                    ))
                     .into_any_element(),
             );
             v.push(div().absolute().top(z(300.)).left_0().right_0().bottom_0().bg(gpui::hsla(0., 0., 0., 0.12)).into_any_element());
             v
         }
-        None => vec![div().absolute().inset_0().bg(c(tok(idx::BACKGROUND_BASE_LOW))).child(div().size_full().bg(c(tok(idx::BACKGROUND_SCRIM)))).into_any_element()],
+        None => {
+            vec![div().absolute().inset_0().bg(c(tok(idx::BACKGROUND_BASE_LOW))).child(div().size_full().bg(c(tok(idx::BACKGROUND_SCRIM)))).into_any_element()]
+        }
     };
     let right = div()
         .relative()
@@ -1278,17 +1320,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
         .h_full()
         .overflow_hidden()
         .children(backdrop)
-        .child(
-            div()
-                .relative()
-                .size_full()
-                .pt(z(80.))
-                .pr(z(32.))
-                .pl(z(48.))
-                .flex()
-                .child(card(app, e, bio_focused, cx))
-                .child(tabs(e, cx)),
-        )
+        .child(div().relative().size_full().pt(z(80.)).pr(z(32.)).pl(z(48.)).flex().child(card(app, e, bio_focused, cx)).child(tabs(e, cx)))
         .when(dirty || e.error.is_some(), |d| d.child(unsaved_bar(e, cx)));
     div()
         .id("profile-editor")

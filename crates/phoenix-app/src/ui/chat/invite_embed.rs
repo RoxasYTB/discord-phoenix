@@ -6,10 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{
-    AnyElement, App, Entity, FontWeight, ImageSource, ParentElement, RenderImage, SharedString,
-    Styled, div, img, prelude::*,
-};
+use gpui::{AnyElement, App, Entity, FontWeight, ImageSource, ParentElement, RenderImage, SharedString, Styled, div, img, prelude::*};
 
 use crate::{
     app::PhoenixApp,
@@ -44,11 +41,7 @@ thread_local! {
     static BANNERS: RefCell<HashMap<u32, Arc<RenderImage>>> = RefCell::new(HashMap::new());
 }
 
-const HOSTS: [&str; 3] = [
-    "discord.gg/",
-    "discord.com/invite/",
-    "discordapp.com/invite/",
-];
+const HOSTS: [&str; 3] = ["discord.gg/", "discord.com/invite/", "discordapp.com/invite/"];
 const SUBDOMAINS: [&str; 3] = ["www.", "ptb.", "canary."];
 
 pub(super) fn tk(i: usize) -> gpui::Hsla {
@@ -92,14 +85,8 @@ fn strip_code(s: &str) -> String {
 
 fn host_boundary(text: &str, at: usize) -> bool {
     let before = &text[..at];
-    let before = SUBDOMAINS
-        .iter()
-        .find_map(|s| before.strip_suffix(s))
-        .unwrap_or(before);
-    before
-        .chars()
-        .next_back()
-        .is_none_or(|ch| !(ch.is_alphanumeric() || matches!(ch, '.' | '-' | '_' | '@')))
+    let before = SUBDOMAINS.iter().find_map(|s| before.strip_suffix(s)).unwrap_or(before);
+    before.chars().next_back().is_none_or(|ch| !(ch.is_alphanumeric() || matches!(ch, '.' | '-' | '_' | '@')))
 }
 
 pub fn links(content: &str) -> Vec<InviteLink> {
@@ -114,21 +101,14 @@ pub fn links(content: &str) -> Vec<InviteLink> {
                 continue;
             }
             let tail = &text[from..];
-            let code: String = tail
-                .chars()
-                .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
-                .collect();
+            let code: String = tail.chars().take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '-').collect();
             if code.is_empty() || code.len() > 32 {
                 continue;
             }
             let after = &tail[code.len()..];
             let event = after
                 .strip_prefix('?')
-                .map(|q| {
-                    q.split(|ch: char| ch.is_whitespace() || matches!(ch, '>' | ')' | '#'))
-                        .next()
-                        .unwrap_or_default()
-                })
+                .map(|q| q.split(|ch: char| ch.is_whitespace() || matches!(ch, '>' | ')' | '#')).next().unwrap_or_default())
                 .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("event=")))
                 .and_then(|v| v.parse::<u64>().ok())
                 .map(Id);
@@ -204,13 +184,7 @@ fn retry_delay(attempt: u32) -> Duration {
     Duration::from_secs((2u64 << attempt.min(5)).min(60))
 }
 
-pub fn render(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    author: Id,
-    content: &str,
-    cx: &App,
-) -> Vec<AnyElement> {
+pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, author: Id, content: &str, cx: &App) -> Vec<AnyElement> {
     if !content.contains("discord") {
         return Vec::new();
     }
@@ -230,11 +204,7 @@ pub fn render(
 }
 
 pub(super) fn text(size: f32, lh: f32, weight: FontWeight, color: usize) -> gpui::Div {
-    div()
-        .text_size(z(size))
-        .line_height(z(lh))
-        .font_weight(weight)
-        .text_color(tk(color))
+    div().text_size(z(size)).line_height(z(lh)).font_weight(weight).text_color(tk(color))
 }
 
 pub(super) fn wrapper() -> gpui::Div {
@@ -253,12 +223,7 @@ pub(super) fn wrapper() -> gpui::Div {
 }
 
 pub(super) fn title(t: SharedString) -> gpui::Div {
-    text(14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED)
-        .mb(z(12.))
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_ellipsis()
-        .child(t)
+    text(14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED).mb(z(12.)).overflow_hidden().whitespace_nowrap().text_ellipsis().child(t)
 }
 
 pub(super) fn body() -> gpui::Div {
@@ -266,37 +231,17 @@ pub(super) fn body() -> gpui::Div {
 }
 
 pub(super) fn header_line(icon: Option<AnyElement>, info: gpui::Div) -> gpui::Div {
-    div()
-        .flex_1()
-        .min_w(z(1.))
-        .flex()
-        .items_center()
-        .gap(z(16.))
-        .children(icon)
-        .child(info)
+    div().flex_1().min_w(z(1.)).flex().items_center().gap(z(16.)).children(icon).child(info)
 }
 
-pub(super) fn info(
-    name: AnyElement,
-    detail: Option<AnyElement>,
-    title_color: usize,
-    title_weight: FontWeight,
-    gap: f32,
-) -> gpui::Div {
+pub(super) fn info(name: AnyElement, detail: Option<AnyElement>, title_color: usize, title_weight: FontWeight, gap: f32) -> gpui::Div {
     div()
         .flex_1()
         .min_w(z(1.))
         .flex()
         .flex_col()
         .justify_center()
-        .child(
-            text(16., 20., title_weight, title_color)
-                .mb(z(gap))
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .text_ellipsis()
-                .child(name),
-        )
+        .child(text(16., 20., title_weight, title_color).mb(z(gap)).overflow_hidden().whitespace_nowrap().text_ellipsis().child(name))
         .children(detail)
 }
 
@@ -307,43 +252,19 @@ pub fn resolving_offset(t: f32) -> f32 {
 
 fn shimmer_band(key: usize, x: f32) -> impl IntoElement {
     use gpui::AnimationExt as _;
-    let (edge, mid) = if crate::theme::is_light() {
-        (tk(idx::PRIMARY_100), tk(idx::PRIMARY_200))
-    } else {
-        (tk(idx::PRIMARY_600), tk(idx::PRIMARY_500))
-    };
+    let (edge, mid) = if crate::theme::is_light() { (tk(idx::PRIMARY_100), tk(idx::PRIMARY_200)) } else { (tk(idx::PRIMARY_600), tk(idx::PRIMARY_500)) };
     let half = |a: gpui::Hsla, b: gpui::Hsla| {
-        div().w(z(380.)).h_full().flex_none().bg(gpui::linear_gradient(
-            90.,
-            gpui::linear_color_stop(a, 0.),
-            gpui::linear_color_stop(b, 1.),
-        ))
+        div().w(z(380.)).h_full().flex_none().bg(gpui::linear_gradient(90., gpui::linear_color_stop(a, 0.), gpui::linear_color_stop(b, 1.)))
     };
-    div()
-        .absolute()
-        .top_0()
-        .bottom_0()
-        .w(z(760.))
-        .flex()
-        .child(half(edge, mid))
-        .child(half(mid, edge))
-        .with_animation(
-            ("invite-resolving", key),
-            gpui::Animation::new(Duration::from_secs(4)).repeat(),
-            move |d, t| d.left(z(resolving_offset(t) - x)),
-        )
+    div().absolute().top_0().bottom_0().w(z(760.)).flex().child(half(edge, mid)).child(half(mid, edge)).with_animation(
+        ("invite-resolving", key),
+        gpui::Animation::new(Duration::from_secs(4)).repeat(),
+        move |d, t| d.left(z(resolving_offset(t) - x)),
+    )
 }
 
 fn shimmer_piece(key: usize, x: f32, y: f32, w: f32, h: f32, r: f32) -> gpui::Div {
-    div()
-        .absolute()
-        .left(z(x))
-        .top(z(y))
-        .w(z(w))
-        .h(z(h))
-        .rounded(z(r))
-        .overflow_hidden()
-        .child(shimmer_band(key, x))
+    div().absolute().left(z(x)).top(z(y)).w(z(w)).h(z(h)).rounded(z(r)).overflow_hidden().child(shimmer_band(key, x))
 }
 
 fn resolving() -> AnyElement {
@@ -363,32 +284,16 @@ fn resolving() -> AnyElement {
                         .child(shimmer_piece(1, 59., 6., 130., 20., 3.))
                         .child(shimmer_piece(2, 59., 30., 200., 16., 3.)),
                 )
-                .child(
-                    div()
-                        .relative()
-                        .flex_grow(1.)
-                        .flex_shrink_0()
-                        .min_w(z(66.))
-                        .h(z(38.))
-                        .rounded(z(3.))
-                        .overflow_hidden()
-                        .child(shimmer_band(3, 0.)),
-                ),
+                .child(div().relative().flex_grow(1.).flex_shrink_0().min_w(z(66.)).h(z(38.)).rounded(z(3.)).overflow_hidden().child(shimmer_band(3, 0.))),
         )
         .into_any_element()
 }
 
 fn invalid(own: bool) -> AnyElement {
     let (head, detail) = if own {
-        (
-            crate::t!("invite.card.sent_but"),
-            crate::t!("invite.card.try_new"),
-        )
+        (crate::t!("invite.card.sent_but"), crate::t!("invite.card.try_new"))
     } else {
-        (
-            crate::t!("invite.card.invited_but"),
-            crate::t!("invite.card.ask_new"),
-        )
+        (crate::t!("invite.card.invited_but"), crate::t!("invite.card.ask_new"))
     };
     let icon = div()
         .size(z(48.))
@@ -400,39 +305,24 @@ fn invalid(own: bool) -> AnyElement {
         .flex()
         .items_center()
         .justify_center()
-        .child(
-            gpui::svg()
-                .path(crate::icons::path("server/envelope"))
-                .size(z(26.))
-                .text_color(tk(idx::ICON_FEEDBACK_CRITICAL)),
-        );
+        .child(gpui::svg().path(crate::icons::path("server/envelope")).size(z(26.)).text_color(tk(idx::ICON_FEEDBACK_CRITICAL)));
     wrapper()
         .child(title(head))
-        .child(
-            body().child(header_line(
-                Some(icon.into_any_element()),
-                info(
-                    crate::t!("invite.card.invalid").into_any_element(),
-                    Some(
-                        text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT)
-                            .child(detail)
-                            .into_any_element(),
-                    ),
-                    idx::TEXT_FEEDBACK_CRITICAL,
-                    FontWeight::MEDIUM,
-                    4.,
-                ),
-            )),
-        )
+        .child(body().child(header_line(
+            Some(icon.into_any_element()),
+            info(
+                crate::t!("invite.card.invalid").into_any_element(),
+                Some(text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT).child(detail).into_any_element()),
+                idx::TEXT_FEEDBACK_CRITICAL,
+                FontWeight::MEDIUM,
+                4.,
+            ),
+        )))
         .into_any_element()
 }
 
 fn grouped(n: u64) -> String {
-    let sep = if crate::i18n::locale().starts_with("fr") {
-        "\u{202f}"
-    } else {
-        ","
-    };
+    let sep = if crate::i18n::locale().starts_with("fr") { "\u{202f}" } else { "," };
     let s = n.to_string();
     let mut out = String::new();
     for (i, ch) in s.chars().enumerate() {
@@ -445,11 +335,7 @@ fn grouped(n: u64) -> String {
 }
 
 pub fn members_label(n: u64) -> SharedString {
-    if n == 1 {
-        crate::t!("invite.card.member_one", n = grouped(n))
-    } else {
-        crate::t!("invite.card.members", n = grouped(n))
-    }
+    if n == 1 { crate::t!("invite.card.member_one", n = grouped(n)) } else { crate::t!("invite.card.members", n = grouped(n)) }
 }
 
 pub fn established(guild: Id) -> SharedString {
@@ -459,10 +345,7 @@ pub fn established(guild: Id) -> SharedString {
         return SharedString::default();
     };
     let month = crate::i18n::t(&format!("month_short.{}", d.month()), &[]);
-    crate::t!(
-        "invite.card.established",
-        date = format!("{month} {}", d.year())
-    )
+    crate::t!("invite.card.established", date = format!("{month} {}", d.year()))
 }
 
 pub fn group_name(name: Option<&str>, recipients: &[SharedString]) -> SharedString {
@@ -480,24 +363,14 @@ pub fn group_name(name: Option<&str>, recipients: &[SharedString]) -> SharedStri
 
 fn round_icon(src: Option<&ImageRef>, size: f32) -> Option<AnyElement> {
     match src {
-        Some(ImageRef::Url(u)) => Some(
-            img(ImageSource::from(u.clone()))
-                .size(z(size))
-                .flex_none()
-                .rounded_full()
-                .into_any_element(),
-        ),
+        Some(ImageRef::Url(u)) => Some(img(ImageSource::from(u.clone())).size(z(size)).flex_none().rounded_full().into_any_element()),
         _ => None,
     }
 }
 
 pub(super) fn guild_icon(p: &InvitePreview, size: f32, radius: f32, acronym_px: f32) -> AnyElement {
     match &p.guild_icon {
-        Some(ImageRef::Url(u)) => img(ImageSource::from(u.clone()))
-            .size(z(size))
-            .flex_none()
-            .rounded(z(radius))
-            .into_any_element(),
+        Some(ImageRef::Url(u)) => img(ImageSource::from(u.clone())).size(z(size)).flex_none().rounded(z(radius)).into_any_element(),
         _ => div()
             .size(z(size))
             .flex_none()
@@ -515,52 +388,31 @@ pub(super) fn guild_icon(p: &InvitePreview, size: f32, radius: f32, acronym_px: 
 }
 
 fn dot(online: bool) -> gpui::Div {
-    div()
-        .size(z(8.))
-        .flex_none()
-        .rounded_full()
-        .bg(tk(if online {
-            idx::TEXT_STATUS_ONLINE
-        } else {
-            idx::TEXT_STATUS_OFFLINE
-        }))
+    div().size(z(8.)).flex_none().rounded_full().bg(tk(if online { idx::TEXT_STATUS_ONLINE } else { idx::TEXT_STATUS_OFFLINE }))
 }
 
 fn is_voice_or_thread(t: Option<u8>) -> bool {
     matches!(t, Some(2 | 10 | 11 | 12 | 13))
 }
 
-fn card(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    p: &Rc<InvitePreview>,
-    own: bool,
-) -> AnyElement {
+fn card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePreview>, own: bool) -> AnyElement {
     match p.kind {
         InviteKind::GroupDm => group_card(app, entity, p, own),
         InviteKind::Friend => friend_card(app, entity, p, own),
         InviteKind::Guild if p.guild.is_none() => invalid(own),
-        InviteKind::Guild if p.target_type == Some(1) && p.target_user.is_some() => {
-            match super::invite_cards::visible_voice_channel(app, p) {
-                Some(ch) => super::invite_cards::voice_list_card(app, entity, ch),
-                None => super::invite_cards::stream_card(app, entity, p),
-            }
-        }
+        InviteKind::Guild if p.target_type == Some(1) && p.target_user.is_some() => match super::invite_cards::visible_voice_channel(app, p) {
+            Some(ch) => super::invite_cards::voice_list_card(app, entity, ch),
+            None => super::invite_cards::stream_card(app, entity, p),
+        },
         InviteKind::Guild if p.event.as_ref().is_some_and(|e| e.status < 3) => match &p.event {
             Some(e) => super::invite_cards::event_card(app, entity, p, e),
             None => invalid(own),
         },
-        InviteKind::Guild if super::invite_cards::visible_voice_channel(app, p).is_some() => {
-            match super::invite_cards::visible_voice_channel(app, p) {
-                Some(ch) => super::invite_cards::voice_list_card(app, entity, ch),
-                None => invalid(own),
-            }
-        }
-        InviteKind::Guild
-            if p.features.iter().any(|f| f == "HUB") || is_voice_or_thread(p.channel_type) =>
-        {
-            legacy_guild_card(app, entity, p, own)
-        }
+        InviteKind::Guild if super::invite_cards::visible_voice_channel(app, p).is_some() => match super::invite_cards::visible_voice_channel(app, p) {
+            Some(ch) => super::invite_cards::voice_list_card(app, entity, ch),
+            None => invalid(own),
+        },
+        InviteKind::Guild if p.features.iter().any(|f| f == "HUB") || is_voice_or_thread(p.channel_type) => legacy_guild_card(app, entity, p, own),
         InviteKind::Guild => profile_card(app, entity, p),
     }
 }
@@ -578,23 +430,13 @@ pub(super) fn accept_click(
     }
 }
 
-fn goto_click(
-    entity: &Entity<PhoenixApp>,
-    guild: Id,
-    channel: Option<Id>,
-) -> impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut App) + 'static {
+fn goto_click(entity: &Entity<PhoenixApp>, guild: Id, channel: Option<Id>) -> impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut App) + 'static {
     let entity = entity.clone();
     move |_, _, cx| entity.update(cx, |a, cx| a.go_to_invite(guild, channel, cx))
 }
 
 impl PhoenixApp {
-    pub fn accept_embed_invite(
-        &mut self,
-        code: String,
-        guild: Option<Id>,
-        channel: Option<Id>,
-        cx: &mut gpui::Context<Self>,
-    ) {
+    pub fn accept_embed_invite(&mut self, code: String, guild: Option<Id>, channel: Option<Id>, cx: &mut gpui::Context<Self>) {
         self.nav_request(NavRequest::AcceptInvite(code), cx, move |this, res, cx| {
             if res.is_ok()
                 && let Some(g) = guild
@@ -629,11 +471,7 @@ fn banner_color(p: &InvitePreview, profile_brand: Option<u32>) -> u32 {
 
 fn mix(a: u32, b: u32, t: f32) -> [u8; 3] {
     let ch = |v: u32, s: u32| ((v >> s) & 0xff) as f32;
-    let m = |s: u32| {
-        (ch(a, s) + (ch(b, s) - ch(a, s)) * t)
-            .round()
-            .clamp(0., 255.) as u8
-    };
+    let m = |s: u32| (ch(a, s) + (ch(b, s) - ch(a, s)) * t).round().clamp(0., 255.) as u8;
     [m(16), m(8), m(0)]
 }
 
@@ -653,12 +491,7 @@ fn baked_banner(base: u32) -> Arc<RenderImage> {
     let (w, h) = (300u32 * 2, 72u32 * 2);
     let mut out = image::RgbaImage::new(w, h);
     for (x, y, px) in out.enumerate_pixels_mut() {
-        let [r, g, b] = radial_banner_pixel(
-            base,
-            light,
-            (x as f32 + 0.5) / w as f32,
-            (y as f32 + 0.5) / h as f32,
-        );
+        let [r, g, b] = radial_banner_pixel(base, light, (x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32);
         *px = image::Rgba([b, g, r, 255]);
     }
     let arc = Arc::new(RenderImage::new(vec![image::Frame::new(out)]));
@@ -673,19 +506,15 @@ fn verified_badge() -> AnyElement {
         .flex()
         .justify_center()
         .child(
-            div()
-                .relative()
-                .size(z(18.))
-                .child(gpui::svg().path(crate::icons::path("guild/flower-star")).size_full().text_color(tk(idx::GREEN_360)))
-                .child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(gpui::svg().path(crate::icons::path("check-small")).size(z(13.)).text_color(gpui::white())),
-                ),
+            div().relative().size(z(18.)).child(gpui::svg().path(crate::icons::path("guild/flower-star")).size_full().text_color(tk(idx::GREEN_360))).child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(gpui::svg().path(crate::icons::path("check-small")).size(z(13.)).text_color(gpui::white())),
+            ),
         )
         .into_any_element()
 }
@@ -704,9 +533,7 @@ fn game_icon(guild: u64, g: &crate::commands::guide::ProfileGame, tip: bool) -> 
                 .border_1()
                 .border_color(tk(idx::BORDER_MUTED))
                 .overflow_hidden()
-                .when_some(g.icon.clone(), |d, u| {
-                    d.child(img(ImageSource::from(SharedString::from(u))).size_full().object_fit(gpui::ObjectFit::Contain))
-                }),
+                .when_some(g.icon.clone(), |d, u| d.child(img(ImageSource::from(SharedString::from(u))).size_full().object_fit(gpui::ObjectFit::Contain))),
         )
         .when(g.high, |d| {
             d.child(
@@ -773,46 +600,24 @@ fn games_row(guild: u64, games: &[crate::commands::guide::ProfileGame]) -> Optio
 }
 
 fn parse_hex(s: &str) -> Option<u32> {
-    u32::from_str_radix(s.trim_start_matches('#'), 16)
-        .ok()
-        .filter(|_| s.trim_start_matches('#').len() == 6)
+    u32::from_str_radix(s.trim_start_matches('#'), 16).ok().filter(|_| s.trim_start_matches('#').len() == 6)
 }
 
-fn profile_card(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    p: &Rc<InvitePreview>,
-) -> AnyElement {
+fn profile_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePreview>) -> AnyElement {
     let Some(gid) = p.guild else {
         return invalid(false);
     };
     let prof = p.profile.clone().unwrap_or_default();
-    let (online, members) = if p.profile.is_some() {
-        (prof.online_count, prof.member_count)
-    } else {
-        (u64::from(p.online), u64::from(p.members))
-    };
-    let features: &[String] = if p.profile.is_some() {
-        &prof.features
-    } else {
-        &p.features
-    };
+    let (online, members) = if p.profile.is_some() { (prof.online_count, prof.member_count) } else { (u64::from(p.online), u64::from(p.members)) };
+    let features: &[String] = if p.profile.is_some() { &prof.features } else { &p.features };
     let discoverable = features.iter().any(|f| f == "DISCOVERABLE");
     let custom_banner = prof.custom_banner_hash.clone().filter(|_| discoverable);
     let banner: AnyElement = match custom_banner {
-        Some(h) => img(ImageSource::from(SharedString::from(format!(
-            "https://cdn.discordapp.com/discovery-splashes/{}/{h}.jpg?size=512",
-            gid.0
-        ))))
-        .size_full()
-        .object_fit(gpui::ObjectFit::Cover)
-        .into_any_element(),
-        None => img(ImageSource::Render(baked_banner(banner_color(
-            p,
-            prof.brand_color_primary.as_deref().and_then(parse_hex),
-        ))))
-        .size_full()
-        .into_any_element(),
+        Some(h) => img(ImageSource::from(SharedString::from(format!("https://cdn.discordapp.com/discovery-splashes/{}/{h}.jpg?size=512", gid.0))))
+            .size_full()
+            .object_fit(gpui::ObjectFit::Cover)
+            .into_any_element(),
+        None => img(ImageSource::Render(baked_banner(banner_color(p, prof.brand_color_primary.as_deref().and_then(parse_hex))))).size_full().into_any_element(),
     };
     let tag = prof.tag.clone().map(|tag| {
         div()
@@ -825,51 +630,19 @@ fn profile_card(
             .items_center()
             .gap(z(2.))
             .when_some(prof.badge_hash.clone(), |d, h| {
-                d.child(
-                    img(SharedString::from(format!(
-                        "https://cdn.discordapp.com/guild-tag-badges/{}/{h}.png?size=16",
-                        gid.0
-                    )))
-                    .size(z(14.)),
-                )
+                d.child(img(SharedString::from(format!("https://cdn.discordapp.com/guild-tag-badges/{}/{h}.png?size=16", gid.0))).size(z(14.)))
             })
             .child(text(12., 16., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT).child(tag))
     });
     let subtle = |s: SharedString| text(14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE).child(s);
-    let count = |on: bool, s: SharedString| {
-        div()
-            .flex()
-            .items_center()
-            .gap(z(4.))
-            .child(dot(on))
-            .child(subtle(s))
-    };
+    let count = |on: bool, s: SharedString| div().flex().items_center().gap(z(4.)).child(dot(on)).child(subtle(s));
     let member = app.guilds.iter().any(|g| g.id == gid);
-    let gated = features
-        .iter()
-        .any(|f| f == "MEMBER_VERIFICATION_GATE_ENABLED")
-        && features
-            .iter()
-            .any(|f| f == "MEMBER_VERIFICATION_MANUAL_APPROVAL");
+    let gated = features.iter().any(|f| f == "MEMBER_VERIFICATION_GATE_ENABLED") && features.iter().any(|f| f == "MEMBER_VERIFICATION_MANUAL_APPROVAL");
     let cta = if member {
-        button_sm(
-            ("invite-goto", gid.0),
-            crate::t!("invite.card.go_to_server"),
-            BtnKind::Active,
-        )
-        .on_click(goto_click(entity, gid, p.channel_id))
+        button_sm(("invite-goto", gid.0), crate::t!("invite.card.go_to_server"), BtnKind::Active).on_click(goto_click(entity, gid, p.channel_id))
     } else {
-        let label = if gated {
-            crate::t!("invite.card.apply")
-        } else {
-            crate::t!("invite.card.join")
-        };
-        button_sm(("invite-join", gid.0), label, BtnKind::Active).on_click(accept_click(
-            entity,
-            p.code.clone(),
-            Some(gid),
-            p.channel_id,
-        ))
+        let label = if gated { crate::t!("invite.card.apply") } else { crate::t!("invite.card.join") };
+        button_sm(("invite-join", gid.0), label, BtnKind::Active).on_click(accept_click(entity, p.code.clone(), Some(gid), p.channel_id))
     };
     let has_body = !prof.description.is_empty() || !prof.traits.is_empty() || !prof.games.is_empty();
     let games = games_row(gid.0, &prof.games);
@@ -886,15 +659,8 @@ fn profile_card(
                 .flex()
                 .items_center()
                 .gap(z(4.))
-                .when_some(tr.emoji.token(), |d, t| {
-                    d.child(crate::media::emoji::emoji_element(&t, 16.))
-                })
-                .child(
-                    text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT)
-                        .min_w_0()
-                        .text_ellipsis()
-                        .child(SharedString::from(tr.label.clone())),
-                ),
+                .when_some(tr.emoji.token(), |d, t| d.child(crate::media::emoji::emoji_element(&t, 16.)))
+                .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).min_w_0().text_ellipsis().child(SharedString::from(tr.label.clone()))),
         );
     }
     let name = p.guild_name.clone();
@@ -929,14 +695,7 @@ fn profile_card(
         .flex()
         .flex_col()
         .child(probe)
-        .child(
-            div()
-                .h(z(72.))
-                .w_full()
-                .flex_none()
-                .overflow_hidden()
-                .child(banner),
-        )
+        .child(div().h(z(72.)).w_full().flex_none().overflow_hidden().child(banner))
         .child(
             div().mt(z(-34.)).px(z(16.)).child(
                 div()
@@ -976,10 +735,7 @@ fn profile_card(
                         .flex()
                         .flex_wrap()
                         .gap_x(z(8.))
-                        .child(count(
-                            true,
-                            crate::t!("invite.card.online", n = grouped(online)),
-                        ))
+                        .child(count(true, crate::t!("invite.card.online", n = grouped(online))))
                         .child(count(false, members_label(members))),
                 )
                 .child(subtle(established(gid))),
@@ -993,9 +749,7 @@ fn profile_card(
                         .flex()
                         .flex_col()
                         .gap(z(16.))
-                        .when(!prof.description.is_empty(), |d| {
-                            d.child(subtle(prof.description.clone().into()))
-                        })
+                        .when(!prof.description.is_empty(), |d| d.child(subtle(prof.description.clone().into())))
                         .children(games)
                         .when(!prof.traits.is_empty(), |d| d.child(traits)),
                 )
@@ -1003,12 +757,7 @@ fn profile_card(
                 d.child(div().h(z(8.)))
             }
         });
-    let button_row = div()
-        .w_full()
-        .px(z(16.))
-        .pb(z(16.))
-        .flex()
-        .child(cta.flex_1().min_w(z(60.)));
+    let button_row = div().w_full().px(z(16.)).pb(z(16.)).flex().child(cta.flex_1().min_w(z(60.)));
     let card = div()
         .id(("invite-profile", gid.0))
         .mt(z(2.))
@@ -1038,30 +787,22 @@ fn profile_card(
                 gpui::linear_color_stop(tk(idx::BACKGROUND_SURFACE_HIGH).opacity(0.), 1.),
             )))
         })
-        .child(
-            div()
-                .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
-                .when(!expanded, |d| d.pt(z(8.)))
-                .child(button_row),
-        );
+        .child(div().bg(tk(idx::BACKGROUND_SURFACE_HIGH)).when(!expanded, |d| d.pt(z(8.))).child(button_row));
     let toggle_key = key.clone();
     let toggle = entity.clone();
     if expanded {
         card.h(z(h + 36. + 48.))
-            .child(
-                div().mx(z(16.)).child(
-                    button_sm(("invite-hide", gid.0), crate::t!("invite.card.hide_details"), BtnKind::Secondary)
-                        .text_size(z(12.))
-                        .line_height(z(16.))
-                        .on_click(move |_, _, cx| {
-                            EXPANDED.with(|e| e.borrow_mut().remove(&toggle_key));
-                            toggle.update(cx, |a, cx| {
-                                a.message_list.remeasure();
-                                cx.notify();
-                            });
-                        }),
+            .child(div().mx(z(16.)).child(
+                button_sm(("invite-hide", gid.0), crate::t!("invite.card.hide_details"), BtnKind::Secondary).text_size(z(12.)).line_height(z(16.)).on_click(
+                    move |_, _, cx| {
+                        EXPANDED.with(|e| e.borrow_mut().remove(&toggle_key));
+                        toggle.update(cx, |a, cx| {
+                            a.message_list.remeasure();
+                            cx.notify();
+                        });
+                    },
                 ),
-            )
+            ))
             .child(footer)
             .into_any_element()
     } else {
@@ -1079,12 +820,7 @@ fn profile_card(
     }
 }
 
-fn legacy_guild_card(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    p: &Rc<InvitePreview>,
-    own: bool,
-) -> AnyElement {
+fn legacy_guild_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePreview>, own: bool) -> AnyElement {
     let Some(gid) = p.guild else {
         return invalid(own);
     };
@@ -1102,30 +838,14 @@ fn legacy_guild_card(
         (false, false, false, _) => crate::t!("invite.card.invited_server"),
     };
     let member = app.guilds.iter().any(|g| g.id == gid);
-    let detail_text = |s: SharedString| {
-        text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT)
-            .overflow_hidden()
-            .whitespace_nowrap()
-            .text_ellipsis()
-            .child(s)
-    };
+    let detail_text =
+        |s: SharedString| text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT).overflow_hidden().whitespace_nowrap().text_ellipsis().child(s);
     let channel_line = |icon: &'static str| {
         div()
             .flex()
             .items_center()
-            .child(
-                gpui::svg()
-                    .path(crate::icons::path(icon))
-                    .size(z(16.))
-                    .flex_none()
-                    .text_color(tk(idx::TEXT_MUTED)),
-            )
-            .child(
-                detail_text(p.channel_name.clone().unwrap_or_default())
-                    .ml(z(4.))
-                    .flex_1()
-                    .min_w_0(),
-            )
+            .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).flex_none().text_color(tk(idx::TEXT_MUTED)))
+            .child(detail_text(p.channel_name.clone().unwrap_or_default()).ml(z(4.)).flex_1().min_w_0())
             .into_any_element()
     };
     let detail: Option<AnyElement> = if voice {
@@ -1142,45 +862,23 @@ fn legacy_guild_card(
                         .flex()
                         .items_center()
                         .child(dot(true).mr(z(4.)))
-                        .child(detail_text(crate::t!(
-                            "invite.card.online",
-                            n = grouped(u64::from(p.online))
-                        ))),
+                        .child(detail_text(crate::t!("invite.card.online", n = grouped(u64::from(p.online))))),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .child(dot(false).mr(z(4.)))
-                        .child(detail_text(members_label(u64::from(p.members)))),
-                )
+                .child(div().flex().items_center().child(dot(false).mr(z(4.))).child(detail_text(members_label(u64::from(p.members)))))
                 .into_any_element(),
         )
     } else {
         p.channel_name.as_ref().map(|_| channel_line("hash"))
     };
     let label = if voice {
-        if stage {
-            crate::t!("invite.card.join_stage")
-        } else {
-            crate::t!("invite.card.join_voice")
-        }
+        if stage { crate::t!("invite.card.join_stage") } else { crate::t!("invite.card.join_voice") }
     } else if member {
         crate::t!("invite.card.joined")
     } else {
         crate::t!("invite.card.join")
     };
     let btn = button_sm(("invite-legacy", gid.0), label, BtnKind::Active).map(|b| {
-        if member {
-            b.on_click(goto_click(entity, gid, p.channel_id))
-        } else {
-            b.on_click(accept_click(
-                entity,
-                p.code.clone(),
-                Some(gid),
-                p.channel_id,
-            ))
-        }
+        if member { b.on_click(goto_click(entity, gid, p.channel_id)) } else { b.on_click(accept_click(entity, p.code.clone(), Some(gid), p.channel_id)) }
     });
     wrapper()
         .when_some(p.splash.clone(), |d, s| {
@@ -1193,11 +891,7 @@ fn legacy_guild_card(
                     .rounded_t(z(8.))
                     .overflow_hidden()
                     .bg(tk(idx::BACKGROUND_MOD_SUBTLE))
-                    .child(
-                        img(ImageSource::from(s))
-                            .size_full()
-                            .object_fit(gpui::ObjectFit::Cover),
-                    ),
+                    .child(img(ImageSource::from(s)).size_full().object_fit(gpui::ObjectFit::Cover)),
             )
         })
         .child(title(head))
@@ -1205,59 +899,28 @@ fn legacy_guild_card(
             body()
                 .child(header_line(
                     Some(guild_icon(p, 48., 12., 16.)),
-                    info(
-                        crate::ui::emoji_text::label(p.guild_name.clone(), 16.),
-                        detail,
-                        idx::TEXT_STRONG,
-                        FontWeight::SEMIBOLD,
-                        2.,
-                    ),
+                    info(crate::ui::emoji_text::label(p.guild_name.clone(), 16.), detail, idx::TEXT_STRONG, FontWeight::SEMIBOLD, 2.),
                 ))
-                .child(if voice {
-                    div().w_full().flex().child(btn.flex_1())
-                } else {
-                    div().flex_none().child(btn)
-                }),
+                .child(if voice { div().w_full().flex().child(btn.flex_1()) } else { div().flex_none().child(btn) }),
         )
         .into_any_element()
 }
 
-fn group_card(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    p: &Rc<InvitePreview>,
-    own: bool,
-) -> AnyElement {
-    let known = p
-        .channel_id
-        .is_some_and(|ch| app.channels.contains_key(&ch));
-    let head = if own {
-        crate::t!("invite.card.sent_to")
-    } else {
-        crate::t!("invite.card.invited_to")
-    };
+fn group_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePreview>, own: bool) -> AnyElement {
+    let known = p.channel_id.is_some_and(|ch| app.channels.contains_key(&ch));
+    let head = if own { crate::t!("invite.card.sent_to") } else { crate::t!("invite.card.invited_to") };
     let name = group_name(p.channel_name.as_deref(), &p.recipients);
     let btn = if known {
-        button_sm(
-            ("invite-gdm", p.channel_id.map_or(0, |c| c.0)),
-            crate::t!("invite.card.joined"),
-            BtnKind::Secondary,
-        )
-        .opacity(0.5)
-        .cursor_default()
+        button_sm(("invite-gdm", p.channel_id.map_or(0, |c| c.0)), crate::t!("invite.card.joined"), BtnKind::Secondary).opacity(0.5).cursor_default()
     } else {
-        button_sm(
-            ("invite-gdm", p.channel_id.map_or(0, |c| c.0)),
-            crate::t!("invite.card.join_group"),
-            BtnKind::Active,
-        )
-        .on_click(accept_click(entity, p.code.clone(), None, p.channel_id))
+        button_sm(("invite-gdm", p.channel_id.map_or(0, |c| c.0)), crate::t!("invite.card.join_group"), BtnKind::Active).on_click(accept_click(
+            entity,
+            p.code.clone(),
+            None,
+            p.channel_id,
+        ))
     };
-    let people: Vec<(Option<Id>, ImageRef, SharedString)> = match p
-        .channel_id
-        .filter(|_| known)
-        .and_then(|ch| app.nav.extras.get(&ch))
-    {
+    let people: Vec<(Option<Id>, ImageRef, SharedString)> = match p.channel_id.filter(|_| known).and_then(|ch| app.nav.extras.get(&ch)) {
         Some(extra) => extra
             .members
             .iter()
@@ -1274,13 +937,7 @@ fn group_card(
         None => p
             .recipient_users
             .iter()
-            .map(|r| {
-                (
-                    r.id,
-                    r.avatar.clone().unwrap_or(ImageRef::Default(r.id.map_or(0, |u| ((u.0 >> 22) % 6) as u8))),
-                    r.name.clone(),
-                )
-            })
+            .map(|r| (r.id, r.avatar.clone().unwrap_or(ImageRef::Default(r.id.map_or(0, |u| ((u.0 >> 22) % 6) as u8))), r.name.clone()))
             .collect(),
     };
     let count = if people.is_empty() { p.recipients.len() } else { people.len() };
@@ -1302,13 +959,7 @@ fn group_card(
                 .child(
                     header_line(
                         round_icon(p.channel_icon.as_ref(), 48.),
-                        info(
-                            name.into_any_element(),
-                            Some(detail),
-                            idx::TEXT_STRONG,
-                            FontWeight::MEDIUM,
-                            4.,
-                        ),
+                        info(name.into_any_element(), Some(detail), idx::TEXT_STRONG, FontWeight::MEDIUM, 4.),
                     )
                     .gap(z(12.))
                     .w_full()
@@ -1346,82 +997,33 @@ pub fn summary_avatars(people: &[(Option<Id>, ImageRef, SharedString)], max: usi
     }
     if overflow {
         let more = people.len() - max + 1;
-        row = row.child(
-            div()
-                .flex_none()
-                .ml(z(-size / 4. - ring))
-                .p(z(ring))
-                .rounded_full()
-                .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
-                .child(
-                    div()
-                        .h(z(size))
-                        .min_w(z(size))
-                        .px(z(10.))
-                        .rounded(z(16.))
-                        .bg(tk(idx::BACKGROUND_BASE_LOWEST))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            text(14., 18., FontWeight::MEDIUM, idx::INTERACTIVE_TEXT_DEFAULT)
-                                .child(if more > 99 { ">99".to_owned() } else { format!("+{more}") }),
-                        ),
+        row =
+            row.child(div().flex_none().ml(z(-size / 4. - ring)).p(z(ring)).rounded_full().bg(tk(idx::BACKGROUND_SURFACE_HIGH)).child(
+                div().h(z(size)).min_w(z(size)).px(z(10.)).rounded(z(16.)).bg(tk(idx::BACKGROUND_BASE_LOWEST)).flex().items_center().justify_center().child(
+                    text(14., 18., FontWeight::MEDIUM, idx::INTERACTIVE_TEXT_DEFAULT).child(if more > 99 { ">99".to_owned() } else { format!("+{more}") }),
                 ),
-        );
+            ));
     }
     Some(row.into_any_element())
 }
 
-fn friend_card(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    p: &Rc<InvitePreview>,
-    own: bool,
-) -> AnyElement {
+fn friend_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePreview>, own: bool) -> AnyElement {
     let Some(user) = p.inviter_id else {
         return div().into_any_element();
     };
-    let friend = app
-        .nav
-        .relationship(user)
-        .is_some_and(|r| r.kind == RelationshipKind::Friend);
-    let head = if own {
-        crate::t!("invite.card.sent_friend")
-    } else {
-        crate::t!("invite.card.got_friend")
-    };
+    let friend = app.nav.relationship(user).is_some_and(|r| r.kind == RelationshipKind::Friend);
+    let head = if own { crate::t!("invite.card.sent_friend") } else { crate::t!("invite.card.got_friend") };
     let username = p.inviter_username.clone().unwrap_or_default();
     let btn = if friend {
         let e = entity.clone();
-        button_sm(
-            ("invite-friend", user.0),
-            crate::t!("invite.card.send_message"),
-            BtnKind::Secondary,
-        )
-        .on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_dm_with(user, cx)))
+        button_sm(("invite-friend", user.0), crate::t!("invite.card.send_message"), BtnKind::Secondary)
+            .on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_dm_with(user, cx)))
     } else if own {
-        button_sm(
-            ("invite-friend", user.0),
-            crate::t!("invite.card.add_friend"),
-            BtnKind::Secondary,
-        )
-        .opacity(0.5)
-        .cursor_default()
+        button_sm(("invite-friend", user.0), crate::t!("invite.card.add_friend"), BtnKind::Secondary).opacity(0.5).cursor_default()
     } else {
-        button_sm(
-            ("invite-friend", user.0),
-            crate::t!("invite.card.add_friend"),
-            BtnKind::Active,
-        )
-        .on_click(accept_click(entity, p.code.clone(), None, None))
+        button_sm(("invite-friend", user.0), crate::t!("invite.card.add_friend"), BtnKind::Active).on_click(accept_click(entity, p.code.clone(), None, None))
     };
-    let avatar = Some(crate::ui::avatar_ref(
-        p.inviter_avatar
-            .clone()
-            .unwrap_or(ImageRef::Default(((user.0 >> 22) % 6) as u8)),
-        48. * crate::theme::zoom(),
-    ));
+    let avatar = Some(crate::ui::avatar_ref(p.inviter_avatar.clone().unwrap_or(ImageRef::Default(((user.0 >> 22) % 6) as u8)), 48. * crate::theme::zoom()));
     wrapper()
         .child(title(head))
         .child(
@@ -1430,11 +1032,7 @@ fn friend_card(
                     avatar,
                     info(
                         username.clone().into_any_element(),
-                        Some(
-                            text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT)
-                                .child(username)
-                                .into_any_element(),
-                        ),
+                        Some(text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT).child(username).into_any_element()),
                         idx::TEXT_STRONG,
                         FontWeight::SEMIBOLD,
                         2.,
@@ -1467,51 +1065,25 @@ mod tests {
     use super::*;
 
     fn codes(s: &str) -> Vec<(String, Option<u64>)> {
-        links(s)
-            .into_iter()
-            .map(|l| (l.code, l.event.map(|e| e.0)))
-            .collect()
+        links(s).into_iter().map(|l| (l.code, l.event.map(|e| e.0))).collect()
     }
 
     #[test]
     fn finds_invite_links() {
-        assert_eq!(
-            codes("https://discord.gg/cS8CHeVv"),
-            vec![("cS8CHeVv".into(), None)]
-        );
-        assert_eq!(
-            codes("viens <https://discord.com/invite/abc-1?event=42> ou discord.gg/xyz"),
-            vec![("abc-1".into(), Some(42)), ("xyz".into(), None)]
-        );
-        assert_eq!(
-            codes("https://ptb.discord.com/invite/p1 et canary.discord.com/invite/p1"),
-            vec![("p1".into(), None)]
-        );
-        assert_eq!(
-            codes("https://discordapp.com/invite/old"),
-            vec![("old".into(), None)]
-        );
+        assert_eq!(codes("https://discord.gg/cS8CHeVv"), vec![("cS8CHeVv".into(), None)]);
+        assert_eq!(codes("viens <https://discord.com/invite/abc-1?event=42> ou discord.gg/xyz"), vec![("abc-1".into(), Some(42)), ("xyz".into(), None)]);
+        assert_eq!(codes("https://ptb.discord.com/invite/p1 et canary.discord.com/invite/p1"), vec![("p1".into(), None)]);
+        assert_eq!(codes("https://discordapp.com/invite/old"), vec![("old".into(), None)]);
         assert!(codes("notdiscord.gg/abc").is_empty());
         assert!(codes("`discord.gg/code` and ```\ndiscord.gg/block\n```").is_empty());
         assert!(codes("https://discord.gg/").is_empty());
         assert_eq!(codes("discord.gg/a discord.gg/a"), vec![("a".into(), None)]);
-        assert_eq!(
-            codes("https://discord.gg/ev?foo=1&event=7"),
-            vec![("ev".into(), Some(7))]
-        );
+        assert_eq!(codes("https://discord.gg/ev?foo=1&event=7"), vec![("ev".into(), Some(7))]);
     }
 
     #[test]
     fn group_names_follow_the_client() {
-        let n = |v: &[&str]| {
-            group_name(
-                None,
-                &v.iter()
-                    .map(|s| SharedString::from(s.to_string()))
-                    .collect::<Vec<_>>(),
-            )
-            .to_string()
-        };
+        let n = |v: &[&str]| group_name(None, &v.iter().map(|s| SharedString::from(s.to_string())).collect::<Vec<_>>()).to_string();
         assert_eq!(n(&[]), "Unnamed");
         assert_eq!(n(&["a"]), "a");
         assert_eq!(n(&["a", "b"]), "a, b");
@@ -1525,10 +1097,7 @@ mod tests {
         assert_eq!(members_label(1).to_string(), "1 Member");
         assert_eq!(members_label(12).to_string(), "12 Members");
         assert_eq!(members_label(1234).to_string(), "1,234 Members");
-        assert_eq!(
-            established(Id(1427645329775263756)).to_string(),
-            "Est. Oct 2025"
-        );
+        assert_eq!(established(Id(1427645329775263756)).to_string(), "Est. Oct 2025");
     }
 
     #[test]
@@ -1538,10 +1107,7 @@ mod tests {
         let ch = |v: u32, s: u32| (v >> s) & 0xff;
         assert!((ch(light, 16) as i32 - 74).abs() <= 2, "{light:06x}");
         let bottom = radial_banner_pixel(base, light, 0.5, 1.0);
-        assert!(
-            (i32::from(bottom[0]) - ch(light, 16) as i32).abs() <= 2,
-            "{bottom:?}"
-        );
+        assert!((i32::from(bottom[0]) - ch(light, 16) as i32).abs() <= 2, "{bottom:?}");
         assert_eq!(radial_banner_pixel(base, light, 0.5, 0.0), [0, 0, 0]);
     }
 }

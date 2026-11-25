@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::codec::CodecOffer;
 use crate::{Error, Result};
@@ -162,34 +162,26 @@ pub fn decode_text(text: &str) -> Result<Decoded> {
     let seq = v.get("seq").and_then(Value::as_u64);
     let d = v.get("d").cloned().unwrap_or(Value::Null);
     let msg = match op {
-        op::HELLO => ServerMessage::Hello {
-            heartbeat_interval_ms: d.get("heartbeat_interval").and_then(Value::as_f64).ok_or(Error::Protocol("hello".into()))?,
-        },
+        op::HELLO => {
+            ServerMessage::Hello { heartbeat_interval_ms: d.get("heartbeat_interval").and_then(Value::as_f64).ok_or(Error::Protocol("hello".into()))? }
+        }
         op::READY => ServerMessage::Ready(serde_json::from_value(d)?),
         op::SESSION_DESCRIPTION => ServerMessage::SessionDescription(serde_json::from_value(d)?),
-        op::HEARTBEAT_ACK => ServerMessage::HeartbeatAck {
-            nonce: d.get("t").and_then(Value::as_u64).or_else(|| d.as_u64()).unwrap_or(0),
-        },
+        op::HEARTBEAT_ACK => ServerMessage::HeartbeatAck { nonce: d.get("t").and_then(Value::as_u64).or_else(|| d.as_u64()).unwrap_or(0) },
         op::RESUMED => ServerMessage::Resumed,
         op::SPEAKING => ServerMessage::Speaking {
             user_id: d.get("user_id").and_then(Value::as_str).map(str::to_string),
             ssrc: d.get("ssrc").and_then(Value::as_u64).unwrap_or(0) as u32,
             speaking: d.get("speaking").and_then(Value::as_u64).unwrap_or(0) as u32,
         },
-        op::CLIENTS_CONNECT => ServerMessage::ClientsConnect {
-            user_ids: serde_json::from_value(d.get("user_ids").cloned().unwrap_or(Value::Array(vec![])))?,
-        },
-        op::CLIENT_DISCONNECT => ServerMessage::ClientDisconnect {
-            user_id: d.get("user_id").and_then(Value::as_str).unwrap_or_default().to_string(),
-        },
+        op::CLIENTS_CONNECT => ServerMessage::ClientsConnect { user_ids: serde_json::from_value(d.get("user_ids").cloned().unwrap_or(Value::Array(vec![])))? },
+        op::CLIENT_DISCONNECT => ServerMessage::ClientDisconnect { user_id: d.get("user_id").and_then(Value::as_str).unwrap_or_default().to_string() },
         op::VIDEO => ServerMessage::Video(serde_json::from_value(d)?),
         op::DAVE_PREPARE_TRANSITION => ServerMessage::Dave(DaveServerMessage::PrepareTransition {
             transition_id: u16_field(&d, "transition_id"),
             protocol_version: u16_field(&d, "protocol_version"),
         }),
-        op::DAVE_EXECUTE_TRANSITION => ServerMessage::Dave(DaveServerMessage::ExecuteTransition {
-            transition_id: u16_field(&d, "transition_id"),
-        }),
+        op::DAVE_EXECUTE_TRANSITION => ServerMessage::Dave(DaveServerMessage::ExecuteTransition { transition_id: u16_field(&d, "transition_id") }),
         op::DAVE_PREPARE_EPOCH => ServerMessage::Dave(DaveServerMessage::PrepareEpoch {
             epoch: d.get("epoch").and_then(Value::as_u64).unwrap_or(0),
             protocol_version: u16_field(&d, "protocol_version"),

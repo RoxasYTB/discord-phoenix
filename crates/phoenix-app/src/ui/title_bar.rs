@@ -55,25 +55,14 @@ fn nav_arrow(id: &'static str, name: &'static str, back: bool, enabled: bool) ->
         .items_center()
         .when(back, |d| d.pl(z(6.)).pr(z(2.)).rounded_l(z(6.)))
         .when(!back, |d| d.pl(z(2.)).pr(z(6.)).rounded_r(z(6.)))
-        .child(
-            gpui::svg()
-                .path(crate::icons::path(name))
-                .size(z(18.))
-                .flex_none()
-                .text_color(c(tok(idx::INTERACTIVE_ICON_DEFAULT))),
-        );
-    if enabled {
-        d.cursor_pointer().hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
-    } else {
-        d.opacity(0.5)
-    }
+        .child(gpui::svg().path(crate::icons::path(name)).size(z(18.)).flex_none().text_color(c(tok(idx::INTERACTIVE_ICON_DEFAULT))));
+    if enabled { d.cursor_pointer().hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL)))) } else { d.opacity(0.5) }
 }
 
 pub static FORCE_CLIENT_DECORATIONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn client_decorated(window: &gpui::Window) -> bool {
-    FORCE_CLIENT_DECORATIONS.load(std::sync::atomic::Ordering::Relaxed)
-        || matches!(window.window_decorations(), gpui::Decorations::Client { .. })
+    FORCE_CLIENT_DECORATIONS.load(std::sync::atomic::Ordering::Relaxed) || matches!(window.window_decorations(), gpui::Decorations::Client { .. })
 }
 
 static DREW_WIN_BUTTONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -150,9 +139,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(c(tok(idx::TEXT_STRONG)))
                 .map(|d| match guild {
-                    Some(g) => d.child(
-                        div().rounded(z(4.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16. * zoom())),
-                    ),
+                    Some(g) => d.child(div().rounded(z(4.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16. * zoom()))),
                     None => d.child(icon(glyph, 16. * zoom(), c(tok(idx::INTERACTIVE_ICON_DEFAULT)))),
                 })
                 .child(div().max_w(z(title_max_w(vw))).text_ellipsis().child(text)),
@@ -166,24 +153,17 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .items_center()
                 .gap(z(4.))
                 .when(compact_sidebar(vw), |d| {
-                    d.child(
-                        bar_button("title-drawer", Icon::Hash, drawer_open(), crate::t!("title.toggle_sidebar"))
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                set_drawer_open(!drawer_open());
-                                cx.notify();
-                            })),
-                    )
+                    d.child(bar_button("title-drawer", Icon::Hash, drawer_open(), crate::t!("title.toggle_sidebar")).on_click(cx.listener(|_, _, _, cx| {
+                        set_drawer_open(!drawer_open());
+                        cx.notify();
+                    })))
                 })
-                .child(
-                    div()
-                        .w(z(64.))
-                        .h(z(24.))
-                        .flex()
-                        .justify_center()
-                        .gap(z(2.))
-                        .child(nav_arrow("title-back", "nav/back", true, true))
-                        .child(nav_arrow("title-forward", "nav/forward", false, false)),
-                ),
+                .child(div().w(z(64.)).h(z(24.)).flex().justify_center().gap(z(2.)).child(nav_arrow("title-back", "nav/back", true, true)).child(nav_arrow(
+                    "title-forward",
+                    "nav/forward",
+                    false,
+                    false,
+                ))),
         )
         .child(
             div()
@@ -238,24 +218,13 @@ pub fn login_bar(window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> impl In
 
 fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let btn = |id: &'static str, close: bool| {
-        div()
-            .id(id)
-            .group(id)
-            .size(z(m::TITLE_BAR_H))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .occlude()
-            .cursor_pointer()
-            .map(|d| {
-                if close {
-                    d.hover(|s| s.bg(c(tok(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT))))
-                } else {
-                    d.hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
-                        .active(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))))
-                }
-            })
+        div().id(id).group(id).size(z(m::TITLE_BAR_H)).flex_none().flex().items_center().justify_center().occlude().cursor_pointer().map(|d| {
+            if close {
+                d.hover(|s| s.bg(c(tok(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT))))
+            } else {
+                d.hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER)))).active(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))))
+            }
+        })
     };
     let fg = c(tok(idx::INTERACTIVE_TEXT_DEFAULT));
     let fg_hover = c(tok(idx::INTERACTIVE_TEXT_HOVER));
@@ -269,34 +238,38 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .child(div().mx(z(4.)).w(z(1.)).h(z(m::TITLE_BAR_H - 12.)).bg(c(tok(idx::BORDER_SUBTLE))))
         .child(
             btn("win-min", false)
-                .child(glyph_box().child(
-                    div()
-                        .id("win-min-g")
-                        .absolute()
-                        .left(z(1.))
-                        .top(z(6.))
-                        .w(z(10.))
-                        .h(z(1.))
-                        .bg(fg)
-                        .group_hover("win-min", |s| s.bg(fg_hover))
-                        .group_active("win-min", |s| s.bg(fg_active)),
-                ))
+                .child(
+                    glyph_box().child(
+                        div()
+                            .id("win-min-g")
+                            .absolute()
+                            .left(z(1.))
+                            .top(z(6.))
+                            .w(z(10.))
+                            .h(z(1.))
+                            .bg(fg)
+                            .group_hover("win-min", |s| s.bg(fg_hover))
+                            .group_active("win-min", |s| s.bg(fg_active)),
+                    ),
+                )
                 .on_click(cx.listener(|_, _, w, _| w.minimize_window())),
         )
         .child(
             btn("win-max", false)
-                .child(glyph_box().child(
-                    div()
-                        .id("win-max-g")
-                        .absolute()
-                        .left(z(1.))
-                        .top(z(1.))
-                        .size(z(10.))
-                        .border_1()
-                        .border_color(fg)
-                        .group_hover("win-max", |s| s.border_color(fg_hover))
-                        .group_active("win-max", |s| s.border_color(fg_active)),
-                ))
+                .child(
+                    glyph_box().child(
+                        div()
+                            .id("win-max-g")
+                            .absolute()
+                            .left(z(1.))
+                            .top(z(1.))
+                            .size(z(10.))
+                            .border_1()
+                            .border_color(fg)
+                            .group_hover("win-max", |s| s.border_color(fg_hover))
+                            .group_active("win-max", |s| s.border_color(fg_active)),
+                    ),
+                )
                 .on_click(cx.listener(|_, _, w, _| w.zoom_window())),
         )
         .child(

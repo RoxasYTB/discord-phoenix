@@ -1,16 +1,13 @@
 use crate::theme::z;
-use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, ParentElement, SharedString, Styled, Subscription,
-    Window, div, prelude::*, px,
-};
+use gpui::{AnyElement, App, Context, Entity, FontWeight, ParentElement, SharedString, Styled, Subscription, Window, div, prelude::*, px};
 use gpui_component::input::{Input, InputEvent, InputState};
 use phoenix_api::rest::search::{date_to_snowflake, parse_search};
 
 use crate::{
-    search_highlight::Highlighter,
     app::{PhoenixApp, format_time_full},
     assets::Icon,
     model::{ChannelKind, Id, Message},
+    search_highlight::Highlighter,
     theme::{Palette, c, generated::idx, m as layout},
     ui::avatar,
 };
@@ -143,7 +140,13 @@ pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, Stri
         let mut best: Option<(u8, Id)> = None;
         for u in app.users.values() {
             for cand in [u.name.to_lowercase(), u.display_name.to_lowercase()] {
-                let s = if cand == n { 0 } else if cand.starts_with(&n) { 1 } else { continue };
+                let s = if cand == n {
+                    0
+                } else if cand.starts_with(&n) {
+                    1
+                } else {
+                    continue;
+                };
                 if best.is_none_or(|(b, _)| s < b) {
                     best = Some((s, u.id));
                 }
@@ -215,9 +218,7 @@ pub fn is_open(cx: &App) -> bool {
 }
 
 pub fn is_focused(window: &Window, cx: &App) -> bool {
-    cx.try_global::<Search>()
-        .and_then(|s| s.0.as_ref())
-        .is_some_and(|s| gpui::Focusable::focus_handle(s.input.read(cx), cx).is_focused(window))
+    cx.try_global::<Search>().and_then(|s| s.0.as_ref()).is_some_and(|s| gpui::Focusable::focus_handle(s.input.read(cx), cx).is_focused(window))
 }
 
 pub fn open(_app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -387,7 +388,6 @@ const FILTERS: [(&str, &str, &str, &str, &str); 4] = [
     ("mentions:", "search/at", "search.f_mentions", "search.k_mentions", "search.v_user"),
 ];
 
-
 fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let guild = app.channel_guild(m.channel).or(app.selected_guild);
     let author_cow = app.member_user(guild, m.author);
@@ -512,23 +512,28 @@ fn highlight_plain(text: SharedString, hl: &Highlighter) -> gpui::StyledText {
 }
 
 fn reply_line(app: &PhoenixApp, m: &Message, entity: &gpui::Entity<PhoenixApp>) -> gpui::Div {
-    let spine = div()
-        .absolute()
-        .left(z(-41.))
-        .top(z(9.))
-        .w(z(37.))
-        .h(z(13.))
-        .border_l_2()
-        .border_t_2()
-        .rounded_tl(z(6.))
-        .border_color(tk(idx::SPINE_DEFAULT));
-    let row = div().relative().h(z(18.)).mb(z(4.)).flex().items_center().gap(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::TEXT_DEFAULT)).child(spine);
+    let spine = div().absolute().left(z(-41.)).top(z(9.)).w(z(37.)).h(z(13.)).border_l_2().border_t_2().rounded_tl(z(6.)).border_color(tk(idx::SPINE_DEFAULT));
+    let row = div()
+        .relative()
+        .h(z(18.))
+        .mb(z(4.))
+        .flex()
+        .items_center()
+        .gap(z(4.))
+        .text_size(z(14.))
+        .line_height(z(18.))
+        .text_color(tk(idx::TEXT_DEFAULT))
+        .child(spine);
     match &m.reply_preview {
         Some((a, nick, text)) => {
             let guild = app.channel_guild(m.channel).or(app.selected_guild);
             let ru_cow = app.member_user(guild, *a);
             let ru = ru_cow.as_deref();
-            let name: SharedString = nick.clone().or_else(|| app.member_nick_in(guild, *a)).or_else(|| ru.map(|u| u.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown"));
+            let name: SharedString = nick
+                .clone()
+                .or_else(|| app.member_nick_in(guild, *a))
+                .or_else(|| ru.map(|u| u.display_name.clone()))
+                .unwrap_or_else(|| crate::t!("common.unknown"));
             let (reply_color, reply_gradient) = app.author_role_style_in(guild, *a);
             let preview: String = text.chars().take(200).collect::<String>().replace('\n', " ");
             row.child(avatar(ru, 16.))
@@ -788,10 +793,13 @@ fn results_panel(
         .border_l_1()
         .border_color(tk(idx::APP_FRAME_BORDER))
         .occlude()
-        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _, _, cx| {
-            close_sort_menu(cx);
-            close_dm_menu(cx);
-        }))
+        .on_mouse_down(
+            gpui::MouseButton::Left,
+            cx.listener(|_, _, _, cx| {
+                close_sort_menu(cx);
+                close_dm_menu(cx);
+            }),
+        )
         .flex()
         .flex_col()
         .child(header)
@@ -836,17 +844,21 @@ fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div
         .flex()
         .items_center()
         .child(div().w(z(20.)).flex_none().pr(z(4.)).child(gpui::svg().path(glyph).size(z(16.)).text_color(tk(idx::TEXT_STRONG))))
-        .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(highlight_plain(name, hl)))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(tk(idx::TEXT_STRONG))
+                .child(highlight_plain(name, hl)),
+        )
         .when_some(parent, |d, p| {
-            d.child(
-                div()
-                    .max_w(z(190.))
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .child(named("folder", 14., tk(idx::TEXT_DEFAULT)).ml(z(4.)).mr(z(4.)))
-                    .child(div().min_w_0().truncate().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(p)),
-            )
+            d.child(div().max_w(z(190.)).min_w_0().flex().items_center().child(named("folder", 14., tk(idx::TEXT_DEFAULT)).ml(z(4.)).mr(z(4.))).child(
+                div().min_w_0().truncate().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(p),
+            ))
         })
 }
 
@@ -941,7 +953,12 @@ fn pager(cur: u32, pages: u32, cx: &mut Context<PhoenixApp>) -> gpui::Div {
                     .line_height(z(16.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .when(on, |d| d.bg(tk(idx::BRAND_500)).text_color(tk(idx::WHITE)))
-                    .when(!on, |d| d.text_color(tk(idx::TEXT_STRONG)).cursor_pointer().hover(|s| s.bg(tk(idx::BACKGROUND_MOD_SUBTLE))).on_click(cx.listener(move |a, _, _, cx| go_page(a, p, cx))))
+                    .when(!on, |d| {
+                        d.text_color(tk(idx::TEXT_STRONG))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(tk(idx::BACKGROUND_MOD_SUBTLE)))
+                            .on_click(cx.listener(move |a, _, _, cx| go_page(a, p, cx)))
+                    })
                     .child(p.to_string())
             }
         });
@@ -1114,7 +1131,15 @@ fn history_segments(q: &str) -> Vec<HistorySeg> {
 }
 
 fn history_pills(app: &PhoenixApp, q: &str) -> gpui::Div {
-    let mut row = div().flex().items_center().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).whitespace_nowrap().overflow_hidden();
+    let mut row = div()
+        .flex()
+        .items_center()
+        .text_size(z(14.))
+        .line_height(z(18.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(tk(idx::TEXT_STRONG))
+        .whitespace_nowrap()
+        .overflow_hidden();
     let pill = || div().py(z(3.)).bg(tk(idx::BACKGROUND_MOD_STRONG));
     for seg in history_segments(q) {
         row = match seg {
@@ -1139,15 +1164,7 @@ fn history_pills(app: &PhoenixApp, q: &str) -> gpui::Div {
 }
 
 fn option_row(id: (&'static str, usize)) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .px(z(8.))
-        .py(z(4.))
-        .rounded(z(8.))
-        .flex()
-        .items_center()
-        .cursor_pointer()
-        .hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
+    div().id(id).px(z(8.)).py(z(4.)).rounded(z(8.)).flex().items_center().cursor_pointer().hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
 }
 
 fn group_header(label: SharedString) -> gpui::Div {
@@ -1180,7 +1197,14 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
                     div()
                         .flex()
                         .flex_col()
-                        .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(crate::t!(label)))
+                        .child(
+                            div()
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(tk(idx::TEXT_STRONG))
+                                .child(crate::t!(label)),
+                        )
                         .child(
                             div()
                                 .flex()
@@ -1232,7 +1256,8 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
             )
             .child(div().my(z(8.)).mx(z(-8.)).h(z(1.)).bg(tk(idx::BORDER_SUBTLE)));
     }
-    if all_dms && query_empty
+    if all_dms
+        && query_empty
         && let Some(cur) = app.selected_channel
     {
         let tag = dm_tag(app, cur);
@@ -1246,23 +1271,24 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
                     submit(a, cx);
                 }))
                 .child(named("search", 20., tk(idx::TEXT_MUTED)).mr(z(8.)))
-                .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("search.find_in", name = tag))),
+                .child(
+                    div()
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(tk(idx::TEXT_STRONG))
+                        .child(crate::t!("search.find_in", name = tag)),
+                ),
         );
     }
     body = body.child(filters);
     if !history.is_empty() {
-        let mut group = div().flex().flex_col().gap(z(4.)).child(
-            group_header(crate::t!("search.history")).child(
-                div()
-                    .id("search-clear-history")
-                    .cursor_pointer()
-                    .child(named("chat/trash", 18., tk(idx::TEXT_SUBTLE)))
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        cx.default_global::<SearchHistory>().0.clear();
-                        cx.notify();
-                    })),
-            ),
-        );
+        let mut group = div().flex().flex_col().gap(z(4.)).child(group_header(crate::t!("search.history")).child(
+            div().id("search-clear-history").cursor_pointer().child(named("chat/trash", 18., tk(idx::TEXT_SUBTLE))).on_click(cx.listener(|_, _, _, cx| {
+                cx.default_global::<SearchHistory>().0.clear();
+                cx.notify();
+            })),
+        ));
         for (i, q) in history.into_iter().enumerate() {
             let text = q.clone();
             group = group.child(
@@ -1297,10 +1323,7 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
                 .id("search-popout")
                 .debug_selector(|| "search-options-popout".into())
                 .on_mouse_down_out(cx.listener(|a, ev: &gpui::MouseDownEvent, w, cx| {
-                    let bar = gpui::Bounds::new(
-                        gpui::point(w.viewport_size().width - z(8. + 244.), z(layout::TITLE_BAR_H + 8.)),
-                        gpui::size(z(244.), z(32.)),
-                    );
+                    let bar = gpui::Bounds::new(gpui::point(w.viewport_size().width - z(8. + 244.), z(layout::TITLE_BAR_H + 8.)), gpui::size(z(244.), z(32.)));
                     if !bar.contains(&ev.position) && !crate::ui::search_filters::is_open(cx) {
                         set_idle(a, w, cx);
                     }
@@ -1325,7 +1348,6 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
 #[cfg(test)]
 mod history_tests {
     use super::*;
-
 
     #[test]
     fn pager_pages() {

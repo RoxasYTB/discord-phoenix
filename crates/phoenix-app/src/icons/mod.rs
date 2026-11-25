@@ -124,25 +124,27 @@ fn extract_all(entries: &[(String, PathBuf)]) -> HashMap<&'static str, String> {
     let workers = std::thread::available_parallelism().map_or(2, |n| n.get()).clamp(1, 4);
     std::thread::scope(|sc| {
         for _ in 0..workers {
-            sc.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                let Some((_, p)) = entries.get(i) else { break };
-                let todo: Vec<_> = {
-                    let f = found.lock().unwrap_or_else(|e| e.into_inner());
-                    NAMES.iter().filter(|(n, _)| f.get(n).is_none_or(|(r, _)| *r > (0, i))).collect()
-                };
-                if todo.is_empty() {
-                    break;
-                }
-                let Some(js) = cache::read_body(p) else { continue };
-                if !js.contains("Icon:function(") {
-                    continue;
-                }
-                for (name, candidates) in todo {
-                    if let Some((rank, svg)) = candidates.iter().enumerate().find_map(|(ci, c)| extract::icon_svg(&js, c).map(|s| ((ci, i), s))) {
-                        let mut f = found.lock().unwrap_or_else(|e| e.into_inner());
-                        if f.get(name).is_none_or(|(r, _)| *r > rank) {
-                            f.insert(*name, (rank, svg));
+            sc.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    let Some((_, p)) = entries.get(i) else { break };
+                    let todo: Vec<_> = {
+                        let f = found.lock().unwrap_or_else(|e| e.into_inner());
+                        NAMES.iter().filter(|(n, _)| f.get(n).is_none_or(|(r, _)| *r > (0, i))).collect()
+                    };
+                    if todo.is_empty() {
+                        break;
+                    }
+                    let Some(js) = cache::read_body(p) else { continue };
+                    if !js.contains("Icon:function(") {
+                        continue;
+                    }
+                    for (name, candidates) in todo {
+                        if let Some((rank, svg)) = candidates.iter().enumerate().find_map(|(ci, c)| extract::icon_svg(&js, c).map(|s| ((ci, i), s))) {
+                            let mut f = found.lock().unwrap_or_else(|e| e.into_inner());
+                            if f.get(name).is_none_or(|(r, _)| *r > rank) {
+                                f.insert(*name, (rank, svg));
+                            }
                         }
                     }
                 }

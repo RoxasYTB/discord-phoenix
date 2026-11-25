@@ -37,7 +37,13 @@ fn uploader(url: Option<String>, h: f32) -> gpui::Div {
         .flex()
         .flex_col()
         .gap(z(12.))
-        .child(frame.child(div().absolute().top(z(12.)).right(z(12.)).size(z(28.)).rounded_full().bg(gpui::white()).flex().items_center().justify_center().child(icon("pen", 16., idx::BLACK))))
+        .child(frame.child(
+            div().absolute().top(z(12.)).right(z(12.)).size(z(28.)).rounded_full().bg(gpui::white()).flex().items_center().justify_center().child(icon(
+                "pen",
+                16.,
+                idx::BLACK,
+            )),
+        ))
         .child(div().flex().justify_center().child(text(14., 14., FontWeight::NORMAL, idx::TEXT_LINK, crate::t!("gs2.remove"))))
 }
 
@@ -76,19 +82,33 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                 .flex()
                 .gap(z(32.))
                 .child(
-                    div().w(z(314.)).flex_none().flex().items_start().gap(z(28.)).child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap(z(4.))
-                            .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.progress_bar")))
-                            .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!("gs2.progress_bar_desc"))),
-                    )
-                    .child(switch("gs2-progress-bar", bar).on_click(cx.listener(move |a, _, _, cx| {
-                        write(a, ServerCall::EditSafety { guild: sf(guild), edit: SafetyEdit { premium_progress_bar_enabled: Some(!bar), ..Default::default() } }, None, cx);
-                    }))),
+                    div()
+                        .w(z(314.))
+                        .flex_none()
+                        .flex()
+                        .items_start()
+                        .gap(z(28.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap(z(4.))
+                                .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.progress_bar")))
+                                .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!("gs2.progress_bar_desc"))),
+                        )
+                        .child(switch("gs2-progress-bar", bar).on_click(cx.listener(move |a, _, _, cx| {
+                            write(
+                                a,
+                                ServerCall::EditSafety {
+                                    guild: sf(guild),
+                                    edit: SafetyEdit { premium_progress_bar_enabled: Some(!bar), ..Default::default() },
+                                },
+                                None,
+                                cx,
+                            );
+                        }))),
                 )
                 .child(progress_preview()),
         )
@@ -116,7 +136,13 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
 fn progress_preview() -> gpui::Div {
     let mut channels = div().mt(z(8.)).pt(z(12.)).border_t_1().border_color(t(idx::BORDER_SUBTLE)).flex().flex_col().gap(z(12.));
     for name in ["general", "memes", "gaming"] {
-        channels = channels.child(div().flex().items_center().gap(z(8.)).child(icon("hash", 20., idx::CHANNEL_ICON)).child(text(16., 20., FontWeight::MEDIUM, idx::CHANNELS_DEFAULT, name)));
+        channels = channels.child(div().flex().items_center().gap(z(8.)).child(icon("hash", 20., idx::CHANNEL_ICON)).child(text(
+            16.,
+            20.,
+            FontWeight::MEDIUM,
+            idx::CHANNELS_DEFAULT,
+            name,
+        )));
     }
     div()
         .w(z(314.))
@@ -186,8 +212,20 @@ fn vanity_section(guild: Id, tier: u64, v: Option<&Value>, cx: &mut Context<Phoe
     div()
         .flex()
         .flex_col()
-        .child(div().flex().items_center().gap(z(8.)).child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.vanity"))).child(tier_pill(crate::t!("gs2.tier_n", n = 3), !locked)))
-        .child(div().mt(z(8.)).child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT, crate::t!("gs2.vanity_desc"))).child(link(crate::t!("gs2.learn_more_dot"))))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(z(8.))
+                .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.vanity")))
+                .child(tier_pill(crate::t!("gs2.tier_n", n = 3), !locked)),
+        )
+        .child(
+            div()
+                .mt(z(8.))
+                .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT, crate::t!("gs2.vanity_desc")))
+                .child(link(crate::t!("gs2.learn_more_dot"))),
+        )
         .child(
             div()
                 .mt(z(16.))
@@ -208,20 +246,21 @@ fn vanity_section(guild: Id, tier: u64, v: Option<&Value>, cx: &mut Context<Phoe
                         .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, "https://discord.gg/"))
                         .child(super::field(guild, "vanity", &code, cx).flex_1()),
                 )
-                .child(div().mt(z(12.)).flex().child(button("gs2-vanity-remove", crate::t!("gs2.vanity_remove"), BtnKind::Critical).on_click(cx.listener(move |a, _, _, cx| {
-                    write(a, ServerCall::SetVanityUrl { guild: sf(guild), code: String::new() }, None, cx);
-                })))),
+                .child(div().mt(z(12.)).flex().child(button("gs2-vanity-remove", crate::t!("gs2.vanity_remove"), BtnKind::Critical).on_click(cx.listener(
+                    move |a, _, _, cx| {
+                        write(a, ServerCall::SetVanityUrl { guild: sf(guild), code: String::new() }, None, cx);
+                    },
+                )))),
         )
         .children(vanity_bar(guild, &code, cx))
         .when(!code.is_empty(), |d| {
-            d.child(
-                div()
-                    .mt(z(16.))
-                    .flex()
-                    .gap(z(4.))
-                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT, crate::t!("gs2.vanity_info")))
-                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_LINK, format!("https://discord.gg/{code}"))),
-            )
+            d.child(div().mt(z(16.)).flex().gap(z(4.)).child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT, crate::t!("gs2.vanity_info"))).child(text(
+                14.,
+                18.,
+                FontWeight::MEDIUM,
+                idx::TEXT_LINK,
+                format!("https://discord.gg/{code}"),
+            )))
         })
 }
 

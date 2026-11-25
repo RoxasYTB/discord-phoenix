@@ -1,5 +1,5 @@
-use crate::ui::tooltip::Tipped as _;
 use crate::theme::z;
+use crate::ui::tooltip::Tipped as _;
 use gpui::{AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Window, div, prelude::*};
 use gpui_component::input::{Input, InputState};
 
@@ -23,8 +23,14 @@ pub const BAN_MEMBERS: u64 = 1 << 2;
 pub const ADMINISTRATOR: u64 = 1 << 3;
 pub const MODERATE_MEMBERS: u64 = 1 << 40;
 
-pub const TIMEOUTS: [(&str, u64); 6] =
-    [("mod.timeout.60s", 60), ("mod.timeout.5m", 300), ("mod.timeout.10m", 600), ("mod.timeout.1h", 3600), ("mod.timeout.1d", 86_400), ("mod.timeout.1w", 604_800)];
+pub const TIMEOUTS: [(&str, u64); 6] = [
+    ("mod.timeout.60s", 60),
+    ("mod.timeout.5m", 300),
+    ("mod.timeout.10m", 600),
+    ("mod.timeout.1h", 3600),
+    ("mod.timeout.1d", 86_400),
+    ("mod.timeout.1w", 604_800),
+];
 
 pub const BAN_HISTORY: [(&str, u32); 7] = [
     ("mod.ban.none", 0),
@@ -81,7 +87,10 @@ impl PhoenixApp {
                                 .or_else(|| user.map(|u| if u.display_name.is_empty() { u.name.clone() } else { u.display_name.clone() }))
                                 .unwrap_or_default();
                             let avatar = user.map(|u| u.avatar.clone()).unwrap_or(crate::model::ImageRef::Default(0));
-                            crate::thread_recent::set(t, crate::thread_recent::Recent { author: m.author, name, avatar, content: m.content.clone(), ts: m.timestamp });
+                            crate::thread_recent::set(
+                                t,
+                                crate::thread_recent::Recent { author: m.author, name, avatar, content: m.content.clone(), ts: m.timestamp },
+                            );
                             cx.notify();
                         }
                     });
@@ -404,12 +413,7 @@ pub fn folder_sync(app: &PhoenixApp) -> Vec<FolderSync> {
     let mut out: Vec<FolderSync> = app.guilds.iter().filter(|g| !in_folders.contains(&g.id)).map(|g| lone(g.id)).collect();
     for f in &app.nav.folders {
         match f.id {
-            Some(id) => out.push(FolderSync {
-                id: Some(id),
-                name: f.name.as_ref().map(|n| n.to_string()),
-                color: f.color,
-                guilds: f.guilds.clone(),
-            }),
+            Some(id) => out.push(FolderSync { id: Some(id), name: f.name.as_ref().map(|n| n.to_string()), color: f.color, guilds: f.guilds.clone() }),
             None => out.extend(f.guilds.iter().copied().map(lone)),
         }
     }
@@ -427,9 +431,7 @@ pub fn moderation_items(app: &PhoenixApp, user: Id, guild: Option<Id>, entity: &
     };
     if has_perm(perms, MODERATE_MEMBERS) {
         let e = entity.clone();
-        items.push(MenuItem::action(crate::t!("menu.mod_view"), None, move |_, _, cx: &mut App| {
-            e.update(cx, |a, cx| a.open_mod_view(g, user, cx))
-        }));
+        items.push(MenuItem::action(crate::t!("menu.mod_view"), None, move |_, _, cx: &mut App| e.update(cx, |a, cx| a.open_mod_view(g, user, cx))));
     }
     if user != app.me.id {
         if has_perm(perms, MODERATE_MEMBERS) {
@@ -523,15 +525,31 @@ pub fn sm_text_button(id: impl Into<gpui::ElementId>, label: SharedString, prima
             d.bg(tk(idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT))
                 .border_color(tk(idx::CONTROL_PRIMARY_BORDER_DEFAULT))
                 .text_color(tk(idx::CONTROL_PRIMARY_TEXT_DEFAULT))
-                .hover(|s| s.bg(tk(idx::CONTROL_PRIMARY_BACKGROUND_HOVER)).border_color(tk(idx::CONTROL_PRIMARY_BORDER_HOVER)).text_color(tk(idx::CONTROL_PRIMARY_TEXT_HOVER)))
-                .active(|s| s.bg(tk(idx::CONTROL_PRIMARY_BACKGROUND_ACTIVE)).border_color(tk(idx::CONTROL_PRIMARY_BORDER_ACTIVE)).text_color(tk(idx::CONTROL_PRIMARY_TEXT_ACTIVE)))
+                .hover(|s| {
+                    s.bg(tk(idx::CONTROL_PRIMARY_BACKGROUND_HOVER))
+                        .border_color(tk(idx::CONTROL_PRIMARY_BORDER_HOVER))
+                        .text_color(tk(idx::CONTROL_PRIMARY_TEXT_HOVER))
+                })
+                .active(|s| {
+                    s.bg(tk(idx::CONTROL_PRIMARY_BACKGROUND_ACTIVE))
+                        .border_color(tk(idx::CONTROL_PRIMARY_BORDER_ACTIVE))
+                        .text_color(tk(idx::CONTROL_PRIMARY_TEXT_ACTIVE))
+                })
         })
         .when(!primary, |d| {
             d.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
                 .border_color(tk(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
                 .text_color(tk(idx::CONTROL_SECONDARY_TEXT_DEFAULT))
-                .hover(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)).border_color(tk(idx::CONTROL_SECONDARY_BORDER_HOVER)).text_color(tk(idx::CONTROL_SECONDARY_TEXT_HOVER)))
-                .active(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE)).border_color(tk(idx::CONTROL_SECONDARY_BORDER_ACTIVE)).text_color(tk(idx::CONTROL_SECONDARY_TEXT_ACTIVE)))
+                .hover(|s| {
+                    s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))
+                        .border_color(tk(idx::CONTROL_SECONDARY_BORDER_HOVER))
+                        .text_color(tk(idx::CONTROL_SECONDARY_TEXT_HOVER))
+                })
+                .active(|s| {
+                    s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE))
+                        .border_color(tk(idx::CONTROL_SECONDARY_BORDER_ACTIVE))
+                        .text_color(tk(idx::CONTROL_SECONDARY_TEXT_ACTIVE))
+                })
         })
         .flex()
         .items_center()
@@ -553,12 +571,7 @@ const TABS: [(InboxTab, &str, &str); 5] = [
 ];
 
 fn tab_bar(sel: InboxTab, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let mut bar = div()
-        .mt(z(16.))
-        .mx(z(-16.))
-        .flex()
-        .border_b_1()
-        .border_color(tk(idx::BORDER_SUBTLE));
+    let mut bar = div().mt(z(16.)).mx(z(-16.)).flex().border_b_1().border_color(tk(idx::BORDER_SUBTLE));
     for (i, (t, id, key)) in TABS.into_iter().enumerate() {
         let on = t == sel;
         bar = bar.child(
@@ -581,9 +594,7 @@ fn tab_bar(sel: InboxTab, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .hover(|s| s.text_color(tk(idx::TEXT_STRONG)))
                 .on_click(cx.listener(move |a, _, _, cx| a.set_inbox_tab(t, cx)))
                 .child(div().min_w_0().whitespace_nowrap().overflow_hidden().text_ellipsis().child(crate::t!(key)))
-                .when(on, |d| {
-                    d.child(div().absolute().left_0().right_0().bottom(z(-1.)).h(z(2.)).rounded_t(z(2.)).bg(tk(idx::TEXT_BRAND)))
-                }),
+                .when(on, |d| d.child(div().absolute().left_0().right_0().bottom(z(-1.)).h(z(2.)).rounded_t(z(2.)).bg(tk(idx::TEXT_BRAND)))),
         );
     }
     bar.into_any_element()
@@ -597,17 +608,11 @@ fn caught_up(tip: Option<SharedString>) -> AnyElement {
         .flex_col()
         .items_center()
         .justify_center()
-        .child(
-            div()
-                .mb(z(16.))
-                .size(z(80.))
-                .rounded_full()
-                .bg(tk(idx::BACKGROUND_BASE_LOW))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(named("inbox", 36., tk(idx::TEXT_MUTED))),
-        )
+        .child(div().mb(z(16.)).size(z(80.)).rounded_full().bg(tk(idx::BACKGROUND_BASE_LOW)).flex().items_center().justify_center().child(named(
+            "inbox",
+            36.,
+            tk(idx::TEXT_MUTED),
+        )))
         .child(
             div()
                 .mb(z(8.))
@@ -618,19 +623,12 @@ fn caught_up(tip: Option<SharedString>) -> AnyElement {
                 .child(crate::t!("inbox.caught_up")),
         )
         .when_some(tip, |d, tip| {
-            d.child(
-                div()
-                    .text_center()
-                    .text_size(z(12.))
-                    .line_height(z(16.))
-                    .text_color(tk(idx::TEXT_DEFAULT))
-                    .child(
-                        gpui::StyledText::new(format!("{} {tip}", crate::t!("inbox.protip"))).with_highlights([(
-                            0..crate::t!("inbox.protip").len(),
-                            gpui::HighlightStyle { color: Some(tk(idx::TEXT_FEEDBACK_POSITIVE)), font_weight: Some(FontWeight::MEDIUM), ..Default::default() },
-                        )]),
-                    ),
-            )
+            d.child(div().text_center().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_DEFAULT)).child(
+                gpui::StyledText::new(format!("{} {tip}", crate::t!("inbox.protip"))).with_highlights([(
+                    0..crate::t!("inbox.protip").len(),
+                    gpui::HighlightStyle { color: Some(tk(idx::TEXT_FEEDBACK_POSITIVE)), font_weight: Some(FontWeight::MEDIUM), ..Default::default() },
+                )]),
+            ))
         })
         .into_any_element()
 }
@@ -670,7 +668,16 @@ fn demo_menu(rows: Vec<gpui::Div>) -> gpui::Div {
 
 fn wumpus_demo(hi_second: bool) -> AnyElement {
     let line = |t: SharedString| {
-        div().pl(z(80.)).pr(z(30.)).py(z(2.)).text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().child(t)
+        div()
+            .pl(z(80.))
+            .pr(z(30.))
+            .py(z(2.))
+            .text_size(z(16.))
+            .line_height(z(22.))
+            .text_color(tk(idx::TEXT_DEFAULT))
+            .whitespace_nowrap()
+            .overflow_hidden()
+            .child(t)
     };
     let time = crate::app::format_time_full(chrono::Local::now().timestamp());
     div()
@@ -693,19 +700,33 @@ fn wumpus_demo(hi_second: bool) -> AnyElement {
                     div()
                         .flex()
                         .items_baseline()
-                        .child(div().mr(z(4.)).text_size(z(16.)).line_height(z(22.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child("Wumpus"))
+                        .child(
+                            div()
+                                .mr(z(4.))
+                                .text_size(z(16.))
+                                .line_height(z(22.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(tk(idx::TEXT_STRONG))
+                                .child("Wumpus"),
+                        )
                         .child(div().ml(z(4.)).text_size(z(12.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::CHAT_TEXT_MUTED)).child(time)),
                 )
-                .child(div().text_size(z(16.)).line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().child(crate::t!("inbox.demo_1"))),
+                .child(
+                    div()
+                        .text_size(z(16.))
+                        .line_height(z(22.))
+                        .text_color(tk(idx::TEXT_DEFAULT))
+                        .whitespace_nowrap()
+                        .overflow_hidden()
+                        .child(crate::t!("inbox.demo_1")),
+                ),
         )
         .child(line(crate::t!("inbox.demo_2")))
         .child(line(crate::t!("inbox.demo_3")))
-        .child(
-            div().absolute().left(z(300.)).top(z(49.)).child(demo_menu(vec![
-                demo_menu_row("inbox/bookmark", crate::t!("inbox.demo_save"), !hi_second),
-                demo_menu_row("inbox/clock", crate::t!("inbox.demo_remind"), hi_second),
-            ])),
-        )
+        .child(div().absolute().left(z(300.)).top(z(49.)).child(demo_menu(vec![
+            demo_menu_row("inbox/bookmark", crate::t!("inbox.demo_save"), !hi_second),
+            demo_menu_row("inbox/clock", crate::t!("inbox.demo_remind"), hi_second),
+        ])))
         .into_any_element()
 }
 
@@ -717,9 +738,7 @@ fn upsell(glyph: &str, title: SharedString, body: gpui::StyledText, demo: AnyEle
         .flex_col()
         .justify_center()
         .items_center()
-        .child(
-            div().mb(z(24.)).w(z(140.)).h(z(93.)).flex().items_center().justify_center().child(named(glyph, 72., tk(idx::TEXT_BRAND))),
-        )
+        .child(div().mb(z(24.)).w(z(140.)).h(z(93.)).flex().items_center().justify_center().child(named(glyph, 72., tk(idx::TEXT_BRAND))))
         .child(
             div()
                 .mb(z(8.))
@@ -766,7 +785,11 @@ fn scheduled_demo() -> AnyElement {
                 .flex()
                 .items_center()
                 .gap(z(8.))
-                .child(div().size(z(24.)).rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_STRONG)).flex().items_center().justify_center().child(named("plus", 16., tk(idx::INTERACTIVE_TEXT_ACTIVE))))
+                .child(div().size(z(24.)).rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_STRONG)).flex().items_center().justify_center().child(named(
+                    "plus",
+                    16.,
+                    tk(idx::INTERACTIVE_TEXT_ACTIVE),
+                )))
                 .child(div().text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("inbox.demo_placeholder"))),
         )
         .into_any_element()
@@ -807,8 +830,14 @@ fn channel_head_with(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui:
         .when(!collapsed, |d| d.border_b_1())
         .border_color(tk(idx::BORDER_SUBTLE))
         .child(match guild {
-            Some(g) => div().size(z(32.)).rounded(z(8.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 32. * crate::theme::zoom())),
-            None => div().size(z(32.)).rounded(z(8.)).overflow_hidden().child(avatar(channel.and_then(|c| c.voice_users.first()).and_then(|u| app.users.get(u)), 32.)),
+            Some(g) => {
+                div().size(z(32.)).rounded(z(8.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 32. * crate::theme::zoom()))
+            }
+            None => div()
+                .size(z(32.))
+                .rounded(z(8.))
+                .overflow_hidden()
+                .child(avatar(channel.and_then(|c| c.voice_users.first()).and_then(|u| app.users.get(u)), 32.)),
         })
         .child(named("chevron-right", 12., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
         .child(
@@ -831,7 +860,16 @@ fn channel_head_with(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui:
                         .when(mentions > 0, |d| d.child(div().flex_none().ml(z(4.)).child(crate::ui::badge(mentions)))),
                 )
                 .when_some(guild_name, |d, g| {
-                    d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(g))
+                    d.child(
+                        div()
+                            .text_size(z(12.))
+                            .line_height(z(16.))
+                            .text_color(tk(idx::TEXT_DEFAULT))
+                            .whitespace_nowrap()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(g),
+                    )
                 }),
         )
         .child(div().flex().flex_none().items_center().gap(z(8.)).children(buttons))
@@ -895,13 +933,19 @@ fn cozy_message_with(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<Pho
                     .child(crate::fonts::role_name_text(name, u, 16., guild.is_some(), role_gradient))
                     .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col)))),
                 )
-                .when_some(
-                    if m.author == app.me.id { app.me.tag.clone() } else { u.and_then(|u| u.tag.clone()) },
-                    |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(2.)).mr(z(4.))),
-                )
+                .when_some(if m.author == app.me.id { app.me.tag.clone() } else { u.and_then(|u| u.tag.clone()) }, |d, t| {
+                    d.child(crate::ui::members::server_tag(&t).ml(z(2.)).mr(z(4.)))
+                })
                 .when_some(app.author_role_icon_in(guild, m.author), |d, icon| d.child(crate::ui::chat::role_icon(icon)))
                 .when(bot, |d| d.child(crate::ui::chat::bot_tag(u.is_some_and(|u| u.verified_bot))))
-                .child(div().ml(z(4.)).text_size(z(12.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::CHAT_TEXT_MUTED)).child(crate::app::format_time_full(m.timestamp))),
+                .child(
+                    div()
+                        .ml(z(4.))
+                        .text_size(z(12.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(tk(idx::CHAT_TEXT_MUTED))
+                        .child(crate::app::format_time_full(m.timestamp)),
+                ),
         )
         .map(|d| match editor {
             Some(ed) => d.child(ed),
@@ -940,16 +984,7 @@ fn reply_line(app: &PhoenixApp, m: &Message, guild: Option<Id>) -> Option<AnyEle
             .text_size(z(14.))
             .line_height(z(18.))
             .child(
-                div()
-                    .absolute()
-                    .left(z(-41.))
-                    .top(z(9.))
-                    .w(z(37.))
-                    .h(z(13.))
-                    .border_l_2()
-                    .border_t_2()
-                    .rounded_tl(z(6.))
-                    .border_color(tk(idx::SPINE_DEFAULT)),
+                div().absolute().left(z(-41.)).top(z(9.)).w(z(37.)).h(z(13.)).border_l_2().border_t_2().rounded_tl(z(6.)).border_color(tk(idx::SPINE_DEFAULT)),
             )
             .child(avatar(ru, 16.))
             .when(ru.is_some_and(|u| u.bot), |d| d.child(crate::ui::chat::bot_tag(ru.is_some_and(|u| u.verified_bot)).ml_0()))
@@ -1051,7 +1086,14 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("events.server_events")))
+                    .child(
+                        div()
+                            .text_size(z(14.))
+                            .line_height(z(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(tk(idx::TEXT_STRONG))
+                            .child(crate::t!("events.server_events")),
+                    )
                     .when(!gname.is_empty(), |d| d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(gname))),
             )
             .into_any_element();
@@ -1069,15 +1111,15 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
             crate::ui::nav_menus::toggle_inbox_bell(ch, ev.position(), w);
             cx.notify();
         }));
-    let read = sm_icon_button(("inbox-unread-read", ch.0), if guild_mode { "inbox/read-all" } else { "check" })
-        .tip(read_tip)
-        .on_click(cx.listener(move |a, ev: &gpui::ClickEvent, _, cx| {
+    let read = sm_icon_button(("inbox-unread-read", ch.0), if guild_mode { "inbox/read-all" } else { "check" }).tip(read_tip).on_click(cx.listener(
+        move |a, ev: &gpui::ClickEvent, _, cx| {
             cx.stop_propagation();
             match guild.filter(|_| ev.modifiers().shift) {
                 Some(g) => a.mark_unread_guild_read(g, cx),
                 None => a.mark_unread_card_read(ch, cx),
             }
-        }));
+        },
+    ));
     let chevron = div()
         .id(("inbox-unread-collapse", ch.0))
         .flex_none()
@@ -1152,13 +1194,10 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
         let group: SharedString = format!("inbox-unread-msg-{}", id.0).into();
         body = body.child(
             div().relative().group(group.clone()).child(row).child(
-                div()
-                    .absolute()
-                    .top(z(0.))
-                    .right(z(12.))
-                    .opacity(0.)
-                    .group_hover(group, |s| s.opacity(1.))
-                    .child(sm_text_button(("inbox-unread-jump", id.0), crate::t!("inbox.jump"), false).on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, id, cx)))),
+                div().absolute().top(z(0.)).right(z(12.)).opacity(0.).group_hover(group, |s| s.opacity(1.)).child(
+                    sm_text_button(("inbox-unread-jump", id.0), crate::t!("inbox.jump"), false)
+                        .on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, id, cx))),
+                ),
             ),
         );
         prev = Some(m);
@@ -1170,11 +1209,10 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
         && let Some(last) = card.msgs.last().map(|m| m.id)
     {
         body = body.child(
-            div()
-                .pt(z(8.))
-                .flex()
-                .justify_center()
-                .child(sm_text_button(("inbox-unread-all", ch.0), crate::t!("inbox.view_all"), true).on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, last, cx)))),
+            div().pt(z(8.)).flex().justify_center().child(
+                sm_text_button(("inbox-unread-all", ch.0), crate::t!("inbox.view_all"), true)
+                    .on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, last, cx))),
+            ),
         );
     }
     inbox_box().child(head).child(body).into_any_element()
@@ -1260,17 +1298,15 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let mut controls = div().ml_auto().flex().items_center().gap(z(8.));
     match i.tab {
         InboxTab::Unreads => {
-            controls = controls.child(
-                sm_icon_button("inbox-read-all", "inbox/read-all")
-                    .tip(crate::t!("inbox.read_all"))
-                    .on_click(cx.listener(|a, ev: &gpui::ClickEvent, _, cx| {
-                        if ev.modifiers().shift {
-                            a.mark_all_unread_cards_read(cx);
-                        } else {
-                            a.confirm_mark_all_unreads(cx);
-                        }
-                    })),
-            )
+            controls = controls.child(sm_icon_button("inbox-read-all", "inbox/read-all").tip(crate::t!("inbox.read_all")).on_click(cx.listener(
+                |a, ev: &gpui::ClickEvent, _, cx| {
+                    if ev.modifiers().shift {
+                        a.mark_all_unread_cards_read(cx);
+                    } else {
+                        a.confirm_mark_all_unreads(cx);
+                    }
+                },
+            )))
         }
         InboxTab::Mentions => {
             controls = controls.child(sm_icon_button("inbox-filter", "inbox/filter").on_click(cx.listener(|a, _, _, cx| {
@@ -1303,7 +1339,15 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 .flex()
                 .items_center()
                 .child(named("inbox", 20., tk(idx::ICON_STRONG)).mr(z(8.)))
-                .child(div().flex_1().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("inbox.title")))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(tk(idx::TEXT_STRONG))
+                        .child(crate::t!("inbox.title")),
+                )
                 .child(controls),
         )
         .child(tab_bar(i.tab, cx));
@@ -1323,14 +1367,9 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 list = list.child(message_entry(app, m, cx, "check", move |a, cx| a.dismiss_mention(id, cx)));
             }
             if !i.reached_end && !i.mentions.is_empty() && !i.loading {
-                list = list.child(
-                    div()
-                        .id("inbox-more")
-                        .pb(z(16.))
-                        .flex()
-                        .justify_center()
-                        .child(sm_text_button("inbox-more-btn", crate::t!("common.load_more"), false).on_click(cx.listener(|a, _, _, cx| a.load_inbox_tab(false, cx)))),
-                );
+                list = list.child(div().id("inbox-more").pb(z(16.)).flex().justify_center().child(
+                    sm_text_button("inbox-more-btn", crate::t!("common.load_more"), false).on_click(cx.listener(|a, _, _, cx| a.load_inbox_tab(false, cx))),
+                ));
             }
         }
         InboxTab::Saved => {
@@ -1384,8 +1423,13 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                         .on_click(cx.listener(move |a, _, _, cx| a.cancel_scheduled(id, cx))),
                 ];
                 let editor = i.sched_edit.as_ref().filter(|e| e.id == id).map(|e| {
-                    crate::ui::chat::message_ext::edit_frame(&e.input, &cx.entity(), |a, w, cx| a.cancel_scheduled_edit(w, cx), |a, w, cx| a.save_scheduled_edit(w, cx))
-                        .into_any_element()
+                    crate::ui::chat::message_ext::edit_frame(
+                        &e.input,
+                        &cx.entity(),
+                        |a, w, cx| a.cancel_scheduled_edit(w, cx),
+                        |a, w, cx| a.save_scheduled_edit(w, cx),
+                    )
+                    .into_any_element()
                 });
                 list = list.child(
                     inbox_box()
@@ -1464,14 +1508,7 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 .flex_col()
                 .child(header)
                 .child(
-                    div()
-                        .relative()
-                        .flex_1()
-                        .min_h_0()
-                        .flex()
-                        .flex_col()
-                        .child(list)
-                        .children(crate::ui::chat::scrollbar::thin_scrollbar_div(&inbox_scroll)),
+                    div().relative().flex_1().min_h_0().flex().flex_col().child(list).children(crate::ui::chat::scrollbar::thin_scrollbar_div(&inbox_scroll)),
                 )
                 .children(filter),
         )
@@ -1504,7 +1541,15 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
         .border_b_1()
         .border_color(tk(idx::BORDER_SUBTLE))
         .child(named("threads", 24., tk(idx::INTERACTIVE_TEXT_DEFAULT)).mr(z(8.)))
-        .child(div().mr(z(16.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("threads.title")))
+        .child(
+            div()
+                .mr(z(16.))
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(tk(idx::TEXT_STRONG))
+                .child(crate::t!("threads.title")),
+        )
         .child(div().mr(z(16.)).w(z(1.)).h(z(24.)).bg(tk(idx::BORDER_SUBTLE)))
         .child(
             div()
@@ -1523,7 +1568,12 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
                 .child(div().size(z(22.)).flex().items_center().justify_center().child(named("search", 16., tk(idx::TEXT_DEFAULT))))
                 .child(match &search {
                     Some(i) => div().flex_1().min_w_0().text_size(z(14.)).line_height(z(18.)).child(Input::new(i).appearance(false).bordered(false)),
-                    None => div().text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT)).whitespace_nowrap().child(crate::t!("threads.search")),
+                    None => div()
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .text_color(tk(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT))
+                        .whitespace_nowrap()
+                        .child(crate::t!("threads.search")),
                 }),
         )
         .child(div().flex_1())
@@ -1552,15 +1602,28 @@ fn threads(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement>
                 .justify_center()
                 .text_center()
                 .child(div().mb(z(12.)).w(z(256.)).h(z(144.)).flex().items_center().justify_center().child(named("threads", 96., tk(idx::TEXT_BRAND))))
-                .child(div().mb(z(8.)).text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("threads.empty")))
+                .child(
+                    div()
+                        .mb(z(8.))
+                        .text_size(z(24.))
+                        .line_height(z(32.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(tk(idx::TEXT_STRONG))
+                        .child(crate::t!("threads.empty")),
+                )
                 .child(div().text_size(z(16.)).line_height(z(20.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("threads.empty_body")))
                 .child(
                     div().mt(z(24.)).child(
-                        sm_text_button("threads-create-cta", crate::t!("threads.create_thread"), true).on_click(cx.listener(|a, _, w, cx| {
-                            if let Some(ch) = a.selected_channel {
-                                a.open_create_thread(ch, w, cx);
-                            }
-                        })).h(z(40.)).px(z(16.)).text_size(z(16.)).line_height(z(20.)),
+                        sm_text_button("threads-create-cta", crate::t!("threads.create_thread"), true)
+                            .on_click(cx.listener(|a, _, w, cx| {
+                                if let Some(ch) = a.selected_channel {
+                                    a.open_create_thread(ch, w, cx);
+                                }
+                            }))
+                            .h(z(40.))
+                            .px(z(16.))
+                            .text_size(z(16.))
+                            .line_height(z(20.)),
                     ),
                 ),
         );
@@ -1654,22 +1717,46 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                 .flex()
                 .flex_col()
                 .items_center()
-                .child(div().size(z(120.)).rounded_full().bg(tk(idx::BACKGROUND_MOD_STRONG)).flex().items_center().justify_center().child(named("pin", 56., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
-                .child(div().mt(z(20.)).text_center().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("pins.empty_line1")))
-                .child(div().text_center().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("pins.empty_line2"))),
-        );
-        footer = Some(
-            div()
-                .flex_none()
-                .p(z(16.))
-                .bg(tk(idx::BACKGROUND_MOD_SUBTLE))
+                .child(div().size(z(120.)).rounded_full().bg(tk(idx::BACKGROUND_MOD_STRONG)).flex().items_center().justify_center().child(named(
+                    "pin",
+                    56.,
+                    tk(idx::INTERACTIVE_TEXT_DEFAULT),
+                )))
                 .child(
                     div()
-                        .py(z(10.))
+                        .mt(z(20.))
                         .text_center()
-                        .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_FEEDBACK_POSITIVE)).child(crate::t!("inbox.protip")))
-                        .child(div().text_size(z(14.)).line_height(z(16.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("pins.tip"))),
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(tk(idx::TEXT_DEFAULT))
+                        .child(crate::t!("pins.empty_line1")),
+                )
+                .child(
+                    div()
+                        .text_center()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(tk(idx::TEXT_DEFAULT))
+                        .child(crate::t!("pins.empty_line2")),
                 ),
+        );
+        footer = Some(
+            div().flex_none().p(z(16.)).bg(tk(idx::BACKGROUND_MOD_SUBTLE)).child(
+                div()
+                    .py(z(10.))
+                    .text_center()
+                    .child(
+                        div()
+                            .text_size(z(14.))
+                            .line_height(z(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(tk(idx::TEXT_FEEDBACK_POSITIVE))
+                            .child(crate::t!("inbox.protip")),
+                    )
+                    .child(div().text_size(z(14.)).line_height(z(16.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("pins.tip"))),
+            ),
         );
     }
     for m in &p.msgs {
@@ -1697,7 +1784,10 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                         .gap(z(8.))
                         .invisible()
                         .group_hover("pin", |s| s.visible())
-                        .child(sm_text_button(("pin-jump", id.0), crate::t!("pins.jump"), false).on_click(cx.listener(move |a, _, _, cx| a.jump_to_message(ch, id, cx))))
+                        .child(
+                            sm_text_button(("pin-jump", id.0), crate::t!("pins.jump"), false)
+                                .on_click(cx.listener(move |a, _, _, cx| a.jump_to_message(ch, id, cx))),
+                        )
                         .child(sm_icon_button(("pin-unpin", id.0), "close").on_click(cx.listener(move |a, _, _, cx| {
                             cx.stop_propagation();
                             a.unpin_from_popout(ch, id, cx)
@@ -1706,47 +1796,56 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
         );
     }
     let right = if is_dm { hdr_right(2.) } else { hdr_right(1.) };
-    Some(gpui::deferred(
-        div()
-            .id("pins-popout")
-            .debug_selector(|| "pins-popout".into())
+    Some(
+        gpui::deferred(
+            div()
+                .id("pins-popout")
+                .debug_selector(|| "pins-popout".into())
                 .map(|d| close_on_press_outside(d, cx))
-            .absolute()
-            .top(z(m::HEADER_H - 3.))
-            .right(z(right))
-            .w(z(420.))
-            .min_h(z(200.))
-            .max_h(gpui::relative(0.8))
-            .rounded(z(8.))
-            .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
-            .shadow(popout_shadow())
-            .occlude()
-            .flex()
-            .flex_col()
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex_none()
-                    .p(z(16.))
-                    .border_b_1()
-                    .border_color(tk(idx::BORDER_SUBTLE))
-                    .flex()
-                    .items_center()
-                    .gap(z(8.))
-                    .child(named("pin", 24., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
-                    .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("pins.title"))),
-            )
-            .child(
-                crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin)
-                    .flex_1()
-                    .min_h_0()
-                    .child(list)
-                    .children(crate::ui::chat::scrollbar::bar_for("pins-list", crate::ui::chat::scrollbar::Bar::Thin)),
-            )
-            .children(footer),
+                .absolute()
+                .top(z(m::HEADER_H - 3.))
+                .right(z(right))
+                .w(z(420.))
+                .min_h(z(200.))
+                .max_h(gpui::relative(0.8))
+                .rounded(z(8.))
+                .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
+                .shadow(popout_shadow())
+                .occlude()
+                .flex()
+                .flex_col()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .flex_none()
+                        .p(z(16.))
+                        .border_b_1()
+                        .border_color(tk(idx::BORDER_SUBTLE))
+                        .flex()
+                        .items_center()
+                        .gap(z(8.))
+                        .child(named("pin", 24., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
+                        .child(
+                            div()
+                                .text_size(z(20.))
+                                .line_height(z(24.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(tk(idx::TEXT_STRONG))
+                                .child(crate::t!("pins.title")),
+                        ),
+                )
+                .child(
+                    crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin)
+                        .flex_1()
+                        .min_h_0()
+                        .child(list)
+                        .children(crate::ui::chat::scrollbar::bar_for("pins-list", crate::ui::chat::scrollbar::Bar::Thin)),
+                )
+                .children(footer),
+        )
+        .with_priority(10)
+        .into_any_element(),
     )
-    .with_priority(10)
-    .into_any_element())
 }
 
 thread_local! {
@@ -1799,7 +1898,9 @@ pub fn svg_asset(path: &str) -> Option<&'static str> {
         };
     }
     Some(match path {
-        "icons/inbox/filter.svg" => st!(r#"<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>"#),
+        "icons/inbox/filter.svg" => st!(
+            r#"<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>"#
+        ),
         "icons/inbox/read-all.svg" => st!(r#"<path d="m2 12.5 4.5 4.5L15 8.5M11 16.5l.5.5L20 8.5"/>"#),
         "icons/inbox/jump.svg" => st!(r#"<path d="M20 11.5a8 8 0 1 0-3.2 6.4L21 19l-1-3.6M9 12h6m-2.5-2.5L15 12l-2.5 2.5"/>"#),
         "icons/inbox/bookmark.svg" => st!(r#"<path d="M6 3h12v18l-6-4.5L6 21z"/>"#),
@@ -1896,38 +1997,31 @@ fn moderation_dialog(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
             vec![div().text_color(c(Palette::TEXT_NORMAL)).child(crate::t!("mod.remove_timeout_body", name = name).to_string()).into_any_element()],
         ),
         ModKind::Timeout(secs) => {
-            let mut col = div().flex().flex_col().gap(z(4.)).child(
-                div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("mod.duration")),
-            );
+            let mut col = div()
+                .flex()
+                .flex_col()
+                .gap(z(4.))
+                .child(div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("mod.duration")));
             for (i, (label, s)) in TIMEOUTS.iter().enumerate() {
                 col = col.child(radio_row(("timeout-opt", i as u64), crate::t!(label), secs == *s).on_click(set(ModKind::Timeout(*s))));
             }
             (
                 crate::t!("mod.timeout_user", name = name).to_string(),
                 crate::t!("mod.timeout"),
-                vec![
-                    div()
-                        .text_color(c(Palette::TEXT_NORMAL))
-                        .child(crate::t!("mod.timeout_note"))
-                        .into_any_element(),
-                    col.into_any_element(),
-                ],
+                vec![div().text_color(c(Palette::TEXT_NORMAL)).child(crate::t!("mod.timeout_note")).into_any_element(), col.into_any_element()],
             )
         }
         ModKind::Kick => (
             crate::t!("mod.kick_title", name = name).to_string(),
             crate::t!("mod.kick"),
-            vec![
-                div()
-                    .text_color(c(Palette::TEXT_NORMAL))
-                    .child(crate::t!("mod.kick_body", name = name, guild = guild).to_string())
-                    .into_any_element(),
-            ],
+            vec![div().text_color(c(Palette::TEXT_NORMAL)).child(crate::t!("mod.kick_body", name = name, guild = guild).to_string()).into_any_element()],
         ),
         ModKind::Ban(del) => {
-            let mut col = div().flex().flex_col().gap(z(4.)).child(
-                div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("mod.delete_history")),
-            );
+            let mut col = div()
+                .flex()
+                .flex_col()
+                .gap(z(4.))
+                .child(div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("mod.delete_history")));
             for (i, (label, s)) in BAN_HISTORY.iter().enumerate() {
                 col = col.child(radio_row(("ban-opt", i as u64), crate::t!(label), del == *s).on_click(set(ModKind::Ban(*s))));
             }
@@ -1935,10 +2029,7 @@ fn moderation_dialog(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
                 crate::t!("mod.ban_title", name = name).to_string(),
                 crate::t!("mod.ban"),
                 vec![
-                    div()
-                        .text_color(c(Palette::TEXT_NORMAL))
-                        .child(crate::t!("mod.ban_body", name = name, guild = guild).to_string())
-                        .into_any_element(),
+                    div().text_color(c(Palette::TEXT_NORMAL)).child(crate::t!("mod.ban_body", name = name, guild = guild).to_string()).into_any_element(),
                     col.into_any_element(),
                 ],
             )
@@ -1971,10 +2062,7 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
         .iter()
         .filter(|r| r.kind == RelationshipKind::Friend)
         .map(|r| r.user)
-        .filter(|u| {
-            q.is_empty()
-                || app.users.get(u).is_some_and(|u| u.name.to_lowercase().contains(&q) || u.display_name.to_lowercase().contains(&q))
-        })
+        .filter(|u| q.is_empty() || app.users.get(u).is_some_and(|u| u.name.to_lowercase().contains(&q) || u.display_name.to_lowercase().contains(&q)))
         .collect();
     let left = GROUP_DM_MAX.saturating_sub(p.picked.len());
     let mut list = div().id("gdm-list").h(z(240.)).overflow_y_scroll().flex().flex_col();
@@ -2062,7 +2150,11 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
                 .flex_col()
                 .gap(z(4.))
                 .child(div().text_size(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_HEADER)).child(crate::t!("groupdm.select")))
-                .child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(if left == 1 { crate::t!("groupdm.left_one") } else { crate::t!("groupdm.left_many", left = left) }))
+                .child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(if left == 1 {
+                    crate::t!("groupdm.left_one")
+                } else {
+                    crate::t!("groupdm.left_many", left = left)
+                }))
                 .child(
                     div()
                         .mt(z(12.))
@@ -2160,7 +2252,17 @@ fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Contex
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(p.title.clone()))
+                .child(
+                    div()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(tk(idx::TEXT_DEFAULT))
+                        .whitespace_nowrap()
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(p.title.clone()),
+                )
                 .child(
                     div()
                         .flex()
@@ -2172,12 +2274,10 @@ fn archived_row(app: &PhoenixApp, p: crate::commands::ForumPost, cx: &mut Contex
                         .overflow_hidden()
                         .child(div().flex_none().mr(z(8.)).child(avatar(owner, 16.)))
                         .child(div().flex_none().child(crate::t!("threads.started_by")))
-                        .child(div().flex_none().ml(z(4.)).font_weight(FontWeight::SEMIBOLD).text_color(owner_color).child(
-                            match owner_gradient {
-                                Some(stops) => crate::fonts::name_text_with(owner_name, owner, 14., Some(stops)),
-                                None => owner_name.into_any_element(),
-                            },
-                        ))
+                        .child(div().flex_none().ml(z(4.)).font_weight(FontWeight::SEMIBOLD).text_color(owner_color).child(match owner_gradient {
+                            Some(stops) => crate::fonts::name_text_with(owner_name, owner, 14., Some(stops)),
+                            None => owner_name.into_any_element(),
+                        }))
                         .child(div().flex_none().w(z(20.)).flex().justify_center().text_color(gpui::rgba(0x97979f14)).child("•"))
                         .child(crate::t!("threads.last_activity", date = date)),
                 ),
@@ -2216,19 +2316,19 @@ pub(crate) fn thread_browser_row(app: &PhoenixApp, t: &crate::model::Channel, pa
                 .child(div().flex_none().mr(z(8.)).child(avatar(u.as_deref(), 16.)))
                 .child({
                     let name = app.member_nick(r.author).unwrap_or_else(|| r.name.clone());
-                    div().flex_none().max_w(z(160.)).overflow_hidden().text_ellipsis().font_weight(FontWeight::MEDIUM).text_color(color).child(
-                        match gradient {
-                            Some(stops) => crate::fonts::name_text_with(name, u.as_deref(), 14., Some(stops)),
-                            None => name.into_any_element(),
-                        },
-                    )
+                    div().flex_none().max_w(z(160.)).overflow_hidden().text_ellipsis().font_weight(FontWeight::MEDIUM).text_color(color).child(match gradient {
+                        Some(stops) => crate::fonts::name_text_with(name, u.as_deref(), 14., Some(stops)),
+                        None => name.into_any_element(),
+                    })
                 })
                 .child(div().flex_none().child(": "))
                 .child(div().flex_shrink(1.).min_w_0().overflow_hidden().text_ellipsis().child(r.content.clone()))
                 .child(div().flex_none().w(z(20.)).flex().justify_center().child("•"))
                 .child(div().flex_none().child(when))
         }
-        None => div().flex().items_center().child(crate::t!("threads.no_recent")).child(div().flex_none().w(z(20.)).flex().justify_center().child("•")).child(when),
+        None => {
+            div().flex().items_center().child(crate::t!("threads.no_recent")).child(div().flex_none().w(z(20.)).flex().justify_center().child("•")).child(when)
+        }
     };
     div()
         .id(("thread-row", t.id.0))
@@ -2257,8 +2357,27 @@ pub(crate) fn thread_browser_row(app: &PhoenixApp, t: &crate::model::Channel, pa
                         .min_w_0()
                         .whitespace_nowrap()
                         .overflow_hidden()
-                        .child(div().min_w_0().overflow_hidden().text_ellipsis().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_DEFAULT)).child(t.name.clone()))
-                        .children(parent.map(|p| div().flex_none().ml(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(p))),
+                        .child(
+                            div()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .text_size(z(16.))
+                                .line_height(z(20.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(tk(idx::TEXT_DEFAULT))
+                                .child(t.name.clone()),
+                        )
+                        .children(parent.map(|p| {
+                            div()
+                                .flex_none()
+                                .ml(z(8.))
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(tk(idx::TEXT_MUTED))
+                                .child(p)
+                        })),
                 )
                 .child(div().text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::TEXT_DEFAULT)).whitespace_nowrap().overflow_hidden().child(sub)),
         )

@@ -104,9 +104,7 @@ pub fn route_own_streams(input: bool, node: String) {
                 .as_array()
                 .map(|a| {
                     a.iter()
-                        .filter(|s| {
-                            s.pointer("/properties/application.process.id").and_then(Value::as_str) == Some(pid.as_str())
-                        })
+                        .filter(|s| s.pointer("/properties/application.process.id").and_then(Value::as_str) == Some(pid.as_str()))
                         .filter_map(|s| s.get("index").and_then(Value::as_u64).map(|i| i.to_string()))
                         .collect()
                 })

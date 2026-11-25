@@ -50,12 +50,8 @@ impl TrayState {
         let connected = a.voice_channel.is_some();
         let dms = || a.channels.values().filter(|c| c.guild.is_none());
         let mentions = a.guilds.iter().map(|g| g.mentions).sum::<u32>() + dms().map(|c| c.mentions).sum::<u32>();
-        let pending = a
-            .nav
-            .relationships
-            .iter()
-            .filter(|r| r.kind == crate::ui::home::data::RelationshipKind::Incoming && !r.spam && !r.ignored)
-            .count() as u32;
+        let pending =
+            a.nav.relationships.iter().filter(|r| r.kind == crate::ui::home::data::RelationshipKind::Incoming && !r.spam && !r.ignored).count() as u32;
         let any_unread = a.guilds.iter().any(|g| g.unread) || dms().any(|c| c.unread);
         Self {
             connected,
@@ -291,7 +287,8 @@ async fn serve(
     while let Some(st) = states.next().await {
         if st.count != count {
             count = st.count;
-            let _ = conn.emit_signal(None::<&str>, LAUNCHER_PATH, "com.canonical.Unity.LauncherEntry", "Update", &(launcher_uri(), launcher_props(count))).await;
+            let _ =
+                conn.emit_signal(None::<&str>, LAUNCHER_PATH, "com.canonical.Unity.LauncherEntry", "Update", &(launcher_uri(), launcher_props(count))).await;
         }
         let item = conn.object_server().interface::<_, Item>("/StatusNotifierItem").await?;
         let icon_changed = {
@@ -397,10 +394,7 @@ const ID_QUIT: i32 = 9;
 type Props = HashMap<String, zbus::zvariant::OwnedValue>;
 
 fn props(pairs: &[(&str, zbus::zvariant::Value<'_>)]) -> Props {
-    pairs
-        .iter()
-        .filter_map(|(k, v)| Some(((*k).to_string(), zbus::zvariant::OwnedValue::try_from(v.try_clone().ok()?).ok()?)))
-        .collect()
+    pairs.iter().filter_map(|(k, v)| Some(((*k).to_string(), zbus::zvariant::OwnedValue::try_from(v.try_clone().ok()?).ok()?))).collect()
 }
 
 pub fn menu_ids(state: &TrayState) -> Vec<i32> {
@@ -433,12 +427,7 @@ impl Menu {
 
 #[zbus::interface(name = "com.canonical.dbusmenu")]
 impl Menu {
-    fn get_layout(
-        &self,
-        _parent_id: i32,
-        _recursion_depth: i32,
-        _property_names: Vec<String>,
-    ) -> (u32, (i32, Props, Vec<zbus::zvariant::OwnedValue>)) {
+    fn get_layout(&self, _parent_id: i32, _recursion_depth: i32, _property_names: Vec<String>) -> (u32, (i32, Props, Vec<zbus::zvariant::OwnedValue>)) {
         let children = menu_ids(&self.state)
             .into_iter()
             .filter_map(|id| {

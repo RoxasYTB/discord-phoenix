@@ -6,8 +6,8 @@ use std::{
 };
 
 use gpui::{
-    AppContext, Entity, HeadlessAppContext, ListOffset, Modifiers, MouseMoveEvent, PlatformInput, ScrollDelta,
-    ScrollEvent, ScrollSource, TouchPhase, point, px, size,
+    AppContext, Entity, HeadlessAppContext, ListOffset, Modifiers, MouseMoveEvent, PlatformInput, ScrollDelta, ScrollEvent, ScrollSource, TouchPhase, point,
+    px, size,
 };
 use gpui_component::Root;
 use phoenix_app::{app::PhoenixApp, assets::Assets, mock::MockBackend};

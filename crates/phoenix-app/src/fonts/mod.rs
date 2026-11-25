@@ -4,9 +4,22 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const NAME_STYLE_FAMILIES: &[&str] = &[
-    "Sakura", "Pricedown", "Journal", "Jellybean", "Headbang", "Mainframe", "Medieval",
-    "Modern", "Monkey Bars", "Munro", "Tempo", "Vampyre", "8Bit", "Corinthia",
-    "Delicious Handrawn", "Fraunces",
+    "Sakura",
+    "Pricedown",
+    "Journal",
+    "Jellybean",
+    "Headbang",
+    "Mainframe",
+    "Medieval",
+    "Modern",
+    "Monkey Bars",
+    "Munro",
+    "Tempo",
+    "Vampyre",
+    "8Bit",
+    "Corinthia",
+    "Delicious Handrawn",
+    "Fraunces",
 ];
 
 const MAGIC: [u8; 8] = [0x30, 0x5c, 0x72, 0xa7, 0x1b, 0x6d, 0xfb, 0xfc];
@@ -73,9 +86,7 @@ pub fn parse_font_faces_styled(css: &str) -> Vec<(String, u16, bool, String)> {
     let mut out = Vec::new();
     for rule in css.split("@font-face{").skip(1) {
         let rule = rule.split('}').next().unwrap_or("");
-        let prop = |k: &str| {
-            rule.split(';').find_map(|d| d.trim().strip_prefix(k)).map(|v| v.trim().trim_matches('"').trim_matches('\''))
-        };
+        let prop = |k: &str| rule.split(';').find_map(|d| d.trim().strip_prefix(k)).map(|v| v.trim().trim_matches('"').trim_matches('\''));
         let Some(family) = prop("font-family:") else { continue };
         let weight = prop("font-weight:").and_then(|w| w.parse().ok()).unwrap_or(400);
         let Some(src) = prop("src:") else { continue };
@@ -169,9 +180,7 @@ pub fn to_ttf(b: &[u8]) -> Option<Vec<u8>> {
 pub fn ttf_family(ttf: &[u8]) -> Option<String> {
     let face = ttf_parser::Face::parse(ttf, 0).ok()?;
     let names = face.names();
-    [16u16, 1].iter().find_map(|&id| {
-        names.into_iter().filter(|n| n.name_id == id && n.is_unicode()).find_map(|n| n.to_string())
-    })
+    [16u16, 1].iter().find_map(|&id| names.into_iter().filter(|n| n.name_id == id && n.is_unicode()).find_map(|n| n.to_string()))
 }
 
 static GG_SANS: AtomicBool = AtomicBool::new(false);
@@ -297,31 +306,13 @@ pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, si
     name_text_with(text, user, size, stops)
 }
 
-pub fn role_name_text(
-    text: gpui::SharedString,
-    user: Option<&crate::model::User>,
-    size: f32,
-    in_guild: bool,
-    gradient: Option<[u32; 3]>,
-) -> gpui::AnyElement {
-    if in_guild {
-        name_text_with(text, user, size, gradient)
-    } else {
-        name_text(text, user, size)
-    }
+pub fn role_name_text(text: gpui::SharedString, user: Option<&crate::model::User>, size: f32, in_guild: bool, gradient: Option<[u32; 3]>) -> gpui::AnyElement {
+    if in_guild { name_text_with(text, user, size, gradient) } else { name_text(text, user, size) }
 }
 
-pub fn name_text_with(
-    text: gpui::SharedString,
-    user: Option<&crate::model::User>,
-    size: f32,
-    stops: Option<[u32; 3]>,
-) -> gpui::AnyElement {
+pub fn name_text_with(text: gpui::SharedString, user: Option<&crate::model::User>, size: f32, stops: Option<[u32; 3]>) -> gpui::AnyElement {
     use gpui::IntoElement;
-    let ls = name_style(user)
-        .filter(|s| family_for_id(s.0).is_some())
-        .and_then(|s| font_for_id(s.0))
-        .map_or(0., |(_, ls)| ls);
+    let ls = name_style(user).filter(|s| family_for_id(s.0).is_some()).and_then(|s| font_for_id(s.0)).map_or(0., |(_, ls)| ls);
     let stops: Vec<gpui::Hsla> = stops.map(|s| s.iter().map(|&c| gpui::rgb(c).into()).collect()).unwrap_or_default();
     if ls <= 0. && stops.is_empty() {
         return crate::ui::emoji_text::label(text, size);

@@ -28,17 +28,10 @@ fn ringing_avatar(app: &PhoenixApp, user: crate::model::Id) -> AnyElement {
                 .rounded_full()
                 .border(z(3.))
                 .border_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
-                .with_animation(
-                    ("dm-call-pulse-anim", user.0),
-                    gpui::Animation::new(Duration::from_millis(PULSE_MS)).repeat(),
-                    move |d, t| {
-                        let grow = (size + 6.) * 0.1 * t;
-                        d.opacity(1. - t)
-                            .top(z(-3. - grow / 2.))
-                            .left(z(-3. - grow / 2.))
-                            .size(z(size + 6. + grow))
-                    },
-                ),
+                .with_animation(("dm-call-pulse-anim", user.0), gpui::Animation::new(Duration::from_millis(PULSE_MS)).repeat(), move |d, t| {
+                    let grow = (size + 6.) * 0.1 * t;
+                    d.opacity(1. - t).top(z(-3. - grow / 2.)).left(z(-3. - grow / 2.)).size(z(size + 6. + grow))
+                }),
         )
         .into_any_element()
 }

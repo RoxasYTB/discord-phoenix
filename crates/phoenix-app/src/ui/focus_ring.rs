@@ -63,15 +63,7 @@ pub fn ring_inset(el: Stateful<Div>, key: u64, radius: f32, dx: f32, dy: f32) ->
     ring_inset_edges(el, key, radius, dx, dy, dx, dy)
 }
 
-pub fn ring_inset_edges(
-    el: Stateful<Div>,
-    key: u64,
-    radius: f32,
-    left: f32,
-    top: f32,
-    right: f32,
-    bottom: f32,
-) -> Stateful<Div> {
+pub fn ring_inset_edges(el: Stateful<Div>, key: u64, radius: f32, left: f32, top: f32, right: f32, bottom: f32) -> Stateful<Div> {
     let Some(h) = handle(key) else { return el };
     let shown = VISIBLE.with(|v| v.get()) == Some(key);
     el.track_focus(&h).when(shown, |el| el.child(ring_box_edges(radius, left, top, right, bottom)))

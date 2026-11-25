@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
 use gpui::{
-    App, ClipboardItem, Context, FontWeight, InteractiveElement, IntoElement, KeyBinding,
-    ParentElement, Pixels, SharedString, Stateful, Styled, actions, div, prelude::*, px,
+    App, ClipboardItem, Context, FontWeight, InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels, SharedString, Stateful, Styled, actions, div,
+    prelude::*, px,
 };
 
 pub mod message;
@@ -304,9 +304,7 @@ fn texty(kind: ChannelKind) -> bool {
 impl PhoenixApp {
     fn shortcut_channels(&self) -> Vec<Id> {
         let Some(g) = self.selected_guild else { return self.dms.clone() };
-        let ok = |id: &Id| {
-            self.channels.get(id).is_some_and(|c| c.guild == Some(g) && (texty(c.kind) || self.voice_channel == Some(*id)))
-        };
+        let ok = |id: &Id| self.channels.get(id).is_some_and(|c| c.guild == Some(g) && (texty(c.kind) || self.voice_channel == Some(*id)));
         let rows: Vec<Id> = self
             .sidebar_rows
             .iter()
@@ -331,9 +329,9 @@ impl PhoenixApp {
             match g {
                 _ if g == self.selected_guild => out.extend(self.shortcut_channels()),
                 None => out.extend(self.dms.iter().copied()),
-                Some(g) => out.extend(
-                    self.guild_channels.get(&g).into_iter().flatten().copied().filter(|id| self.channels.get(id).is_some_and(|c| texty(c.kind))),
-                ),
+                Some(g) => {
+                    out.extend(self.guild_channels.get(&g).into_iter().flatten().copied().filter(|id| self.channels.get(id).is_some_and(|c| texty(c.kind))))
+                }
             }
         }
         out
@@ -352,9 +350,7 @@ impl PhoenixApp {
 
     fn step_unread(&mut self, step: i32, mentions_only: bool, cx: &mut Context<Self>) {
         let list = self.shortcut_all_channels();
-        let pred = |id: Id| {
-            self.channels.get(&id).is_some_and(|c| if mentions_only { c.mentions > 0 } else { (c.unread && !c.muted) || c.mentions > 0 })
-        };
+        let pred = |id: Id| self.channels.get(&id).is_some_and(|c| if mentions_only { c.mentions > 0 } else { (c.unread && !c.muted) || c.mentions > 0 });
         if let Some(id) = seek(&list, self.selected_channel, step, pred) {
             self.goto_channel(id, cx);
         }
@@ -533,29 +529,26 @@ pub fn key_caps(keys: &str) -> Vec<SharedString> {
 fn combo(keys: &str) -> gpui::Div {
     let caps = key_caps(keys);
     let n = caps.len();
-    div()
-        .flex()
-        .h(z(23.))
-        .children(caps.into_iter().enumerate().map(move |(i, k)| {
-            div()
-                .h(z(23.))
-                .min_w(z(14.))
-                .pt(z(3.))
-                .px(z(6.))
-                .pb(z(4.))
-                .when(i + 1 < n, |d| d.mr(z(3.)))
-                .rounded(z(4.))
-                .border_1()
-                .border_color(c(tok(idx::BORDER_SUBTLE)))
-                .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
-                .text_size(z(12.))
-                .line_height(z(12.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
-                .flex()
-                .justify_center()
-                .child(k)
-        }))
+    div().flex().h(z(23.)).children(caps.into_iter().enumerate().map(move |(i, k)| {
+        div()
+            .h(z(23.))
+            .min_w(z(14.))
+            .pt(z(3.))
+            .px(z(6.))
+            .pb(z(4.))
+            .when(i + 1 < n, |d| d.mr(z(3.)))
+            .rounded(z(4.))
+            .border_1()
+            .border_color(c(tok(idx::BORDER_SUBTLE)))
+            .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
+            .text_size(z(12.))
+            .line_height(z(12.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
+            .flex()
+            .justify_center()
+            .child(k)
+    }))
 }
 
 fn keybind_card(label: SharedString, keys: &[&str], width: Pixels) -> impl IntoElement {
@@ -582,17 +575,8 @@ fn section(title: SharedString, desc: Option<SharedString>, rows: Vec<gpui::AnyE
         .py(z(24.))
         .border_b_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
-        .child(
-            div()
-                .text_size(z(20.))
-                .line_height(z(24.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(tok(idx::TEXT_STRONG)))
-                .child(title),
-        )
-        .when_some(desc, |d, t| {
-            d.child(div().mt(z(8.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(t))
-        })
+        .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(title))
+        .when_some(desc, |d, t| d.child(div().mt(z(8.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(t)))
         .child(div().mt(z(8.)).py(z(8.)).flex().flex_col().gap(z(24.)).children(rows))
 }
 
@@ -807,7 +791,9 @@ mod tests {
                     let keymap = cx.key_bindings();
                     let keymap = keymap.borrow();
                     assert!(
-                        keymap.bindings().any(|b| b.keystrokes().len() == 1 && b.keystrokes()[0].inner().modifiers == ks.modifiers && b.keystrokes()[0].inner().key == ks.key),
+                        keymap.bindings().any(|b| b.keystrokes().len() == 1
+                            && b.keystrokes()[0].inner().modifiers == ks.modifiers
+                            && b.keystrokes()[0].inner().key == ks.key),
                         "{k} not bound"
                     );
                 }

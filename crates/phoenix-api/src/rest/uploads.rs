@@ -178,9 +178,7 @@ pub fn chunk_ranges(len: usize, chunk: usize) -> Vec<Option<(usize, usize, Strin
 
 pub fn upload_url_allowed(url: &str, base: &str) -> bool {
     let Ok(u) = url::Url::parse(url) else { return false };
-    if u.scheme() == "https"
-        && u.host_str().is_some_and(|h| h == "storage.googleapis.com" || h.ends_with(".storage.googleapis.com"))
-    {
+    if u.scheme() == "https" && u.host_str().is_some_and(|h| h == "storage.googleapis.com" || h.ends_with(".storage.googleapis.com")) {
         return true;
     }
     url::Url::parse(base).is_ok_and(|b| b.origin() == u.origin())
@@ -188,11 +186,7 @@ pub fn upload_url_allowed(url: &str, base: &str) -> bool {
 
 fn put_error(status: StatusCode, bytes: &[u8]) -> Error {
     let raw = String::from_utf8_lossy(bytes).chars().take(300).collect::<String>();
-    Error::Api {
-        status: status.as_u16(),
-        body: Box::new(ApiErrorBody { message: "attachment upload failed".into(), ..Default::default() }),
-        raw,
-    }
+    Error::Api { status: status.as_u16(), body: Box::new(ApiErrorBody { message: "attachment upload failed".into(), ..Default::default() }), raw }
 }
 
 impl RestClient {
@@ -201,9 +195,7 @@ impl RestClient {
         struct Resp {
             attachments: Vec<CloudUpload>,
         }
-        let r: Resp = self
-            .call(Method::POST, &format!("/channels/{channel}/attachments"), Body::Json(attachment_slots_body(files)))
-            .await?;
+        let r: Resp = self.call(Method::POST, &format!("/channels/{channel}/attachments"), Body::Json(attachment_slots_body(files))).await?;
         let mut out = Vec::with_capacity(files.len());
         for (i, _) in files.iter().enumerate() {
             let id = i.to_string();
@@ -217,11 +209,7 @@ impl RestClient {
         if !upload_url_allowed(url, &self.inner.base) {
             return Err(Error::Protocol("upload URL outside Cloud Storage".into()));
         }
-        let http = reqwest::Client::builder()
-            .user_agent(self.inner.props.user_agent())
-            .use_rustls_tls()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()?;
+        let http = reqwest::Client::builder().user_agent(self.inner.props.user_agent()).use_rustls_tls().redirect(reqwest::redirect::Policy::none()).build()?;
         for range in chunk_ranges(bytes.len(), chunk) {
             let (part, header) = match &range {
                 None => (bytes, None),
@@ -260,13 +248,7 @@ impl RestClient {
         self.send_message_with_uploads_chunked(channel, &mut msg, files, progress, UPLOAD_CHUNK).await
     }
 
-    pub async fn upload_files(
-        &self,
-        channel: ChannelId,
-        files: &[FileUpload],
-        progress: Option<Progress>,
-        chunk: usize,
-    ) -> Result<Vec<CloudUpload>> {
+    pub async fn upload_files(&self, channel: ChannelId, files: &[FileUpload], progress: Option<Progress>, chunk: usize) -> Result<Vec<CloudUpload>> {
         let total: u64 = files.iter().map(|f| f.bytes.len() as u64).sum();
         let report = |sent: u64| progress.as_ref().is_none_or(|p| p(sent.min(total), total));
         if !report(0) {
@@ -289,7 +271,13 @@ impl RestClient {
         Ok(slot)
     }
 
-    pub async fn send_message_with_uploaded(&self, channel: ChannelId, msg: &mut CreateMessage, files: &[FileUpload], slots: &[CloudUpload]) -> Result<Message> {
+    pub async fn send_message_with_uploaded(
+        &self,
+        channel: ChannelId,
+        msg: &mut CreateMessage,
+        files: &[FileUpload],
+        slots: &[CloudUpload],
+    ) -> Result<Message> {
         fill_nonce(msg);
         msg.attachments = message_attachments(files, slots).as_array().cloned().unwrap_or_default();
         let body = serde_json::to_value(&*msg)?;
@@ -417,10 +405,8 @@ mod tests {
             buf.extend_from_slice(&chunk[..n]);
             if let Some(h) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
                 let head = String::from_utf8_lossy(&buf[..h]).into_owned();
-                let len = head
-                    .lines()
-                    .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
-                    .unwrap_or(0);
+                let len =
+                    head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
                 if buf.len() >= h + 4 + len {
                     break (head, len);
                 }
@@ -429,10 +415,7 @@ mod tests {
         };
         let start = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
         let req_body = buf[start..start + len].to_vec();
-        let resp = format!(
-            "HTTP/1.1 {status}\r\ncontent-type: application/json\r\n{extra}content-length: {}\r\nconnection: close\r\n\r\n{body}",
-            body.len()
-        );
+        let resp = format!("HTTP/1.1 {status}\r\ncontent-type: application/json\r\n{extra}content-length: {}\r\nconnection: close\r\n\r\n{body}", body.len());
         sock.write_all(resp.as_bytes()).await.unwrap();
         (head, req_body)
     }
@@ -442,13 +425,12 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
-            let slots = format!(
-                r#"{{"attachments":[{{"id":0,"upload_url":"http://{addr}/up/abc/pic.png?sig=x","upload_filename":"abc/pic.png"}}]}}"#
-            );
+            let slots = format!(r#"{{"attachments":[{{"id":0,"upload_url":"http://{addr}/up/abc/pic.png?sig=x","upload_filename":"abc/pic.png"}}]}}"#);
             let a = serve_one(&listener, "200 OK", "", &slots).await;
             let p1 = serve_one(&listener, "308 Resume Incomplete", "range: bytes=0-15\r\n", "").await;
             let p2 = serve_one(&listener, "200 OK", "", "").await;
-            let msg = r#"{"id":"99","channel_id":"7","content":"hi","author":{"id":"1","username":"me"},"timestamp":"2026-11-24T15:00:00+00:00","attachments":[]}"#;
+            let msg =
+                r#"{"id":"99","channel_id":"7","content":"hi","author":{"id":"1","username":"me"},"timestamp":"2026-11-24T15:00:00+00:00","attachments":[]}"#;
             let m = serve_one(&listener, "200 OK", "", msg).await;
             vec![a, p1, p2, m]
         });

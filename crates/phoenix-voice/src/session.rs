@@ -8,7 +8,7 @@ use crate::rtp::av1::{self, Av1Packetizer};
 use crate::rtp::h264::H264Packetizer;
 use crate::rtp::rtcp::Feedback;
 use crate::rtp::vp8::Vp8Packetizer;
-use crate::rtp::{Packetizer, RtpSender, DEFAULT_MAX_PAYLOAD};
+use crate::rtp::{DEFAULT_MAX_PAYLOAD, Packetizer, RtpSender};
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,12 +80,7 @@ pub struct VideoSessionManager {
 }
 
 impl VideoSessionManager {
-    pub fn new(
-        caps: LocalCapabilities,
-        remote_accepts: Vec<Codec>,
-        factory: Arc<dyn VideoEncoderFactory>,
-        total_bitrate_bps: u32,
-    ) -> Self {
+    pub fn new(caps: LocalCapabilities, remote_accepts: Vec<Codec>, factory: Arc<dyn VideoEncoderFactory>, total_bitrate_bps: u32) -> Self {
         Self { caps, remote_accepts, factory, streams: HashMap::new(), total_bitrate_bps, max_payload: DEFAULT_MAX_PAYLOAD }
     }
 
@@ -111,13 +106,7 @@ impl VideoSessionManager {
         }
     }
 
-    fn open_encoder(
-        &self,
-        kind: StreamKind,
-        params: StreamParams,
-        bitrate: u32,
-        first: Option<Codec>,
-    ) -> Result<(VideoEncoderConfig, Box<dyn VideoEncoder>)> {
+    fn open_encoder(&self, kind: StreamKind, params: StreamParams, bitrate: u32, first: Option<Codec>) -> Result<(VideoEncoderConfig, Box<dyn VideoEncoder>)> {
         let mut candidate = first;
         let mut last_err = Error::NoCodecAvailable;
         while let Some(c) = candidate {
@@ -179,11 +168,8 @@ impl VideoSessionManager {
     }
 
     fn rebalance(&mut self) {
-        let (c, s) = codec::split_bitrate(
-            self.total_bitrate_bps,
-            self.streams.contains_key(&StreamKind::Camera),
-            self.streams.contains_key(&StreamKind::Screen),
-        );
+        let (c, s) =
+            codec::split_bitrate(self.total_bitrate_bps, self.streams.contains_key(&StreamKind::Camera), self.streams.contains_key(&StreamKind::Screen));
         for (kind, st) in self.streams.iter_mut() {
             let b = if *kind == StreamKind::Camera { c } else { s };
             st.config.bitrate_bps = b;

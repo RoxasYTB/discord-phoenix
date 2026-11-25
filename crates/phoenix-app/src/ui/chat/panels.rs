@@ -1,10 +1,7 @@
 use crate::ui::tooltip::Tipped as _;
 use std::rc::Rc;
 
-use gpui::{
-    AnyElement, Context, Div, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window,
-    div, prelude::*,
-};
+use gpui::{AnyElement, Context, Div, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*};
 use gpui_component::input::Input;
 
 use super::{
@@ -68,9 +65,8 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         let mut items = Vec::new();
         if has_text {
             let ee = e.clone();
-            items.push(MenuItem::action(crate::t!("msg.copy_text"), ic(ChatIcon::Copy), move |_, _, cx| {
-                ee.update(cx, |a, cx| a.copy_message_text(ch, id, cx))
-            }));
+            items
+                .push(MenuItem::action(crate::t!("msg.copy_text"), ic(ChatIcon::Copy), move |_, _, cx| ee.update(cx, |a, cx| a.copy_message_text(ch, id, cx))));
         }
         if local.send_state == crate::model::SendState::Failed {
             let ee = e.clone();
@@ -105,9 +101,7 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     let in_guild = app.channels.get(&ch).is_some_and(|c| c.guild.is_some());
     let stub = |key: &'static str, icon: &str| {
         let ee = e.clone();
-        MenuItem::action(crate::t!(key), Some(crate::icons::path(icon)), move |_, _, cx| {
-            ee.update(cx, |a, cx| a.stub(&crate::t!(key), cx))
-        })
+        MenuItem::action(crate::t!(key), Some(crate::icons::path(icon)), move |_, _, cx| ee.update(cx, |a, cx| a.stub(&crate::t!(key), cx)))
     };
     let mut strip = div().flex().gap(z(8.)).px(z(2.)).py(z(2.));
     let guild = app.channels.get(&ch).and_then(|c| c.guild);
@@ -176,14 +170,10 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     items.push(MenuItem::Separator);
     if own {
         let ee = e.clone();
-        items.push(MenuItem::action(crate::t!("msg.edit"), ic(ChatIcon::Edit), move |_, w, cx| {
-            ee.update(cx, |a, cx| a.start_edit(id, w, cx))
-        }));
+        items.push(MenuItem::action(crate::t!("msg.edit"), ic(ChatIcon::Edit), move |_, w, cx| ee.update(cx, |a, cx| a.start_edit(id, w, cx))));
     }
     let ee = e.clone();
-    items.push(MenuItem::action(crate::t!("msg.reply"), Some(Icon::Reply.path()), move |_, w, cx| {
-        ee.update(cx, |a, cx| a.start_reply(id, w, cx))
-    }));
+    items.push(MenuItem::action(crate::t!("msg.reply"), Some(Icon::Reply.path()), move |_, w, cx| ee.update(cx, |a, cx| a.start_reply(id, w, cx))));
     let ee = e.clone();
     items.push(MenuItem::action(crate::t!("msg.forward"), Some(crate::icons::path("nav/forward")), move |_, _, cx| {
         ee.update(cx, |a, cx| a.open_forward(ch, id, cx))
@@ -197,19 +187,15 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     items.push(MenuItem::Separator);
     if has_text {
         let ee = e.clone();
-        items.push(MenuItem::action(crate::t!("msg.copy_text"), ic(ChatIcon::Copy), move |_, _, cx| {
-            ee.update(cx, |a, cx| a.copy_message_text(ch, id, cx))
-        }));
+        items.push(MenuItem::action(crate::t!("msg.copy_text"), ic(ChatIcon::Copy), move |_, _, cx| ee.update(cx, |a, cx| a.copy_message_text(ch, id, cx))));
     }
     let guild = app.channels.get(&ch).and_then(|c| c.guild);
     let manage = crate::actions::has(app, guild, crate::actions::MANAGE_MESSAGES);
     if guild.is_none() || crate::actions::has(app, guild, crate::actions::MANAGE_MESSAGES | (1 << 51)) {
         let ee = e.clone();
-        items.push(MenuItem::action(
-            if pinned { crate::t!("msg.unpin") } else { crate::t!("msg.pin") },
-            Some(Icon::Pin.path()),
-            move |_, _, cx| ee.update(cx, |a, cx| a.toggle_pin(ch, id, cx)),
-        ));
+        items.push(MenuItem::action(if pinned { crate::t!("msg.unpin") } else { crate::t!("msg.pin") }, Some(Icon::Pin.path()), move |_, _, cx| {
+            ee.update(cx, |a, cx| a.toggle_pin(ch, id, cx))
+        }));
     }
     let ee = e.clone();
     items.push(MenuItem::action(crate::t!("msg.bookmark"), Some(crate::icons::path("menu/bookmark")), move |_, _, cx| {
@@ -222,31 +208,21 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         .iter()
         .map(|&(k, secs)| {
             let ee = e.clone();
-            MenuItem::action(crate::t!(k), None, move |_, _, cx| {
-                ee.update(cx, |a, cx| a.remind_message(ch, id, crate::actions::message::due_for(secs), cx))
-            })
+            MenuItem::action(crate::t!(k), None, move |_, _, cx| ee.update(cx, |a, cx| a.remind_message(ch, id, crate::actions::message::due_for(secs), cx)))
         })
         .collect();
     if let Some(due) = crate::actions::message::next_monday_9am(chrono::Local::now()) {
         let ee = e.clone();
-        reminders.push(MenuItem::action(crate::t!("msg.remind.monday"), None, move |_, _, cx| {
-            ee.update(cx, |a, cx| a.remind_message(ch, id, due, cx))
-        }));
+        reminders.push(MenuItem::action(crate::t!("msg.remind.monday"), None, move |_, _, cx| ee.update(cx, |a, cx| a.remind_message(ch, id, due, cx))));
     }
     let ee = e.clone();
-    reminders.push(MenuItem::action(crate::t!("msg.remind.custom"), None, move |_, _, cx| {
-        ee.update(cx, |a, cx| a.open_custom_reminder(ch, id, cx))
-    }));
+    reminders.push(MenuItem::action(crate::t!("msg.remind.custom"), None, move |_, _, cx| ee.update(cx, |a, cx| a.open_custom_reminder(ch, id, cx))));
     items.push(MenuItem::submenu_with_icon(crate::t!("msg.remind"), "inbox/clock", reminders));
     items.push(MenuItem::submenu_with_icon(crate::t!("menu.apps"), "apps", vec![stub("menu.apps_none", "apps")]));
     let ee = e.clone();
-    items.push(MenuItem::action(crate::t!("msg.mark_unread"), ic(ChatIcon::Unread), move |_, _, cx| {
-        ee.update(cx, |a, cx| a.mark_unread_from(ch, id, cx))
-    }));
+    items.push(MenuItem::action(crate::t!("msg.mark_unread"), ic(ChatIcon::Unread), move |_, _, cx| ee.update(cx, |a, cx| a.mark_unread_from(ch, id, cx))));
     let ee = e.clone();
-    items.push(MenuItem::action(crate::t!("msg.copy_link"), ic(ChatIcon::Link), move |_, _, cx| {
-        ee.update(cx, |a, cx| a.copy_message_link(ch, id, cx))
-    }));
+    items.push(MenuItem::action(crate::t!("msg.copy_link"), ic(ChatIcon::Link), move |_, _, cx| ee.update(cx, |a, cx| a.copy_message_link(ch, id, cx))));
     if msg.is_some_and(|m| !m.content.is_empty()) {
         let ee = e.clone();
         let label = if crate::tts::speaking(ch, id) { crate::t!("tts.stop") } else { crate::t!("msg.speak") };
@@ -293,31 +269,18 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         .or_else(|| crate::commands::store::get(id).map(|p| p.app))
         .or_else(|| msg.and_then(|m| app.users.get(&m.author)).filter(|u| u.bot).map(|u| u.id));
     if let Some(app_id) = interaction_app {
-        let app_name = msg
-            .and_then(|m| app.users.get(&m.author))
-            .map(|u| u.display_name.to_string())
-            .unwrap_or_else(|| app_id.0.to_string());
+        let app_name = msg.and_then(|m| app.users.get(&m.author)).map(|u| u.display_name.to_string()).unwrap_or_else(|| app_id.0.to_string());
         let ee = e.clone();
-        items.push(MenuItem::action(
-            crate::t!("msg.view_interaction_info"),
-            Some(crate::icons::path("info")),
-            move |_, _, cx| {
-                let text = crate::t!(
-                    "msg.interaction_info_body",
-                    app = app_name.clone(),
-                    app_id = app_id.0.to_string(),
-                    msg_id = id.0.to_string()
-                )
-                .to_string();
-                ee.update(cx, |a, cx| a.parity_toast(text, cx));
-            },
-        ));
+        items.push(MenuItem::action(crate::t!("msg.view_interaction_info"), Some(crate::icons::path("info")), move |_, _, cx| {
+            let text = crate::t!("msg.interaction_info_body", app = app_name.clone(), app_id = app_id.0.to_string(), msg_id = id.0.to_string()).to_string();
+            ee.update(cx, |a, cx| a.parity_toast(text, cx));
+        }));
     }
     if app.prefs.synced.developer_mode {
-    items.push(MenuItem::Separator);
-    items.push(MenuItem::action(crate::t!("msg.copy_id"), ic(ChatIcon::IdBadge), move |_, _, cx| {
-        cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.0.to_string()))
-    }));
+        items.push(MenuItem::Separator);
+        items.push(MenuItem::action(crate::t!("msg.copy_id"), ic(ChatIcon::IdBadge), move |_, _, cx| {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.0.to_string()))
+        }));
     }
     if let Some(url) = MENU_MEDIA.with(|m| m.borrow().1.clone()) {
         items.push(MenuItem::Separator);
@@ -358,73 +321,45 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
 
 fn message_card(app: &PhoenixApp, m: &Message) -> gpui::Div {
     let u = app.users.get(&m.author);
-    div()
-        .p(z(12.))
-        .rounded(z(4.))
-        .bg(c(Palette::BG_SECONDARY))
-        .flex()
-        .gap(z(12.))
-        .child(avatar(u, 40.))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex()
-                        .items_baseline()
-                        .gap(z(8.))
-                        .child({
-                            let author_name: SharedString = m
-                                .author_nick
-                                .clone()
-                                .or_else(|| app.member_nick(m.author))
-                                .or_else(|| u.map(|u| u.display_name.clone()))
-                                .unwrap_or_else(|| crate::t!("common.unknown"));
-                            let (role_color, role_gradient) = app.author_role_style(m.author);
-                            crate::fonts::styled_name(
-                                div()
-                                    .text_size(z(16.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(crate::theme::role_color(role_color)),
-                                u,
-                                false,
-                            )
-                            .child(crate::fonts::role_name_text(author_name, u, 16., app.selected_guild.is_some(), role_gradient))
-                        })
-                        .child(
-                            div()
-                                .text_size(z(12.))
-                                .text_color(c(Palette::TEXT_MUTED))
-                                .child(format_time_full(m.timestamp)),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .line_height(z(22.))
-                        .text_color(c(Palette::TEXT_NORMAL))
-                        .child(if m.content.is_empty() && !m.attachments.is_empty() {
-                            crate::t!("msg.attachments", n = m.attachments.len())
-                        } else {
-                            m.content.clone()
-                        }),
-                ),
-        )
+    div().p(z(12.)).rounded(z(4.)).bg(c(Palette::BG_SECONDARY)).flex().gap(z(12.)).child(avatar(u, 40.)).child(
+        div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap(z(8.))
+                    .child({
+                        let author_name: SharedString = m
+                            .author_nick
+                            .clone()
+                            .or_else(|| app.member_nick(m.author))
+                            .or_else(|| u.map(|u| u.display_name.clone()))
+                            .unwrap_or_else(|| crate::t!("common.unknown"));
+                        let (role_color, role_gradient) = app.author_role_style(m.author);
+                        crate::fonts::styled_name(
+                            div().text_size(z(16.)).font_weight(FontWeight::MEDIUM).text_color(crate::theme::role_color(role_color)),
+                            u,
+                            false,
+                        )
+                        .child(crate::fonts::role_name_text(author_name, u, 16., app.selected_guild.is_some(), role_gradient))
+                    })
+                    .child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(format_time_full(m.timestamp))),
+            )
+            .child(div().text_size(z(16.)).line_height(z(22.)).text_color(c(Palette::TEXT_NORMAL)).child(
+                if m.content.is_empty() && !m.attachments.is_empty() { crate::t!("msg.attachments", n = m.attachments.len()) } else { m.content.clone() },
+            )),
+    )
 }
 
 fn delete_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let e = cx.entity();
     let e2 = e.clone();
     let msg = app.messages.get(&ch).and_then(|x| x.msgs.iter().find(|x| x.id == id));
-    let mut body: Vec<AnyElement> = vec![
-        div()
-            .text_size(z(16.))
-            .child(crate::t!("msg.delete_confirm"))
-            .into_any_element(),
-    ];
+    let mut body: Vec<AnyElement> = vec![div().text_size(z(16.)).child(crate::t!("msg.delete_confirm")).into_any_element()];
     if let Some(m) = msg {
         body.push(message_card(app, m).shadow_md().into_any_element());
     }
@@ -486,14 +421,7 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
                     .items_center()
                     .gap(z(4.))
                     .child(crate::media::emoji::emoji_element(&token, 18.))
-                    .child(
-                        div()
-                            .text_size(z(14.))
-                            .line_height(z(16.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(count_color)
-                            .child(r.count.to_string()),
-                    ),
+                    .child(div().text_size(z(14.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(count_color).child(r.count.to_string())),
             );
         }
     }
@@ -606,7 +534,8 @@ fn thread_intro(app: &PhoenixApp, id: crate::model::Id, name: SharedString, entr
     use crate::theme::generated::idx;
     let tk = |i: usize| c(crate::theme::tok(i));
     let owner = app.nav.extras.get(&id).and_then(|x| x.owner).or_else(|| entry.msgs.first().map(|m| m.author));
-    let owner_name = owner.map(|u| app.member_nick(u).or_else(|| app.users.get(&u).map(|x| x.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown")));
+    let owner_name =
+        owner.map(|u| app.member_nick(u).or_else(|| app.users.get(&u).map(|x| x.display_name.clone())).unwrap_or_else(|| crate::t!("common.unknown")));
     let mut d = div()
         .m(z(20.))
         .flex_none()
@@ -614,16 +543,28 @@ fn thread_intro(app: &PhoenixApp, id: crate::model::Id, name: SharedString, entr
         .flex_col()
         .justify_end()
         .child(
-            div().mt(z(16.)).size(z(64.)).rounded_full().bg(tk(idx::BACKGROUND_MOD_STRONG)).flex().items_center().justify_center().child(
-                gpui::svg().path(crate::icons::path("chat/thread")).size(z(32.)).text_color(tk(idx::ICON_SUBTLE)),
-            ),
+            div()
+                .mt(z(16.))
+                .size(z(64.))
+                .rounded_full()
+                .bg(tk(idx::BACKGROUND_MOD_STRONG))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("chat/thread")).size(z(32.)).text_color(tk(idx::ICON_SUBTLE))),
         )
         .child(div().my(z(8.)).text_size(z(32.)).line_height(z(40.)).font_weight(FontWeight::BOLD).text_color(tk(idx::TEXT_STRONG)).child(name));
     if let Some(n) = owner_name {
         d = d.child(
-            div().mb(z(2.)).flex().flex_wrap().text_size(z(16.)).line_height(z(20.)).text_color(tk(idx::TEXT_DEFAULT)).child(crate::t!("thread.started_by")).child(
-                div().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(n),
-            ),
+            div()
+                .mb(z(2.))
+                .flex()
+                .flex_wrap()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .text_color(tk(idx::TEXT_DEFAULT))
+                .child(crate::t!("thread.started_by"))
+                .child(div().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(n)),
         );
     }
     d
@@ -688,9 +629,15 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                     .border_b_1()
                     .border_color(tk(idx::BORDER_SUBTLE))
                     .when(!is_post, |d| {
-                        d.child(div().size(z(32.)).flex_none().flex().items_center().justify_center().child(
-                            gpui::svg().path(crate::icons::path("chat/thread")).size(z(20.)).flex_none().text_color(tk(idx::ICON_MUTED)),
-                        ))
+                        d.child(
+                            div()
+                                .size(z(32.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(gpui::svg().path(crate::icons::path("chat/thread")).size(z(20.)).flex_none().text_color(tk(idx::ICON_MUTED))),
+                        )
                     })
                     .child(
                         div()
@@ -705,35 +652,32 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                     )
                     .child({
                         let btn = |id: &'static str, path: &'static str| {
-                            div()
-                                .id(id)
-                                .group(id)
-                                .size(z(32.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .child(
-                                    gpui::svg()
-                                        .path(crate::icons::path(path))
-                                        .size(z(20.))
-                                        .flex_none()
-                                        .text_color(tk(idx::ICON_MUTED))
-                                        .group_hover(id, |s| s.text_color(tk(idx::ICON_SUBTLE))),
-                                )
+                            div().id(id).group(id).size(z(32.)).flex_none().flex().items_center().justify_center().cursor_pointer().child(
+                                gpui::svg()
+                                    .path(crate::icons::path(path))
+                                    .size(z(20.))
+                                    .flex_none()
+                                    .text_color(tk(idx::ICON_MUTED))
+                                    .group_hover(id, |s| s.text_color(tk(idx::ICON_SUBTLE))),
+                            )
                         };
                         div()
                             .flex_none()
                             .pl(z(10.))
                             .flex()
                             .gap(z(10.))
-                            .when(!is_post, |d| d.child(btn("thread-notify", "bell").tip(crate::t!("menu.notify_settings")).on_click(move |ev, w, _| {
-                                crate::ui::nav_menus::toggle_bell(id, ev.position(), w)
-                            })))
-                            .child(btn("thread-more", "more-horizontal").tip(crate::t!("header.more")).on_click(move |ev, w, _| {
-                                crate::ui::thread_menu::open_at(id, crate::actions::thread::Place::Sidebar, ev.position(), w)
-                            }))
+                            .when(!is_post, |d| {
+                                d.child(
+                                    btn("thread-notify", "bell")
+                                        .tip(crate::t!("menu.notify_settings"))
+                                        .on_click(move |ev, w, _| crate::ui::nav_menus::toggle_bell(id, ev.position(), w)),
+                                )
+                            })
+                            .child(
+                                btn("thread-more", "more-horizontal")
+                                    .tip(crate::t!("header.more"))
+                                    .on_click(move |ev, w, _| crate::ui::thread_menu::open_at(id, crate::actions::thread::Place::Sidebar, ev.position(), w)),
+                            )
                             .child(btn("close-thread", "close").on_click(cx.listener(|a, _, _, cx| a.close_thread(cx))))
                     }),
             )
@@ -781,14 +725,9 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
     if app.chat.at_bottom {
         return None;
     }
-    let today = chrono::TimeZone::timestamp_opt(&chrono::Local, ts, 0)
-        .single()
-        .is_some_and(|d| d.date_naive() == chrono::Local::now().date_naive());
-    let since: SharedString = if today {
-        format_time_short(ts)
-    } else {
-        crate::t!("chat.new_since_date", date = crate::app::format_day(ts), time = format_time_short(ts))
-    };
+    let today = chrono::TimeZone::timestamp_opt(&chrono::Local, ts, 0).single().is_some_and(|d| d.date_naive() == chrono::Local::now().date_naive());
+    let since: SharedString =
+        if today { format_time_short(ts) } else { crate::t!("chat.new_since_date", date = crate::app::format_day(ts), time = format_time_short(ts)) };
     let text = if n == 1 { crate::t!("chat.new_since_one", since = since) } else { crate::t!("chat.new_since_many", n = n, since = since) };
     Some(
         div()
@@ -854,8 +793,7 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
 }
 
 pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    let scrolled_up = (!app.chat.at_bottom && app.message_list.is_scrolled_to_end() == Some(false))
-        || crate::history_detached::is_detached(app);
+    let scrolled_up = (!app.chat.at_bottom && app.message_list.is_scrolled_to_end() == Some(false)) || crate::history_detached::is_detached(app);
     if !scrolled_up {
         return None;
     }
@@ -1064,13 +1002,9 @@ pub fn drop_overlay(app: &PhoenixApp) -> impl IntoElement {
 mod tests {
     #[test]
     fn upload_icon_pose_matches_live_samples() {
-        for (ms, x, y, deg) in [
-            (100., -25.80, -5.84, -19.35),
-            (250., -47.95, -9.95, -35.94),
-            (450., -41.02, -3.02, -28.03),
-            (600., -45., -8., -32.),
-            (800., -44., -6., -30.),
-        ] {
+        for (ms, x, y, deg) in
+            [(100., -25.80, -5.84, -19.35), (250., -47.95, -9.95, -35.94), (450., -41.02, -3.02, -28.03), (600., -45., -8., -32.), (800., -44., -6., -30.)]
+        {
             let (px, py, _, pr) = super::icon_pose(ms / 800.);
             assert!((px - x).abs() < 0.6 && (py - y).abs() < 0.6, "{ms}ms: ({px}, {py}) vs ({x}, {y})");
             assert!((pr - deg).abs() < 0.3, "{ms}ms: {pr}° vs {deg}°");

@@ -37,11 +37,7 @@ pub fn parse_reminders(v: &Value) -> Vec<Reminder> {
     let mut out = Vec::new();
     let mut scan = |arr: Option<&Vec<Value>>, need_due: bool| {
         for e in arr.into_iter().flatten() {
-            let due = e
-                .get("due_at")
-                .or_else(|| e.get("save_data").and_then(|s| s.get("due_at")))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
+            let due = e.get("due_at").or_else(|| e.get("save_data").and_then(|s| s.get("due_at"))).and_then(Value::as_str).map(str::to_owned);
             if need_due && due.is_none() {
                 continue;
             }

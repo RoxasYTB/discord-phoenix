@@ -10,7 +10,18 @@ use crate::{
     ui::controls::{BtnKind, button, switch},
 };
 
-pub const BADGES: [&str; 10] = ["gs2.badge_leaf", "gs2.badge_sword", "gs2.badge_heart", "gs2.badge_fire", "gs2.badge_water", "gs2.badge_skull", "gs2.badge_moon", "gs2.badge_bolt", "gs2.badge_compass", "gs2.badge_mushroom"];
+pub const BADGES: [&str; 10] = [
+    "gs2.badge_leaf",
+    "gs2.badge_sword",
+    "gs2.badge_heart",
+    "gs2.badge_fire",
+    "gs2.badge_water",
+    "gs2.badge_skull",
+    "gs2.badge_moon",
+    "gs2.badge_bolt",
+    "gs2.badge_compass",
+    "gs2.badge_mushroom",
+];
 
 pub const COLORS: [(u32, u32); 13] = [
     (0xff2594, 0xe06fa8),
@@ -73,36 +84,23 @@ fn grid(items: Vec<gpui::Stateful<gpui::Div>>) -> gpui::Div {
 }
 
 fn sample_message(name: &str, msg: SharedString, tag: Option<(&str, Option<AnyElement>)>, dim: bool) -> gpui::Div {
-    div()
-        .flex()
-        .gap(z(12.))
-        .when(dim, |d| d.opacity(0.3))
-        .child(div().size(z(40.)).flex_none().rounded_full().bg(t(idx::BACKGROUND_MOD_STRONG)))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(z(6.))
-                        .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, name.to_owned()))
-                        .children(tag.map(|(t_, b)| {
-                            div()
-                                .px(z(4.))
-                                .h(z(16.))
-                                .rounded(z(4.))
-                                .bg(t(idx::BACKGROUND_MOD_NORMAL))
-                                .flex()
-                                .items_center()
-                                .gap(z(2.))
-                                .children(b)
-                                .child(text(12., 16., FontWeight::SEMIBOLD, idx::TEXT_STRONG, t_.to_owned()))
-                        })),
-                )
-                .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT, msg)),
-        )
+    div().flex().gap(z(12.)).when(dim, |d| d.opacity(0.3)).child(div().size(z(40.)).flex_none().rounded_full().bg(t(idx::BACKGROUND_MOD_STRONG))).child(
+        div()
+            .flex()
+            .flex_col()
+            .child(div().flex().items_center().gap(z(6.)).child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, name.to_owned())).children(tag.map(
+                |(t_, b)| {
+                    div().px(z(4.)).h(z(16.)).rounded(z(4.)).bg(t(idx::BACKGROUND_MOD_NORMAL)).flex().items_center().gap(z(2.)).children(b).child(text(
+                        12.,
+                        16.,
+                        FontWeight::SEMIBOLD,
+                        idx::TEXT_STRONG,
+                        t_.to_owned(),
+                    ))
+                },
+            )))
+            .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT, msg)),
+    )
 }
 
 pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -130,9 +128,14 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
     for (i, (p, s)) in COLORS.iter().copied().enumerate() {
         colors.push(
             tile(("gs2-color", i), preset == Some(i))
-                .child(div().size(z(32.)).rounded(z(4.)).bg(gpui::linear_gradient(135., gpui::linear_color_stop(c(s), 0.5), gpui::linear_color_stop(c(p), 0.5))))
+                .child(div().size(z(32.)).rounded(z(4.)).bg(gpui::linear_gradient(
+                    135.,
+                    gpui::linear_color_stop(c(s), 0.5),
+                    gpui::linear_color_stop(c(p), 0.5),
+                )))
                 .on_click(cx.listener(move |a, _, _, cx| {
-                    let patch = ProfilePatch { badge_color_primary: Some(format!("#{p:06x}")), badge_color_secondary: Some(format!("#{s:06x}")), ..Default::default() };
+                    let patch =
+                        ProfilePatch { badge_color_primary: Some(format!("#{p:06x}")), badge_color_secondary: Some(format!("#{s:06x}")), ..Default::default() };
                     write(a, ServerCall::SetProfile { guild: sf(guild), patch }, None, cx);
                 })),
         );
@@ -182,7 +185,12 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                         .gap(z(8.))
                         .children((!hash.is_empty()).then(|| badge_img(guild, &hash, 40.)))
                         .child(match super::input(guild, "tag", &tag_s, cx) {
-                            Some(e) => div().w(z(84.)).text_size(z(24.)).text_color(t(idx::TEXT_DEFAULT)).child(gpui_component::input::Input::new(&e).appearance(false).bordered(false)).into_any_element(),
+                            Some(e) => div()
+                                .w(z(84.))
+                                .text_size(z(24.))
+                                .text_color(t(idx::TEXT_DEFAULT))
+                                .child(gpui_component::input::Input::new(&e).appearance(false).bordered(false))
+                                .into_any_element(),
                             None => div().text_size(z(24.)).text_color(t(idx::TEXT_DEFAULT)).child(tag_s.clone()).into_any_element(),
                         }),
                 )
@@ -219,7 +227,12 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
         let save: crate::ui::modals::settings_layout::Act = std::rc::Rc::new(move |a, _, cx| {
             let v = super::value(guild, "tag", cx).unwrap_or_default();
             if ok {
-                write(a, ServerCall::SetProfile { guild: sf(guild), patch: ProfilePatch { tag: Some(Some(v.to_uppercase())), ..Default::default() } }, None, cx);
+                write(
+                    a,
+                    ServerCall::SetProfile { guild: sf(guild), patch: ProfilePatch { tag: Some(Some(v.to_uppercase())), ..Default::default() } },
+                    None,
+                    cx,
+                );
             }
         });
         div().mt(z(24.)).child(crate::ui::modals::settings_layout::unsaved_bar(reset, save, cx))

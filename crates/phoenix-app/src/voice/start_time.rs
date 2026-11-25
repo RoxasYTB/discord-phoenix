@@ -13,12 +13,7 @@ struct Store {
 static STORE: LazyLock<Mutex<Store>> = LazyLock::new(Default::default);
 
 pub fn request(guild: u64) -> Option<(u8, Value)> {
-    STORE
-        .lock()
-        .ok()?
-        .requested
-        .insert(guild)
-        .then(|| (43, serde_json::json!({ "guild_id": guild.to_string(), "fields": ["status", "voice_start_time"] })))
+    STORE.lock().ok()?.requested.insert(guild).then(|| (43, serde_json::json!({ "guild_id": guild.to_string(), "fields": ["status", "voice_start_time"] })))
 }
 
 fn id(v: &Value) -> Option<u64> {

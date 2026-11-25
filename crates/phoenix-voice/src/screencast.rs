@@ -73,11 +73,7 @@ async fn open(kind: Kind) -> ashpd::Result<Opened> {
     proxy
         .select_sources(
             &session,
-            SelectSourcesOptions::default()
-                .set_cursor_mode(CursorMode::Embedded)
-                .set_sources(types)
-                .set_multiple(false)
-                .set_persist_mode(PersistMode::DoNot),
+            SelectSourcesOptions::default().set_cursor_mode(CursorMode::Embedded).set_sources(types).set_multiple(false).set_persist_mode(PersistMode::DoNot),
         )
         .await?;
     let streams = proxy.start(&session, None, Default::default()).await?.response()?;

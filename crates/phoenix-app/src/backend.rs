@@ -40,9 +40,7 @@ impl std::fmt::Debug for Credentials {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Token(_) => f.write_str("Token(<redacted>)"),
-            Self::Password { login, .. } => {
-                f.debug_struct("Password").field("login", login).field("password", &"<redacted>").finish()
-            }
+            Self::Password { login, .. } => f.debug_struct("Password").field("login", login).field("password", &"<redacted>").finish(),
             Self::Mfa { .. } => f.write_str("Mfa(<redacted>)"),
         }
     }

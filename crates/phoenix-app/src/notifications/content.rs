@@ -143,8 +143,19 @@ fn poll_result_question(m: &api::Message) -> String {
 }
 
 pub const JOIN_KEYS: [&str; 13] = [
-    "notif.join0", "notif.join1", "notif.join2", "notif.join3", "notif.join4", "notif.join5", "notif.join6",
-    "notif.join7", "notif.join8", "notif.join9", "notif.join10", "notif.join11", "notif.join12",
+    "notif.join0",
+    "notif.join1",
+    "notif.join2",
+    "notif.join3",
+    "notif.join4",
+    "notif.join5",
+    "notif.join6",
+    "notif.join7",
+    "notif.join8",
+    "notif.join9",
+    "notif.join10",
+    "notif.join11",
+    "notif.join12",
 ];
 
 pub fn join_key(message_id: u64) -> &'static str {
@@ -214,7 +225,10 @@ fn group_label(cache: &Cache, c: &api::Channel, me: Option<api::Snowflake>) -> S
     }
     let rel = cache.relationships();
     let nick = |u: &api::User| {
-        rel.iter().find(|r| r.user.as_ref().map(|x| x.id).or(r.user_id).unwrap_or(r.id) == u.id).and_then(|r| r.nickname.clone()).unwrap_or_else(|| u.display_name().to_owned())
+        rel.iter()
+            .find(|r| r.user.as_ref().map(|x| x.id).or(r.user_id).unwrap_or(r.id) == u.id)
+            .and_then(|r| r.nickname.clone())
+            .unwrap_or_else(|| u.display_name().to_owned())
     };
     let names: Vec<String> = c.recipients.iter().filter(|u| Some(u.id) != me).map(nick).collect();
     if names.is_empty() {

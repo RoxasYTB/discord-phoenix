@@ -15,8 +15,8 @@ use crate::{
 };
 
 pub const ACTIONS: [u32; 56] = [
-    1, 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 40, 41, 42, 50, 51, 52, 60, 61, 62, 72, 73, 74, 75, 80, 81, 82, 83, 84, 85, 90, 91, 92, 100, 101, 102, 110, 111, 112, 121, 130, 131,
-    132, 140, 141, 142, 192, 193,
+    1, 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 40, 41, 42, 50, 51, 52, 60, 61, 62, 72, 73, 74, 75, 80, 81, 82, 83, 84, 85, 90,
+    91, 92, 100, 101, 102, 110, 111, 112, 121, 130, 131, 132, 140, 141, 142, 192, 193,
 ];
 
 pub fn icon_for(action: u32) -> &'static str {
@@ -72,7 +72,12 @@ pub fn target_name(log: &Value, e: &Value, app: &PhoenixApp) -> String {
 }
 
 fn changed(e: &Value, key: &str) -> Option<String> {
-    e.get("changes")?.as_array()?.iter().find(|c| kit::s(c, "key") == key).and_then(|c| c.get("new_value").or_else(|| c.get("old_value"))).and_then(|v| v.as_str().map(str::to_owned))
+    e.get("changes")?
+        .as_array()?
+        .iter()
+        .find(|c| kit::s(c, "key") == key)
+        .and_then(|c| c.get("new_value").or_else(|| c.get("old_value")))
+        .and_then(|v| v.as_str().map(str::to_owned))
 }
 
 pub fn sentence(action: u32, user: &str, target: &str, channel: &str, count: u64) -> String {
@@ -85,7 +90,9 @@ fn value_text(v: Option<&Value>) -> String {
     match v {
         None | Some(Value::Null) => "—".into(),
         Some(Value::String(s)) => s.clone(),
-        Some(Value::Array(a)) => a.iter().map(|x| x.get("name").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(|| x.to_string())).collect::<Vec<_>>().join(", "),
+        Some(Value::Array(a)) => {
+            a.iter().map(|x| x.get("name").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(|| x.to_string())).collect::<Vec<_>>().join(", ")
+        }
         Some(x) => x.to_string(),
     }
 }
@@ -101,7 +108,13 @@ fn change_rows(e: &Value) -> AnyElement {
             (false, true) => crate::t!("gs.audit.set_to", key = key, new = value_text(new)),
             _ => crate::t!("gs.audit.removed", key = key, old = value_text(old)),
         };
-        col = col.child(div().flex().gap(z(8.)).child(div().mt(z(7.)).size(z(4.)).flex_none().rounded_full().bg(c(tok(idx::TEXT_MUTED)))).child(text(line, 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT)));
+        col = col.child(div().flex().gap(z(8.)).child(div().mt(z(7.)).size(z(4.)).flex_none().rounded_full().bg(c(tok(idx::TEXT_MUTED)))).child(text(
+            line,
+            14.,
+            18.,
+            FontWeight::NORMAL,
+            idx::TEXT_DEFAULT,
+        )));
     }
     if let Some(r) = e.get("reason").and_then(Value::as_str) {
         col = col.child(text(crate::t!("gs.audit.reason", reason = r), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE));
@@ -139,32 +152,44 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let filters = div()
         .flex()
         .gap(z(16.))
-        .child(div().w(z(249.)).flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.audit.filter_user"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(kit::dropdown(
-            s,
-            "audit_user",
-            text(uval, 16., 20., FontWeight::NORMAL, idx::TEXT_STRONG).into_any_element(),
-            user_opts,
-            ucur,
-            Rc::new(move |a: &mut PhoenixApp, i: usize, cx: &mut Cx| {
-                let v = user_ids.get(i).copied().flatten();
-                with_state(|s| s.audit_user = v);
-                super::reload(a, "audit", cx);
-            }),
-            cx,
-        )))
-        .child(div().w(z(249.)).flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.audit.filter_action"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(kit::dropdown(
-            s,
-            "audit_action",
-            text(aval, 16., 20., FontWeight::NORMAL, idx::TEXT_STRONG).into_any_element(),
-            action_opts,
-            acur,
-            Rc::new(move |a: &mut PhoenixApp, i: usize, cx: &mut Cx| {
-                let v = action_ids.get(i).copied().flatten();
-                with_state(|s| s.audit_action = v);
-                super::reload(a, "audit", cx);
-            }),
-            cx,
-        )));
+        .child(
+            div().w(z(249.)).flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.audit.filter_user"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(
+                kit::dropdown(
+                    s,
+                    "audit_user",
+                    text(uval, 16., 20., FontWeight::NORMAL, idx::TEXT_STRONG).into_any_element(),
+                    user_opts,
+                    ucur,
+                    Rc::new(move |a: &mut PhoenixApp, i: usize, cx: &mut Cx| {
+                        let v = user_ids.get(i).copied().flatten();
+                        with_state(|s| s.audit_user = v);
+                        super::reload(a, "audit", cx);
+                    }),
+                    cx,
+                ),
+            ),
+        )
+        .child(
+            div()
+                .w(z(249.))
+                .flex()
+                .flex_col()
+                .gap(z(8.))
+                .child(text(crate::t!("gs.audit.filter_action"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG))
+                .child(kit::dropdown(
+                    s,
+                    "audit_action",
+                    text(aval, 16., 20., FontWeight::NORMAL, idx::TEXT_STRONG).into_any_element(),
+                    action_opts,
+                    acur,
+                    Rc::new(move |a: &mut PhoenixApp, i: usize, cx: &mut Cx| {
+                        let v = action_ids.get(i).copied().flatten();
+                        with_state(|s| s.audit_action = v);
+                        super::reload(a, "audit", cx);
+                    }),
+                    cx,
+                )),
+        );
     let mut list = div().flex().flex_col().gap(z(8.));
     for (i, e) in entries.iter().enumerate() {
         let id = kit::s(e, "id");
@@ -173,7 +198,13 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         let user = users.iter().find(|u| kit::s(u, "id") == uid).cloned().unwrap_or(Value::Null);
         let target = target_name(&log, e, app);
         let opt = e.get("options");
-        let channel = opt.and_then(|o| o.get("channel_id")).and_then(Value::as_str).and_then(|c| c.parse().ok()).and_then(|c: u64| app.channels.get(&Id(c))).map(|c| format!("#{}", c.name)).unwrap_or_default();
+        let channel = opt
+            .and_then(|o| o.get("channel_id"))
+            .and_then(Value::as_str)
+            .and_then(|c| c.parse().ok())
+            .and_then(|c: u64| app.channels.get(&Id(c)))
+            .map(|c| format!("#{}", c.name))
+            .unwrap_or_default();
         let count = opt.and_then(|o| kit::id_of(o, "count").or_else(|| kit::id_of(o, "members_removed"))).unwrap_or(1);
         let has_changes = e.get("changes").and_then(Value::as_array).is_some_and(|c| !c.is_empty()) || e.get("reason").is_some();
         let open = s.expanded.contains(&id);
@@ -209,10 +240,21 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                                 .min_w_0()
                                 .flex()
                                 .flex_col()
-                                .child(text(sentence(action, &kit::user_name(&user), &target, &channel, count), 16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT).truncate())
+                                .child(
+                                    text(sentence(action, &kit::user_name(&user), &target, &channel, count), 16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT)
+                                        .truncate(),
+                                )
                                 .child(text(when(kit::n(e, "id")), 14., 18., FontWeight::NORMAL, idx::TEXT_MUTED)),
                         )
-                        .when(has_changes, |d| d.child(gpui::svg().path(crate::icons::path(if open { "chevron" } else { "chevron-right" })).flex_none().size(z(24.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
+                        .when(has_changes, |d| {
+                            d.child(
+                                gpui::svg()
+                                    .path(crate::icons::path(if open { "chevron" } else { "chevron-right" }))
+                                    .flex_none()
+                                    .size(z(24.))
+                                    .text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))),
+                            )
+                        })
                         .on_click(cx.listener(move |_, _, _, cx| {
                             let k = key.clone();
                             with_state(|s| {

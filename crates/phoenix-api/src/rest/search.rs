@@ -19,16 +19,7 @@ pub enum HasFilter {
 }
 
 impl HasFilter {
-    pub const ALL: [HasFilter; 8] = [
-        Self::Link,
-        Self::Embed,
-        Self::File,
-        Self::Video,
-        Self::Image,
-        Self::Sound,
-        Self::Sticker,
-        Self::Poll,
-    ];
+    pub const ALL: [HasFilter; 8] = [Self::Link, Self::Embed, Self::File, Self::Video, Self::Image, Self::Sound, Self::Sticker, Self::Poll];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -200,12 +191,17 @@ pub fn parse_tabs_reply(status: StatusCode, bytes: &[u8]) -> Result<SearchOutcom
     let total_results = tab.get("total_results").and_then(serde_json::Value::as_u64).unwrap_or(0) as u32;
     let mut messages = Vec::new();
     for m in tab.get("messages").and_then(serde_json::Value::as_array).into_iter().flatten() {
-        let group = if m.is_array() { serde_json::from_value::<Vec<Message>>(m.clone()) } else { serde_json::from_value::<Message>(m.clone()).map(|x| vec![x]) };
+        let group =
+            if m.is_array() { serde_json::from_value::<Vec<Message>>(m.clone()) } else { serde_json::from_value::<Message>(m.clone()).map(|x| vec![x]) };
         if let Ok(g) = group {
             messages.push(g);
         }
     }
-    Ok(SearchOutcome::Results(SearchResponse { total_results, messages, doing_deep_historical_index: v.get("doing_deep_historical_index").and_then(serde_json::Value::as_bool).unwrap_or(false) }))
+    Ok(SearchOutcome::Results(SearchResponse {
+        total_results,
+        messages,
+        doing_deep_historical_index: v.get("doing_deep_historical_index").and_then(serde_json::Value::as_bool).unwrap_or(false),
+    }))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -593,10 +589,7 @@ mod tests {
             offset: 25,
             ..Default::default()
         };
-        assert_eq!(
-            q.to_query(),
-            "content=a+b%26c&author_id=1&author_id=2&channel_id=3&has=image&sort_by=timestamp&sort_order=desc&offset=25"
-        );
+        assert_eq!(q.to_query(), "content=a+b%26c&author_id=1&author_id=2&channel_id=3&has=image&sort_by=timestamp&sort_order=desc&offset=25");
         assert!(!q.is_empty());
         assert!(SearchQuery::text("  ").is_empty());
         let r = SearchQuery { sort: SearchSort::Relevance, ..Default::default() };
@@ -660,10 +653,8 @@ mod tests {
 
     #[test]
     fn gif_shapes() {
-        let t: GifTrending = serde_json::from_str(
-            r#"{"categories":[{"name":"happy","src":"https://m/x.mp4"}],"gifs":[{"type":"gif","src":"https://m/t.mp4"}]}"#,
-        )
-        .unwrap();
+        let t: GifTrending =
+            serde_json::from_str(r#"{"categories":[{"name":"happy","src":"https://m/x.mp4"}],"gifs":[{"type":"gif","src":"https://m/t.mp4"}]}"#).unwrap();
         assert_eq!(t.categories[0].name, "happy");
         let g: Vec<Gif> = serde_json::from_str(
             r#"[{"id":"1","title":"t","url":"https://tenor.com/v","src":"https://m/a.mp4","gif_src":"https://m/a.gif","width":220,"height":124,"preview":"https://m/p.png"}]"#,

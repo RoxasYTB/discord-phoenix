@@ -87,12 +87,8 @@ fn read_trim(path: &str) -> Option<String> {
 }
 
 pub fn os_release_name(text: &str) -> Option<String> {
-    let field = |key: &str| {
-        text.lines()
-            .find_map(|l| l.strip_prefix(key)?.strip_prefix('='))
-            .map(|v| v.trim().trim_matches('"').to_owned())
-            .filter(|v| !v.is_empty())
-    };
+    let field =
+        |key: &str| text.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix('=')).map(|v| v.trim().trim_matches('"').to_owned()).filter(|v| !v.is_empty());
     field("PRETTY_NAME").or_else(|| field("NAME"))
 }
 
@@ -128,12 +124,7 @@ pub fn session_description() -> String {
         return "native".to_owned();
     }
     let var = |k: &str| std::env::var(k).ok();
-    session_from(
-        var("WAYLAND_DISPLAY").as_deref(),
-        var("DISPLAY").as_deref(),
-        var("XDG_SESSION_TYPE").as_deref(),
-        var("XDG_CURRENT_DESKTOP").as_deref(),
-    )
+    session_from(var("WAYLAND_DISPLAY").as_deref(), var("DISPLAY").as_deref(), var("XDG_SESSION_TYPE").as_deref(), var("XDG_CURRENT_DESKTOP").as_deref())
 }
 
 #[cfg(test)]

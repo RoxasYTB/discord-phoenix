@@ -31,7 +31,16 @@ thread_local! {
 }
 
 fn menu_group_label(t: SharedString) -> AnyElement {
-    div().px(z(8.)).pt(z(6.)).pb(z(2.)).text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_MUTED))).child(t).into_any_element()
+    div()
+        .px(z(8.))
+        .pt(z(6.))
+        .pb(z(2.))
+        .text_size(z(12.))
+        .line_height(z(16.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(c(tok(idx::TEXT_MUTED)))
+        .child(t)
+        .into_any_element()
 }
 
 fn search_input(forum: Id) -> Option<gpui::Entity<InputState>> {
@@ -88,20 +97,12 @@ pub fn open_by_id(app: &mut PhoenixApp, thread: Id, cx: &mut Context<PhoenixApp>
 }
 
 pub fn is_op(app: &PhoenixApp, channel: Id, author: Id) -> bool {
-    let Some(forum) = app
-        .channels
-        .get(&channel)
-        .and_then(|ch| ch.parent)
-        .or_else(|| app.nav.find_thread(channel).and_then(|t| t.parent))
-        .or_else(|| open_forum(app))
+    let Some(forum) =
+        app.channels.get(&channel).and_then(|ch| ch.parent).or_else(|| app.nav.find_thread(channel).and_then(|t| t.parent)).or_else(|| open_forum(app))
     else {
         return false;
     };
-    app.parity
-        .forums
-        .get(&forum)
-        .and_then(|v| v.posts.iter().chain(v.archived.iter()).find(|p| p.thread == channel))
-        .is_some_and(|p| p.owner == Some(author))
+    app.parity.forums.get(&forum).and_then(|v| v.posts.iter().chain(v.archived.iter()).find(|p| p.thread == channel)).is_some_and(|p| p.owner == Some(author))
 }
 
 pub fn follow_button() -> gpui::Stateful<gpui::Div> {
@@ -320,21 +321,19 @@ impl PhoenixApp {
         }
         let Some(comp) = self.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) else { return };
         comp.sending = true;
-        self.parity_request(ParityRequest::CreatePost { forum, title: title.clone(), content, tags }, cx, move |a, res, cx| {
-            match res {
-                Ok(ParityReply::Channel(t)) => {
-                    if let Some(v) = a.parity.forums.get_mut(&forum) {
-                        v.compose = None;
-                    }
-                    a.load_forum(forum, true, cx);
-                    a.parity.forum_open_thread = Some(ThreadRef { id: t, name: title.into(), message_count: 0 });
+        self.parity_request(ParityRequest::CreatePost { forum, title: title.clone(), content, tags }, cx, move |a, res, cx| match res {
+            Ok(ParityReply::Channel(t)) => {
+                if let Some(v) = a.parity.forums.get_mut(&forum) {
+                    v.compose = None;
                 }
-                Ok(_) => {}
-                Err(e) => {
-                    if let Some(comp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
-                        comp.sending = false;
-                        comp.error = Some(e.0.into());
-                    }
+                a.load_forum(forum, true, cx);
+                a.parity.forum_open_thread = Some(ThreadRef { id: t, name: title.into(), message_count: 0 });
+            }
+            Ok(_) => {}
+            Err(e) => {
+                if let Some(comp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
+                    comp.sending = false;
+                    comp.error = Some(e.0.into());
                 }
             }
         });
@@ -461,9 +460,7 @@ fn guidelines(app: &PhoenixApp, forum: Id, text: &str, full: bool, cx: &mut Cont
                 .text_color(c(tok(idx::TEXT_STRONG)))
                 .child(gpui::svg().path(crate::icons::path("forum/book-check")).size(z(20.)).flex_none().text_color(c(tok(idx::TEXT_STRONG))))
                 .child(crate::t!("forum.guide"))
-                .when(manage, |d| {
-                    d.child(small_icon("forum-guide-edit", "pen").on_click(cx.listener(move |a, _, _, cx| a.open_channel_settings(forum, cx))))
-                }),
+                .when(manage, |d| d.child(small_icon("forum-guide-edit", "pen").on_click(cx.listener(move |a, _, _, cx| a.open_channel_settings(forum, cx))))),
         )
         .child(small_icon("forum-guide-close", "close-small").on_click(cx.listener(move |a, _, _, cx| {
             if let Some(v) = a.parity.forums.get_mut(&forum) {
@@ -515,25 +512,17 @@ fn guidelines(app: &PhoenixApp, forum: Id, text: &str, full: bool, cx: &mut Cont
                 ),
             )
     });
-    div()
-        .mt(z(16.))
-        .p(z(12.))
-        .rounded(z(12.))
-        .bg(c(tok(idx::BACKGROUND_BASE_LOW)))
-        .border_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE)))
-        .child(header)
-        .child(
-            div()
-                .relative()
-                .mt(z(12.))
-                .p(z(16.))
-                .rounded(z(8.))
-                .overflow_hidden()
-                .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
-                .child(div().when(!full, |d| d.max_h(z(220.))).overflow_hidden().child(body))
-                .children(more),
-        )
+    div().mt(z(16.)).p(z(12.)).rounded(z(12.)).bg(c(tok(idx::BACKGROUND_BASE_LOW))).border_1().border_color(c(tok(idx::BORDER_SUBTLE))).child(header).child(
+        div()
+            .relative()
+            .mt(z(12.))
+            .p(z(16.))
+            .rounded(z(8.))
+            .overflow_hidden()
+            .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
+            .child(div().when(!full, |d| d.max_h(z(220.))).overflow_hidden().child(body))
+            .children(more),
+    )
 }
 
 fn tag_pill(t: &ForumTag, on: bool) -> gpui::Div {
@@ -565,8 +554,7 @@ fn pill_states(d: gpui::Stateful<gpui::Div>, on: bool) -> gpui::Stateful<gpui::D
     if on {
         return d;
     }
-    d.hover(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))))
-        .active(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE))))
+    d.hover(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))).active(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE))))
 }
 
 fn card_tag(t: &ForumTag) -> gpui::Div {
@@ -610,9 +598,7 @@ pub(crate) fn is_unread(app: &PhoenixApp, p: &ForumPost) -> bool {
 fn footer_time(now: i64, p: &ForumPost) -> String {
     if p.pinned {
         let ts = snowflake_time(p.thread);
-        return chrono::DateTime::from_timestamp(ts, 0)
-            .map(|d| crate::i18n::long_date(d.with_timezone(&chrono::Local).date_naive()))
-            .unwrap_or_default();
+        return chrono::DateTime::from_timestamp(ts, 0).map(|d| crate::i18n::long_date(d.with_timezone(&chrono::Local).date_naive())).unwrap_or_default();
     }
     let ts = snowflake_time(p.last_message.unwrap_or(p.thread));
     if now - ts > 30 * 86_400 { crate::t!("forum.over_30d").to_string() } else { ago(now, ts) }
@@ -648,25 +634,20 @@ fn card_reaction(r: &crate::model::Reaction, count: bool, thread: Id, msg: Optio
                 a.toggle_reaction(thread, m, &rc, cx);
             }
         }))
-        .child(
-            div()
-                .py(z(1.))
-                .px(z(6.))
-                .flex()
-                .items_center()
-                .child(div().my(z(2.)).child(crate::media::emoji::emoji_element(&r.emoji, 20.)))
-                .when(count, |d| {
-                    d.child(
-                        div()
-                            .ml(z(6.))
-                            .text_size(z(14.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(c(tok(if r.me { idx::REACTION_TEXT_REACTED_DEFAULT } else { idx::TEXT_SUBTLE })))
-                            .group_hover("card-reaction", |s| s.text_color(c(tok(idx::REACTION_TEXT_HOVER))))
-                            .child(r.count.to_string()),
-                    )
-                }),
-        )
+        .child(div().py(z(1.)).px(z(6.)).flex().items_center().child(div().my(z(2.)).child(crate::media::emoji::emoji_element(&r.emoji, 20.))).when(
+            count,
+            |d| {
+                d.child(
+                    div()
+                        .ml(z(6.))
+                        .text_size(z(14.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(c(tok(if r.me { idx::REACTION_TEXT_REACTED_DEFAULT } else { idx::TEXT_SUBTLE })))
+                        .group_hover("card-reaction", |s| s.text_color(c(tok(idx::REACTION_TEXT_HOVER))))
+                        .child(r.count.to_string()),
+                )
+            },
+        ))
 }
 
 fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -675,8 +656,7 @@ fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &
     let author = author_id.and_then(|u| app.users.get(&u));
     let guild = app.channels.get(&p.thread).and_then(|ch| ch.guild).or(app.selected_guild);
     let (author_color, author_gradient) = author_id.map_or((None, None), |u| app.author_role_style_in(guild, u));
-    let preview: SharedString =
-        first.map(|m| crate::ui::chat::reply_preview_text(app, &preview_text(&m.content).into())).unwrap_or_default();
+    let preview: SharedString = first.map(|m| crate::ui::chat::reply_preview_text(app, &preview_text(&m.content).into())).unwrap_or_default();
     let thumb = first.and_then(|m| m.attachments.iter().find(|a| a.kind == AttachmentKind::Image)).map(|a| a.url.clone());
     let reaction = first.and_then(|m| m.reactions.iter().max_by_key(|r| r.count)).cloned();
     let first_id = first.map(|m| m.id);
@@ -691,130 +671,132 @@ fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &
     let title_color = if unread { c(Palette::TEXT_HEADER) } else { c(Palette::TEXT_MUTED) };
     let preview_color = if unread { c(Palette::TEXT_NORMAL) } else { c(Palette::TEXT_MUTED) };
     let post_tags: Vec<&ForumTag> = p.tags.iter().filter_map(|t| tags.iter().find(|x| x.id == *t)).collect();
-    div().pb(z(16.)).child(
-        div()
-            .id(("forum-post", p.thread.0))
-            .py(z(12.))
-            .px(z(10.))
-            .rounded(z(12.))
-            .bg(c(Palette::BG_BASE_LOW))
-            .border_1()
-            .border_color(c(tok(idx::BORDER_SUBTLE)))
-            .cursor_pointer()
-            .hover(|s| {
-                s.bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).border_color(c(tok(idx::BORDER_STRONG))).shadow(crate::ui::inbox::low_shadow())
-            })
-            .active(|s| {
-                s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
-                    .border_color(c(tok(idx::BORDER_STRONG)))
-                    .shadow(crate::ui::inbox::popout_shadow())
-            })
-            .flex()
-            .items_start()
-            .on_click(cx.listener(move |a, _, w, cx| a.open_thread(r.clone(), w, cx)))
-            .when_some(open_forum(app), |d, forum| {
-                let post = p.clone();
-                d.on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| crate::ui::thread_menu::open_post(post.clone(), forum, ev.position, w))
-            })
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .when(p.pinned || !post_tags.is_empty(), |d| {
-                        d.child(
+    div()
+        .pb(z(16.))
+        .child(
+            div()
+                .id(("forum-post", p.thread.0))
+                .py(z(12.))
+                .px(z(10.))
+                .rounded(z(12.))
+                .bg(c(Palette::BG_BASE_LOW))
+                .border_1()
+                .border_color(c(tok(idx::BORDER_SUBTLE)))
+                .cursor_pointer()
+                .hover(|s| s.bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).border_color(c(tok(idx::BORDER_STRONG))).shadow(crate::ui::inbox::low_shadow()))
+                .active(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))).border_color(c(tok(idx::BORDER_STRONG))).shadow(crate::ui::inbox::popout_shadow()))
+                .flex()
+                .items_start()
+                .on_click(cx.listener(move |a, _, w, cx| a.open_thread(r.clone(), w, cx)))
+                .when_some(open_forum(app), |d, forum| {
+                    let post = p.clone();
+                    d.on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| crate::ui::thread_menu::open_post(post.clone(), forum, ev.position, w))
+                })
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .when(p.pinned || !post_tags.is_empty(), |d| {
+                            d.child(
+                                div()
+                                    .h(z(24.))
+                                    .mb(z(8.))
+                                    .flex()
+                                    .items_center()
+                                    .gap(z(8.))
+                                    .overflow_hidden()
+                                    .when(p.pinned, |d| {
+                                        d.child(
+                                            div()
+                                                .size(z(22.))
+                                                .flex_none()
+                                                .rounded_full()
+                                                .bg(c(Palette::BLURPLE))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .child(icon(Icon::Pin, 14., gpui::white())),
+                                        )
+                                    })
+                                    .children(post_tags.iter().map(|t| card_tag(t))),
+                            )
+                        })
+                        .child(
                             div()
-                                .h(z(24.))
-                                .mb(z(8.))
+                                .pb(z(6.))
+                                .text_size(z(20.))
+                                .line_height(z(24.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(title_color)
+                                .line_clamp(2)
+                                .child(SharedString::from(p.title.clone())),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .h(z(18.))
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .min_w_0()
+                                .overflow_hidden()
+                                .child({
+                                    let author_name: SharedString = author.map(|u| u.display_name.clone()).unwrap_or_else(|| crate::t!("forum.deleted_user"));
+                                    crate::fonts::styled_name(
+                                        div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(author_color.map(c).unwrap_or(c(Palette::TEXT_HEADER))),
+                                        author,
+                                        false,
+                                    )
+                                    .child(crate::fonts::role_name_text(
+                                        author_name,
+                                        author,
+                                        14.,
+                                        guild.is_some(),
+                                        author_gradient,
+                                    ))
+                                })
+                                .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(":"))
+                                .child(
+                                    div()
+                                        .ml(z(4.))
+                                        .min_w_0()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_ellipsis()
+                                        .whitespace_nowrap()
+                                        .overflow_hidden()
+                                        .text_color(preview_color)
+                                        .child(preview),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .mt(z(8.))
+                                .h(z(20.))
                                 .flex()
                                 .items_center()
                                 .gap(z(8.))
-                                .overflow_hidden()
-                                .when(p.pinned, |d| {
-                                    d.child(
-                                        div()
-                                            .size(z(22.))
-                                            .flex_none()
-                                            .rounded_full()
-                                            .bg(c(Palette::BLURPLE))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(icon(Icon::Pin, 14., gpui::white())),
-                                    )
-                                })
-                                .children(post_tags.iter().map(|t| card_tag(t))),
-                        )
-                    })
-                    .child(
-                        div()
-                            .pb(z(6.))
-                            .text_size(z(20.))
-                            .line_height(z(24.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(title_color)
-                            .line_clamp(2)
-                            .child(SharedString::from(p.title.clone())),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .h(z(18.))
-                            .text_size(z(14.))
-                            .line_height(z(18.))
-                            .min_w_0()
-                            .overflow_hidden()
-                            .child({
-                                let author_name: SharedString = author.map(|u| u.display_name.clone()).unwrap_or_else(|| crate::t!("forum.deleted_user"));
-                                crate::fonts::styled_name(
-                                    div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(author_color.map(c).unwrap_or(c(Palette::TEXT_HEADER))),
-                                    author,
-                                    false,
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .text_color(c(Palette::TEXT_NORMAL))
+                                .when_some(default_reaction, |d, re| d.child(card_reaction(&re, false, p.thread, first_id, cx)))
+                                .when_some(reaction, |d, re| d.child(card_reaction(&re, true, p.thread, first_id, cx)))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(z(4.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(gpui::svg().path(crate::icons::path("chat")).size(z(14.)).flex_none().text_color(c(Palette::TEXT_NORMAL)))
+                                        .child(p.message_count.to_string()),
                                 )
-                                .child(crate::fonts::role_name_text(author_name, author, 14., guild.is_some(), author_gradient))
-                            })
-                            .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(":"))
-                            .child(
-                                div()
-                                    .ml(z(4.))
-                                    .min_w_0()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_ellipsis()
-                                    .whitespace_nowrap()
-                                    .overflow_hidden()
-                                    .text_color(preview_color)
-                                    .child(preview),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt(z(8.))
-                            .h(z(20.))
-                            .flex()
-                            .items_center()
-                            .gap(z(8.))
-                            .text_size(z(14.))
-                            .line_height(z(18.))
-                            .text_color(c(Palette::TEXT_NORMAL))
-                            .when_some(default_reaction, |d, re| d.child(card_reaction(&re, false, p.thread, first_id, cx)))
-                            .when_some(reaction, |d, re| d.child(card_reaction(&re, true, p.thread, first_id, cx)))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(z(4.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(gpui::svg().path(crate::icons::path("chat")).size(z(14.)).flex_none().text_color(c(Palette::TEXT_NORMAL)))
-                                    .child(p.message_count.to_string()),
-                            )
-                            .child(div().text_color(c(tok(idx::BORDER_SUBTLE))).child("\u{2022}"))
-                            .child(footer_time(now, p)),
-                    ),
-            )
-            .when_some(thumb, |d, u| d.child(img(u).ml(z(12.)).size(z(72.)).flex_none().rounded(z(8.)).object_fit(gpui::ObjectFit::Cover))),
-    )
-    .into_any_element()
+                                .child(div().text_color(c(tok(idx::BORDER_SUBTLE))).child("\u{2022}"))
+                                .child(footer_time(now, p)),
+                        ),
+                )
+                .when_some(thumb, |d, u| d.child(img(u).ml(z(12.)).size(z(72.)).flex_none().rounded(z(8.)).object_fit(gpui::ObjectFit::Cover))),
+        )
+        .into_any_element()
 }
 
 fn media_tile(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -871,7 +853,9 @@ fn media_tile(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: 
                         .text_size(z(12.))
                         .text_color(c(Palette::TEXT_MUTED))
                         .child(div().min_w_0().text_ellipsis().child(author.map(|u| u.display_name.to_string()).unwrap_or_default()))
-                        .child(div().flex().items_center().gap(z(4.)).child(icon(Icon::Threads, 14., c(Palette::INTERACTIVE))).child(p.message_count.to_string()))
+                        .child(
+                            div().flex().items_center().gap(z(4.)).child(icon(Icon::Threads, 14., c(Palette::INTERACTIVE))).child(p.message_count.to_string()),
+                        )
                         .child(ago(now, activity)),
                 ),
         )
@@ -893,9 +877,8 @@ fn compose_card(forum: Id, comp: &ForumCompose, tags: &[ForumTag], has_guide: bo
         let on = comp.tags.contains(&t.id);
         let id = t.id;
         tag_list = tag_list.child(
-            pill_states(tag_pill(t, on).h(z(24.)).px(z(8.)).text_size(z(12.)).line_height(z(16.)).id(("compose-tag", id.0)), on)
-                .cursor_pointer()
-                .on_click(cx.listener(move |a, _, _, cx| {
+            pill_states(tag_pill(t, on).h(z(24.)).px(z(8.)).text_size(z(12.)).line_height(z(16.)).id(("compose-tag", id.0)), on).cursor_pointer().on_click(
+                cx.listener(move |a, _, _, cx| {
                     if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
                         if let Some(i) = cmp.tags.iter().position(|x| *x == id) {
                             cmp.tags.remove(i);
@@ -904,7 +887,8 @@ fn compose_card(forum: Id, comp: &ForumCompose, tags: &[ForumTag], has_guide: bo
                         }
                     }
                     cx.notify();
-                })),
+                }),
+            ),
         );
     }
     div()
@@ -951,13 +935,7 @@ fn compose_card(forum: Id, comp: &ForumCompose, tags: &[ForumTag], has_guide: bo
                                 .text_color(c(tok(idx::TEXT_STRONG)))
                                 .child(Input::new(&comp.title).appearance(false).bordered(false).text_size(z(20.)).line_height(z(24.))),
                         )
-                        .child(
-                            div()
-                                .min_h(z(80.))
-                                .text_size(z(16.))
-                                .line_height(z(22.))
-                                .child(Textarea::new(&comp.body).appearance(false).bordered(false)),
-                        ),
+                        .child(div().min_h(z(80.)).text_size(z(16.)).line_height(z(22.)).child(Textarea::new(&comp.body).appearance(false).bordered(false))),
                 )
                 .child(
                     div()
@@ -973,23 +951,19 @@ fn compose_card(forum: Id, comp: &ForumCompose, tags: &[ForumTag], has_guide: bo
                         .child(gpui::svg().path(crate::icons::path("image-plus")).size(z(32.)).flex_none().text_color(c(Palette::INTERACTIVE))),
                 ),
         )
-        .when_some(comp.error.clone(), |d, er| {
-            d.child(div().px(z(46.)).pt(z(4.)).text_size(z(14.)).text_color(c(Palette::TEXT_CRITICAL)).child(er))
-        })
-        .child(
-            div().px(z(8.)).when(!tags.is_empty(), |d| {
-                d.child(
-                    div()
-                        .mt(z(16.))
-                        .mb(z(12.))
-                        .flex()
-                        .items_center()
-                        .gap(z(8.))
-                        .child(gpui::svg().path(crate::icons::path("forum/tag")).size(z(16.)).flex_none().text_color(c(Palette::INTERACTIVE)))
-                        .child(tag_list),
-                )
-            }),
-        )
+        .when_some(comp.error.clone(), |d, er| d.child(div().px(z(46.)).pt(z(4.)).text_size(z(14.)).text_color(c(Palette::TEXT_CRITICAL)).child(er)))
+        .child(div().px(z(8.)).when(!tags.is_empty(), |d| {
+            d.child(
+                div()
+                    .mt(z(16.))
+                    .mb(z(12.))
+                    .flex()
+                    .items_center()
+                    .gap(z(8.))
+                    .child(gpui::svg().path(crate::icons::path("forum/tag")).size(z(16.)).flex_none().text_color(c(Palette::INTERACTIVE)))
+                    .child(tag_list),
+            )
+        }))
         .child(div().h(px(1.)).bg(c(tok(idx::BORDER_SUBTLE))))
         .child(
             div()
@@ -1000,9 +974,13 @@ fn compose_card(forum: Id, comp: &ForumCompose, tags: &[ForumTag], has_guide: bo
                 .items_center()
                 .gap(z(8.))
                 .child(
-                    div().size(z(32.)).flex_none().flex().items_center().justify_center().child(
-                        gpui::svg().path(crate::icons::path("emoji")).size(z(18.)).flex_none().text_color(c(Palette::INTERACTIVE)),
-                    ),
+                    div()
+                        .size(z(32.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(gpui::svg().path(crate::icons::path("emoji")).size(z(18.)).flex_none().text_color(c(Palette::INTERACTIVE))),
                 )
                 .child(div().flex_1())
                 .when(has_guide, |d| d.child(guide_button(forum, "compose-guide", cx)))
@@ -1157,16 +1135,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         );
     }
 
-    let mut col = div()
-        .id("forum-list")
-        .track_scroll(&LIST_SCROLL.with(|h| h.clone()))
-        .size_full()
-        .overflow_y_scroll()
-        .pl(z(16.))
-        .pr(z(32.))
-        .flex()
-        .flex_col()
-        .child(
+    let mut col =
+        div().id("forum-list").track_scroll(&LIST_SCROLL.with(|h| h.clone())).size_full().overflow_y_scroll().pl(z(16.)).pr(z(32.)).flex().flex_col().child(
             div()
                 .pb(z(16.))
                 .child(match v.compose.as_ref() {
@@ -1227,15 +1197,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     active.sort_by_key(|p| !p.pinned);
     let older: Vec<&ForumPost> = v.archived.iter().filter(|p| post_matches(p, &tags, &query)).collect();
     if !query.is_empty() && active.is_empty() && older.is_empty() && !(v.posts.is_empty() && v.archived.is_empty()) {
-        col = col.child(
-            div()
-                .p(z(32.))
-                .flex()
-                .justify_center()
-                .text_size(z(14.))
-                .text_color(c(Palette::TEXT_MUTED))
-                .child(crate::t!("forum.no_match")),
-        );
+        col = col.child(div().p(z(32.)).flex().justify_center().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("forum.no_match")));
     }
     let older_header = || {
         div()
@@ -1250,9 +1212,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     if app.backend.is_media_channel(forum) || v.gallery {
         col = col.child(div().flex().flex_wrap().gap(z(16.)).children(active.iter().map(|p| media_tile(app, p, &tags, now, cx))));
         if !older.is_empty() {
-            col = col
-                .child(older_header())
-                .child(div().flex().flex_wrap().gap(z(16.)).children(older.iter().map(|p| media_tile(app, p, &tags, now, cx))));
+            col = col.child(older_header()).child(div().flex().flex_wrap().gap(z(16.)).children(older.iter().map(|p| media_tile(app, p, &tags, now, cx))));
         }
     } else {
         for p in active {
@@ -1306,7 +1266,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         }
         items.push(MenuItem::Separator);
         let reset = e.clone();
-        items.push(MenuItem::action(crate::t!("forum.reset_view"), None, move |_, _, cx: &mut gpui::App| reset.update(cx, |a, cx| a.reset_forum_view(forum, cx))));
+        items.push(MenuItem::action(crate::t!("forum.reset_view"), None, move |_, _, cx: &mut gpui::App| {
+            reset.update(cx, |a, cx| a.reset_forum_view(forum, cx))
+        }));
         let dismiss: crate::ui::context_menu::Dismiss = std::rc::Rc::new(move |w, cx| {
             e.update(cx, |a, _| {
                 if let Some(v) = a.parity.forums.get_mut(&forum) {
@@ -1355,24 +1317,18 @@ pub fn compose_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
     for t in tags.iter().filter(|t| !t.moderated) {
         let on = comp.tags.contains(&t.id);
         let id = t.id;
-        tag_row = tag_row.child(
-            pill_states(tag_pill(t, on).id(("compose-tag", id.0)), on)
-                .cursor_pointer()
-                .on_click(cx.listener(move |a, _, _, cx| {
-                    if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
-                        if let Some(i) = cmp.tags.iter().position(|x| *x == id) {
-                            cmp.tags.remove(i);
-                        } else if cmp.tags.len() < 5 {
-                            cmp.tags.push(id);
-                        }
-                    }
-                    cx.notify();
-                })),
-        );
+        tag_row = tag_row.child(pill_states(tag_pill(t, on).id(("compose-tag", id.0)), on).cursor_pointer().on_click(cx.listener(move |a, _, _, cx| {
+            if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
+                if let Some(i) = cmp.tags.iter().position(|x| *x == id) {
+                    cmp.tags.remove(i);
+                } else if cmp.tags.len() < 5 {
+                    cmp.tags.push(id);
+                }
+            }
+            cx.notify();
+        })));
     }
-    let field = |el: AnyElement, h: f32| {
-        div().min_h(px(h)).px(z(10.)).py(z(8.)).rounded(z(8.)).bg(c(Palette::INPUT_BG)).text_size(z(16.)).child(el)
-    };
+    let field = |el: AnyElement, h: f32| div().min_h(px(h)).px(z(10.)).py(z(8.)).rounded(z(8.)).bg(c(Palette::INPUT_BG)).text_size(z(16.)).child(el);
     let close2 = close.clone();
     let card = div()
         .w(z(560.))
@@ -1392,7 +1348,8 @@ pub fn compose_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
                 .child(field(Input::new(&comp.title).appearance(false).bordered(false).into_any_element(), 40.))
                 .child(field(Textarea::new(&comp.body).appearance(false).bordered(false).into_any_element(), 100.))
                 .when(!tags.is_empty(), |d| {
-                    d.child(div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("forum.tags"))).child(tag_row)
+                    d.child(div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("forum.tags")))
+                        .child(tag_row)
                 })
                 .when_some(comp.error.clone(), |d, er| d.child(div().text_size(z(14.)).text_color(c(Palette::TEXT_CRITICAL)).child(er))),
         )
@@ -1476,7 +1433,8 @@ mod tests {
         apply_defaults(&mut v, &d);
         assert_eq!(v.sort, ForumSort::Created);
         assert!(v.gallery && v.match_all);
-        let plain: phoenix_api::models::Channel = serde_json::from_str(r#"{"id":"2","type":15,"default_reaction_emoji":{"emoji_id":null,"emoji_name":null}}"#).unwrap();
+        let plain: phoenix_api::models::Channel =
+            serde_json::from_str(r#"{"id":"2","type":15,"default_reaction_emoji":{"emoji_id":null,"emoji_name":null}}"#).unwrap();
         let d = crate::commands::ForumSettings::from_channel(&plain);
         assert_eq!(d, crate::commands::ForumSettings::default());
     }

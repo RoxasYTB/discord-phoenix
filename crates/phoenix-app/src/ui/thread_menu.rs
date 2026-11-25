@@ -14,14 +14,8 @@ thread_local! {
     static POST: RefCell<Option<(crate::commands::ForumPost, Id, Point<Pixels>)>> = const { RefCell::new(None) };
 }
 
-const MUTE_DURATIONS: [(i64, &str); 6] = [
-    (900, "menu.mute.15m"),
-    (3600, "menu.mute.1h"),
-    (10_800, "menu.mute.3h"),
-    (28_800, "menu.mute.8h"),
-    (86_400, "menu.mute.24h"),
-    (-1, "menu.mute.forever"),
-];
+const MUTE_DURATIONS: [(i64, &str); 6] =
+    [(900, "menu.mute.15m"), (3600, "menu.mute.1h"), (10_800, "menu.mute.3h"), (28_800, "menu.mute.8h"), (86_400, "menu.mute.24h"), (-1, "menu.mute.forever")];
 const NOTIFY: [(u8, &str); 3] = [(2, "menu.notify.all"), (4, "thread.notify_mentions"), (8, "menu.notify.nothing")];
 
 pub fn open_post(post: crate::commands::ForumPost, forum: Id, pos: Point<Pixels>, window: &mut Window) {
@@ -139,11 +133,14 @@ pub fn items(app: &PhoenixApp, e: &Entity<PhoenixApp>, t: Id, place: Place) -> V
     match place {
         Place::ContextMenu => {
             let (unread, _) = crate::ui::sidebar::thread_unread(app, t);
-            push_group(&mut out, vec![if unread {
-                act(e, crate::t!("menu.mark_read"), move |a, _, cx| a.mark_nav_read(crate::ui::nav_menus::Target::Thread(t), cx))
-            } else {
-                MenuItem::disabled(crate::t!("menu.mark_read"), None)
-            }]);
+            push_group(
+                &mut out,
+                vec![if unread {
+                    act(e, crate::t!("menu.mark_read"), move |a, _, cx| a.mark_nav_read(crate::ui::nav_menus::Target::Thread(t), cx))
+                } else {
+                    MenuItem::disabled(crate::t!("menu.mark_read"), None)
+                }],
+            );
             push_group(&mut out, vec![crate::actions::channel::favorite_item(app, e, t)]);
             push_group(&mut out, [archive, lock, edit, link].into_iter().flatten().collect());
             push_group(&mut out, vec![mute_item(app, e, t), notify_item(app, e, t)]);
@@ -255,7 +252,8 @@ fn render_post(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElem
         let pinned = p.pinned;
         items.push(act(&e, crate::t!(if pinned { "menu.post.unpin" } else { "menu.post.pin" }), move |a, _, cx| a.set_thread_pinned(t, !pinned, cx)));
         let e2 = e.clone();
-        items.push(MenuItem::danger(crate::t!("menu.post.delete"), None, move |_, _, cx: &mut App| e2.update(cx, |a, cx| a.confirm_delete_thread(t, true, cx))));
+        items
+            .push(MenuItem::danger(crate::t!("menu.post.delete"), None, move |_, _, cx: &mut App| e2.update(cx, |a, cx| a.confirm_delete_thread(t, true, cx))));
     }
     if app.prefs.synced.developer_mode {
         items.push(MenuItem::Separator);

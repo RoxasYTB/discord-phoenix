@@ -137,16 +137,7 @@ pub enum ParityRequest {
     RunCommand { guild: Option<Id>, channel: Id, command: Value, options: Value, nonce: u64 },
     Autocomplete { guild: Option<Id>, channel: Id, command: Value, options: Value, nonce: u64 },
     ContextCommand { guild: Option<Id>, channel: Id, command: Value, target: Id, nonce: u64 },
-    Component {
-        guild: Option<Id>,
-        channel: Id,
-        message: Id,
-        app: Id,
-        flags: u64,
-        custom_id: String,
-        kind: u8,
-        values: Option<Vec<String>>,
-    },
+    Component { guild: Option<Id>, channel: Id, message: Id, app: Id, flags: u64, custom_id: String, kind: u8, values: Option<Vec<String>> },
     ModalSubmit { guild: Option<Id>, channel: Id, app: Id, modal: Id, custom_id: String, fields: Vec<(String, String)> },
     Mentions { before: Option<Id>, guild: Option<Id>, everyone: bool, roles: bool },
     DismissMention(Id),
@@ -272,11 +263,7 @@ mod tests {
                 app.apply_ready(first, cx);
                 let g = app.guilds[0].id;
                 app.select_guild(Some(g), cx);
-                let ch = app.guild_channels[&g]
-                    .iter()
-                    .copied()
-                    .find(|c| app.channels[c].kind == crate::model::ChannelKind::Text)
-                    .unwrap();
+                let ch = app.guild_channels[&g].iter().copied().find(|c| app.channels[c].kind == crate::model::ChannelKind::Text).unwrap();
                 app.select_channel(ch, cx);
                 app.guilds.clear();
                 on_resync(app, Resync(ready()), cx);
@@ -320,9 +307,7 @@ mod tests {
 
 pub fn parse_event(v: &serde_json::Value) -> Option<GuildEvent> {
     let sid = |k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
-    let time = |k: &str| {
-        v.get(k).and_then(|x| x.as_str()).and_then(|x| chrono::DateTime::parse_from_rfc3339(x).ok()).map(|d| d.timestamp())
-    };
+    let time = |k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| chrono::DateTime::parse_from_rfc3339(x).ok()).map(|d| d.timestamp());
     let s = |k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_owned);
     Some(GuildEvent {
         id: sid("id")?,

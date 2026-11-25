@@ -25,16 +25,12 @@ pub fn svg(path: &str) -> Option<String> {
     let body = match path.strip_prefix("status/")?.strip_suffix(".svg")? {
         "online" => CIRCLE.to_owned(),
         "offline" => format!("{CIRCLE} M75 50 A25 25 0 1 0 25 50 A25 25 0 1 0 75 50 Z"),
-        "dnd" => format!(
-            "{CIRCLE} M25 37.5 L75 37.5 A12.5 12.5 0 0 1 75 62.5 L25 62.5 A12.5 12.5 0 0 1 25 37.5 Z"
-        ),
+        "dnd" => format!("{CIRCLE} M25 37.5 L75 37.5 A12.5 12.5 0 0 1 75 62.5 L25 62.5 A12.5 12.5 0 0 1 25 37.5 Z"),
         "streaming" => format!("{CIRCLE} M35 25 L78.301 50 L35 75 Z"),
         "idle" => idle(),
         _ => return None,
     };
-    Some(format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="white" fill-rule="evenodd" d="{body}"/></svg>"#
-    ))
+    Some(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="white" fill-rule="evenodd" d="{body}"/></svg>"#))
 }
 
 pub const MOBILE: &str = "status/mobile.svg";
@@ -43,11 +39,19 @@ pub const SWITCH_OFF: &str = "switch/off.svg";
 
 fn switch_icon(path: &str) -> Option<String> {
     let (a, b) = match path {
-        SWITCH_OFF => ("M4.10585 5.3837L5.37864 4.11091L11.884 10.61632L10.6112 11.88912L4.10585 5.3837Z", "M10.61632 4.11091L11.88912 5.3837L5.3837 11.88912L4.11091 10.61632L10.61632 4.11091Z"),
-        SWITCH_ON => ("M6.31649 11.88304L5.0437 10.61032L11.44792 4.20604L12.72072 5.47883L6.31649 11.88304Z", "M3.26914 8.87224L4.54194 7.59943L7.5588 10.61632L6.28601 11.88912L3.26914 8.87224Z"),
+        SWITCH_OFF => (
+            "M4.10585 5.3837L5.37864 4.11091L11.884 10.61632L10.6112 11.88912L4.10585 5.3837Z",
+            "M10.61632 4.11091L11.88912 5.3837L5.3837 11.88912L4.11091 10.61632L10.61632 4.11091Z",
+        ),
+        SWITCH_ON => (
+            "M6.31649 11.88304L5.0437 10.61032L11.44792 4.20604L12.72072 5.47883L6.31649 11.88304Z",
+            "M3.26914 8.87224L4.54194 7.59943L7.5588 10.61632L6.28601 11.88912L3.26914 8.87224Z",
+        ),
         _ => return None,
     };
-    Some(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="translate(4 4)" fill="white"><path d="{a}"/><path d="{b}"/></g></svg>"#))
+    Some(format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="translate(4 4)" fill="white"><path d="{a}"/><path d="{b}"/></g></svg>"#
+    ))
 }
 
 const CIRCLE: &str = "M100 50 A50 50 0 1 0 0 50 A50 50 0 1 0 100 50 Z";

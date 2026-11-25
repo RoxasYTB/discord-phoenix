@@ -76,9 +76,7 @@ pub fn config_home() -> Option<PathBuf> {
 }
 
 pub fn cache_home() -> Option<PathBuf> {
-    absolute_env("XDG_CACHE_HOME")
-        .or_else(|| absolute_env("LOCALAPPDATA"))
-        .or_else(|| Some(home()?.join(".cache")))
+    absolute_env("XDG_CACHE_HOME").or_else(|| absolute_env("LOCALAPPDATA")).or_else(|| Some(home()?.join(".cache")))
 }
 
 pub fn config_dir() -> Option<PathBuf> {

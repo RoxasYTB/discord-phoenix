@@ -1,22 +1,22 @@
 pub mod account;
-pub mod nested;
-pub mod sessions;
 mod art;
 pub mod authorized_apps;
-pub mod connections;
 pub mod billing;
 mod boost;
-mod gift;
-mod pages;
-pub mod subscriptions;
-pub mod synced_map;
-pub mod effects;
-pub mod emoticons;
-pub(crate) mod profile_editor;
 pub mod collectible_picker;
 pub mod collectibles;
+pub mod connections;
+pub mod effects;
+pub mod emoticons;
+mod gift;
+pub mod nested;
+mod pages;
 pub mod profile_activity;
+pub(crate) mod profile_editor;
 pub mod profile_widgets;
+pub mod sessions;
+pub mod subscriptions;
+pub mod synced_map;
 mod view;
 pub(crate) mod voice;
 
@@ -209,11 +209,7 @@ impl LocalPrefs {
             saturation: f("saturation").map(|x| (x as u32).min(100)).unwrap_or(d.saturation),
             minimize_to_tray: b("minimize_to_tray", d.minimize_to_tray),
             beta_channel: b("beta_channel", d.beta_channel),
-            ui: v
-                .get("ui")
-                .and_then(Value::as_object)
-                .map(|o| o.iter().filter_map(|(k, v)| Some((k.clone(), v.as_u64()?))).collect())
-                .unwrap_or_default(),
+            ui: v.get("ui").and_then(Value::as_object).map(|o| o.iter().filter_map(|(k, v)| Some((k.clone(), v.as_u64()?))).collect()).unwrap_or_default(),
             trusted_domains: strings(v, "trusted_domains"),
             trusted_protocols: strings(v, "trusted_protocols"),
             collapsed_in_inbox: v

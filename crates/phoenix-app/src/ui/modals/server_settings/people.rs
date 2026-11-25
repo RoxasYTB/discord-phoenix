@@ -116,7 +116,9 @@ fn col_head(id: (&'static str, usize), label: SharedString, sorted: Option<bool>
         .gap(z(4.))
         .cursor_pointer()
         .child(text(label, 12., 16., FontWeight::SEMIBOLD, idx::TEXT_SUBTLE))
-        .when_some(sorted, |d, asc| d.child(gpui::svg().path(crate::icons::path(if asc { "chevron-up" } else { "chevron" })).size(z(16.)).text_color(c(tok(idx::ICON_SUBTLE)))))
+        .when_some(sorted, |d, asc| {
+            d.child(gpui::svg().path(crate::icons::path(if asc { "chevron-up" } else { "chevron" })).size(z(16.)).text_color(c(tok(idx::ICON_SUBTLE))))
+        })
         .on_click(cx.listener(move |_, _, _, cx| {
             with_state(|s| s.member_sort = s.member_sort.next(col));
             cx.notify();
@@ -137,8 +139,20 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .gap(z(16.))
         .border_b_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
-        .child(col_head(("ss-mcol", 0), crate::t!("gs.members.col_name"), matches!(sort, Sort::NameAsc | Sort::NameDesc).then_some(sort == Sort::NameAsc), None, cx))
-        .child(col_head(("ss-mcol", 1), crate::t!("gs.members.col_joined"), matches!(sort, Sort::JoinedAsc | Sort::JoinedDesc).then_some(sort == Sort::JoinedAsc), Some(110.), cx))
+        .child(col_head(
+            ("ss-mcol", 0),
+            crate::t!("gs.members.col_name"),
+            matches!(sort, Sort::NameAsc | Sort::NameDesc).then_some(sort == Sort::NameAsc),
+            None,
+            cx,
+        ))
+        .child(col_head(
+            ("ss-mcol", 1),
+            crate::t!("gs.members.col_joined"),
+            matches!(sort, Sort::JoinedAsc | Sort::JoinedDesc).then_some(sort == Sort::JoinedAsc),
+            Some(110.),
+            cx,
+        ))
         .child(div().w(z(110.)).flex_none().child(text(crate::t!("gs.members.col_age"), 12., 16., FontWeight::SEMIBOLD, idx::TEXT_SUBTLE)))
         .child(div().w(z(160.)).flex_none().child(text(crate::t!("gs.members.col_roles"), 12., 16., FontWeight::SEMIBOLD, idx::TEXT_SUBTLE)))
         .child(div().w(z(32.)).flex_none());
@@ -171,25 +185,23 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
                 .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap(z(12.))
-                        .child(crate::ui::avatar(u, 32.))
-                        .child(div().flex().flex_col().min_w_0().child(text(r.name.clone(), 14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG).truncate()).child(text(r.tag.clone(), 12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE).truncate())),
+                    div().flex_1().min_w_0().flex().items_center().gap(z(12.)).child(crate::ui::avatar(u, 32.)).child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            .child(text(r.name.clone(), 14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG).truncate())
+                            .child(text(r.tag.clone(), 12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE).truncate()),
+                    ),
                 )
                 .child(text(r.joined.map(ago).unwrap_or_default(), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).w(z(110.)).flex_none())
                 .child(text(ago(r.created), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).w(z(110.)).flex_none())
                 .child(roles)
-                .child(
-                    kit::icon_btn(("ss-member-more", i), "more-vertical", 32., 16., false).on_click(cx.listener(move |_, _, _, cx| {
-                        let k = mk.clone();
-                        with_state(|s| s.menu = if s.menu.as_deref() == Some(k.as_str()) { None } else { Some(k) });
-                        cx.notify();
-                    })),
-                )
+                .child(kit::icon_btn(("ss-member-more", i), "more-vertical", 32., 16., false).on_click(cx.listener(move |_, _, _, cx| {
+                    let k = mk.clone();
+                    with_state(|s| s.menu = if s.menu.as_deref() == Some(k.as_str()) { None } else { Some(k) });
+                    cx.notify();
+                })))
                 .when(open, |d| d.child(gpui::deferred(member_menu(s.guild, uid, cx)).with_priority(30))),
         );
     }
@@ -198,7 +210,11 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .flex_col()
         .gap(z(16.))
         .child(kit::page_head(crate::t!("menu.gs.members"), Some(crate::t!("gs.members.desc", n = total))))
-        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(s.inputs.get("member_search")).flex_1()).child(kit::btn_sm("ss-members-prune", crate::t!("gs.members.prune"), BtnKind::Secondary)))
+        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(s.inputs.get("member_search")).flex_1()).child(kit::btn_sm(
+            "ss-members-prune",
+            crate::t!("gs.members.prune"),
+            BtnKind::Secondary,
+        )))
         .child(div().rounded(z(8.)).border_1().border_color(c(tok(idx::BORDER_SUBTLE))).flex().flex_col().child(head).child(body))
         .into_any_element()
 }
@@ -303,13 +319,14 @@ pub fn invites(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 .border_t_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .child(
-                    div()
-                        .w(z(193.4))
-                        .flex()
-                        .items_center()
-                        .gap(z(12.))
-                        .child(kit::avatar(kit::user_avatar(&u, 64), 24.))
-                        .child(div().flex().flex_col().min_w_0().child(text(kit::user_name(&u), 16., 20., FontWeight::NORMAL, idx::TEXT_STRONG).truncate()).child(text(format!("#{ch}"), 12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE).truncate())),
+                    div().w(z(193.4)).flex().items_center().gap(z(12.)).child(kit::avatar(kit::user_avatar(&u, 64), 24.)).child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            .child(text(kit::user_name(&u), 16., 20., FontWeight::NORMAL, idx::TEXT_STRONG).truncate())
+                            .child(text(format!("#{ch}"), 12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE).truncate()),
+                    ),
                 )
                 .child(text(code.clone(), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).w(z(155.)).pl(z(16.)))
                 .child(text(kit::n(inv, "uses").to_string(), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).w(z(98.2)).pl(z(24.)))
@@ -450,25 +467,23 @@ pub fn bans(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
             cx.notify();
         })));
         for n in 0..pages {
-            pager = pager.child(page_button(("ss-ban-page", n), SharedString::from((n + 1).to_string()), n == page).on_click(cx.listener(move |_, _, _, cx| {
-                super::with_state(|s| s.ban_page = n);
-                cx.notify();
-            })));
+            pager =
+                pager.child(page_button(("ss-ban-page", n), SharedString::from((n + 1).to_string()), n == page).on_click(cx.listener(move |_, _, _, cx| {
+                    super::with_state(|s| s.ban_page = n);
+                    cx.notify();
+                })));
         }
         pager = pager.child(page_button(("ss-ban-next", 0), crate::t!("gs.bans.next"), false).px(z(12.)).on_click(cx.listener(move |_, _, _, cx| {
             super::with_state(|s| s.ban_page = (s.ban_page + 1).min(pages - 1));
             cx.notify();
         })));
     }
-    let desc = div()
-        .mb(z(20.))
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(gpui::StyledText::new(format!("{}{}.", crate::t!("gs.bans.desc_lead"), crate::t!("gs.bans.desc_link"))).with_highlights([(
+    let desc = div().mb(z(20.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(
+        gpui::StyledText::new(format!("{}{}.", crate::t!("gs.bans.desc_lead"), crate::t!("gs.bans.desc_link"))).with_highlights([(
             crate::t!("gs.bans.desc_lead").len()..crate::t!("gs.bans.desc_lead").len() + crate::t!("gs.bans.desc_link").len(),
             gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() },
-        )]));
+        )]),
+    );
     div()
         .pt(z(56.))
         .px(z(24.))

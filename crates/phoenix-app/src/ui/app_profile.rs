@@ -19,7 +19,8 @@ pub const MESSAGE_CONTENT_FLAGS: u64 = (1 << 18) | (1 << 19);
 pub const GUILD_MEMBERS_FLAGS: u64 = (1 << 14) | (1 << 15);
 
 pub const PERMISSION_ORDER: [u32; 54] = [
-    3, 5, 28, 4, 1, 2, 0, 27, 26, 30, 43, 29, 7, 10, 33, 44, 40, 19, 41, 50, 11, 38, 35, 36, 12, 13, 34, 14, 15, 16, 17, 6, 18, 37, 31, 46, 49, 51, 52, 53, 20, 21, 22, 23, 24, 25, 8, 32, 9, 39, 42, 45, 48, 47,
+    3, 5, 28, 4, 1, 2, 0, 27, 26, 30, 43, 29, 7, 10, 33, 44, 40, 19, 41, 50, 11, 38, 35, 36, 12, 13, 34, 14, 15, 16, 17, 6, 18, 37, 31, 46, 49, 51, 52, 53, 20,
+    21, 22, 23, 24, 25, 8, 32, 9, 39, 42, 45, 48, 47,
 ];
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -115,7 +116,10 @@ pub fn parse_profile(a: &Value) -> Option<Profile> {
         monetized: a["is_monetized"].as_bool().unwrap_or(false),
         launchable: f & EMBEDDED_FLAG != 0 || !a["embedded_activity_config"].is_null(),
         store: a["storefront_available"].as_bool().unwrap_or(false),
-        images: de["carousel_items"].as_array().map(|l| l.iter().filter_map(|i| s(&i["proxy_url"]).or_else(|| s(&i["url"])).map(Into::into)).collect()).unwrap_or_default(),
+        images: de["carousel_items"]
+            .as_array()
+            .map(|l| l.iter().filter_map(|i| s(&i["proxy_url"]).or_else(|| s(&i["url"])).map(Into::into)).collect())
+            .unwrap_or_default(),
         commands: de["popular_application_command_ids"]
             .as_array()
             .map(|ids| {
@@ -316,24 +320,27 @@ fn carousel(p: &Profile, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let mut dots = div().flex().items_center().gap(z(8.));
     for i in 0..n {
         dots = dots.child(
-            div()
-                .id(("app-profile-dot", i))
-                .size(z(8.))
-                .rounded_full()
-                .bg(gpui::white())
-                .opacity(if i == sel { 1. } else { 0.3 })
-                .cursor_pointer()
-                .on_click(cx.listener(move |_, _, _, cx| {
+            div().id(("app-profile-dot", i)).size(z(8.)).rounded_full().bg(gpui::white()).opacity(if i == sel { 1. } else { 0.3 }).cursor_pointer().on_click(
+                cx.listener(move |_, _, _, cx| {
                     STATE.with(|s| s.borrow_mut().image = i);
                     cx.notify();
-                })),
+                }),
+            ),
         );
     }
     Some(
         div()
             .flex()
             .flex_col()
-            .child(div().w_full().aspect_ratio(16. / 9.).rounded(z(5.)).overflow_hidden().bg(tk(idx::BACKGROUND_BASE_LOWER)).child(img(url).size_full().object_fit(gpui::ObjectFit::Cover)))
+            .child(
+                div()
+                    .w_full()
+                    .aspect_ratio(16. / 9.)
+                    .rounded(z(5.))
+                    .overflow_hidden()
+                    .bg(tk(idx::BACKGROUND_BASE_LOWER))
+                    .child(img(url).size_full().object_fit(gpui::ObjectFit::Cover)),
+            )
             .when(n > 1, |d| d.child(div().mt(z(12.)).px(z(12.)).flex().items_center().justify_between().children(prev).child(dots).children(next)))
             .into_any_element(),
     )
@@ -382,7 +389,13 @@ fn overview(p: &Profile, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         });
                         cx.notify();
                     }))
-                    .child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::INTERACTIVE_TEXT_DEFAULT), if expanded { crate::t!("app_profile.show_less") } else { crate::t!("app_profile.show_more") }))
+                    .child(text(
+                        16.,
+                        20.,
+                        FontWeight::SEMIBOLD,
+                        tk(idx::INTERACTIVE_TEXT_DEFAULT),
+                        if expanded { crate::t!("app_profile.show_less") } else { crate::t!("app_profile.show_more") },
+                    ))
                     .child(icon("chevron", 18., tk(idx::TEXT_DEFAULT))),
             )
         })
@@ -442,7 +455,9 @@ fn permissions(p: &Profile) -> Option<AnyElement> {
             .flex()
             .flex_col()
             .child(section_title(crate::t!("app_profile.permissions")))
-            .child(boxed().child(text(14., 18., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("app_profile.required_permissions")).mb(z(12.))).child(grid))
+            .child(
+                boxed().child(text(14., 18., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("app_profile.required_permissions")).mb(z(12.))).child(grid),
+            )
             .into_any_element(),
     )
 }
@@ -452,12 +467,13 @@ fn data_access(p: &Profile) -> AnyElement {
     if p.reads_messages || p.reads_members {
         let mut rows = div().flex().flex_col().gap(z(16.)).mb(z(16.));
         let row = |path: &'static str, title: SharedString, desc: SharedString| {
-            div()
-                .flex()
-                .items_start()
-                .gap(z(16.))
-                .child(icon(path, 24., tk(idx::TEXT_DEFAULT)))
-                .child(div().flex().flex_col().child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), title)).child(text(16., 20., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), desc).mt(z(4.))))
+            div().flex().items_start().gap(z(16.)).child(icon(path, 24., tk(idx::TEXT_DEFAULT))).child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), title))
+                    .child(text(16., 20., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), desc).mt(z(4.))),
+            )
         };
         if p.reads_messages {
             rows = rows.child(row("chat", crate::t!("app_profile.read_messages"), crate::t!("app_profile.read_messages_desc")));
@@ -533,13 +549,13 @@ fn similar_card(a: &Similar, cx: &mut Context<PhoenixApp>) -> AnyElement {
         )
         .child(text(14., 18., FontWeight::MEDIUM, tk(idx::TEXT_DEFAULT), a.description.clone()).mt(z(16.)).max_h(z(36.)).overflow_hidden())
         .children(a.guild_count.map(|n| {
-            div()
-                .mt(z(16.))
-                .flex()
-                .items_center()
-                .gap(z(4.))
-                .child(icon("server/server", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
-                .child(text(12., 16., FontWeight::MEDIUM, tk(idx::TEXT_DEFAULT), crate::t!("app_profile.in_servers", n = compact(n))))
+            div().mt(z(16.)).flex().items_center().gap(z(4.)).child(icon("server/server", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT))).child(text(
+                12.,
+                16.,
+                FontWeight::MEDIUM,
+                tk(idx::TEXT_DEFAULT),
+                crate::t!("app_profile.in_servers", n = compact(n)),
+            ))
         }))
         .into_any_element()
 }
@@ -547,18 +563,26 @@ fn similar_card(a: &Similar, cx: &mut Context<PhoenixApp>) -> AnyElement {
 fn sidebar(p: &Profile) -> AnyElement {
     let mut col = div().w(z(SIDE_W)).flex_none().flex().flex_col().gap(z(32.));
     if let Some(n) = p.guild_count {
-        col = col.child(
-            div()
-                .flex()
-                .flex_col()
-                .child(side_title(crate::t!("app_profile.server_count")))
-                .child(div().flex().items_center().gap(z(8.)).child(icon("server/server", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT))).child(text(14., 18., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), crate::t!("app_profile.in_servers", n = compact(n))))),
-        );
+        col = col.child(div().flex().flex_col().child(side_title(crate::t!("app_profile.server_count"))).child(
+            div().flex().items_center().gap(z(8.)).child(icon("server/server", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT))).child(text(
+                14.,
+                18.,
+                FontWeight::NORMAL,
+                tk(idx::TEXT_DEFAULT),
+                crate::t!("app_profile.in_servers", n = compact(n)),
+            )),
+        ));
     }
     if !p.categories.is_empty() {
         let mut chips = div().flex().flex_wrap().gap(z(8.));
         for c in &p.categories {
-            chips = chips.child(div().px(z(12.)).py(z(6.)).rounded(z(4.)).border_1().border_color(tk(idx::BORDER_STRONG)).child(text(14., 18., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), c.clone())));
+            chips = chips.child(div().px(z(12.)).py(z(6.)).rounded(z(4.)).border_1().border_color(tk(idx::BORDER_STRONG)).child(text(
+                14.,
+                18.,
+                FontWeight::SEMIBOLD,
+                tk(idx::TEXT_DEFAULT),
+                c.clone(),
+            )));
         }
         col = col.child(div().flex().flex_col().child(side_title(crate::t!("app_profile.categories"))).child(chips));
     }
@@ -572,7 +596,13 @@ fn sidebar(p: &Profile) -> AnyElement {
                 if t == key { crate::ui::server_pages::community::locale_name(l) } else { t }
             })
             .collect();
-        col = col.child(div().flex().flex_col().child(side_title(crate::t!("app_profile.languages"))).child(text(14., 18., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), names.join(", "))));
+        col = col.child(div().flex().flex_col().child(side_title(crate::t!("app_profile.languages"))).child(text(
+            14.,
+            18.,
+            FontWeight::NORMAL,
+            tk(idx::TEXT_DEFAULT),
+            names.join(", "),
+        )));
     }
     if !p.links.is_empty() {
         let mut list = div().flex().flex_col().gap(z(12.));
@@ -626,7 +656,9 @@ fn header(p: Option<&Profile>, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 }))
                 .child(icon("nav/back", 18., tk(idx::INTERACTIVE_TEXT_ACTIVE))),
         )
-        .child(div().flex_1().min_w_0().flex().justify_center().children(p.map(|p| text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), p.name.clone()).overflow_hidden().text_ellipsis().whitespace_nowrap())))
+        .child(div().flex_1().min_w_0().flex().justify_center().children(
+            p.map(|p| text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), p.name.clone()).overflow_hidden().text_ellipsis().whitespace_nowrap()),
+        ))
         .child(div().size(z(32.)).flex_none())
         .into_any_element()
 }
@@ -638,7 +670,12 @@ pub fn page(app: &PhoenixApp, id: u64, _window: &mut Window, cx: &mut Context<Ph
         return div().size_full().relative().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(header(None, cx)).into_any_element();
     };
     let tab = STATE.with(|s| s.borrow().tab);
-    let banner = div().w_full().h(z(BANNER_H)).overflow_hidden().bg(tk(idx::BACKGROUND_BASE_LOWER)).children(p.banner.clone().map(|b| img(b).size_full().object_fit(gpui::ObjectFit::Cover)));
+    let banner = div()
+        .w_full()
+        .h(z(BANNER_H))
+        .overflow_hidden()
+        .bg(tk(idx::BACKGROUND_BASE_LOWER))
+        .children(p.banner.clone().map(|b| img(b).size_full().object_fit(gpui::ObjectFit::Cover)));
     let avatar = div()
         .absolute()
         .top(z(BANNER_H - 52.))
@@ -704,9 +741,13 @@ pub fn page(app: &PhoenixApp, id: u64, _window: &mut Window, cx: &mut Context<Ph
             for a in similar.iter().take(3) {
                 grid = grid.child(similar_card(a, cx));
             }
-            main = main
-                .child(div().h(z(1.)).bg(tk(idx::BORDER_SUBTLE)))
-                .child(div().flex().flex_col().child(text(14., 18., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("app_profile.similar")).mb(z(16.))).child(grid));
+            main = main.child(div().h(z(1.)).bg(tk(idx::BORDER_SUBTLE))).child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(text(14., 18., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("app_profile.similar")).mb(z(16.)))
+                    .child(grid),
+            );
         }
     } else {
         main = main.child(text(16., 20., FontWeight::NORMAL, tk(idx::TEXT_MUTED), crate::t!("app_profile.store_empty")));
@@ -756,13 +797,17 @@ mod tests {
         assert!(p.monetized && p.store && p.markdown && p.reads_messages && p.reads_members);
         assert_eq!(p.links.len(), 3);
         assert_eq!(p.links[0].0.as_ref(), "Website");
-        let e = parse_profile(&json!({"id": "1", "name": "E", "flags": 537002498, "embedded_activity_config": {}, "directory_entry": {"short_description": "s"}})).unwrap();
+        let e =
+            parse_profile(&json!({"id": "1", "name": "E", "flags": 537002498, "embedded_activity_config": {}, "directory_entry": {"short_description": "s"}}))
+                .unwrap();
         assert!(e.launchable && !e.markdown && !e.reads_messages && e.overview == "s" && e.permissions.is_empty());
     }
 
     #[test]
     fn similar_apps_and_compact_counts() {
-        let s = parse_similar(&json!({"applications": [{"id": "5", "name": "Tupperbox", "icon": "i", "categories": [{"name": "Jeux"}], "directory_entry": {"guild_count": 5440000, "short_description": "d"}}]}));
+        let s = parse_similar(
+            &json!({"applications": [{"id": "5", "name": "Tupperbox", "icon": "i", "categories": [{"name": "Jeux"}], "directory_entry": {"guild_count": 5440000, "short_description": "d"}}]}),
+        );
         assert_eq!(s[0].icon.as_deref(), Some("https://cdn.discordapp.com/app-icons/5/i.png?size=96"));
         assert_eq!((s[0].category.as_deref(), s[0].guild_count), (Some("Jeux"), Some(5440000)));
         assert_eq!(compact(353), "353");

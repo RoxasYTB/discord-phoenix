@@ -63,9 +63,25 @@ pub fn max_bitrate(app: &PhoenixApp, s: &State) -> u32 {
     tier.max(feat)
 }
 
-fn slow_select(id: &'static str, which: u8, value: u32, open: bool, e: &gpui::Entity<PhoenixApp>, set: fn(&mut State, u32), cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn slow_select(
+    id: &'static str,
+    which: u8,
+    value: u32,
+    open: bool,
+    e: &gpui::Entity<PhoenixApp>,
+    set: fn(&mut State, u32),
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let sel = SLOWMODE.iter().position(|x| *x == value).unwrap_or(0);
-    dropdown(id, SLOWMODE.iter().map(|x| slowmode_label(*x)).collect(), sel, open, toggle(which), picker(e, move |s, k| set(s, SLOWMODE[k.min(SLOWMODE.len() - 1)])), cx)
+    dropdown(
+        id,
+        SLOWMODE.iter().map(|x| slowmode_label(*x)).collect(),
+        sel,
+        open,
+        toggle(which),
+        picker(e, move |s, k| set(s, SLOWMODE[k.min(SLOWMODE.len() - 1)])),
+        cx,
+    )
 }
 
 fn topic_block(s: &State, forum: bool, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -85,7 +101,12 @@ fn topic_block(s: &State, forum: bool, cx: &mut Context<PhoenixApp>) -> Option<A
         div()
             .flex()
             .flex_col()
-            .child(format_toolbar("cs-topic-tools", forum, wrap, Some(emoji_button("cs-topic-emoji", Field::ChannelTopic, 26., 32., 8., cx).into_any_element())))
+            .child(format_toolbar(
+                "cs-topic-tools",
+                forum,
+                wrap,
+                Some(emoji_button("cs-topic-emoji", Field::ChannelTopic, 26., 32., 8., cx).into_any_element()),
+            ))
             .child(
                 div()
                     .relative()
@@ -100,7 +121,12 @@ fn topic_block(s: &State, forum: bool, cx: &mut Context<PhoenixApp>) -> Option<A
                     .text_size(z(16.))
                     .line_height(z(22.))
                     .child(Textarea::new(&area).appearance(false).bordered(false))
-                    .child(div().absolute().right(z(13.)).bottom(z(10.)).child(text(left.to_string(), 14., 18., if left < 0 { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_DEFAULT }).font_weight(FontWeight::SEMIBOLD))),
+                    .child(
+                        div().absolute().right(z(13.)).bottom(z(10.)).child(
+                            text(left.to_string(), 14., 18., if left < 0 { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_DEFAULT })
+                                .font_weight(FontWeight::SEMIBOLD),
+                        ),
+                    ),
             )
             .into_any_element(),
     )
@@ -123,7 +149,19 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
     let mut d = div().flex().flex_col().gap(z(24.));
     if let Some(i) = &s.name {
         let key = if kind == ChannelKind::Category { "admin.category_name" } else { "admin.channel_name" };
-        d = d.child(field(crate::t!(key), None, input_box(i).pl(z(0.)).pr(z(4.)).gap(z(4.)).child(div().flex_none().w(z(32.)).h(z(30.)).flex().items_center().child(emoji_button("cs-name-emoji", Field::ChannelName, 30., 18., 12., cx))), None));
+        d = d.child(field(
+            crate::t!(key),
+            None,
+            input_box(i).pl(z(0.)).pr(z(4.)).gap(z(4.)).child(div().flex_none().w(z(32.)).h(z(30.)).flex().items_center().child(emoji_button(
+                "cs-name-emoji",
+                Field::ChannelName,
+                30.,
+                18.,
+                12.,
+                cx,
+            ))),
+            None,
+        ));
     }
     if kind == ChannelKind::Category {
         return d.child(illustration()).into_any_element();
@@ -204,7 +242,12 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                 .flex_col()
                 .gap(z(16.))
                 .child(text(crate::t!("admin.slowmode"), 20., 24., idx::TEXT_STRONG).font_weight(FontWeight::MEDIUM))
-                .child(field(crate::t!("cs.posts"), None, slow_select("cs-slow", 1, v.slow, s.open_select == Some(1), &e, |s, x| s.v.slow = x, cx), Some(crate::t!("cs.slow_posts_help"))))
+                .child(field(
+                    crate::t!("cs.posts"),
+                    None,
+                    slow_select("cs-slow", 1, v.slow, s.open_select == Some(1), &e, |s, x| s.v.slow = x, cx),
+                    Some(crate::t!("cs.slow_posts_help")),
+                ))
                 .child(field(
                     crate::t!("cs.messages"),
                     None,
@@ -238,24 +281,49 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         d = d.child(field(
             crate::t!("cs.tag_matching"),
             Some(crate::t!("cs.tag_matching_desc")),
-            dropdown("cs-match", matching, msel, s.open_select == Some(5), toggle(5), picker(&e, |s, k| s.v.tag_setting = Some(if k == 1 { "match_all" } else { "match_some" }.into())), cx),
+            dropdown(
+                "cs-match",
+                matching,
+                msel,
+                s.open_select == Some(5),
+                toggle(5),
+                picker(&e, |s, k| s.v.tag_setting = Some(if k == 1 { "match_all" } else { "match_some" }.into())),
+                cx,
+            ),
             None,
         ));
     } else if kind != ChannelKind::Announcement {
         let help = if matches!(kind, ChannelKind::Text | ChannelKind::Voice | ChannelKind::Stage) { "cs.slow_text_help" } else { "cs.slow_plain_help" };
-        d = d.child(field(crate::t!("admin.slowmode"), None, slow_select("cs-slow", 1, v.slow, s.open_select == Some(1), &e, |s, x| s.v.slow = x, cx), Some(crate::t!(help))));
+        d = d.child(field(
+            crate::t!("admin.slowmode"),
+            None,
+            slow_select("cs-slow", 1, v.slow, s.open_select == Some(1), &e, |s, x| s.v.slow = x, cx),
+            Some(crate::t!(help)),
+        ));
     }
     let vis = vec![
         (crate::t!("cs.vis_default"), Some(crate::t!("cs.vis_default_desc"))),
         (crate::t!("cs.vis_spoiler"), Some(crate::t!("cs.vis_spoiler_desc"))),
         (crate::t!("admin.nsfw"), Some(crate::t!("cs.vis_age_desc"))),
     ];
-    d = d.child(div().py(z(8.)).child(field(crate::t!("cs.visibility"), None, radio_group("cs-vis", vis, v.visibility(), picker(&e, |s, k| s.v.set_visibility(k))), None)));
+    d = d.child(div().py(z(8.)).child(field(
+        crate::t!("cs.visibility"),
+        None,
+        radio_group("cs-vis", vis, v.visibility(), picker(&e, |s, k| s.v.set_visibility(k))),
+        None,
+    )));
     let community = s.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).is_some_and(|g| g.community);
     if community && matches!(kind, ChannelKind::Text | ChannelKind::Announcement) {
         let on = v.kind == 5;
         let desc = description(crate::t!("cs.announcement_desc")).into_any_element();
-        let mut block = div().flex().flex_col().gap(z(4.)).child(switch_field("cs-news", crate::t!("cs.announcement"), Some(desc), on, Rc::new(|_| with_state(|s| s.v.kind = if s.v.kind == 5 { 0 } else { 5 })), cx));
+        let mut block = div().flex().flex_col().gap(z(4.)).child(switch_field(
+            "cs-news",
+            crate::t!("cs.announcement"),
+            Some(desc),
+            on,
+            Rc::new(|_| with_state(|s| s.v.kind = if s.v.kind == 5 { 0 } else { 5 })),
+            cx,
+        ));
         if !on {
             block = block.child(info_notice(crate::t!("cs.announcement_notice")));
         }
@@ -267,7 +335,15 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         d = d.child(div().mt(z(16.)).child(field(
             crate::t!("thread.hide_after"),
             None,
-            dropdown("cs-archive", AUTO_ARCHIVE.iter().map(|(_, k)| crate::t!(k)).collect(), sel, s.open_select == Some(6), toggle(6), picker(&e, |s, k| s.v.archive = AUTO_ARCHIVE[k.min(3)].0), cx),
+            dropdown(
+                "cs-archive",
+                AUTO_ARCHIVE.iter().map(|(_, k)| crate::t!(k)).collect(),
+                sel,
+                s.open_select == Some(6),
+                toggle(6),
+                picker(&e, |s, k| s.v.archive = AUTO_ARCHIVE[k.min(3)].0),
+                cx,
+            ),
             Some(crate::t!(help)),
         )));
     }
@@ -298,7 +374,11 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         d = d.child(field(
             crate::t!("cs.video_quality"),
             None,
-            div().flex().flex_col().child(radio_group("cs-video", quality, if v.video == 2 { 1 } else { 0 }, picker(&e, |s, k| s.v.video = if k == 1 { 2 } else { 1 }))).child(helper(crate::t!("cs.video_quality_help")).mt(z(4.))),
+            div()
+                .flex()
+                .flex_col()
+                .child(radio_group("cs-video", quality, if v.video == 2 { 1 } else { 0 }, picker(&e, |s, k| s.v.video = if k == 1 { 2 } else { 1 })))
+                .child(helper(crate::t!("cs.video_quality_help")).mt(z(4.))),
             None,
         ));
         let lim_max = if kind == ChannelKind::Stage { 10_000 } else { 99 };
@@ -326,7 +406,15 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
             d = d.child(field(
                 crate::t!("cs.region"),
                 Some(crate::t!("cs.region_desc")),
-                dropdown("cs-region", opts, sel, s.open_select == Some(7), toggle(7), picker(&e, |s, k| s.v.region = k.checked_sub(1).map(|i| REGIONS[i].0.to_owned())), cx),
+                dropdown(
+                    "cs-region",
+                    opts,
+                    sel,
+                    s.open_select == Some(7),
+                    toggle(7),
+                    picker(&e, |s, k| s.v.region = k.checked_sub(1).map(|i| REGIONS[i].0.to_owned())),
+                    cx,
+                ),
                 None,
             ));
         }
@@ -336,7 +424,6 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
     }
     d.into_any_element()
 }
-
 
 pub fn emoji_button(id: &'static str, f: Field, w: f32, h: f32, pr: f32, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     div()
@@ -362,7 +449,9 @@ pub fn emoji_button(id: &'static str, f: Field, w: f32, h: f32, pr: f32, cx: &mu
 
 fn emoji_glyph(e: &Value, size: f32) -> Option<AnyElement> {
     if let Some(id) = e.get("emoji_id").and_then(Value::as_str) {
-        return Some(gpui::img(SharedString::from(format!("https://cdn.discordapp.com/emojis/{id}.webp?size=48"))).size(z(size)).flex_none().into_any_element());
+        return Some(
+            gpui::img(SharedString::from(format!("https://cdn.discordapp.com/emojis/{id}.webp?size=48"))).size(z(size)).flex_none().into_any_element(),
+        );
     }
     let n = e.get("emoji_name").and_then(Value::as_str).filter(|n| !n.is_empty())?;
     let url = crate::media::emoji::twemoji_url(n)?;
@@ -499,7 +588,9 @@ pub fn tag_modal(s: &State, t: &TagDraft, cx: &mut Context<PhoenixApp>) -> AnyEl
                 Some(g) => div()
                     .id("cs-tag-emoji")
                     .cursor_pointer()
-                    .on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::open(a, crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::Field(Field::TagEmoji), w, cx)))
+                    .on_click(cx.listener(|a, _, w, cx| {
+                        crate::ui::pickers::open(a, crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::Field(Field::TagEmoji), w, cx)
+                    }))
                     .child(g)
                     .into_any_element(),
                 None => emoji_button("cs-tag-emoji", Field::TagEmoji, 18., 18., 0., cx).into_any_element(),
@@ -581,14 +672,21 @@ pub fn tag_modal(s: &State, t: &TagDraft, cx: &mut Context<PhoenixApp>) -> AnyEl
             .w_full()
             .flex()
             .justify_between()
-            .child(super::server_settings::kit::critical_secondary("cs-tag-delete", crate::t!("cs.tag_delete")).h(z(40.)).px(z(16.)).text_size(z(16.)).line_height(z(20.)).on_click(move |_, w, cx| {
-                with_state(|s| {
-                    if let Some(i) = index.filter(|i| *i < s.tags.len()) {
-                        s.tags.remove(i);
-                    }
-                });
-                c4(w, cx);
-            }))
+            .child(
+                super::server_settings::kit::critical_secondary("cs-tag-delete", crate::t!("cs.tag_delete"))
+                    .h(z(40.))
+                    .px(z(16.))
+                    .text_size(z(16.))
+                    .line_height(z(20.))
+                    .on_click(move |_, w, cx| {
+                        with_state(|s| {
+                            if let Some(i) = index.filter(|i| *i < s.tags.len()) {
+                                s.tags.remove(i);
+                            }
+                        });
+                        c4(w, cx);
+                    }),
+            )
             .child(div().flex().gap(z(8.)).child(cancel).child(save))
     } else {
         div().w_full().flex().gap(z(8.)).child(cancel.flex_1()).child(save.flex_1())

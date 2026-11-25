@@ -41,10 +41,29 @@ pub fn connection_icon(kind: &str) -> Option<(String, bool)> {
 
 pub fn app_icons() -> Vec<String> {
     [
-        "5926a37cee0904ce", "e8396e79419904ca", "2d62663c4b493f8e", "28f89b5f78dd6f80", "96f9a2942150ba17", "22bb7108ad1c466f",
-        "9af4b996c897420f", "9ad8ec824f71bd05", "5bf3279039efa66c", "3a2d57c0bde9b218", "181e40b5ea872cdb", "1e208c512641758d",
-        "e14578cc054054c0", "5e5cc9b058e63987", "82c7a89d15622af4", "441d164362b711b1", "e5f2a55421a6dc7e", "9b50f7ba00ee941f",
-        "a629a2a3fe1ccbcc", "685b2900a9423534", "10cd104567438715", "7ebbc1790864207a", "7ce5a942a5cc7cba",
+        "5926a37cee0904ce",
+        "e8396e79419904ca",
+        "2d62663c4b493f8e",
+        "28f89b5f78dd6f80",
+        "96f9a2942150ba17",
+        "22bb7108ad1c466f",
+        "9af4b996c897420f",
+        "9ad8ec824f71bd05",
+        "5bf3279039efa66c",
+        "3a2d57c0bde9b218",
+        "181e40b5ea872cdb",
+        "1e208c512641758d",
+        "e14578cc054054c0",
+        "5e5cc9b058e63987",
+        "82c7a89d15622af4",
+        "441d164362b711b1",
+        "e5f2a55421a6dc7e",
+        "9b50f7ba00ee941f",
+        "a629a2a3fe1ccbcc",
+        "685b2900a9423534",
+        "10cd104567438715",
+        "7ebbc1790864207a",
+        "7ce5a942a5cc7cba",
     ]
     .iter()
     .map(|h| a(&format!("{h}.webp")))

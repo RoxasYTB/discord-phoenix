@@ -59,15 +59,7 @@ pub fn hovered_link(msg: Id, bi: usize, seed: u64) -> Option<gpui::SharedString>
     HOVER_LINK.with(|h| h.borrow().as_ref().filter(|(m, b, s, _)| *m == msg.0 && *b == bi && *s == seed).map(|(_, _, _, u)| u.clone()))
 }
 
-pub fn on_hover(
-    msg: Id,
-    bi: usize,
-    seed: u64,
-    ranges: &[Range<usize>],
-    targets: &[ClickTarget],
-    ix: Option<usize>,
-    window: &mut Window,
-) {
+pub fn on_hover(msg: Id, bi: usize, seed: u64, ranges: &[Range<usize>], targets: &[ClickTarget], ix: Option<usize>, window: &mut Window) {
     let at = ix.and_then(|i| ranges.iter().position(|r| r.contains(&i)));
     HOVER_LINK.with(|h| {
         let mut h = h.borrow_mut();
@@ -87,14 +79,7 @@ pub fn on_hover(
     }
 }
 
-pub fn hovered_runs(
-    msg: Id,
-    bi: usize,
-    seed: u64,
-    ranges: &[Range<usize>],
-    targets: &[ClickTarget],
-    runs: &[TextRun],
-) -> Option<Vec<TextRun>> {
+pub fn hovered_runs(msg: Id, bi: usize, seed: u64, ranges: &[Range<usize>], targets: &[ClickTarget], runs: &[TextRun]) -> Option<Vec<TextRun>> {
     let (m, b, s, k) = HOVER.with(Cell::get)?;
     if m != msg.0 || b != bi || s != seed {
         return None;
@@ -131,14 +116,7 @@ mod tests {
     use super::*;
 
     fn run(len: usize) -> TextRun {
-        TextRun {
-            len,
-            font: gpui::font("x"),
-            color: gpui::black(),
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        }
+        TextRun { len, font: gpui::font("x"), color: gpui::black(), background_color: None, underline: None, strikethrough: None }
     }
 
     #[test]

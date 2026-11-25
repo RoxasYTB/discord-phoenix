@@ -1,8 +1,5 @@
 use crate::theme::z;
-use gpui::{
-    AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, anchored, deferred, div,
-    point, prelude::*, px, svg,
-};
+use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, anchored, deferred, div, point, prelude::*, px, svg};
 use gpui_component::input::{InputEvent, InputState};
 
 use crate::{
@@ -64,12 +61,8 @@ impl PhoenixApp {
     }
 }
 
-const ITEMS: [(Presence, Option<&str>); 4] = [
-    (Presence::Online, None),
-    (Presence::Idle, None),
-    (Presence::Dnd, Some("status.dnd_desc")),
-    (Presence::Offline, Some("status.invisible_desc")),
-];
+const ITEMS: [(Presence, Option<&str>); 4] =
+    [(Presence::Online, None), (Presence::Idle, None), (Presence::Dnd, Some("status.dnd_desc")), (Presence::Offline, Some("status.invisible_desc"))];
 
 thread_local! {
     static STATUS_SUB: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -115,17 +108,7 @@ fn accounts_submenu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Sta
     let account = row("acct-sub-me")
         .gap(z(8.))
         .child(crate::ui::avatar(me, 24.))
-        .child(
-            div()
-                .flex_grow(1.)
-                .max_w(z(132.))
-                .min_w_0()
-                .overflow_hidden()
-                .text_ellipsis()
-                .whitespace_nowrap()
-                .font_weight(FontWeight::NORMAL)
-                .child(name),
-        )
+        .child(div().flex_grow(1.).max_w(z(132.)).min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().font_weight(FontWeight::NORMAL).child(name))
         .child(svg().path(crate::icons::path("circle-check")).size(z(20.)).flex_none().text_color(c(tok(idx::BRAND_500))))
         .on_click(cx.listener(|a, _, w, cx| {
             set_accounts_sub(false, w);
@@ -185,7 +168,14 @@ fn pop_row(id: &'static str, icon: AnyElement, label: AnyElement, trailing: Opti
                 .child(div().text_size(z(14.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).child(label))
                 .children(trailing),
         )
-        .when(caret, |d| d.child(div().pl(z(8.)).flex_none().child(svg().path(crate::icons::path("chevron-right")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))))
+        .when(caret, |d| {
+            d.child(
+                div()
+                    .pl(z(8.))
+                    .flex_none()
+                    .child(svg().path(crate::icons::path("chevron-right")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
+            )
+        })
 }
 
 fn icon(name: &str) -> AnyElement {
@@ -249,22 +239,15 @@ fn status_submenu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::State
                 .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
                 .on_click(cx.listener(move |a, _, _, cx| a.set_own_status(p, cx)))
                 .child(div().size(z(20.)).mr(z(8.)).flex_none().flex().items_center().justify_center().child(status_dot(p, 10., bg)))
-                .child(
+                .child(div().flex_1().min_w_0().pt(z(1.)).child(status_label(p)).children(desc.map(|d| {
                     div()
-                        .flex_1()
-                        .min_w_0()
-                        .pt(z(1.))
-                        .child(status_label(p))
-                        .children(desc.map(|d| {
-                            div()
-                                .mt(z(2.))
-                                .text_size(z(12.))
-                                .line_height(z(16.))
-                                .font_weight(FontWeight::NORMAL)
-                                .text_color(c(tok(idx::TEXT_MUTED)))
-                                .child(crate::t!(d))
-                        })),
-                ),
+                        .mt(z(2.))
+                        .text_size(z(12.))
+                        .line_height(z(16.))
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(c(tok(idx::TEXT_MUTED)))
+                        .child(crate::t!(d))
+                }))),
         );
     }
     menu
@@ -280,12 +263,12 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         let ch = |sh: u32| (((p >> sh) & 0xFF) as f32 * 0.4).round() as u32;
         (ch(16) << 16) | (ch(8) << 8) | ch(0)
     });
-    let header = div()
-        .relative()
-        .flex_none()
-        .h(z(151.))
-        .child(banner(&i, 105., 6.))
-        .child(div().absolute().left(z(8.)).top(z(53.)).child(avatar_block(&i, 80., 6., ring.unwrap_or(surface))));
+    let header = div().relative().flex_none().h(z(151.)).child(banner(&i, 105., 6.)).child(div().absolute().left(z(8.)).top(z(53.)).child(avatar_block(
+        &i,
+        80.,
+        6.,
+        ring.unwrap_or(surface),
+    )));
     let bubble = app.people.custom_input.as_ref().map(|_| {
         let has = app.people.custom_status.is_some();
         div()
@@ -316,7 +299,9 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                     .gap(z(4.))
                     .cursor_pointer()
                     .on_click(cx.listener(|a, _, _, cx| a.open_custom_status(cx)))
-                    .when(!has, |d| d.child(svg().path(crate::icons::path("plus-circle")).size(z(12.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
+                    .when(!has, |d| {
+                        d.child(svg().path(crate::icons::path("plus-circle")).size(z(12.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
+                    })
                     .child(
                         div()
                             .min_w_0()
@@ -380,7 +365,11 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     .on_click(|_, w, _| set_sub(!STATUS_SUB.with(|c| c.get()), w))
     .when(sub_open, |d| {
         d.child(deferred(
-            anchored().position_mode(gpui::AnchoredPositionMode::Local).position(point(px(252. + 12.), px(-14.))).snap_to_window().child(status_submenu(app, cx)),
+            anchored()
+                .position_mode(gpui::AnchoredPositionMode::Local)
+                .position(point(px(252. + 12.), px(-14.)))
+                .snap_to_window()
+                .child(status_submenu(app, cx)),
         ))
     });
     let hover_off = |id: &'static str, ic: &str, label: SharedString| {
@@ -397,8 +386,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             s.page = crate::ui::settings::Page::Profiles;
         }
     }));
-    let badges = hover_off("acct-badges", "ribbon", crate::t!("status.badges"))
-        .on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("status.badges"), cx)));
+    let badges = hover_off("acct-badges", "ribbon", crate::t!("status.badges")).on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("status.badges"), cx)));
     let accounts_open = ACCOUNTS_SUB.with(|c| c.get());
     let switch = pop_row("acct-switch", icon("user-circle"), text(crate::t!("status.switch_accounts")), None, true)
         .relative()
@@ -413,7 +401,11 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         }))
         .when(accounts_open, |d| {
             d.child(deferred(
-                anchored().position_mode(gpui::AnchoredPositionMode::Local).position(point(px(252. + 12.), px(-8.))).snap_to_window().child(accounts_submenu(app, cx)),
+                anchored()
+                    .position_mode(gpui::AnchoredPositionMode::Local)
+                    .position(point(px(252. + 12.), px(-8.)))
+                    .snap_to_window()
+                    .child(accounts_submenu(app, cx)),
             ))
         });
     let my_id = me.0.to_string();
@@ -489,7 +481,13 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .flex_col()
                 .gap(z(8.))
                 .child(header.children(bubble))
-                .child(crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin).flex_1().min_h_0().child(body).children(crate::ui::chat::scrollbar::bar_for("acct-body", crate::ui::chat::scrollbar::Bar::Thin))),
+                .child(
+                    crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin)
+                        .flex_1()
+                        .min_h_0()
+                        .child(body)
+                        .children(crate::ui::chat::scrollbar::bar_for("acct-body", crate::ui::chat::scrollbar::Bar::Thin)),
+                ),
         );
 
     div().absolute().left(px(10.)).bottom(px(76.)).child(card).into_any_element()

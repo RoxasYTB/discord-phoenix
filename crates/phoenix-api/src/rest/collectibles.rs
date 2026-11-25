@@ -13,21 +13,11 @@ pub const RECOMMENDED_ITEMS: &str = "/storefront/recommended-items?application_i
 pub const PREMIUM_TYPE_NITRO: u64 = 2;
 
 pub fn products(v: &Value) -> impl Iterator<Item = &Value> {
-    v.get("categories")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|c| c.get("products").and_then(Value::as_array))
-        .flatten()
+    v.get("categories").and_then(Value::as_array).into_iter().flatten().filter_map(|c| c.get("products").and_then(Value::as_array)).flatten()
 }
 
 pub fn recommended_skus(v: &Value) -> Vec<u64> {
-    v.get("recommended_items")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|i| i.get("sku_id")?.as_str()?.parse().ok())
-        .collect()
+    v.get("recommended_items").and_then(Value::as_array).into_iter().flatten().filter_map(|i| i.get("sku_id")?.as_str()?.parse().ok()).collect()
 }
 
 impl RestClient {

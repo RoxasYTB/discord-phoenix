@@ -24,11 +24,7 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
     push(4, text("# Heading 1\n## Heading 2\n### Heading 3\n-# subtext under the headings"), &mut out);
     push(4, text("- first item\n- second item\n  - nested item\n1. ordered one\n2. ordered two"), &mut out);
     push(5, text("> a block quote\n> spanning two lines\nand a line after it"), &mut out);
-    push(
-        5,
-        text("```rust\nfn main() {\n    let answer = 42; // the answer\n    println!(\"{answer}\");\n}\n```"),
-        &mut out,
-    );
+    push(5, text("```rust\nfn main() {\n    let answer = 42; // the answer\n    println!(\"{answer}\");\n}\n```"), &mut out);
     push(
         6,
         Message {
@@ -139,7 +135,14 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
     push(5, Message { attachments: vec![at(AttachmentKind::File, "phoenix-0.1.0.tar.gz", 0, 0, 4_213_337)], ..Default::default() }, &mut out);
     push(
         5,
-        Message { attachments: vec![Attachment { filename: "Wumpus wave".into(), kind: AttachmentKind::Sticker(crate::media::StickerFormat::Png), ..Default::default() }], ..Default::default() },
+        Message {
+            attachments: vec![Attachment {
+                filename: "Wumpus wave".into(),
+                kind: AttachmentKind::Sticker(crate::media::StickerFormat::Png),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
         &mut out,
     );
     push(

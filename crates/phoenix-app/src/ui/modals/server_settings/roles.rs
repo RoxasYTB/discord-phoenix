@@ -30,8 +30,8 @@ pub const PERMS: [(&str, &[u32]); 8] = [
 ];
 
 pub const SOLID: [u32; 20] = [
-    0x1ABC9C, 0x2ECC71, 0x3498DB, 0x9B59B6, 0xE91E63, 0xF1C40F, 0xE67E22, 0xE74C3C, 0x95A5A6, 0x607D8B, 0x11806A, 0x1F8B4C, 0x206694, 0x71368A, 0xAD1457, 0xC27C0E, 0xA84300, 0x992D22,
-    0x979C9F, 0x546E7A,
+    0x1ABC9C, 0x2ECC71, 0x3498DB, 0x9B59B6, 0xE91E63, 0xF1C40F, 0xE67E22, 0xE74C3C, 0x95A5A6, 0x607D8B, 0x11806A, 0x1F8B4C, 0x206694, 0x71368A, 0xAD1457,
+    0xC27C0E, 0xA84300, 0x992D22, 0x979C9F, 0x546E7A,
 ];
 
 pub const GRADIENTS: [(&str, u32, u32); 12] = [
@@ -182,7 +182,8 @@ pub fn move_role(order: &[u64], id: u64, to: usize) -> Vec<u64> {
 }
 
 fn my_top(app: &PhoenixApp, s: &State) -> i64 {
-    let mine: Vec<u64> = app.members.get(&s.guild).and_then(|m| m.iter().find(|m| m.user == app.me.id)).map(|m| m.roles.iter().map(|r| r.0).collect()).unwrap_or_default();
+    let mine: Vec<u64> =
+        app.members.get(&s.guild).and_then(|m| m.iter().find(|m| m.user == app.me.id)).map(|m| m.roles.iter().map(|r| r.0).collect()).unwrap_or_default();
     s.list("roles").iter().filter(|r| mine.contains(&kit::n(r, "id"))).filter_map(|r| r.get("position").and_then(Value::as_i64)).max().unwrap_or(0)
 }
 
@@ -201,7 +202,13 @@ pub fn circle(colors: &RoleColors, size: f32) -> AnyElement {
         return d.bg(c(0x99AAB5)).into_any_element();
     }
     match colors.secondary {
-        Some(sec) => d.bg(gpui::linear_gradient(90., gpui::linear_color_stop(hsla(colors.primary), 0.), gpui::linear_color_stop(hsla(colors.tertiary.unwrap_or(sec)), 1.))).into_any_element(),
+        Some(sec) => d
+            .bg(gpui::linear_gradient(
+                90.,
+                gpui::linear_color_stop(hsla(colors.primary), 0.),
+                gpui::linear_color_stop(hsla(colors.tertiary.unwrap_or(sec)), 1.),
+            ))
+            .into_any_element(),
         None => d.bg(hsla(colors.primary)).into_any_element(),
     }
 }
@@ -209,7 +216,10 @@ pub fn circle(colors: &RoleColors, size: f32) -> AnyElement {
 fn role_icon(guild: u64, r: &Value, size: f32) -> AnyElement {
     let _ = guild;
     if let Some(h) = r.get("icon").and_then(Value::as_str) {
-        return gpui::img(SharedString::from(format!("https://cdn.discordapp.com/role-icons/{}/{h}.webp?size=48", kit::s(r, "id")))).size(z(size)).flex_none().into_any_element();
+        return gpui::img(SharedString::from(format!("https://cdn.discordapp.com/role-icons/{}/{h}.webp?size=48", kit::s(r, "id"))))
+            .size(z(size))
+            .flex_none()
+            .into_any_element();
     }
     if let Some(e) = r.get("unicode_emoji").and_then(Value::as_str) {
         return crate::media::emoji::emoji_element(e, size);
@@ -234,7 +244,8 @@ fn open_editor(id: u64, everyone: bool, members_tab: bool, a: &mut PhoenixApp, c
         && !everyone
     {
         a.admin(AdminCall::RoleMemberIds { guild: sf(g), role: Snowflake(id) }, cx, move |_, r, cx| {
-            let ids: Vec<u64> = r.ok().and_then(|v| v.as_array().cloned()).unwrap_or_default().iter().filter_map(|x| x.as_str().and_then(|s| s.parse().ok())).collect();
+            let ids: Vec<u64> =
+                r.ok().and_then(|v| v.as_array().cloned()).unwrap_or_default().iter().filter_map(|x| x.as_str().and_then(|s| s.parse().ok())).collect();
             with_state(|s| {
                 if let Some(e) = s.role.as_mut().filter(|e| e.id == id) {
                     e.members = Some(ids);
@@ -266,7 +277,17 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .cursor_pointer()
         .flex()
         .items_center()
-        .child(div().size(z(32.)).flex_none().rounded_full().bg(c(tok(idx::BACKGROUND_BASE_LOWEST))).flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("members")).size(z(20.)).text_color(c(tok(idx::TEXT_SUBTLE)))))
+        .child(
+            div()
+                .size(z(32.))
+                .flex_none()
+                .rounded_full()
+                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("members")).size(z(20.)).text_color(c(tok(idx::TEXT_SUBTLE)))),
+        )
         .child(
             div()
                 .ml(z(16.))
@@ -278,13 +299,11 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         )
         .child(gpui::svg().path(crate::icons::path("chevron-right")).size(z(24.)).text_color(c(tok(idx::ICON_SUBTLE))))
         .on_click(cx.listener(move |a, _, _, cx| open_editor(everyone, true, false, a, cx)));
-    let search = div()
-        .mt(z(32.))
-        .flex()
-        .items_center()
-        .gap(z(16.))
-        .child(kit::search_box(s.inputs.get("role_search")).flex_1())
-        .child(kit::btn_sm("ss-role-create", crate::t!("gs.roles.create"), BtnKind::Primary));
+    let search = div().mt(z(32.)).flex().items_center().gap(z(16.)).child(kit::search_box(s.inputs.get("role_search")).flex_1()).child(kit::btn_sm(
+        "ss-role-create",
+        crate::t!("gs.roles.create"),
+        BtnKind::Primary,
+    ));
     let help = div()
         .mt(z(8.))
         .flex()
@@ -329,9 +348,20 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
             .items_center()
             .cursor_pointer()
             .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
-            .child(div().absolute().top_0().left(z(32.)).right(z(8.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))).group_hover(group.clone(), |s| s.bg(gpui::transparent_black())))
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left(z(32.))
+                    .right(z(8.))
+                    .h(z(1.))
+                    .bg(c(tok(idx::BORDER_SUBTLE)))
+                    .group_hover(group.clone(), |s| s.bg(gpui::transparent_black())),
+            )
             .when(i == last, |d| d.child(div().absolute().bottom(z(-1.)).left(z(32.)).right(z(8.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))))
-            .when(drag.is_some_and(|(_, over)| over == i), |d| d.child(div().absolute().top_0().left(z(32.)).right(z(8.)).h(z(2.)).bg(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW)))))
+            .when(drag.is_some_and(|(_, over)| over == i), |d| {
+                d.child(div().absolute().top_0().left(z(32.)).right(z(8.)).h(z(2.)).bg(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW))))
+            })
             .child(
                 div()
                     .id(("ss-role-drag", id as usize))
@@ -342,10 +372,13 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                     .when(!lock && !managed, |d| d.group_hover(group.clone(), |s| s.visible()))
                     .child(gpui::svg().path(crate::icons::path("server/drag")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
                     .when(!lock, |d| {
-                        d.on_mouse_down(gpui::MouseButton::Left, cx.listener(move |_, _, _, cx| {
-                            with_state(|s| s.drag = Some(Drag { id, over: i }));
-                            cx.notify();
-                        }))
+                        d.on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(move |_, _, _, cx| {
+                                with_state(|s| s.drag = Some(Drag { id, over: i }));
+                                cx.notify();
+                            }),
+                        )
                     }),
             )
             .child(
@@ -357,7 +390,9 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                     .min_w_0()
                     .child(div().mr(z(8.)).child(role_icon(s.guild.0, r, 24.)))
                     .child(text(kit::s(r, "name"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG).truncate().min_w_0())
-                    .when(lock, |d| d.child(gpui::svg().path(crate::icons::path("lock")).ml(z(4.)).flex_none().size(z(16.)).text_color(c(tok(idx::TEXT_MUTED))))),
+                    .when(lock, |d| {
+                        d.child(gpui::svg().path(crate::icons::path("lock")).ml(z(4.)).flex_none().size(z(16.)).text_color(c(tok(idx::TEXT_MUTED))))
+                    }),
             )
             .child(
                 div()
@@ -401,22 +436,25 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                     cx.notify();
                 }
             }))
-            .on_mouse_up(gpui::MouseButton::Left, cx.listener(move |_, _, _, cx| {
-                with_state(|s| {
-                    if let Some(d) = s.drag.take()
-                        && d.id != id
-                    {
-                        let next = move_role(&order2, d.id, d.over);
-                        let base: Vec<u64> = {
-                            let mut v: Vec<&Value> = s.list("roles").iter().filter(|r| kit::n(r, "id") != s.guild.0).collect();
-                            v.sort_by_key(|r| -(r.get("position").and_then(Value::as_i64).unwrap_or(0)));
-                            v.iter().map(|r| kit::n(r, "id")).collect()
-                        };
-                        s.role_order = (next != base).then_some(next);
-                    }
-                });
-                cx.notify();
-            }))
+            .on_mouse_up(
+                gpui::MouseButton::Left,
+                cx.listener(move |_, _, _, cx| {
+                    with_state(|s| {
+                        if let Some(d) = s.drag.take()
+                            && d.id != id
+                        {
+                            let next = move_role(&order2, d.id, d.over);
+                            let base: Vec<u64> = {
+                                let mut v: Vec<&Value> = s.list("roles").iter().filter(|r| kit::n(r, "id") != s.guild.0).collect();
+                                v.sort_by_key(|r| -(r.get("position").and_then(Value::as_i64).unwrap_or(0)));
+                                v.iter().map(|r| kit::n(r, "id")).collect()
+                            };
+                            s.role_order = (next != base).then_some(next);
+                        }
+                    });
+                    cx.notify();
+                }),
+            )
             .on_click(cx.listener(move |a, _, _, cx| open_editor(id, false, false, a, cx)));
         table = table.child(row);
     }
@@ -571,37 +609,42 @@ fn perm_row(bit: u32, on: bool, cx: &mut Cx) -> AnyElement {
 
 fn permissions(e: &Editor, cx: &mut Cx) -> AnyElement {
     let q = kit::input_value(e.perm_search.as_ref(), cx).to_lowercase();
-    let mut col = div()
-        .flex()
-        .flex_col()
-        .child(kit::search_box(e.perm_search.as_ref()))
-        .child(
-            div()
-                .id("ss-perm-clear")
-                .mt(z(32.))
-                .flex()
-                .justify_end()
-                .cursor_pointer()
-                .child(text(crate::t!("gs.role.clear_perms"), 14., 18., FontWeight::SEMIBOLD, idx::TEXT_LINK))
-                .on_click(cx.listener(|_, _, _, cx| {
-                    with_state(|s| {
-                        if let Some(e) = s.role.as_mut() {
-                            e.perms = 0;
-                        }
-                    });
-                    cx.notify();
-                })),
-        );
+    let mut col = div().flex().flex_col().child(kit::search_box(e.perm_search.as_ref())).child(
+        div()
+            .id("ss-perm-clear")
+            .mt(z(32.))
+            .flex()
+            .justify_end()
+            .cursor_pointer()
+            .child(text(crate::t!("gs.role.clear_perms"), 14., 18., FontWeight::SEMIBOLD, idx::TEXT_LINK))
+            .on_click(cx.listener(|_, _, _, cx| {
+                with_state(|s| {
+                    if let Some(e) = s.role.as_mut() {
+                        e.perms = 0;
+                    }
+                });
+                cx.notify();
+            })),
+    );
     for (si, (title, bits)) in PERMS.iter().enumerate() {
         let shown: Vec<u32> = bits
             .iter()
             .copied()
-            .filter(|b| q.is_empty() || crate::t!(&format!("gs.perm.p{b}")).to_lowercase().contains(&q) || crate::t!(&format!("gs.perm.p{b}_desc")).to_lowercase().contains(&q))
+            .filter(|b| {
+                q.is_empty()
+                    || crate::t!(&format!("gs.perm.p{b}")).to_lowercase().contains(&q)
+                    || crate::t!(&format!("gs.perm.p{b}_desc")).to_lowercase().contains(&q)
+            })
             .collect();
         if shown.is_empty() {
             continue;
         }
-        let mut fs = div().flex().flex_col().when(si > 0, |d| d.mt(z(56.))).when(si == 0, |d| d.mt(z(-18.))).child(text(crate::t!(title), 20., 24., FontWeight::MEDIUM, idx::TEXT_STRONG).mb(z(12.)));
+        let mut fs = div()
+            .flex()
+            .flex_col()
+            .when(si > 0, |d| d.mt(z(56.)))
+            .when(si == 0, |d| d.mt(z(-18.)))
+            .child(text(crate::t!(title), 20., 24., FontWeight::MEDIUM, idx::TEXT_STRONG).mb(z(12.)));
         for (j, b) in shown.iter().enumerate() {
             if j > 0 {
                 fs = fs.child(div().my(z(24.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))));
@@ -624,9 +667,20 @@ fn style_card(i: usize, style: Style, label: SharedString, e: &Editor, cx: &mut 
         Some(sec) => div()
             .relative()
             .child(text("Wumpus", 16., 22., FontWeight::MEDIUM, idx::TEXT_STRONG).text_color(c(preview.primary)))
-            .child(div().absolute().top_0().left_0().right_0().bottom_0().opacity(0.5).child(text("Wumpus", 16., 22., FontWeight::MEDIUM, idx::TEXT_STRONG).text_color(c(preview.tertiary.unwrap_or(sec)))))
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .opacity(0.5)
+                    .child(text("Wumpus", 16., 22., FontWeight::MEDIUM, idx::TEXT_STRONG).text_color(c(preview.tertiary.unwrap_or(sec)))),
+            )
             .into_any_element(),
-        None => text("Wumpus", 16., 22., FontWeight::MEDIUM, idx::TEXT_STRONG).text_color(c(if preview.primary == 0 { 0xDBDEE1 } else { preview.primary })).into_any_element(),
+        None => text("Wumpus", 16., 22., FontWeight::MEDIUM, idx::TEXT_STRONG)
+            .text_color(c(if preview.primary == 0 { 0xDBDEE1 } else { preview.primary }))
+            .into_any_element(),
     };
     div()
         .id(("ss-role-style", i))
@@ -649,7 +703,13 @@ fn style_card(i: usize, style: Style, label: SharedString, e: &Editor, cx: &mut 
                 .flex()
                 .gap(z(8.))
                 .child(div().size(z(40.)).flex_none().rounded_full().bg(c(tok(idx::BACKGROUND_BRAND))))
-                .child(div().flex_1().min_w_0().flex().flex_col().child(name).child(text(crate::t!("gs.role.preview_msg"), 16., 22., FontWeight::NORMAL, idx::TEXT_DEFAULT))),
+                .child(div().flex_1().min_w_0().flex().flex_col().child(name).child(text(
+                    crate::t!("gs.role.preview_msg"),
+                    16.,
+                    22.,
+                    FontWeight::NORMAL,
+                    idx::TEXT_DEFAULT,
+                ))),
         )
         .child(
             div()
@@ -665,7 +725,11 @@ fn style_card(i: usize, style: Style, label: SharedString, e: &Editor, cx: &mut 
                 if let Some(e) = s.role.as_mut() {
                     e.colors = match style {
                         Style::Solid => RoleColors { primary: e.colors.primary, secondary: None, tertiary: None },
-                        Style::Gradient => RoleColors { primary: e.colors.primary, secondary: Some(e.colors.secondary.filter(|_| e.colors != HOLOGRAPHIC).unwrap_or(0xFF4FB6)), tertiary: None },
+                        Style::Gradient => RoleColors {
+                            primary: e.colors.primary,
+                            secondary: Some(e.colors.secondary.filter(|_| e.colors != HOLOGRAPHIC).unwrap_or(0xFF4FB6)),
+                            tertiary: None,
+                        },
                         Style::Holographic => HOLOGRAPHIC,
                     };
                 }
@@ -698,18 +762,24 @@ fn swatch(id: (&'static str, usize), bg: gpui::Background, on: bool, set: RoleCo
 fn color_picker(e: &Editor, cx: &mut Cx) -> AnyElement {
     let style = style_of(&e.colors);
     let custom_bg: gpui::Background = match style {
-        Style::Gradient => gpui::linear_gradient(90., gpui::linear_color_stop(c(e.colors.primary), 0.), gpui::linear_color_stop(c(e.colors.secondary.unwrap_or(e.colors.primary)), 1.)),
+        Style::Gradient => gpui::linear_gradient(
+            90.,
+            gpui::linear_color_stop(c(e.colors.primary), 0.),
+            gpui::linear_color_stop(c(e.colors.secondary.unwrap_or(e.colors.primary)), 1.),
+        ),
         _ => c(if e.colors.primary == 0 { 0x99AAB5 } else { e.colors.primary }).into(),
     };
     let dropper = |col: u32| {
-        div()
-            .size(z(34.))
-            .rounded_full()
-            .bg(gpui::white())
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(div().size(z(32.)).rounded_full().bg(c(col)).flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("server/dropper")).size(z(14.)).text_color(gpui::white())))
+        div().size(z(34.)).rounded_full().bg(gpui::white()).flex().items_center().justify_center().child(
+            div()
+                .size(z(32.))
+                .rounded_full()
+                .bg(c(col))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("server/dropper")).size(z(14.)).text_color(gpui::white())),
+        )
     };
     let custom = div()
         .w(z(154.))
@@ -731,7 +801,13 @@ fn color_picker(e: &Editor, cx: &mut Cx) -> AnyElement {
                 let mut row = div().flex().gap(z(8.));
                 for (j, (_, a, b)) in list.iter().enumerate() {
                     let set = RoleColors { primary: *a, secondary: Some(*b), tertiary: None };
-                    row = row.child(swatch(("ss-grad", ri * 6 + j), gpui::linear_gradient(180., gpui::linear_color_stop(c(*a), 0.), gpui::linear_color_stop(c(*b), 1.)), e.colors == set, set, cx));
+                    row = row.child(swatch(
+                        ("ss-grad", ri * 6 + j),
+                        gpui::linear_gradient(180., gpui::linear_color_stop(c(*a), 0.), gpui::linear_color_stop(c(*b), 1.)),
+                        e.colors == set,
+                        set,
+                        cx,
+                    ));
                 }
                 rows = rows.child(row);
             }
@@ -751,7 +827,13 @@ fn color_picker(e: &Editor, cx: &mut Cx) -> AnyElement {
 }
 
 fn required(label: SharedString) -> gpui::Div {
-    div().flex().gap(z(4.)).child(text(label, 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(text("*", 16., 20., FontWeight::NORMAL, idx::TEXT_FEEDBACK_CRITICAL))
+    div().flex().gap(z(4.)).child(text(label, 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(text(
+        "*",
+        16.,
+        20.,
+        FontWeight::NORMAL,
+        idx::TEXT_FEEDBACK_CRITICAL,
+    ))
 }
 
 fn display(app: &PhoenixApp, s: &State, e: &Editor, cx: &mut Cx) -> AnyElement {
@@ -805,29 +887,32 @@ fn display(app: &PhoenixApp, s: &State, e: &Editor, cx: &mut Cx) -> AnyElement {
                 .child(style_card(1, Style::Gradient, crate::t!("gs.role.style_gradient"), e, cx))
                 .child(style_card(2, Style::Holographic, crate::t!("gs.role.style_holo"), e, cx)),
         )
-        .child(div().mt(z(24.)).flex().flex_col().child(required(crate::t!("gs.role.color")).mb(z(4.))).child(text(crate::t!("gs.role.color_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE).mb(z(8.))).child(color_picker(e, cx)))
+        .child(
+            div()
+                .mt(z(24.))
+                .flex()
+                .flex_col()
+                .child(required(crate::t!("gs.role.color")).mb(z(4.)))
+                .child(text(crate::t!("gs.role.color_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE).mb(z(8.)))
+                .child(color_picker(e, cx)),
+        )
         .child(
             div()
                 .mt(z(16.))
                 .flex()
                 .flex_col()
                 .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(z(8.))
-                        .child(text(crate::t!("gs.role.icon"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG))
-                        .child(
-                            div()
-                                .px(z(6.))
-                                .rounded(z(8.))
-                                .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
-                                .flex()
-                                .items_center()
-                                .gap(z(4.))
-                                .child(gpui::svg().path(crate::icons::path("boost")).size(z(14.)).text_color(c(0xFF73FA)))
-                                .child(text(crate::t!("gs.role.unlocked"), 14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT)),
-                        ),
+                    div().flex().items_center().gap(z(8.)).child(text(crate::t!("gs.role.icon"), 16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(
+                        div()
+                            .px(z(6.))
+                            .rounded(z(8.))
+                            .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
+                            .flex()
+                            .items_center()
+                            .gap(z(4.))
+                            .child(gpui::svg().path(crate::icons::path("boost")).size(z(14.)).text_color(c(0xFF73FA)))
+                            .child(text(crate::t!("gs.role.unlocked"), 14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT)),
+                    ),
                 )
                 .child(text(crate::t!("gs.role.icon_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).mt(z(8.)))
                 .child(
@@ -836,7 +921,17 @@ fn display(app: &PhoenixApp, s: &State, e: &Editor, cx: &mut Cx) -> AnyElement {
                         .flex()
                         .items_center()
                         .gap(z(16.))
-                        .child(div().size(z(80.)).flex_none().rounded(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWEST))).flex().items_center().justify_center().child(role_icon(s.guild.0, &role, 40.)))
+                        .child(
+                            div()
+                                .size(z(80.))
+                                .flex_none()
+                                .rounded(z(8.))
+                                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(role_icon(s.guild.0, &role, 40.)),
+                        )
                         .child(crate::ui::controls::button("ss-role-icon-pick", crate::t!("gs.role.icon_pick"), BtnKind::Secondary))
                         .child(crate::ui::controls::button("ss-role-icon-remove", crate::t!("gs.role.icon_remove"), BtnKind::Secondary)),
                 ),
@@ -847,21 +942,21 @@ fn display(app: &PhoenixApp, s: &State, e: &Editor, cx: &mut Cx) -> AnyElement {
         .child(line())
         .child(mention)
         .child(line())
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .child(labels(crate::t!("gs.role.view_as"), Some(crate::t!("gs.role.view_as_desc"))))
-                .child(div().mt(z(8.)).flex().child(kit::btn_sm("ss-role-view-as", crate::t!("gs.role.view_as"), BtnKind::Secondary).on_click({
-                    let (guild, role) = (s.guild, e.id);
-                    cx.listener(move |a, _, _, cx| crate::ui::view_as::start(a, guild, crate::model::Id(role), cx))
-                }))),
-        )
+        .child(div().flex().flex_col().child(labels(crate::t!("gs.role.view_as"), Some(crate::t!("gs.role.view_as_desc")))).child(
+            div().mt(z(8.)).flex().child(kit::btn_sm("ss-role-view-as", crate::t!("gs.role.view_as"), BtnKind::Secondary).on_click({
+                let (guild, role) = (s.guild, e.id);
+                cx.listener(move |a, _, _, cx| crate::ui::view_as::start(a, guild, crate::model::Id(role), cx))
+            })),
+        ))
         .into_any_element()
 }
 
-pub static PREVIEW_THEMES: [(&[u32; crate::theme::generated::COLOR_COUNT], bool); 4] =
-    [(&crate::theme::generated::ASH, false), (&crate::theme::generated::DARK, false), (&crate::theme::generated::ONYX, false), (&crate::theme::generated::LIGHT, true)];
+pub static PREVIEW_THEMES: [(&[u32; crate::theme::generated::COLOR_COUNT], bool); 4] = [
+    (&crate::theme::generated::ASH, false),
+    (&crate::theme::generated::DARK, false),
+    (&crate::theme::generated::ONYX, false),
+    (&crate::theme::generated::LIGHT, true),
+];
 
 fn rgba(v: u32) -> Hsla {
     gpui::Hsla::from(gpui::rgba(v))
@@ -887,27 +982,28 @@ fn theme_preview(guild: u64, role: &Value, e: &Editor) -> AnyElement {
                 .child("Wumpus")
                 .into_any_element(),
         };
-        let row = div()
-            .py(z(16.))
-            .child(
-                div()
-                    .relative()
-                    .pl(z(80.))
-                    .pr(z(30.))
-                    .py(z(2.))
-                    .min_h(z(48.))
-                    .child(div().absolute().left(z(20.)).top(z(4.)).size(z(40.)).rounded_full().overflow_hidden().child(gpui::img(SharedString::from("https://cdn.discordapp.com/embed/avatars/0.png")).size(z(40.))))
-                    .child(
-                        div()
-                            .h(z(22.))
-                            .flex()
-                            .items_center()
-                            .child(name)
-                            .child(div().ml(z(4.)).child(role_icon(guild, role, 20.)))
-                            .child(div().ml(z(4.)).text_size(z(12.)).line_height(z(22.)).font_weight(FontWeight::MEDIUM).text_color(col(idx::TEXT_MUTED)).child(now.clone())),
-                    )
-                    .child(div().text_size(z(16.)).line_height(z(22.)).text_color(col(idx::TEXT_DEFAULT)).child(crate::t!("gs.role.preview_message"))),
-            );
+        let row = div().py(z(16.)).child(
+            div()
+                .relative()
+                .pl(z(80.))
+                .pr(z(30.))
+                .py(z(2.))
+                .min_h(z(48.))
+                .child(
+                    div()
+                        .absolute()
+                        .left(z(20.))
+                        .top(z(4.))
+                        .size(z(40.))
+                        .rounded_full()
+                        .overflow_hidden()
+                        .child(gpui::img(SharedString::from("https://cdn.discordapp.com/embed/avatars/0.png")).size(z(40.))),
+                )
+                .child(div().h(z(22.)).flex().items_center().child(name).child(div().ml(z(4.)).child(role_icon(guild, role, 20.))).child(
+                    div().ml(z(4.)).text_size(z(12.)).line_height(z(22.)).font_weight(FontWeight::MEDIUM).text_color(col(idx::TEXT_MUTED)).child(now.clone()),
+                ))
+                .child(div().text_size(z(16.)).line_height(z(22.)).text_color(col(idx::TEXT_DEFAULT)).child(crate::t!("gs.role.preview_message"))),
+        );
         let mut wrap = div().id(("ss-role-preview", n)).bg(col(idx::BACKGROUND_BASE_LOW)).flex().flex_col().child(row);
         if *light {
             wrap = wrap.child(
@@ -933,10 +1029,19 @@ fn links() -> AnyElement {
         .flex()
         .flex_col()
         .gap(z(8.))
-        .child(text(crate::t!("gs.role.links_notice"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).p(z(8.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_INFO))))
+        .child(
+            text(crate::t!("gs.role.links_notice"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT)
+                .p(z(8.))
+                .rounded(z(8.))
+                .bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_INFO))),
+        )
         .child(text(crate::t!("gs.role.links_title"), 14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG).mt(z(16.)))
         .child(text(crate::t!("gs.role.links_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE))
-        .child(div().mt(z(16.)).flex().justify_center().child(crate::ui::controls::button("ss-role-link-add", crate::t!("gs.role.links_add"), BtnKind::Secondary)))
+        .child(div().mt(z(16.)).flex().justify_center().child(crate::ui::controls::button(
+            "ss-role-link-add",
+            crate::t!("gs.role.links_add"),
+            BtnKind::Secondary,
+        )))
         .into_any_element()
 }
 
@@ -963,7 +1068,11 @@ fn members(app: &PhoenixApp, e: &Editor, cx: &mut Cx) -> AnyElement {
                 .child(text(name, 14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG).ml(z(8.)))
                 .child(text(tag, 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE).ml(z(4.)))
                 .child(div().flex_1())
-                .child(div().mx(z(8.)).child(gpui::svg().path(crate::icons::path("settings/circle-x")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
+                .child(
+                    div()
+                        .mx(z(8.))
+                        .child(gpui::svg().path(crate::icons::path("settings/circle-x")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
+                )
                 .into_any_element()
         })
         .collect();
@@ -972,7 +1081,11 @@ fn members(app: &PhoenixApp, e: &Editor, cx: &mut Cx) -> AnyElement {
         .mt(z(16.))
         .flex()
         .flex_col()
-        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(None).flex_1()).child(kit::btn_sm("ss-role-add-members", crate::t!("gs.role.add_members"), BtnKind::Primary)))
+        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(None).flex_1()).child(kit::btn_sm(
+            "ss-role-add-members",
+            crate::t!("gs.role.add_members"),
+            BtnKind::Primary,
+        )))
         .child(div().mt(z(24.)).flex().flex_col().children(rows))
         .into_any_element()
 }

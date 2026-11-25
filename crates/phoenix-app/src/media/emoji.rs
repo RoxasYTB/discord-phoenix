@@ -139,8 +139,7 @@ fn table() -> &'static Table {
     T.get_or_init(|| {
         let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
         let mut canon = std::collections::HashMap::new();
-        let extra: Vec<&'static str> =
-            (0x1F1E6..=0x1F1FF).chain(0x1F3FB..=0x1F3FF).filter_map(char::from_u32).map(|c| leak(c.to_string())).collect();
+        let extra: Vec<&'static str> = (0x1F1E6..=0x1F1FF).chain(0x1F3FB..=0x1F3FF).filter_map(char::from_u32).map(|c| leak(c.to_string())).collect();
         for s in super::emoji_seqs::SEQUENCES.iter().copied().chain(extra) {
             canon.insert(s, s);
             if !s.contains('\u{200D}') && s.contains('\u{FE0F}') {
@@ -202,11 +201,7 @@ fn emoji_element_with(token: &str, size: f32, auto: bool) -> AnyElement {
     match url {
         Some(u) => {
             let fb = text.clone();
-            img(u)
-                .size(px(size))
-                .flex_none()
-                .with_fallback(move || div().text_size(px(size * 0.9)).child(fb.clone()).into_any_element())
-                .into_any_element()
+            img(u).size(px(size)).flex_none().with_fallback(move || div().text_size(px(size * 0.9)).child(fb.clone()).into_any_element()).into_any_element()
         }
         None => div().text_size(px(size)).child(text).into_any_element(),
     }

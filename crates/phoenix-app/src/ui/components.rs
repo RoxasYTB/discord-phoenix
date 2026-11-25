@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use gpui::{
-    AnyElement, App, Entity, FontWeight, IntoElement, MouseButton, ParentElement, SharedString, StyledText, Window,
-    div, img, prelude::*, px,
-};
+use gpui::{AnyElement, App, Entity, FontWeight, IntoElement, MouseButton, ParentElement, SharedString, StyledText, Window, div, img, prelude::*, px};
 use gpui_component::input::{Input, InputState, Textarea, TextareaState};
 
 use phoenix_api::models as api;
@@ -43,13 +40,7 @@ pub fn markdown_in(app: &PhoenixApp, text: &str, entity: &Entity<PhoenixApp>, ms
     markdown_sized(app, text, false, Some((entity, msg)), None)
 }
 
-pub fn markdown_highlighted(
-    app: &PhoenixApp,
-    text: &str,
-    entity: &Entity<PhoenixApp>,
-    msg: Id,
-    hl: &crate::search_highlight::Highlighter,
-) -> AnyElement {
+pub fn markdown_highlighted(app: &PhoenixApp, text: &str, entity: &Entity<PhoenixApp>, msg: Id, hl: &crate::search_highlight::Highlighter) -> AnyElement {
     markdown_sized(app, text, false, Some((entity, msg)), Some(hl))
 }
 
@@ -80,13 +71,7 @@ fn markdown_lines(
     if let Some(hl) = hl {
         richtext::apply_highlights(&parsed, &mut blocks, hl);
     }
-    let mut col = div()
-        .flex()
-        .flex_col()
-        .min_w_0()
-        .text_size(fz(16. * k))
-        .line_height(fz(line.unwrap_or(22. * k)))
-        .text_color(c(Palette::TEXT_NORMAL));
+    let mut col = div().flex().flex_col().min_w_0().text_size(fz(16. * k)).line_height(fz(line.unwrap_or(22. * k))).text_color(c(Palette::TEXT_NORMAL));
     let n = blocks.len();
     for (bi, b) in blocks.into_iter().enumerate() {
         col = col.child(match b {
@@ -192,11 +177,7 @@ fn render_with(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, int
     for (i, comp) in parts.components.iter().enumerate() {
         col = col.child(comp_el(app, &k, comp, i, cx));
     }
-    Some(if v2 {
-        div().mt(z(2.)).flex().child(col.max_w(z(600.))).into_any_element()
-    } else {
-        col.mt(z(2.)).into_any_element()
-    })
+    Some(if v2 { div().mt(z(2.)).flex().child(col.max_w(z(600.))).into_any_element() } else { col.mt(z(2.)).into_any_element() })
 }
 
 fn comp_el(app: &PhoenixApp, k: &Ctx, comp: &Comp, ix: usize, cx: &App) -> AnyElement {
@@ -249,11 +230,9 @@ fn section(app: &PhoenixApp, k: &Ctx, s: &api::Section, ix: usize, cx: &App) -> 
         .flex()
         .flex_col()
         .gap(z(4.))
-        .child(
-            div().flex().gap(z(12.)).justify_between().child(texts).when_some(s.accessory.as_deref(), |d, a| {
-                d.child(div().flex().items_start().min_w_0().max_w(gpui::relative(0.5)).flex_none().child(comp_el(app, k, a, ix * 8 + 7, cx)))
-            }),
-        )
+        .child(div().flex().gap(z(12.)).justify_between().child(texts).when_some(s.accessory.as_deref(), |d, a| {
+            d.child(div().flex().items_start().min_w_0().max_w(gpui::relative(0.5)).flex_none().child(comp_el(app, k, a, ix * 8 + 7, cx)))
+        }))
         .into_any_element()
 }
 
@@ -431,11 +410,8 @@ fn button(app: &PhoenixApp, k: &Ctx, b: &api::Button, ix: usize) -> AnyElement {
     let [bg, hover, active, border, fg] = button_tokens(b.style);
     let action = button_action(b);
     let premium = b.style == api::ButtonStyle::Premium;
-    let label: Option<SharedString> = if premium {
-        Some(crate::t!("components.product_unavailable"))
-    } else {
-        b.label.clone().filter(|l| !l.is_empty()).map(SharedString::from)
-    };
+    let label: Option<SharedString> =
+        if premium { Some(crate::t!("components.product_unavailable")) } else { b.label.clone().filter(|l| !l.is_empty()).map(SharedString::from) };
     let pending = match &action {
         ButtonAction::Interact(id) => app.parity.pending.contains(&(k.message, id.clone())),
         _ => false,
@@ -450,9 +426,7 @@ fn button(app: &PhoenixApp, k: &Ctx, b: &api::Button, ix: usize) -> AnyElement {
         .min_w(z(32.))
         .overflow_hidden()
         .when(pending, |d| d.invisible())
-        .when(premium, |d| {
-            d.child(div().flex().items_center().mr(z(4.)).child(icon_svg("shop", 16., gpui::white())))
-        })
+        .when(premium, |d| d.child(div().flex().items_center().mr(z(4.)).child(icon_svg("shop", 16., gpui::white()))))
         .when_some(b.emoji.as_ref(), |d, e| {
             d.child(div().flex_none().when(has_label, |d| d.mr(z(4.))).child(crate::media::emoji::emoji_element(&e.token(), 19.25)))
         })
@@ -538,8 +512,7 @@ fn select(app: &PhoenixApp, k: &Ctx, s: &api::SelectMenu) -> AnyElement {
     let kind = s.kind;
     let key = (k.message, s.custom_id.clone());
     let open = app.parity.open_select.as_ref() == Some(&key);
-    let options: Vec<api::SelectOption> =
-        if kind == api::SelectKind::String { s.options.clone() } else { auto_options(app, kind, k.guild) };
+    let options: Vec<api::SelectOption> = if kind == api::SelectKind::String { s.options.clone() } else { auto_options(app, kind, k.guild) };
     let picked: Vec<String> = app.parity.select_values.get(&key).cloned().unwrap_or_else(|| {
         let mut v: Vec<String> = options.iter().filter(|o| o.default).map(|o| o.value.clone()).collect();
         v.extend(s.default_values.iter().map(|d| d.id.0.to_string()));
@@ -577,14 +550,10 @@ fn select(app: &PhoenixApp, k: &Ctx, s: &api::SelectMenu) -> AnyElement {
                 .child(label),
         )
         .child(
-            div()
-                .w(z(36.))
-                .h_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .pr(z(4.))
-                .child(icon_svg("chevron", 20., t(idx::TEXT_STRONG)).when(open, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI))))),
+            div().w(z(36.)).h_full().flex().items_center().justify_center().pr(z(4.)).child(
+                icon_svg("chevron", 20., t(idx::TEXT_STRONG))
+                    .when(open, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI)))),
+            ),
         );
     let header = if disabled {
         header.opacity(0.5).cursor_not_allowed()
@@ -743,12 +712,14 @@ fn gallery(items: &[api::GalleryItem], msg: Id, ix: usize, cx: &App) -> AnyEleme
             div()
                 .id(("gallery", (msg.0 << 8) ^ ix as u64))
                 .pb(z(2.4))
-                .child(
-                    div()
-                        .rounded(z(8.))
-                        .overflow_hidden()
-                        .child(crate::ui::chat::media_image_with(&a.url, a.original.clone(), a.filename.clone(), (a.width, a.height), size, false)),
-                )
+                .child(div().rounded(z(8.)).overflow_hidden().child(crate::ui::chat::media_image_with(
+                    &a.url,
+                    a.original.clone(),
+                    a.filename.clone(),
+                    (a.width, a.height),
+                    size,
+                    false,
+                )))
                 .into_any_element()
         }
         many => {
@@ -1074,16 +1045,7 @@ impl PhoenixApp {
         self.parity.pending.insert((k.message, custom_id.clone()));
         self.parity.last_target = Some((k.guild, k.channel));
         let key = (k.message, custom_id.clone());
-        let req = ParityRequest::Component {
-            guild: k.guild,
-            channel: k.channel,
-            message: k.message,
-            app: k.app,
-            flags: k.flags,
-            custom_id,
-            kind,
-            values,
-        };
+        let req = ParityRequest::Component { guild: k.guild, channel: k.channel, message: k.message, app: k.app, flags: k.flags, custom_id, kind, values };
         let (ch, msg) = (k.channel, k.message);
         self.refresh_message(ch, msg);
         self.parity_request(req, cx, move |a, res, cx| {
@@ -1242,14 +1204,7 @@ impl PhoenixApp {
         let guild = guild.or_else(|| self.channels.get(&channel).and_then(|c| c.guild));
         m.sending = true;
         m.error = None;
-        let req = ParityRequest::ModalSubmit {
-            guild,
-            channel,
-            app: m.spec.app,
-            modal: m.spec.id,
-            custom_id: m.spec.custom_id.clone(),
-            fields,
-        };
+        let req = ParityRequest::ModalSubmit { guild, channel, app: m.spec.app, modal: m.spec.id, custom_id: m.spec.custom_id.clone(), fields };
         self.parity_request(req, cx, |a, res, _| match res {
             Ok(_) => a.parity.modal = None,
             Err(e) => {
@@ -1295,9 +1250,7 @@ fn modal_el(app: &PhoenixApp, cx: &mut gpui::Context<PhoenixApp>) -> Option<AnyE
                         .child(SharedString::from(spec.label.to_uppercase()))
                         .when(spec.required, |d| d.child(div().text_color(c(Palette::RED)).child("*"))),
                 )
-                .when_some(spec.description.clone(), |d, ds| {
-                    d.child(div().text_size(px(14.)).text_color(c(Palette::TEXT_MUTED)).child(ds))
-                })
+                .when_some(spec.description.clone(), |d, ds| d.child(div().text_size(px(14.)).text_color(c(Palette::TEXT_MUTED)).child(ds)))
                 .child(
                     div()
                         .min_h(px(if spec.style == 2 { 80. } else { 40. }))
@@ -1332,9 +1285,7 @@ fn modal_el(app: &PhoenixApp, cx: &mut gpui::Context<PhoenixApp>) -> Option<AnyE
                 .flex()
                 .flex_col()
                 .gap(px(4.))
-                .when_some(m.spec.app_name.clone(), |d, n| {
-                    d.child(div().text_size(px(12.)).text_color(c(Palette::TEXT_MUTED)).child(n))
-                })
+                .when_some(m.spec.app_name.clone(), |d, n| d.child(div().text_size(px(12.)).text_color(c(Palette::TEXT_MUTED)).child(n)))
                 .child(
                     div()
                         .text_size(px(20.))
@@ -1394,20 +1345,11 @@ fn toast(app: &PhoenixApp) -> Option<AnyElement> {
                 .child(div().line_clamp(2).child(t.clone())),
         );
     Some(
-        gpui::deferred(
-            div()
-                .absolute()
-                .top(z(8.))
-                .left_0()
-                .w_full()
-                .px(z(8.))
-                .flex()
-                .justify_center()
-                .child(card)
-                .with_animation(gpui::ElementId::Name(format!("toast-{t}").into()), Animation::new(std::time::Duration::from_millis(300)), |d, p| {
-                    d.opacity(p).mt(z(-40. * (1. - p)))
-                }),
-        )
+        gpui::deferred(div().absolute().top(z(8.)).left_0().w_full().px(z(8.)).flex().justify_center().child(card).with_animation(
+            gpui::ElementId::Name(format!("toast-{t}").into()),
+            Animation::new(std::time::Duration::from_millis(300)),
+            |d, p| d.opacity(p).mt(z(-40. * (1. - p))),
+        ))
         .with_priority(30)
         .into_any_element(),
     )
@@ -1476,7 +1418,13 @@ mod tests {
         let a = as_attachment(&m, None, 0, true);
         assert_eq!((a.filename.as_ref(), a.url.as_ref(), a.width, a.spoiler), ("b.png", "https://media.example/a/b.png?ex=1", 800, true));
         assert_eq!(a.kind, crate::model::AttachmentKind::Image);
-        let f = UnfurledMedia { url: "https://cdn.example/t.html".into(), width: Some(0), height: Some(0), content_type: Some("text/html".into()), ..Default::default() };
+        let f = UnfurledMedia {
+            url: "https://cdn.example/t.html".into(),
+            width: Some(0),
+            height: Some(0),
+            content_type: Some("text/html".into()),
+            ..Default::default()
+        };
         let a = as_attachment(&f, Some("t.html"), 40104, false);
         assert_eq!((a.kind, a.url.as_ref(), a.size), (crate::model::AttachmentKind::File, "https://cdn.example/t.html", 40104));
     }

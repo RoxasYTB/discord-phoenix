@@ -12,8 +12,8 @@ pub mod gdm;
 pub mod gdm_cleanup;
 pub mod gift_nitro;
 pub mod go_live;
-pub mod ignore;
 pub mod guild_notify;
+pub mod ignore;
 pub mod leave_link;
 pub mod member;
 pub mod poll_create;
@@ -259,11 +259,25 @@ pub fn close_action(cx: &mut Context<PhoenixApp>) -> crate::ui::modal::Action {
     })
 }
 
-pub fn card(width: f32, title: SharedString, subtitle: Option<SharedString>, body: AnyElement, footer: Option<AnyElement>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+pub fn card(
+    width: f32,
+    title: SharedString,
+    subtitle: Option<SharedString>,
+    body: AnyElement,
+    footer: Option<AnyElement>,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     card_with(width, title, subtitle, body, footer, close_action(cx))
 }
 
-pub fn card_with(width: f32, title: SharedString, subtitle: Option<SharedString>, body: AnyElement, footer: Option<AnyElement>, close: crate::ui::modal::Action) -> AnyElement {
+pub fn card_with(
+    width: f32,
+    title: SharedString,
+    subtitle: Option<SharedString>,
+    body: AnyElement,
+    footer: Option<AnyElement>,
+    close: crate::ui::modal::Action,
+) -> AnyElement {
     let close2 = close.clone();
     let el = div()
         .relative()
@@ -292,7 +306,9 @@ pub fn card_with(width: f32, title: SharedString, subtitle: Option<SharedString>
                 .flex()
                 .flex_col()
                 .gap(z(8.))
-                .child(div().pr(z(36.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(title))
+                .child(
+                    div().pr(z(36.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(title),
+                )
                 .children(subtitle.map(|s| div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(s))),
         )
         .child(div().px(z(24.)).pt(z(8.)).flex().flex_col().min_h_0().text_size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(body))
@@ -336,13 +352,7 @@ pub(crate) fn clamp_insert(old: &str, new: &str, max: usize) -> Option<(String, 
         return None;
     }
     let prefix = old.char_indices().zip(new.chars()).take_while(|((_, a), b)| a == b).last().map_or(0, |((i, a), _)| i + a.len_utf8());
-    let suffix = old[prefix..]
-        .chars()
-        .rev()
-        .zip(new[prefix..].chars().rev())
-        .take_while(|(a, b)| a == b)
-        .map(|(a, _)| a.len_utf8())
-        .sum::<usize>();
+    let suffix = old[prefix..].chars().rev().zip(new[prefix..].chars().rev()).take_while(|(a, b)| a == b).map(|(a, _)| a.len_utf8()).sum::<usize>();
     let inserted = &new[prefix..new.len() - suffix];
     let kept = utf16_len(&new[..prefix]) + utf16_len(&new[new.len() - suffix..]);
     let fit = truncate_utf16(inserted, max.saturating_sub(kept));
@@ -453,22 +463,20 @@ fn form(f: &Form, cx: &mut Context<PhoenixApp>) -> AnyElement {
             let close = close_action(cx);
             move |_, w, cx| close(w, cx)
         }))
-        .child(
-            button("aform-submit", f.submit.clone(), if f.danger { BtnKind::Critical } else { BtnKind::Primary }).on_click(cx.listener(|a, _, _, cx| {
-                let taken = with_modal(|m| match m.take() {
-                    Some(Modal::Form(f)) => Some(f),
-                    other => {
-                        *m = other;
-                        None
-                    }
-                });
-                if let Some(f) = taken {
-                    let vals = values(&f, cx);
-                    (f.on_submit)(a, vals, f.choice, cx);
+        .child(button("aform-submit", f.submit.clone(), if f.danger { BtnKind::Critical } else { BtnKind::Primary }).on_click(cx.listener(|a, _, _, cx| {
+            let taken = with_modal(|m| match m.take() {
+                Some(Modal::Form(f)) => Some(f),
+                other => {
+                    *m = other;
+                    None
                 }
-                cx.notify();
-            })),
-        );
+            });
+            if let Some(f) = taken {
+                let vals = values(&f, cx);
+                (f.on_submit)(a, vals, f.choice, cx);
+            }
+            cx.notify();
+        })));
     card(f.width, f.title.clone(), f.subtitle.clone(), body.into_any_element(), Some(footer.into_any_element()), cx)
 }
 

@@ -112,19 +112,15 @@ fn bar_el(app: &PhoenixApp, ix: usize, mode: Mode, top: bool) -> gpui::AnyElemen
                 .border_1()
                 .map(|d| {
                     if mention {
-                        d.bg(c(tok(idx::BACKGROUND_FEEDBACK_NOTIFICATION)))
-                            .border_color(c(tok(idx::BORDER_SUBTLE)))
-                            .shadow(crate::ui::inbox::shadow_medium())
+                        d.bg(c(tok(idx::BACKGROUND_FEEDBACK_NOTIFICATION))).border_color(c(tok(idx::BORDER_SUBTLE))).shadow(crate::ui::inbox::shadow_medium())
                     } else {
-                        d.bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST))).border_color(c(tok(idx::BORDER_NORMAL))).shadow(vec![
-                            gpui::BoxShadow {
-                                color: c(tok(idx::OPACITY_BLACK_24)),
-                                offset: gpui::point(px(0.), z(12.)),
-                                blur_radius: z(24.),
-                                spread_radius: px(0.),
-                                inset: false,
-                            },
-                        ])
+                        d.bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST))).border_color(c(tok(idx::BORDER_NORMAL))).shadow(vec![gpui::BoxShadow {
+                            color: c(tok(idx::OPACITY_BLACK_24)),
+                            offset: gpui::point(px(0.), z(12.)),
+                            blur_radius: z(24.),
+                            spread_radius: px(0.),
+                            inset: false,
+                        }])
                     }
                 })
                 .text_size(z(12.))

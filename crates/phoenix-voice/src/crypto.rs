@@ -1,5 +1,5 @@
-use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::XChaCha20Poly1305;
 
 use crate::{Error, Result};
@@ -27,9 +27,7 @@ impl EncryptionMode {
     }
 
     pub fn choose(server_modes: &[String]) -> Option<Self> {
-        [Self::Aes256GcmRtpSize, Self::XChaCha20Poly1305RtpSize]
-            .into_iter()
-            .find(|m| server_modes.iter().any(|s| s == m.name()))
+        [Self::Aes256GcmRtpSize, Self::XChaCha20Poly1305RtpSize].into_iter().find(|m| server_modes.iter().any(|s| s == m.name()))
     }
 
     fn nonce_len(self) -> usize {
@@ -60,12 +58,10 @@ impl TransportCipher {
             return Err(Error::Crypto("secret key must be 32 bytes"));
         }
         let cipher = match mode {
-            EncryptionMode::Aes256GcmRtpSize => Cipher::Aes(Box::new(
-                Aes256Gcm::new_from_slice(secret_key).map_err(|_| Error::Crypto("key"))?,
-            )),
-            EncryptionMode::XChaCha20Poly1305RtpSize => Cipher::XChaCha(Box::new(
-                XChaCha20Poly1305::new_from_slice(secret_key).map_err(|_| Error::Crypto("key"))?,
-            )),
+            EncryptionMode::Aes256GcmRtpSize => Cipher::Aes(Box::new(Aes256Gcm::new_from_slice(secret_key).map_err(|_| Error::Crypto("key"))?)),
+            EncryptionMode::XChaCha20Poly1305RtpSize => {
+                Cipher::XChaCha(Box::new(XChaCha20Poly1305::new_from_slice(secret_key).map_err(|_| Error::Crypto("key"))?))
+            }
         };
         Ok(Self { mode, cipher, counter: 0 })
     }

@@ -10,7 +10,10 @@ pub mod user;
 use std::cell::RefCell;
 
 use gpui::{AnyElement, Context, Window};
-use phoenix_api::rest::{members::VoiceMod, reporting::{ReportMenu, ReportStep, ReportTarget}};
+use phoenix_api::rest::{
+    members::VoiceMod,
+    reporting::{ReportMenu, ReportStep, ReportTarget},
+};
 
 use crate::{
     app::PhoenixApp,

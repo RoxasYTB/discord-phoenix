@@ -18,7 +18,10 @@ pub enum Input {
     TestPattern,
     Device(String),
     #[cfg(unix)]
-    PipeWire { fd: std::os::fd::OwnedFd, node: u32 },
+    PipeWire {
+        fd: std::os::fd::OwnedFd,
+        node: u32,
+    },
 }
 
 impl PartialEq for Input {
@@ -76,7 +79,22 @@ impl DeviceReader {
         let caps = format!("video/x-raw,format=RGBA,width={width},height={height},framerate={fps}/1,pixel-aspect-ratio=1/1");
         let mut child = Command::new("gst-launch-1.0")
             .args(["-q", "pipewiresrc", "fd=0", &format!("path={node}"), "do-timestamp=true", "keepalive-time=1000", "always-copy=true"])
-            .args(["!", "videoconvert", "!", "videoscale", "add-borders=true", "!", "videorate", "drop-only=true", "!", &caps, "!", "fdsink", "fd=1", "sync=false"])
+            .args([
+                "!",
+                "videoconvert",
+                "!",
+                "videoscale",
+                "add-borders=true",
+                "!",
+                "videorate",
+                "drop-only=true",
+                "!",
+                &caps,
+                "!",
+                "fdsink",
+                "fd=1",
+                "sync=false",
+            ])
             .stdin(Stdio::from(fd))
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -101,13 +119,7 @@ impl Drop for DeviceReader {
 }
 
 impl Camera {
-    pub fn start(
-        input: Input,
-        width: u32,
-        height: u32,
-        fps: u32,
-        on_frame: impl FnMut(EncodedVideo) + Send + 'static,
-    ) -> Result<Self> {
+    pub fn start(input: Input, width: u32, height: u32, fps: u32, on_frame: impl FnMut(EncodedVideo) + Send + 'static) -> Result<Self> {
         Self::start_with(input, width, height, fps, 1_500_000, false, on_frame)
     }
 

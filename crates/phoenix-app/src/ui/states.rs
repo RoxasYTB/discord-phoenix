@@ -1,7 +1,7 @@
 use crate::theme::{c, generated::idx, tok, z};
 use crate::ui::Icon;
-use gpui::{AnimationExt, Div, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled, div, svg};
 use gpui::prelude::FluentBuilder as _;
+use gpui::{AnimationExt, Div, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled, div, svg};
 
 pub fn composer_button(id: &'static str, i: Icon) -> gpui::Stateful<Div> {
     composer_button_ext(id, i, 20., true)
@@ -164,9 +164,10 @@ pub fn below_tip(text: gpui::SharedString, button_w: f32, button_h: f32) -> gpui
         .child(text)
         .with_animation("tip-zoom", tip_zoom(), zoom_card);
     let tip = deferred(
-        anchored().position_mode(AnchoredPositionMode::Local).position(point(z(button_w / 2. - SPAN / 2.), z(button_h + 6.))).child(
-            div().w(z(SPAN)).flex().flex_col().items_center().child(caret).child(card),
-        ),
+        anchored()
+            .position_mode(AnchoredPositionMode::Local)
+            .position(point(z(button_w / 2. - SPAN / 2.), z(button_h + 6.)))
+            .child(div().w(z(SPAN)).flex().flex_col().items_center().child(caret).child(card)),
     )
     .with_priority(2);
     div().absolute().top_0().left_0().child(tip).into_any_element()
@@ -185,14 +186,7 @@ pub fn header_button(id: &'static str, path: gpui::SharedString, selected: bool,
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .child(
-            svg()
-                .path(path)
-                .size(z(20.))
-                .flex_none()
-                .text_color(rest)
-                .group_hover(id, move |s| s.text_color(hover)),
-        )
+        .child(svg().path(path).size(z(20.)).flex_none().text_color(rest).group_hover(id, move |s| s.text_color(hover)))
         .children(hovered(k).then(|| below_tip(label, 32., 32.)))
         .map(|d| crate::ui::focus_ring::ring(d, k, 4.))
 }

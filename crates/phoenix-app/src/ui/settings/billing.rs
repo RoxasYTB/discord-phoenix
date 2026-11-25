@@ -106,12 +106,7 @@ pub fn parse_payments(v: &Value) -> Vec<Payment> {
             let amount = p.get("amount").and_then(Value::as_u64).unwrap_or(0);
             let orbs = cur.len() != 3;
             let amount = if orbs { group(amount) } else { format!("{},{:02} {}", amount / 100, amount % 100, if cur == "eur" { "€" } else { "$" }) };
-            let description = p
-                .get("sku")
-                .and_then(|k| k.get("name"))
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-                .unwrap_or_else(|| s(p, "description"));
+            let description = p.get("sku").and_then(|k| k.get("name")).and_then(Value::as_str).map(str::to_owned).unwrap_or_else(|| s(p, "description"));
             Payment { date, description, amount, orbs }
         })
         .collect()

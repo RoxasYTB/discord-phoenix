@@ -119,12 +119,14 @@ fn spam_row(app: &PhoenixApp, r: &Relationship, cx: &mut Context<PhoenixApp>) ->
                 .flex()
                 .gap(z(10.))
                 .ml(z(8.))
-                .child(crate::ui::home::friends::action_button(("fr-spam-ok", user.0), "check", true, crate::t!("friends.accept")).on_click(
-                    cx.listener(move |a, _, _, cx| a.accept_friend_request(user, cx)),
-                ))
-                .child(crate::ui::home::friends::action_button(("fr-spam-no", user.0), "close", false, crate::t!("friends.ignore")).on_click(
-                    cx.listener(move |a, _, _, cx| a.relationship_action(user, RelAction::Remove, cx)),
-                )),
+                .child(
+                    crate::ui::home::friends::action_button(("fr-spam-ok", user.0), "check", true, crate::t!("friends.accept"))
+                        .on_click(cx.listener(move |a, _, _, cx| a.accept_friend_request(user, cx))),
+                )
+                .child(
+                    crate::ui::home::friends::action_button(("fr-spam-no", user.0), "close", false, crate::t!("friends.ignore"))
+                        .on_click(cx.listener(move |a, _, _, cx| a.relationship_action(user, RelAction::Remove, cx))),
+                ),
         )
         .into_any_element()
 }

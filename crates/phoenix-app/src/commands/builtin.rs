@@ -34,17 +34,32 @@ fn make(id: &str, name: &str, desc: &str, options: Vec<Value>) -> SlashCommand {
 }
 
 fn delete_choices() -> Vec<Value> {
-    [("slash.ban_none", 0), ("slash.ban_1h", 3600), ("slash.ban_6h", 21600), ("slash.ban_12h", 43200), ("slash.ban_24h", 86400), ("slash.ban_3d", 259200), ("slash.ban_7d", 604800)]
-        .iter()
-        .map(|(k, v)| json!({ "name": crate::t!(k).to_string(), "value": v }))
-        .collect()
+    [
+        ("slash.ban_none", 0),
+        ("slash.ban_1h", 3600),
+        ("slash.ban_6h", 21600),
+        ("slash.ban_12h", 43200),
+        ("slash.ban_24h", 86400),
+        ("slash.ban_3d", 259200),
+        ("slash.ban_7d", 604800),
+    ]
+    .iter()
+    .map(|(k, v)| json!({ "name": crate::t!(k).to_string(), "value": v }))
+    .collect()
 }
 
 fn timeout_choices() -> Vec<Value> {
-    [("mod.timeout.60s", 60), ("mod.timeout.5m", 300), ("mod.timeout.10m", 600), ("mod.timeout.1h", 3600), ("mod.timeout.1d", 86400), ("mod.timeout.1w", 604800)]
-        .iter()
-        .map(|(k, v)| json!({ "name": crate::t!(k).to_string(), "value": v }))
-        .collect()
+    [
+        ("mod.timeout.60s", 60),
+        ("mod.timeout.5m", 300),
+        ("mod.timeout.10m", 600),
+        ("mod.timeout.1h", 3600),
+        ("mod.timeout.1d", 86400),
+        ("mod.timeout.1w", 604800),
+    ]
+    .iter()
+    .map(|(k, v)| json!({ "name": crate::t!(k).to_string(), "value": v }))
+    .collect()
 }
 
 pub struct Context {

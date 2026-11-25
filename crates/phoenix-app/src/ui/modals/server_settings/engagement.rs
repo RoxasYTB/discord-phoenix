@@ -60,20 +60,36 @@ fn channel_value(app: &PhoenixApp, ch: Option<u64>, none: SharedString) -> AnyEl
         .flex()
         .items_center()
         .min_w_0()
-        .child(gpui::svg().path(crate::icons::path(if ch.kind == ChannelKind::Voice { "speaker" } else { "hash" })).flex_none().size(z(16.)).text_color(c(tok(idx::ICON_MUTED))))
+        .child(
+            gpui::svg()
+                .path(crate::icons::path(if ch.kind == ChannelKind::Voice { "speaker" } else { "hash" }))
+                .flex_none()
+                .size(z(16.))
+                .text_color(c(tok(idx::ICON_MUTED))),
+        )
         .child(text(ch.name.clone(), 16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT).mx(z(4.)).flex_shrink(1.).min_w_0().truncate())
         .children(cat.map(|n| text(n, 14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED).ml(z(4.)).flex_shrink(1.).min_w_0().truncate()))
         .into_any_element()
 }
 
 fn channels(app: &PhoenixApp, guild: Id, kind: ChannelKind) -> Vec<Id> {
-    let mut v: Vec<&crate::model::Channel> = app.guild_channels.get(&guild).into_iter().flatten().filter_map(|id| app.channels.get(id)).filter(|ch| ch.kind == kind).collect();
+    let mut v: Vec<&crate::model::Channel> =
+        app.guild_channels.get(&guild).into_iter().flatten().filter_map(|id| app.channels.get(id)).filter(|ch| ch.kind == kind).collect();
     v.sort_by_key(|ch| (ch.parent.and_then(|p| app.channels.get(&p)).map(|p| p.position).unwrap_or(-1), ch.position));
     v.into_iter().map(|ch| ch.id).collect()
 }
 
 #[allow(clippy::too_many_arguments)]
-fn channel_dropdown(app: &PhoenixApp, s: &State, id: &'static str, kind: ChannelKind, cur: Option<u64>, none: SharedString, set: fn(&mut State, Option<u64>), cx: &mut Cx) -> AnyElement {
+fn channel_dropdown(
+    app: &PhoenixApp,
+    s: &State,
+    id: &'static str,
+    kind: ChannelKind,
+    cur: Option<u64>,
+    none: SharedString,
+    set: fn(&mut State, Option<u64>),
+    cx: &mut Cx,
+) -> AnyElement {
     let list = channels(app, s.guild, kind);
     let mut opts: Vec<SharedString> = vec![none.clone()];
     opts.extend(list.iter().map(|c| app.channels.get(c).map(|ch| ch.name.clone()).unwrap_or_default()));
@@ -161,11 +177,18 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         }
     };
     let sys = s.edits.system_channel.unwrap_or_else(|| kit::id_of(g, "system_channel_id"));
-    let sys_row = div()
-        .flex()
-        .gap(z(24.))
-        .child(labels(crate::t!("gs.eng.sys_channel"), Some(crate::t!("gs.eng.sys_channel_desc"))).flex_1())
-        .child(div().flex_1().min_w_0().child(channel_dropdown(app, s, "sys", ChannelKind::Text, sys, crate::t!("gs.eng.no_sys"), |s, v| s.edits.system_channel = Some(v), cx)));
+    let sys_row = div().flex().gap(z(24.)).child(labels(crate::t!("gs.eng.sys_channel"), Some(crate::t!("gs.eng.sys_channel_desc"))).flex_1()).child(
+        div().flex_1().min_w_0().child(channel_dropdown(
+            app,
+            s,
+            "sys",
+            ChannelKind::Text,
+            sys,
+            crate::t!("gs.eng.no_sys"),
+            |s, v| s.edits.system_channel = Some(v),
+            cx,
+        )),
+    );
     let system = fieldset(
         crate::t!("gs.eng.system"),
         Some(crate::t!("gs.eng.system_desc")),
@@ -181,7 +204,14 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let feed = fieldset(
         crate::t!("gs.eng.feed"),
         Some(crate::t!("gs.eng.feed_desc")),
-        vec![div().flex().gap(z(24.)).child(labels(crate::t!("gs.eng.feed_show"), None).flex_1().pt(z(2.))).child(crate::ui::controls::switch("ss-feed", feed_on)).into_any_element()],
+        vec![
+            div()
+                .flex()
+                .gap(z(24.))
+                .child(labels(crate::t!("gs.eng.feed_show"), None).flex_1().pt(z(2.)))
+                .child(crate::ui::controls::switch("ss-feed", feed_on))
+                .into_any_element(),
+        ],
     );
     let notify = s.edits.notify.unwrap_or(kit::n(g, "default_message_notifications") as u8);
     let set_notify = |v: u8| move |s: &mut State| s.edits.notify = Some(v).filter(|v| u64::from(*v) != kit::n(s.guild_json(), "default_message_notifications"));
@@ -211,7 +241,11 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .flex_col()
         .child(
             half(
-                field(crate::t!("gs.eng.afk_channel"), None, channel_dropdown(app, s, "afk", ChannelKind::Voice, afk, crate::t!("gs.eng.no_afk"), |s, v| s.edits.afk_channel = Some(v), cx)),
+                field(
+                    crate::t!("gs.eng.afk_channel"),
+                    None,
+                    channel_dropdown(app, s, "afk", ChannelKind::Voice, afk, crate::t!("gs.eng.no_afk"), |s, v| s.edits.afk_channel = Some(v), cx),
+                ),
                 field(
                     crate::t!("gs.eng.afk_timeout"),
                     None,
@@ -302,7 +336,10 @@ mod tests {
 
     fn state() -> State {
         let mut s = State::new(Id(1), super::super::section_index("menu.gs.engagement"));
-        s.data.insert("guild", json!({ "name": "G", "system_channel_flags": 13, "default_message_notifications": 1, "afk_timeout": 3600, "system_channel_id": "5" }));
+        s.data.insert(
+            "guild",
+            json!({ "name": "G", "system_channel_flags": 13, "default_message_notifications": 1, "afk_timeout": 3600, "system_channel_id": "5" }),
+        );
         s
     }
 

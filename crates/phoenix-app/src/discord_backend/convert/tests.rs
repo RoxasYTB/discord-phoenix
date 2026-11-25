@@ -37,7 +37,13 @@ fn message_create_maps() {
     let e = ev("MESSAGE_CREATE", "message_create.json");
     cache.apply(&e);
     let out = a.map(&cache, &e);
-    let m = out.iter().find_map(|x| match x { AppEvent::MessageCreate(m) => Some(m), _ => None }).unwrap();
+    let m = out
+        .iter()
+        .find_map(|x| match x {
+            AppEvent::MessageCreate(m) => Some(m),
+            _ => None,
+        })
+        .unwrap();
     assert_eq!(m.id, Id(700000000000000051));
     assert!(m.attachments[0].is_image && !m.attachments[0].url.is_empty());
     assert!(out.iter().any(|x| matches!(x, AppEvent::Users(u) if u.iter().any(|u| u.name.as_ref() == "bob"))));
@@ -50,7 +56,13 @@ fn member_list_update_maps() {
     let e = ev("GUILD_MEMBER_LIST_UPDATE", "member_list_update.json");
     cache.apply(&e);
     let out = a.map(&cache, &e);
-    let ms = out.iter().find_map(|x| match x { AppEvent::GuildMembers { members, .. } => Some(members), _ => None }).unwrap();
+    let ms = out
+        .iter()
+        .find_map(|x| match x {
+            AppEvent::GuildMembers { members, .. } => Some(members),
+            _ => None,
+        })
+        .unwrap();
     assert_eq!(ms[0].presence, model::Presence::Idle);
     assert!(ms.len() == 1 || (ms.len() == 2 && ms[1].user == Id(r.user.id.0)));
 }
@@ -127,10 +139,14 @@ fn late_sync_of_the_previous_channel_is_not_shown() {
     };
     let rows_of = |out: &[AppEvent]| {
         out.iter().find_map(|x| match x {
-            AppEvent::MemberListRows { rows, .. } => Some(rows.iter().filter_map(|r| match r {
-                crate::presence::ListEntry::Member(m, _) => Some(m.user.0),
-                _ => None,
-            }).collect::<Vec<_>>()),
+            AppEvent::MemberListRows { rows, .. } => Some(
+                rows.iter()
+                    .filter_map(|r| match r {
+                        crate::presence::ListEntry::Member(m, _) => Some(m.user.0),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+            ),
             _ => None,
         })
     };

@@ -1,21 +1,21 @@
-pub mod convert;
 mod account;
+mod collectibles_shop;
+pub mod convert;
 mod expressions;
+mod history;
 pub mod http;
+mod inbox;
+mod member_list_id;
+mod msg_cache;
 mod nav;
 mod people;
-mod profile_edit;
-mod profile_widgets;
-pub(crate) mod profile_games;
-mod collectibles_shop;
-mod thread_members;
 mod pins;
-mod member_list_id;
-mod history;
-mod inbox;
-mod msg_cache;
-mod snapshot;
 mod preupload;
+mod profile_edit;
+pub(crate) mod profile_games;
+mod profile_widgets;
+mod snapshot;
+mod thread_members;
 #[cfg(test)]
 pub(crate) use profile_edit::bodies as profile_edit_bodies;
 pub mod store;
@@ -27,13 +27,13 @@ use std::{
 };
 
 use parking_lot::Mutex;
+use phoenix_api::gateway::events as api_ready;
 use phoenix_api::{
     Cache, ClientProperties, Error as ApiError, Gateway, GatewayConfig, GatewayEvent, GatewayHandle, RestClient,
     gateway::GuildSubscription,
     models as api,
     rest::{CreateMessage, LoginResponse},
 };
-use phoenix_api::gateway::events as api_ready;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
@@ -62,9 +62,7 @@ fn api_err(e: ApiError) -> BackendError {
             err(if body.message.is_empty() { "Login or password is invalid.".to_owned() } else { body.message.clone() })
         }
         _ if e.is_unauthorized() => err("Invalid token."),
-        ApiError::RateLimited { retry_after, .. } => {
-            err(format!("Rate limited by Discord, retry in {}s.", retry_after.as_secs().max(1)))
-        }
+        ApiError::RateLimited { retry_after, .. } => err(format!("Rate limited by Discord, retry in {}s.", retry_after.as_secs().max(1))),
         _ => err(e.to_string()),
     }
 }
@@ -133,12 +131,7 @@ impl DiscordBackend {
     }
 
     pub fn with_store(store: Arc<dyn TokenStore>) -> Self {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .thread_name("phoenix-net")
-            .enable_all()
-            .build()
-            .expect("tokio runtime");
+        let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).thread_name("phoenix-net").enable_all().build().expect("tokio runtime");
         let _ = std::thread::Builder::new().name("phoenix-buildinfo".into()).spawn(|| {
             phoenix_api::BuildInfo::refresh_cache();
         });
@@ -194,10 +187,7 @@ fn clean_token(t: &str) -> String {
     t.trim().trim_matches('"').trim().to_owned()
 }
 
-async fn store_op<T: Send + 'static>(
-    store: &Arc<dyn TokenStore>,
-    f: impl FnOnce(&dyn TokenStore) -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
+async fn store_op<T: Send + 'static>(store: &Arc<dyn TokenStore>, f: impl FnOnce(&dyn TokenStore) -> Result<T, String> + Send + 'static) -> Result<T, String> {
     let s = store.clone();
     tokio::task::spawn_blocking(move || f(&*s)).await.map_err(|e| e.to_string())?
 }
@@ -481,9 +471,7 @@ impl Backend for DiscordBackend {
                     let rest = RestClient::unauthenticated(inner.props.clone());
                     match rest.login(login.trim(), &password).await.map_err(api_err)? {
                         LoginResponse::Token { token, .. } => connect(inner, Secret::new(token), true).await,
-                        LoginResponse::MfaRequired { ticket, totp, sms, backup, .. } => {
-                            account::mfa_required(&inner, ticket, totp, sms, backup)
-                        }
+                        LoginResponse::MfaRequired { ticket, totp, sms, backup, .. } => account::mfa_required(&inner, ticket, totp, sms, backup),
                     }
                 }
                 Credentials::Mfa { code } => {
@@ -646,7 +634,8 @@ impl Backend for DiscordBackend {
         if !c.kind.is_thread() {
             return None;
         }
-        let parent_forum = c.parent_id.and_then(|p| s.cache.channel(p)).is_some_and(|p| matches!(p.kind, api::ChannelType::GuildForum | api::ChannelType::GuildMedia));
+        let parent_forum =
+            c.parent_id.and_then(|p| s.cache.channel(p)).is_some_and(|p| matches!(p.kind, api::ChannelType::GuildForum | api::ChannelType::GuildMedia));
         let (unread, mentions) = {
             let a = s.adapter.lock();
             let joined = c.member.is_some();
@@ -704,9 +693,7 @@ impl Backend for DiscordBackend {
 
     fn member_can_view(&self, channel: Id, user: Id) -> bool {
         let Ok(s) = self.inner.session() else { return true };
-        s.cache
-            .member_permissions_in(sf(channel), sf(user))
-            .is_none_or(|p| p.contains(phoenix_api::models::Permissions::VIEW_CHANNEL))
+        s.cache.member_permissions_in(sf(channel), sf(user)).is_none_or(|p| p.contains(phoenix_api::models::Permissions::VIEW_CHANNEL))
     }
 
     fn request_feed_members(&self, guild: Id, users: Vec<Id>) {
@@ -1032,28 +1019,14 @@ impl Backend for DiscordBackend {
 
     fn set_reaction(&self, channel: Id, msg: Id, emoji: crate::model::Reaction, add: bool) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
-            let e = api::ReactionEmoji {
-                id: emoji.emoji_id.map(sf),
-                name: Some(crate::ui::chat::state::reaction_name(&emoji.emoji)),
-                animated: false,
-            };
-            if add {
-                s.rest.add_reaction(sf(channel), sf(msg), &e).await
-            } else {
-                s.rest.remove_own_reaction(sf(channel), sf(msg), &e).await
-            }
-            .map_err(api_err)
+            let e = api::ReactionEmoji { id: emoji.emoji_id.map(sf), name: Some(crate::ui::chat::state::reaction_name(&emoji.emoji)), animated: false };
+            if add { s.rest.add_reaction(sf(channel), sf(msg), &e).await } else { s.rest.remove_own_reaction(sf(channel), sf(msg), &e).await }.map_err(api_err)
         })
     }
 
     fn set_pinned(&self, channel: Id, msg: Id, pinned: bool) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
-            if pinned {
-                s.rest.pin_message(sf(channel), sf(msg)).await
-            } else {
-                s.rest.unpin_message(sf(channel), sf(msg)).await
-            }
-            .map_err(api_err)
+            if pinned { s.rest.pin_message(sf(channel), sf(msg)).await } else { s.rest.unpin_message(sf(channel), sf(msg)).await }.map_err(api_err)
         })
     }
 
@@ -1246,13 +1219,7 @@ impl Backend for DiscordBackend {
     fn send_soundboard_sound(&self, channel: Id, sound: crate::model::SoundboardSound) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
             s.rest
-                .send_soundboard_sound(
-                    sf(channel),
-                    sf(sound.id),
-                    sound.guild.map(sf),
-                    sound.emoji_id.map(sf),
-                    sound.emoji_name.as_deref(),
-                )
+                .send_soundboard_sound(sf(channel), sf(sound.id), sound.guild.map(sf), sound.emoji_id.map(sf), sound.emoji_name.as_deref())
                 .await
                 .map_err(api_err)
         })

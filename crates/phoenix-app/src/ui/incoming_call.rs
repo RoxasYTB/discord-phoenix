@@ -91,15 +91,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 .text_color(c(tok(idx::TEXT_STRONG)))
                 .child(name),
         )
-        .child(
-            div()
-                .mb(z(24.))
-                .text_center()
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(c(tok(idx::TEXT_DEFAULT)))
-                .child(crate::t!("call.incoming")),
-        )
+        .child(div().mb(z(24.)).text_center().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("call.incoming")))
         .child(
             div()
                 .flex()

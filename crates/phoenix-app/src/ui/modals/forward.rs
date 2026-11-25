@@ -159,10 +159,8 @@ pub fn render(app: &PhoenixApp, f: &Forward, cx: &mut Context<PhoenixApp>) -> An
     let can = !f.picked.is_empty() && !f.sending;
     if f.favorites {
         let label = if f.picked.len() >= 2 { crate::t!("fav.add_n", count = f.picked.len()) } else { crate::t!("fav.add_title") };
-        let add = button("fav-add-send", label, BtnKind::Primary)
-            .w_full()
-            .when(!can, |d| d.opacity(0.5).cursor_default())
-            .on_click(cx.listener(move |a, _, _, cx| {
+        let add = button("fav-add-send", label, BtnKind::Primary).w_full().when(!can, |d| d.opacity(0.5).cursor_default()).on_click(cx.listener(
+            move |a, _, _, cx| {
                 let picked = with_modal(|m| match m {
                     Some(Modal::Forward(f)) if f.favorites && !f.picked.is_empty() => Some(f.picked.clone()),
                     _ => None,
@@ -171,12 +169,12 @@ pub fn render(app: &PhoenixApp, f: &Forward, cx: &mut Context<PhoenixApp>) -> An
                 close_modal();
                 crate::ui::favorites::add_many(a, &picked, cx);
                 cx.notify();
-            }));
+            },
+        ));
         return card(480., crate::t!("fav.add_title"), None, body.into_any_element(), Some(add.into_any_element()), cx);
     }
-    let send = button("fwd-send", crate::t!("fwd.send"), BtnKind::Primary)
-        .when(!can, |d| d.opacity(0.5).cursor_default())
-        .on_click(cx.listener(move |a, _, _, cx| {
+    let send = button("fwd-send", crate::t!("fwd.send"), BtnKind::Primary).when(!can, |d| d.opacity(0.5).cursor_default()).on_click(cx.listener(
+        move |a, _, _, cx| {
             let req = with_modal(|m| match m {
                 Some(Modal::Forward(f)) if !f.picked.is_empty() && !f.sending => {
                     f.sending = true;
@@ -202,15 +200,9 @@ pub fn render(app: &PhoenixApp, f: &Forward, cx: &mut Context<PhoenixApp>) -> An
                 }
             });
             cx.notify();
-        }));
-    card(
-        480.,
-        crate::t!("fwd.title"),
-        Some(crate::t!("fwd.subtitle", n = MAX_DESTINATIONS)),
-        body.into_any_element(),
-        Some(send.into_any_element()),
-        cx,
-    )
+        },
+    ));
+    card(480., crate::t!("fwd.title"), Some(crate::t!("fwd.subtitle", n = MAX_DESTINATIONS)), body.into_any_element(), Some(send.into_any_element()), cx)
 }
 
 #[cfg(test)]

@@ -1,7 +1,9 @@
 use std::{cell::RefCell, ops::Range};
 
-use gpui::{AnyElement, App, Context, FontStyle, FontWeight, HighlightStyle, IntoElement, ParentElement, StrikethroughStyle, Styled, UnderlineStyle, Window, div, px};
 use gpui::TextBox;
+use gpui::{
+    AnyElement, App, Context, FontStyle, FontWeight, HighlightStyle, IntoElement, ParentElement, StrikethroughStyle, Styled, UnderlineStyle, Window, div, px,
+};
 use gpui_base::input::{LineStyle, RichSpan};
 use gpui_component::input::{InlineToken, InlineTokenContext, InputContent, TextDecoration};
 
@@ -190,10 +192,7 @@ pub fn rich_for(text: &str) -> Rich {
         }
     }
     for r in merged(&spans, md::CODE) {
-        let b = TextBox::new(r.clone())
-            .background(c(tok(idx::BACKGROUND_CODE)))
-            .border(px(1.), c(tok(idx::BORDER_MUTED)))
-            .corner_radius(px(RADIUS_XS));
+        let b = TextBox::new(r.clone()).background(c(tok(idx::BACKGROUND_CODE))).border(px(1.), c(tok(idx::BORDER_MUTED))).corner_radius(px(RADIUS_XS));
         rich.push(RichSpan::new(r).text_box(b));
     }
     for (r, a) in spans.iter().filter(|(_, a)| a & md::SPOILER != 0 && a & md::SYNTAX == 0) {
@@ -208,10 +207,7 @@ pub fn rich_for(text: &str) -> Rich {
     let mut lines: Vec<LineStyle> = Vec::new();
     for q in &blocks.quotes {
         lines.push(
-            LineStyle::new(q.clone())
-                .bar(c(tok(idx::SPINE_DEFAULT)), px(QUOTE_BAR), px(QUOTE_BAR))
-                .indent(px(QUOTE_BAR + QUOTE_GAP))
-                .end_inset(px(QUOTE_END)),
+            LineStyle::new(q.clone()).bar(c(tok(idx::SPINE_DEFAULT)), px(QUOTE_BAR), px(QUOTE_BAR)).indent(px(QUOTE_BAR + QUOTE_GAP)).end_inset(px(QUOTE_END)),
         );
         rich.push(RichSpan::new(q.start..q.start + 2).hidden());
     }

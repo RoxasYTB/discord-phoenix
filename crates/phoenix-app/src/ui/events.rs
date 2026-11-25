@@ -76,11 +76,7 @@ fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
         Some(crate::model::ChannelKind::Stage) => "stage",
         _ => "calendar",
     };
-    let place = e
-        .location
-        .clone()
-        .or_else(|| e.channel.and_then(|ch| app.channels.get(&ch)).map(|ch| ch.name.to_string()))
-        .unwrap_or_default();
+    let place = e.location.clone().or_else(|| e.channel.and_then(|ch| app.channels.get(&ch)).map(|ch| ch.name.to_string())).unwrap_or_default();
     let link = format!("https://discord.com/events/{}/{}", guild.0, e.id.0);
     let body = div()
         .p(z(16.))
@@ -116,17 +112,8 @@ fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
                     )
                 }),
         )
-        .child(
-            div()
-                .text_size(z(20.))
-                .line_height(z(24.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t(idx::TEXT_STRONG))
-                .child(e.name.clone()),
-        )
-        .when(!e.description.is_empty(), |d| {
-            d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(e.description.clone()))
-        })
+        .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(e.name.clone()))
+        .when(!e.description.is_empty(), |d| d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(e.description.clone())))
         .child(
             div()
                 .mt(z(4.))
@@ -137,20 +124,13 @@ fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
                 .items_center()
                 .justify_between()
                 .gap(z(8.))
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap(z(6.))
-                        .text_size(z(14.))
-                        .line_height(z(18.))
-                        .text_color(t(idx::TEXT_MUTED))
-                        .when(!place.is_empty(), |d| {
-                            d.child(gpui::svg().path(crate::icons::path(loc_icon)).size(z(16.)).flex_none().text_color(t(idx::ICON_MUTED)))
-                                .child(div().min_w_0().text_ellipsis().child(place))
-                        }),
-                )
+                .child(div().min_w_0().flex().items_center().gap(z(6.)).text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_MUTED)).when(
+                    !place.is_empty(),
+                    |d| {
+                        d.child(gpui::svg().path(crate::icons::path(loc_icon)).size(z(16.)).flex_none().text_color(t(idx::ICON_MUTED)))
+                            .child(div().min_w_0().text_ellipsis().child(place))
+                    },
+                ))
                 .child(
                     div()
                         .flex_none()
@@ -194,7 +174,13 @@ fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
                                 .on_click(move |_, _, cx| {
                                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(link.clone()));
                                 })
-                                .child(gpui::svg().path(crate::icons::path("chat/link")).size(z(16.)).flex_none().text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))),
+                                .child(
+                                    gpui::svg()
+                                        .path(crate::icons::path("chat/link"))
+                                        .size(z(16.))
+                                        .flex_none()
+                                        .text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT)),
+                                ),
                         ),
                 ),
         );
@@ -230,14 +216,7 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .flex()
         .items_center()
         .child(gpui::svg().path(crate::icons::path("calendar")).size(z(24.)).mr(z(8.)).flex_none().text_color(t(idx::ICON_MUTED)))
-        .child(
-            div()
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t(idx::TEXT_STRONG))
-                .child(crate::t!("events.title")),
-        )
+        .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("events.title")))
         .when(can_create(perms), |d| {
             d.child(div().w(px(1.)).h(z(16.)).mx(z(16.)).bg(t(idx::BORDER_SUBTLE))).child(
                 div()
@@ -271,40 +250,45 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         );
     let body: AnyElement = match &s.list {
         None => div().size_full().flex().items_center().justify_center().text_color(t(idx::TEXT_MUTED)).child(crate::t!("common.loading")).into_any_element(),
-        Some(list) if list.is_empty() => {
-            div()
+        Some(list) if list.is_empty() => div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .text_center()
+            .child(
+                div()
+                    .mb(z(8.))
+                    .text_size(z(24.))
+                    .line_height(z(32.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(t(idx::TEXT_STRONG))
+                    .child(crate::t!("events.empty_title")),
+            )
+            .child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(crate::t!("events.empty_sub")))
+            .when(can_create(perms), |d| {
+                d.child(
+                    div()
+                        .mt(z(4.))
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .text_color(t(idx::TEXT_DEFAULT))
+                        .child(crate::t!("events.role_tip"))
+                        .child(div().font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_LINK)).child(crate::t!("events.role_tip_link"))),
+                )
+            })
+            .when_some(s.error.clone(), |d, er| d.child(div().mt(z(8.)).text_size(z(14.)).text_color(t(idx::TEXT_FEEDBACK_CRITICAL)).child(er)))
+            .into_any_element(),
+        Some(list) => {
+            let mut col = div()
+                .id("events-list")
                 .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&crate::ui::chat::scrollbar::handle("events-list"))
                 .flex()
                 .flex_col()
-                .items_center()
-                .justify_center()
-                .text_center()
-                .child(
-                    div()
-                        .mb(z(8.))
-                        .text_size(z(24.))
-                        .line_height(z(32.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(t(idx::TEXT_STRONG))
-                        .child(crate::t!("events.empty_title")),
-                )
-                .child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(crate::t!("events.empty_sub")))
-                .when(can_create(perms), |d| {
-                    d.child(
-                        div()
-                            .mt(z(4.))
-                            .text_size(z(14.))
-                            .line_height(z(18.))
-                            .text_color(t(idx::TEXT_DEFAULT))
-                            .child(crate::t!("events.role_tip"))
-                            .child(div().font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_LINK)).child(crate::t!("events.role_tip_link"))),
-                    )
-                })
-                .when_some(s.error.clone(), |d, er| d.child(div().mt(z(8.)).text_size(z(14.)).text_color(t(idx::TEXT_FEEDBACK_CRITICAL)).child(er)))
-                .into_any_element()
-        }
-        Some(list) => {
-            let mut col = div().id("events-list").size_full().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("events-list")).flex().flex_col().gap(z(16.));
+                .gap(z(16.));
             for ev in list {
                 col = col.child(card(app, guild, ev));
             }

@@ -132,7 +132,8 @@ fn summary(app: &PhoenixApp) -> AnyElement {
     let q = crate::ui::go_live::quality();
     let (r, f) = stream::resolve(q, crate::ui::go_live::perks(app));
     let dot = || div().text_color(t(idx::BACKGROUND_MOD_SUBTLE)).child("•");
-    let mut detail = div().flex().items_center().gap(z(8.)).text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_MUTED));
+    let mut detail =
+        div().flex().items_center().gap(z(8.)).text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_MUTED));
     detail = detail.child(dot()).child(resolution_label(r)).child(dot()).child(format!("{f}fps"));
     if q.sound {
         detail = detail.child(dot()).child(crate::t!("golive.system_audio"));
@@ -149,7 +150,15 @@ fn summary(app: &PhoenixApp) -> AnyElement {
                 .justify_center()
                 .gap(z(2.))
                 .min_w_0()
-                .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).text_ellipsis().child(preset_name(q)))
+                .child(
+                    div()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(t(idx::TEXT_STRONG))
+                        .text_ellipsis()
+                        .child(preset_name(q)),
+                )
                 .child(detail),
         )
         .into_any_element()
@@ -236,7 +245,15 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
     let close = super::close_action(cx);
     let kind = s.kind;
     let body = if s.devices_tab {
-        div().size_full().flex().items_center().justify_center().text_size(z(14.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("golive.no_devices")).into_any_element()
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(z(14.))
+            .text_color(t(idx::TEXT_MUTED))
+            .child(crate::t!("golive.no_devices"))
+            .into_any_element()
     } else {
         div()
             .size_full()
@@ -247,7 +264,15 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
             .flex_col()
             .items_center()
             .justify_center()
-            .child(div().mb(z(8.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_DEFAULT)).child(crate::t!("golive.title")))
+            .child(
+                div()
+                    .mb(z(8.))
+                    .text_size(z(20.))
+                    .line_height(z(24.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(t(idx::TEXT_DEFAULT))
+                    .child(crate::t!("golive.title")),
+            )
             .child(
                 div()
                     .mt(z(32.))
@@ -302,57 +327,48 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                 .child(div().flex_1().min_h_0().px(z(24.)).pt(z(8.)).child(body))
                 .child(
                     div().bg(t(idx::BACKGROUND_SURFACE_HIGH)).child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .gap(z(32.))
-                            .pt(z(16.))
-                            .px(z(24.))
-                            .child(summary(app))
-                            .child(
+                        div().flex().justify_between().gap(z(32.)).pt(z(16.)).px(z(24.)).child(summary(app)).child(
+                            div().flex().items_center().gap(z(8.)).child(button("golive-go", crate::t!("golive.choose"), BtnKind::Primary).on_click(go)).child(
                                 div()
+                                    .id("golive-options")
+                                    .relative()
+                                    .size(z(40.))
+                                    .flex_none()
+                                    .rounded(z(8.))
+                                    .border_1()
+                                    .border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
+                                    .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                                    .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
+                                    .cursor_pointer()
                                     .flex()
                                     .items_center()
-                                    .gap(z(8.))
-                                    .child(button("golive-go", crate::t!("golive.choose"), BtnKind::Primary).on_click(go))
-                                    .child(
-                                        div()
-                                            .id("golive-options")
-                                            .relative()
-                                            .size(z(40.))
-                                            .flex_none()
-                                            .rounded(z(8.))
-                                            .border_1()
-                                            .border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
-                                            .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
-                                            .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
-                                            .cursor_pointer()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .tip(crate::t!("golive.options"))
-                                            .child(gpui::canvas(|b, _, _| COG.with(|c| c.set(Some(b))), |_, _, _, _| {}).absolute().size_full())
-                                            .child(svg().path(crate::icons::path("gear")).size(z(20.)).text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
-                                            .on_click(cx.listener(|_, _, _, cx| update(cx, |s| s.menu = !s.menu))),
-                                    ),
+                                    .justify_center()
+                                    .tip(crate::t!("golive.options"))
+                                    .child(gpui::canvas(|b, _, _| COG.with(|c| c.set(Some(b))), |_, _, _, _| {}).absolute().size_full())
+                                    .child(svg().path(crate::icons::path("gear")).size(z(20.)).text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
+                                    .on_click(cx.listener(|_, _, _, cx| update(cx, |s| s.menu = !s.menu))),
                             ),
+                        ),
                     ),
                 ),
         );
-    let menu = (s.menu)
-        .then(|| COG.with(Cell::get))
-        .flatten()
-        .map(|b| {
-            let e = entity.clone();
-            let dismiss: crate::ui::context_menu::Dismiss = Rc::new(move |_, cx| {
-                with_modal(|m| {
-                    if let Some(Modal::GoLive(s)) = m {
-                        s.menu = false;
-                    }
-                });
-                e.update(cx, |_, cx| cx.notify());
+    let menu = (s.menu).then(|| COG.with(Cell::get)).flatten().map(|b| {
+        let e = entity.clone();
+        let dismiss: crate::ui::context_menu::Dismiss = Rc::new(move |_, cx| {
+            with_modal(|m| {
+                if let Some(Modal::GoLive(s)) = m {
+                    s.menu = false;
+                }
             });
-            crate::ui::context_menu::render_anchored_at(point(b.right(), b.top() - z(8.)), gpui::Anchor::BottomRight, settings_items(app, entity.clone()), dismiss, 30)
+            e.update(cx, |_, cx| cx.notify());
         });
+        crate::ui::context_menu::render_anchored_at(
+            point(b.right(), b.top() - z(8.)),
+            gpui::Anchor::BottomRight,
+            settings_items(app, entity.clone()),
+            dismiss,
+            30,
+        )
+    });
     crate::ui::modal::frame("golive-backdrop", close, card.children(menu))
 }

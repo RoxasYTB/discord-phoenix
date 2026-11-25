@@ -25,7 +25,11 @@ pub fn on_refresh(app: &mut PhoenixApp, channel: Id, messages: Vec<Message>, cx:
 
 use std::collections::{HashMap, HashSet};
 
-use crate::{grouping, markdown::{MentionResolver, SoundboardMention}, richtext::{self, RenderedMessage}};
+use crate::{
+    grouping,
+    markdown::{MentionResolver, SoundboardMention},
+    richtext::{self, RenderedMessage},
+};
 
 #[derive(Default)]
 pub struct PageResolver {
@@ -99,11 +103,7 @@ pub fn page_resolver(app: &PhoenixApp, msgs: &[Message]) -> PageResolver {
         let Some((g, role)) = app.roles.iter().find_map(|(g, rs)| rs.iter().find(|x| x.id.0 == id).map(|x| (*g, x))) else {
             continue;
         };
-        let mine = app
-            .members
-            .get(&g)
-            .and_then(|ms| ms.iter().find(|m| m.user == app.me.id))
-            .is_some_and(|m| m.roles.contains(&Id(id)));
+        let mine = app.members.get(&g).and_then(|ms| ms.iter().find(|m| m.user == app.me.id)).is_some_and(|m| m.roles.contains(&Id(id)));
         out.roles.insert(id, (role.name.to_string(), role.color, mine));
     }
     out
@@ -142,26 +142,16 @@ impl MentionResolver for MessagePageResolver<'_> {
     }
 }
 
-pub fn render_page(
-    msgs: &[Message],
-    resolver: &PageResolver,
-    me: Id,
-    utc_offset: i64,
-    revealed: &HashSet<(Id, usize)>,
-) -> Vec<RenderedMessage> {
+pub fn render_page(msgs: &[Message], resolver: &PageResolver, me: Id, utc_offset: i64, revealed: &HashSet<(Id, usize)>) -> Vec<RenderedMessage> {
     (0..msgs.len())
         .map(|i| {
             let (m, prev) = (&msgs[i], i.checked_sub(1).map(|p| &msgs[p]));
-            let message_resolver = MessagePageResolver {
-                base: resolver,
-                sounds: &m.soundboard_sounds,
-            };
+            let message_resolver = MessagePageResolver { base: resolver, sounds: &m.soundboard_sounds };
             let rev = |s: usize| revealed.contains(&(m.id, s));
             let (parsed, blocks, mentions_me, preview, preview_mentions) = richtext::build(&m.content, &message_resolver, me, &rev);
             RenderedMessage {
                 group_start: grouping::starts_group(prev, m, utc_offset),
-                day_divider: (prev.is_none() || grouping::day_divider(prev, m, utc_offset))
-                    .then(|| crate::app::format_day(m.timestamp)),
+                day_divider: (prev.is_none() || grouping::day_divider(prev, m, utc_offset)).then(|| crate::app::format_day(m.timestamp)),
                 time_full: crate::app::format_time_full(m.timestamp),
                 time_short: crate::app::format_time_short(m.timestamp),
                 blocks,

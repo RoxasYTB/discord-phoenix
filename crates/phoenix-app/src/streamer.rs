@@ -82,9 +82,13 @@ pub fn on_tools_changed(app: &mut PhoenixApp, count: usize, cx: &mut Context<Pho
 }
 
 pub fn disable(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
-    crate::ui::settings::update_local(app, |p| {
-        p.ui.insert("streamer".into(), 0);
-    }, cx);
+    crate::ui::settings::update_local(
+        app,
+        |p| {
+            p.ui.insert("streamer".into(), 0);
+        },
+        cx,
+    );
 }
 
 pub const NOTICE_H: f32 = 37.;

@@ -18,16 +18,9 @@ pub fn status_wrapped(text: SharedString, _font_px: f32) -> AnyElement {
         return text.into_any_element();
     }
     let zoom = crate::theme::zoom();
-    let emoji_only = ranges.len() == 1
-        && text[..ranges[0].0.start].trim().is_empty()
-        && text[ranges[0].0.end..].trim().is_empty();
+    let emoji_only = ranges.len() == 1 && text[..ranges[0].0.start].trim().is_empty() && text[ranges[0].0.end..].trim().is_empty();
     if emoji_only {
-        return div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(crate::media::emoji::emoji_element(&ranges[0].1, 32. * zoom))
-            .into_any_element();
+        return div().flex().items_center().justify_center().child(crate::media::emoji::emoji_element(&ranges[0].1, 32. * zoom)).into_any_element();
     }
     let mut row = div().flex().flex_wrap().items_center();
     let mut at = 0;
@@ -67,8 +60,7 @@ fn label_impl(text: SharedString, font_px: f32, custom: bool, images: bool) -> A
             continue;
         }
         let mut e = div().flex_none();
-        e.text_style().font_fallbacks =
-            Some(gpui::FontFallbacks::from_fonts(vec![crate::fonts::fallback::EMOJI_FAMILY.to_string()]));
+        e.text_style().font_fallbacks = Some(gpui::FontFallbacks::from_fonts(vec![crate::fonts::fallback::EMOJI_FAMILY.to_string()]));
         row = row.child(e.child(SharedString::from(text[r.clone()].to_string())));
         at = r.end;
     }

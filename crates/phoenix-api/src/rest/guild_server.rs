@@ -219,11 +219,9 @@ pub fn build(call: &ServerCall) -> ApiReq {
         S::CommandPermissions { guild, application } => {
             req(Method::GET, format!("/applications/{application}/guilds/{guild}/commands/{application}/permissions"), None)
         }
-        S::SetCommandPermissions { guild, application, command, permissions } => req(
-            Method::PUT,
-            format!("/applications/{application}/guilds/{guild}/commands/{command}/permissions"),
-            Some(json!({ "permissions": permissions })),
-        ),
+        S::SetCommandPermissions { guild, application, command, permissions } => {
+            req(Method::PUT, format!("/applications/{application}/guilds/{guild}/commands/{command}/permissions"), Some(json!({ "permissions": permissions })))
+        }
         S::VanityUrl { guild } => req(Method::GET, format!("/guilds/{guild}/vanity-url"), None),
         S::SetVanityUrl { guild, code } => req(Method::PATCH, format!("/guilds/{guild}/vanity-url"), Some(json!({ "code": code.trim() }))),
         S::Templates { guild } => req(Method::GET, format!("/guilds/{guild}/templates"), None),
@@ -356,7 +354,12 @@ mod tests {
             assert_eq!((r.method, r.path.as_str(), r.body), (Method::GET, path, None));
             assert!(call.is_read());
         }
-        let r = build(&ServerCall::Analytics { guild: G, kind: AnalyticsKind::Retention, start: "2026-10-10T02:01:56.019Z".into(), end: "2026-11-25T02:01:56.019Z".into() });
+        let r = build(&ServerCall::Analytics {
+            guild: G,
+            kind: AnalyticsKind::Retention,
+            start: "2026-10-10T02:01:56.019Z".into(),
+            end: "2026-11-25T02:01:56.019Z".into(),
+        });
         assert_eq!(r.path, "/guilds/1/analytics/growth-activation/retention?start=2026-10-10T02%3A01%3A56.019Z&end=2026-11-25T02%3A01%3A56.019Z&interval=2");
     }
 
@@ -379,7 +382,10 @@ mod tests {
         assert!(body.get("id").is_none());
         assert_eq!(body["trigger_metadata"], json!({ "keyword_filter": ["check bio"], "regex_patterns": ["check\\s*bio"] }));
         assert_eq!(body["exempt_channels"], json!(["5"]));
-        let call = build(&ServerCall::CreateAutomodRule { guild: G, rule: AutomodRule { name: "x".into(), event_type: 1, trigger_type: trigger::MENTION_SPAM, ..Default::default() } });
+        let call = build(&ServerCall::CreateAutomodRule {
+            guild: G,
+            rule: AutomodRule { name: "x".into(), event_type: 1, trigger_type: trigger::MENTION_SPAM, ..Default::default() },
+        });
         assert_eq!((call.method, call.path.as_str()), (Method::POST, "/guilds/1/auto-moderation/rules"));
         let call = build(&ServerCall::DeleteAutomodRule { guild: G, rule: Snowflake(9) });
         assert_eq!((call.method, call.path.as_str(), call.body), (Method::DELETE, "/guilds/1/auto-moderation/rules/9", None));
@@ -403,14 +409,23 @@ mod tests {
         assert_eq!(r.body.unwrap(), json!({ "name": "Hook" }));
         let r = build(&ServerCall::SetProfile { guild: G, patch: ProfilePatch { tag: Some(Some("GLAD".into())), badge: Some(8), ..Default::default() } });
         assert_eq!((r.method, r.path.as_str(), r.body.unwrap()), (Method::PATCH, "/guilds/1/profile", json!({ "tag": "GLAD", "badge": 8 })));
-        let r = build(&ServerCall::EditSafety { guild: G, edit: SafetyEdit { verification_level: Some(2), safety_alerts_channel: Some(None), ..Default::default() } });
-        assert_eq!((r.method, r.path.as_str(), r.body.unwrap()), (Method::PATCH, "/guilds/1", json!({ "verification_level": 2, "safety_alerts_channel_id": null })));
+        let r = build(&ServerCall::EditSafety {
+            guild: G,
+            edit: SafetyEdit { verification_level: Some(2), safety_alerts_channel: Some(None), ..Default::default() },
+        });
+        assert_eq!(
+            (r.method, r.path.as_str(), r.body.unwrap()),
+            (Method::PATCH, "/guilds/1", json!({ "verification_level": 2, "safety_alerts_channel_id": null }))
+        );
         let perms = vec![CommandPermission { id: Snowflake(1), kind: 1, permission: false }];
         let r = build(&ServerCall::SetCommandPermissions { guild: G, application: Snowflake(7), command: Snowflake(8), permissions: perms });
         assert_eq!((r.method, r.path.as_str()), (Method::PUT, "/applications/7/guilds/1/commands/8/permissions"));
         assert_eq!(r.body.unwrap(), json!({ "permissions": [{ "id": "1", "type": 1, "permission": false }] }));
         assert!(!ServerCall::DeleteGuild { guild: G }.is_read());
-        let r = build(&ServerCall::SetProfile { guild: G, patch: ProfilePatch { icon: Some(Some("data:image/png;base64,AA".into())), custom_banner: Some(None), ..Default::default() } });
+        let r = build(&ServerCall::SetProfile {
+            guild: G,
+            patch: ProfilePatch { icon: Some(Some("data:image/png;base64,AA".into())), custom_banner: Some(None), ..Default::default() },
+        });
         assert_eq!(r.body, Some(json!({ "icon": "data:image/png;base64,AA", "custom_banner": null })));
     }
 }

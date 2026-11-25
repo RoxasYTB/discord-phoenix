@@ -93,10 +93,7 @@ pub fn resolve(q: Quality, perks: Perks) -> (u32, u32) {
     if allowed(perks, q.resolution, fps, documents) {
         return (q.resolution, fps);
     }
-    TABLE
-        .iter()
-        .find(|&&(r, f, _)| f == fps && allowed(perks, r, f, documents) && r != 0)
-        .map_or((720, 30), |&(r, f, _)| (r, f))
+    TABLE.iter().find(|&&(r, f, _)| f == fps && allowed(perks, r, f, documents) && r != 0).map_or((720, 30), |&(r, f, _)| (r, f))
 }
 
 pub fn frame_size(resolution: u32, source: Option<(u32, u32)>) -> (u32, u32) {
@@ -113,7 +110,13 @@ pub fn bitrate(resolution: u32, fps: u32) -> u32 {
         720 => 1280 * 720,
         _ => 854 * 480,
     } as f64;
-    let bpp = if fps >= 60 { 0.07 } else if fps >= 30 { 0.09 } else { 0.14 };
+    let bpp = if fps >= 60 {
+        0.07
+    } else if fps >= 30 {
+        0.09
+    } else {
+        0.14
+    };
     ((px * f64::from(fps.max(5)) * bpp) as u32).clamp(1_000_000, 8_000_000)
 }
 

@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use gpui::prelude::{FluentBuilder as _, StyledImage as _};
-use gpui::{AnyElement, Bounds, InteractiveElement, IntoElement, ParentElement, Pixels, Point, SharedString, StatefulInteractiveElement, Styled, div, point, px, svg};
+use gpui::{
+    AnyElement, Bounds, InteractiveElement, IntoElement, ParentElement, Pixels, Point, SharedString, StatefulInteractiveElement, Styled, div, point, px, svg,
+};
 
 use crate::theme::{c, generated::idx, tok, z};
 
@@ -65,12 +67,11 @@ pub fn collapsed_list(app: &crate::app::PhoenixApp, users: &[Id]) -> AnyElement 
         .items_start()
         .children(users.iter().map(|u| {
             let speaking = app.voice.is_speaking(*u);
-            div()
-                .h(z(32.))
-                .ml(z(8.))
-                .flex()
-                .items_center()
-                .child(crate::ui::voice_panel::speaking_ring(crate::ui::avatar(app.users.get(u), 24.), 24., speaking))
+            div().h(z(32.)).ml(z(8.)).flex().items_center().child(crate::ui::voice_panel::speaking_ring(
+                crate::ui::avatar(app.users.get(u), 24.),
+                24.,
+                speaking,
+            ))
         }))
         .into_any_element()
 }
@@ -98,12 +99,7 @@ pub fn options_button(user: Id, guild: Option<Id>, in_call: bool) -> AnyElement 
         .justify_center()
         .cursor_pointer()
         .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_ACTIVE))))
-        .child(
-            svg()
-                .path(crate::icons::path("more-horizontal"))
-                .size(z(16.))
-                .text_color(c(tok(idx::CHANNELS_DEFAULT))),
-        )
+        .child(svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::CHANNELS_DEFAULT))))
         .on_click(move |ev, window, cx| {
             cx.stop_propagation();
             if in_call {
@@ -200,14 +196,7 @@ pub fn voice_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui:
                                             ),
                                     )
                                     .when_some(gname, |d, n| {
-                                        d.child(
-                                            div()
-                                                .text_size(z(12.))
-                                                .line_height(z(16.))
-                                                .text_color(c(tok(idx::TEXT_MUTED)))
-                                                .text_ellipsis()
-                                                .child(n),
-                                        )
+                                        d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).text_ellipsis().child(n))
                                     }),
                             ),
                     ),
@@ -238,21 +227,11 @@ mod tests {
 
 pub fn stage_audience(app: &crate::app::PhoenixApp, channel: Id) -> AnyElement {
     use crate::theme::generated::global::SPACE_XS;
-    let audience: Vec<Id> = app
-        .channels
-        .get(&channel)
-        .map(|c| c.voice_users.iter().copied().filter(|u| crate::ui::voice_panel::flags(*u).suppress).collect())
-        .unwrap_or_default();
+    let audience: Vec<Id> =
+        app.channels.get(&channel).map(|c| c.voice_users.iter().copied().filter(|u| crate::ui::voice_panel::flags(*u).suppress).collect()).unwrap_or_default();
     let shown = audience.len().min(3);
     let more = audience.len() - shown;
-    let ring = |child: AnyElement| {
-        div()
-            .ml(z(-8.))
-            .rounded_full()
-            .border(z(4.))
-            .border_color(c(tok(idx::BACKGROUND_BASE_LOWEST)))
-            .child(child)
-    };
+    let ring = |child: AnyElement| div().ml(z(-8.)).rounded_full().border(z(4.)).border_color(c(tok(idx::BACKGROUND_BASE_LOWEST))).child(child);
     div()
         .w_full()
         .pl(z(38.))
@@ -386,7 +365,14 @@ pub fn stream_preview(app: &crate::app::PhoenixApp, user: Id, entity: gpui::Enti
                 .flex()
                 .justify_between()
                 .items_center()
-                .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("voice.streaming")))
+                .child(
+                    div()
+                        .text_size(z(12.))
+                        .line_height(z(16.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_MUTED)))
+                        .child(crate::t!("voice.streaming")),
+                )
                 .child(badge),
         )
         .child(
@@ -463,16 +449,8 @@ pub fn stream_preview(app: &crate::app::PhoenixApp, user: Id, entity: gpui::Enti
                     }),
             ),
         )
-        .with_animation(
-            ("stream-preview-in", user.0),
-            gpui::Animation::new(std::time::Duration::from_millis(150)),
-            |d, t| d.opacity(t).ml(z(10. * t)),
-        );
-    Some(
-        gpui::deferred(gpui::anchored().position(point(b.right() + z(17.), b.top() - z(12.))).child(card))
-            .with_priority(1)
-            .into_any_element(),
-    )
+        .with_animation(("stream-preview-in", user.0), gpui::Animation::new(std::time::Duration::from_millis(150)), |d, t| d.opacity(t).ml(z(10. * t)));
+    Some(gpui::deferred(gpui::anchored().position(point(b.right() + z(17.), b.top() - z(12.))).child(card)).with_priority(1).into_any_element())
 }
 
 pub fn watch_from_sidebar(app: &mut crate::app::PhoenixApp, key: String, cx: &mut gpui::Context<crate::app::PhoenixApp>) {
@@ -488,12 +466,7 @@ pub fn watch_from_sidebar(app: &mut crate::app::PhoenixApp, key: String, cx: &mu
     cx.notify();
 }
 
-pub fn stream_activity_card(
-    app: &crate::app::PhoenixApp,
-    user: Id,
-    entity: gpui::Entity<crate::app::PhoenixApp>,
-    cx: &mut gpui::App,
-) -> Option<AnyElement> {
+pub fn stream_activity_card(app: &crate::app::PhoenixApp, user: Id, entity: gpui::Entity<crate::app::PhoenixApp>, cx: &mut gpui::App) -> Option<AnyElement> {
     use gpui::FontWeight;
     if !crate::ui::voice_panel::flags(user).stream {
         return None;
@@ -622,43 +595,46 @@ pub fn stream_activity_card(
             None => d.child(acronym),
         });
     let open_entity = entity.clone();
-    let channel_row = div()
-        .flex()
-        .items_center()
-        .gap(z(4.))
-        .h(z(16.))
-        .child(guild_icon)
-        .child(svg().path(crate::icons::path("chevron-right")).size(z(12.)).flex_none().text_color(subtle))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .items_center()
-                .gap(z(2.))
-                .child(svg().path(crate::icons::path(voice_icon)).size(z(12.)).flex_none().text_color(subtle))
-                .child(
-                    div()
-                        .id(("profile-stream-channel", user.0))
-                        .min_w_0()
-                        .cursor_pointer()
-                        .text_size(z(12.))
-                        .line_height(z(16.))
-                        .text_color(subtle)
-                        .text_ellipsis()
-                        .hover(|s| s.underline())
-                        .child(cname)
-                        .on_click(move |_, _, cx| {
-                            open_entity.update(cx, |a, cx| {
-                                a.people.popout = None;
-                                a.open_channel_chat(cid, cx);
-                            })
-                        }),
+    let channel_row =
+        div()
+            .flex()
+            .items_center()
+            .gap(z(4.))
+            .h(z(16.))
+            .child(guild_icon)
+            .child(svg().path(crate::icons::path("chevron-right")).size(z(12.)).flex_none().text_color(subtle))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap(z(2.))
+                    .child(svg().path(crate::icons::path(voice_icon)).size(z(12.)).flex_none().text_color(subtle))
+                    .child(
+                        div()
+                            .id(("profile-stream-channel", user.0))
+                            .min_w_0()
+                            .cursor_pointer()
+                            .text_size(z(12.))
+                            .line_height(z(16.))
+                            .text_color(subtle)
+                            .text_ellipsis()
+                            .hover(|s| s.underline())
+                            .child(cname)
+                            .on_click(move |_, _, cx| {
+                                open_entity.update(cx, |a, cx| {
+                                    a.people.popout = None;
+                                    a.open_channel_chat(cid, cx);
+                                })
+                            }),
+                    ),
+            )
+            .child(
+                div().flex().flex_none().items_center().children(
+                    people.iter().enumerate().map(|(n, u)| div().when(n + 1 < shown, |d| d.mr(z(-3.))).child(crate::ui::avatar(app.users.get(u), 16.))),
                 ),
-        )
-        .child(div().flex().flex_none().items_center().children(people.iter().enumerate().map(|(n, u)| {
-            div().when(n + 1 < shown, |d| d.mr(z(-3.))).child(crate::ui::avatar(app.users.get(u), 16.))
-        })));
+            );
     let join = crate::ui::profile::mana_button(("profile-stream-join", user.0), crate::t!("profile.join_voice"), false, false)
         .w_full()
         .line_height(z(18.))
@@ -680,15 +656,7 @@ pub fn stream_activity_card(
                     .rounded(z(8.))
                     .bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND_HOVER)))
                     .child(header)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(z(8.))
-                            .child(preview)
-                            .child(div().h(z(1.)).bg(c(tok(idx::USER_PROFILE_BORDER))))
-                            .child(channel_row),
-                    )
+                    .child(div().flex().flex_col().gap(z(8.)).child(preview).child(div().h(z(1.)).bg(c(tok(idx::USER_PROFILE_BORDER)))).child(channel_row))
                     .child(div().mt(z(4.)).flex().items_center().child(join)),
             )
             .into_any_element(),

@@ -75,10 +75,7 @@ impl UserProfile {
         pick(self.guild_member_profile.as_ref().map(|p| p.bio.as_str()), self.user_profile.as_ref().map(|p| p.bio.as_str()))
     }
     pub fn pronouns(&self) -> &str {
-        pick(
-            self.guild_member_profile.as_ref().map(|p| p.pronouns.as_str()),
-            self.user_profile.as_ref().map(|p| p.pronouns.as_str()),
-        )
+        pick(self.guild_member_profile.as_ref().map(|p| p.pronouns.as_str()), self.user_profile.as_ref().map(|p| p.pronouns.as_str()))
     }
 }
 
@@ -143,11 +140,7 @@ impl RestClient {
         self.call_empty(Method::PUT, &format!("/users/@me/notes/{user}"), Body::Json(json!({ "note": note }))).await
     }
 
-    pub async fn update_status_settings(
-        &self,
-        status: Option<&str>,
-        custom: Option<Option<&CustomStatus>>,
-    ) -> Result<()> {
+    pub async fn update_status_settings(&self, status: Option<&str>, custom: Option<Option<&CustomStatus>>) -> Result<()> {
         self.call_empty(Method::PATCH, "/users/@me/settings", Body::Json(status_body(status, custom))).await
     }
 }

@@ -1,8 +1,5 @@
 use crate::theme::z;
-use gpui::{
-    AnyElement, Context, FontWeight, ImageSource, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    img, prelude::*, px,
-};
+use gpui::{AnyElement, Context, FontWeight, ImageSource, IntoElement, ParentElement, SharedString, Styled, Window, div, img, prelude::*, px};
 
 use crate::{
     app::PhoenixApp,
@@ -76,11 +73,7 @@ impl PhoenixApp {
         let channel = self
             .selected_channel
             .filter(|c| self.channels.get(c).is_some_and(|c| c.guild == Some(guild)))
-            .or_else(|| {
-                self.guild_channels.get(&guild).and_then(|l| {
-                    l.iter().copied().find(|id| self.channels[id].kind == crate::model::ChannelKind::Text)
-                })
-            });
+            .or_else(|| self.guild_channels.get(&guild).and_then(|l| l.iter().copied().find(|id| self.channels[id].kind == crate::model::ChannelKind::Text)));
         let Some(channel) = channel else { return };
         self.nav_request(NavRequest::CreateInvite(channel), cx, move |this, res, _| {
             let link: SharedString = match res {
@@ -148,13 +141,7 @@ pub(crate) fn modal(id: &'static str, cx: &mut Context<PhoenixApp>, inner: gpui:
 }
 
 fn title(t: impl Into<SharedString>) -> gpui::Div {
-    div()
-        .px(z(28.))
-        .text_size(z(24.))
-        .font_weight(FontWeight::BOLD)
-        .text_color(c(Palette::TEXT_HEADER))
-        .text_center()
-        .child(t.into())
+    div().px(z(28.)).text_size(z(24.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_HEADER)).text_center().child(t.into())
 }
 
 fn button(id: &'static str, label: impl Into<SharedString>, bg: u32) -> gpui::Stateful<gpui::Div> {
@@ -216,20 +203,10 @@ pub(crate) fn preview_card(p: &InvitePreview) -> gpui::Div {
                 .flex_col()
                 .gap(z(2.))
                 .when_some(p.inviter.clone(), |d, i| {
-                    d.child(
-                        div()
-                            .text_size(z(12.))
-                            .text_color(c(Palette::TEXT_MUTED))
-                            .child(crate::t!("invite.invited_you", i = i)),
-                    )
+                    d.child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("invite.invited_you", i = i)))
                 })
                 .child(
-                    div()
-                        .text_size(z(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(c(Palette::TEXT_HEADER))
-                        .text_ellipsis()
-                        .child(p.guild_name.clone()),
+                    div().text_size(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_HEADER)).text_ellipsis().child(p.guild_name.clone()),
                 )
                 .child(
                     div()
@@ -264,13 +241,7 @@ pub fn render(app: &PhoenixApp, ov: &Overlay, window: &mut Window, cx: &mut Cont
                 .flex_col()
                 .gap(z(12.))
                 .child(title(crate::t!("invite.friends_to", name = name)))
-                .child(
-                    div()
-                        .text_size(z(12.))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(c(Palette::TEXT_MUTED))
-                        .child(crate::t!("invite.or_send")),
-                )
+                .child(div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("invite.or_send")))
                 .child(
                     div()
                         .h(z(44.))
@@ -281,20 +252,13 @@ pub fn render(app: &PhoenixApp, ov: &Overlay, window: &mut Window, cx: &mut Cont
                         .flex()
                         .items_center()
                         .child(div().flex_1().text_size(z(16.)).text_color(c(Palette::TEXT_NORMAL)).child(shown))
-                        .child(button("copy-invite", crate::t!("common.copy"), Palette::BLURPLE).h(z(32.)).on_click(cx.listener(
-                            move |_, _, _, cx| {
-                                if let Some(l) = &link {
-                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(l.to_string()));
-                                }
-                            },
-                        ))),
+                        .child(button("copy-invite", crate::t!("common.copy"), Palette::BLURPLE).h(z(32.)).on_click(cx.listener(move |_, _, _, cx| {
+                            if let Some(l) = &link {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(l.to_string()));
+                            }
+                        }))),
                 )
-                .child(
-                    div()
-                        .text_size(z(12.))
-                        .text_color(c(Palette::TEXT_MUTED))
-                        .child(crate::t!("invite.expires")),
-                );
+                .child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("invite.expires")));
             modal("invite-modal", cx, inner)
         }
         Overlay::LeaveGuild(g) => {
@@ -321,20 +285,9 @@ pub fn render(app: &PhoenixApp, ov: &Overlay, window: &mut Window, cx: &mut Cont
                         .flex_col()
                         .gap(z(8.))
                         .child(title(what.clone()))
-                        .child(
-                            div()
-                                .text_size(z(14.))
-                                .text_color(c(Palette::TEXT_MUTED))
-                                .text_center()
-                                .child(crate::t!("invite.stub")),
-                        ),
+                        .child(div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).text_center().child(crate::t!("invite.stub"))),
                 )
-                .child(
-                    footer().child(
-                        button("stub-ok", crate::t!("common.okay"), Palette::BLURPLE)
-                            .on_click(cx.listener(|a, _, _, cx| a.close_overlay(cx))),
-                    ),
-                );
+                .child(footer().child(button("stub-ok", crate::t!("common.okay"), Palette::BLURPLE).on_click(cx.listener(|a, _, _, cx| a.close_overlay(cx)))));
             modal("stub-modal", cx, inner)
         }
         Overlay::Topic(_) => div().into_any_element(),

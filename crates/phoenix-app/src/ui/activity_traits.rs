@@ -3,7 +3,11 @@ use std::time::{Duration, Instant};
 
 use gpui::Context;
 
-use crate::{app::PhoenixApp, commands::{ParityReply, ParityRequest}, model::Id};
+use crate::{
+    app::PhoenixApp,
+    commands::{ParityReply, ParityRequest},
+    model::Id,
+};
 
 type Entry = crate::commands::InventoryEntry;
 
@@ -59,10 +63,15 @@ mod tests {
 
     #[test]
     fn matches_user_and_game() {
-        FEED.with(|f| *f.borrow_mut() = (Some(Instant::now()), vec![
-                Entry { author: Id(1), game: Some("Hades".into()), first_time: true, ..Default::default() },
-                Entry { author: Id(2), resurrected: true, ..Default::default() },
-            ]));
+        FEED.with(|f| {
+            *f.borrow_mut() = (
+                Some(Instant::now()),
+                vec![
+                    Entry { author: Id(1), game: Some("Hades".into()), first_time: true, ..Default::default() },
+                    Entry { author: Id(2), resurrected: true, ..Default::default() },
+                ],
+            )
+        });
         assert_eq!(traits(Id(1), "hades"), (true, false));
         assert_eq!(traits(Id(1), "Celeste"), (false, false));
         assert_eq!(traits(Id(2), "x"), (false, true));

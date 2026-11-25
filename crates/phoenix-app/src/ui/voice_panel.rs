@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, Hsla, IntoElement, MouseButton, ParentElement, Pixels, Point,
-    SharedString, Styled, Window, div, prelude::*, px, svg,
+    AnyElement, App, Context, Entity, FontWeight, Hsla, IntoElement, MouseButton, ParentElement, Pixels, Point, SharedString, Styled, Window, div, prelude::*,
+    px, svg,
 };
 
 use crate::app::PhoenixApp;
@@ -109,20 +109,15 @@ fn asset_icon(path: &'static str, size: f32, color: Hsla) -> gpui::Svg {
 pub fn panel_button(id: impl Into<gpui::ElementId>, glyph: AnyElement, red: bool) -> gpui::Stateful<gpui::Div> {
     let id: gpui::ElementId = id.into();
     let key = crate::ui::states::key(("panel-btn", id.to_string(), red));
-    let (rest, hover) = if red {
-        (t(idx::OPACITY_RED_12), t(idx::OPACITY_RED_24))
-    } else {
-        (gpui::transparent_black(), t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))
-    };
+    let (rest, hover) =
+        if red { (t(idx::OPACITY_RED_12), t(idx::OPACITY_RED_24)) } else { (gpui::transparent_black(), t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)) };
     crate::ui::states::track(div().id(id), key)
         .relative()
         .child(crate::ui::states::fade_layer(key, rest, hover, 200, 8.))
         .size(z(32.))
         .flex_none()
         .rounded(z(8.))
-        .when(crate::theme::high_contrast(), |d| {
-            d.border_1().border_color(if red { t(idx::OPACITY_RED_52) } else { gpui::transparent_black() })
-        })
+        .when(crate::theme::high_contrast(), |d| d.border_1().border_color(if red { t(idx::OPACITY_RED_52) } else { gpui::transparent_black() }))
         .flex()
         .items_center()
         .justify_center()
@@ -154,10 +149,7 @@ pub fn audio_button(
             .justify_center()
             .cursor_pointer()
             .when(red, |d| d.bg(t(idx::OPACITY_RED_12)).hover(|s| s.bg(t(idx::OPACITY_RED_24))))
-            .when(!red, |d| {
-                d.group_hover(group.clone(), |s| s.bg(t(idx::BACKGROUND_MOD_MUTED)))
-                    .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)))
-            })
+            .when(!red, |d| d.group_hover(group.clone(), |s| s.bg(t(idx::BACKGROUND_MOD_MUTED))).hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))))
     };
     let open = AUDIO_MENU.with(|m| m.borrow().as_ref().is_some_and(|(k, _, _)| *k == kind));
     div()
@@ -178,11 +170,7 @@ pub fn audio_button(
                 .w(z(16.))
                 .rounded_r(z(8.))
                 .when(open && !red, |d| d.bg(t(idx::BACKGROUND_MOD_MUTED)))
-                .child(icon(
-                    Icon::Chevron,
-                    16. * crate::theme::zoom(),
-                    t(if red { idx::ICON_FEEDBACK_CRITICAL } else { idx::ICON_SUBTLE }),
-                ))
+                .child(icon(Icon::Chevron, 16. * crate::theme::zoom(), t(if red { idx::ICON_FEEDBACK_CRITICAL } else { idx::ICON_SUBTLE })))
                 .tip(match kind {
                     Audio::Mic => crate::t!("voice.input_options"),
                     Audio::Deafen => crate::t!("voice.output_options"),
@@ -242,28 +230,33 @@ fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, cx: &mut Co
                 .child(if kind == Audio::Mic { crate::t!("voice.input_volume_menu") } else { crate::t!("voice.output_volume_menu") }),
         )
         .child(
-            div().px(z(8.)).mt(z(-4.)).h(z(24.)).relative().child(
-                div()
-                    .absolute()
-                    .top(z(10.))
-                    .left_0()
-                    .right_0()
-                    .h(z(4.))
-                    .rounded(z(4.))
-                    .bg(t(idx::SLIDER_TRACK_BACKGROUND))
-                    .child(div().h_full().w(gpui::relative(frac)).rounded(z(4.)).bg(t(idx::SLIDER_INDICATOR_BACKGROUND))),
-            )
-            .child(
-                div().absolute().top(z(4.)).left(gpui::relative(frac)).ml(z(-8.)).child(
+            div()
+                .px(z(8.))
+                .mt(z(-4.))
+                .h(z(24.))
+                .relative()
+                .child(
                     div()
-                        .size(z(16.))
-                        .rounded_full()
-                        .bg(gpui::white())
-                        .border_1()
-                        .border_color(t(if crate::theme::high_contrast() { idx::BORDER_STRONG } else { idx::BORDER_NORMAL }))
-                        .shadow_sm(),
+                        .absolute()
+                        .top(z(10.))
+                        .left_0()
+                        .right_0()
+                        .h(z(4.))
+                        .rounded(z(4.))
+                        .bg(t(idx::SLIDER_TRACK_BACKGROUND))
+                        .child(div().h_full().w(gpui::relative(frac)).rounded(z(4.)).bg(t(idx::SLIDER_INDICATOR_BACKGROUND))),
+                )
+                .child(
+                    div().absolute().top(z(4.)).left(gpui::relative(frac)).ml(z(-8.)).child(
+                        div()
+                            .size(z(16.))
+                            .rounded_full()
+                            .bg(gpui::white())
+                            .border_1()
+                            .border_color(t(if crate::theme::high_contrast() { idx::BORDER_STRONG } else { idx::BORDER_NORMAL }))
+                            .shadow_sm(),
+                    ),
                 ),
-            ),
         )
         .pb(z(4.));
     let items = vec![
@@ -379,13 +372,7 @@ fn large_ping(color: Hsla, bg: Hsla) -> impl IntoElement {
 }
 
 fn signal_bars(color: Hsla) -> impl IntoElement {
-    div()
-        .flex()
-        .items_end()
-        .gap(z(2.))
-        .h(z(14.))
-        .flex_none()
-        .children([6., 10., 14.].map(|h| div().w(z(3.)).h(z(h)).rounded(z(1.)).bg(color)))
+    div().flex().items_end().gap(z(2.)).h(z(14.)).flex_none().children([6., 10., 14.].map(|h| div().w(z(3.)).h(z(h)).rounded(z(1.)).bg(color)))
 }
 
 pub fn speaking_ring(avatar: AnyElement, size: f32, speaking: bool) -> AnyElement {
@@ -394,26 +381,13 @@ pub fn speaking_ring(avatar: AnyElement, size: f32, speaking: bool) -> AnyElemen
         .flex_none()
         .relative()
         .child(avatar)
-        .when(speaking, |d| {
-            d.child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .rounded_full()
-                    .border_2()
-                    .border_color(t(idx::GREEN_360)),
-            )
-        })
+        .when(speaking, |d| d.child(div().absolute().inset_0().rounded_full().border_2().border_color(t(idx::GREEN_360))))
         .into_any_element()
 }
 
 pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let ch = app.voice_channel.and_then(|v| app.channels.get(&v));
-    let guild = ch
-        .and_then(|c| c.guild)
-        .and_then(|g| app.guilds.iter().find(|x| x.id == g))
-        .map(|g| g.name.clone())
-        .unwrap_or_default();
+    let guild = ch.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.clone()).unwrap_or_default();
     let name = ch.map(|c| c.name.to_string()).unwrap_or_default();
     let label: SharedString = if guild.is_empty() { name.into() } else { format!("{name} / {guild}").into() };
     let v = &app.voice;
@@ -436,7 +410,13 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
     let color = t(fg);
     let ping: SharedString = match (v.ping_ms, &v.last_error) {
         (_, Some(e)) if v.status == VoiceStatus::Failed => e.clone().into(),
-        (Some(p), _) => if v.e2ee { crate::t!("voice.ping_e2ee", p = p) } else { crate::t!("voice.ping", p = p) },
+        (Some(p), _) => {
+            if v.e2ee {
+                crate::t!("voice.ping_e2ee", p = p)
+            } else {
+                crate::t!("voice.ping", p = p)
+            }
+        }
         (None, _) => crate::t!("voice.waiting_server"),
     };
     let noise = prefs().lock().noise_suppression;
@@ -496,10 +476,7 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
                                                     .id("voice-e2ee")
                                                     .cursor_pointer()
                                                     .child(asset_icon(SHIELD, 12., t(idx::TEXT_FEEDBACK_POSITIVE)))
-                                                    .tooltip(|window, cx| {
-                                                        gpui_component::tooltip::Tooltip::new(crate::t!("voice.e2ee"))
-                                                            .build(window, cx)
-                                                    })
+                                                    .tooltip(|window, cx| gpui_component::tooltip::Tooltip::new(crate::t!("voice.e2ee")).build(window, cx))
                                                     .on_click(cx.listener(|_, _, _, cx| {
                                                         cx.stop_propagation();
                                                         POPOUT.with(|p| p.set(Some(Tab::Privacy)));
@@ -524,21 +501,13 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
                         .flex()
                         .gap(z(4.))
                         .child(
-                            panel_button(
-                                "voice-noise",
-                                asset_icon(NOISE, 20. * crate::theme::zoom(), t(idx::ICON_SUBTLE)).into_any_element(),
-                                false,
-                            )
-                            .when(noise, |d| d.bg(t(idx::BACKGROUND_MOD_MUTED)))
-                            .tip(if noise {
-                                crate::t!("voice.noise_off")
-                            } else {
-                                crate::t!("voice.noise_on")
-                            })
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                update(|p| p.noise_suppression = !p.noise_suppression, true);
-                                cx.notify();
-                            })),
+                            panel_button("voice-noise", asset_icon(NOISE, 20. * crate::theme::zoom(), t(idx::ICON_SUBTLE)).into_any_element(), false)
+                                .when(noise, |d| d.bg(t(idx::BACKGROUND_MOD_MUTED)))
+                                .tip(if noise { crate::t!("voice.noise_off") } else { crate::t!("voice.noise_on") })
+                                .on_click(cx.listener(|_, _, _, cx| {
+                                    update(|p| p.noise_suppression = !p.noise_suppression, true);
+                                    cx.notify();
+                                })),
                         )
                         .child(
                             panel_button("hangup", panel_glyph(Icon::PhoneHangup, false), false)
@@ -570,14 +539,7 @@ pub fn server_tag(tag: &(SharedString, Option<SharedString>), size: f32) -> AnyE
         .items_center()
         .gap(z(2.))
         .when_some(tag.1.clone(), |d, url| d.child(gpui::img(url).size(z(size)).flex_none()))
-        .child(
-            div()
-                .text_size(z(12.))
-                .line_height(z(16.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(Palette::TEXT_NORMAL))
-                .child(tag.0.clone()),
-        )
+        .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(tag.0.clone()))
         .into_any_element()
 }
 
@@ -604,11 +566,7 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
         .id(("voice-user-row", user.0))
         .group("voice-user-row")
         .cursor_pointer()
-        .child(
-            gpui::canvas(move |b, _, _| crate::ui::voice_row::record(user, b), |_, _, _, _| {})
-                .absolute()
-                .size_full(),
-        )
+        .child(gpui::canvas(move |b, _, _| crate::ui::voice_row::record(user, b), |_, _, _, _| {}).absolute().size_full())
         .ml(z(38.))
         .mr(z(8.))
         .h(z(32.))
@@ -676,9 +634,7 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
                 .when(f.video, |d| d.child(asset_icon(VIDEO, 16., state)))
                 .when(local_muted, |d| d.child(icon(Icon::MicOff, 16., red)))
                 .when(f.server_mute && !local_muted, |d| d.child(icon(Icon::MicOff, 16., red)))
-                .when((f.self_mute || f.self_deaf) && !f.server_mute && !local_muted, |d| {
-                    d.child(icon(Icon::MicOff, 16., state))
-                })
+                .when((f.self_mute || f.self_deaf) && !f.server_mute && !local_muted, |d| d.child(icon(Icon::MicOff, 16., state)))
                 .when(f.server_deaf, |d| d.child(icon(Icon::HeadphonesOff, 16., red)))
                 .when(f.self_deaf && !f.server_deaf, |d| d.child(icon(Icon::HeadphonesOff, 16., state)))
                 .when(f.stream, |d| {
@@ -698,12 +654,7 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
                     )
                 }),
         )
-        .child(
-            div()
-                .hidden()
-                .group_hover("voice-user-row", |s| s.flex())
-                .child(crate::ui::voice_row::options_button(user, guild, in_call)),
-        )
+        .child(div().hidden().group_hover("voice-user-row", |s| s.flex()).child(crate::ui::voice_row::options_button(user, guild, in_call)))
         .on_mouse_down(MouseButton::Right, move |ev, window, cx| {
             cx.stop_propagation();
             if in_call {
@@ -716,13 +667,7 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
         .into_any_element()
 }
 
-fn check_row(
-    id: &'static str,
-    label: SharedString,
-    on: bool,
-    f: impl Fn(&mut PhoenixApp) + 'static,
-    cx: &mut Context<PhoenixApp>,
-) -> AnyElement {
+fn check_row(id: &'static str, label: SharedString, on: bool, f: impl Fn(&mut PhoenixApp) + 'static, cx: &mut Context<PhoenixApp>) -> AnyElement {
     div()
         .id(id)
         .h(z(32.))
@@ -847,25 +792,17 @@ fn ping_graph(history: &[u32]) -> impl IntoElement {
     let n = crate::voice::PING_HISTORY;
     let max = history.iter().copied().max().unwrap_or(0).max(100) as f32;
     let off = n - history.len().min(n);
-    div()
-        .h(z(80.))
-        .p(z(8.))
-        .rounded(z(4.))
-        .bg(c(Palette::BG_TERTIARY))
-        .flex()
-        .items_end()
-        .gap(z(2.))
-        .children((0..n).map(|i| {
-            let p = i.checked_sub(off).and_then(|j| history.get(j)).copied();
-            let col = match p {
-                Some(p) if p < 150 => Palette::GREEN,
-                Some(p) if p < 400 => Palette::YELLOW,
-                Some(_) => Palette::RED,
-                None => Palette::BG_MOD_HOVER,
-            };
-            let h = p.map(|p| (p as f32 / max * 64.).max(2.)).unwrap_or(2.);
-            div().flex_1().h(px(h)).rounded(z(1.)).bg(c(col))
-        }))
+    div().h(z(80.)).p(z(8.)).rounded(z(4.)).bg(c(Palette::BG_TERTIARY)).flex().items_end().gap(z(2.)).children((0..n).map(|i| {
+        let p = i.checked_sub(off).and_then(|j| history.get(j)).copied();
+        let col = match p {
+            Some(p) if p < 150 => Palette::GREEN,
+            Some(p) if p < 400 => Palette::YELLOW,
+            Some(_) => Palette::RED,
+            None => Palette::BG_MOD_HOVER,
+        };
+        let h = p.map(|p| (p as f32 / max * 64.).max(2.)).unwrap_or(2.);
+        div().flex_1().h(px(h)).rounded(z(1.)).bg(c(col))
+    }))
 }
 
 fn stat(label: SharedString, value: String) -> impl IntoElement {
@@ -889,20 +826,13 @@ fn privacy_body(v: &crate::voice::VoiceUi) -> AnyElement {
         .flex()
         .flex_col()
         .gap(z(12.))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(z(8.))
-                .child(asset_icon(SHIELD, 20., c(if v.e2ee { Palette::GREEN } else { Palette::TEXT_MUTED })))
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(c(Palette::TEXT_HEADER))
-                        .child(if v.e2ee { crate::t!("voice.e2ee") } else { crate::t!("voice.not_e2ee") }),
-                ),
-        )
+        .child(div().flex().items_center().gap(z(8.)).child(asset_icon(SHIELD, 20., c(if v.e2ee { Palette::GREEN } else { Palette::TEXT_MUTED }))).child(
+            div().text_size(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_HEADER)).child(if v.e2ee {
+                crate::t!("voice.e2ee")
+            } else {
+                crate::t!("voice.not_e2ee")
+            }),
+        ))
         .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(Palette::TEXT_MUTED)).child(if v.e2ee {
             crate::t!("voice.e2ee_note")
         } else {
@@ -921,12 +851,7 @@ fn privacy_body(v: &crate::voice::VoiceUi) -> AnyElement {
                         .text_color(c(Palette::TEXT_NORMAL))
                         .child(g)
                 })))
-                .child(
-                    div()
-                        .text_size(z(12.))
-                        .text_color(c(Palette::TEXT_MUTED))
-                        .child(crate::t!("voice.code_changes")),
-                )
+                .child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("voice.code_changes")))
         })
         .into_any_element()
 }
@@ -977,42 +902,35 @@ fn popout(app: &PhoenixApp, tab: Tab, cx: &mut Context<PhoenixApp>) -> AnyElemen
         cx.notify();
     });
     gpui::deferred(
-        div()
-            .id("voice-popout-backdrop")
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full()
-            .on_click(close)
-            .child(
-                div()
-                    .id("voice-popout")
-                    .absolute()
-                    .left(z(80.))
-                    .bottom(z(150.))
-                    .w(z(320.))
-                    .p(z(16.))
-                    .rounded(z(8.))
-                    .bg(c(Palette::BG_FLOATING))
-                    .border_1()
-                    .border_color(c(Palette::DIVIDER))
-                    .shadow_lg()
-                    .occlude()
-                    .on_click(|_, _, cx| cx.stop_propagation())
-                    .flex()
-                    .flex_col()
-                    .gap(z(12.))
-                    .child(
-                        div()
-                            .flex()
-                            .gap(z(16.))
-                            .border_b_1()
-                            .border_color(c(Palette::DIVIDER))
-                            .child(tab_button("vp-tab-conn", crate::t!("voice.connection"), Tab::Connection, cx))
-                            .child(tab_button("vp-tab-privacy", crate::t!("voice.privacy"), Tab::Privacy, cx)),
-                    )
-                    .child(body),
-            ),
+        div().id("voice-popout-backdrop").absolute().top_0().left_0().size_full().on_click(close).child(
+            div()
+                .id("voice-popout")
+                .absolute()
+                .left(z(80.))
+                .bottom(z(150.))
+                .w(z(320.))
+                .p(z(16.))
+                .rounded(z(8.))
+                .bg(c(Palette::BG_FLOATING))
+                .border_1()
+                .border_color(c(Palette::DIVIDER))
+                .shadow_lg()
+                .occlude()
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .flex()
+                .flex_col()
+                .gap(z(12.))
+                .child(
+                    div()
+                        .flex()
+                        .gap(z(16.))
+                        .border_b_1()
+                        .border_color(c(Palette::DIVIDER))
+                        .child(tab_button("vp-tab-conn", crate::t!("voice.connection"), Tab::Connection, cx))
+                        .child(tab_button("vp-tab-privacy", crate::t!("voice.privacy"), Tab::Privacy, cx)),
+                )
+                .child(body),
+        ),
     )
     .with_priority(3)
     .into_any_element()

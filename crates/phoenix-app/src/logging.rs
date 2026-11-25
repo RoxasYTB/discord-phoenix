@@ -141,9 +141,7 @@ impl<'a> MakeWriter<'a> for Sink {
 }
 
 pub fn filter_from(var: Option<&str>) -> EnvFilter {
-    var.filter(|v| !v.trim().is_empty())
-        .and_then(|v| EnvFilter::try_new(v).ok())
-        .unwrap_or_else(|| EnvFilter::new(DEFAULT_FILTER))
+    var.filter(|v| !v.trim().is_empty()).and_then(|v| EnvFilter::try_new(v).ok()).unwrap_or_else(|| EnvFilter::new(DEFAULT_FILTER))
 }
 
 static INIT: OnceLock<Option<PathBuf>> = OnceLock::new();
@@ -160,11 +158,7 @@ pub fn init() -> Option<PathBuf> {
         let path = file.as_ref().and_then(|_| log_file());
         let sink = Sink { file, stderr: true };
         let layer = tracing_subscriber::fmt::layer().with_ansi(false).with_target(true).with_writer(sink);
-        let ok = tracing_subscriber::registry()
-            .with(filter_from(std::env::var("RUST_LOG").ok().as_deref()))
-            .with(layer)
-            .try_init()
-            .is_ok();
+        let ok = tracing_subscriber::registry().with(filter_from(std::env::var("RUST_LOG").ok().as_deref())).with(layer).try_init().is_ok();
         if ok {
             install_panic_hook();
             tracing::info!(version = crate::diagnostics::VERSION, commit = crate::diagnostics::COMMIT, "Discord Phoenix starting");
@@ -178,12 +172,8 @@ fn install_panic_hook() {
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let at = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
-        let msg = info
-            .payload()
-            .downcast_ref::<&str>()
-            .map(|s| (*s).to_owned())
-            .or_else(|| info.payload().downcast_ref::<String>().cloned())
-            .unwrap_or_default();
+        let msg =
+            info.payload().downcast_ref::<&str>().map(|s| (*s).to_owned()).or_else(|| info.payload().downcast_ref::<String>().cloned()).unwrap_or_default();
         tracing::error!(target: "panic", location = %at, "{msg}\n{}", std::backtrace::Backtrace::force_capture());
         prev(info);
     }));

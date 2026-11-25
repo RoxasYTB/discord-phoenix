@@ -4,6 +4,7 @@ use gpui::{AnyElement, Context, Entity, FontWeight, Image, IntoElement, ParentEl
 use gpui_component::input::InputState;
 
 use super::{Modal, card, close_action, field_label, input_box};
+use crate::ui::home::data::GuildFolder;
 use crate::{
     actions::{ActionReply, ActionRequest, open_modal, with_modal},
     app::PhoenixApp,
@@ -11,7 +12,6 @@ use crate::{
     theme::{c, generated::idx, tok, z},
     ui::controls::{BtnKind, button},
 };
-use crate::ui::home::data::GuildFolder;
 use phoenix_api::{models::Snowflake, rest::guild_manage::AdminCall};
 
 pub struct EditGroup {
@@ -45,8 +45,8 @@ pub struct Folder {
 
 pub const FOLDER_DEFAULT: u32 = 0x5865F2;
 pub const FOLDER_COLORS: [u32; 20] = [
-    0x1ABC9C, 0x2ECC71, 0x3498DB, 0x9B59B6, 0xE91E63, 0xF1C40F, 0xE67E22, 0xE74C3C, 0x95A5A6, 0x607D8B, 0x11806A, 0x1F8B4C, 0x206694, 0x71368A,
-    0xAD1457, 0xC27C0E, 0xA84300, 0x992D22, 0x979C9F, 0x546E7A,
+    0x1ABC9C, 0x2ECC71, 0x3498DB, 0x9B59B6, 0xE91E63, 0xF1C40F, 0xE67E22, 0xE74C3C, 0x95A5A6, 0x607D8B, 0x11806A, 0x1F8B4C, 0x206694, 0x71368A, 0xAD1457,
+    0xC27C0E, 0xA84300, 0x992D22, 0x979C9F, 0x546E7A,
 ];
 pub const FOLDER_NAME_MAX: usize = 32;
 pub const GROUP_NAME_MAX: usize = 100;
@@ -75,12 +75,9 @@ pub fn parse_invites(v: &serde_json::Value) -> Vec<Invite> {
                 .and_then(|u| u.get("global_name").and_then(|n| n.as_str()).or_else(|| u.get("username").and_then(|n| n.as_str())))
                 .unwrap_or_default()
                 .to_owned();
-            let avatar = inv.and_then(|u| serde_json::from_value::<phoenix_api::models::User>(u.clone()).ok()).map(|u| crate::discord_backend::convert::user(&u));
-            let expires = i
-                .get("expires_at")
-                .and_then(|e| e.as_str())
-                .and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok())
-                .map(|d| d.timestamp());
+            let avatar =
+                inv.and_then(|u| serde_json::from_value::<phoenix_api::models::User>(u.clone()).ok()).map(|u| crate::discord_backend::convert::user(&u));
+            let expires = i.get("expires_at").and_then(|e| e.as_str()).and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok()).map(|d| d.timestamp());
             Some(Invite { code: code.into(), inviter: name.into(), avatar, expires })
         })
         .collect();
@@ -335,23 +332,24 @@ fn icon_data_uri(bytes: &[u8]) -> Option<(String, Vec<u8>)> {
     Some((format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png)), png))
 }
 
-fn footer_two(cancel: SharedString, ok: SharedString, enabled: bool, on_ok: impl Fn(&mut PhoenixApp, &mut Context<PhoenixApp>) + 'static, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn footer_two(
+    cancel: SharedString,
+    ok: SharedString,
+    enabled: bool,
+    on_ok: impl Fn(&mut PhoenixApp, &mut Context<PhoenixApp>) + 'static,
+    cx: &mut Context<PhoenixApp>,
+) -> AnyElement {
     let close = close_action(cx);
     div()
         .w_full()
         .flex()
         .gap(z(8.))
         .child(button("gdm-cancel", cancel, BtnKind::Secondary).flex_1().on_click(move |_, w, cx| close(w, cx)))
-        .child(
-            button("gdm-ok", ok, BtnKind::Primary)
-                .flex_1()
-                .when(!enabled, |d| d.opacity(0.5).cursor_default())
-                .on_click(cx.listener(move |a, _, _, cx| {
-                    if enabled {
-                        on_ok(a, cx)
-                    }
-                })),
-        )
+        .child(button("gdm-ok", ok, BtnKind::Primary).flex_1().when(!enabled, |d| d.opacity(0.5).cursor_default()).on_click(cx.listener(move |a, _, _, cx| {
+            if enabled {
+                on_ok(a, cx)
+            }
+        })))
         .into_any_element()
 }
 
@@ -486,31 +484,25 @@ pub fn render_invites(s: &Invites, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         )
                         .child(div().w(z(100.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(i.code.clone()))
                         .child(
-                            div()
-                                .w(z(140.))
-                                .flex()
-                                .items_center()
-                                .gap(z(8.))
-                                .child(div().flex_1().text_color(muted).child(countdown(i.expires, now)))
-                                .child(
-                                    div()
-                                        .id(("gdm-inv-del", n))
-                                        .size(z(32.))
-                                        .rounded(z(8.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .cursor_pointer()
-                                        .bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_DEFAULT)))
-                                        .hover(|s| s.bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_HOVER))))
-                                        .on_click(cx.listener(move |a, _, _, cx| a.revoke_group_invite(code.clone(), cx)))
-                                        .child(
-                                            gpui::svg()
-                                                .path(crate::icons::path("chat/trash"))
-                                                .size(z(16.))
-                                                .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT))),
-                                        ),
-                                ),
+                            div().w(z(140.)).flex().items_center().gap(z(8.)).child(div().flex_1().text_color(muted).child(countdown(i.expires, now))).child(
+                                div()
+                                    .id(("gdm-inv-del", n))
+                                    .size(z(32.))
+                                    .rounded(z(8.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_DEFAULT)))
+                                    .hover(|s| s.bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_HOVER))))
+                                    .on_click(cx.listener(move |a, _, _, cx| a.revoke_group_invite(code.clone(), cx)))
+                                    .child(
+                                        gpui::svg()
+                                            .path(crate::icons::path("chat/trash"))
+                                            .size(z(16.))
+                                            .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT))),
+                                    ),
+                            ),
                         ),
                 );
             }
@@ -543,12 +535,11 @@ fn swatch(id: (&'static str, usize), color: u32, size: (f32, f32), selected: boo
         .items_center()
         .justify_center()
         .when(selected, |d| {
-            d.child(
-                gpui::svg()
-                    .path(crate::icons::path("check"))
-                    .size(z(if size.1 > 30. { 32. } else { 16. }))
-                    .text_color(if dark { gpui::black() } else { gpui::white() }),
-            )
+            d.child(gpui::svg().path(crate::icons::path("check")).size(z(if size.1 > 30. { 32. } else { 16. })).text_color(if dark {
+                gpui::black()
+            } else {
+                gpui::white()
+            }))
         })
         .on_click(cx.listener(move |_, _, _, cx| {
             with_modal(|m| {
@@ -582,18 +573,17 @@ pub fn render_folder(f: &Folder, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .mr(z(-10.))
         .child(big(0, FOLDER_DEFAULT, current == FOLDER_DEFAULT, cx))
         .child(if custom {
-            big(1, current, off_palette, cx).child(
-                div().absolute().top(z(4.)).right(z(4.)).child(
-                    gpui::svg()
-                        .path(crate::icons::path("pen"))
-                        .size(z(14.))
-                        .text_color(if luminance(current) > 0.5 { gpui::black() } else { gpui::white() }),
-                ),
-            )
+            big(1, current, off_palette, cx).child(div().absolute().top(z(4.)).right(z(4.)).child(
+                gpui::svg().path(crate::icons::path("pen")).size(z(14.)).text_color(if luminance(current) > 0.5 { gpui::black() } else { gpui::white() }),
+            ))
         } else {
-            div().flex_1().mt(z(10.)).mr(z(10.)).min_w(z(60.)).max_w(z(70.)).child(
-                div().w_full().h(z(50.)).rounded(z(8.)).border_1().border_color(c(tok(idx::OPACITY_WHITE_8))),
-            )
+            div()
+                .flex_1()
+                .mt(z(10.))
+                .mr(z(10.))
+                .min_w(z(60.))
+                .max_w(z(70.))
+                .child(div().w_full().h(z(50.)).rounded(z(8.)).border_1().border_color(c(tok(idx::OPACITY_WHITE_8))))
         })
         .child(rows);
     let body = div()

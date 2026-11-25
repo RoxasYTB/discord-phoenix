@@ -71,7 +71,11 @@ fn app_icon(url: Option<&str>, size: f32) -> AnyElement {
 }
 
 fn icon_tile(name: &str) -> gpui::Div {
-    div().size(z(48.)).flex_none().rounded_full().bg(t(idx::CARD_BACKGROUND_DEFAULT)).flex().items_center().justify_center().child(icon(name, 24., idx::ICON_SUBTLE))
+    div().size(z(48.)).flex_none().rounded_full().bg(t(idx::CARD_BACKGROUND_DEFAULT)).flex().items_center().justify_center().child(icon(
+        name,
+        24.,
+        idx::ICON_SUBTLE,
+    ))
 }
 
 fn card_row(id: impl Into<gpui::ElementId>, lead_el: AnyElement, head: SharedString, sub: gpui::Div, trailing: AnyElement) -> gpui::Stateful<gpui::Div> {
@@ -124,7 +128,8 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
 fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let ints = fetch(app, guild, ServerCall::Integrations { guild: sf(guild) }, cx);
     let hooks = fetch(app, guild, ServerCall::Webhooks { guild: sf(guild) }, cx);
-    let count = |kind: u64| hooks.as_ref().and_then(Value::as_array).into_iter().flatten().filter(|w| w.get("type").and_then(Value::as_u64) == Some(kind)).count();
+    let count =
+        |kind: u64| hooks.as_ref().and_then(Value::as_array).into_iter().flatten().filter(|w| w.get("type").and_then(Value::as_u64) == Some(kind)).count();
     let (incoming, followed) = (count(1), count(2));
     let mut p = page()
         .child(title(crate::t!("menu.gs.integrations")))
@@ -153,11 +158,21 @@ fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
             button_sm("gs2-int-followed-more", crate::t!("gs2.learn_more"), BtnKind::Primary).into_any_element(),
         ));
     for (n, (name, desc, cta, col)) in
-        [("Twitch", "gs2.twitch_desc", "gs2.twitch_connect", 0x9146FFu32), ("YouTube", "gs2.youtube_desc", "gs2.youtube_connect", 0xE3302Fu32)].into_iter().enumerate()
+        [("Twitch", "gs2.twitch_desc", "gs2.twitch_connect", 0x9146FFu32), ("YouTube", "gs2.youtube_desc", "gs2.youtube_connect", 0xE3302Fu32)]
+            .into_iter()
+            .enumerate()
     {
         p = p.child(card_row(
             ("gs2-int-platform", n),
-            div().size(z(48.)).rounded_full().bg(crate::theme::c(col)).flex().items_center().justify_center().child(icon(if n == 0 { "tv" } else { "play" }, 28., idx::WHITE)).into_any_element(),
+            div()
+                .size(z(48.))
+                .rounded_full()
+                .bg(crate::theme::c(col))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(icon(if n == 0 { "tv" } else { "play" }, 28., idx::WHITE))
+                .into_any_element(),
             name.into(),
             text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!(desc)),
             button_sm(("gs2-int-connect", n), crate::t!(cta), BtnKind::Primary).into_any_element(),
@@ -194,15 +209,13 @@ fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
         let sub = div()
             .flex()
             .flex_col()
-            .child(
-                div()
-                    .mt(z(4.))
-                    .flex()
-                    .items_center()
-                    .gap(z(4.))
-                    .child(icon("calendar", 16., idx::ICON_SUBTLE))
-                    .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.added_by", date = a.added, user = a.by))),
-            )
+            .child(div().mt(z(4.)).flex().items_center().gap(z(4.)).child(icon("calendar", 16., idx::ICON_SUBTLE)).child(text(
+                12.,
+                16.,
+                FontWeight::NORMAL,
+                idx::TEXT_DEFAULT,
+                crate::t!("gs2.added_by", date = a.added, user = a.by),
+            )))
             .child(tags);
         let id = a.id.clone();
         p = p.child(
@@ -211,7 +224,13 @@ fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
                 app_icon(a.icon_url.as_deref(), 48.),
                 a.name.clone().into(),
                 sub,
-                div().flex().items_center().gap(z(8.)).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.manage"))).child(icon("chevron-right", 16., idx::TEXT_DEFAULT)).into_any_element(),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(z(8.))
+                    .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.manage")))
+                    .child(icon("chevron-right", 16., idx::TEXT_DEFAULT))
+                    .into_any_element(),
             )
             .cursor_pointer()
             .on_click(cx.listener(move |_, _, _, cx| {
@@ -334,11 +353,23 @@ pub fn commands(v: &Value) -> Vec<String> {
 
 pub fn everyone_allowed(perms: Option<&Value>, guild: Id) -> (bool, bool) {
     let list = perms.and_then(|p| p.get("permissions")).and_then(Value::as_array);
-    let get = |id: u64| list.into_iter().flatten().find(|x| str_of(x, "id").parse::<u64>().ok() == Some(id)).and_then(|x| x.get("permission")).and_then(Value::as_bool).unwrap_or(true);
+    let get = |id: u64| {
+        list.into_iter()
+            .flatten()
+            .find(|x| str_of(x, "id").parse::<u64>().ok() == Some(id))
+            .and_then(|x| x.get("permission"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    };
     (get(guild.0), get(guild.0.wrapping_sub(1)))
 }
 
-fn allow_deny(id: &'static str, allowed: bool, on_set: impl Fn(&mut PhoenixApp, bool, &mut Context<PhoenixApp>) + 'static + Clone, cx: &mut Context<PhoenixApp>) -> gpui::Div {
+fn allow_deny(
+    id: &'static str,
+    allowed: bool,
+    on_set: impl Fn(&mut PhoenixApp, bool, &mut Context<PhoenixApp>) + 'static + Clone,
+    cx: &mut Context<PhoenixApp>,
+) -> gpui::Div {
     let seg = |n: usize, on: bool, deny: bool, set: bool| {
         let f = on_set.clone();
         div()
@@ -352,7 +383,17 @@ fn allow_deny(id: &'static str, allowed: bool, on_set: impl Fn(&mut PhoenixApp, 
             .cursor_pointer()
             .when(on, |d| d.bg(t(if deny { idx::BACKGROUND_FEEDBACK_CRITICAL } else { idx::BACKGROUND_FEEDBACK_POSITIVE })))
             .on_click(cx.listener(move |a, _, _, cx| f(a, set, cx)))
-            .child(icon(if deny { "close-small" } else { "check" }, 16., if on { idx::WHITE } else if deny { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_FEEDBACK_POSITIVE }))
+            .child(icon(
+                if deny { "close-small" } else { "check" },
+                16.,
+                if on {
+                    idx::WHITE
+                } else if deny {
+                    idx::TEXT_FEEDBACK_CRITICAL
+                } else {
+                    idx::TEXT_FEEDBACK_POSITIVE
+                },
+            ))
     };
     div().flex().rounded(z(4.)).border_1().border_color(t(idx::BORDER_SUBTLE)).child(seg(0, !allowed, true, false)).child(seg(1, allowed, false, true))
 }
@@ -402,25 +443,27 @@ fn app_page(app: &PhoenixApp, guild: Id, id: &str, cx: &mut Context<PhoenixApp>)
     let mut p = page()
         .child(breadcrumb(guild, a.name.clone().into(), cx))
         .child(
-            div()
-                .mt(z(20.))
-                .flex()
-                .gap(z(16.))
-                .child(app_icon(a.icon_url.as_deref(), 48.))
-                .child(
+            div().mt(z(20.)).flex().gap(z(16.)).child(app_icon(a.icon_url.as_deref(), 48.)).child(
+                div().flex().flex_col().gap(z(12.)).child(text(24., 32., FontWeight::SEMIBOLD, idx::TEXT_STRONG, a.name.clone())).child(
                     div()
                         .flex()
-                        .flex_col()
-                        .gap(z(12.))
-                        .child(text(24., 32., FontWeight::SEMIBOLD, idx::TEXT_STRONG, a.name.clone()))
-                        .child(
-                            div()
-                                .flex()
-                                .gap(z(16.))
-                                .child(div().flex().gap(z(4.)).child(icon("calendar", 16., idx::ICON_SUBTLE)).child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.added_on", date = a.added))))
-                                .child(div().flex().gap(z(4.)).child(icon("user", 16., idx::ICON_SUBTLE)).child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.added_by_only", user = a.by)))),
-                        ),
+                        .gap(z(16.))
+                        .child(div().flex().gap(z(4.)).child(icon("calendar", 16., idx::ICON_SUBTLE)).child(text(
+                            12.,
+                            16.,
+                            FontWeight::NORMAL,
+                            idx::TEXT_DEFAULT,
+                            crate::t!("gs2.added_on", date = a.added),
+                        )))
+                        .child(div().flex().gap(z(4.)).child(icon("user", 16., idx::ICON_SUBTLE)).child(text(
+                            12.,
+                            16.,
+                            FontWeight::NORMAL,
+                            idx::TEXT_DEFAULT,
+                            crate::t!("gs2.added_by_only", user = a.by),
+                        ))),
                 ),
+            ),
         )
         .child(div().mt(z(28.)).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, plain_description(&a.description))));
     if a.commands {
@@ -434,12 +477,30 @@ fn app_page(app: &PhoenixApp, guild: Id, id: &str, cx: &mut Context<PhoenixApp>)
             }
         };
         p = p
-            .child(div().mt(z(24.)).flex().items_center().gap(z(8.)).child(icon("angle-brackets", 24., idx::ICON_DEFAULT)).child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!("gs2.cmd_perms"))))
+            .child(div().mt(z(24.)).flex().items_center().gap(z(8.)).child(icon("angle-brackets", 24., idx::ICON_DEFAULT)).child(text(
+                16.,
+                20.,
+                FontWeight::SEMIBOLD,
+                idx::TEXT_STRONG,
+                crate::t!("gs2.cmd_perms"),
+            )))
             .child(div().mt(z(16.)).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED, crate::t!("gs2.cmd_perms_desc"))));
         if perms_done {
             p = p
-                .child(perm_block(crate::t!("gs2.roles_members"), crate::t!("gs2.add_roles_members"), "gs2-add-roles", "@everyone".into(), allow_deny("gs2-perm-everyone", everyone, set(1), cx)))
-                .child(perm_block(crate::t!("gs2.channels"), crate::t!("gs2.add_channels"), "gs2-add-channels", crate::t!("gs2.all_channels"), allow_deny("gs2-perm-channels", all_channels, set(3), cx)));
+                .child(perm_block(
+                    crate::t!("gs2.roles_members"),
+                    crate::t!("gs2.add_roles_members"),
+                    "gs2-add-roles",
+                    "@everyone".into(),
+                    allow_deny("gs2-perm-everyone", everyone, set(1), cx),
+                ))
+                .child(perm_block(
+                    crate::t!("gs2.channels"),
+                    crate::t!("gs2.add_channels"),
+                    "gs2-add-channels",
+                    crate::t!("gs2.all_channels"),
+                    allow_deny("gs2-perm-channels", all_channels, set(3), cx),
+                ));
         }
         let mut list = div().mt(z(16.)).rounded(z(8.)).border_1().border_color(t(idx::BORDER_SUBTLE)).flex().flex_col().child(
             div()
@@ -500,9 +561,11 @@ fn app_page(app: &PhoenixApp, guild: Id, id: &str, cx: &mut Context<PhoenixApp>)
     }
     let integration = a.integration.clone();
     p.child(divider(32.))
-        .child(div().flex().child(button_sm("gs2-kick-app", crate::t!("gs2.remove_app", name = a.name), BtnKind::Critical).on_click(cx.listener(move |app, _, _, cx| {
-            write(app, ServerCall::DeleteIntegration { guild: sf(guild), integration: Snowflake(integration.parse().unwrap_or(0)) }, None, cx);
-        }))))
+        .child(div().flex().child(button_sm("gs2-kick-app", crate::t!("gs2.remove_app", name = a.name), BtnKind::Critical).on_click(cx.listener(
+            move |app, _, _, cx| {
+                write(app, ServerCall::DeleteIntegration { guild: sf(guild), integration: Snowflake(integration.parse().unwrap_or(0)) }, None, cx);
+            },
+        ))))
         .into_any_element()
 }
 

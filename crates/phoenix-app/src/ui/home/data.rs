@@ -105,7 +105,10 @@ pub enum NavEvent {
     },
     RelationshipUpsert(Relationship),
     RelationshipRemove(Id),
-    Activity { user: Id, activity: Option<SharedString> },
+    Activity {
+        user: Id,
+        activity: Option<SharedString>,
+    },
     ThreadUpsert(Channel),
     ThreadDelete(Id),
     Extras(Vec<(Id, ChannelExtra)>),
@@ -381,8 +384,7 @@ pub fn invite_code(input: &str) -> Option<String> {
         .find_map(|p| s.strip_prefix(p))
         .unwrap_or(s);
     let code = code.split(['?', '#']).next().unwrap_or_default();
-    (!code.is_empty() && code.len() <= 32 && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
-        .then(|| code.to_owned())
+    (!code.is_empty() && code.len() <= 32 && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).then(|| code.to_owned())
 }
 
 #[cfg(test)]
@@ -400,12 +402,7 @@ mod tests {
 
     #[test]
     fn prefs_roundtrip() {
-        let p = NavPrefs {
-            last_channel: vec![(None, 5), (Some(7), 9)],
-            collapsed: vec![1, 2],
-            folders: vec![3],
-            hide_muted: vec![],
-        };
+        let p = NavPrefs { last_channel: vec![(None, 5), (Some(7), 9)], collapsed: vec![1, 2], folders: vec![3], hide_muted: vec![] };
         assert_eq!(NavPrefs::parse(&p.serialize()), p);
     }
 

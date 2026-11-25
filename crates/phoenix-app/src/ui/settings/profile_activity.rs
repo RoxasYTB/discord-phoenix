@@ -120,13 +120,7 @@ fn card(g: &RecentGame, now: i64, col: &Colors) -> Div {
                 .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(col.strong).child(g.name.clone()))
                 .child(div().flex().flex_wrap().gap_x(z(8.)).children(badges)),
         )
-        .child(
-            div()
-                .absolute()
-                .top(z(12.))
-                .right(z(16.))
-                .child(gpui::svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(col.strong)),
-        )
+        .child(div().absolute().top(z(12.)).right(z(16.)).child(gpui::svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(col.strong)))
 }
 
 pub fn render(games: &[RecentGame], col: &Colors) -> Div {

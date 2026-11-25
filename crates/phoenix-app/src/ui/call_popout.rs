@@ -1,9 +1,8 @@
 use std::cell::RefCell;
 
 use gpui::{
-    AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context, Entity, FontWeight, Hsla, IntoElement,
-    ParentElement, SharedString, Styled, Subscription, TitlebarOptions, Window, WindowBounds, WindowDecorations,
-    WindowOptions, div, prelude::*, px, size, svg,
+    AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context, Entity, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, Subscription,
+    TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowOptions, div, prelude::*, px, size, svg,
 };
 use gpui_component::Root;
 
@@ -48,11 +47,7 @@ pub fn open(app: Entity<PhoenixApp>, cx: &mut App) {
     let bounds = Bounds::centered(None, size(px(860.), px(560.)), cx);
     let opts = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        titlebar: Some(TitlebarOptions {
-            title: Some("Discord Phoenix — Appel".into()),
-            appears_transparent: true,
-            ..Default::default()
-        }),
+        titlebar: Some(TitlebarOptions { title: Some("Discord Phoenix — Appel".into()), appears_transparent: true, ..Default::default() }),
         window_decorations: Some(WindowDecorations::Client),
         app_id: Some(crate::APP_ID.into()),
         window_min_size: Some(size(px(420.), px(320.))),
@@ -114,17 +109,9 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
     let video = if stream {
         let skey = crate::ui::call_view::stream_key(app, user_id);
         let watching = skey.as_ref().is_some_and(|k| app.voice.watching.contains(k));
-        if me || watching {
-            crate::ui::call_view::stream_image(user_id, me)
-        } else {
-            None
-        }
+        if me || watching { crate::ui::call_view::stream_image(user_id, me) } else { None }
     } else if flags.video {
-        if me {
-            crate::ui::call_view::camera_image()
-        } else {
-            crate::ui::call_view::remote_image(user_id)
-        }
+        if me { crate::ui::call_view::camera_image() } else { crate::ui::call_view::remote_image(user_id) }
     } else {
         None
     };
@@ -136,11 +123,7 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
         .flex_none()
         .rounded(z(8.))
         .overflow_hidden()
-        .bg(if video.is_some() || stream {
-            t(idx::BACKGROUND_BASE_LOWER)
-        } else {
-            tile_color(app, user_id)
-        })
+        .bg(if video.is_some() || stream { t(idx::BACKGROUND_BASE_LOWER) } else { tile_color(app, user_id) })
         .flex()
         .items_center()
         .justify_center()
@@ -179,16 +162,7 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
                 .line_height(z(18.))
                 .child(name),
         )
-        .when(speaking, |d| {
-            d.child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .rounded(z(8.))
-                    .border(z(2.))
-                    .border_color(t(idx::STATUS_POSITIVE)),
-            )
-        })
+        .when(speaking, |d| d.child(div().absolute().inset_0().rounded(z(8.)).border(z(2.)).border_color(t(idx::STATUS_POSITIVE))))
         .into_any_element()
 }
 
@@ -287,14 +261,7 @@ impl gpui::Render for CallPopoutView {
                             .gap(z(8.))
                             .min_w_0()
                             .child(svg().path(crate::icons::path("speaker")).size(z(16.)).text_color(t(idx::CHANNEL_ICON)))
-                            .child(
-                                div()
-                                    .text_size(z(14.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(t(idx::TEXT_STRONG))
-                                    .text_ellipsis()
-                                    .child(ch_name),
-                            ),
+                            .child(div().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).text_ellipsis().child(ch_name)),
                     )
                     .child(
                         div()
@@ -333,18 +300,7 @@ impl gpui::Render for CallPopoutView {
                             ),
                     ),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .p(z(12.))
-                    .flex()
-                    .flex_wrap()
-                    .content_center()
-                    .justify_center()
-                    .gap(z(8.))
-                    .children(rendered_tiles),
-            )
+            .child(div().flex_1().min_h_0().p(z(12.)).flex().flex_wrap().content_center().justify_center().gap(z(8.)).children(rendered_tiles))
             .child(
                 div()
                     .h(z(64.))
@@ -386,14 +342,13 @@ impl gpui::Render for CallPopoutView {
                             });
                         })),
                     )
-                    .child(
-                        ctrl_btn("popout-hangup", Icon::PhoneHangup, true, false, crate::t!("voice.disconnect"))
-                            .on_click(cx.listener(move |_, _, w, cx| {
-                                clear_handle();
-                                app_ent_hang.update(cx, |a, cx| a.join_voice(None, cx));
-                                w.remove_window();
-                            })),
-                    )
+                    .child(ctrl_btn("popout-hangup", Icon::PhoneHangup, true, false, crate::t!("voice.disconnect")).on_click(cx.listener(
+                        move |_, _, w, cx| {
+                            clear_handle();
+                            app_ent_hang.update(cx, |a, cx| a.join_voice(None, cx));
+                            w.remove_window();
+                        },
+                    )))
                     .child(
                         div()
                             .id("popout-fullscreen")

@@ -54,11 +54,7 @@ pub fn render(locale: &str, ast: &Value, args: &[(&str, &str)], mapping: &Mappin
         .collect();
     let mut out = String::new();
     eval_node(locale, ast, &mapped, None, &mut out);
-    if mapping.upper {
-        out.to_uppercase()
-    } else {
-        out
-    }
+    if mapping.upper { out.to_uppercase() } else { out }
 }
 
 fn eval_node(locale: &str, node: &Value, args: &[(&str, &str)], pound: Option<&str>, out: &mut String) {
@@ -137,11 +133,7 @@ fn eval_typed(locale: &str, kind: u64, items: &[Value], args: &[(&str, &str)], p
             let n = raw.parse::<f64>().unwrap_or(0.0);
             let exact = format!("={}", n as i64);
             let cat = intl::plural(locale, (n - offset).max(0.0));
-            let formatted = if (n - offset).fract() == 0.0 {
-                intl::number(locale, (n - offset) as i64)
-            } else {
-                intl::decimal(locale, n - offset, 2)
-            };
+            let formatted = if (n - offset).fract() == 0.0 { intl::number(locale, (n - offset) as i64) } else { intl::decimal(locale, n - offset, 2) };
             if let Some(branch) = cases.get(&exact).or_else(|| cases.get(cat)).or_else(|| cases.get("other")) {
                 eval_node(locale, branch, args, Some(&formatted), out);
             }

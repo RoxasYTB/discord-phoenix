@@ -4,9 +4,8 @@ use std::{
 };
 
 use gpui::{
-    Animation, AnimationExt, AnchoredPositionMode, AnyElement, App, Context, ElementId, Entity, FontWeight,
-    IntoElement, ParentElement, Render, SharedString, Styled, Window, anchored, deferred, div,
-    ease_out_quint, img, point, prelude::*, px, svg,
+    AnchoredPositionMode, Animation, AnimationExt, AnyElement, App, Context, ElementId, Entity, FontWeight, IntoElement, ParentElement, Render, SharedString,
+    Styled, Window, anchored, deferred, div, ease_out_quint, img, point, prelude::*, px, svg,
 };
 
 use crate::{
@@ -26,17 +25,13 @@ enum RailItem<'a> {
 
 fn rail(app: &PhoenixApp) -> Vec<RailItem<'_>> {
     let by_id = |g: Id| app.guilds.iter().find(|x| x.id == g);
-    let in_folders: std::collections::HashSet<Id> =
-        app.nav.folders.iter().flat_map(|f| f.guilds.iter().copied()).collect();
-    let mut out: Vec<RailItem> =
-        app.guilds.iter().filter(|g| !in_folders.contains(&g.id)).map(|g| RailItem::Guild(g, false)).collect();
+    let in_folders: std::collections::HashSet<Id> = app.nav.folders.iter().flat_map(|f| f.guilds.iter().copied()).collect();
+    let mut out: Vec<RailItem> = app.guilds.iter().filter(|g| !in_folders.contains(&g.id)).map(|g| RailItem::Guild(g, false)).collect();
     for f in &app.nav.folders {
         let guilds: Vec<&Guild> = f.guilds.iter().filter_map(|g| by_id(*g)).collect();
         match f.id {
             Some(id) if !guilds.is_empty() => {
-                let name = f.name.clone().unwrap_or_else(|| {
-                    guilds.iter().map(|g| g.name.as_ref()).collect::<Vec<_>>().join(", ").into()
-                });
+                let name = f.name.clone().unwrap_or_else(|| guilds.iter().map(|g| g.name.as_ref()).collect::<Vec<_>>().join(", ").into());
                 out.push(RailItem::Folder {
                     id,
                     name,
@@ -86,12 +81,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
     for (i, item) in rail(app).into_iter().enumerate() {
         match &item {
             RailItem::Guild(g, _) if is_unread(g) => spans.push(Span { ix: base + i, y: 0., h: ICON, mentions: g.mentions }),
-            RailItem::Folder { guilds, open: false, .. } if guilds.iter().any(|g| is_unread(g)) => spans.push(Span {
-                ix: base + i,
-                y: 0.,
-                h: FOLDER,
-                mentions: guilds.iter().map(|g| g.mentions).sum(),
-            }),
+            RailItem::Folder { guilds, open: false, .. } if guilds.iter().any(|g| is_unread(g)) => {
+                spans.push(Span { ix: base + i, y: 0., h: FOLDER, mentions: guilds.iter().map(|g| g.mentions).sum() })
+            }
             RailItem::Folder { guilds, open: true, .. } => {
                 for (k, g) in guilds.iter().enumerate().filter(|(_, g)| is_unread(g)) {
                     let y = FOLDER + gap() - FOLDER_PAD + k as f32 * (ICON + gap());
@@ -102,27 +94,23 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         }
         col = match item {
             RailItem::Guild(g, nested) => col.child(guild(app, &entity, g, nested)),
-            RailItem::Folder { id, name, color, guilds, open } => {
-                col.child(folder(app, &entity, id, name, color, &guilds, open))
-            }
+            RailItem::Folder { id, name, color, guilds, open } => col.child(folder(app, &entity, id, name, color, &guilds, open)),
         };
     }
     let e = entity.clone();
     col = col
         .child(separator())
         .child(
-            action(&entity, "add-server", Icon::Plus, crate::t!("rail.add_server"))
-                .on_click(move |_, w, cx| e.update(cx, |a, cx| a.open_join_server(w, cx))),
+            action(&entity, "add-server", Icon::Plus, crate::t!("rail.add_server")).on_click(move |_, w, cx| e.update(cx, |a, cx| a.open_join_server(w, cx))),
         )
         .child({
             let e = entity.clone();
-            action(&entity, "discover", Icon::Compass, crate::t!("rail.discover"))
-                .on_click(move |_, _, cx| {
-                    e.update(cx, |_, cx| {
-                        crate::ui::discovery::open(crate::ui::discovery::Tab::Servers);
-                        cx.notify();
-                    })
+            action(&entity, "discover", Icon::Compass, crate::t!("rail.discover")).on_click(move |_, _, cx| {
+                e.update(cx, |_, cx| {
+                    crate::ui::discovery::open(crate::ui::discovery::Tab::Servers);
+                    cx.notify();
                 })
+            })
         });
     let (above, below, m_above, m_below) = offscreen_unread(&scroll, &spans);
     div()
@@ -201,16 +189,13 @@ fn unread_bar(h: &gpui::ScrollHandle, ix: usize, top: bool, mentions: u32) -> An
                             .border_color(c(tok(idx::BORDER_SUBTLE)))
                             .shadow(crate::ui::inbox::shadow_medium())
                     } else {
-                        d.bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST)))
-                            .border_1()
-                            .border_color(c(tok(idx::BORDER_NORMAL)))
-                            .shadow(vec![gpui::BoxShadow {
-                                color: c(tok(idx::OPACITY_BLACK_24)),
-                                offset: point(px(0.), z(2.)),
-                                blur_radius: z(6.),
-                                spread_radius: px(0.),
-                                inset: false,
-                            }])
+                        d.bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST))).border_1().border_color(c(tok(idx::BORDER_NORMAL))).shadow(vec![gpui::BoxShadow {
+                            color: c(tok(idx::OPACITY_BLACK_24)),
+                            offset: point(px(0.), z(2.)),
+                            blur_radius: z(6.),
+                            spread_radius: px(0.),
+                            inset: false,
+                        }])
                     }
                 })
                 .text_size(z(12.))
@@ -255,7 +240,13 @@ fn track_hover(el: gpui::Stateful<gpui::Div>, key: u64, entity: &Entity<PhoenixA
     let e = entity.clone();
     el.on_hover(move |over, _, cx| {
         let changed = HOVERED.with(|h| {
-            let next = if *over { Some(key) } else if h.get() == Some(key) { None } else { h.get() };
+            let next = if *over {
+                Some(key)
+            } else if h.get() == Some(key) {
+                None
+            } else {
+                h.get()
+            };
             let changed = next != h.get();
             h.set(next);
             changed
@@ -333,23 +324,13 @@ fn right_tooltip_with(text: SharedString, extra: Option<gpui::Div>, item_h: f32)
         let w = 5. - (4. - i as f32).abs();
         pointer = pointer.child(div().w(z(w)).h(z(1.)).bg(c(crate::theme::tok(crate::theme::generated::idx::BACKGROUND_SURFACE_HIGH))));
     }
-    let tip = deferred(
-        anchored()
-            .position_mode(AnchoredPositionMode::Local)
-            .position(point(z((m::server_bar_w() + item_h) / 2. + 12. - 5.), z(0.))).child(
-            div()
-                .h(z(item_h))
-                .flex()
-                .items_center()
-                .child(pointer)
-                .child(card)
-                .with_animation(
-                    "rail-tip",
-                    Animation::new(crate::ui::settings::effects::motion(100)).with_easing(ease_out_quint()),
-                    |d, t| d.ml(z(4. * (1. - t))),
-                ),
+    let tip = deferred(anchored().position_mode(AnchoredPositionMode::Local).position(point(z((m::server_bar_w() + item_h) / 2. + 12. - 5.), z(0.))).child(
+        div().h(z(item_h)).flex().items_center().child(pointer).child(card).with_animation(
+            "rail-tip",
+            Animation::new(crate::ui::settings::effects::motion(100)).with_easing(ease_out_quint()),
+            |d, t| d.ml(z(4. * (1. - t))),
         ),
-    )
+    ))
     .with_priority(2);
     div().absolute().top_0().left_0().child(tip).into_any_element()
 }
@@ -387,14 +368,7 @@ fn pill(key: u64, selected: bool, hover: bool, unread: bool) -> AnyElement {
 }
 
 fn mention_badge(n: u32) -> impl IntoElement {
-    div()
-        .absolute()
-        .right(z(-4.))
-        .bottom(z(-4.))
-        .p(z(4.))
-        .rounded(z(12.))
-        .bg(c(Palette::BG_TERTIARY))
-        .child(badge(n).bg(c(Palette::NOTIFICATION)))
+    div().absolute().right(z(-4.)).bottom(z(-4.)).p(z(4.)).rounded(z(12.)).bg(c(Palette::BG_TERTIARY)).child(badge(n).bg(c(Palette::NOTIFICATION)))
 }
 
 fn voice_badge(app: &PhoenixApp, g: &Guild) -> Option<AnyElement> {
@@ -418,20 +392,21 @@ fn voice_badge(app: &PhoenixApp, g: &Guild) -> Option<AnyElement> {
             .rounded_full()
             .bg(c(Palette::BG_TERTIARY))
             .child(
-                div().size(z(16.)).rounded_full().bg(c(bg)).flex().items_center().justify_center().child(
-                    gpui::svg().path(crate::icons::path("speaker")).size(z(12.)).text_color(gpui::white()),
-                ),
+                div()
+                    .size(z(16.))
+                    .rounded_full()
+                    .bg(c(bg))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(gpui::svg().path(crate::icons::path("speaker")).size(z(12.)).text_color(gpui::white())),
             )
             .into_any_element(),
     )
 }
 
 fn row(id: impl Into<ElementId>, key: u64, entity: &Entity<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
-    let row = track_hover(
-        div().id(id).w_full().h(z(ICON)).flex_none().flex().justify_center().relative().cursor_pointer(),
-        key,
-        entity,
-    );
+    let row = track_hover(div().id(id).w_full().h(z(ICON)).flex_none().flex().justify_center().relative().cursor_pointer(), key, entity);
     crate::ui::focus_ring::ring_inset(row, crate::ui::states::key(("rail-row", key)), ICON_RADIUS, (m::SERVER_BAR_W - ICON) / 2., 0.)
 }
 
@@ -457,13 +432,7 @@ fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElem
                     })
                 })
                 .child(pill(key, false, hover, true))
-                .child(
-                    div()
-                        .relative()
-                        .size(z(ICON))
-                        .child(crate::ui::avatar(u, ICON))
-                        .child(mention_badge(ch.mentions)),
-                )
+                .child(div().relative().size(z(ICON)).child(crate::ui::avatar(u, ICON)).child(mention_badge(ch.mentions)))
                 .when(hover, |d| d.child(right_tooltip(name, ICON)))
                 .into_any_element()
         })
@@ -500,7 +469,11 @@ fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
                             150,
                             ICON_RADIUS,
                         ))
-                        .child(svg().path(crate::icons::path("discord-logo")).size(z(24.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
+                        .child(svg().path(crate::icons::path("discord-logo")).size(z(24.)).flex_none().text_color(if selected || hover {
+                            gpui::white()
+                        } else {
+                            c(Palette::TEXT_NORMAL)
+                        })),
                 )
                 .when(pending > 0, |d| d.child(mention_badge(pending))),
         )
@@ -542,7 +515,11 @@ fn favorites(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Option<AnyElement
                                 150,
                                 ICON_RADIUS,
                             ))
-                            .child(svg().path(crate::icons::path("star")).size(z(20.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
+                            .child(svg().path(crate::icons::path("star")).size(z(20.)).flex_none().text_color(if selected || hover {
+                                gpui::white()
+                            } else {
+                                c(Palette::TEXT_NORMAL)
+                            })),
                     )
                     .when(mentions > 0, |d| d.child(mention_badge(mentions))),
             )
@@ -662,35 +639,18 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, _nested: bool
         .child(guild_inner(g, ICON));
     row(("guild", id.0), id.0, entity)
         .on_click(move |_, _, cx| e.update(cx, |app, cx| app.select_guild(Some(id), cx)))
-        .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
-            crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Guild(id), ev.position, w)
-        })
+        .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Guild(id), ev.position, w))
         .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| cx.new(|_| d.clone()))
         .drag_over::<DraggedGuild>(|s, _, _, _| s.border_t_2().border_color(c(Palette::GREEN)))
         .on_drop(move |d: &DraggedGuild, _, cx| drop_e.update(cx, |a, cx| a.move_guild(d.id, id, cx)))
         .child(pill(id.0, selected, hover, g.unread))
-        .child(
-            div()
-                .relative()
-                .size(z(ICON))
-                .child(icon_box)
-                .children(voice_badge(app, g))
-                .when(g.mentions > 0, |d| d.child(mention_badge(g.mentions))),
-        )
+        .child(div().relative().size(z(ICON)).child(icon_box).children(voice_badge(app, g)).when(g.mentions > 0, |d| d.child(mention_badge(g.mentions))))
         .when(hover, |d| d.child(right_tooltip(g.name.clone(), ICON)))
         .into_any_element()
 }
 
 #[allow(clippy::too_many_arguments)]
-fn folder(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    id: u64,
-    name: SharedString,
-    color: u32,
-    guilds: &[&Guild],
-    open: bool,
-) -> AnyElement {
+fn folder(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: u64, name: SharedString, color: u32, guilds: &[&Guild], open: bool) -> AnyElement {
     let key = id | (1 << 63);
     let hover = hovered(key);
     let unread = guilds.iter().any(|g| g.unread);
@@ -702,21 +662,14 @@ fn folder(
             .size(z(FOLDER))
             .p(z(FOLDER_PAD))
             .child(
-                div()
-                    .size(z(ICON))
-                    .rounded(z(ICON_RADIUS))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .when(hover, |d| d.bg(c(Palette::GUILD_ICON_BG)))
-                    .child(
-                        div()
-                            .w(z(15.))
-                            .h(z(15.))
-                            .relative()
-                            .child(div().absolute().top_0().left_0().w(z(7.5)).h(z(4.)).rounded_tl(z(2.25)).rounded_tr(z(1.5)).bg(c(color)))
-                            .child(div().absolute().top(z(2.25)).left_0().w(z(15.)).h(z(12.75)).rounded(z(2.25)).bg(c(color))),
-                    ),
+                div().size(z(ICON)).rounded(z(ICON_RADIUS)).flex().items_center().justify_center().when(hover, |d| d.bg(c(Palette::GUILD_ICON_BG))).child(
+                    div()
+                        .w(z(15.))
+                        .h(z(15.))
+                        .relative()
+                        .child(div().absolute().top_0().left_0().w(z(7.5)).h(z(4.)).rounded_tl(z(2.25)).rounded_tr(z(1.5)).bg(c(color)))
+                        .child(div().absolute().top(z(2.25)).left_0().w(z(15.)).h(z(12.75)).rounded(z(2.25)).bg(c(color))),
+                ),
             )
             .into_any_element()
     } else {
@@ -741,34 +694,19 @@ fn folder(
                     .child(guild_inner(g, cell)),
             );
         }
-        div()
-            .size(z(FOLDER))
-            .rounded(z(FOLDER_RADIUS))
-            .p(z(PREVIEW_PAD))
-            .bg(c(color).opacity(0.4))
-            .child(grid)
-            .into_any_element()
+        div().size(z(FOLDER)).rounded(z(FOLDER_RADIUS)).p(z(PREVIEW_PAD)).bg(c(color).opacity(0.4)).child(grid).into_any_element()
     };
     let header = row(("folder", id), key, entity)
         .h(z(FOLDER))
         .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_folder(id, cx)))
-        .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
-            crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Folder(id), ev.position, w)
-        })
+        .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Folder(id), ev.position, w))
         .child(pill(key, !open && has_selected, hover, !open && unread))
-        .child(
-            div()
-                .relative()
-                .size(z(FOLDER))
-                .child(head_inner)
-                .when(!open && mentions > 0, |d| d.child(mention_badge(mentions))),
-        )
+        .child(div().relative().size(z(FOLDER)).child(head_inner).when(!open && mentions > 0, |d| d.child(mention_badge(mentions))))
         .when(hover, |d| d.child(right_tooltip(name.clone(), FOLDER)));
     if !open {
         return header.into_any_element();
     }
-    let mut body =
-        div().w_full().mt(z(gap() - FOLDER_PAD)).flex().flex_col().gap(z(gap())).pb(z(FOLDER_PAD));
+    let mut body = div().w_full().mt(z(gap() - FOLDER_PAD)).flex().flex_col().gap(z(gap())).pb(z(FOLDER_PAD));
     for g in guilds {
         body = body.child(guild(app, entity, g, true));
     }

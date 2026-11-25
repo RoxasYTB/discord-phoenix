@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use gpui_component::Sizable as _;
 
-use gpui::{
-    Animation, AnimationExt, Context, FontWeight, IntoElement, KeyDownEvent, ParentElement, SharedString,
-    Styled, Window, div, img, prelude::*,
-};
+use gpui::{Animation, AnimationExt, Context, FontWeight, IntoElement, KeyDownEvent, ParentElement, SharedString, Styled, Window, div, img, prelude::*};
 
 use super::{
     icons::{ChatIcon, icon},
@@ -13,8 +10,8 @@ use super::{
 };
 use crate::{
     app::PhoenixApp,
-    model::Id,
     assets::Icon,
+    model::Id,
     theme::{Palette, c, fz, generated::idx, z},
     ui::icon_button,
 };
@@ -58,7 +55,11 @@ fn reply_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl Into
                         .cursor_pointer()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(c(if mention { Palette::TEXT_LINK } else { Palette::TEXT_MUTED }))
-                        .child(gpui::svg().path(crate::icons::path("search/at")).size(z(16.)).mr(z(4.)).flex_none().text_color(c(if mention { Palette::TEXT_LINK } else { Palette::TEXT_MUTED })))
+                        .child(gpui::svg().path(crate::icons::path("search/at")).size(z(16.)).mr(z(4.)).flex_none().text_color(c(if mention {
+                            Palette::TEXT_LINK
+                        } else {
+                            Palette::TEXT_MUTED
+                        })))
                         .child(if mention { crate::t!("chat.on") } else { crate::t!("chat.off") })
                         .on_click(cx.listener(|a, _, _, cx| {
                             a.chat.reply_mention = !a.chat.reply_mention;
@@ -67,14 +68,10 @@ fn reply_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl Into
                 )
                 .child(div().w(z(1.)).h(z(20.)).bg(super::tk(idx::BORDER_SUBTLE)))
             })
-            .child(
-                icon_button("cancel-reply", Icon::Close, super::tk(idx::INTERACTIVE_TEXT_DEFAULT), 16.).px(z(12.)).on_click(cx.listener(
-                    |a, _, _, cx| {
-                        a.replying_to = None;
-                        cx.notify();
-                    },
-                )),
-            ),
+            .child(icon_button("cancel-reply", Icon::Close, super::tk(idx::INTERACTIVE_TEXT_DEFAULT), 16.).px(z(12.)).on_click(cx.listener(|a, _, _, cx| {
+                a.replying_to = None;
+                cx.notify();
+            }))),
     )
 }
 
@@ -82,22 +79,11 @@ fn upload_tray(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<impl In
     if app.chat.uploads.is_empty() {
         return None;
     }
-    let mut tray = div()
-        .id("upload-tray")
-        .pt(z(20.))
-        .px(z(10.))
-        .pb(z(10.))
-        .flex()
-        .gap(z(24.))
-        .overflow_x_scroll();
+    let mut tray = div().id("upload-tray").pt(z(20.)).px(z(10.)).pb(z(10.)).flex().gap(z(24.)).overflow_x_scroll();
     for (ix, f) in app.chat.uploads.iter().enumerate() {
         let shown = if f.spoiler { f.blurred.as_ref().or(f.image.as_ref()) } else { f.image.as_ref() };
         let preview = match shown {
-            Some(i) => img(i.clone())
-                .size_full()
-                .rounded(z(12.))
-                .object_fit(gpui::ObjectFit::Contain)
-                .into_any_element(),
+            Some(i) => img(i.clone()).size_full().rounded(z(12.)).object_fit(gpui::ObjectFit::Contain).into_any_element(),
             None => icon(ChatIcon::Upload, 64., super::tk(idx::TEXT_BRAND)).into_any_element(),
         };
         let button = |id: (&'static str, usize), glyph: ChatIcon, color: gpui::Hsla| {
@@ -200,31 +186,45 @@ fn attach_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::A
             });
         }
     };
-    let thread_ok = app
-        .channels
-        .get(&ch)
-        .is_some_and(|c| c.guild.is_some() && matches!(c.kind, crate::model::ChannelKind::Text | crate::model::ChannelKind::Announcement));
+    let thread_ok =
+        app.channels.get(&ch).is_some_and(|c| c.guild.is_some() && matches!(c.kind, crate::model::ChannelKind::Text | crate::model::ChannelKind::Announcement));
     let mut items = vec![MenuItem::action(crate::t!("attach.upload"), Some(crate::icons::path("attach/file-up")), act(|a, _, _, cx| a.prompt_attach(cx)))];
     if !app.composer.read(cx).value().trim().is_empty() {
-        items.push(MenuItem::action(crate::t!("attach.text_file"), Some(crate::icons::path("attach/file-up")), act(|a, _, w, cx| a.upload_text_as_file(w, cx))));
+        items.push(MenuItem::action(
+            crate::t!("attach.text_file"),
+            Some(crate::icons::path("attach/file-up")),
+            act(|a, _, w, cx| a.upload_text_as_file(w, cx)),
+        ));
     }
     if thread_ok {
-        items.push(MenuItem::action(crate::t!("attach.thread"), Some(crate::icons::path("attach/thread-plus")), act(|a, ch, w, cx| a.open_create_thread(ch, w, cx))));
+        items.push(MenuItem::action(
+            crate::t!("attach.thread"),
+            Some(crate::icons::path("attach/thread-plus")),
+            act(|a, ch, w, cx| a.open_create_thread(ch, w, cx)),
+        ));
     }
     let guild = app.channels.get(&ch).and_then(|c| c.guild);
     if guild.is_none() || crate::actions::has(app, guild, 1 << 49) {
-        items.push(MenuItem::action(crate::t!("attach.poll"), Some(crate::icons::path("attach/poll")), act(|_, ch, w, _cx| {
-            crate::actions::open_modal(crate::ui::modals::Modal::CreatePoll(crate::ui::modals::poll_create::State::new(ch)), Some(w));
-        })));
+        items.push(MenuItem::action(
+            crate::t!("attach.poll"),
+            Some(crate::icons::path("attach/poll")),
+            act(|_, ch, w, _cx| {
+                crate::actions::open_modal(crate::ui::modals::Modal::CreatePoll(crate::ui::modals::poll_create::State::new(ch)), Some(w));
+            }),
+        ));
     }
-    items.push(MenuItem::action(crate::t!("attach.apps"), Some(crate::icons::path("apps")), act(|a, _, w, cx| {
-        a.composer.update(cx, |s, cx| {
-            if s.value().is_empty() {
-                s.set_value("/", w, cx);
-            }
-            s.focus(w, cx);
-        });
-    })));
+    items.push(MenuItem::action(
+        crate::t!("attach.apps"),
+        Some(crate::icons::path("apps")),
+        act(|a, _, w, cx| {
+            a.composer.update(cx, |s, cx| {
+                if s.value().is_empty() {
+                    s.set_value("/", w, cx);
+                }
+                s.focus(w, cx);
+            });
+        }),
+    ));
     if let Some(me) = e.upgrade() {
         items.push(MenuItem::submenu_with_icon(crate::t!("attach.schedule"), "inbox/schedule", super::scheduled::menu_items(&me, ch)));
     }
@@ -246,19 +246,19 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     render_text_area(app, window, cx).into_any_element()
 }
 
-
 fn blocked_dm_notice(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::AnyElement> {
     use crate::ui::home::data::{NavRequest, RelAction, RelationshipKind};
     let user = crate::ui::dm_profile_panel::peer(app)?;
     if app.nav.relationship(user)?.kind != RelationshipKind::Blocked {
         return None;
     }
-    let unblock = crate::ui::controls::button_sm("dm-unblock", crate::t!("friends.unblock"), crate::ui::controls::BtnKind::Secondary)
-        .on_click(cx.listener(move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _, cx| {
+    let unblock = crate::ui::controls::button_sm("dm-unblock", crate::t!("friends.unblock"), crate::ui::controls::BtnKind::Secondary).on_click(cx.listener(
+        move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _, cx| {
             a.nav.relationships.retain(|x| x.user != user);
             a.nav_request(NavRequest::Relationship { user, action: RelAction::Remove }, cx, |_, _, _| {});
             cx.notify();
-        }));
+        },
+    ));
     Some(
         div()
             .flex_none()
@@ -319,16 +319,11 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     let placeholder = if blocked { crate::t!("chat.no_permission") } else { placeholder };
     let vbar = super::voice_message::bar(app, window, cx);
     let voice_on = vbar.is_some();
-    div()
-        .flex_none()
-        .relative()
-        .flex()
-        .flex_col()
-        .gap(z(8.))
-        .children(attach_menu(app, cx))
-        .children(super::slash::render(app, cx))
-        .child(
-            div().relative().px(z(crate::theme::space::xs())).mb(z(crate::theme::space::xs() - 0.8))
+    div().flex_none().relative().flex().flex_col().gap(z(8.)).children(attach_menu(app, cx)).children(super::slash::render(app, cx)).child(
+        div()
+            .relative()
+            .px(z(crate::theme::space::xs()))
+            .mb(z(crate::theme::space::xs() - 0.8))
             .child(div().absolute().top(z(-24.)).left_0().right_0().child(typing(app, window)))
             .child(
                 div()
@@ -380,129 +375,141 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                 }
                             }))
                             .when_some(vbar, |d, bar| d.child(bar))
-                            .when(!voice_on, |d| d.child(
-                                div().pl(z(15.)).h(z(56.)).flex().items_center().when(blocked, |d| d.invisible()).child(div().px(z(14.)).child(
-                                    div()
-                                        .relative()
-                                        .ml(z(-16.))
-                                        .mr(z(10.))
-                                        .child(
-                                            crate::ui::states::composer_button("attach", Icon::Plus).on_click(cx.listener(|a, _, _, cx| {
-                                                a.chat.attach_menu = !a.chat.attach_menu;
-                                                cx.notify();
-                                            })),
-                                        )
-                                        .child(
-                                            gpui::canvas(|b, _, _| ATTACH_BTN.with(|c| c.set(Some(b))), |_, _, _, _| ())
-                                                .absolute()
-                                                .top_0()
-                                                .left_0()
-                                                .size_full(),
-                                        ),
-                                )),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .relative()
-                                    .py(z(text_pad_y()))
-                                    .text_size(fz(16.))
-                                    .line_height(fz(22.))
-                                    .text_color(c(Palette::TEXT_NORMAL))
-                                    .child(
-                                        div().mx(z(-4.)).child(
-                                            gpui_component::input::Textarea::new(&app.composer)
-                                                .token(super::rich_input::render_token)
-                                                .context_menu(|_, w, _| {
-                                                    let pos = w.mouse_position();
-                                                    crate::ui::extra_menus::open(crate::ui::extra_menus::Target::Textarea, pos, w);
-                                                    gpui_component::native_menu::NativeMenu::new()
-                                                })
-                                                .on_paste({
-                                                    let this = cx.entity().downgrade();
-                                                    move |item, _, cx| this.update(cx, |a, cx| a.paste_clipboard(item, cx)).unwrap_or(false)
-                                                })
-                                                .appearance(false)
-                                                .bordered(false)
-                                                .xsmall()
-                                                .text_size(fz(16.))
-                                                .line_height(fz(22.))
-                                                .disabled(blocked),
-                                        ),
-                                    )
-                                    .when(placeholder_empty, |d| {
-                                        d.child(
+                            .when(!voice_on, |d| {
+                                d.child(
+                                    div().pl(z(15.)).h(z(56.)).flex().items_center().when(blocked, |d| d.invisible()).child(
+                                        div().px(z(14.)).child(
                                             div()
-                                                .absolute()
-                                                .top(z(text_pad_y() - 1.5))
-                                                .h(fz(22.))
-                                                .left_0()
-                                                .right_0()
+                                                .relative()
+                                                .ml(z(-16.))
+                                                .mr(z(10.))
+                                                .child(crate::ui::states::composer_button("attach", Icon::Plus).on_click(cx.listener(|a, _, _, cx| {
+                                                    a.chat.attach_menu = !a.chat.attach_menu;
+                                                    cx.notify();
+                                                })))
+                                                .child(
+                                                    gpui::canvas(|b, _, _| ATTACH_BTN.with(|c| c.set(Some(b))), |_, _, _, _| ())
+                                                        .absolute()
+                                                        .top_0()
+                                                        .left_0()
+                                                        .size_full(),
+                                                ),
+                                        ),
+                                    ),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .relative()
+                                        .py(z(text_pad_y()))
+                                        .text_size(fz(16.))
+                                        .line_height(fz(22.))
+                                        .text_color(c(Palette::TEXT_NORMAL))
+                                        .child(
+                                            div().mx(z(-4.)).child(
+                                                gpui_component::input::Textarea::new(&app.composer)
+                                                    .token(super::rich_input::render_token)
+                                                    .context_menu(|_, w, _| {
+                                                        let pos = w.mouse_position();
+                                                        crate::ui::extra_menus::open(crate::ui::extra_menus::Target::Textarea, pos, w);
+                                                        gpui_component::native_menu::NativeMenu::new()
+                                                    })
+                                                    .on_paste({
+                                                        let this = cx.entity().downgrade();
+                                                        move |item, _, cx| this.update(cx, |a, cx| a.paste_clipboard(item, cx)).unwrap_or(false)
+                                                    })
+                                                    .appearance(false)
+                                                    .bordered(false)
+                                                    .xsmall()
+                                                    .text_size(fz(16.))
+                                                    .line_height(fz(22.))
+                                                    .disabled(blocked),
+                                            ),
+                                        )
+                                        .when(placeholder_empty, |d| {
+                                            d.child(
+                                                div()
+                                                    .absolute()
+                                                    .top(z(text_pad_y() - 1.5))
+                                                    .h(fz(22.))
+                                                    .left_0()
+                                                    .right_0()
+                                                    .flex()
+                                                    .items_center()
+                                                    .text_color(super::tk(idx::CHANNEL_TEXT_AREA_PLACEHOLDER))
+                                                    .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(placeholder)),
+                                            )
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .when(blocked, |d| d.invisible())
+                                        .mr(z(13.))
+                                        .h(z(56.))
+                                        .flex()
+                                        .gap(z(8.))
+                                        .items_center()
+                                        .child(crate::ui::states::composer_button_ext("gift", Icon::Gift, 20., false).on_click(cx.listener(|a, _, _, cx| {
+                                            let recipient = crate::ui::dm_profile_panel::peer(a);
+                                            a.open_gift_nitro(recipient, cx);
+                                        })))
+                                        .when(full_buttons(), |d| {
+                                            d.child(crate::ui::states::composer_button("gif", Icon::Gif).on_click(cx.listener(|a, _, w, cx| {
+                                                crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Gif, crate::ui::pickers::EmojiTarget::Composer, w, cx)
+                                            })))
+                                            .child(
+                                                crate::ui::states::composer_button("sticker", Icon::Sticker).on_click(cx.listener(|a, _, w, cx| {
+                                                    crate::ui::pickers::toggle(
+                                                        a,
+                                                        crate::ui::pickers::Tab::Sticker,
+                                                        crate::ui::pickers::EmojiTarget::Composer,
+                                                        w,
+                                                        cx,
+                                                    )
+                                                })),
+                                            )
+                                        })
+                                        .child({
+                                            let emoji_open = matches!(
+                                                crate::ui::pickers::open_tab(cx),
+                                                Some((crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::Composer))
+                                            );
+                                            crate::ui::states::composer_button_ext("emoji", Icon::Emoji, 18., true)
+                                                .when(emoji_open, |d| d.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                                                .on_click(cx.listener(|a, _, _, cx| a.open_emoji_picker(EmojiTarget::Composer, cx)))
+                                        })
+                                        .child(crate::ui::focus_ring::ring_inset(
+                                            div()
+                                                .id("apps")
+                                                .relative()
+                                                .size(z(32.))
+                                                .rounded(z(8.))
                                                 .flex()
                                                 .items_center()
-                                                .text_color(super::tk(idx::CHANNEL_TEXT_AREA_PLACEHOLDER))
-                                                .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(placeholder)),
-                                        )
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .when(blocked, |d| d.invisible())
-                                    .mr(z(13.))
-                                    .h(z(56.))
-                                    .flex()
-                                    .gap(z(8.))
-                                    .items_center()
-                                    .child(crate::ui::states::composer_button_ext("gift", Icon::Gift, 20., false).on_click(cx.listener(|a, _, _, cx| {
-                                        let recipient = crate::ui::dm_profile_panel::peer(a);
-                                        a.open_gift_nitro(recipient, cx);
-                                    })))
-                                    .when(full_buttons(), |d| {
-                                        d.child(crate::ui::states::composer_button("gif", Icon::Gif).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Gif, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
-                                            .child(crate::ui::states::composer_button("sticker", Icon::Sticker).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Sticker, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
-                                    })
-                                    .child({
-                                        let emoji_open = matches!(
-                                            crate::ui::pickers::open_tab(cx),
-                                            Some((crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::Composer))
-                                        );
-                                        crate::ui::states::composer_button_ext("emoji", Icon::Emoji, 18., true)
-                                            .when(emoji_open, |d| d.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
-                                            .on_click(cx.listener(|a, _, _, cx| a.open_emoji_picker(EmojiTarget::Composer, cx)))
-                                    })
-                                    .child(crate::ui::focus_ring::ring_inset(
-                                        div()
-                                            .id("apps")
-                                            .relative()
-                                            .size(z(32.))
-                                            .rounded(z(8.))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .cursor_pointer()
-                                            .group("apps")
-                                            .hover(|s| s.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
-                                            .child(
-                                                gpui::svg()
-                                                    .path(crate::icons::path("apps"))
-                                                    .size(z(20.))
-                                                    .flex_none()
-                                                    .text_color(ic)
-                                                    .group_hover("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_HOVER))))
-                                                    .id("g")
-                                                    .group_active("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_ACTIVE)))),
-                                            )
-                                            .child(super::app_launcher::anchor_probe())
-                                            .on_click(cx.listener(|a, _, w, cx| super::app_launcher::toggle(a, w, cx))),
-                                        crate::ui::states::key(("composer-btn", "apps")),
-                                        8.,
-                                        -4.,
-                                        4.,
-                                    ))
-                                    .when(show_send_button, |d| {
-                                        d.child(div().w(z(1.)).h(fz(22.)).bg(super::tk(idx::BORDER_NORMAL)))
-                                            .child(
+                                                .justify_center()
+                                                .cursor_pointer()
+                                                .group("apps")
+                                                .hover(|s| s.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                                                .child(
+                                                    gpui::svg()
+                                                        .path(crate::icons::path("apps"))
+                                                        .size(z(20.))
+                                                        .flex_none()
+                                                        .text_color(ic)
+                                                        .group_hover("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_HOVER))))
+                                                        .id("g")
+                                                        .group_active("apps", |s| s.text_color(c(crate::theme::tok(idx::INTERACTIVE_TEXT_ACTIVE)))),
+                                                )
+                                                .child(super::app_launcher::anchor_probe())
+                                                .on_click(cx.listener(|a, _, w, cx| super::app_launcher::toggle(a, w, cx))),
+                                            crate::ui::states::key(("composer-btn", "apps")),
+                                            8.,
+                                            -4.,
+                                            4.,
+                                        ))
+                                        .when(show_send_button, |d| {
+                                            d.child(div().w(z(1.)).h(fz(22.)).bg(super::tk(idx::BORDER_NORMAL))).child(
                                                 div()
                                                     .id("send")
                                                     .size(z(32.))
@@ -510,13 +517,11 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                                     .flex()
                                                     .items_center()
                                                     .justify_center()
-                                                    .child(
-                                                        gpui::svg()
-                                                            .path(Icon::Send.path())
-                                                            .size(z(20.))
-                                                            .flex_none()
-                                                            .text_color(super::tk(if can_send { idx::TEXT_BRAND } else { idx::ICON_MUTED })),
-                                                    )
+                                                    .child(gpui::svg().path(Icon::Send.path()).size(z(20.)).flex_none().text_color(super::tk(if can_send {
+                                                        idx::TEXT_BRAND
+                                                    } else {
+                                                        idx::ICON_MUTED
+                                                    })))
                                                     .when(can_send, |b| {
                                                         b.cursor_pointer()
                                                             .hover(|s| s.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
@@ -525,11 +530,12 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                                     })
                                                     .when(!can_send, |b| b.cursor(gpui::CursorStyle::OperationNotAllowed)),
                                             )
-                                    }),
-                            )),
+                                        }),
+                                )
+                            }),
                     ),
             ),
-        )
+    )
 }
 
 fn open_upload_edit(app: &mut PhoenixApp, ix: usize, cx: &mut Context<PhoenixApp>) {
@@ -649,7 +655,11 @@ pub fn slowmode_tip(secs: u32) -> String {
     let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
     let one = |n: u32| if crate::i18n::locale() == "fr" { n < 2 } else { n == 1 };
     let part = |n: u32, k: &str| -> String {
-        if n == 0 { String::new() } else { crate::i18n::t(&format!("chat.slowmode_{k}{}", if one(n) { "_one" } else { "" }), &[("n", &n.to_string())]).to_string() }
+        if n == 0 {
+            String::new()
+        } else {
+            crate::i18n::t(&format!("chat.slowmode_{k}{}", if one(n) { "_one" } else { "" }), &[("n", &n.to_string())]).to_string()
+        }
     };
     let prefix = crate::t!("chat.slowmode_tip");
     if h > 0 {
@@ -764,16 +774,14 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
     }
     let active = !names.is_empty();
     let dot = |i: usize| {
-        div().size(z(7.)).flex().items_center().justify_center().child(
-            div().rounded_full().bg(super::tk(idx::TEXT_DEFAULT)).with_animation(
-                ("typing-dot", i),
-                Animation::new(Duration::from_millis(1200)).repeat(),
-                move |d, t| {
-                    let (o, s) = dot_frame(i, t);
-                    d.size(z(7. * s)).opacity(o)
-                },
-            ),
-        )
+        div().size(z(7.)).flex().items_center().justify_center().child(div().rounded_full().bg(super::tk(idx::TEXT_DEFAULT)).with_animation(
+            ("typing-dot", i),
+            Animation::new(Duration::from_millis(1200)).repeat(),
+            move |d, t| {
+                let (o, s) = dot_frame(i, t);
+                d.size(z(7. * s)).opacity(o)
+            },
+        ))
     };
     div()
         .h(z(24.))
@@ -785,15 +793,20 @@ fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement {
         .font_weight(FontWeight::MEDIUM)
         .text_color(super::tk(idx::TEXT_SUBTLE))
         .child(
-            div().relative().flex_1().min_w_0().overflow_hidden().flex().items_center().pl(z(8.))
-            .child(gpui::canvas(|b, _, _| DOTS_BOX_W.with(|w| w.set(f32::from(b.size.width))), |_, _, _, _| {}).absolute().top_0().left_0().w_full().h_full())
-            .when(active, |d| {
-                d.child(div().flex_none().flex().items_center().gap(z(2.)).child(dot(0)).child(dot(1)).child(dot(2))).child(line)
-            }),
+            div()
+                .relative()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .flex()
+                .items_center()
+                .pl(z(8.))
+                .child(
+                    gpui::canvas(|b, _, _| DOTS_BOX_W.with(|w| w.set(f32::from(b.size.width))), |_, _, _, _| {}).absolute().top_0().left_0().w_full().h_full(),
+                )
+                .when(active, |d| d.child(div().flex_none().flex().items_center().gap(z(2.)).child(dot(0)).child(dot(1)).child(dot(2))).child(line)),
         )
-        .when_some(app.chat.error.clone(), |d, err| {
-            d.child(div().text_color(c(Palette::RED)).text_ellipsis().child(err))
-        })
+        .when_some(app.chat.error.clone(), |d, err| d.child(div().text_color(c(Palette::RED)).text_ellipsis().child(err)))
         .children(cooldown(app))
 }
 

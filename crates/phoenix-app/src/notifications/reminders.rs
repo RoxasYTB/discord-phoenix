@@ -6,7 +6,10 @@ use std::{
     time::Duration,
 };
 
-use phoenix_api::{Cache, models as api, rest::message_actions::{Reminder, parse_reminders}};
+use phoenix_api::{
+    Cache, models as api,
+    rest::message_actions::{Reminder, parse_reminders},
+};
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 

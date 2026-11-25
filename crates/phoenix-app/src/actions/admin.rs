@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
 use gpui::Context;
-use phoenix_api::{models::Snowflake, rest::guild_manage::{AdminCall, NewChannelKind}};
+use phoenix_api::{
+    models::Snowflake,
+    rest::guild_manage::{AdminCall, NewChannelKind},
+};
 use serde_json::{Value, json};
 
 use super::{ActionReply, ActionRequest, open_modal};
@@ -68,7 +71,9 @@ pub fn mock_reply(c: &AdminCall) -> Value {
             { "id": "31", "type": 2, "name": "Rust News #releases", "channel_id": channel, "avatar": null,
               "source_guild": { "id": "40", "name": "Rust", "icon": null }, "source_channel": { "id": "41", "name": "releases" }, "user": user(2, "ferris") }
         ]),
-        C::CreateWebhook { channel, name } => json!({ "id": "32", "type": 1, "name": name, "channel_id": channel, "avatar": null, "token": "t", "user": user(2, "ferris") }),
+        C::CreateWebhook { channel, name } => {
+            json!({ "id": "32", "type": 1, "name": name, "channel_id": channel, "avatar": null, "token": "t", "user": user(2, "ferris") })
+        }
         C::Roles { guild } => json!([
             { "id": guild, "name": "@everyone", "permissions": "104324673", "position": 0, "color": 0, "hoist": false, "mentionable": false },
             { "id": "40", "name": "Crabs", "permissions": "8", "position": 2, "color": 15_158_332, "colors": { "primary_color": 15_158_332, "secondary_color": 3_447_003, "tertiary_color": null }, "hoist": true, "mentionable": false },
@@ -87,10 +92,14 @@ pub fn mock_reply(c: &AdminCall) -> Value {
         ], "users": [user(2, "ferris"), user(4, "spammer")] }),
         C::UserSettings => json!({ "restricted_guilds": [], "message_request_restricted_guild_ids": [] }),
         C::Server(s) => crate::ui::server_pages::mock::reply(s),
-        C::Guild { guild } => json!({ "id": guild, "name": "Phoenix", "icon": null, "description": "A demo server", "system_channel_id": "10", "system_channel_flags": 13,
-            "afk_channel_id": null, "afk_timeout": 300, "default_message_notifications": 1, "premium_tier": 1, "features": ["COMMUNITY"] }),
-        C::GuildProfile { guild } => json!({ "id": guild, "name": "Phoenix", "description": "A demo server", "member_count": 3, "online_count": 2, "tag": "PHX", "visibility": 1,
-            "traits": [{ "emoji_name": "crab", "label": "Rust", "position": 0 }], "game_application_ids": [] }),
+        C::Guild { guild } => {
+            json!({ "id": guild, "name": "Phoenix", "icon": null, "description": "A demo server", "system_channel_id": "10", "system_channel_flags": 13,
+            "afk_channel_id": null, "afk_timeout": 300, "default_message_notifications": 1, "premium_tier": 1, "features": ["COMMUNITY"] })
+        }
+        C::GuildProfile { guild } => {
+            json!({ "id": guild, "name": "Phoenix", "description": "A demo server", "member_count": 3, "online_count": 2, "tag": "PHX", "visibility": 1,
+            "traits": [{ "emoji_name": "crab", "label": "Rust", "position": 0 }], "game_application_ids": [] })
+        }
         C::RoleMemberCounts { .. } => json!({}),
         C::RoleMemberIds { .. } => json!(["2"]),
         C::Soundboard { .. } => json!({ "items": [{ "name": "ding", "sound_id": "30", "volume": 1.0, "emoji_name": "🔔", "user": user(2, "ferris") }] }),
@@ -160,13 +169,30 @@ impl PhoenixApp {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn create_channel(&mut self, guild: Id, parent: Option<Id>, kind: ChannelKind, name: String, private: bool, members: Vec<(Id, u8)>, cx: &mut Context<Self>) {
+    pub fn create_channel(
+        &mut self,
+        guild: Id,
+        parent: Option<Id>,
+        kind: ChannelKind,
+        name: String,
+        private: bool,
+        members: Vec<(Id, u8)>,
+        cx: &mut Context<Self>,
+    ) {
         let name = channel_name(kind, &name);
         if name.is_empty() {
             return;
         }
         let me = self.me.id;
-        let call = AdminCall::CreateChannel { guild: sf(guild), name: name.clone(), kind: new_kind(kind), parent: parent.map(sf), private, me: sf(me), members: members.into_iter().map(|(i, t)| (sf(i), t)).collect() };
+        let call = AdminCall::CreateChannel {
+            guild: sf(guild),
+            name: name.clone(),
+            kind: new_kind(kind),
+            parent: parent.map(sf),
+            private,
+            me: sf(me),
+            members: members.into_iter().map(|(i, t)| (sf(i), t)).collect(),
+        };
         self.admin(call, cx, move |a, r, cx| match r {
             Ok(v) => {
                 if let Some(id) = id_of(&v) {
@@ -303,7 +329,15 @@ mod tests {
     #[test]
     fn mock_lists() {
         assert!(mock_reply(&AdminCall::Bans { guild: Snowflake(1) }).as_array().is_some_and(|a| !a.is_empty()));
-        let v = mock_reply(&AdminCall::CreateChannel { guild: Snowflake(1), name: "x".into(), kind: NewChannelKind::Text, parent: None, private: false, me: Snowflake(2), members: Vec::new() });
+        let v = mock_reply(&AdminCall::CreateChannel {
+            guild: Snowflake(1),
+            name: "x".into(),
+            kind: NewChannelKind::Text,
+            parent: None,
+            private: false,
+            me: Snowflake(2),
+            members: Vec::new(),
+        });
         assert!(id_of(&v).is_some());
     }
 }

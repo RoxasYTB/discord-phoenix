@@ -1,15 +1,15 @@
 pub mod camera;
 pub mod ffmpeg;
 pub mod mock;
-pub mod testsrc;
 #[cfg(feature = "opus")]
 pub mod opus;
 #[cfg(feature = "opus")]
 pub mod soundshare;
+pub mod testsrc;
 pub mod video;
 
-use crate::codec::{Codec, VideoEncoderConfig};
 use crate::Result;
+use crate::codec::{Codec, VideoEncoderConfig};
 
 #[derive(Debug, Clone)]
 pub struct VideoFrame {

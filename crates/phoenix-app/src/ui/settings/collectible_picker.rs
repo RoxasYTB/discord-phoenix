@@ -196,7 +196,14 @@ fn profile_card(app: &PhoenixApp, e: &super::profile_editor::EditorState, overla
             div()
                 .flex()
                 .flex_col()
-                .child(crate::fonts::styled_name(div().h(z(24.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(strong), Some(me), true).child(crate::fonts::name_text(me.display_name.clone(), Some(me), 20.)))
+                .child(
+                    crate::fonts::styled_name(
+                        div().h(z(24.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(strong),
+                        Some(me),
+                        true,
+                    )
+                    .child(crate::fonts::name_text(me.display_name.clone(), Some(me), 20.)),
+                )
                 .child(
                     div()
                         .h(z(24.))
@@ -225,7 +232,13 @@ fn profile_card(app: &PhoenixApp, e: &super::profile_editor::EditorState, overla
         .bg(outer)
         .shadow(vec![
             gpui::BoxShadow { color: gpui::hsla(0., 0., 1., 0.08), offset: gpui::point(z(0.), z(0.)), blur_radius: z(0.), spread_radius: z(1.), inset: false },
-            gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.24), offset: gpui::point(z(0.), z(12.)), blur_radius: z(24.), spread_radius: z(0.), inset: false },
+            gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.24),
+                offset: gpui::point(z(0.), z(12.)),
+                blur_radius: z(24.),
+                spread_radius: z(0.),
+                inset: false,
+            },
         ])
         .child(
             div()
@@ -239,24 +252,19 @@ fn profile_card(app: &PhoenixApp, e: &super::profile_editor::EditorState, overla
                 .gap(z(8.))
                 .pb(z(4.))
                 .child(
-                    div()
-                        .relative()
-                        .h(z(140.))
-                        .flex_none()
-                        .child(banner)
-                        .child(
-                            div()
-                                .absolute()
-                                .left(z(8.))
-                                .top(z(53.))
-                                .size(z(92.))
-                                .rounded_full()
-                                .bg(ring)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(crate::ui::avatar_with_status(Some(me), 80., app.presence_of(me.id), ring)),
-                        ),
+                    div().relative().h(z(140.)).flex_none().child(banner).child(
+                        div()
+                            .absolute()
+                            .left(z(8.))
+                            .top(z(53.))
+                            .size(z(92.))
+                            .rounded_full()
+                            .bg(ring)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(crate::ui::avatar_with_status(Some(me), 80., app.presence_of(me.id), ring)),
+                    ),
                 )
                 .child(div().flex_1().min_h_0().child(body))
                 .child(
@@ -306,24 +314,14 @@ fn preview(app: &PhoenixApp, e: &super::profile_editor::EditorState, kind: Kind,
                         .items_center()
                         .gap(z(16.))
                         .children([40., 32., 40., 32.].into_iter().map(|s| {
-                            div()
-                                .relative()
-                                .size(z(s))
-                                .child(crate::ui::avatar(Some(&app.me), s))
-                                .children(overlay.clone().map(|u| div().absolute().top(z(-s * 0.1)).left(z(-s * 0.1)).size(z(s * 1.2)).child(img(u).size(z(s * 1.2)))))
+                            div().relative().size(z(s)).child(crate::ui::avatar(Some(&app.me), s)).children(
+                                overlay.clone().map(|u| div().absolute().top(z(-s * 0.1)).left(z(-s * 0.1)).size(z(s * 1.2)).child(img(u).size(z(s * 1.2)))),
+                            )
                         })),
                 )
             }),
-        Kind::Nameplate => div()
-            .w(z(276.))
-            .h(z(190.))
-            .rounded(z(8.))
-            .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
-            .flex()
-            .flex_col()
-            .justify_center()
-            .px(z(32.))
-            .child(
+        Kind::Nameplate => {
+            div().w(z(276.)).h(z(190.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWEST))).flex().flex_col().justify_center().px(z(32.)).child(
                 div()
                     .relative()
                     .h(z(42.))
@@ -336,7 +334,8 @@ fn preview(app: &PhoenixApp, e: &super::profile_editor::EditorState, kind: Kind,
                     .children(overlay.map(|u| div().absolute().inset_0().child(img(u).size_full())))
                     .child(crate::ui::avatar(Some(&app.me), 32.))
                     .child(div().text_size(z(16.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(app.me.display_name.clone())),
-            ),
+            )
+        }
     }
 }
 
@@ -356,13 +355,15 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
     let premium = app.backend.has_premium();
     let owns_sel = p.sel.is_none_or(|s| owned.iter().any(|o| o.sku == s) || (premium && nitro.iter().any(|o| o.sku == s)));
     let changed = e.equipped.get(kind).flatten() != p.sel && owns_sel;
-    let pick = |sel: Option<u64>| move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _: &mut gpui::Window, cx: &mut Cx| {
-        with_picker(a, |e| {
-            if let Some(p) = e.picker.as_mut() {
-                p.sel = sel;
-            }
-        });
-        cx.notify();
+    let pick = |sel: Option<u64>| {
+        move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _: &mut gpui::Window, cx: &mut Cx| {
+            with_picker(a, |e| {
+                if let Some(p) = e.picker.as_mut() {
+                    p.sel = sel;
+                }
+            });
+            cx.notify();
+        }
     };
     let row = kind == Kind::Nameplate;
     let item_tiles = |items: &[&Collectible], locked: bool, cx: &mut Cx| -> Vec<AnyElement> {
@@ -375,7 +376,8 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
                     .relative()
                     .when(kind == Kind::Effect, |d| d.child(sample_profile(sz.0 - 4., sz.1 - 4.)))
                     .when(kind == Kind::Frame, |d| {
-                        let sample = div().absolute().left(z(13.)).top(z(10.)).w(z(52.)).h(z(56.)).rounded(z(4.)).border_1().border_color(c(tok(idx::BORDER_STRONG)));
+                        let sample =
+                            div().absolute().left(z(13.)).top(z(10.)).w(z(52.)).h(z(56.)).rounded(z(4.)).border_1().border_color(c(tok(idx::BORDER_STRONG)));
                         match &it.frame {
                             Some(f) => d.child(
                                 sample
@@ -426,7 +428,9 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
         icon_tile("shop", size, "shop", crate::t!("pk.shop"), false).into_any_element(),
     ];
     let owned_tiles = item_tiles(&owned, false, cx);
-    let rows = if row { owned_tiles } else {
+    let rows = if row {
+        owned_tiles
+    } else {
         grid.extend(owned_tiles);
         Vec::new()
     };
@@ -495,7 +499,9 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(crate::t!(title)))
+                .child(
+                    div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(crate::t!(title)),
+                )
                 .child(
                     div()
                         .id("pk-close")
@@ -505,7 +511,11 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
                         .on_click(cx.listener(close)),
                 ),
         )
-        .child(div().flex_1().min_h_0().pt(z(8.)).px(z(24.)).flex().gap(z(12.)).child(list).child(if matches!(kind, Kind::Effect | Kind::Frame) { preview(app, e, kind, chosen) } else { div().mt(z(24.)).child(preview(app, e, kind, chosen)) }))
+        .child(div().flex_1().min_h_0().pt(z(8.)).px(z(24.)).flex().gap(z(12.)).child(list).child(if matches!(kind, Kind::Effect | Kind::Frame) {
+            preview(app, e, kind, chosen)
+        } else {
+            div().mt(z(24.)).child(preview(app, e, kind, chosen))
+        }))
         .child(
             div()
                 .p(z(16.))
@@ -513,7 +523,11 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
                 .flex()
                 .flex_row_reverse()
                 .gap(z(8.))
-                .child(controls::button("pk-apply", crate::t!("pk.apply"), BtnKind::Primary).when(!changed, |b| b.opacity(0.5)).when(changed, |b| b.on_click(cx.listener(apply))))
+                .child(
+                    controls::button("pk-apply", crate::t!("pk.apply"), BtnKind::Primary)
+                        .when(!changed, |b| b.opacity(0.5))
+                        .when(changed, |b| b.on_click(cx.listener(apply))),
+                )
                 .child(controls::button("pk-cancel", crate::t!("pk.cancel"), BtnKind::Secondary).on_click(cx.listener(close))),
         );
     Some(

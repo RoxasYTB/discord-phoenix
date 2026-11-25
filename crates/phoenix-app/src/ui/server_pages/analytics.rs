@@ -47,13 +47,13 @@ fn trend(delta: Option<f64>) -> gpui::Div {
     } else {
         None
     };
-    div()
-        .mt(z(4.))
-        .flex()
-        .items_center()
-        .gap(z(5.))
-        .children(arrow.map(|(n, c)| super::icon(n, 14., c)))
-        .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.since_last_week", pct = fr_number(d.abs(), if d.abs().fract().abs() < f64::EPSILON { 0 } else { 1 }))))
+    div().mt(z(4.)).flex().items_center().gap(z(5.)).children(arrow.map(|(n, c)| super::icon(n, 14., c))).child(text(
+        12.,
+        16.,
+        FontWeight::NORMAL,
+        idx::TEXT_DEFAULT,
+        crate::t!("gs2.since_last_week", pct = fr_number(d.abs(), if d.abs().fract().abs() < f64::EPSILON { 0 } else { 1 })),
+    ))
 }
 
 fn stat(title_key: &str, value: String, delta: Option<f64>, info: bool, left: bool) -> gpui::Div {
@@ -70,7 +70,14 @@ fn stat(title_key: &str, value: String, delta: Option<f64>, info: bool, left: bo
         .border_color(t(idx::BORDER_SUBTLE))
         .flex()
         .flex_col()
-        .child(div().flex().items_center().gap(z(6.)).child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(title_key))).when(info, |d| d.child(super::icon("info", 16., idx::ICON_DEFAULT))))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(z(6.))
+                .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(title_key)))
+                .when(info, |d| d.child(super::icon("info", 16., idx::ICON_DEFAULT))),
+        )
         .child(div().mt(z(8.)).child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, value)))
         .child(trend(delta))
 }
@@ -101,12 +108,21 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
     let n = weekly(&growth, "new_members");
     let r = weekly(&ret, "pct_retained");
     let num = |x: Option<(f64, Option<f64>)>| x.map(|(v, _)| fr_number(v, 0)).unwrap_or_else(|| "-".into());
-    p = p.child(div().mt(z(46.)).flex().child(stat("gs2.weekly_visitors", num(v), v.and_then(|x| x.1), true, true)).child(stat("gs2.weekly_communicators", num(c), c.and_then(|x| x.1), true, false))).child(
-        div()
-            .flex()
-            .child(stat("gs2.weekly_new_members", num(n), n.and_then(|x| x.1), false, true))
-            .child(stat("gs2.weekly_retention", r.map(|(v, _)| format!("{}%", fr_number(v, 1))).unwrap_or_else(|| "-".into()), r.and_then(|x| x.1), true, false)),
-    );
+    p = p
+        .child(div().mt(z(46.)).flex().child(stat("gs2.weekly_visitors", num(v), v.and_then(|x| x.1), true, true)).child(stat(
+            "gs2.weekly_communicators",
+            num(c),
+            c.and_then(|x| x.1),
+            true,
+            false,
+        )))
+        .child(div().flex().child(stat("gs2.weekly_new_members", num(n), n.and_then(|x| x.1), false, true)).child(stat(
+            "gs2.weekly_retention",
+            r.map(|(v, _)| format!("{}%", fr_number(v, 1))).unwrap_or_else(|| "-".into()),
+            r.and_then(|x| x.1),
+            true,
+            false,
+        )));
     p.into_any_element()
 }
 

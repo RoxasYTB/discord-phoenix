@@ -195,26 +195,18 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
                         .text_color(tk(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT))
                         .child(div().size(z(22.)).flex().items_center().justify_center().child(glyph("search", 16., tk(idx::ICON_MUTED))))
                         .child(
-                            div().flex_1().min_w_0().child(
-                                gpui_component::input::Input::new(&search).appearance(false).bordered(false).pl(z(0.)).text_size(z(14.)),
-                            ),
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(gpui_component::input::Input::new(&search).appearance(false).bordered(false).pl(z(0.)).text_size(z(14.))),
                         ),
                 )
                 .child(pill("shop-wishlist").w(z(32.)).child(glyph("heart", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
-                .child(
-                    pill("shop-orbs")
-                        .px(z(12.))
-                        .gap(z(2.))
-                        .child(glyph("orbs", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
-                        .children(ORBS.with(Cell::get).map(|b| {
-                            div()
-                                .text_size(z(16.))
-                                .line_height(z(20.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(tk(idx::TEXT_STRONG))
-                                .child(b.to_string())
-                        })),
-                ),
+                .child(pill("shop-orbs").px(z(12.)).gap(z(2.)).child(glyph("orbs", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT))).children(
+                    ORBS.with(Cell::get).map(|b| {
+                        div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(b.to_string())
+                    }),
+                )),
         )
 }
 
@@ -255,13 +247,11 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                 .justify_center()
                 .child(img(u.to_string()).size(z(150.)).object_fit(gpui::ObjectFit::Contain))
         }))
-        .child(
-            div().absolute().left_0().right_0().bottom_0().h(z(146.)).bg(gpui::linear_gradient(
-                0.,
-                gpui::linear_color_stop(tk(idx::BACKGROUND_BASE_LOWEST), 0.),
-                gpui::linear_color_stop(tk(idx::BACKGROUND_BASE_LOWEST).opacity(0.), 1.),
-            )),
-        )
+        .child(div().absolute().left_0().right_0().bottom_0().h(z(146.)).bg(gpui::linear_gradient(
+            0.,
+            gpui::linear_color_stop(tk(idx::BACKGROUND_BASE_LOWEST), 0.),
+            gpui::linear_color_stop(tk(idx::BACKGROUND_BASE_LOWEST).opacity(0.), 1.),
+        )))
         .children(off.map(|p| {
             div().absolute().top(z(12.)).left(z(12.)).child(
                 div()
@@ -301,9 +291,7 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                         .line_height(z(20.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(tk(idx::TEXT_STRONG))
-                        .when(k.items > 0, |d| {
-                            d.child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(crate::t!("shop.items", n = k.items)))
-                        })
+                        .when(k.items > 0, |d| d.child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(crate::t!("shop.items", n = k.items))))
                         .child(div().min_w_0().overflow_hidden().text_ellipsis().child(name)),
                 )
                 .child(
@@ -321,7 +309,11 @@ fn card(app: &PhoenixApp, k: &ShopCard, cx: &mut Context<PhoenixApp>) -> AnyElem
                                 .line_height(z(20.))
                                 .group_hover(group.clone(), |s| s.opacity(0.))
                                 .when(off.is_some(), |d| {
-                                    d.children(k.base.as_ref().map(|b| div().font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).line_through().child(fmt(b))))
+                                    d.children(
+                                        k.base
+                                            .as_ref()
+                                            .map(|b| div().font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_DEFAULT)).line_through().child(fmt(b))),
+                                    )
                                 })
                                 .children(mine.as_ref().map(|m| {
                                     div()
@@ -394,7 +386,9 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
             crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin)
                 .flex_1()
                 .min_h_0()
-                .child(div().id("shop-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("shop-scroll")).child(body))
+                .child(
+                    div().id("shop-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("shop-scroll")).child(body),
+                )
                 .children(crate::ui::chat::scrollbar::bar_for("shop-scroll", crate::ui::chat::scrollbar::Bar::Thin)),
         )
         .into_any_element()

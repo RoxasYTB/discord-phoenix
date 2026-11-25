@@ -41,9 +41,7 @@ const PERKS: &[(&str, [Option<&str>; 3])] = &[
     ("sp.bo.p_vanity", [Some(""), Some(""), None]),
 ];
 
-const FAQ: &[&str] = &[
-    "sp.bo.q1", "sp.bo.q2", "sp.bo.q3", "sp.bo.q4", "sp.bo.q5", "sp.bo.q6", "sp.bo.q7", "sp.bo.q8", "sp.bo.q9",
-];
+const FAQ: &[&str] = &["sp.bo.q1", "sp.bo.q2", "sp.bo.q3", "sp.bo.q4", "sp.bo.q5", "sp.bo.q6", "sp.bo.q7", "sp.bo.q8", "sp.bo.q9"];
 
 fn value(v: &str) -> SharedString {
     if v.starts_with("sp.") { tr(v) } else { SharedString::from(v.to_string()) }
@@ -56,16 +54,7 @@ pub(super) fn page(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
         .w_full()
         .child(header())
         .child(notice())
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(z(32.))
-                .child(guild_cards(app))
-                .child(perks_table())
-                .child(community())
-                .child(faq()),
-        )
+        .child(div().flex().flex_col().gap(z(32.)).child(guild_cards(app)).child(perks_table()).child(community()).child(faq()))
         .into_any_element()
 }
 
@@ -104,28 +93,25 @@ fn header() -> Div {
                 .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
                 .overflow_hidden()
                 .child(div().absolute().top(z(12.)).left(z(12.)).child(text(14., 18., FontWeight::SEMIBOLD, idx::WHITE, tr("sp.bo.video"))))
-                .child(
-                    div()
-                        .absolute()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(div().size(z(48.)).rounded_full().bg(gpui::black().opacity(0.6)).flex().items_center().justify_center().child(icon("play", 24., idx::WHITE))),
-                ),
+                .child(div().absolute().size_full().flex().items_center().justify_center().child(
+                    div().size(z(48.)).rounded_full().bg(gpui::black().opacity(0.6)).flex().items_center().justify_center().child(icon(
+                        "play",
+                        24.,
+                        idx::WHITE,
+                    )),
+                )),
         )
 }
 
 fn notice() -> Div {
     div().flex().justify_center().mb(z(32.)).child(
-        div()
-            .px(z(16.))
-            .py(z(8.))
-            .rounded_full()
-            .border_2()
-            .border_color(gpui::white())
-            .bg(gpui::white().opacity(0.1))
-            .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT, tr("sp.bo.unavailable"))),
+        div().px(z(16.)).py(z(8.)).rounded_full().border_2().border_color(gpui::white()).bg(gpui::white().opacity(0.1)).child(text(
+            16.,
+            20.,
+            FontWeight::MEDIUM,
+            idx::TEXT_DEFAULT,
+            tr("sp.bo.unavailable"),
+        )),
     )
 }
 
@@ -143,42 +129,29 @@ fn guild_cards(app: &PhoenixApp) -> Div {
                 .border_color(c(tok(idx::BORDER_MUTED)))
                 .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
                 .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(z(12.))
-                        .min_w_0()
-                        .child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 40.))
-                        .child(
+                    div().flex().items_center().gap(z(12.)).min_w_0().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 40.)).child(
+                        div().flex().flex_col().gap(z(2.)).min_w_0().child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, g.name.clone())).child(
                             div()
                                 .flex()
-                                .flex_col()
-                                .gap(z(2.))
-                                .min_w_0()
-                                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, g.name.clone()))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(z(8.))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .items_center()
-                                                .gap(z(2.))
-                                                .child(icon("boost", 14., idx::GUILD_BOOSTING_PINK))
-                                                .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_MUTED, crate::t!("sp.bo.count", n = g.boosts))),
-                                        )
-                                        .child(div().size(z(4.)).rounded_full().bg(c(tok(idx::TEXT_MUTED))))
-                                        .child(text(
-                                            12.,
-                                            16.,
-                                            FontWeight::NORMAL,
-                                            idx::TEXT_MUTED,
-                                            if g.boost_tier == 0 { tr("sp.bo.no_level") } else { crate::t!("sp.bo.level", n = g.boost_tier) },
-                                        )),
-                                ),
+                                .items_center()
+                                .gap(z(8.))
+                                .child(div().flex().items_center().gap(z(2.)).child(icon("boost", 14., idx::GUILD_BOOSTING_PINK)).child(text(
+                                    12.,
+                                    16.,
+                                    FontWeight::NORMAL,
+                                    idx::TEXT_MUTED,
+                                    crate::t!("sp.bo.count", n = g.boosts),
+                                )))
+                                .child(div().size(z(4.)).rounded_full().bg(c(tok(idx::TEXT_MUTED))))
+                                .child(text(
+                                    12.,
+                                    16.,
+                                    FontWeight::NORMAL,
+                                    idx::TEXT_MUTED,
+                                    if g.boost_tier == 0 { tr("sp.bo.no_level") } else { crate::t!("sp.bo.level", n = g.boost_tier) },
+                                )),
                         ),
+                    ),
                 )
                 .child(
                     controls::button_sm(eid(format!("boost-{}", g.id.0)), SharedString::default(), BtnKind::Secondary)
@@ -188,12 +161,7 @@ fn guild_cards(app: &PhoenixApp) -> Div {
                 ),
         );
     }
-    div()
-        .flex()
-        .flex_col()
-        .gap(z(16.))
-        .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.bo.could")))
-        .child(cards)
+    div().flex().flex_col().gap(z(16.)).child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.bo.could"))).child(cards)
 }
 
 fn perks_table() -> Div {
@@ -202,11 +170,13 @@ fn perks_table() -> Div {
     let row = || div().flex().items_center().py(z(16.)).border_b_1().border_color(c(tok(idx::BORDER_NORMAL)));
     let mut head = row().items_start().child(cell().child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, tr("sp.bo.perks"))));
     for (lvl, n) in [("sp.bo.lvl1", "sp.bo.n2"), ("sp.bo.lvl2", "sp.bo.n7"), ("sp.bo.lvl3", "sp.bo.n14")] {
-        head = head.child(
-            tier()
-                .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, tr(lvl)))
-                .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_SUBTLE, tr(n))),
-        );
+        head = head.child(tier().child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, tr(lvl))).child(text(
+            14.,
+            18.,
+            FontWeight::MEDIUM,
+            idx::TEXT_SUBTLE,
+            tr(n),
+        )));
     }
     let mut t = div().flex().flex_col().child(head);
     for (label, vals) in PERKS {
@@ -257,11 +227,7 @@ fn faq() -> Div {
     let mut list = div().flex().flex_col().gap(z(4.));
     for (i, q) in FAQ.iter().enumerate() {
         let expanded = open & (1 << i) != 0;
-        let (bg, border) = if expanded {
-            (idx::BACKGROUND_SURFACE_HIGHEST, idx::BORDER_NORMAL)
-        } else {
-            (idx::BACKGROUND_SURFACE_HIGH, idx::BORDER_SUBTLE)
-        };
+        let (bg, border) = if expanded { (idx::BACKGROUND_SURFACE_HIGHEST, idx::BORDER_NORMAL) } else { (idx::BACKGROUND_SURFACE_HIGH, idx::BORDER_SUBTLE) };
         let mut row = div()
             .id(eid(format!("boost-faq-{i}")))
             .flex()

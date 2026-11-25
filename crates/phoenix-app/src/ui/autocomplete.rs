@@ -1,7 +1,4 @@
-use gpui::{
-    AnyElement, App, Context, Focusable, FontWeight, ParentElement, SharedString, Styled, Window,
-    div, prelude::*,
-};
+use gpui::{AnyElement, App, Context, Focusable, FontWeight, ParentElement, SharedString, Styled, Window, div, prelude::*};
 
 fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
@@ -101,10 +98,8 @@ pub fn suggestions(app: &PhoenixApp, kind: Kind, q: &str) -> Vec<Item> {
     let q = q.to_lowercase();
     match kind {
         Kind::Emoji => {
-            let mut custom: Vec<(u8, GuildEmoji)> = custom_emojis(app)
-                .into_iter()
-                .filter_map(|e| name_score(&e.name.to_lowercase(), &q).map(|s| (s, e)))
-                .collect();
+            let mut custom: Vec<(u8, GuildEmoji)> =
+                custom_emojis(app).into_iter().filter_map(|e| name_score(&e.name.to_lowercase(), &q).map(|s| (s, e))).collect();
             custom.sort_by_key(|(s, _)| *s);
             let mut out: Vec<Item> = custom.into_iter().take(MAX).map(|(_, e)| Item::Emoji(PickItem::Custom(e))).collect();
             out.extend(emoji::search(&q, MAX).into_iter().map(|i| Item::Emoji(PickItem::Unicode(i))));
@@ -119,10 +114,8 @@ pub fn suggestions(app: &PhoenixApp, kind: Kind, q: &str) -> Vec<Item> {
                     return;
                 }
                 let Some(u) = app.users.get(&id) else { return };
-                let s = [u.display_name.to_lowercase(), u.name.to_lowercase()]
-                    .iter()
-                    .filter_map(|n| if q.is_empty() { Some(4) } else { name_score(n, &q) })
-                    .min();
+                let s =
+                    [u.display_name.to_lowercase(), u.name.to_lowercase()].iter().filter_map(|n| if q.is_empty() { Some(4) } else { name_score(n, &q) }).min();
                 if let Some(s) = s {
                     scored.push((s, u.display_name.clone(), Item::User(id)));
                 }
@@ -197,7 +190,9 @@ fn sticker_matches(app: &PhoenixApp, q: &str, cx: &App) -> Vec<Item> {
     for (data, source) in pool {
         if data.name.to_lowercase().contains(&q) {
             by_name.push(Item::Sticker { data, source, similar: None });
-        } else if let Some(tag) = data.tags.to_lowercase().split([',', ' ']).find(|t| !t.is_empty() && t.starts_with(&q)).map(|t| SharedString::from(t.to_owned())) {
+        } else if let Some(tag) =
+            data.tags.to_lowercase().split([',', ' ']).find(|t| !t.is_empty() && t.starts_with(&q)).map(|t| SharedString::from(t.to_owned()))
+        {
             by_tag.push(Item::Sticker { data, source, similar: Some(tag) });
         }
     }
@@ -307,8 +302,20 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     let tone = cx.try_global::<Pickers>().map(|p| p.prefs.tone).unwrap_or(0);
     let title: SharedString = match a.kind {
         Kind::Emoji => crate::t!("ac.emoji", q = a.query),
-        Kind::Mention => if a.query.is_empty() { crate::t!("members.members") } else { crate::t!("ac.members", q = a.query) },
-        Kind::Channel => if a.query.is_empty() { crate::t!("ac.text_channels") } else { crate::t!("ac.channels", q = a.query) },
+        Kind::Mention => {
+            if a.query.is_empty() {
+                crate::t!("members.members")
+            } else {
+                crate::t!("ac.members", q = a.query)
+            }
+        }
+        Kind::Channel => {
+            if a.query.is_empty() {
+                crate::t!("ac.text_channels")
+            } else {
+                crate::t!("ac.channels", q = a.query)
+            }
+        }
     };
     let mut rows = div().flex().flex_col().pb(z(8.));
     let mut stickers_started = false;
@@ -387,20 +394,10 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
                     .child(div().flex_none().mr(z(8.)).child(lead))
-                    .child(
-                        div()
-                            .flex_shrink(1.)
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .child(main)
-                            .when_some(similar, |d, t| {
-                                d.child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::NORMAL).child(crate::t!("ac.similar", q = t)))
-                            }),
-                    )
-                    .when_some(hint, |d, h| {
-                        d.child(div().flex_1().ml(z(16.)).min_w_0().overflow_hidden().whitespace_nowrap().flex().justify_end().child(h))
-                    }),
+                    .child(div().flex_shrink(1.).min_w_0().overflow_hidden().whitespace_nowrap().child(main).when_some(similar, |d, t| {
+                        d.child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::NORMAL).child(crate::t!("ac.similar", q = t)))
+                    }))
+                    .when_some(hint, |d, h| d.child(div().flex_1().ml(z(16.)).min_w_0().overflow_hidden().whitespace_nowrap().flex().justify_end().child(h))),
             ),
         );
     }
@@ -419,13 +416,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                     .occlude()
                     .overflow_hidden()
                     .child(
-                        div()
-                            .px(z(8.))
-                            .py(z(12.))
-                            .text_size(z(14.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
-                            .child(title),
+                        div().px(z(8.)).py(z(12.)).text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)).child(title),
                     )
                     .child(rows),
             )
@@ -440,14 +431,7 @@ mod tests {
     #[test]
     fn sticker_and_emoji_counts() {
         let st = |n: u64| Item::Sticker {
-            data: StickerData {
-                id: Id(n),
-                name: "s".into(),
-                description: "".into(),
-                tags: "".into(),
-                format: crate::media::StickerFormat::Png,
-                guild: None,
-            },
+            data: StickerData { id: Id(n), name: "s".into(), description: "".into(), tags: "".into(), format: crate::media::StickerFormat::Png, guild: None },
             source: None,
             similar: None,
         };

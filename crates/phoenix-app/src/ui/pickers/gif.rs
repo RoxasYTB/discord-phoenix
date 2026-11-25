@@ -1,9 +1,6 @@
-use gpui::{
-    AnyElement, Context, FontWeight, ObjectFit, ParentElement, SharedString, Styled, StyledImage,
-    div, img, prelude::*, px,
-};
+use gpui::{AnyElement, Context, FontWeight, ObjectFit, ParentElement, SharedString, Styled, StyledImage, div, img, prelude::*, px};
 
-use super::{Pickers, PICKER_W, close, debounce, empty_state, types::GifItem, with_app};
+use super::{PICKER_W, Pickers, close, debounce, empty_state, types::GifItem, with_app};
 use crate::{
     app::PhoenixApp,
     theme::{c, generated::idx, tok},
@@ -105,7 +102,14 @@ fn hc_outline<E: Styled>(d: E) -> E {
     d.border_1().border_color(c(tok(idx::BORDER_STRONG)))
 }
 
-fn tile(id: (&'static str, usize), name: SharedString, preview: Option<SharedString>, w: f32, blurple: bool, icon: Option<&'static str>) -> gpui::Stateful<gpui::Div> {
+fn tile(
+    id: (&'static str, usize),
+    name: SharedString,
+    preview: Option<SharedString>,
+    w: f32,
+    blurple: bool,
+    icon: Option<&'static str>,
+) -> gpui::Stateful<gpui::Div> {
     let fade = if blurple { c(tok(idx::BACKGROUND_BRAND)).opacity(0.8) } else { c(tok(idx::BACKGROUND_SCRIM)) };
     div()
         .id(id)
@@ -178,9 +182,16 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
             return empty_state(if g.home_loading { crate::t!("picker.loading_gifs") } else { crate::t!("picker.gifs_unavailable") });
         };
         let mut tiles: Vec<AnyElement> = vec![
-            tile(("gif-favorites", 0), crate::t!("picker.favorites"), favorite_tile_preview(&favs, p.open.as_ref().map(|o| o.input.entity_id())), col_w, true, None)
-                .on_click(|_, w, cx| with_app(cx, w, |_, _, cx| show_favorites(cx)))
-                .into_any_element(),
+            tile(
+                ("gif-favorites", 0),
+                crate::t!("picker.favorites"),
+                favorite_tile_preview(&favs, p.open.as_ref().map(|o| o.input.entity_id())),
+                col_w,
+                true,
+                None,
+            )
+            .on_click(|_, w, cx| with_app(cx, w, |_, _, cx| show_favorites(cx)))
+            .into_any_element(),
             tile(("gif-trending", 0), crate::t!("picker.trending"), home.trending_preview.clone(), col_w, false, Some("picker/trending"))
                 .on_click(|_, w, cx| with_app(cx, w, |a, _, cx| run(a, String::new(), cx)))
                 .into_any_element(),

@@ -4,11 +4,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{
-    canvas, div, img, prelude::*, AnyElement, App, Context, Global, ImageSource, RenderImage, SharedString,
-};
+use gpui::{AnyElement, App, Context, Global, ImageSource, RenderImage, SharedString, canvas, div, img, prelude::*};
 
-use crate::{app::PhoenixApp, ui::settings::collectibles::{Anchor, Collectible, FrameSpec}};
+use crate::{
+    app::PhoenixApp,
+    ui::settings::collectibles::{Anchor, Collectible, FrameSpec},
+};
 
 const MAX_W: u32 = 450;
 const MAX_ANIMS: usize = 4;

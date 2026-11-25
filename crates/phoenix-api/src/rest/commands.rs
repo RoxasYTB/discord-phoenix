@@ -83,11 +83,7 @@ pub struct CommandIndex {
 impl CommandIndex {
     pub fn matching(&self, prefix: &str) -> Vec<&ApplicationCommand> {
         let p = prefix.to_lowercase();
-        let mut v: Vec<_> = self
-            .application_commands
-            .iter()
-            .filter(|c| c.kind == 1 && c.name.starts_with(&p))
-            .collect();
+        let mut v: Vec<_> = self.application_commands.iter().filter(|c| c.kind == 1 && c.name.starts_with(&p)).collect();
         v.sort_by(|a, b| a.name.cmp(&b.name));
         v
     }

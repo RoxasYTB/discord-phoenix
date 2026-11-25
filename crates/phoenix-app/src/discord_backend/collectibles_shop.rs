@@ -1,5 +1,8 @@
 use super::{DiscordBackend, api_err};
-use crate::{backend::BoxFuture, ui::settings::collectibles::{Collectible, ShopCatalog, parse_product, parse_shop, promote}};
+use crate::{
+    backend::BoxFuture,
+    ui::settings::collectibles::{Collectible, ShopCatalog, parse_product, parse_shop, promote},
+};
 
 impl DiscordBackend {
     pub(super) fn collectibles_shop_impl(&self) -> BoxFuture<ShopCatalog> {

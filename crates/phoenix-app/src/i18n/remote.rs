@@ -85,10 +85,7 @@ pub fn load_blocking(locale: &str) -> Option<MessageTable> {
     let cached_js = cached_js_map();
     let mut merged: HashMap<String, Value> = HashMap::new();
     for file in &chunks {
-        let js = cached_js
-            .get(file)
-            .and_then(|p| crate::icons::cache::read_body(p))
-            .or_else(|| download_js(file));
+        let js = cached_js.get(file).and_then(|p| crate::icons::cache::read_body(p)).or_else(|| download_js(file));
         if let Some(js) = js {
             extract_messages(&js, &mut merged);
         }
@@ -121,11 +118,7 @@ fn cached_js_map() -> HashMap<String, PathBuf> {
 
 fn chunk_files_for(locale: &str) -> Vec<String> {
     for cache in crate::icons::discord_caches() {
-        for (_, entry) in crate::icons::cache::js_entries(&cache)
-            .into_iter()
-            .filter(|(n, _)| n.starts_with("web."))
-            .take(4)
-        {
+        for (_, entry) in crate::icons::cache::js_entries(&cache).into_iter().filter(|(n, _)| n.starts_with("web.")).take(4) {
             if let Some(js) = crate::icons::cache::read_body(&entry) {
                 let files = parse_loader_chunks(&js, locale);
                 if !files.is_empty() {
@@ -141,15 +134,9 @@ pub fn parse_loader_chunks(bundle: &str, locale: &str) -> Vec<String> {
     static LOADER_RE: OnceLock<Regex> = OnceLock::new();
     static ENTRY_RE: OnceLock<Regex> = OnceLock::new();
     static CHUNK_RE: OnceLock<Regex> = OnceLock::new();
-    let loader_re = LOADER_RE.get_or_init(|| {
-        Regex::new(r#"createLoader:\w+\}=n\(\d+\),\w+=\w+\(\{(.*?)\},"en-US"\)"#).expect("valid regex")
-    });
-    let entry_re = ENTRY_RE.get_or_init(|| {
-        Regex::new(r#"(?:"([\w-]+)"|(\w+)):\(\)=>n\.e\((\d+)\)"#).expect("valid regex")
-    });
-    let chunk_re = CHUNK_RE.get_or_init(|| {
-        Regex::new(r#"(\d+):"([0-9a-f]{16})""#).expect("valid regex")
-    });
+    let loader_re = LOADER_RE.get_or_init(|| Regex::new(r#"createLoader:\w+\}=n\(\d+\),\w+=\w+\(\{(.*?)\},"en-US"\)"#).expect("valid regex"));
+    let entry_re = ENTRY_RE.get_or_init(|| Regex::new(r#"(?:"([\w-]+)"|(\w+)):\(\)=>n\.e\((\d+)\)"#).expect("valid regex"));
+    let chunk_re = CHUNK_RE.get_or_init(|| Regex::new(r#"(\d+):"([0-9a-f]{16})""#).expect("valid regex"));
 
     let mut cmap: HashMap<&str, &str> = HashMap::new();
     for cap in chunk_re.captures_iter(bundle) {
@@ -179,16 +166,8 @@ pub fn parse_loader_chunks(bundle: &str, locale: &str) -> Vec<String> {
 fn download_js(file: &str) -> Option<String> {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().ok()?;
     rt.block_on(async {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(20))
-            .build()
-            .ok()?;
-        let r = client
-            .get(format!("https://discord.com/assets/{file}"))
-            .header(reqwest::header::USER_AGENT, "Mozilla/5.0")
-            .send()
-            .await
-            .ok()?;
+        let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().ok()?;
+        let r = client.get(format!("https://discord.com/assets/{file}")).header(reqwest::header::USER_AGENT, "Mozilla/5.0").send().await.ok()?;
         if !r.status().is_success() {
             return None;
         }

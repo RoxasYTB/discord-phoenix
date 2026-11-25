@@ -100,11 +100,7 @@ pub fn category_move_item(app: &PhoenixApp, e: &Ent, guild: Id, cat: Id) -> Opti
     let first = cats.first().is_some_and(|c| c.0 == cat);
     let last = cats.last().is_some_and(|c| c.0 == cat);
     let place = |key: &str, at_end: bool, disabled: bool| {
-        if disabled {
-            MenuItem::disabled(crate::t!(key), None)
-        } else {
-            item(e, crate::t!(key), move |a, cx| a.move_category(guild, cat, at_end, cx))
-        }
+        if disabled { MenuItem::disabled(crate::t!(key), None) } else { item(e, crate::t!(key), move |a, cx| a.move_category(guild, cat, at_end, cx)) }
     };
     Some(MenuItem::submenu(crate::t!("menu.move_to"), vec![place("menu.move_first", false, first), place("menu.move_last", true, last)]))
 }

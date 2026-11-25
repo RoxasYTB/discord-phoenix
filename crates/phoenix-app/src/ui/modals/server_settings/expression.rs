@@ -33,7 +33,12 @@ fn header(title: SharedString, desc: SharedString, upload: SharedString, id: &'s
         .flex_col()
         .gap(z(20.))
         .child(div().flex().flex_col().gap(z(4.)).child(kit::h2(title)).child(text(desc, 16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT)))
-        .child(div().flex().child(crate::ui::controls::button(id, upload, BtnKind::Primary).on_click(cx.listener(|_, _, _, cx| super::pick_upload("emoji", &crate::ui::file_pick::IMAGES, cx)))))
+        .child(
+            div().flex().child(
+                crate::ui::controls::button(id, upload, BtnKind::Primary)
+                    .on_click(cx.listener(|_, _, _, cx| super::pick_upload("emoji", &crate::ui::file_pick::IMAGES, cx))),
+            ),
+        )
 }
 
 fn uploader(u: Option<&Value>) -> AnyElement {
@@ -84,7 +89,17 @@ fn emoji_table(title: SharedString, list: &[&Value], slots: usize, cx: &mut Cx) 
                 .items_center()
                 .when(i > 0, |d| d.border_t_1().border_color(c(tok(idx::BORDER_SUBTLE))))
                 .child(div().w(z(48.1)).flex_none().child(gpui::img(url).size(z(32.)).object_fit(gpui::ObjectFit::Contain)))
-                .child(div().flex_1().min_w_0().flex().items_center().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(format!(":{}:", kit::s(e, "name"))))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .child(format!(":{}:", kit::s(e, "name"))),
+                )
                 .child(div().flex_1().min_w_0().child(uploader(e.get("user"))))
                 .child(
                     div()
@@ -102,7 +117,9 @@ fn emoji_table(title: SharedString, list: &[&Value], slots: usize, cx: &mut Cx) 
         .flex_col()
         .gap(z(16.))
         .child(kit::legend(title, Some(crate::t!("gs.expr.slots_left", n = slots.saturating_sub(list.len())))))
-        .when(!list.is_empty(), |d| d.child(div().mb(z(48.)).rounded(z(12.)).border_1().border_color(c(tok(idx::BORDER_SUBTLE))).flex().flex_col().child(head).child(body)))
+        .when(!list.is_empty(), |d| {
+            d.child(div().mb(z(48.)).rounded(z(12.)).border_1().border_color(c(tok(idx::BORDER_SUBTLE))).flex().flex_col().child(head).child(body))
+        })
         .into_any_element()
 }
 
@@ -189,7 +206,10 @@ fn sticker_card(i: usize, st: &Value, cx: &mut Cx) -> AnyElement {
         .child(if ext == "json" {
             div().size(z(72.)).into_any_element()
         } else {
-            gpui::img(SharedString::from(format!("https://media.discordapp.net/stickers/{id}.{ext}?size=160"))).size(z(72.)).object_fit(gpui::ObjectFit::Contain).into_any_element()
+            gpui::img(SharedString::from(format!("https://media.discordapp.net/stickers/{id}.{ext}?size=160")))
+                .size(z(72.))
+                .object_fit(gpui::ObjectFit::Contain)
+                .into_any_element()
         })
         .child(text(kit::s(st, "name"), 12., 16., FontWeight::SEMIBOLD, idx::TEXT_STRONG).mt(z(8.)).max_w_full().truncate())
         .children(user.map(|u| {
@@ -214,7 +234,14 @@ fn sticker_card(i: usize, st: &Value, cx: &mut Cx) -> AnyElement {
                 .child(action(0, "pen", idx::TEXT_SUBTLE))
                 .child(action(1, "close-small", idx::TEXT_FEEDBACK_CRITICAL).mt(z(8.)).on_click(cx.listener(move |a, _, _, cx| {
                     if let Some(g) = super::with_state(|s| s.guild) {
-                        a.admin_toast(phoenix_api::rest::guild_manage::AdminCall::DeleteSticker { guild: crate::actions::admin::sf(g), sticker: phoenix_api::models::Snowflake(sid) }, None, cx);
+                        a.admin_toast(
+                            phoenix_api::rest::guild_manage::AdminCall::DeleteSticker {
+                                guild: crate::actions::admin::sf(g),
+                                sticker: phoenix_api::models::Snowflake(sid),
+                            },
+                            None,
+                            cx,
+                        );
                     }
                 }))),
         )
@@ -223,7 +250,14 @@ fn sticker_card(i: usize, st: &Value, cx: &mut Cx) -> AnyElement {
 
 fn rail(state: u8) -> gpui::Div {
     let dot = match state {
-        2 => div().size(z(26.)).rounded_full().bg(c(BOOST_PINK)).flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("boost")).size(z(16.)).text_color(gpui::white())),
+        2 => div()
+            .size(z(26.))
+            .rounded_full()
+            .bg(c(BOOST_PINK))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(gpui::svg().path(crate::icons::path("boost")).size(z(16.)).text_color(gpui::white())),
         1 => div().size(z(16.)).rounded_full().bg(c(BOOST_PINK)),
         _ => div().size(z(16.)).rounded_full().bg(c(tok(idx::BACKGROUND_MOD_STRONG))),
     };
@@ -260,19 +294,38 @@ pub fn stickers(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                         .child(text(crate::t!("gs.st.lost_title", level = level), 20., 24., FontWeight::SEMIBOLD, idx::WHITE).pb(z(4.)))
                         .child(text(crate::t!("gs.st.lost_desc", level = level), 14., 18., FontWeight::NORMAL, idx::WHITE)),
                 )
-                .child(div().flex_none().h(z(40.)).px(z(12.)).rounded(z(8.)).bg(gpui::white()).flex().items_center().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(gpui::black()).child(crate::t!("gs.st.boost"))),
+                .child(
+                    div()
+                        .flex_none()
+                        .h(z(40.))
+                        .px(z(12.))
+                        .rounded(z(8.))
+                        .bg(gpui::white())
+                        .flex()
+                        .items_center()
+                        .text_size(z(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(gpui::black())
+                        .child(crate::t!("gs.st.boost")),
+                ),
         );
     }
     top = top.child(
-        div()
-            .flex()
-            .flex_col()
-            .gap(z(8.))
-            .child(text(crate::t!("gs.expr.sticker_rules"), 16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT))
-            .child(text(crate::t!("gs.expr.sticker_rules_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT)),
+        div().flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.expr.sticker_rules"), 16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT)).child(text(
+            crate::t!("gs.expr.sticker_rules_desc"),
+            14.,
+            18.,
+            FontWeight::NORMAL,
+            idx::TEXT_DEFAULT,
+        )),
     );
     page = page.child(top).child(div().my(z(24.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))));
-    let subs = crate::ui::server_pages::fetch(app, s.guild, phoenix_api::rest::guild_server::ServerCall::PremiumSubscriptions { guild: crate::actions::admin::sf(s.guild) }, cx);
+    let subs = crate::ui::server_pages::fetch(
+        app,
+        s.guild,
+        phoenix_api::rest::guild_server::ServerCall::PremiumSubscriptions { guild: crate::actions::admin::sf(s.guild) },
+        cx,
+    );
     let mut users: Vec<Value> = Vec::new();
     for sub in subs.as_ref().and_then(Value::as_array).into_iter().flatten() {
         if let Some(u) = sub.get("user")
@@ -285,24 +338,43 @@ pub fn stickers(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     if !users.is_empty() {
         let mut avatars = div().flex().items_center();
         for u in users.iter().take(4) {
-            avatars = avatars.child(div().mr(z(-8.)).size(z(30.)).rounded_full().border_2().border_color(c(tok(idx::BACKGROUND_BASE_LOW))).overflow_hidden().child(kit::avatar(kit::user_avatar(u, 64), 30.)));
+            avatars = avatars.child(
+                div()
+                    .mr(z(-8.))
+                    .size(z(30.))
+                    .rounded_full()
+                    .border_2()
+                    .border_color(c(tok(idx::BACKGROUND_BASE_LOW)))
+                    .overflow_hidden()
+                    .child(kit::avatar(kit::user_avatar(u, 64), 30.)),
+            );
         }
         if users.len() > 4 {
-            avatars = avatars.child(div().size(z(30.)).rounded_full().bg(gpui::rgb(0x1E1F22)).flex().items_center().justify_center().text_size(z(12.)).text_color(gpui::white()).child(format!("+{}", users.len() - 4)));
+            avatars = avatars.child(
+                div()
+                    .size(z(30.))
+                    .rounded_full()
+                    .bg(gpui::rgb(0x1E1F22))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(z(12.))
+                    .text_color(gpui::white())
+                    .child(format!("+{}", users.len() - 4)),
+            );
         }
         let n = users.len();
         let bold = crate::t!(if n == 1 { "gs.st.boosters_bold_one" } else { "gs.st.boosters_bold" }, n = n);
         let rest = crate::t!(if n == 1 { "gs.st.boosters_rest_one" } else { "gs.st.boosters_rest" });
-        col = col.child(
-            div().flex().child(rail(1)).child(
-                div()
-                    .ml(z(14.))
-                    .flex()
-                    .flex_col()
-                    .child(avatars)
-                    .child(div().mt(z(8.)).mb(z(24.)).flex().child(text(bold, 16., 16., FontWeight::MEDIUM, idx::TEXT_DEFAULT)).child(text(rest, 16., 16., FontWeight::NORMAL, idx::TEXT_MUTED))),
-            ),
-        );
+        col = col.child(div().flex().child(rail(1)).child(div().ml(z(14.)).flex().flex_col().child(avatars).child(
+            div().mt(z(8.)).mb(z(24.)).flex().child(text(bold, 16., 16., FontWeight::MEDIUM, idx::TEXT_DEFAULT)).child(text(
+                rest,
+                16.,
+                16.,
+                FontWeight::NORMAL,
+                idx::TEXT_MUTED,
+            )),
+        )));
     }
     let per = sticker_tiers(list.len());
     let mut start = 0;
@@ -356,7 +428,13 @@ pub fn stickers(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
             .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
             .flex()
             .items_center()
-            .when(level > 0, |d| d.child(gpui::svg().path(crate::icons::path("boost")).flex_none().mr(z(16.)).size(z(32.)).text_color(if unlocked { c(BOOST_PINK) } else { c(tok(idx::TEXT_MUTED)) })))
+            .when(level > 0, |d| {
+                d.child(gpui::svg().path(crate::icons::path("boost")).flex_none().mr(z(16.)).size(z(32.)).text_color(if unlocked {
+                    c(BOOST_PINK)
+                } else {
+                    c(tok(idx::TEXT_MUTED))
+                }))
+            })
             .child(
                 div()
                     .flex_1()
@@ -414,7 +492,15 @@ pub fn soundboard(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .child(div().w(z(60.)).mr(z(8.)).flex().justify_center().child(emoji))
                 .child(text(kit::s(snd, "name"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).w(z(328.)).mr(z(8.)).truncate())
-                .child(div().w(z(200.)).flex().items_center().gap(z(8.)).child(kit::avatar(kit::user_avatar(&user, 40), 20.)).child(text(kit::s(&user, "username"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).truncate()))
+                .child(
+                    div()
+                        .w(z(200.))
+                        .flex()
+                        .items_center()
+                        .gap(z(8.))
+                        .child(kit::avatar(kit::user_avatar(&user, 40), 20.))
+                        .child(text(kit::s(&user, "username"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).truncate()),
+                )
                 .child(div().flex_1().flex().justify_end().child(kit::icon_btn(("ss-sound-play", i), "play", 32., 16., false))),
         );
     }
@@ -423,8 +509,23 @@ pub fn soundboard(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .flex_col()
         .child(kit::h2(crate::t!("menu.gs.soundboard")))
         .child(text(crate::t!("gs.expr.sound_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).mt(z(16.)))
-        .child(div().mt(z(24.)).flex().child(crate::ui::controls::button("ss-sound-upload", crate::t!("gs.expr.sound_upload"), BtnKind::Primary).on_click(cx.listener(|_, _, _, cx| super::pick_upload("sound", &crate::ui::file_pick::SOUNDS, cx)))))
-        .child(text(crate::t!("gs.expr.sound_slots", tier = t, n = slots.saturating_sub(items.len()), total = slots), 16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG).mt(z(50.)).h(z(24.)))
+        .child(
+            div().mt(z(24.)).flex().child(
+                crate::ui::controls::button("ss-sound-upload", crate::t!("gs.expr.sound_upload"), BtnKind::Primary)
+                    .on_click(cx.listener(|_, _, _, cx| super::pick_upload("sound", &crate::ui::file_pick::SOUNDS, cx))),
+            ),
+        )
+        .child(
+            text(
+                crate::t!("gs.expr.sound_slots", tier = t, n = slots.saturating_sub(items.len()), total = slots),
+                16.,
+                20.,
+                FontWeight::SEMIBOLD,
+                idx::TEXT_STRONG,
+            )
+            .mt(z(50.))
+            .h(z(24.)),
+        )
         .child(div().mt(z(32.)).child(head))
         .child(rows)
         .into_any_element()

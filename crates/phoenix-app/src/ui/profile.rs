@@ -1,8 +1,5 @@
 use crate::theme::{generated::idx, tok, z};
-use gpui::{
-    AnyElement, Context, Div, FontWeight, IntoElement, ParentElement, Pixels, Point, SharedString, Styled,
-    Window, div, img, prelude::*, px,
-};
+use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, ParentElement, Pixels, Point, SharedString, Styled, Window, div, img, prelude::*, px};
 use gpui_component::input::{InputEvent, InputState};
 
 use crate::{
@@ -19,14 +16,7 @@ const MODAL_W: f32 = 962.;
 const MODAL_H: f32 = 800.;
 
 impl PhoenixApp {
-    pub fn open_profile(
-        &mut self,
-        user: Id,
-        guild: Option<Id>,
-        at: Point<Pixels>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn open_profile(&mut self, user: Id, guild: Option<Id>, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         if self.people.popout.as_ref().is_some_and(|p| p.user == user) {
             self.people.popout = None;
             cx.notify();
@@ -151,13 +141,7 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
 }
 
 pub(crate) fn section_title(t: SharedString) -> Div {
-    div()
-        .text_size(z(12.))
-        .line_height(z(16.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(c(tok(idx::TEXT_STRONG)))
-        .mb(z(4.))
-        .child(t)
+    div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).mb(z(4.)).child(t)
 }
 
 fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
@@ -200,58 +184,39 @@ fn activity_block(a: &Activity, big: bool) -> Option<AnyElement> {
             .border_1()
             .border_color(c(tok(idx::BORDER_SUBTLE)))
             .child(
-                div()
-                    .text_size(z(12.))
-                    .line_height(z(16.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(c(tok(idx::TEXT_DEFAULT)))
-                    .text_ellipsis()
-                    .child(title),
+                div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).text_ellipsis().child(title),
             )
             .child(
-                div()
-                    .flex()
-                    .gap(z(if big { 12. } else { 8. }))
-                    .items_center()
-                    .child(art)
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap(z(4.))
-                            .when_some(line1, |d, l| {
-                                d.child(
-                                    div()
-                                        .text_size(z(14.))
-                                        .line_height(z(18.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(c(tok(idx::TEXT_STRONG)))
-                                        .text_ellipsis()
-                                        .child(l),
-                                )
-                            })
-                            .children(lines.into_iter().map(|l| {
+                div().flex().gap(z(if big { 12. } else { 8. })).items_center().child(art).child(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(z(4.))
+                        .when_some(line1, |d, l| {
+                            d.child(
                                 div()
-                                    .text_size(z(12.))
-                                    .line_height(z(16.))
-                                    .text_color(c(tok(idx::TEXT_DEFAULT)))
+                                    .text_size(z(14.))
+                                    .line_height(z(18.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(c(tok(idx::TEXT_STRONG)))
                                     .text_ellipsis()
-                                    .child(l)
-                            })),
-                    ),
+                                    .child(l),
+                            )
+                        })
+                        .children(
+                            lines
+                                .into_iter()
+                                .map(|l| div().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))).text_ellipsis().child(l)),
+                        ),
+                ),
             )
             .into_any_element(),
     )
 }
 
 fn section_heading(t: SharedString) -> Div {
-    div()
-        .text_size(z(12.))
-        .line_height(z(16.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(t)
+    div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(t)
 }
 
 pub(crate) struct Info<'a> {
@@ -294,8 +259,7 @@ pub(crate) fn info<'a>(app: &'a PhoenixApp, uid: Id, guild: Option<Id>) -> Info<
         _ => None,
     };
     let accent = prof.and_then(|p| p.accent).or(avatar_colour).unwrap_or(fallback_accent);
-    let mut role_ids: Vec<Id> =
-        prof.map(|p| p.roles.clone()).filter(|r| !r.is_empty()).or_else(|| member.map(|m| m.roles.clone())).unwrap_or_default();
+    let mut role_ids: Vec<Id> = prof.map(|p| p.roles.clone()).filter(|r| !r.is_empty()).or_else(|| member.map(|m| m.roles.clone())).unwrap_or_default();
     let guild_roles = guild.and_then(|g| app.roles.get(&g));
     if let Some(gr) = guild_roles {
         role_ids.sort_by_key(|r| -gr.iter().find(|x| x.id == *r).map(|x| x.position).unwrap_or(0));
@@ -318,18 +282,14 @@ pub(crate) fn banner(i: &Info, h: f32, radius: f32) -> Div {
 }
 
 pub(crate) fn avatar_block(i: &Info, size: f32, ring: f32, ring_color: u32) -> Div {
-    div()
-        .p(z(ring))
-        .rounded_full()
-        .bg(c(ring_color))
-        .child(crate::ui::avatar_with_status_deco(
-            i.user.as_deref(),
-            size,
-            i.presence,
-            c(ring_color),
-            |d| d,
-            i.prof.and_then(|p| p.decoration.clone()).map(|deco| crate::ui::avatar_deco::src(&deco, true)),
-        ))
+    div().p(z(ring)).rounded_full().bg(c(ring_color)).child(crate::ui::avatar_with_status_deco(
+        i.user.as_deref(),
+        size,
+        i.presence,
+        c(ring_color),
+        |d| d,
+        i.prof.and_then(|p| p.decoration.clone()).map(|deco| crate::ui::avatar_deco::src(&deco, true)),
+    ))
 }
 
 fn badges(i: &Info) -> Option<Div> {
@@ -558,57 +518,62 @@ fn roles_block(app: &PhoenixApp, guild: Option<Id>, uid: Id, roles: Vec<crate::m
             })
             .child(gpui::svg().path(crate::icons::path("plus")).size(z(12.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
     });
-    div().mt(z(2.)).flex().flex_wrap().gap(z(4.)).children(roles.into_iter().take(shown).enumerate().map(|(i, r)| {
-        let cap = if !expanded && shown < total && i >= row2 { second_row } else { ROLE_ROW_W };
-        let remove = guild.filter(|g| role_removable(app, *g, uid, &r)).map(|g| {
-            let e = entity.clone();
-            let role = r.clone();
-            let group = SharedString::from(format!("profile-role-remove-{}", r.id.0));
+    div()
+        .mt(z(2.))
+        .flex()
+        .flex_wrap()
+        .gap(z(4.))
+        .children(roles.into_iter().take(shown).enumerate().map(|(i, r)| {
+            let cap = if !expanded && shown < total && i >= row2 { second_row } else { ROLE_ROW_W };
+            let remove = guild.filter(|g| role_removable(app, *g, uid, &r)).map(|g| {
+                let e = entity.clone();
+                let role = r.clone();
+                let group = SharedString::from(format!("profile-role-remove-{}", r.id.0));
+                div()
+                    .id(("profile-role-remove", r.id.0))
+                    .group(group.clone())
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .size(z(24.))
+                    .my(z(-1.))
+                    .mr(z(-1.))
+                    .rounded(z(4.))
+                    .cursor_pointer()
+                    .tooltip(crate::ui::tooltip::tip(crate::t!("profile.remove_role")))
+                    .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
+                        e.update(cx, |a, cx| a.remove_profile_role(g, uid, &role, cx));
+                    })
+                    .child(
+                        gpui::svg()
+                            .path(crate::icons::path("close-small"))
+                            .size(z(12.))
+                            .text_color(c(tok(idx::ICON_SUBTLE)))
+                            .group_hover(group, |s| s.text_color(c(tok(idx::ICON_STRONG)))),
+                    )
+            });
             div()
-                .id(("profile-role-remove", r.id.0))
-                .group(group.clone())
                 .flex()
-                .flex_none()
                 .items_center()
-                .justify_center()
-                .size(z(24.))
-                .my(z(-1.))
-                .mr(z(-1.))
-                .rounded(z(4.))
-                .cursor_pointer()
-                .tooltip(crate::ui::tooltip::tip(crate::t!("profile.remove_role")))
-                .on_click(move |_, _, cx| {
-                    cx.stop_propagation();
-                    e.update(cx, |a, cx| a.remove_profile_role(g, uid, &role, cx));
-                })
-                .child(
-                    gpui::svg()
-                        .path(crate::icons::path("close-small"))
-                        .size(z(12.))
-                        .text_color(c(tok(idx::ICON_SUBTLE)))
-                        .group_hover(group, |s| s.text_color(c(tok(idx::ICON_STRONG)))),
-                )
-        });
-        div()
-            .flex()
-            .items_center()
-            .min_h(z(24.))
-            .max_w(z(cap))
-            .pl(z(2.))
-            .when(remove.is_none(), |d| d.pr(z(8.)))
-            .rounded(z(8.))
-            .border_1()
-            .border_color(c(tok(idx::USER_PROFILE_BORDER)))
-            .text_size(z(12.))
-            .line_height(z(16.))
-            .text_color(c(tok(idx::TEXT_DEFAULT)))
-            .child(div().size(z(12.)).mx(z(4.)).flex_none().rounded_full().bg(role_color(r.color.or(Some(0x99AAB5)))))
-            .child(div().min_w_0().text_ellipsis().whitespace_nowrap().overflow_hidden().child(r.name.clone()))
-            .when_some(r.icon.clone(), |d, u| {
-                d.child(div().flex_none().ml(z(4.)).child(img(u).size(z(12.)).object_fit(gpui::ObjectFit::Contain)))
-            })
-            .children(remove)
-    })).children(toggle).children(add_btn)
+                .min_h(z(24.))
+                .max_w(z(cap))
+                .pl(z(2.))
+                .when(remove.is_none(), |d| d.pr(z(8.)))
+                .rounded(z(8.))
+                .border_1()
+                .border_color(c(tok(idx::USER_PROFILE_BORDER)))
+                .text_size(z(12.))
+                .line_height(z(16.))
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(div().size(z(12.)).mx(z(4.)).flex_none().rounded_full().bg(role_color(r.color.or(Some(0x99AAB5)))))
+                .child(div().min_w_0().text_ellipsis().whitespace_nowrap().overflow_hidden().child(r.name.clone()))
+                .when_some(r.icon.clone(), |d, u| d.child(div().flex_none().ml(z(4.)).child(img(u).size(z(12.)).object_fit(gpui::ObjectFit::Contain))))
+                .children(remove)
+        }))
+        .children(toggle)
+        .children(add_btn)
 }
 
 pub(crate) fn member_role_ids(app: &PhoenixApp, guild: Id, user: Id) -> Vec<Id> {
@@ -653,21 +618,9 @@ fn bio_block(bio: SharedString, clamp: bool) -> Div {
     div()
         .flex()
         .flex_col()
-        .child(
-            div()
-                .text_size(z(14.))
-                .line_height(z(18.))
-                .child(crate::ui::profile_bio::bio(&bio, clamp, c(tok(idx::TEXT_DEFAULT)))),
-        )
+        .child(div().text_size(z(14.)).line_height(z(18.)).child(crate::ui::profile_bio::bio(&bio, clamp, c(tok(idx::TEXT_DEFAULT)))))
         .when(long, |d| {
-            d.child(
-                div()
-                    .mt(z(18.))
-                    .text_size(z(12.))
-                    .line_height(z(16.))
-                    .text_color(c(tok(idx::TEXT_DEFAULT)))
-                    .child(crate::t!("profile.view_full_bio")),
-            )
+            d.child(div().mt(z(18.)).text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("profile.view_full_bio")))
         })
 }
 
@@ -679,9 +632,7 @@ pub(crate) fn mutuals_row(p: &Profile, uid: Id, e: &gpui::Entity<PhoenixApp>) ->
     }
     let both = friends > 0 && servers > 0;
     let (fs, lh) = if both { (12., 16.) } else { (14., 18.) };
-    let text = move |t: SharedString| {
-        div().text_size(z(fs)).line_height(z(lh)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).child(t)
-    };
+    let text = move |t: SharedString| div().text_size(z(fs)).line_height(z(lh)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).child(t);
     let section = |tab: u8| {
         let e = e.clone();
         div()
@@ -694,9 +645,13 @@ pub(crate) fn mutuals_row(p: &Profile, uid: Id, e: &gpui::Entity<PhoenixApp>) ->
             .hover(|s| s.underline())
             .on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_profile_modal_at(uid, tab, cx)))
     };
-    let stack = div().flex().children(p.mutual_friends.iter().take(3).enumerate().map(|(n, u)| {
-        div().when(n < 2.min(p.mutual_friends.len().saturating_sub(1)), |d| d.mr(z(-3.))).child(crate::ui::avatar(Some(u), 16.))
-    }));
+    let stack = div().flex().children(
+        p.mutual_friends
+            .iter()
+            .take(3)
+            .enumerate()
+            .map(|(n, u)| div().when(n < 2.min(p.mutual_friends.len().saturating_sub(1)), |d| d.mr(z(-3.))).child(crate::ui::avatar(Some(u), 16.))),
+    );
     Some(
         div()
             .flex()
@@ -705,21 +660,26 @@ pub(crate) fn mutuals_row(p: &Profile, uid: Id, e: &gpui::Entity<PhoenixApp>) ->
             .gap_x(z(6.))
             .gap_y(z(2.))
             .when(friends > 0, |d| {
-                d.child(section(TAB_FRIENDS).when(!p.mutual_friends.is_empty(), |s| s.child(stack)).child(text(if friends == 1 { crate::t!("profile.mutual_friends_one", n = friends) } else { crate::t!("profile.mutual_friends", n = friends) })))
+                d.child(section(TAB_FRIENDS).when(!p.mutual_friends.is_empty(), |s| s.child(stack)).child(text(if friends == 1 {
+                    crate::t!("profile.mutual_friends_one", n = friends)
+                } else {
+                    crate::t!("profile.mutual_friends", n = friends)
+                })))
             })
             .when(both, |d| d.child(div().size(z(4.)).rounded_full().bg(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
-            .when(servers > 0, |d| d.child(section(TAB_SERVERS).child(text(if servers == 1 { crate::t!("profile.mutual_servers_one", n = servers) } else { crate::t!("profile.mutual_servers", n = servers) })))),
+            .when(servers > 0, |d| {
+                d.child(section(TAB_SERVERS).child(text(if servers == 1 {
+                    crate::t!("profile.mutual_servers_one", n = servers)
+                } else {
+                    crate::t!("profile.mutual_servers", n = servers)
+                })))
+            }),
     )
 }
 
 pub fn mana_button(id: impl Into<gpui::ElementId>, label: impl Into<SharedString>, primary: bool, md: bool) -> gpui::Stateful<Div> {
     let (bg, hover, fg, border) = if primary {
-        (
-            idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT,
-            idx::CONTROL_PRIMARY_BACKGROUND_HOVER,
-            idx::CONTROL_PRIMARY_TEXT_DEFAULT,
-            idx::CONTROL_PRIMARY_BORDER_DEFAULT,
-        )
+        (idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT, idx::CONTROL_PRIMARY_BACKGROUND_HOVER, idx::CONTROL_PRIMARY_TEXT_DEFAULT, idx::CONTROL_PRIMARY_BORDER_DEFAULT)
     } else {
         (
             idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT,
@@ -782,11 +742,7 @@ pub(crate) fn theme_backdrop_at((primary, secondary): (u32, u32), banner: f32, f
             .bottom(z(footer))
             .when(banner <= 0., |d| d.rounded_t(z(top_r)))
             .when(footer <= 0., |d| d.rounded_b(z(bottom_r)))
-            .bg(gpui::linear_gradient(
-                180.,
-                gpui::linear_color_stop(c(primary), 0.),
-                gpui::linear_color_stop(c(secondary), 1.),
-            )),
+            .bg(gpui::linear_gradient(180., gpui::linear_color_stop(c(primary), 0.), gpui::linear_color_stop(c(secondary), 1.))),
         div().absolute().left_0().right_0().bottom_0().h(z(footer)).rounded_b(z(bottom_r)).bg(c(secondary)),
     ]
 }
@@ -809,9 +765,7 @@ pub(crate) fn banner_buttons(app: &PhoenixApp, uid: Id, guild: Option<Id>, end: 
         Some(RelationshipKind::Friend) => Some(banner_button(("profile-friend", uid.0), "user-check")),
         None if !bot => Some(
             banner_button(("profile-add-friend", uid.0), "invite")
-                .on_click(cx.listener(move |a, _, _, cx| {
-                    a.nav_request(NavRequest::Relationship { user: uid, action: RelAction::Accept }, cx, |_, _, _| {})
-                })),
+                .on_click(cx.listener(move |a, _, _, cx| a.nav_request(NavRequest::Relationship { user: uid, action: RelAction::Accept }, cx, |_, _, _| {}))),
         ),
         _ => None,
     };
@@ -836,24 +790,12 @@ pub(crate) fn mod_view_allowed(app: &PhoenixApp, guild: Option<Id>) -> bool {
     perms & (ADMINISTRATOR | MANAGE_GUILD | BAN_MEMBERS | KICK_MEMBERS | MODERATE_MEMBERS | MANAGE_ROLES | MANAGE_NICKNAMES) != 0
 }
 
-fn popout_card(
-    app: &PhoenixApp,
-    uid: Id,
-    guild: Option<Id>,
-    note: Option<&gpui::Entity<InputState>>,
-    cx: &mut Context<PhoenixApp>,
-) -> Div {
+fn popout_card(app: &PhoenixApp, uid: Id, guild: Option<Id>, note: Option<&gpui::Entity<InputState>>, cx: &mut Context<PhoenixApp>) -> Div {
     let theme = app.people.profiles.get(&uid).and_then(|p| p.theme);
     crate::ui::profile_theme::scoped(theme, || popout_card_inner(app, uid, guild, note, cx))
 }
 
-fn popout_card_inner(
-    app: &PhoenixApp,
-    uid: Id,
-    guild: Option<Id>,
-    _note: Option<&gpui::Entity<InputState>>,
-    cx: &mut Context<PhoenixApp>,
-) -> Div {
+fn popout_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, _note: Option<&gpui::Entity<InputState>>, cx: &mut Context<PhoenixApp>) -> Div {
     ensure_avatar_colour(app, uid, cx);
     let i = info(app, uid, guild);
     let theme = i.prof.and_then(|p| p.theme);
@@ -891,13 +833,14 @@ fn popout_card_inner(
         .min_h_0()
         .overflow_y_scroll()
         .track_scroll(&crate::ui::chat::scrollbar::handle("profile-popout-body"))
-        .child(
-            div()
-                .id(("profile-name", uid.0))
-                .cursor_pointer()
-                .on_click(move |_, _, cx| e_name.update(cx, |a, cx| a.open_profile_modal(uid, cx)))
-                .child(name_block_with(&i, false, (uid != app.me.id && !app.prefs.local.streamer_hides_info()).then(|| crate::ui::profile_note::note_button(uid, cx)), true)),
-        );
+        .child(div().id(("profile-name", uid.0)).cursor_pointer().on_click(move |_, _, cx| e_name.update(cx, |a, cx| a.open_profile_modal(uid, cx))).child(
+            name_block_with(
+                &i,
+                false,
+                (uid != app.me.id && !app.prefs.local.streamer_hides_info()).then(|| crate::ui::profile_note::note_button(uid, cx)),
+                true,
+            ),
+        ));
     if uid == app.me.id {
         body = body.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(status_label(i.presence)));
     }
@@ -991,22 +934,17 @@ fn popout_card_inner(
     let (fx_sku, frame_sku) = i.prof.map(|p| (p.effect_sku, p.frame_sku)).unwrap_or_default();
     let effect = fx_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| crate::ui::profile_fx::effect(&c, 300., cx));
     let frame = frame_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| c.frame);
-    let body = crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::ThinFade).min_h_0().child(body).children(crate::ui::chat::scrollbar::bar_for("profile-popout-body", crate::ui::chat::scrollbar::Bar::ThinFade));
+    let body = crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::ThinFade)
+        .min_h_0()
+        .child(body)
+        .children(crate::ui::chat::scrollbar::bar_for("profile-popout-body", crate::ui::chat::scrollbar::Bar::ThinFade));
     let inner = div().flex().flex_col().gap(z(8.)).pb(z(4.)).min_h_0().child(header).child(body).children(footer);
-    let card = div()
-        .relative()
-        .w_full()
-        .max_h_full()
-        .flex()
-        .flex_col()
-        .rounded(z(8.))
-        .shadow(popout_shadow())
-        .overflow_hidden();
+    let card = div().relative().w_full().max_h_full().flex().flex_col().rounded(z(8.)).shadow(popout_shadow()).overflow_hidden();
     let card = match theme {
         None => card.bg(c(bg)).child(inner),
-        Some(t) => card.p(z(2.)).children(theme_backdrop(t, 0.)).child(
-            inner.relative().rounded(z(6.)).overflow_hidden().bg(crate::ui::profile_theme::overlay(t)),
-        ),
+        Some(t) => {
+            card.p(z(2.)).children(theme_backdrop(t, 0.)).child(inner.relative().rounded(z(6.)).overflow_hidden().bg(crate::ui::profile_theme::overlay(t)))
+        }
     }
     .children(effect.map(|e| {
         let pad = if theme.is_some() { 2. } else { 0. };
@@ -1029,20 +967,8 @@ fn popout_card_inner(
 
 pub(crate) fn popout_shadow() -> Vec<gpui::BoxShadow> {
     vec![
-        gpui::BoxShadow {
-            color: gpui::hsla(0., 0., 1., 0.08),
-            offset: gpui::point(z(0.), z(0.)),
-            blur_radius: z(0.),
-            spread_radius: z(1.),
-            inset: false,
-        },
-        gpui::BoxShadow {
-            color: gpui::hsla(0., 0., 0., 0.24),
-            offset: gpui::point(z(0.), z(12.)),
-            blur_radius: z(24.),
-            spread_radius: z(0.),
-            inset: false,
-        },
+        gpui::BoxShadow { color: gpui::hsla(0., 0., 1., 0.08), offset: gpui::point(z(0.), z(0.)), blur_radius: z(0.), spread_radius: z(1.), inset: false },
+        gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.24), offset: gpui::point(z(0.), z(12.)), blur_radius: z(24.), spread_radius: z(0.), inset: false },
     ]
 }
 
@@ -1062,13 +988,7 @@ pub fn set_modal_tab(t: u8) {
     PANEL_SCROLL.with(|h| h.set_offset(gpui::Point::default()));
 }
 
-fn mutual_row(
-    id: impl Into<gpui::ElementId>,
-    icon: AnyElement,
-    name: SharedString,
-    tag: Option<AnyElement>,
-    sub: Option<SharedString>,
-) -> gpui::Stateful<Div> {
+fn mutual_row(id: impl Into<gpui::ElementId>, icon: AnyElement, name: SharedString, tag: Option<AnyElement>, sub: Option<SharedString>) -> gpui::Stateful<Div> {
     div()
         .id(id)
         .flex()
@@ -1155,9 +1075,8 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
     };
     let is_friend = app.nav.relationship(uid).is_some_and(|r| r.kind == crate::ui::home::data::RelationshipKind::Friend);
     let buttons = (uid != app.me.id).then(|| {
-        let msg = mana_button(("profile-modal-message", uid.0), "", true, false)
-            .on_click(move |_, _, cx| e2.update(cx, |a, cx| a.message_user(uid, cx)))
-            .child(
+        let msg =
+            mana_button(("profile-modal-message", uid.0), "", true, false).on_click(move |_, _, cx| e2.update(cx, |a, cx| a.message_user(uid, cx))).child(
                 div()
                     .flex()
                     .items_center()
@@ -1166,13 +1085,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                     .child(crate::t!("pe.send_message")),
             );
         let more = icon_btn(("profile-modal-more", uid.0), "chat/more");
-        div()
-            .flex()
-            .items_center()
-            .gap(z(8.))
-            .child(msg)
-            .children(is_friend.then(|| icon_btn(("profile-modal-friend", uid.0), "user-check")))
-            .child(more)
+        div().flex().items_center().gap(z(8.)).child(msg).children(is_friend.then(|| icon_btn(("profile-modal-friend", uid.0), "user-check"))).child(more)
     });
 
     let mut pbody = div()
@@ -1210,9 +1123,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                         .child(format_date(p.created)),
                 )
                 .when_some(p.joined, |d, j| {
-                    let gicon = guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| {
-                        crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16.)
-                    });
+                    let gicon = guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16.));
                     d.child(div().size(z(4.)).rounded_full().bg(c(tok(idx::TEXT_DEFAULT))))
                         .child(div().flex().items_center().gap(z(4.)).children(gicon).child(format_date(j)))
                 });
@@ -1259,9 +1170,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .shadow_md()
         .child(banner(&i, BANNER, 16.))
         .child(div().absolute().left(z(CARD_PAD - RING)).top(z(BANNER - AV / 2. - RING)).child(avatar_block(&i, AV, RING, card_bg)))
-        .when_some(i.custom.clone(), |d, t| {
-            d.child(div().absolute().left(z(CARD_PAD + AV + 20.)).top(z(BANNER - 8.)).child(status_bubble(t)))
-        })
+        .when_some(i.custom.clone(), |d, t| d.child(div().absolute().left(z(CARD_PAD + AV + 20.)).top(z(BANNER - 8.)).child(status_bubble(t))))
         .child(div().h(z(220. - BANNER)).flex_none())
         .child(pbody);
 
@@ -1293,9 +1202,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 window.refresh();
             })
             .child(t)
-            .when(on, |d| {
-                d.child(div().absolute().left_0().right_0().bottom_0().h(z(2.)).rounded_t(z(2.)).bg(c(tok(idx::TEXT_STRONG))))
-            })
+            .when(on, |d| d.child(div().absolute().left_0().right_0().bottom_0().h(z(2.)).rounded_t(z(2.)).bg(c(tok(idx::TEXT_STRONG)))))
     };
     let mut panel = div().flex().flex_col().pt(z(20.)).pr(z(8.)).pb(z(16.));
     let empty = |t: SharedString| div().ml(z(12.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_MUTED))).child(t);
@@ -1330,7 +1237,14 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                             .flex()
                             .items_center()
                             .justify_between()
-                            .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_SUBTLE))).child(crate::t!("profile.wishlist_items", n = items.len())))
+                            .child(
+                                div()
+                                    .text_size(z(12.))
+                                    .line_height(z(16.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(c(tok(idx::TEXT_SUBTLE)))
+                                    .child(crate::t!("profile.wishlist_items", n = items.len())),
+                            )
                             .child(mana_button("profile-wishlist-shop", crate::t!("profile.browse_shop"), false, false)),
                     )
                     .child(div().py(z(12.)).flex().flex_wrap().gap(z(16.)).children(items.iter().map(|it| {
@@ -1511,11 +1425,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         .pl(z(pad))
         .pr(z(32.))
         .child({
-            let frame = i
-                .prof
-                .and_then(|p| p.frame_sku)
-                .and_then(|s| crate::ui::profile_fx::product(app, s, cx))
-                .and_then(|c| c.frame);
+            let frame = i.prof.and_then(|p| p.frame_sku).and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| c.frame);
             match frame {
                 None => profile.into_any_element(),
                 Some(f) => div()

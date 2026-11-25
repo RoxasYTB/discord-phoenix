@@ -19,12 +19,7 @@ pub const TEXT: &[PermSection] = &[
             PermRow { bit: 1 << 29, label: "cperm.l3", desc: "cperm.d3" },
         ],
     },
-    PermSection {
-        legend: "cperm.s1",
-        rows: &[
-            PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d4" },
-        ],
-    },
+    PermSection { legend: "cperm.s1", rows: &[PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d4" }] },
     PermSection {
         legend: "cperm.s2",
         rows: &[
@@ -68,12 +63,7 @@ pub const NEWS: &[PermSection] = &[
             PermRow { bit: 1 << 29, label: "cperm.l3", desc: "cperm.d3" },
         ],
     },
-    PermSection {
-        legend: "cperm.s1",
-        rows: &[
-            PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d4" },
-        ],
-    },
+    PermSection { legend: "cperm.s1", rows: &[PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d4" }] },
     PermSection {
         legend: "cperm.s2",
         rows: &[
@@ -116,12 +106,7 @@ pub const VOICE: &[PermSection] = &[
             PermRow { bit: 1 << 29, label: "cperm.l3", desc: "cperm.d3" },
         ],
     },
-    PermSection {
-        legend: "cperm.s1",
-        rows: &[
-            PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d30" },
-        ],
-    },
+    PermSection { legend: "cperm.s1", rows: &[PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d30" }] },
     PermSection {
         legend: "cperm.s4",
         rows: &[
@@ -158,10 +143,7 @@ pub const VOICE: &[PermSection] = &[
     },
     PermSection {
         legend: "cperm.s6",
-        rows: &[
-            PermRow { bit: 1 << 44, label: "cperm.l37", desc: "cperm.d43" },
-            PermRow { bit: 1 << 33, label: "cperm.l38", desc: "cperm.d44" },
-        ],
+        rows: &[PermRow { bit: 1 << 44, label: "cperm.l37", desc: "cperm.d43" }, PermRow { bit: 1 << 33, label: "cperm.l38", desc: "cperm.d44" }],
     },
     PermSection {
         legend: "cperm.s3",
@@ -182,12 +164,7 @@ pub const STAGE: &[PermSection] = &[
             PermRow { bit: 1 << 28, label: "cperm.l2", desc: "cperm.d2" },
         ],
     },
-    PermSection {
-        legend: "cperm.s1",
-        rows: &[
-            PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d30" },
-        ],
-    },
+    PermSection { legend: "cperm.s1", rows: &[PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d30" }] },
     PermSection {
         legend: "cperm.s4",
         rows: &[
@@ -199,17 +176,11 @@ pub const STAGE: &[PermSection] = &[
     },
     PermSection {
         legend: "cperm.s7",
-        rows: &[
-            PermRow { bit: 1 << 32, label: "cperm.l39", desc: "cperm.d50" },
-            PermRow { bit: 1 << 17, label: "cperm.l40", desc: "cperm.d51" },
-        ],
+        rows: &[PermRow { bit: 1 << 32, label: "cperm.l39", desc: "cperm.d50" }, PermRow { bit: 1 << 17, label: "cperm.l40", desc: "cperm.d51" }],
     },
     PermSection {
         legend: "cperm.s6",
-        rows: &[
-            PermRow { bit: 1 << 44, label: "cperm.l37", desc: "cperm.d43" },
-            PermRow { bit: 1 << 33, label: "cperm.l38", desc: "cperm.d44" },
-        ],
+        rows: &[PermRow { bit: 1 << 44, label: "cperm.l37", desc: "cperm.d43" }, PermRow { bit: 1 << 33, label: "cperm.l38", desc: "cperm.d44" }],
     },
     PermSection {
         legend: "cperm.s5",
@@ -231,10 +202,7 @@ pub const STAGE: &[PermSection] = &[
     },
     PermSection {
         legend: "cperm.s3",
-        rows: &[
-            PermRow { bit: 1 << 31, label: "cperm.l23", desc: "cperm.d23" },
-            PermRow { bit: 1 << 50, label: "cperm.l25", desc: "cperm.d25" },
-        ],
+        rows: &[PermRow { bit: 1 << 31, label: "cperm.l23", desc: "cperm.d23" }, PermRow { bit: 1 << 50, label: "cperm.l25", desc: "cperm.d25" }],
     },
 ];
 
@@ -248,12 +216,7 @@ pub const FORUM: &[PermSection] = &[
             PermRow { bit: 1 << 29, label: "cperm.l3", desc: "cperm.d3" },
         ],
     },
-    PermSection {
-        legend: "cperm.s1",
-        rows: &[
-            PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d4" },
-        ],
-    },
+    PermSection { legend: "cperm.s1", rows: &[PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d4" }] },
     PermSection {
         legend: "cperm.s8",
         rows: &[
@@ -295,12 +258,7 @@ pub const CAT: &[PermSection] = &[
             PermRow { bit: 1 << 29, label: "cperm.l3", desc: "cperm.d61" },
         ],
     },
-    PermSection {
-        legend: "cperm.s1",
-        rows: &[
-            PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d62" },
-        ],
-    },
+    PermSection { legend: "cperm.s1", rows: &[PermRow { bit: 1 << 0, label: "cperm.l4", desc: "cperm.d62" }] },
     PermSection {
         legend: "cperm.s2",
         rows: &[
@@ -350,16 +308,10 @@ pub const CAT: &[PermSection] = &[
     },
     PermSection {
         legend: "cperm.s7",
-        rows: &[
-            PermRow { bit: 1 << 32, label: "cperm.l39", desc: "cperm.d93" },
-            PermRow { bit: 1 << 17, label: "cperm.l14", desc: "cperm.d72" },
-        ],
+        rows: &[PermRow { bit: 1 << 32, label: "cperm.l39", desc: "cperm.d93" }, PermRow { bit: 1 << 17, label: "cperm.l14", desc: "cperm.d72" }],
     },
     PermSection {
         legend: "cperm.s6",
-        rows: &[
-            PermRow { bit: 1 << 44, label: "cperm.l37", desc: "cperm.d94" },
-            PermRow { bit: 1 << 33, label: "cperm.l38", desc: "cperm.d95" },
-        ],
+        rows: &[PermRow { bit: 1 << 44, label: "cperm.l37", desc: "cperm.d94" }, PermRow { bit: 1 << 33, label: "cperm.l38", desc: "cperm.d95" }],
     },
 ];

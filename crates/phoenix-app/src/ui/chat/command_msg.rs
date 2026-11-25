@@ -1,6 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
-use gpui::{Animation, AnimationExt, AnyElement, App, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder};
+use gpui::{
+    Animation, AnimationExt, AnyElement, App, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement,
+    Styled, div, prelude::FluentBuilder,
+};
 
 use crate::{
     app::PhoenixApp,
@@ -113,16 +116,14 @@ pub fn status(app: &PhoenixApp, msg: &Message) -> Option<Status> {
 
 fn dots() -> AnyElement {
     let dot = |i: usize| {
-        div().size(z(7.)).flex().items_center().justify_center().child(
-            div().rounded_full().bg(c(tok(idx::TEXT_DEFAULT))).with_animation(
-                ("cmd-dot", i),
-                Animation::new(Duration::from_millis(1200)).repeat(),
-                move |d, t| {
-                    let (o, s) = super::composer::dot_frame(i, t);
-                    d.size(z(7. * s)).opacity(o)
-                },
-            ),
-        )
+        div().size(z(7.)).flex().items_center().justify_center().child(div().rounded_full().bg(c(tok(idx::TEXT_DEFAULT))).with_animation(
+            ("cmd-dot", i),
+            Animation::new(Duration::from_millis(1200)).repeat(),
+            move |d, t| {
+                let (o, s) = super::composer::dot_frame(i, t);
+                d.size(z(7. * s)).opacity(o)
+            },
+        ))
     };
     div().flex_none().mr(z(8.)).flex().items_center().gap(z(2.)).child(dot(0)).child(dot(1)).child(dot(2)).into_any_element()
 }
@@ -131,7 +132,13 @@ pub fn status_line(st: Status) -> AnyElement {
     let (lead, text, color) = match st {
         Status::Busy(t) => (dots(), t, idx::TEXT_DEFAULT),
         Status::Error(t) => (
-            gpui::svg().path(crate::icons::path("settings/circle-error")).size(z(12.)).flex_none().mr(z(8.)).text_color(c(tok(idx::ICON_FEEDBACK_CRITICAL))).into_any_element(),
+            gpui::svg()
+                .path(crate::icons::path("settings/circle-error"))
+                .size(z(12.))
+                .flex_none()
+                .mr(z(8.))
+                .text_color(c(tok(idx::ICON_FEEDBACK_CRITICAL)))
+                .into_any_element(),
             t,
             idx::TEXT_FEEDBACK_CRITICAL,
         ),
@@ -189,14 +196,7 @@ pub fn header(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cu: 
                 .child(crate::fonts::role_name_text(nick, user, 14., app.selected_guild.is_some(), role_gradient)),
         )
         .child(div().flex_none().mr(z(4.)).child(SharedString::from(lead.trim().to_owned())))
-        .child(
-            div()
-                .flex_none()
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(c(tok(idx::TEXT_LINK)))
-                .opacity(0.64)
-                .child(name),
-        )
+        .child(div().flex_none().font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_LINK))).opacity(0.64).child(name))
         .when_some(target, |d, t| {
             d.child(div().flex_none().mx(z(2.)).child(" › ")).child(div().flex_none().font_weight(FontWeight::MEDIUM).opacity(0.64).child(t))
         })

@@ -16,10 +16,8 @@ fn main() -> anyhow::Result<()> {
     let what = std::env::args().nth(1).unwrap_or_else(|| "message programmé".into());
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     rt.block_on(async move {
-        let token = tokio::task::spawn_blocking(|| KeyringStore.load())
-            .await?
-            .map_err(anyhow::Error::msg)?
-            .ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
+        let token =
+            tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
         let rest = RestClient::new(token.expose(), ClientProperties::linux_desktop());
         let ch = rest.get_channel(Snowflake(SANDBOX)).await?;
         let guild = rest.request_json(reqwest::Method::GET, &format!("/guilds/{TEST_GUILD}"), None).await?;

@@ -389,16 +389,13 @@ pub fn icon(name: &str, size: f32, col: usize) -> gpui::Svg {
 }
 
 pub fn pill(s: impl Into<SharedString>) -> gpui::Div {
-    div()
-        .mt(z(4.))
-        .px(z(8.))
-        .py(z(4.))
-        .rounded(z(16.))
-        .bg(t(idx::BACKGROUND_MOD_NORMAL))
-        .flex()
-        .items_center()
-        .gap(z(4.))
-        .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_SUBTLE, s))
+    div().mt(z(4.)).px(z(8.)).py(z(4.)).rounded(z(16.)).bg(t(idx::BACKGROUND_MOD_NORMAL)).flex().items_center().gap(z(4.)).child(text(
+        12.,
+        16.,
+        FontWeight::MEDIUM,
+        idx::TEXT_SUBTLE,
+        s,
+    ))
 }
 
 pub fn back(guild: Id, section: &'static str, cx: &mut Context<PhoenixApp>) -> impl IntoElement {

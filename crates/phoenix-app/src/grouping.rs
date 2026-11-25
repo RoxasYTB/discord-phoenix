@@ -16,11 +16,7 @@ fn non_default(m: &Message) -> bool {
 }
 
 fn ms(m: &Message) -> i64 {
-    if m.id.0 >= 1 << 40 {
-        ((m.id.0 >> 22) + 1_420_070_400_000) as i64
-    } else {
-        m.timestamp * 1000
-    }
+    if m.id.0 >= 1 << 40 { ((m.id.0 >> 22) + 1_420_070_400_000) as i64 } else { m.timestamp * 1000 }
 }
 
 pub fn starts_group(prev: Option<&Message>, cur: &Message, utc_offset_secs: i64) -> bool {
@@ -56,10 +52,7 @@ fn day(ts: i64, off: i64) -> i64 {
 }
 
 pub fn group_flags(msgs: &[Message], utc_offset_secs: i64) -> Vec<bool> {
-    msgs.iter()
-        .enumerate()
-        .map(|(i, m)| starts_group(i.checked_sub(1).map(|p| &msgs[p]), m, utc_offset_secs))
-        .collect()
+    msgs.iter().enumerate().map(|(i, m)| starts_group(i.checked_sub(1).map(|p| &msgs[p]), m, utc_offset_secs)).collect()
 }
 
 #[cfg(test)]
@@ -178,13 +171,7 @@ mod tests {
 
     #[test]
     fn flags_for_slice() {
-        let v = vec![
-            msg(1, 1, T0),
-            msg(2, 1, T0 + 10),
-            msg(3, 2, T0 + 20),
-            msg(4, 2, T0 + 30),
-            msg(5, 2, T0 + 1000),
-        ];
+        let v = vec![msg(1, 1, T0), msg(2, 1, T0 + 10), msg(3, 2, T0 + 20), msg(4, 2, T0 + 30), msg(5, 2, T0 + 1000)];
         assert_eq!(group_flags(&v, 0), vec![true, false, true, false, true]);
     }
 }

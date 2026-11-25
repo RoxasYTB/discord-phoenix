@@ -46,9 +46,7 @@ impl Member {
     }
 
     pub fn display_name(&self) -> Option<&str> {
-        self.nick
-            .as_deref()
-            .or_else(|| self.user.as_ref().map(|u| u.display_name()))
+        self.nick.as_deref().or_else(|| self.user.as_ref().map(|u| u.display_name()))
     }
 
     pub fn nameplate(&self) -> Option<(String, Option<String>)> {

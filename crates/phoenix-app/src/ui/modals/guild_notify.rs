@@ -167,18 +167,19 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         let close = close_action(cx);
         move |_, w, cx| close(w, cx)
     });
-    let body = crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto).mr(z(-24.)).pr(z(24.)).child(body).children(crate::ui::chat::scrollbar::bar_for("gn-body", crate::ui::chat::scrollbar::Bar::Auto));
+    let body = crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
+        .mr(z(-24.))
+        .pr(z(24.))
+        .child(body)
+        .children(crate::ui::chat::scrollbar::bar_for("gn-body", crate::ui::chat::scrollbar::Bar::Auto));
     card(480., crate::t!("menu.notify_settings"), None, body.into_any_element(), Some(footer.into_any_element()), cx)
 }
 
 fn override_table(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
     use crate::notifications::Level;
     let prefs = app.backend.notify_prefs().map(|p| p.guild(Some(s.guild.0))).unwrap_or_default();
-    let mut rows: Vec<_> = prefs
-        .channels
-        .iter()
-        .filter_map(|(id, p)| app.channels.get(&Id(*id)).filter(|ch| ch.guild == Some(s.guild)).map(|ch| (ch.clone(), *p)))
-        .collect();
+    let mut rows: Vec<_> =
+        prefs.channels.iter().filter_map(|(id, p)| app.channels.get(&Id(*id)).filter(|ch| ch.guild == Some(s.guild)).map(|ch| (ch.clone(), *p))).collect();
     if rows.is_empty() {
         return div().into_any_element();
     }
@@ -188,21 +189,25 @@ fn override_table(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> 
             div().mb(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!(k)),
         )
     };
-    let mut table = div()
-        .mt(z(30.))
-        .flex()
-        .flex_col()
-        .child(
-            div()
-                .flex()
-                .child(div().ml(z(8.)).w(z(122.)).flex_none().h(z(44.)).child(
-                    div().mb(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("gn.ov_name")),
-                ))
-                .child(head("gn.ov_all", 75.))
-                .child(head("gn.ov_mentions", 75.))
-                .child(head("gn.ov_nothing", 75.))
-                .child(head("gn.ov_mute", 75.)),
-        );
+    let mut table = div().mt(z(30.)).flex().flex_col().child(
+        div()
+            .flex()
+            .child(
+                div().ml(z(8.)).w(z(122.)).flex_none().h(z(44.)).child(
+                    div()
+                        .mb(z(8.))
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .child(crate::t!("gn.ov_name")),
+                ),
+            )
+            .child(head("gn.ov_all", 75.))
+            .child(head("gn.ov_mentions", 75.))
+            .child(head("gn.ov_nothing", 75.))
+            .child(head("gn.ov_mute", 75.)),
+    );
     let guild = s.guild;
     let default = s.level;
     for (ch, p) in rows {
@@ -213,12 +218,10 @@ fn override_table(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> 
             Level::Nothing => 2,
             Level::Inherit => default,
         };
-        let byline = ch
-            .parent
-            .and_then(|pid| app.channels.get(&pid))
-            .map(|c| c.name.clone())
-            .unwrap_or_else(|| crate::t!("gn.ov_no_category"));
-        let check = |n: usize, on: bool| crate::ui::controls::checkbox_option(("gn-ov", (cid.0 as usize).wrapping_mul(8) + n), SharedString::default(), on).w(z(20.)).overflow_hidden();
+        let byline = ch.parent.and_then(|pid| app.channels.get(&pid)).map(|c| c.name.clone()).unwrap_or_else(|| crate::t!("gn.ov_no_category"));
+        let check = |n: usize, on: bool| {
+            crate::ui::controls::checkbox_option(("gn-ov", (cid.0 as usize).wrapping_mul(8) + n), SharedString::default(), on).w(z(20.)).overflow_hidden()
+        };
         let mut opts = div().w(z(300.)).flex_none().flex().items_center().justify_around();
         for n in 0..3u8 {
             opts = opts.child(check(n as usize, level == n).on_click(cx.listener(move |a, _, _, cx| {
@@ -245,14 +248,9 @@ fn override_table(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> 
                         .w(z(120.))
                         .flex_none()
                         .flex()
-                        .child(
-                            div().w(z(24.)).h(z(20.)).mt(z(8.)).flex_none().opacity(0.6).child(
-                                gpui::svg()
-                                    .path(crate::icons::path(super::create_channel::icon_for(ch.kind)))
-                                    .size(z(20.))
-                                    .text_color(c(tok(idx::TEXT_DEFAULT))),
-                            ),
-                        )
+                        .child(div().w(z(24.)).h(z(20.)).mt(z(8.)).flex_none().opacity(0.6).child(
+                            gpui::svg().path(crate::icons::path(super::create_channel::icon_for(ch.kind))).size(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))),
+                        ))
                         .child(
                             div()
                                 .flex_1()

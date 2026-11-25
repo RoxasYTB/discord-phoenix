@@ -80,8 +80,13 @@ pub(super) fn warm_recent(inner: &Arc<Inner>, s: &Arc<Session>) {
     tokio::spawn(async move {
         let mut todo: Vec<u64> = {
             let a = s.adapter.lock();
-            let mut m: Vec<(u64, u64)> =
-                a.prefs.reads.iter().filter(|(_, r)| r.mentions > 0).map(|(c, _)| (*c, s.cache.channel(api::Snowflake(*c)).and_then(|ch| ch.last_message_id).map_or(0, |l| l.0))).collect();
+            let mut m: Vec<(u64, u64)> = a
+                .prefs
+                .reads
+                .iter()
+                .filter(|(_, r)| r.mentions > 0)
+                .map(|(c, _)| (*c, s.cache.channel(api::Snowflake(*c)).and_then(|ch| ch.last_message_id).map_or(0, |l| l.0)))
+                .collect();
             m.sort_by_key(|x| std::cmp::Reverse(x.1));
             m.into_iter().take(8).map(|x| x.0).collect()
         };

@@ -15,11 +15,7 @@ macro_rules! s {
 }
 macro_rules! f {
     ($body:expr) => {
-        concat!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black">"#,
-            $body,
-            "</svg>"
-        )
+        concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black">"#, $body, "</svg>")
     };
 }
 
@@ -113,9 +109,13 @@ pub fn fallback_svg(path: &str) -> Option<&'static str> {
 fn svg_for(path: &str) -> Option<&'static str> {
     Some(match path {
         "icons/hash.svg" => s!(r#"<path d="M10 3 8 21M16 3l-2 18M4 8.5h17M3 15.5h17"/>"#),
-        "icons/speaker.svg" => f!(r#"<path d="M11.4 3.2A1 1 0 0 1 13 4v16a1 1 0 0 1-1.6.8L6.7 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.7zM15.5 8.5a1 1 0 0 1 1.4 0 5 5 0 0 1 0 7 1 1 0 1 1-1.4-1.4 3 3 0 0 0 0-4.2 1 1 0 0 1 0-1.4zm2.8-2.8a1 1 0 0 1 1.4 0 9 9 0 0 1 0 12.6 1 1 0 1 1-1.4-1.4 7 7 0 0 0 0-9.8 1 1 0 0 1 0-1.4z"/>"#),
+        "icons/speaker.svg" => f!(
+            r#"<path d="M11.4 3.2A1 1 0 0 1 13 4v16a1 1 0 0 1-1.6.8L6.7 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.7zM15.5 8.5a1 1 0 0 1 1.4 0 5 5 0 0 1 0 7 1 1 0 1 1-1.4-1.4 3 3 0 0 0 0-4.2 1 1 0 0 1 0-1.4zm2.8-2.8a1 1 0 0 1 1.4 0 9 9 0 0 1 0 12.6 1 1 0 1 1-1.4-1.4 7 7 0 0 0 0-9.8 1 1 0 0 1 0-1.4z"/>"#
+        ),
         "icons/megaphone.svg" => s!(r#"<path d="M3 10v4a1 1 0 0 0 1 1h3l8 5V4L7 9H4a1 1 0 0 0-1 1zM7 15l1.5 5M19 9.5a3 3 0 0 1 0 5"/>"#),
-        "icons/forum.svg" => s!(r#"<path d="M4 4h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8l-4 3V5a1 1 0 0 1 1-1zM20 8h0a1 1 0 0 1 1 1v11l-3-2.5H10a1 1 0 0 1-1-1V17"/>"#),
+        "icons/forum.svg" => {
+            s!(r#"<path d="M4 4h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8l-4 3V5a1 1 0 0 1 1-1zM20 8h0a1 1 0 0 1 1 1v11l-3-2.5H10a1 1 0 0 1-1-1V17"/>"#)
+        }
         "icons/stage.svg" => s!(r#"<circle cx="12" cy="9" r="3"/><path d="M5.6 15.5A8 8 0 1 1 18.4 15.5M8 21l1-5h6l1 5"/>"#),
         "icons/sparkle.svg" => f!(r#"<path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z"/>"#),
         "icons/picker/sparkle.svg" => f!(r#"<path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z"/>"#),
@@ -123,9 +123,13 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/chevron.svg" => s!(r#"<path d="m6 9 6 6 6-6"/>"#),
         "icons/invite.svg" => s!(r#"<circle cx="10" cy="8" r="4"/><path d="M3 20a7 7 0 0 1 12-4.9M19 14v6m-3-3h6"/>"#),
         "icons/nav/back.svg" => s!(r#"<path d="M20 12H5m6-7-7 7 7 7"/>"#),
-        "icons/chat/unread-cap.svg" => concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 13" fill="black">"#, r#"<path d="M8 0v13H5L0 6.5 5 0z"/>"#, "</svg>"),
+        "icons/chat/unread-cap.svg" => {
+            concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 13" fill="black">"#, r#"<path d="M8 0v13H5L0 6.5 5 0z"/>"#, "</svg>")
+        }
         "icons/chat-check.svg" => s!(r#"<path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>"#),
-        "icons/chat/eye-slash.svg" => s!(r#"<path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6a12.6 12.6 0 0 1-2.9 3.6M6.3 7.6C4.4 8.8 3.1 10.5 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.8-.3 4-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/>"#),
+        "icons/chat/eye-slash.svg" => s!(
+            r#"<path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6a12.6 12.6 0 0 1-2.9 3.6M6.3 7.6C4.4 8.8 3.1 10.5 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.8-.3 4-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/>"#
+        ),
         "icons/chat/forwarded.svg" => s!(r#"<path d="M20 8h-7a8 8 0 0 0-8 8v4M15 3l5 5-5 5"/>"#),
         "icons/menu/view-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>"#),
         "icons/menu/remove-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8"/>"#),
@@ -133,19 +137,27 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/menu/open-link.svg" => s!(r#"<path d="M9 6h9v9M18 6 6 18"/>"#),
         "icons/link-external.svg" => s!(r#"<path d="M9 6h9v9M18 6 6 18"/>"#),
         "icons/viewer/zoom.svg" => s!(r#"<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M10.5 7.5v6m-3-3h6"/>"#),
-        "icons/heart.svg" => s!(r#"<path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.6 1.2 4.6 2.8 1-1.6 2.6-2.8 4.6-2.8 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20z"/>"#),
+        "icons/heart.svg" => s!(
+            r#"<path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.6 1.2 4.6 2.8 1-1.6 2.6-2.8 4.6-2.8 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20z"/>"#
+        ),
         "icons/server/badge.svg" => s!(r#"<path d="M6 3h12l-1.5 15L12 21l-4.5-3z"/><circle cx="12" cy="10" r="2.5"/>"#),
         "icons/server/envelope.svg" => s!(r#"<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>"#),
         "icons/server/clipboard.svg" => s!(r#"<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9zM8 11h8M8 15h8"/>"#),
         "icons/server/server.svg" => s!(r#"<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 12h8"/>"#),
         "icons/server/list-numbered.svg" => s!(r#"<path d="M10 6h11M10 12h11M10 18h11M4 5l1-1v4M3.5 11h2l-2 3h2M3.5 17h2v3h-2"/>"#),
         "icons/server/grid-horizontal.svg" => s!(r#"<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/>"#),
-        "icons/server/server-grid.svg" => s!(r#"<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>"#),
-        "icons/server/drag.svg" => f!(r#"<circle cx="8" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="20" r="2"/>"#),
+        "icons/server/server-grid.svg" => s!(
+            r#"<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>"#
+        ),
+        "icons/server/drag.svg" => f!(
+            r#"<circle cx="8" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="20" r="2"/>"#
+        ),
         "icons/server/dropper.svg" => s!(r#"<path d="m14 7 3 3-9 9H5v-3zM14 4l6 6-2 2-6-6z"/>"#),
         "icons/tag.svg" => s!(r#"<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/>"#),
         "icons/viewer/open.svg" => s!(r#"<path d="M13 4h7v7M20 4l-9 9"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>"#),
-        "icons/circle-check.svg" => f!(r#"<path fill-rule="evenodd" d="M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm-1.3 15.4-4.4-4.4 1.4-1.4 3 3 6.3-6.3 1.4 1.4z"/>"#),
+        "icons/circle-check.svg" => {
+            f!(r#"<path fill-rule="evenodd" d="M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm-1.3 15.4-4.4-4.4 1.4-1.4 3 3 6.3-6.3 1.4 1.4z"/>"#)
+        }
         "icons/circle-check-bg.svg" => f!(r#"<circle cx="12" cy="12" r="10"/>"#),
         "icons/attach/poll.svg" => s!(r#"<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h6M7 13h10M7 17h4"/>"#),
         "icons/chat/timer.svg" => s!(r#"<circle cx="12" cy="13" r="8"/><path d="M10 2h4M12 2v3M12 13l3-3M18.5 6.5l1-1"/>"#),
@@ -161,26 +173,44 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/boost.svg" => s!(r#"<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><path d="m12 7-3 5h6l-3 5"/>"#),
         "icons/chevron-right.svg" => s!(r#"<path d="m9 6 6 6-6 6"/>"#),
         "icons/user.svg" => s!(r#"<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>"#),
-        "icons/shield-lock.svg" => s!(r#"<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10 11V9a2 2 0 0 1 4 0v2"/>"#),
-        "icons/chat-shield.svg" => s!(r#"<path d="M20 11a8 8 0 1 0-15 4l-1 5 5-1a8 8 0 0 0 3 .6"/><path d="M18 13l-3 1.5v2c0 1.8 1.3 3 3 3.5 1.7-.5 3-1.7 3-3.5v-2z"/>"#),
+        "icons/shield-lock.svg" => s!(
+            r#"<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10 11V9a2 2 0 0 1 4 0v2"/>"#
+        ),
+        "icons/chat-shield.svg" => {
+            s!(r#"<path d="M20 11a8 8 0 1 0-15 4l-1 5 5-1a8 8 0 0 0 3 .6"/><path d="M18 13l-3 1.5v2c0 1.8 1.3 3 3 3.5 1.7-.5 3-1.7 3-3.5v-2z"/>"#)
+        }
         "icons/credit-card.svg" => s!(r#"<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>"#),
-        "icons/qr-code.svg" => s!(r#"<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><rect x="7" y="7" width="4" height="4"/><rect x="13" y="13" width="4" height="4"/>"#),
-        "icons/piggy-bank.svg" => s!(r#"<path d="M4 11a7 6 0 0 1 13-3h2v3l2 1v3l-2 1-2 3h-2l-1-2h-4l-1 2H7l-1.5-3A6 6 0 0 1 4 11z"/><circle cx="15" cy="11" r=".5"/>"#),
+        "icons/qr-code.svg" => s!(
+            r#"<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><rect x="7" y="7" width="4" height="4"/><rect x="13" y="13" width="4" height="4"/>"#
+        ),
+        "icons/piggy-bank.svg" => {
+            s!(r#"<path d="M4 11a7 6 0 0 1 13-3h2v3l2 1v3l-2 1-2 3h-2l-1-2h-4l-1 2H7l-1.5-3A6 6 0 0 1 4 11z"/><circle cx="15" cy="11" r=".5"/>"#)
+        }
         "icons/phone.svg" => s!(r#"<path d="M7 3H5a2 2 0 0 0-2 2c0 9 7 16 16 16a2 2 0 0 0 2-2v-2l-4.5-1.5-2 2a12 12 0 0 1-6-6l2-2z"/>"#),
-        "icons/subscription.svg" => s!(r#"<path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/><path d="M14 9.5c-.5-.8-1.2-1-2-1-1.2 0-2 .6-2 1.5 0 2 4 1 4 3 0 .9-.8 1.5-2 1.5-.8 0-1.5-.3-2-1M12 7.5v9"/>"#),
+        "icons/subscription.svg" => s!(
+            r#"<path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/><path d="M14 9.5c-.5-.8-1.2-1-2-1-1.2 0-2 .6-2 1.5 0 2 4 1 4 3 0 .9-.8 1.5-2 1.5-.8 0-1.5-.3-2-1M12 7.5v9"/>"#
+        ),
         "icons/accessibility.svg" => s!(r#"<circle cx="12" cy="4.5" r="1.5"/><path d="M5 8l7 1.5L19 8M12 9.5V14l-3 7m3-7 3 7"/>"#),
         "icons/keyboard.svg" => s!(r#"<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h0m4 0h0m4 0h0m4 0h0M7 14h10"/>"#),
         "icons/language.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>"#),
-        "icons/user-platform.svg" => s!(r#"<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 12-4.9"/><rect x="15" y="13" width="7" height="6" rx="1"/>"#),
+        "icons/user-platform.svg" => {
+            s!(r#"<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 12-4.9"/><rect x="15" y="13" width="7" height="6" rx="1"/>"#)
+        }
         "icons/link.svg" => s!(r#"<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>"#),
         "icons/angle-brackets.svg" => s!(r#"<path d="m8 6-6 6 6 6M16 6l6 6-6 6"/>"#),
         "icons/folder.svg" => f!(r#"<path d="M3 6a2 2 0 0 1 2-2h4.5l2 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>"#),
         "icons/door-exit.svg" => s!(r#"<path d="M14 4H5v16h9M10 12h11m-3-3 3 3-3 3"/>"#),
-        "icons/discord-logo.svg" => f!(r#"<path d="M19.7 5.4a17 17 0 0 0-4.3-1.3l-.5 1.1a15.7 15.7 0 0 0-4.8 0l-.5-1.1a17 17 0 0 0-4.3 1.3C2.6 9.5 1.9 13.5 2.2 17.4a17.2 17.2 0 0 0 5.3 2.7l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.3 12.3 0 0 0 10.4 0l.4.3a11 11 0 0 1-1.7.8l1.1 1.8a17.1 17.1 0 0 0 5.3-2.7c.4-4.5-.8-8.5-3.1-12zM8.7 15c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z"/>"#),
+        "icons/discord-logo.svg" => f!(
+            r#"<path d="M19.7 5.4a17 17 0 0 0-4.3-1.3l-.5 1.1a15.7 15.7 0 0 0-4.8 0l-.5-1.1a17 17 0 0 0-4.3 1.3C2.6 9.5 1.9 13.5 2.2 17.4a17.2 17.2 0 0 0 5.3 2.7l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.3 12.3 0 0 0 10.4 0l.4.3a11 11 0 0 1-1.7.8l1.1 1.8a17.1 17.1 0 0 0 5.3-2.7c.4-4.5-.8-8.5-3.1-12zM8.7 15c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z"/>"#
+        ),
         "icons/music.svg" => f!(r#"<path d="M20 3v12.5a3.5 3.5 0 1 1-2-3.2V7.3l-8 1.6v8.6A3.5 3.5 0 1 1 8 14.3V5.4z"/>"#),
         "icons/tv.svg" => s!(r#"<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>"#),
-        "icons/game-controller.svg" => f!(r#"<path d="M7 7h10a5 5 0 0 1 5 5v1a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-1a5 5 0 0 1 5-5zm0 3v2H5v2h2v2h2v-2h2v-2H9v-2zm9 1a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>"#),
-        "icons/more-horizontal.svg" => f!(r#"<path d="M4 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>"#),
+        "icons/game-controller.svg" => f!(
+            r#"<path d="M7 7h10a5 5 0 0 1 5 5v1a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-1a5 5 0 0 1 5-5zm0 3v2H5v2h2v2h2v-2h2v-2H9v-2zm9 1a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>"#
+        ),
+        "icons/more-horizontal.svg" => {
+            f!(r#"<path d="M4 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>"#)
+        }
         "icons/medal.svg" => f!(r#"<path d="M7 2h4l1 4 1-4h4l-3 7a6 6 0 1 1-4 0zM12 11a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>"#),
         "icons/streak.svg" => f!(r#"<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>"#),
         "icons/fire.svg" => f!(r#"<path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2.3 1.2-3.9 2.5-5 .2 1.8 1 3 2.5 3.5-.8-3.2.2-6.3 0-9.5z"/>"#),
@@ -188,51 +218,79 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/flag.svg" => f!(r#"<path d="M5 3h1.5v18H5zM7.5 4h10.2l-2.2 4 2.2 4H7.5z"/>"#),
         "icons/star.svg" => f!(r#"<path d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5-4.9-4.5 6.6-.8z"/>"#),
         "icons/star-outline.svg" => s!(r#"<path d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5-4.9-4.5 6.6-.8z"/>"#),
-        "icons/discord.svg" => f!(r#"<path d="M19.3 5.3A17 17 0 0 0 15 4l-.5 1a15.7 15.7 0 0 0-5 0L9 4a17 17 0 0 0-4.3 1.3C2 9.4 1.3 13.4 1.6 17.3A17.2 17.2 0 0 0 6.9 20l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.3 12.3 0 0 0 10.6 0l.4.3-1.7.8 1.1 1.8a17.1 17.1 0 0 0 5.3-2.7c.4-4.5-.7-8.5-3.1-12zM8.7 14.9c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z"/>"#),
-        "icons/new-user.svg" => f!(r#"<path d="M12 11a4 4 0 0 1-4-4 4 4 0 0 1 8 0 4 4 0 0 1-4 4zm0 0a4 4 0 0 1 4 4 4 4 0 0 1-8 0 4 4 0 0 1 4-4zm0 0a4 4 0 0 1-4 4 4 4 0 0 1 0-8 4 4 0 0 1 4 4zm0 0a4 4 0 0 1 4-4 4 4 0 0 1 0 8 4 4 0 0 1-4-4zM12 18v4"/>"#),
+        "icons/discord.svg" => f!(
+            r#"<path d="M19.3 5.3A17 17 0 0 0 15 4l-.5 1a15.7 15.7 0 0 0-5 0L9 4a17 17 0 0 0-4.3 1.3C2 9.4 1.3 13.4 1.6 17.3A17.2 17.2 0 0 0 6.9 20l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.3 12.3 0 0 0 10.6 0l.4.3-1.7.8 1.1 1.8a17.1 17.1 0 0 0 5.3-2.7c.4-4.5-.7-8.5-3.1-12zM8.7 14.9c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z"/>"#
+        ),
+        "icons/new-user.svg" => f!(
+            r#"<path d="M12 11a4 4 0 0 1-4-4 4 4 0 0 1 8 0 4 4 0 0 1-4 4zm0 0a4 4 0 0 1 4 4 4 4 0 0 1-8 0 4 4 0 0 1 4-4zm0 0a4 4 0 0 1-4 4 4 4 0 0 1 0-8 4 4 0 0 1 4 4zm0 0a4 4 0 0 1 4-4 4 4 0 0 1 0 8 4 4 0 0 1-4-4zM12 18v4"/>"#
+        ),
         "icons/crown.svg" => f!(r#"<path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z"/>"#),
         "icons/sort.svg" => s!(r#"<path d="M7 20V4M3 8l4-4 4 4M17 4v16M13 16l4 4 4-4"/>"#),
         "icons/chevron-up.svg" => s!(r#"<path d="m6 15 6-6 6 6"/>"#),
         "icons/check.svg" => s!(r#"<path d="m5 12.5 4.5 4.5L19 7.5"/>"#),
         "icons/check-small.svg" => s!(r#"<path d="m7.5 12.5 3 3L16.5 9"/>"#),
-        "icons/guild/flower-star.svg" => f!(r#"<path d="M12 1.5l2.6 2.2 3.4-.4 1 3.3 3 1.6-1 3.3 1 3.3-3 1.6-1 3.3-3.4-.4-2.6 2.2-2.6-2.2-3.4.4-1-3.3-3-1.6 1-3.3-1-3.3 3-1.6 1-3.3 3.4.4z"/>"#),
+        "icons/guild/flower-star.svg" => f!(
+            r#"<path d="M12 1.5l2.6 2.2 3.4-.4 1 3.3 3 1.6-1 3.3 1 3.3-3 1.6-1 3.3-3.4-.4-2.6 2.2-2.6-2.2-3.4.4-1-3.3-3-1.6 1-3.3-1-3.3 3-1.6 1-3.3 3.4.4z"/>"#
+        ),
         "icons/check-small-bold.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">"#,
             r#"<path d="m6 12 4 4 8-8"/>"#,
             "</svg>"
         ),
         "icons/plus.svg" => s!(r#"<path d="M12 5v14M5 12h14"/>"#),
-        "icons/mic.svg" => f!(r#"<rect x="8" y="2" width="8" height="13" rx="4"/><path d="M5 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-7 7.9V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.1A8 8 0 0 1 4 12a1 1 0 0 1 1-1z"/>"#),
+        "icons/mic.svg" => f!(
+            r#"<rect x="8" y="2" width="8" height="13" rx="4"/><path d="M5 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-7 7.9V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.1A8 8 0 0 1 4 12a1 1 0 0 1 1-1z"/>"#
+        ),
         "icons/mic-off.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">"#,
             r#"<rect x="8" y="2" width="8" height="13" rx="4" fill="black"/><path d="M5 11a1 1 0 0 1 1 1 6 6 0 0 0 12 0 1 1 0 1 1 2 0 8 8 0 0 1-7 7.9V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.1A8 8 0 0 1 4 12a1 1 0 0 1 1-1z" fill="black"/>"#,
             r#"<path d="M3 2 21 22" stroke="black" stroke-width="2.4" stroke-linecap="round"/></svg>"#
         ),
-        "icons/headphones.svg" => f!(r#"<path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z"/>"#),
+        "icons/headphones.svg" => f!(
+            r#"<path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z"/>"#
+        ),
         "icons/headphones-off.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">"#,
             r#"<path fill="black" d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z"/>"#,
             r#"<path d="M3 2 21 22" stroke="black" stroke-width="2.4" stroke-linecap="round"/></svg>"#
         ),
-        "icons/gear.svg" => f!(r#"<path fill-rule="evenodd" d="M10.6 2h2.8l.5 2.6 1.7.7 2.2-1.5 2 2-1.5 2.2.7 1.7 2.6.5v2.8l-2.6.5-.7 1.7 1.5 2.2-2 2-2.2-1.5-1.7.7-.5 2.6h-2.8l-.5-2.6-1.7-.7-2.2 1.5-2-2 1.5-2.2-.7-1.7L2 13.4v-2.8l2.6-.5.7-1.7-1.5-2.2 2-2 2.2 1.5 1.7-.7zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/>"#),
+        "icons/gear.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M10.6 2h2.8l.5 2.6 1.7.7 2.2-1.5 2 2-1.5 2.2.7 1.7 2.6.5v2.8l-2.6.5-.7 1.7 1.5 2.2-2 2-2.2-1.5-1.7.7-.5 2.6h-2.8l-.5-2.6-1.7-.7-2.2 1.5-2-2 1.5-2.2-.7-1.7L2 13.4v-2.8l2.6-.5.7-1.7-1.5-2.2 2-2 2.2 1.5 1.7-.7zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/>"#
+        ),
         "icons/bell.svg" => f!(r#"<path d="M12 2a7 7 0 0 0-7 7v4l-2 3v1h18v-1l-2-3V9a7 7 0 0 0-7-7zM9 19a3 3 0 0 0 6 0z"/>"#),
         "icons/pin.svg" => f!(r#"<path d="M15 2 22 9l-2 1-3.5 3.5L17 19l-1.5 1.5-4.5-4.5-6 6L3 20l6-6-4.5-4.5L6 8l5.5.5L15 5z"/>"#),
-        "icons/members.svg" => f!(r#"<circle cx="9" cy="8" r="4"/><path d="M1 20a8 6 0 0 1 16 0v1H1zM16 4a4 4 0 0 1 0 8 6 6 0 0 0 0-8zM18 14a7 6 0 0 1 5 6v1h-4v-1a8 8 0 0 0-1-6z"/>"#),
+        "icons/members.svg" => f!(
+            r#"<circle cx="9" cy="8" r="4"/><path d="M1 20a8 6 0 0 1 16 0v1H1zM16 4a4 4 0 0 1 0 8 6 6 0 0 0 0-8zM18 14a7 6 0 0 1 5 6v1h-4v-1a8 8 0 0 0-1-6z"/>"#
+        ),
         "icons/search.svg" => s!(r#"<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/>"#),
         "icons/inbox.svg" => f!(r#"<path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm0 2v9h3.5a3.5 3.5 0 0 0 7 0H19V5z"/>"#),
-        "icons/help.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 14.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6zM12 5a4 4 0 0 0-4 4h2.2a1.8 1.8 0 1 1 2.6 1.6c-1.2.6-1.9 1.4-1.9 2.9v.5h2.2v-.4c0-.6.3-1 1-1.4A4 4 0 0 0 12 5z"/>"#),
+        "icons/help.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 14.5a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6zM12 5a4 4 0 0 0-4 4h2.2a1.8 1.8 0 1 1 2.6 1.6c-1.2.6-1.9 1.4-1.9 2.9v.5h2.2v-.4c0-.6.3-1 1-1.4A4 4 0 0 0 12 5z"/>"#
+        ),
         "icons/gift.svg" => f!(r#"<path d="M3 8h18v4H3zM4 13h7v8H5a1 1 0 0 1-1-1zm9 0h7v7a1 1 0 0 1-1 1h-6zM11 8V7a3 3 0 1 0-3 0zM13 8V7a3 3 0 1 1 3 0z"/>"#),
-        "icons/gif.svg" => f!(r#"<path fill-rule="evenodd" d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm4.5 5A2.5 2.5 0 0 0 6 11.5v1A2.5 2.5 0 0 0 8.5 15h1.5v-3H8.5v1.2H8v-1.7a.5.5 0 0 1 .5-.5H10V9zm3 0v6h1.6V9zm2.8 0v6h1.6v-2H18v-1.5h-2.1V10.5H18.2V9z"/>"#),
+        "icons/gif.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm4.5 5A2.5 2.5 0 0 0 6 11.5v1A2.5 2.5 0 0 0 8.5 15h1.5v-3H8.5v1.2H8v-1.7a.5.5 0 0 1 .5-.5H10V9zm3 0v6h1.6V9zm2.8 0v6h1.6v-2H18v-1.5h-2.1V10.5H18.2V9z"/>"#
+        ),
         "icons/sticker.svg" => f!(r#"<path d="M5 3h14a2 2 0 0 1 2 2v9l-7 7H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm8 18v-5a2 2 0 0 1 2-2h6z"/>"#),
-        "icons/emoji.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM8.5 8a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM6.5 13.5a5.5 5.5 0 0 0 11 0z"/>"#),
+        "icons/emoji.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM8.5 8a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM6.5 13.5a5.5 5.5 0 0 0 11 0z"/>"#
+        ),
         "icons/plus-circle.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm-1 5v4H7v2h4v4h2v-4h4v-2h-4V7z"/>"#),
-        "icons/compass.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm4.5 5.5-6.4 2.6-2.6 6.4 6.4-2.6zM12 10.7a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z"/>"#),
+        "icons/compass.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm4.5 5.5-6.4 2.6-2.6 6.4 6.4-2.6zM12 10.7a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z"/>"#
+        ),
         "icons/download.svg" => s!(r#"<path d="M12 3v12m-5-5 5 5 5-5M4 21h16"/>"#),
-        "icons/window/close.svg" => concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">"#, r#"<path d="M1.3 1.3 10.7 10.7M10.7 1.3 1.3 10.7" stroke="black" stroke-width="0.82"/>"#, "</svg>"),
+        "icons/window/close.svg" => concat!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">"#,
+            r#"<path d="M1.3 1.3 10.7 10.7M10.7 1.3 1.3 10.7" stroke="black" stroke-width="0.82"/>"#,
+            "</svg>"
+        ),
         "icons/close.svg" => s!(r#"<path d="M6 6l12 12M18 6 6 18"/>"#),
         "icons/threads.svg" => s!(r#"<path d="M5 4h14v10H11l-4 3v-3H5zM9 8h6M9 11h4"/>"#),
         "icons/friends.svg" => f!(r#"<circle cx="12" cy="7" r="4.5"/><path d="M3 21a9 7 0 0 1 18 0z"/>"#),
-        "icons/nitro.svg" => f!(r#"<path d="M3 9h5v2H3zm1 4h4v2H4zM14 4a8 8 0 1 1 0 16 8 8 0 0 1-6.9-4h2.5A6 6 0 1 0 9.6 8H7.1A8 8 0 0 1 14 4zm0 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/>"#),
+        "icons/nitro.svg" => f!(
+            r#"<path d="M3 9h5v2H3zm1 4h4v2H4zM14 4a8 8 0 1 1 0 16 8 8 0 0 1-6.9-4h2.5A6 6 0 1 0 9.6 8H7.1A8 8 0 0 1 14 4zm0 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/>"#
+        ),
         "icons/camera.svg" => s!(r#"<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/>"#),
         "icons/deny.svg" => s!(r#"<circle cx="12" cy="12" r="10"/><path d="m5 5 14 14"/>"#),
         "icons/blur.svg" => s!(r#"<circle cx="12" cy="12" r="9" stroke-dasharray="2 3"/><circle cx="12" cy="12" r="4"/>"#),
@@ -240,17 +298,27 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/pause.svg" => f!(r#"<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>"#),
         "icons/stop.svg" => f!(r#"<rect x="5" y="5" width="14" height="14" rx="2"/>"#),
         "icons/send-message.svg" => f!(r#"<path d="M3.4 2.6 21 11.2a1 1 0 0 1 0 1.6L3.4 21.4a.8.8 0 0 1-1.1-1L5 13l8-1-8-1-2.7-7.4a.8.8 0 0 1 1.1-1z"/>"#),
-        "icons/volume-off.svg" => f!(r#"<path d="M11.4 3.2A1 1 0 0 1 13 4v16a1 1 0 0 1-1.6.8L6.7 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.7zM15.3 8.3a1 1 0 0 1 1.4 0L19 10.6l2.3-2.3a1 1 0 1 1 1.4 1.4L20.4 12l2.3 2.3a1 1 0 0 1-1.4 1.4L19 13.4l-2.3 2.3a1 1 0 0 1-1.4-1.4l2.3-2.3-2.3-2.3a1 1 0 0 1 0-1.4z"/>"#),
-        "icons/voice-low.svg" => f!(r#"<path d="M11.4 3.2A1 1 0 0 1 13 4v16a1 1 0 0 1-1.6.8L6.7 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.7zM15.2 8.4a1 1 0 0 1 1.4-.2 4.7 4.7 0 0 1 0 7.6 1 1 0 1 1-1.2-1.6 2.7 2.7 0 0 0 0-4.4 1 1 0 0 1-.2-1.4z"/>"#),
+        "icons/volume-off.svg" => f!(
+            r#"<path d="M11.4 3.2A1 1 0 0 1 13 4v16a1 1 0 0 1-1.6.8L6.7 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.7zM15.3 8.3a1 1 0 0 1 1.4 0L19 10.6l2.3-2.3a1 1 0 1 1 1.4 1.4L20.4 12l2.3 2.3a1 1 0 0 1-1.4 1.4L19 13.4l-2.3 2.3a1 1 0 0 1-1.4-1.4l2.3-2.3-2.3-2.3a1 1 0 0 1 0-1.4z"/>"#
+        ),
+        "icons/voice-low.svg" => f!(
+            r#"<path d="M11.4 3.2A1 1 0 0 1 13 4v16a1 1 0 0 1-1.6.8L6.7 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.7zM15.2 8.4a1 1 0 0 1 1.4-.2 4.7 4.7 0 0 1 0 7.6 1 1 0 1 1-1.2-1.6 2.7 2.7 0 0 0 0-4.4 1 1 0 0 1-.2-1.4z"/>"#
+        ),
         "icons/refresh.svg" => s!(r#"<path d="M20 4v5h-5"/><path d="M19.5 9A8 8 0 0 0 5 7"/><path d="M4 20v-5h5"/><path d="M4.5 15A8 8 0 0 0 19 17"/>"#),
         "icons/image-plus.svg" => s!(r#"<path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9M3 17l5-5 4 4 2-2 7 7M18 2v6M15 5h6"/>"#),
-        "icons/palette.svg" => s!(r#"<path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.4 1.5-1.4H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/>"#),
+        "icons/palette.svg" => s!(
+            r#"<path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.4 1.5-1.4H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/>"#
+        ),
         "icons/info.svg" => s!(r#"<circle cx="12" cy="12" r="10"/><path d="M12 16v-5M12 8h0"/>"#),
         "icons/warning.svg" => s!(r#"<circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 17h0"/>"#),
-        "icons/voice-lock.svg" => f!(r#"<path d="M10.4 4.2A1 1 0 0 1 12 5v14a1 1 0 0 1-1.6.8L6.2 16.5H3a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3.2zM16 7.5V6a2.5 2.5 0 0 1 5 0v1.5h.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5V8a.5.5 0 0 1 .5-.5zm1.5 0h2V6a1 1 0 0 0-2 0z"/>"#),
+        "icons/voice-lock.svg" => f!(
+            r#"<path d="M10.4 4.2A1 1 0 0 1 12 5v14a1 1 0 0 1-1.6.8L6.2 16.5H3a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3.2zM16 7.5V6a2.5 2.5 0 0 1 5 0v1.5h.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5V8a.5.5 0 0 1 .5-.5zm1.5 0h2V6a1 1 0 0 0-2 0z"/>"#
+        ),
         "icons/discovery-badge.svg" => f!(r#"<circle cx="12" cy="12" r="11"/>"#),
         "icons/discovery-badge-fg.svg" => f!(r#"<path d="M12 6.5 13.6 10.4 17.5 12 13.6 13.6 12 17.5 10.4 13.6 6.5 12 10.4 10.4z"/>"#),
-        "icons/lock.svg" | "icons/text-lock.svg" | "icons/forum-lock.svg" | "icons/announcement-lock.svg" | "icons/stage-lock.svg" => f!(r#"<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/>"#),
+        "icons/lock.svg" | "icons/text-lock.svg" | "icons/forum-lock.svg" | "icons/announcement-lock.svg" | "icons/stage-lock.svg" => {
+            f!(r#"<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/>"#)
+        }
         "icons/quests.svg" => s!(r#"<path d="M5 4h14v6a7 7 0 0 1-14 0zM9 21h6M12 17v4M8 9h8"/>"#),
         "icons/note.svg" => s!(r#"<path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7M7 8h6M7 12h8M7 16h4M19 14v8M15 18h8"/>"#),
         "icons/user-check.svg" => s!(r#"<circle cx="11" cy="7" r="4"/><path d="M3 21a8 8 0 0 1 11-7.4M15 18l2 2 4-4"/>"#),
@@ -260,15 +328,21 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/bell-slash.svg" => s!(r#"<path d="M6 16V11a6 6 0 0 1 9.5-4.9M18 11v5l2 2H6M10 21h4M3 3l18 18"/>"#),
         "icons/forum/book-check.svg" => s!(r#"<path d="M5 4a2 2 0 0 1 2-2h12v16H7a2 2 0 0 0-2 2zM5 20a2 2 0 0 0 2 2h12v-4M9 9l2 2 4-4"/>"#),
         "icons/settings/puzzle.svg" => s!(r#"<path d="M5 7h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H5z"/>"#),
-        "icons/settings/webhook.svg" => s!(r#"<circle cx="12" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M10.5 8.6 7.5 15.4M9 18h6M13.5 8.6l3 6.8"/>"#),
-        "icons/settings/followed.svg" => s!(r#"<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/><path d="M14 10l6-6M14 4v6h6M10 14l-6 6M4 14v6h6"/>"#),
+        "icons/settings/webhook.svg" => s!(
+            r#"<circle cx="12" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M10.5 8.6 7.5 15.4M9 18h6M13.5 8.6l3 6.8"/>"#
+        ),
+        "icons/settings/followed.svg" => s!(
+            r#"<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/><path d="M14 10l6-6M14 4v6h6M10 14l-6 6M4 14v6h6"/>"#
+        ),
         "icons/settings/circle-x.svg" => s!(r#"<circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/>"#),
         "icons/settings/arrow-left.svg" => s!(r#"<path d="M20 12H4m6-6-6 6 6 6"/>"#),
         "icons/settings/mobile-phone.svg" => s!(r#"<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>"#),
         "icons/settings/vr-headset.svg" => s!(r#"<rect x="2" y="7" width="20" height="11" rx="3"/><path d="M10 18l2-3 2 3"/>"#),
         "icons/settings/laptop-phone.svg" => s!(r#"<rect x="3" y="4" width="13" height="10" rx="2"/><path d="M2 18h12M17 9h4v11h-4z"/>"#),
         "icons/settings/circle-error.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 3.5v.5"/>"#),
-        "icons/settings/shield-user.svg" => s!(r#"<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 16a4 4 0 0 1 8 0"/>"#),
+        "icons/settings/shield-user.svg" => {
+            s!(r#"<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 16a4 4 0 0 1 8 0"/>"#)
+        }
         "icons/settings/slash.svg" => s!(r#"<path d="M16 4 8 20"/>"#),
         "icons/settings/chevron-down.svg" => s!(r#"<path d="m5 9 7 7 7-7"/>"#),
         "icons/settings/eye.svg" => s!(r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>"#),
@@ -286,18 +360,40 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/moderation.svg" => s!(r#"<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><path d="m9 9 6 6m0-6-6 6"/>"#),
         "icons/maximize.svg" => s!(r#"<path d="M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6"/>"#),
         "icons/pen.svg" => f!(r#"<path d="M16.3 3.3a2.4 2.4 0 0 1 3.4 0l1 1a2.4 2.4 0 0 1 0 3.4L9.5 18.9 3 21l2.1-6.5zM15 6.4 17.6 9"/>"#),
-        "icons/id.svg" => f!(r#"<path fill-rule="evenodd" d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v8h2V8zm4 0v8h3a4 4 0 0 0 0-8zm2 2h1a2 2 0 0 1 0 4h-1z"/>"#),
+        "icons/id.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v8h2V8zm4 0v8h3a4 4 0 0 0 0-8zm2 2h1a2 2 0 0 1 0 4h-1z"/>"#
+        ),
         "icons/reply.svg" => s!(r#"<path d="M4 20v-5a6 6 0 0 1 6-6h10M15 4l5 5-5 5"/>"#),
         "icons/file.svg" => f!(r#"<path d="M6 2h8l6 6v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm7 1.5V9h5.5z"/>"#),
         "icons/image.svg" => s!(r#"<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>"#),
-        "icons/images.svg" => s!(r#"<rect x="6" y="2" width="16" height="14" rx="2"/><path d="M2 7v13a2 2 0 0 0 2 2h13"/><circle cx="11" cy="7" r="1.5"/><path d="m22 12-4-4-8 8"/>"#),
-        "icons/phone-hangup.svg" => f!(r#"<path d="M12 9c-3.5 0-6.8 1-9.4 2.9a1.5 1.5 0 0 0-.2 2.2l1.8 2a1.5 1.5 0 0 0 1.9.3l2.4-1.4a1.5 1.5 0 0 0 .7-1.3v-1.6a12 12 0 0 1 5.6 0v1.6c0 .5.3 1 .7 1.3l2.4 1.4a1.5 1.5 0 0 0 1.9-.3l1.8-2a1.5 1.5 0 0 0-.2-2.2C18.8 10 15.5 9 12 9z"/>"#),
-        "icons/phone-call.svg" => f!(r#"<path d="M7.4 2.5a1 1 0 0 1 .9.6l1.6 3.6a1 1 0 0 1-.2 1.1L8 9.5a12 12 0 0 0 6.5 6.5l1.7-1.7a1 1 0 0 1 1.1-.2l3.6 1.6a1 1 0 0 1 .6.9V20a2 2 0 0 1-2 2A17.5 17.5 0 0 1 2 4.5a2 2 0 0 1 2-2z"/><path d="M14 4.5a5.5 5.5 0 0 1 5.5 5.5M14 8a2 2 0 0 1 2 2" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>"#),
-        "icons/video-call.svg" => f!(r#"<rect x="2" y="5" width="13" height="14" rx="3"/><path d="M17 10.2 21.4 7a1 1 0 0 1 1.6.8v8.4a1 1 0 0 1-1.6.8L17 13.8z"/>"#),
-        "icons/add-to-dm.svg" => f!(r#"<circle cx="9" cy="8" r="4"/><path d="M1 20a8 6.5 0 0 1 15.5-2.2V21H1zM19 13a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-3v3a1 1 0 1 1-2 0v-3h-3a1 1 0 1 1 0-2h3v-3a1 1 0 0 1 1-1z"/>"#),
-        "icons/user-profile.svg" => f!(r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm-6 12.2a8 8 0 0 0 12 0 7 5 0 0 0-12 0z"/>"#),
-        "icons/apps.svg" => f!(r#"<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>"#),
-        _ => return crate::ui::chat::icons::svg(path).or_else(|| crate::ui::voice_panel::svg_asset(path)).or_else(|| crate::ui::inbox::svg_asset(path)).or_else(|| crate::ui::pickers::svg_asset(path)).or_else(|| crate::ui::call_view::svg_asset(path)),
+        "icons/images.svg" => s!(
+            r#"<rect x="6" y="2" width="16" height="14" rx="2"/><path d="M2 7v13a2 2 0 0 0 2 2h13"/><circle cx="11" cy="7" r="1.5"/><path d="m22 12-4-4-8 8"/>"#
+        ),
+        "icons/phone-hangup.svg" => f!(
+            r#"<path d="M12 9c-3.5 0-6.8 1-9.4 2.9a1.5 1.5 0 0 0-.2 2.2l1.8 2a1.5 1.5 0 0 0 1.9.3l2.4-1.4a1.5 1.5 0 0 0 .7-1.3v-1.6a12 12 0 0 1 5.6 0v1.6c0 .5.3 1 .7 1.3l2.4 1.4a1.5 1.5 0 0 0 1.9-.3l1.8-2a1.5 1.5 0 0 0-.2-2.2C18.8 10 15.5 9 12 9z"/>"#
+        ),
+        "icons/phone-call.svg" => f!(
+            r#"<path d="M7.4 2.5a1 1 0 0 1 .9.6l1.6 3.6a1 1 0 0 1-.2 1.1L8 9.5a12 12 0 0 0 6.5 6.5l1.7-1.7a1 1 0 0 1 1.1-.2l3.6 1.6a1 1 0 0 1 .6.9V20a2 2 0 0 1-2 2A17.5 17.5 0 0 1 2 4.5a2 2 0 0 1 2-2z"/><path d="M14 4.5a5.5 5.5 0 0 1 5.5 5.5M14 8a2 2 0 0 1 2 2" stroke="black" stroke-width="2" stroke-linecap="round" fill="none"/>"#
+        ),
+        "icons/video-call.svg" => {
+            f!(r#"<rect x="2" y="5" width="13" height="14" rx="3"/><path d="M17 10.2 21.4 7a1 1 0 0 1 1.6.8v8.4a1 1 0 0 1-1.6.8L17 13.8z"/>"#)
+        }
+        "icons/add-to-dm.svg" => f!(
+            r#"<circle cx="9" cy="8" r="4"/><path d="M1 20a8 6.5 0 0 1 15.5-2.2V21H1zM19 13a1 1 0 0 1 1 1v3h3a1 1 0 1 1 0 2h-3v3a1 1 0 1 1-2 0v-3h-3a1 1 0 1 1 0-2h3v-3a1 1 0 0 1 1-1z"/>"#
+        ),
+        "icons/user-profile.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm-6 12.2a8 8 0 0 0 12 0 7 5 0 0 0-12 0z"/>"#
+        ),
+        "icons/apps.svg" => f!(
+            r#"<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>"#
+        ),
+        _ => {
+            return crate::ui::chat::icons::svg(path)
+                .or_else(|| crate::ui::voice_panel::svg_asset(path))
+                .or_else(|| crate::ui::inbox::svg_asset(path))
+                .or_else(|| crate::ui::pickers::svg_asset(path))
+                .or_else(|| crate::ui::call_view::svg_asset(path));
+        }
     })
 }
 
@@ -323,21 +419,45 @@ impl AssetSource for Assets {
     }
 
     fn list(&self, path: &str) -> gpui::Result<Vec<SharedString>> {
-        Ok(ALL
-            .iter()
-            .map(|i| i.path())
-            .filter(|p| p.starts_with(path))
-            .collect())
+        Ok(ALL.iter().map(|i| i.path()).filter(|p| p.starts_with(path)).collect())
     }
 }
 
 const ALL: &[Icon] = &[
-    Icon::Hash, Icon::Speaker, Icon::Megaphone, Icon::Forum, Icon::Stage, Icon::Chevron,
-    Icon::Plus, Icon::Mic, Icon::MicOff, Icon::Headphones, Icon::HeadphonesOff, Icon::Gear,
-    Icon::Bell, Icon::Pin, Icon::Members, Icon::Search, Icon::Inbox, Icon::Help, Icon::Gift,
-    Icon::Gif, Icon::Sticker, Icon::Emoji, Icon::PlusCircle, Icon::Compass, Icon::Download,
-    Icon::Close, Icon::Threads, Icon::Friends, Icon::Nitro, Icon::Lock, Icon::Reply, Icon::File,
-    Icon::Image, Icon::PhoneHangup,
+    Icon::Hash,
+    Icon::Speaker,
+    Icon::Megaphone,
+    Icon::Forum,
+    Icon::Stage,
+    Icon::Chevron,
+    Icon::Plus,
+    Icon::Mic,
+    Icon::MicOff,
+    Icon::Headphones,
+    Icon::HeadphonesOff,
+    Icon::Gear,
+    Icon::Bell,
+    Icon::Pin,
+    Icon::Members,
+    Icon::Search,
+    Icon::Inbox,
+    Icon::Help,
+    Icon::Gift,
+    Icon::Gif,
+    Icon::Sticker,
+    Icon::Emoji,
+    Icon::PlusCircle,
+    Icon::Compass,
+    Icon::Download,
+    Icon::Close,
+    Icon::Threads,
+    Icon::Friends,
+    Icon::Nitro,
+    Icon::Lock,
+    Icon::Reply,
+    Icon::File,
+    Icon::Image,
+    Icon::PhoneHangup,
 ];
 
 #[cfg(test)]

@@ -81,68 +81,254 @@ pub const HOLOGRAPHIC: RoleColors = RoleColors { primary: 0xA9_C9FF, secondary: 
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AdminCall {
-    CreateChannel { guild: Snowflake, name: String, kind: NewChannelKind, parent: Option<Snowflake>, private: bool, me: Snowflake, members: Vec<(Snowflake, u8)> },
-    EditChannel { channel: Snowflake, edit: ChannelEdit },
-    DeleteChannel { channel: Snowflake },
-    EditThread { thread: Snowflake, edit: ThreadEdit },
-    JoinThread { thread: Snowflake, location: String },
-    LeaveThread { thread: Snowflake, location: String },
-    AddThreadMember { thread: Snowflake, user: Snowflake, location: String },
-    ThreadMemberSettings { thread: Snowflake, patch: ThreadMemberPatch },
-    Channel { channel: Snowflake },
-    SetOverwrite { channel: Snowflake, target: Snowflake, kind: u8, allow: u64, deny: u64 },
-    DeleteOverwrite { channel: Snowflake, target: Snowflake },
-    ChannelInvites { channel: Snowflake },
-    PatchChannel { channel: Snowflake, body: Value },
-    ChannelWebhooks { channel: Snowflake },
-    CreateWebhook { channel: Snowflake, name: String },
-    EditWebhook { webhook: Snowflake, body: Value },
-    DeleteWebhook { webhook: Snowflake },
-    GuildInvites { guild: Snowflake },
-    DeleteInvite { code: String },
-    Integrations { guild: Snowflake },
-    EditGuild { guild: Snowflake, edit: GuildEdit },
-    Roles { guild: Snowflake },
-    CreateRole { guild: Snowflake, edit: RoleEdit },
-    EditRole { guild: Snowflake, role: Snowflake, edit: RoleEdit },
-    DeleteRole { guild: Snowflake, role: Snowflake },
-    Emojis { guild: Snowflake },
-    RenameEmoji { guild: Snowflake, emoji: Snowflake, name: String },
-    DeleteEmoji { guild: Snowflake, emoji: Snowflake },
-    Stickers { guild: Snowflake },
-    DeleteSticker { guild: Snowflake, sticker: Snowflake },
-    SearchMembers { guild: Snowflake, query: String, limit: u32 },
-    Bans { guild: Snowflake },
-    Unban { guild: Snowflake, user: Snowflake },
-    AuditLog { guild: Snowflake, before: Option<Snowflake>, limit: u32 },
-    IncidentActions { guild: Snowflake, invites_until: Option<u64>, dms_until: Option<u64>, lockdown_hours: Option<u32> },
+    CreateChannel {
+        guild: Snowflake,
+        name: String,
+        kind: NewChannelKind,
+        parent: Option<Snowflake>,
+        private: bool,
+        me: Snowflake,
+        members: Vec<(Snowflake, u8)>,
+    },
+    EditChannel {
+        channel: Snowflake,
+        edit: ChannelEdit,
+    },
+    DeleteChannel {
+        channel: Snowflake,
+    },
+    EditThread {
+        thread: Snowflake,
+        edit: ThreadEdit,
+    },
+    JoinThread {
+        thread: Snowflake,
+        location: String,
+    },
+    LeaveThread {
+        thread: Snowflake,
+        location: String,
+    },
+    AddThreadMember {
+        thread: Snowflake,
+        user: Snowflake,
+        location: String,
+    },
+    ThreadMemberSettings {
+        thread: Snowflake,
+        patch: ThreadMemberPatch,
+    },
+    Channel {
+        channel: Snowflake,
+    },
+    SetOverwrite {
+        channel: Snowflake,
+        target: Snowflake,
+        kind: u8,
+        allow: u64,
+        deny: u64,
+    },
+    DeleteOverwrite {
+        channel: Snowflake,
+        target: Snowflake,
+    },
+    ChannelInvites {
+        channel: Snowflake,
+    },
+    PatchChannel {
+        channel: Snowflake,
+        body: Value,
+    },
+    ChannelWebhooks {
+        channel: Snowflake,
+    },
+    CreateWebhook {
+        channel: Snowflake,
+        name: String,
+    },
+    EditWebhook {
+        webhook: Snowflake,
+        body: Value,
+    },
+    DeleteWebhook {
+        webhook: Snowflake,
+    },
+    GuildInvites {
+        guild: Snowflake,
+    },
+    DeleteInvite {
+        code: String,
+    },
+    Integrations {
+        guild: Snowflake,
+    },
+    EditGuild {
+        guild: Snowflake,
+        edit: GuildEdit,
+    },
+    Roles {
+        guild: Snowflake,
+    },
+    CreateRole {
+        guild: Snowflake,
+        edit: RoleEdit,
+    },
+    EditRole {
+        guild: Snowflake,
+        role: Snowflake,
+        edit: RoleEdit,
+    },
+    DeleteRole {
+        guild: Snowflake,
+        role: Snowflake,
+    },
+    Emojis {
+        guild: Snowflake,
+    },
+    RenameEmoji {
+        guild: Snowflake,
+        emoji: Snowflake,
+        name: String,
+    },
+    DeleteEmoji {
+        guild: Snowflake,
+        emoji: Snowflake,
+    },
+    Stickers {
+        guild: Snowflake,
+    },
+    DeleteSticker {
+        guild: Snowflake,
+        sticker: Snowflake,
+    },
+    SearchMembers {
+        guild: Snowflake,
+        query: String,
+        limit: u32,
+    },
+    Bans {
+        guild: Snowflake,
+    },
+    Unban {
+        guild: Snowflake,
+        user: Snowflake,
+    },
+    AuditLog {
+        guild: Snowflake,
+        before: Option<Snowflake>,
+        limit: u32,
+    },
+    IncidentActions {
+        guild: Snowflake,
+        invites_until: Option<u64>,
+        dms_until: Option<u64>,
+        lockdown_hours: Option<u32>,
+    },
     UserSettings,
-    PatchUserSettings { patch: Value },
-    EditGroupDm { channel: Snowflake, name: Option<String>, icon: Option<Option<String>> },
-    BulkLeaveGroupDms { channels: Vec<Snowflake> },
+    PatchUserSettings {
+        patch: Value,
+    },
+    EditGroupDm {
+        channel: Snowflake,
+        name: Option<String>,
+        icon: Option<Option<String>>,
+    },
+    BulkLeaveGroupDms {
+        channels: Vec<Snowflake>,
+    },
     Server(super::guild_server::ServerCall),
-    ScheduleMessage { channel: Snowflake, at: String, message: Value },
+    ScheduleMessage {
+        channel: Snowflake,
+        at: String,
+        message: Value,
+    },
     ScheduledMessages,
-    EditScheduled { id: Snowflake, at: Option<String>, content: Option<String>, flags: Option<u64> },
-    DeleteScheduled { id: Snowflake },
-    SendScheduledNow { id: Snowflake },
-    Guild { guild: Snowflake },
-    GuildProfile { guild: Snowflake },
-    Applications { ids: Vec<Snowflake> },
-    RoleMemberCounts { guild: Snowflake },
-    RoleMemberIds { guild: Snowflake, role: Snowflake },
-    ReorderRoles { guild: Snowflake, order: Vec<(Snowflake, i32)> },
-    AddRoleMember { guild: Snowflake, role: Snowflake, user: Snowflake },
-    RemoveRoleMember { guild: Snowflake, role: Snowflake, user: Snowflake },
-    Soundboard { guild: Snowflake },
-    Widget { guild: Snowflake },
-    EditWidget { guild: Snowflake, enabled: bool, channel: Option<Snowflake> },
-    CreateEmoji { guild: Snowflake, name: String, image: String },
-    CreateSound { guild: Snowflake, name: String, sound: String, volume: f32, emoji_id: Option<Snowflake>, emoji_name: Option<String> },
-    DeleteSound { guild: Snowflake, sound: Snowflake },
-    Kick { guild: Snowflake, user: Snowflake },
-    Ban { guild: Snowflake, user: Snowflake, delete_message_seconds: u32 },
-    AuditLogFiltered { guild: Snowflake, user: Option<Snowflake>, action: Option<u32>, before: Option<Snowflake>, limit: u32 },
+    EditScheduled {
+        id: Snowflake,
+        at: Option<String>,
+        content: Option<String>,
+        flags: Option<u64>,
+    },
+    DeleteScheduled {
+        id: Snowflake,
+    },
+    SendScheduledNow {
+        id: Snowflake,
+    },
+    Guild {
+        guild: Snowflake,
+    },
+    GuildProfile {
+        guild: Snowflake,
+    },
+    Applications {
+        ids: Vec<Snowflake>,
+    },
+    RoleMemberCounts {
+        guild: Snowflake,
+    },
+    RoleMemberIds {
+        guild: Snowflake,
+        role: Snowflake,
+    },
+    ReorderRoles {
+        guild: Snowflake,
+        order: Vec<(Snowflake, i32)>,
+    },
+    AddRoleMember {
+        guild: Snowflake,
+        role: Snowflake,
+        user: Snowflake,
+    },
+    RemoveRoleMember {
+        guild: Snowflake,
+        role: Snowflake,
+        user: Snowflake,
+    },
+    Soundboard {
+        guild: Snowflake,
+    },
+    Widget {
+        guild: Snowflake,
+    },
+    EditWidget {
+        guild: Snowflake,
+        enabled: bool,
+        channel: Option<Snowflake>,
+    },
+    CreateEmoji {
+        guild: Snowflake,
+        name: String,
+        image: String,
+    },
+    CreateSound {
+        guild: Snowflake,
+        name: String,
+        sound: String,
+        volume: f32,
+        emoji_id: Option<Snowflake>,
+        emoji_name: Option<String>,
+    },
+    DeleteSound {
+        guild: Snowflake,
+        sound: Snowflake,
+    },
+    Kick {
+        guild: Snowflake,
+        user: Snowflake,
+    },
+    Ban {
+        guild: Snowflake,
+        user: Snowflake,
+        delete_message_seconds: u32,
+    },
+    AuditLogFiltered {
+        guild: Snowflake,
+        user: Option<Snowflake>,
+        action: Option<u32>,
+        before: Option<Snowflake>,
+        limit: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -369,7 +555,9 @@ pub fn build(call: &AdminCall) -> ApiReq {
         C::RemoveRoleMember { guild, role, user } => req(Method::DELETE, format!("/guilds/{guild}/members/{user}/roles/{role}"), None),
         C::Soundboard { guild } => req(Method::GET, format!("/guilds/{guild}/soundboard-sounds"), None),
         C::Widget { guild } => req(Method::GET, format!("/guilds/{guild}/widget"), None),
-        C::EditWidget { guild, enabled, channel } => req(Method::PATCH, format!("/guilds/{guild}/widget"), Some(json!({ "enabled": enabled, "channel_id": channel }))),
+        C::EditWidget { guild, enabled, channel } => {
+            req(Method::PATCH, format!("/guilds/{guild}/widget"), Some(json!({ "enabled": enabled, "channel_id": channel })))
+        }
         C::CreateEmoji { guild, name, image } => req(Method::POST, format!("/guilds/{guild}/emojis"), Some(json!({ "name": name.trim(), "image": image }))),
         C::CreateSound { guild, name, sound, volume, emoji_id, emoji_name } => req(
             Method::POST,
@@ -485,7 +673,10 @@ mod tests {
     fn scheduled_message_calls_match_the_client() {
         let r = build(&AdminCall::ScheduleMessage { channel: C, at: "2026-11-25T10:00:00.000Z".into(), message: json!({"content": "hi"}) });
         assert_eq!((r.method, r.path.as_str()), (Method::POST, "/users/@me/scheduled-messages"));
-        assert_eq!(r.body.unwrap(), json!({"channel_id": "2", "content": "hi", "scheduled_timestamp": "2026-11-25T10:00:00.000Z", "flags": 0, "attachments": []}));
+        assert_eq!(
+            r.body.unwrap(),
+            json!({"channel_id": "2", "content": "hi", "scheduled_timestamp": "2026-11-25T10:00:00.000Z", "flags": 0, "attachments": []})
+        );
         let r = build(&AdminCall::ScheduledMessages);
         assert_eq!((r.method, r.path.as_str(), r.body), (Method::GET, "/users/@me/scheduled-messages", None));
         let r = build(&AdminCall::EditScheduled { id: Snowflake(9), at: Some("x".into()), content: None, flags: None });
@@ -519,7 +710,15 @@ mod tests {
 
     #[test]
     fn create_private_voice() {
-        let r = build(&AdminCall::CreateChannel { guild: G, name: " vc ".into(), kind: NewChannelKind::Voice, parent: Some(Snowflake(9)), private: true, me: Snowflake(5), members: vec![(Snowflake(7), 0)] });
+        let r = build(&AdminCall::CreateChannel {
+            guild: G,
+            name: " vc ".into(),
+            kind: NewChannelKind::Voice,
+            parent: Some(Snowflake(9)),
+            private: true,
+            me: Snowflake(5),
+            members: vec![(Snowflake(7), 0)],
+        });
         assert_eq!((r.method, r.path.as_str()), (Method::POST, "/guilds/1/channels"));
         let b = r.body.unwrap();
         assert_eq!(b["name"], "vc");
@@ -540,7 +739,12 @@ mod tests {
         assert_eq!(r.body.unwrap(), json!({"locked": false, "archived": false}));
         let r = build(&AdminCall::EditThread {
             thread: t,
-            edit: ThreadEdit { name: Some(format!("  {}  ", "n".repeat(120))), auto_archive_duration: Some(10_080), slowmode: Some(50_000), ..Default::default() },
+            edit: ThreadEdit {
+                name: Some(format!("  {}  ", "n".repeat(120))),
+                auto_archive_duration: Some(10_080),
+                slowmode: Some(50_000),
+                ..Default::default()
+            },
         });
         let b = r.body.unwrap();
         assert_eq!(b["name"].as_str().unwrap().len(), 100);
@@ -568,14 +772,25 @@ mod tests {
 
     #[test]
     fn create_category_has_no_parent() {
-        let b = build(&AdminCall::CreateChannel { guild: G, name: "c".into(), kind: NewChannelKind::Category, parent: Some(C), private: false, me: G, members: Vec::new() }).body.unwrap();
+        let b = build(&AdminCall::CreateChannel {
+            guild: G,
+            name: "c".into(),
+            kind: NewChannelKind::Category,
+            parent: Some(C),
+            private: false,
+            me: G,
+            members: Vec::new(),
+        })
+        .body
+        .unwrap();
         assert_eq!(b["type"], 4);
         assert!(b.get("parent_id").is_none() && b.get("permission_overwrites").is_none());
     }
 
     #[test]
     fn edit_and_delete_channel() {
-        let r = build(&AdminCall::EditChannel { channel: C, edit: ChannelEdit { name: Some("x".into()), slowmode: Some(99_999), nsfw: Some(true), topic: None } });
+        let r =
+            build(&AdminCall::EditChannel { channel: C, edit: ChannelEdit { name: Some("x".into()), slowmode: Some(99_999), nsfw: Some(true), topic: None } });
         assert_eq!((r.method, r.path.as_str()), (Method::PATCH, "/channels/2"));
         assert_eq!(r.body.unwrap(), json!({"name": "x", "rate_limit_per_user": 21_600, "nsfw": true}));
         let r = build(&AdminCall::DeleteChannel { channel: C });
@@ -600,7 +815,11 @@ mod tests {
         let edit = GuildEdit { name: Some("n".into()), system_channel: Some(None), default_notifications: Some(1), ..Default::default() };
         let b = build(&AdminCall::EditGuild { guild: G, edit }).body.unwrap();
         assert_eq!(b, json!({"name": "n", "system_channel_id": null, "default_message_notifications": 1}));
-        let r = build(&AdminCall::EditRole { guild: G, role: Snowflake(4), edit: RoleEdit { color: Some(0x1FF_0000), permissions: Some(8), ..Default::default() } });
+        let r = build(&AdminCall::EditRole {
+            guild: G,
+            role: Snowflake(4),
+            edit: RoleEdit { color: Some(0x1FF_0000), permissions: Some(8), ..Default::default() },
+        });
         assert_eq!(r.path, "/guilds/1/roles/4");
         assert_eq!(r.body.unwrap(), json!({"color": 0xFF_0000, "permissions": "8"}));
     }
@@ -657,7 +876,14 @@ mod tests {
         let r = build(&AdminCall::CreateEmoji { guild: G, name: " ok ".into(), image: "data:image/png;base64,AA".into() });
         assert_eq!((r.method, r.path.as_str()), (Method::POST, "/guilds/1/emojis"));
         assert_eq!(r.body.unwrap()["name"], "ok");
-        let r = build(&AdminCall::CreateSound { guild: G, name: "s".into(), sound: "data:audio/ogg;base64,AA".into(), volume: 2., emoji_id: None, emoji_name: Some("🔥".into()) });
+        let r = build(&AdminCall::CreateSound {
+            guild: G,
+            name: "s".into(),
+            sound: "data:audio/ogg;base64,AA".into(),
+            volume: 2.,
+            emoji_id: None,
+            emoji_name: Some("🔥".into()),
+        });
         assert_eq!(r.body.unwrap()["volume"], 1.0);
         assert_eq!(build(&AdminCall::DeleteSound { guild: G, sound: Snowflake(4) }).path, "/guilds/1/soundboard-sounds/4");
         let r = build(&AdminCall::Ban { guild: G, user: Snowflake(2), delete_message_seconds: 9_999_999 });

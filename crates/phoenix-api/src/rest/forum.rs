@@ -97,11 +97,7 @@ impl Poll {
         serde_json::from_value(v.clone()).ok()
     }
     pub fn count(&self, answer: u32) -> (u32, bool) {
-        self.results
-            .as_ref()
-            .and_then(|r| r.answer_counts.iter().find(|c| c.id == answer))
-            .map(|c| (c.count, c.me_voted))
-            .unwrap_or((0, false))
+        self.results.as_ref().and_then(|r| r.answer_counts.iter().find(|c| c.id == answer)).map(|c| (c.count, c.me_voted)).unwrap_or((0, false))
     }
     pub fn total(&self) -> u32 {
         self.results.as_ref().map(|r| r.answer_counts.iter().map(|c| c.count).sum()).unwrap_or(0)
@@ -113,7 +109,15 @@ impl RestClient {
         self.search_threads_matching(forum, sort, tags, offset, archived, false).await
     }
 
-    pub async fn search_threads_matching(&self, forum: ChannelId, sort: ThreadSort, tags: &[Snowflake], offset: u32, archived: bool, match_all: bool) -> Result<ThreadSearch> {
+    pub async fn search_threads_matching(
+        &self,
+        forum: ChannelId,
+        sort: ThreadSort,
+        tags: &[Snowflake],
+        offset: u32,
+        archived: bool,
+        match_all: bool,
+    ) -> Result<ThreadSearch> {
         self.call(Method::GET, &threads_search_path(forum, sort, tags, offset, archived, match_all), Body::None).await
     }
 
@@ -169,7 +173,10 @@ pub fn poll_body(question: &str, answers: &[PollAnswerInput], hours: u32, multi:
             json!({ "poll_media": media })
         })
         .collect();
-    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| ((d.as_millis() as u64 - 1_420_070_400_000) << 22).to_string()).unwrap_or_default();
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| ((d.as_millis() as u64 - 1_420_070_400_000) << 22).to_string())
+        .unwrap_or_default();
     json!({
         "content": "",
         "nonce": nonce,
@@ -215,7 +222,8 @@ mod tests {
         let p = Poll::from_value(&serde_json::json!({
             "question":{"text":"Q?"},"answers":[{"answer_id":1,"poll_media":{"text":"A"}},{"answer_id":2,"poll_media":{"text":"B"}}],
             "expiry":"2030-01-01T00:00:00Z","allow_multiselect":false,
-            "results":{"is_finalized":false,"answer_counts":[{"id":1,"count":3,"me_voted":true}]}})).unwrap();
+            "results":{"is_finalized":false,"answer_counts":[{"id":1,"count":3,"me_voted":true}]}}))
+        .unwrap();
         assert_eq!(p.question.text.as_deref(), Some("Q?"));
         assert_eq!(p.count(1), (3, true));
         assert_eq!(p.count(2), (0, false));

@@ -28,9 +28,7 @@ pub fn load_packs(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
 }
 
 pub fn matches(s: &StickerData, q: &str) -> bool {
-    q.is_empty()
-        || s.name.to_lowercase().contains(q)
-        || s.tags.to_lowercase().split([',', ' ']).any(|t| !t.is_empty() && t.starts_with(q))
+    q.is_empty() || s.name.to_lowercase().contains(q) || s.tags.to_lowercase().split([',', ' ']).any(|t| !t.is_empty() && t.starts_with(q))
 }
 
 fn send(app: &mut PhoenixApp, id: crate::model::Id, window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) {
@@ -92,13 +90,7 @@ fn cell(s: &StickerData, section: SharedString, inspected: bool, locked: bool) -
             }
         })
         .when(!locked, |d| d.on_click(move |_, w, cx| with_app(cx, w, move |a, w, cx| send(a, id, w, cx))))
-        .child(
-            div()
-                .relative()
-                .size_full()
-                .when(locked, |d| d.opacity(if crate::theme::is_light() { 0.4 } else { 0.3 }))
-                .child(sticker_graphic(s, CELL - 2.)),
-        )
+        .child(div().relative().size_full().when(locked, |d| d.opacity(if crate::theme::is_light() { 0.4 } else { 0.3 })).child(sticker_graphic(s, CELL - 2.)))
         .into_any_element()
 }
 
@@ -130,12 +122,8 @@ pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
     if q.is_empty()
         && let Some(f) = p.frecency.as_ref()
     {
-        let freq: Vec<StickerData> = f
-            .stickers
-            .iter()
-            .filter_map(|id| sections.iter().flat_map(|s| s.2.iter()).find(|d| d.id == *id).cloned())
-            .take(20)
-            .collect();
+        let freq: Vec<StickerData> =
+            f.stickers.iter().filter_map(|id| sections.iter().flat_map(|s| s.2.iter()).find(|d| d.id == *id).cloned()).take(20).collect();
         if !freq.is_empty() {
             sections.insert(0, (crate::t!("picker.frequent"), None, freq, false));
             has_frequent = true;
@@ -145,15 +133,10 @@ pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
         return empty_state(if p.stickers.loading { crate::t!("picker.loading_stickers") } else { crate::t!("picker.no_stickers") });
     }
     let origin = |id: crate::model::Id| sections.iter().skip(usize::from(has_frequent)).find(|s| s.2.iter().any(|d| d.id == id)).map(|s| s.0.clone());
-    let inspected = p
-        .stickers
-        .inspected
-        .clone()
-        .or_else(|| sections.first().and_then(|s| s.2.first().map(|d| (d.clone(), s.0.clone()))))
-        .map(|(d, from)| {
-            let from = origin(d.id).unwrap_or(from);
-            (d, from)
-        });
+    let inspected = p.stickers.inspected.clone().or_else(|| sections.first().and_then(|s| s.2.first().map(|d| (d.clone(), s.0.clone())))).map(|(d, from)| {
+        let from = origin(d.id).unwrap_or(from);
+        (d, from)
+    });
     let insp_id = inspected.as_ref().map(|(d, _)| d.id);
 
     let scroll = crate::ui::chat::scrollbar::handle("sticker-scroll");
@@ -173,18 +156,14 @@ pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
         body = body.child(section_header(lead, title.clone()).ml(px(-8.)));
         let mut sec = div().flex().flex_col().pb(px(12.));
         for chunk in st.chunks(COLS) {
-            let row = div()
-                .flex()
-                .gap(px(COL_GAP))
-                .mb(px(ROW_GAP))
-                .children(chunk.iter().map(|s| cell(s, title.clone(), Some(s.id) == insp_id, *locked)));
+            let row = div().flex().gap(px(COL_GAP)).mb(px(ROW_GAP)).children(chunk.iter().map(|s| cell(s, title.clone(), Some(s.id) == insp_id, *locked)));
             sec = sec.child(row);
         }
         body = body.child(sec);
         let content: AnyElement = match gicon {
-            _ if is_frequent => clock(24.)
-                .text_color(tk(if si == 0 { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT }))
-                .into_any_element(),
+            _ if is_frequent => {
+                clock(24.).text_color(tk(if si == 0 { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT })).into_any_element()
+            }
             Some((i, a)) => grid::rail_guild_icon(i, a),
             None => crate::ui::icon(crate::assets::Icon::Sticker, 24., tk(idx::INTERACTIVE_TEXT_DEFAULT)).into_any_element(),
         };
@@ -207,7 +186,21 @@ pub fn render_body(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
         .size_full()
         .flex()
         .child(grid::rail_shell(rail, shortcut))
-        .child(div().flex_1().min_w_0().flex().flex_col().child(crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin).flex_1().min_h_0().child(body).children(crate::ui::chat::scrollbar::bar_for("sticker-scroll", crate::ui::chat::scrollbar::Bar::Thin))).child(footer))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(
+                    crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin)
+                        .flex_1()
+                        .min_h_0()
+                        .child(body)
+                        .children(crate::ui::chat::scrollbar::bar_for("sticker-scroll", crate::ui::chat::scrollbar::Bar::Thin)),
+                )
+                .child(footer),
+        )
         .into_any_element()
 }
 

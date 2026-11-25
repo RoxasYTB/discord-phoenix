@@ -55,7 +55,7 @@ fn murmur3_32(data: &[u8], seed: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use phoenix_api::models::{OverwriteType, Permissions, PermissionOverwrite, Snowflake};
+    use phoenix_api::models::{OverwriteType, PermissionOverwrite, Permissions, Snowflake};
 
     fn ow(id: u64, allow: u64, deny: u64) -> PermissionOverwrite {
         PermissionOverwrite {

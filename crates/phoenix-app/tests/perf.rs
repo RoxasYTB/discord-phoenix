@@ -1,10 +1,10 @@
-use phoenix_app::{app::ChannelMessages, model::{Id, Message}};
+use phoenix_app::{
+    app::ChannelMessages,
+    model::{Id, Message},
+};
 
 fn msgs(ids: &[u64]) -> ChannelMessages {
-    ChannelMessages {
-        msgs: ids.iter().map(|&i| Message { id: Id(i), ..Default::default() }).collect(),
-        ..Default::default()
-    }
+    ChannelMessages { msgs: ids.iter().map(|&i| Message { id: Id(i), ..Default::default() }).collect(), ..Default::default() }
 }
 
 #[test]

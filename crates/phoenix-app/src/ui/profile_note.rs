@@ -32,9 +32,7 @@ pub fn close() {
 impl PhoenixApp {
     pub fn start_note_edit(&mut self, uid: Id, window: &mut Window, cx: &mut Context<Self>) {
         let current = self.people.profiles.get(&uid).map(|p| p.note.to_string()).unwrap_or_default();
-        let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(crate::t!("profile.note_placeholder")).default_value(current)
-        });
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("profile.note_placeholder")).default_value(current));
         let sub = cx.subscribe_in(&input, window, move |this, input, ev: &InputEvent, _, cx| {
             if matches!(ev, InputEvent::Blur | InputEvent::PressEnter { shift: false, .. }) {
                 let text = input.read(cx).value().trim().to_string();

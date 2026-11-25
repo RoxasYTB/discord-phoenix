@@ -5,9 +5,7 @@ use gpui_component::Root;
 use phoenix_app::{
     app::PhoenixApp,
     assets::Assets,
-    backend::{
-        AppEvent, Backend, BackendError, BoxFuture, Credentials, EventSink, ReadyData, Upload,
-    },
+    backend::{AppEvent, Backend, BackendError, BoxFuture, Credentials, EventSink, ReadyData, Upload},
     discord_backend::{
         DiscordBackend,
         store::{KeyringStore, Secret, TokenStore},
@@ -52,12 +50,7 @@ impl Backend for ReadOnly {
     fn select_channel(&self, channel: Id) -> BoxFuture<()> {
         self.0.select_channel(channel)
     }
-    fn load_messages(
-        &self,
-        channel: Id,
-        before: Option<Id>,
-        limit: u32,
-    ) -> BoxFuture<Vec<Message>> {
+    fn load_messages(&self, channel: Id, before: Option<Id>, limit: u32) -> BoxFuture<Vec<Message>> {
         self.0.load_messages(channel, before, limit)
     }
     fn send_message(&self, _: Id, _: String, _: Option<Id>) -> BoxFuture<Message> {
@@ -95,10 +88,7 @@ impl Backend for ReadOnly {
     fn mark_unread(&self, _: Id, _: Id) -> BoxFuture<()> {
         denied()
     }
-    fn save_settings(
-        &self,
-        _: phoenix_app::ui::settings::SettingsPatch,
-    ) -> BoxFuture<phoenix_app::ui::settings::SyncedSettings> {
+    fn save_settings(&self, _: phoenix_app::ui::settings::SettingsPatch) -> BoxFuture<phoenix_app::ui::settings::SyncedSettings> {
         denied()
     }
     fn set_status(&self, _: Presence, _: Option<String>) -> BoxFuture<()> {
@@ -177,22 +167,14 @@ fn main() -> anyhow::Result<()> {
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
-    let tab: usize = std::env::var("PHX_TAB")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
-    let wait: u64 = std::env::var("PHX_WAIT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(12);
+    let tab: usize = std::env::var("PHX_TAB").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let wait: u64 = std::env::var("PHX_WAIT").ok().and_then(|v| v.parse().ok()).unwrap_or(12);
     if real {
         phoenix_app::discord_backend::NO_ACKS.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     let text = gpui_platform::current_platform(true).text_system();
-    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
-        gpui_platform::current_headless_renderer()
-    });
+    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || gpui_platform::current_headless_renderer());
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -207,11 +189,7 @@ fn main() -> anyhow::Result<()> {
     let backend: Arc<dyn Backend> = if real {
         let b = DiscordBackend::with_store(Arc::new(LoadOnlyStore));
         let http = b.http_client();
-        cx.update(|cx| {
-            cx.set_http_client(Arc::new(phoenix_app::media::cache::CachingHttpClient::new(
-                http,
-            )))
-        });
+        cx.update(|cx| cx.set_http_client(Arc::new(phoenix_app::media::cache::CachingHttpClient::new(http))));
         Arc::new(ReadOnly(b))
     } else {
         Arc::new(MockBackend::new())
@@ -250,8 +228,7 @@ fn main() -> anyhow::Result<()> {
             cx.update_window(win.into(), |_, window, cx| {
                 v.update(cx, |app, cx| {
                     app.login_with_token = true;
-                    app.login_token
-                        .update(cx, |s, cx| s.set_value("mock-token", window, cx));
+                    app.login_token.update(cx, |s, cx| s.set_value("mock-token", window, cx));
                     app.submit_login(window, cx);
                 });
             })?;
@@ -290,11 +267,7 @@ fn main() -> anyhow::Result<()> {
         if dirty {
             cx.update_window(win.into(), |_, window, cx| {
                 v.update(cx, |app, cx| {
-                    let i = app
-                        .settings
-                        .as_ref()
-                        .and_then(|s| s.profile.as_ref())
-                        .and_then(|e| e.pronouns.clone());
+                    let i = app.settings.as_ref().and_then(|s| s.profile.as_ref()).and_then(|e| e.pronouns.clone());
                     if let Some(i) = i {
                         i.update(cx, |s, cx| s.set_value("il/lui", window, cx));
                     }

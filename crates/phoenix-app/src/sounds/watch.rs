@@ -134,7 +134,11 @@ fn ringtone() -> &'static str {
     let r = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
     match r % 1000 {
         499 => {
-            if r.is_multiple_of(2) { "call_ringing_beat" } else { "call_ringing_snow_halation" }
+            if r.is_multiple_of(2) {
+                "call_ringing_beat"
+            } else {
+                "call_ringing_snow_halation"
+            }
         }
         _ => "call_ringing",
     }

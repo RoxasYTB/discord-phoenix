@@ -1,4 +1,7 @@
-use gpui::{AnyElement, App, Context, FontWeight, HighlightStyle, IntoElement, InteractiveText, ParentElement, Pixels, SharedString, Size, Styled, StyledText, div, prelude::*, px};
+use gpui::{
+    AnyElement, App, Context, FontWeight, HighlightStyle, InteractiveText, IntoElement, ParentElement, Pixels, SharedString, Size, Styled, StyledText, div,
+    prelude::*, px,
+};
 use phoenix_api::rest::reporting::{ReportElement, ReportMenu, ReportNode, ReportStep, ReportTarget};
 
 use super::{Modal, close_action};
@@ -34,7 +37,19 @@ pub struct Report {
 
 impl Report {
     pub fn new(target: ReportTarget) -> Self {
-        Self { target, menu: None, current: 0, history: Vec::new(), picks: Vec::new(), error: None, load_error: None, sending: false, auto_sent: None, viewport: None, done: Vec::new() }
+        Self {
+            target,
+            menu: None,
+            current: 0,
+            history: Vec::new(),
+            picks: Vec::new(),
+            error: None,
+            load_error: None,
+            sending: false,
+            auto_sent: None,
+            viewport: None,
+            done: Vec::new(),
+        }
     }
 
     pub fn current(&self) -> Option<&ReportNode> {
@@ -217,7 +232,8 @@ fn message_preview(app: &PhoenixApp, channel: Id, message: Id) -> Option<gpui::D
         .or_else(|| u.map(|u| u.display_name.clone()))
         .unwrap_or_else(|| crate::t!("common.unknown"));
     let when = chrono::DateTime::from_timestamp(m.timestamp, 0).map(|t| crate::i18n::clock(t.with_timezone(&chrono::Local))).unwrap_or_default();
-    let content: SharedString = if m.content.is_empty() && !m.attachments.is_empty() { crate::t!("msg.attachments", n = m.attachments.len()) } else { m.content.clone() };
+    let content: SharedString =
+        if m.content.is_empty() && !m.attachments.is_empty() { crate::t!("msg.attachments", n = m.attachments.len()) } else { m.content.clone() };
     let header = div()
         .flex()
         .items_center()
@@ -247,20 +263,15 @@ fn message_preview(app: &PhoenixApp, channel: Id, message: Id) -> Option<gpui::D
                 .border_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .child(
-                    div()
-                        .flex()
-                        .gap(z(16.))
-                        .pl(z(16.))
-                        .child(div().flex_none().mt(z(2.)).child(crate::ui::avatar(u, 40.)))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .child(header)
-                                .child(div().text_size(z(16.)).line_height(z(22.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(content)),
-                        ),
+                    div().flex().gap(z(16.)).pl(z(16.)).child(div().flex_none().mt(z(2.)).child(crate::ui::avatar(u, 40.))).child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(header)
+                            .child(div().text_size(z(16.)).line_height(z(22.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(content)),
+                    ),
                 ),
         ),
     )
@@ -284,7 +295,14 @@ fn user_preview(app: &PhoenixApp, user: Id) -> gpui::Div {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .children(u.map(|u| div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(u.display_name.clone())))
+                    .children(u.map(|u| {
+                        div()
+                            .text_size(z(16.))
+                            .line_height(z(20.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(c(tok(idx::TEXT_STRONG)))
+                            .child(u.display_name.clone())
+                    }))
                     .children(u.map(|u| div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(u.name.clone()))),
             ),
     )
@@ -306,7 +324,15 @@ fn guild_preview(app: &PhoenixApp, guild: Id) -> gpui::Div {
     )
 }
 
-fn list_row(id: impl Into<gpui::ElementId>, first: bool, last: bool, min_h: f32, label: SharedString, icon: &'static str, icon_size: f32) -> gpui::Stateful<gpui::Div> {
+fn list_row(
+    id: impl Into<gpui::ElementId>,
+    first: bool,
+    last: bool,
+    min_h: f32,
+    label: SharedString,
+    icon: &'static str,
+    icon_size: f32,
+) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id.into())
         .w_full()
@@ -321,16 +347,7 @@ fn list_row(id: impl Into<gpui::ElementId>, first: bool, last: bool, min_h: f32,
         .when(last, |d| d.rounded_b(z(12.)))
         .cursor_pointer()
         .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .my(z(8.))
-                .ml(z(16.))
-                .py(z(12.))
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(c(tok(idx::TEXT_DEFAULT)))
-                .child(label),
+            div().flex_1().min_w_0().my(z(8.)).ml(z(16.)).py(z(12.)).text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(label),
         )
         .child(
             div()
@@ -347,7 +364,12 @@ fn list_row(id: impl Into<gpui::ElementId>, first: bool, last: bool, min_h: f32,
 
 fn checkbox_row(id: usize, label: SharedString, description: Option<String>, on: bool) -> gpui::Stateful<gpui::Div> {
     let (bg, border, hbg, hborder) = if on {
-        (idx::CHECKBOX_BACKGROUND_SELECTED_DEFAULT, idx::CHECKBOX_BORDER_SELECTED_DEFAULT, idx::CHECKBOX_BACKGROUND_SELECTED_HOVER, idx::CHECKBOX_BORDER_SELECTED_HOVER)
+        (
+            idx::CHECKBOX_BACKGROUND_SELECTED_DEFAULT,
+            idx::CHECKBOX_BORDER_SELECTED_DEFAULT,
+            idx::CHECKBOX_BACKGROUND_SELECTED_HOVER,
+            idx::CHECKBOX_BORDER_SELECTED_HOVER,
+        )
     } else {
         (idx::CHECKBOX_BACKGROUND_DEFAULT, idx::CHECKBOX_BORDER_DEFAULT, idx::CHECKBOX_BACKGROUND_HOVER, idx::CHECKBOX_BORDER_HOVER)
     };
@@ -416,7 +438,10 @@ fn legal() -> AnyElement {
         .text_size(z(14.))
         .line_height(z(18.))
         .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(InteractiveText::new("report-legal", styled).on_click(std::iter::once(start..end).collect(), |_, _, cx| cx.open_url("https://discord.com/guidelines")))
+        .child(
+            InteractiveText::new("report-legal", styled)
+                .on_click(std::iter::once(start..end).collect(), |_, _, cx| cx.open_url("https://discord.com/guidelines")),
+        )
         .into_any_element()
 }
 
@@ -437,7 +462,11 @@ fn links(node: &ReportNode, first: bool) -> Vec<AnyElement> {
             Some(d) => format!("{}\n{d}", l.text).into(),
             None => l.text.clone().into(),
         };
-        out.push(list_row(("report-link", i), first && i == 0, i + 1 == n, 64., label, "link-external", 18.).on_click(move |_, _, cx| cx.open_url(&url)).into_any_element());
+        out.push(
+            list_row(("report-link", i), first && i == 0, i + 1 == n, 64., label, "link-external", 18.)
+                .on_click(move |_, _, cx| cx.open_url(&url))
+                .into_any_element(),
+        );
     }
     out
 }
@@ -532,23 +561,51 @@ fn more_you_can_do(app: &PhoenixApp, r: &Report, n: &ReportNode, cx: &mut Contex
     let mut rows: Vec<MoreRow> = Vec::new();
     if ignore {
         let off = ignored || blocked || done("ignore");
-        rows.push(MoreRow { key: "ignore", title: crate::t!("report.more_ignore", username = name).to_string(), description: crate::t!("report.more_ignore_desc"), label: crate::t!(if off { "report.ignored" } else { "report.ignore" }), kind: BtnKind::Secondary, disabled: off });
+        rows.push(MoreRow {
+            key: "ignore",
+            title: crate::t!("report.more_ignore", username = name).to_string(),
+            description: crate::t!("report.more_ignore_desc"),
+            label: crate::t!(if off { "report.ignored" } else { "report.ignore" }),
+            kind: BtnKind::Secondary,
+            disabled: off,
+        });
     }
     if n.has("block_users") {
         let off = blocked || done("block");
-        rows.push(MoreRow { key: "block", title: crate::t!("report.more_block", username = name).to_string(), description: crate::t!("report.more_block_desc"), label: crate::t!(if off { "report.blocked" } else { "report.block" }), kind: BtnKind::Critical, disabled: off });
+        rows.push(MoreRow {
+            key: "block",
+            title: crate::t!("report.more_block", username = name).to_string(),
+            description: crate::t!("report.more_block_desc"),
+            label: crate::t!(if off { "report.blocked" } else { "report.block" }),
+            kind: BtnKind::Critical,
+            disabled: off,
+        });
     }
     let dm = dm_with(app, user);
     if !ignore && n.has("mute_users") {
         let off = done("mute") || dm.and_then(|d| app.channels.get(&d)).is_some_and(|c| c.muted);
-        rows.push(MoreRow { key: "mute", title: crate::t!("report.more_mute", username = name).to_string(), description: crate::t!("report.more_mute_desc"), label: crate::t!(if off { "report.muted" } else { "report.mute" }), kind: BtnKind::Secondary, disabled: off });
+        rows.push(MoreRow {
+            key: "mute",
+            title: crate::t!("report.more_mute", username = name).to_string(),
+            description: crate::t!("report.more_mute_desc"),
+            label: crate::t!(if off { "report.muted" } else { "report.mute" }),
+            kind: BtnKind::Secondary,
+            disabled: off,
+        });
     }
     if msg_target && n.has("delete_message") {
         let guild = channel.and_then(|c| app.channels.get(&c)).and_then(|c| c.guild);
         let can = guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 13));
         if can {
             let off = done("delete");
-            rows.push(MoreRow { key: "delete", title: crate::t!("report.more_delete").to_string(), description: crate::t!("report.more_delete_desc"), label: crate::t!(if off { "report.deleted" } else { "report.delete" }), kind: BtnKind::Critical, disabled: off });
+            rows.push(MoreRow {
+                key: "delete",
+                title: crate::t!("report.more_delete").to_string(),
+                description: crate::t!("report.more_delete_desc"),
+                label: crate::t!(if off { "report.deleted" } else { "report.delete" }),
+                kind: BtnKind::Critical,
+                disabled: off,
+            });
         }
     }
     if rows.is_empty() {
@@ -579,7 +636,15 @@ fn more_you_can_do(app: &PhoenixApp, r: &Report, n: &ReportNode, cx: &mut Contex
             .mb(z(8.))
             .flex()
             .flex_col()
-            .child(div().mb(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("report.more")))
+            .child(
+                div()
+                    .mb(z(8.))
+                    .text_size(z(14.))
+                    .line_height(z(18.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(c(tok(idx::TEXT_DEFAULT)))
+                    .child(crate::t!("report.more")),
+            )
             .child(list),
     )
 }
@@ -635,7 +700,13 @@ pub fn render(app: &PhoenixApp, r: &Report, cx: &mut Context<PhoenixApp>) -> Any
                 if !crumbs.is_empty() {
                     let k = crumbs.len();
                     let mut list = div().flex().flex_col().mb(z(8.)).child(
-                        div().mb(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("report.category")),
+                        div()
+                            .mb(z(8.))
+                            .text_size(z(14.))
+                            .line_height(z(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(c(tok(idx::TEXT_DEFAULT)))
+                            .child(crate::t!("report.category")),
                     );
                     for (i, t) in crumbs.into_iter().enumerate() {
                         list = list.child(
@@ -643,7 +714,9 @@ pub fn render(app: &PhoenixApp, r: &Report, cx: &mut Context<PhoenixApp>) -> Any
                                 .flex()
                                 .when(i + 1 < k, |d| d.mb(z(8.)))
                                 .child(div().flex_none().size(z(4.)).mt(z(8.)).mr(z(8.)).rounded(z(2.)).bg(c(tok(idx::BRAND_500))))
-                                .child(div().flex_1().min_w_0().line_clamp(2).text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(t)),
+                                .child(
+                                    div().flex_1().min_w_0().line_clamp(2).text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(t),
+                                ),
                         );
                     }
                     body = body.child(list);
@@ -656,18 +729,16 @@ pub fn render(app: &PhoenixApp, r: &Report, cx: &mut Context<PhoenixApp>) -> Any
                 for (i, o) in opts.into_iter().enumerate() {
                     let on = r.picks.iter().any(|(key, _)| *key == o.key);
                     let (key, label) = (o.key.clone(), o.label.clone());
-                    col = col.child(
-                        checkbox_row(i, o.label.into(), o.description, on)
-                            .when(i + 1 < k, |d| d.mb(z(16.)))
-                            .on_click(cx.listener(move |_, _, _, cx| {
-                                with_modal(|m| {
-                                    if let Some(Modal::Report(r)) = m {
-                                        r.toggle(&key, &label);
-                                    }
-                                });
-                                cx.notify();
-                            })),
-                    );
+                    col = col.child(checkbox_row(i, o.label.into(), o.description, on).when(i + 1 < k, |d| d.mb(z(16.))).on_click(cx.listener(
+                        move |_, _, _, cx| {
+                            with_modal(|m| {
+                                if let Some(Modal::Report(r)) = m {
+                                    r.toggle(&key, &label);
+                                }
+                            });
+                            cx.notify();
+                        },
+                    )));
                 }
                 body = body.child(col);
             }
@@ -765,47 +836,46 @@ pub fn render(app: &PhoenixApp, r: &Report, cx: &mut Context<PhoenixApp>) -> Any
                 .child(body),
         )
         .children(crate::ui::chat::scrollbar::thin_scrollbar_div(&scroll));
-    let el = div()
-        .relative()
-        .w(width)
-        .max_h(max_h)
-        .min_h(z(220.).min(max_h))
-        .rounded(z(12.))
-        .bg(c(tok(idx::MODAL_BACKGROUND)))
-        .border_1()
-        .border_color(c(tok(idx::BORDER_NORMAL)))
-        .overflow_hidden()
-        .flex()
-        .flex_col()
-        .child(
-            div()
-                .flex_none()
-                .pt(z(24.))
-                .px(z(24.))
-                .children(header.map(|h| div().w_full().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(h))),
-        )
-        .child(top)
-        .child(content)
-        .children(footer)
-        .child(
-            div()
-                .id("report-close")
-                .absolute()
-                .top(z(8.))
-                .right(z(8.))
-                .size(z(40.))
-                .rounded(z(8.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
-                .on_click({
-                    let close = close.clone();
-                    move |_, w, cx| close(w, cx)
-                })
-                .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
-        );
+    let el =
+        div()
+            .relative()
+            .w(width)
+            .max_h(max_h)
+            .min_h(z(220.).min(max_h))
+            .rounded(z(12.))
+            .bg(c(tok(idx::MODAL_BACKGROUND)))
+            .border_1()
+            .border_color(c(tok(idx::BORDER_NORMAL)))
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .child(div().flex_none().pt(z(24.)).px(z(24.)).children(
+                header.map(|h| {
+                    div().w_full().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(h)
+                }),
+            ))
+            .child(top)
+            .child(content)
+            .children(footer)
+            .child(
+                div()
+                    .id("report-close")
+                    .absolute()
+                    .top(z(8.))
+                    .right(z(8.))
+                    .size(z(40.))
+                    .rounded(z(8.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
+                    .on_click({
+                        let close = close.clone();
+                        move |_, w, cx| close(w, cx)
+                    })
+                    .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
+            );
     crate::ui::modal::frame("report-backdrop", close, el)
 }
 

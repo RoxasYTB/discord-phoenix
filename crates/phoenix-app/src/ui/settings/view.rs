@@ -1,8 +1,5 @@
 use crate::theme::z;
-use gpui::{
-    AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Stateful, Styled,
-    Window, div, prelude::*,
-};
+use gpui::{AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Stateful, Styled, Window, div, prelude::*};
 
 use super::{AppTheme, NAV, Page, SettingsState};
 use crate::{
@@ -28,8 +25,6 @@ fn h1(t: impl Into<SharedString>) -> Div {
     controls::section_title(t)
 }
 
-
-
 fn note(t: impl Into<SharedString>) -> Div {
     div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(t.into())
 }
@@ -45,8 +40,6 @@ fn category(title: impl Into<SharedString>, rows: Vec<AnyElement>) -> Div {
 fn secondary(id: impl Into<String>, label: impl Into<SharedString>) -> Stateful<Div> {
     controls::button(eid(id), label, BtnKind::Secondary)
 }
-
-
 
 pub(super) fn slider(
     id: &str,
@@ -96,37 +89,56 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
     use super::account as acct;
     let me = &app.me;
     let info = acct::info();
-    let (reveal_em, reveal_ph) = if app.prefs.local.streamer_hides_info() {
-        (false, false)
-    } else {
-        app.settings.as_ref().map_or((false, false), |s| (s.reveal_email, s.reveal_phone))
-    };
+    let (reveal_em, reveal_ph) =
+        if app.prefs.local.streamer_hides_info() { (false, false) } else { app.settings.as_ref().map_or((false, false), |s| (s.reveal_email, s.reveal_phone)) };
     let trailing = |val: AnyElement, btn: Stateful<Div>| div().flex().items_center().gap(z(20.)).child(val).child(btn).into_any_element();
     let email_row = match info.email.clone() {
         Some(e) => {
             let m = acct::mask_email(&e);
-            let v = masked_value(reveal_em, e, m, "reveal-email", |a| {
-                if let Some(s) = st(a) {
-                    s.reveal_email = !s.reveal_email;
-                }
-            }, cx);
+            let v = masked_value(
+                reveal_em,
+                e,
+                m,
+                "reveal-email",
+                |a| {
+                    if let Some(s) = st(a) {
+                        s.reveal_email = !s.reveal_email;
+                    }
+                },
+                cx,
+            );
             controls::control_item(crate::t!("settings.account.email"), None, Some(trailing(v, secondary("edit-em", crate::t!("common.edit")))))
         }
-        None => controls::control_item(crate::t!("settings.account.email"), None, Some(trailing(acct::value(crate::t!("settings.account.no_email")).into_any_element(), secondary("edit-em", crate::t!("common.add"))))),
+        None => controls::control_item(
+            crate::t!("settings.account.email"),
+            None,
+            Some(trailing(acct::value(crate::t!("settings.account.no_email")).into_any_element(), secondary("edit-em", crate::t!("common.add")))),
+        ),
     }
     .into_any_element();
     let phone_row = match info.phone.clone() {
         Some(p) => {
             let m = acct::mask_phone(&p);
-            let v = masked_value(reveal_ph, p, m, "reveal-phone", |a| {
-                if let Some(s) = st(a) {
-                    s.reveal_phone = !s.reveal_phone;
-                }
-            }, cx);
+            let v = masked_value(
+                reveal_ph,
+                p,
+                m,
+                "reveal-phone",
+                |a| {
+                    if let Some(s) = st(a) {
+                        s.reveal_phone = !s.reveal_phone;
+                    }
+                },
+                cx,
+            );
             controls::control_item(crate::t!("settings.account.phone"), None, Some(trailing(v, secondary("edit-ph", crate::t!("common.edit")))))
                 .into_any_element()
         }
-        None => field_row(crate::t!("settings.account.phone"), crate::t!("settings.account.no_phone"), Some(secondary("edit-ph", crate::t!("common.add")).into_any_element())),
+        None => field_row(
+            crate::t!("settings.account.phone"),
+            crate::t!("settings.account.no_phone"),
+            Some(secondary("edit-ph", crate::t!("common.add")).into_any_element()),
+        ),
     };
     let link_row = |id: &'static str, title: SharedString, v: Option<SharedString>, to: super::nested::Nested| {
         controls::control_item(title, None, Some(acct::value_chevron(v)))
@@ -140,14 +152,18 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
     let q = query(app, cx);
     let t = |k: &str| crate::t!(k);
     let info_rows = vec![
-        (t("settings.account.username"), field_row(crate::t!("settings.account.username"), me.name.clone(), Some(secondary("edit-un", crate::t!("common.edit")).into_any_element()))),
+        (
+            t("settings.account.username"),
+            field_row(crate::t!("settings.account.username"), me.name.clone(), Some(secondary("edit-un", crate::t!("common.edit")).into_any_element())),
+        ),
         (t("settings.account.email"), email_row),
         (t("settings.account.phone"), phone_row),
     ];
     let security_rows = vec![
         (
             t("settings.account.password"),
-            controls::control_item(crate::t!("settings.account.password"), None, Some(secondary("change-pw", crate::t!("common.edit")).into_any_element())).into_any_element(),
+            controls::control_item(crate::t!("settings.account.password"), None, Some(secondary("change-pw", crate::t!("common.edit")).into_any_element()))
+                .into_any_element(),
         ),
         (
             t("settings.account.mfa"),
@@ -233,13 +249,11 @@ pub(super) fn profiles(app: &PhoenixApp) -> Div {
         .flex()
         .flex_col()
         .child(section("sp.pf.nameplate", tile(208., 48.).justify_between().px(z(8.)).child(avatar(Some(me), 32.)).child(plus())))
-        .child(section(
-            "sp.pf.avatar",
-            div().flex().gap(z(8.)).child(tile(100., 100.).child(avatar(Some(me), 72.))).child(tile(100., 100.).child(plus())),
-        ))
+        .child(section("sp.pf.avatar", div().flex().gap(z(8.)).child(tile(100., 100.).child(avatar(Some(me), 72.))).child(tile(100., 100.).child(plus()))))
         .child(section(
             "sp.pf.name_style",
-            tile(208., 42.).child(div().text_size(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(me.display_name.clone())),
+            tile(208., 42.)
+                .child(div().text_size(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(me.display_name.clone())),
         ))
         .child(section("sp.pf.theme", div().flex().gap(z(8.)).child(tile(100., 100.).bg(c(banner))).child(tile(100., 100.).child(plus()))))
         .child(section("sp.pf.effect", div().flex().gap(z(8.)).child(tile(100., 100.).child(plus())).child(tile(100., 100.).child(plus()))));
@@ -258,13 +272,29 @@ pub(super) fn profiles(app: &PhoenixApp) -> Div {
                 .px(z(16.))
                 .pb(z(16.))
                 .child(div().mt(z(-48.)).size(z(96.)).rounded_full().border_4().border_color(c(tok(idx::BACKGROUND_SURFACE_HIGH))).child(avatar(Some(me), 88.)))
-                .child(div().pt(z(12.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_STRONG))).child(me.display_name.clone()))
+                .child(
+                    div()
+                        .pt(z(12.))
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(c(tok(idx::TEXT_STRONG)))
+                        .child(me.display_name.clone()),
+                )
                 .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(me.name.clone())),
         );
     div()
         .flex()
         .flex_col()
-        .child(div().pb(z(24.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(crate::t!("sp.pf.main")))
+        .child(
+            div()
+                .pb(z(24.))
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_STRONG)))
+                .child(crate::t!("sp.pf.main")),
+        )
         .child(div().flex().gap(z(32.)).items_start().child(styles).child(card))
 }
 
@@ -278,7 +308,6 @@ fn devices() -> Div {
     )
 }
 
-
 pub(super) fn theme_card(t: AppTheme, selected: bool) -> Stateful<Div> {
     div()
         .id(eid(format!("theme-{}", t.label())))
@@ -286,26 +315,9 @@ pub(super) fn theme_card(t: AppTheme, selected: bool) -> Stateful<Div> {
         .size(z(48.))
         .flex_none()
         .cursor_pointer()
-        .child(
-            div()
-                .size_full()
-                .rounded(z(8.))
-                .bg(c(t.swatch()))
-                .border_1()
-                .border_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))),
-        )
+        .child(div().size_full().rounded(z(8.)).bg(c(t.swatch())).border_1().border_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
         .when(selected, |d| {
-            d.child(
-                div()
-                    .absolute()
-                    .top(z(-2.))
-                    .left(z(-2.))
-                    .size(z(52.))
-                    .rounded(z(8.))
-                    .border(z(4.))
-                    .border_color(c(tok(idx::BRAND_500))),
-            )
-            .child(
+            d.child(div().absolute().top(z(-2.)).left(z(-2.)).size(z(52.)).rounded(z(8.)).border(z(4.)).border_color(c(tok(idx::BRAND_500)))).child(
                 div()
                     .absolute()
                     .top(z(-6.))
@@ -321,9 +333,6 @@ pub(super) fn theme_card(t: AppTheme, selected: bool) -> Stateful<Div> {
         })
         .hover(|s| s.opacity(0.9))
 }
-
-
-
 
 fn page(app: &PhoenixApp, cx: &mut Cx) -> Div {
     if let Some(n) = app.settings.as_ref().and_then(|s| s.nested) {
@@ -371,16 +380,7 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
         .id(eid(id))
         .group(group.clone())
         .relative()
-        .when(selected, |d| {
-            d.child(crate::ui::states::fade_to(
-                fade_key,
-                true,
-                c(tok(idx::BACKGROUND_MOD_MUTED)),
-                c(tok(idx::BACKGROUND_MOD_NORMAL)),
-                300,
-                8.,
-            ))
-        })
+        .when(selected, |d| d.child(crate::ui::states::fade_to(fade_key, true, c(tok(idx::BACKGROUND_MOD_MUTED)), c(tok(idx::BACKGROUND_MOD_NORMAL)), 300, 8.)))
         .when(!selected, |d| {
             crate::ui::states::forget(fade_key);
             d
@@ -392,9 +392,7 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
         .gap(z(10.))
         .cursor_pointer()
         .text_color(c(tok(fg)))
-        .when(!selected && !destructive, |d| {
-            d.hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_MUTED))).text_color(c(tok(idx::TEXT_STRONG))))
-        })
+        .when(!selected && !destructive, |d| d.hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_MUTED))).text_color(c(tok(idx::TEXT_STRONG)))))
         .when(destructive, |d| d.hover(|s| s.bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_CRITICAL)))))
         .child(
             gpui::svg()
@@ -510,7 +508,11 @@ fn footer(cx: &mut Cx) -> Div {
                     link(
                         "settings-copy-debug",
                         note(
-                            if DEBUG_COPIED.load(std::sync::atomic::Ordering::Relaxed) { crate::t!("settings.footer.debug_copied") } else { crate::t!("settings.footer.copy_debug") },
+                            if DEBUG_COPIED.load(std::sync::atomic::Ordering::Relaxed) {
+                                crate::t!("settings.footer.debug_copied")
+                            } else {
+                                crate::t!("settings.footer.copy_debug")
+                            },
                             idx::TEXT_LINK,
                         ),
                     )
@@ -525,15 +527,23 @@ fn footer(cx: &mut Cx) -> Div {
                 .flex_wrap()
                 .items_center()
                 .gap(z(4.))
-                .child(link("settings-privacy", note(crate::t!("settings.footer.privacy"), idx::TEXT_LINK)).on_click(|_, _, cx| cx.open_url(crate::ui::extra_menus::PRIVACY_URL)))
+                .child(
+                    link("settings-privacy", note(crate::t!("settings.footer.privacy"), idx::TEXT_LINK))
+                        .on_click(|_, _, cx| cx.open_url(crate::ui::extra_menus::PRIVACY_URL)),
+                )
                 .child(bullet())
-                .child(link("settings-terms", note(crate::t!("settings.footer.terms"), idx::TEXT_LINK)).on_click(|_, _, cx| cx.open_url(crate::ui::extra_menus::TERMS_URL)))
+                .child(
+                    link("settings-terms", note(crate::t!("settings.footer.terms"), idx::TEXT_LINK))
+                        .on_click(|_, _, cx| cx.open_url(crate::ui::extra_menus::TERMS_URL)),
+                )
                 .child(bullet())
                 .child(
                     note(crate::t!("settings.footer.more"), idx::TEXT_MUTED)
                         .id("settings-more")
                         .cursor_pointer()
-                        .when(crate::ui::extra_menus::opened() == Some(crate::ui::extra_menus::Target::SettingsMore), |d| d.text_color(c(tok(idx::TEXT_DEFAULT))))
+                        .when(crate::ui::extra_menus::opened() == Some(crate::ui::extra_menus::Target::SettingsMore), |d| {
+                            d.text_color(c(tok(idx::TEXT_DEFAULT)))
+                        })
                         .hover(|s| s.underline().text_color(c(tok(idx::TEXT_DEFAULT))))
                         .on_click(|ev, w, _| {
                             let b = ev.position();
@@ -561,11 +571,22 @@ fn subnav_rows(p: Page) -> Vec<SharedString> {
 fn subnav_keys(p: Page) -> &'static [&'static str] {
     match p {
         Page::DataPrivacy => &["settings.sub.data_use", "settings.sub.profile_privacy", "settings.sub.e2ee"],
-        Page::PrivacySafety => &["settings.sub.content_filters", "settings.sub.spam", "settings.sub.dms", "settings.sub.friend_requests", "settings.sub.connected_games", "settings.sub.ignore_block"],
+        Page::PrivacySafety => &[
+            "settings.sub.content_filters",
+            "settings.sub.spam",
+            "settings.sub.dms",
+            "settings.sub.friend_requests",
+            "settings.sub.connected_games",
+            "settings.sub.ignore_block",
+        ],
         Page::Notifications => &["settings.sub.overview", "settings.sub.sounds", "settings.sub.badges", "settings.sub.email", "settings.sub.advanced_n"],
         Page::Billing => &["settings.sub.payment", "settings.sub.transactions"],
-        Page::VoiceVideo => &["settings.sub.voice", "settings.sub.camera", "settings.sub.streaming", "settings.sub.sounds", "settings.sub.soundboard", "settings.sub.advanced"],
-        Page::Appearance => &["settings.sub.theme", "settings.sub.app_icon", "settings.sub.messages", "settings.sub.chat_box", "settings.sub.search", "settings.sub.streamer"],
+        Page::VoiceVideo => {
+            &["settings.sub.voice", "settings.sub.camera", "settings.sub.streaming", "settings.sub.sounds", "settings.sub.soundboard", "settings.sub.advanced"]
+        }
+        Page::Appearance => {
+            &["settings.sub.theme", "settings.sub.app_icon", "settings.sub.messages", "settings.sub.chat_box", "settings.sub.search", "settings.sub.streamer"]
+        }
         Page::Accessibility => &["settings.sub.readability", "settings.sub.density", "settings.sub.contrast", "settings.sub.motion", "settings.sub.audio_sr"],
         Page::System => &["settings.sub.general", "settings.sub.custom_keys", "settings.sub.default_keys", "settings.sub.advanced_n"],
         Page::RegisteredGames => &["settings.sub.current_game", "settings.sub.added_games"],
@@ -692,12 +713,7 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
             .text_color(c(tok(idx::TEXT_DEFAULT)))
             .child(gpui_component::input::Input::new(&input).appearance(false).bordered(false).px_0().text_size(z(16.)))
             .into_any_element(),
-        None => div()
-            .flex_1()
-            .text_size(z(16.))
-            .text_color(c(tok(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT)))
-            .child(crate::t!("settings.search"))
-            .into_any_element(),
+        None => div().flex_1().text_size(z(16.)).text_color(c(tok(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT))).child(crate::t!("settings.search")).into_any_element(),
     };
     let search = div()
         .h(z(40.))
@@ -711,9 +727,12 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
         .border_color(c(tok(if query.is_empty() { idx::INPUT_BORDER_DEFAULT } else { idx::INPUT_BORDER_ACTIVE })))
         .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
         .child(
-            div().size(z(30.)).flex().items_center().justify_center().child(
-                gpui::svg().path(crate::icons::path("search")).size(z(16.)).text_color(c(tok(idx::INPUT_ICON_DEFAULT))),
-            ),
+            div()
+                .size(z(30.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("search")).size(z(16.)).text_color(c(tok(idx::INPUT_ICON_DEFAULT)))),
         )
         .child(field)
         .when(!query.is_empty(), |d| {
@@ -734,12 +753,7 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
                     .child(gpui::svg().path(crate::icons::path("settings/circle-x")).size(z(16.)).text_color(c(tok(idx::TEXT_SUBTLE)))),
             )
         });
-    let fixed = div()
-        .pl(z(4.))
-        .pr(z(16.))
-        .flex_none()
-        .child(div().pb(z(10.)).child(profile))
-        .child(search);
+    let fixed = div().pl(z(4.)).pr(z(16.)).flex_none().child(div().pb(z(10.)).child(profile)).child(search);
 
     let searching = !query.is_empty();
     let mut list = div().flex().flex_col().gap(z(10.));
@@ -905,11 +919,8 @@ fn content_header(label: SharedString, nested: Option<super::nested::Nested>, cx
 
 fn hwaccel_modal(on: bool, cx: &mut Cx) -> AnyElement {
     let (e1, e2) = (cx.entity(), cx.entity());
-    let lines: Vec<SharedString> = if on {
-        vec![crate::t!("sp.sy.hwaccel_on_body")]
-    } else {
-        vec![crate::t!("sp.sy.hwaccel_off_body"), crate::t!("sp.sy.hwaccel_sure")]
-    };
+    let lines: Vec<SharedString> =
+        if on { vec![crate::t!("sp.sy.hwaccel_on_body")] } else { vec![crate::t!("sp.sy.hwaccel_off_body"), crate::t!("sp.sy.hwaccel_sure")] };
     crate::ui::modal::confirm(crate::ui::modal::Confirm {
         title: crate::t!("sp.sy.hwaccel_title"),
         body: vec![div().flex().flex_col().children(lines).into_any_element()],
@@ -984,16 +995,23 @@ fn changelog_body(entries: &[crate::updater::ChangelogEntry]) -> Vec<AnyElement>
                 .into_any_element(),
         );
         if !date.is_empty() {
-            out.push(div().mt(z(4.)).text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(SharedString::from(date)).into_any_element());
+            out.push(
+                div().mt(z(4.)).text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(SharedString::from(date)).into_any_element(),
+            );
         }
         for block in parse(&e.body, &NoResolve) {
             let el = match block {
-                Block::Heading(_, inline) => body_text(div().mt(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG)))).child(crate::ui::modals::update::render_inline(&inline)),
+                Block::Heading(_, inline) => body_text(div().mt(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))))
+                    .child(crate::ui::modals::update::render_inline(&inline)),
                 Block::ListItem { depth, inline, ordered } => body_text(div().mt(z(4.)).mb(z(12.)).ml(z(20. + f32::from(depth) * 20.)).flex().gap(z(8.)))
                     .child(div().flex_none().text_color(c(tok(idx::TEXT_MUTED))).child(SharedString::from(ordered.map_or("•".to_owned(), |n| format!("{n}.")))))
                     .child(div().flex_1().min_w_0().child(crate::ui::modals::update::render_inline(&inline))),
-                Block::Code { code, .. } => body_text(div().my(z(8.)).p(z(8.)).rounded(z(4.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).text_size(z(14.))).child(SharedString::from(code)),
-                Block::Paragraph(inline) | Block::Quote(inline) | Block::Subtext(inline) => body_text(div().my(z(8.))).child(crate::ui::modals::update::render_inline(&inline)),
+                Block::Code { code, .. } => {
+                    body_text(div().my(z(8.)).p(z(8.)).rounded(z(4.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).text_size(z(14.))).child(SharedString::from(code))
+                }
+                Block::Paragraph(inline) | Block::Quote(inline) | Block::Subtext(inline) => {
+                    body_text(div().my(z(8.))).child(crate::ui::modals::update::render_inline(&inline))
+                }
             };
             out.push(el.into_any_element());
         }
@@ -1014,7 +1032,16 @@ fn changelog_modal(cx: &mut Cx) -> AnyElement {
     let state = crate::updater::changelog();
     let content: Vec<AnyElement> = match &state {
         crate::updater::Changelog::Loaded(list) if !list.is_empty() => changelog_body(list),
-        crate::updater::Changelog::Loading => vec![div().py(z(40.)).flex().justify_center().text_size(z(14.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("common.loading")).into_any_element()],
+        crate::updater::Changelog::Loading => vec![
+            div()
+                .py(z(40.))
+                .flex()
+                .justify_center()
+                .text_size(z(14.))
+                .text_color(c(tok(idx::TEXT_MUTED)))
+                .child(crate::t!("common.loading"))
+                .into_any_element(),
+        ],
         _ => vec![
             div()
                 .py(z(8.))
@@ -1046,7 +1073,14 @@ fn changelog_modal(cx: &mut Cx) -> AnyElement {
                 .flex()
                 .flex_col()
                 .gap(z(4.))
-                .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(crate::t!("settings.more.changelog")))
+                .child(
+                    div()
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(c(tok(idx::TEXT_STRONG)))
+                        .child(crate::t!("settings.more.changelog")),
+                )
                 .child(div().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::diagnostics::version_line())),
         )
         .child(
@@ -1067,24 +1101,17 @@ fn changelog_modal(cx: &mut Cx) -> AnyElement {
         )
         .child(div().id("changelog-body").flex_1().min_h_0().overflow_y_scroll().px(z(24.)).pb(z(20.)).children(content))
         .child(
-            div()
-                .flex_none()
-                .px(z(24.))
-                .py(z(16.))
-                .border_t_1()
-                .border_color(c(tok(idx::BORDER_SUBTLE)))
-                .flex()
-                .child(
-                    div()
-                        .id("changelog-releases")
-                        .cursor_pointer()
-                        .text_size(z(14.))
-                        .line_height(z(18.))
-                        .text_color(c(tok(idx::TEXT_LINK)))
-                        .hover(|s| s.underline())
-                        .on_click(|_, _, cx| cx.open_url(crate::updater::RELEASES_PAGE_URL))
-                        .child(crate::t!("settings.changelog.all_releases")),
-                ),
+            div().flex_none().px(z(24.)).py(z(16.)).border_t_1().border_color(c(tok(idx::BORDER_SUBTLE))).flex().child(
+                div()
+                    .id("changelog-releases")
+                    .cursor_pointer()
+                    .text_size(z(14.))
+                    .line_height(z(18.))
+                    .text_color(c(tok(idx::TEXT_LINK)))
+                    .hover(|s| s.underline())
+                    .on_click(|_, _, cx| cx.open_url(crate::updater::RELEASES_PAGE_URL))
+                    .child(crate::t!("settings.changelog.all_releases")),
+            ),
         );
     crate::ui::modal::frame("settings-changelog", close, card)
 }
@@ -1112,37 +1139,31 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
     let changelog = s.show_changelog;
     let hwaccel = s.confirm_hwaccel;
     let page_label = s.page.label();
-    let body = div()
-        .id("settings-content")
-        .flex_1()
-        .min_h_0()
-        .overflow_y_scroll()
-        .track_scroll(&s.scroll)
-        .child(
-            div()
-                .mx_auto()
-                .my(z(64.))
-                .w_full()
-                .max_w(z(728.))
-                .px(z(16.))
-                .flex()
-                .flex_col()
-                .when_some(error, |d, e| {
-                    d.child(
-                        div()
-                            .mb(z(16.))
-                            .p(z(12.))
-                            .rounded(z(8.))
-                            .bg(c(tok(idx::BACKGROUND_FEEDBACK_CRITICAL)))
-                            .border_1()
-                            .border_color(c(tok(idx::BORDER_FEEDBACK_CRITICAL)))
-                            .text_color(c(tok(idx::TEXT_DEFAULT)))
-                            .text_size(z(14.))
-                            .child(e),
-                    )
-                })
-                .child(page(app, cx)),
-        );
+    let body = div().id("settings-content").flex_1().min_h_0().overflow_y_scroll().track_scroll(&s.scroll).child(
+        div()
+            .mx_auto()
+            .my(z(64.))
+            .w_full()
+            .max_w(z(728.))
+            .px(z(16.))
+            .flex()
+            .flex_col()
+            .when_some(error, |d, e| {
+                d.child(
+                    div()
+                        .mb(z(16.))
+                        .p(z(12.))
+                        .rounded(z(8.))
+                        .bg(c(tok(idx::BACKGROUND_FEEDBACK_CRITICAL)))
+                        .border_1()
+                        .border_color(c(tok(idx::BORDER_FEEDBACK_CRITICAL)))
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .text_size(z(14.))
+                        .child(e),
+                )
+            })
+            .child(page(app, cx)),
+    );
     let card = div()
         .id("user-settings-card")
         .size_full()
@@ -1156,15 +1177,13 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
         .flex()
         .child(nav(app, cx))
         .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .flex()
-                .flex_col()
-                .bg(c(tok(idx::BACKGROUND_BASE_LOW)))
-                .child(content_header(page_label, s.nested, cx))
-                .child(crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto).flex_1().min_h_0().child(body).children(crate::ui::chat::scrollbar::auto_scrollbar_div(&s.scroll))),
+            div().flex_1().min_w_0().h_full().flex().flex_col().bg(c(tok(idx::BACKGROUND_BASE_LOW))).child(content_header(page_label, s.nested, cx)).child(
+                crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
+                    .flex_1()
+                    .min_h_0()
+                    .child(body)
+                    .children(crate::ui::chat::scrollbar::auto_scrollbar_div(&s.scroll)),
+            ),
         );
     Some(
         div()
@@ -1173,18 +1192,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
             .inset_0()
             .occlude()
             .bg(c(tok(idx::BACKGROUND_SCRIM)))
-            .on_mouse_down(gpui::MouseButton::Left, cx.listener(|a, _, _, cx| {
-                a.settings = None;
-                cx.notify();
-            }))
-            .child(
-                div()
-                    .absolute()
-                    .inset(z(40.))
-                    .flex()
-                    .justify_center()
-                    .child(card.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())),
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|a, _, _, cx| {
+                    a.settings = None;
+                    cx.notify();
+                }),
             )
+            .child(div().absolute().inset(z(40.)).flex().justify_center().child(card.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())))
             .when(confirm, |d| d.child(logout_modal(cx)))
             .when(changelog, |d| d.child(changelog_modal(cx)))
             .children(super::authorized_apps::confirm_modal(cx))

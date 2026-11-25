@@ -1,15 +1,6 @@
 pub use super::emoji_data::EMOJI;
 
-pub const CATEGORIES: [&str; 8] = [
-    "People",
-    "Nature",
-    "Food & Drink",
-    "Activities",
-    "Travel & Places",
-    "Objects",
-    "Symbols",
-    "Flags",
-];
+pub const CATEGORIES: [&str; 8] = ["People", "Nature", "Food & Drink", "Activities", "Travel & Places", "Objects", "Symbols", "Flags"];
 
 pub const CATEGORY_ICON: [&str; 8] = ["😀", "🐻", "🍔", "⚽", "🚗", "💡", "❤️", "🏁"];
 

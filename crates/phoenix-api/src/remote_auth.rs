@@ -47,9 +47,7 @@ impl Keys {
     pub fn generate_bits(bits: usize) -> Result<Self> {
         let mut rng = rsa::rand_core::OsRng;
         let private = RsaPrivateKey::new(&mut rng, bits).map_err(|e| Error::Protocol(format!("rsa: {e}")))?;
-        let der = RsaPublicKey::from(&private)
-            .to_public_key_der()
-            .map_err(|e| Error::Protocol(format!("spki: {e}")))?;
+        let der = RsaPublicKey::from(&private).to_public_key_der().map_err(|e| Error::Protocol(format!("spki: {e}")))?;
         Ok(Self { private, spki_b64: STANDARD.encode(der.as_bytes()) })
     }
 
@@ -90,12 +88,7 @@ pub fn parse_user_payload(s: &str) -> Option<RemoteAuthEvent> {
     let discriminator = it.next()?.to_owned();
     let avatar = it.next()?;
     let username = it.next()?.to_owned();
-    Some(RemoteAuthEvent::Scanned {
-        user_id,
-        discriminator,
-        avatar: (!avatar.is_empty() && avatar != "0").then(|| avatar.to_owned()),
-        username,
-    })
+    Some(RemoteAuthEvent::Scanned { user_id, discriminator, avatar: (!avatar.is_empty() && avatar != "0").then(|| avatar.to_owned()), username })
 }
 
 #[derive(Debug, PartialEq)]
@@ -137,9 +130,7 @@ pub fn handle(keys: &Keys, msg: &Value) -> Result<Step> {
 }
 
 pub async fn run(rest: RestClient, tx: mpsc::UnboundedSender<RemoteAuthEvent>) -> Result<()> {
-    let keys = tokio::task::spawn_blocking(Keys::generate)
-        .await
-        .map_err(|e| Error::Protocol(e.to_string()))??;
+    let keys = tokio::task::spawn_blocking(Keys::generate).await.map_err(|e| Error::Protocol(e.to_string()))??;
     let mut req = GATEWAY_URL.into_client_request().map_err(|e| Error::WebSocket(Box::new(e)))?;
     req.headers_mut().insert("Origin", "https://discord.com".parse().expect("static header"));
     if let Ok(ua) = rest.properties().user_agent().parse() {

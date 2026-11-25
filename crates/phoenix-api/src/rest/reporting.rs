@@ -58,7 +58,12 @@ impl ReportElement {
             .filter_map(|r| {
                 let r = r.as_array()?;
                 let s = |i: usize| r.get(i).and_then(Value::as_str).map(str::to_owned);
-                Some(CheckboxOption { key: s(0)?, label: s(1)?, description: s(2).filter(|d| !d.is_empty()), preselected: r.get(3).and_then(Value::as_bool).unwrap_or(false) })
+                Some(CheckboxOption {
+                    key: s(0)?,
+                    label: s(1)?,
+                    description: s(2).filter(|d| !d.is_empty()),
+                    preselected: r.get(3).and_then(Value::as_bool).unwrap_or(false),
+                })
             })
             .collect()
     }
@@ -123,7 +128,8 @@ impl ReportNode {
 
     pub fn next_blocked(&self, picks: &[(String, String)]) -> bool {
         self.element("checkbox").is_some_and(|e| {
-            (e.should_submit_data && picks.is_empty()) || (e.require_all_options && e.checkbox_options().iter().any(|o| !picks.iter().any(|(k, _)| *k == o.key)))
+            (e.should_submit_data && picks.is_empty())
+                || (e.require_all_options && e.checkbox_options().iter().any(|o| !picks.iter().any(|(k, _)| *k == o.key)))
         })
     }
 }
@@ -305,7 +311,12 @@ mod tests {
         let m = menu();
         let steps = [
             ReportStep { node: 7, label: "Private info".into(), target: 81, picks: vec![] },
-            ReportStep { node: 81, label: String::new(), target: 17, picks: vec![("ip_address".into(), "IP address".into()), ("face_pic".into(), "Face picture".into())] },
+            ReportStep {
+                node: 81,
+                label: String::new(),
+                target: 17,
+                picks: vec![("ip_address".into(), "IP address".into()), ("face_pic".into(), "Face picture".into())],
+            },
             ReportStep { node: 17, label: String::new(), target: 72, picks: vec![] },
         ];
         let v = report_body(&m, msg(), &steps);
@@ -318,7 +329,10 @@ mod tests {
     #[test]
     fn auto_submit_body() {
         let m = menu();
-        let steps = [ReportStep { node: 7, label: "I don't like it".into(), target: 99, picks: vec![] }, ReportStep { node: 99, label: String::new(), target: 99, picks: vec![] }];
+        let steps = [
+            ReportStep { node: 7, label: "I don't like it".into(), target: 99, picks: vec![] },
+            ReportStep { node: 99, label: String::new(), target: 99, picks: vec![] },
+        ];
         let v = report_body(&m, msg(), &steps);
         assert_eq!(v["breadcrumbs"], json!([7, 99]));
         assert_eq!(v["elements"], json!({}));

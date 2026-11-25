@@ -105,11 +105,7 @@ pub fn classify_and_decrypt(cipher: Option<&TransportCipher>, buf: &[u8]) -> Res
     if buf.len() < 2 || buf[0] >> 6 != 2 {
         return Err(Error::Malformed("not rtp/rtcp"));
     }
-    if (192..=223).contains(&buf[1]) {
-        Ok(Incoming::Rtcp(c.decrypt_rtcp(buf)?))
-    } else {
-        Ok(Incoming::Rtp(c.decrypt_rtp(buf)?))
-    }
+    if (192..=223).contains(&buf[1]) { Ok(Incoming::Rtcp(c.decrypt_rtcp(buf)?)) } else { Ok(Incoming::Rtp(c.decrypt_rtp(buf)?)) }
 }
 
 #[cfg(test)]

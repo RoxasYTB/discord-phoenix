@@ -1,9 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-use gpui::{
-    AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, svg,
-};
+use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::*, svg};
 use serde_json::{Value, json};
 
 use crate::{
@@ -116,8 +114,7 @@ pub fn verification_gate(level: u8) -> VerificationGate {
 pub fn is_nsfw_accepted(channel: Id, guild: Option<Id>) -> bool {
     STATE.with(|s| {
         let st = s.borrow();
-        st.nsfw_accepted_channels.contains(&channel)
-            || guild.is_some_and(|g| st.nsfw_accepted_guilds.contains(&g))
+        st.nsfw_accepted_channels.contains(&channel) || guild.is_some_and(|g| st.nsfw_accepted_guilds.contains(&g))
     })
 }
 
@@ -136,11 +133,8 @@ pub fn accept_nsfw_guild(guild: Id) {
 pub fn parse_onboarding(v: &Value) -> OnboardingData {
     let guild_id = v.get("guild_id").and_then(Value::as_str).unwrap_or_default().to_owned();
     let enabled = v.get("enabled").and_then(Value::as_bool).unwrap_or(false);
-    let default_channel_ids = v
-        .get("default_channel_ids")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect())
-        .unwrap_or_default();
+    let default_channel_ids =
+        v.get("default_channel_ids").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_owned).collect()).unwrap_or_default();
     let prompts = v
         .get("prompts")
         .and_then(Value::as_array)
@@ -159,11 +153,7 @@ pub fn parse_onboarding(v: &Value) -> OnboardingData {
                                 .map(|o| OnboardingOption {
                                     id: o.get("id").and_then(Value::as_str).unwrap_or_default().to_owned(),
                                     title: o.get("title").and_then(Value::as_str).unwrap_or_default().to_owned(),
-                                    description: o
-                                        .get("description")
-                                        .and_then(Value::as_str)
-                                        .unwrap_or_default()
-                                        .to_owned(),
+                                    description: o.get("description").and_then(Value::as_str).unwrap_or_default().to_owned(),
                                     channel_ids: o
                                         .get("channel_ids")
                                         .and_then(Value::as_array)
@@ -207,9 +197,7 @@ pub fn parse_member_verification(v: &Value) -> MemberVerification {
     let rules = v
         .get("form_fields")
         .and_then(Value::as_array)
-        .and_then(|fields| {
-            fields.iter().find(|f| f.get("field_type").and_then(Value::as_str) == Some("TERMS"))
-        })
+        .and_then(|fields| fields.iter().find(|f| f.get("field_type").and_then(Value::as_str) == Some("TERMS")))
         .and_then(|terms| terms.get("values").and_then(Value::as_array))
         .map(|arr| arr.iter().filter_map(Value::as_str).map(str::to_owned).collect())
         .unwrap_or_default();
@@ -414,13 +402,7 @@ pub fn nsfw_gate(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEl
                             .text_center()
                             .child(crate::t!("join_flow.nsfw_title")),
                     )
-                    .child(
-                        div()
-                            .text_size(z(14.))
-                            .text_color(c(Palette::TEXT_MUTED))
-                            .text_center()
-                            .child(crate::t!("join_flow.nsfw_desc")),
-                    )
+                    .child(div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).text_center().child(crate::t!("join_flow.nsfw_desc")))
                     .child(
                         div()
                             .mt(z(8.))
@@ -484,13 +466,7 @@ pub fn render_screen(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<A
 fn render_onboarding(_app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let (data, step, selected, err, busy) = STATE.with(|s| {
         let st = s.borrow();
-        (
-            st.onboarding.get(&guild).cloned(),
-            st.onboarding_step,
-            st.onboarding_selected.clone(),
-            st.error.clone(),
-            st.busy,
-        )
+        (st.onboarding.get(&guild).cloned(), st.onboarding_step, st.onboarding_selected.clone(), st.error.clone(), st.busy)
     });
     let mut body = div().p(z(24.)).flex().flex_col().gap(z(16.));
     if let Some(d) = data {
@@ -501,20 +477,12 @@ fn render_onboarding(_app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>)
             let single = prompt.single_select;
             let chosen = selected.get(&pid).cloned().unwrap_or_default();
             body = body
-                .child(
-                    div()
-                        .text_size(z(12.))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(c(Palette::TEXT_MUTED))
-                        .child(crate::t!("join_flow.step_of", cur = step + 1, total = total)),
-                )
-                .child(
-                    div()
-                        .text_size(z(22.))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(c(Palette::TEXT_HEADER))
-                        .child(prompt.title.clone()),
-                );
+                .child(div().text_size(z(12.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_MUTED)).child(crate::t!(
+                    "join_flow.step_of",
+                    cur = step + 1,
+                    total = total
+                )))
+                .child(div().text_size(z(22.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_HEADER)).child(prompt.title.clone()));
             let mut opts = div().flex().flex_col().gap(z(8.));
             for (idx, opt) in prompt.options.iter().enumerate() {
                 let oid = opt.id.clone();
@@ -542,122 +510,83 @@ fn render_onboarding(_app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>)
                             });
                             cx.notify();
                         }))
-                        .child(
-                            div()
-                                .text_size(z(15.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(c(Palette::TEXT_HEADER))
-                                .child(opt.title.clone()),
-                        )
+                        .child(div().text_size(z(15.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_HEADER)).child(opt.title.clone()))
                         .when(!opt.description.is_empty(), |el| {
-                            el.child(
-                                div()
-                                    .mt(z(2.))
-                                    .text_size(z(13.))
-                                    .text_color(c(Palette::TEXT_MUTED))
-                                    .child(opt.description.clone()),
-                            )
+                            el.child(div().mt(z(2.)).text_size(z(13.)).text_color(c(Palette::TEXT_MUTED)).child(opt.description.clone()))
                         }),
                 );
             }
             body = body.child(opts);
         } else {
             body = body
+                .child(div().text_size(z(22.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_HEADER)).child(crate::t!("join_flow.onb_done_title")))
+                .child(div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("join_flow.onb_done_sub")));
+        }
+        body = body.when_some(err, |d, e| d.child(div().text_size(z(12.)).text_color(c(Palette::RED)).child(e))).child(
+            div()
+                .mt(z(8.))
+                .flex()
+                .justify_between()
+                .items_center()
                 .child(
                     div()
-                        .text_size(z(22.))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(c(Palette::TEXT_HEADER))
-                        .child(crate::t!("join_flow.onb_done_title")),
+                        .id("onb-close")
+                        .px(z(12.))
+                        .py(z(8.))
+                        .cursor_pointer()
+                        .text_size(z(14.))
+                        .text_color(c(Palette::TEXT_MUTED))
+                        .on_click(cx.listener(|_, _, _, cx| close_screen(cx)))
+                        .child(crate::t!("common.cancel")),
                 )
                 .child(
                     div()
+                        .id("onb-next")
+                        .h(z(38.))
+                        .px(z(20.))
+                        .rounded(z(4.))
+                        .bg(c(Palette::BLURPLE))
+                        .text_color(gpui::white())
                         .text_size(z(14.))
-                        .text_color(c(Palette::TEXT_MUTED))
-                        .child(crate::t!("join_flow.onb_done_sub")),
-                );
-        }
-        body = body
-            .when_some(err, |d, e| d.child(div().text_size(z(12.)).text_color(c(Palette::RED)).child(e)))
-            .child(
-                div()
-                    .mt(z(8.))
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .id("onb-close")
-                            .px(z(12.))
-                            .py(z(8.))
-                            .cursor_pointer()
-                            .text_size(z(14.))
-                            .text_color(c(Palette::TEXT_MUTED))
-                            .on_click(cx.listener(|_, _, _, cx| close_screen(cx)))
-                            .child(crate::t!("common.cancel")),
-                    )
-                    .child(
-                        div()
-                            .id("onb-next")
-                            .h(z(38.))
-                            .px(z(20.))
-                            .rounded(z(4.))
-                            .bg(c(Palette::BLURPLE))
-                            .text_color(gpui::white())
-                            .text_size(z(14.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .flex()
-                            .items_center()
-                            .when(!busy, |el| el.cursor_pointer())
-                            .on_click(cx.listener(move |a, _, _, cx| {
-                                if step + 1 < total {
-                                    STATE.with(|s| s.borrow_mut().onboarding_step += 1);
-                                    cx.notify();
-                                } else if step < total {
-                                    STATE.with(|s| s.borrow_mut().onboarding_step = total);
-                                    cx.notify();
-                                } else {
-                                    let (options, prompts) = STATE.with(|s| {
-                                        let mut st = s.borrow_mut();
-                                        st.busy = true;
-                                        let opts: Vec<String> =
-                                            st.onboarding_selected.values().flatten().cloned().collect();
-                                        let prm: Vec<String> = st
-                                            .onboarding
-                                            .get(&guild)
-                                            .map(|o| o.prompts.iter().map(|p| p.id.clone()).collect())
-                                            .unwrap_or_default();
-                                        (opts, prm)
-                                    });
-                                    a.nav_request(
-                                        NavRequest::SubmitOnboarding { guild, options, prompts },
-                                        cx,
-                                        |_, res, cx| {
-                                            if res.is_ok() {
-                                                close_screen(cx);
-                                            } else if let Err(e) = res {
-                                                STATE.with(|s| {
-                                                    let mut st = s.borrow_mut();
-                                                    st.busy = false;
-                                                    st.error = Some(e.0.into());
-                                                });
-                                                cx.notify();
-                                            }
-                                        },
-                                    );
-                                }
-                            }))
-                            .child(if step < total {
-                                crate::t!("join_flow.next")
+                        .font_weight(FontWeight::MEDIUM)
+                        .flex()
+                        .items_center()
+                        .when(!busy, |el| el.cursor_pointer())
+                        .on_click(cx.listener(move |a, _, _, cx| {
+                            if step + 1 < total {
+                                STATE.with(|s| s.borrow_mut().onboarding_step += 1);
+                                cx.notify();
+                            } else if step < total {
+                                STATE.with(|s| s.borrow_mut().onboarding_step = total);
+                                cx.notify();
                             } else {
-                                crate::t!("join_flow.finish")
-                            }),
-                    ),
-            );
-    } else {
-        body = body.child(
-            div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("join_flow.loading")),
+                                let (options, prompts) = STATE.with(|s| {
+                                    let mut st = s.borrow_mut();
+                                    st.busy = true;
+                                    let opts: Vec<String> = st.onboarding_selected.values().flatten().cloned().collect();
+                                    let prm: Vec<String> =
+                                        st.onboarding.get(&guild).map(|o| o.prompts.iter().map(|p| p.id.clone()).collect()).unwrap_or_default();
+                                    (opts, prm)
+                                });
+                                a.nav_request(NavRequest::SubmitOnboarding { guild, options, prompts }, cx, |_, res, cx| {
+                                    if res.is_ok() {
+                                        close_screen(cx);
+                                    } else if let Err(e) = res {
+                                        STATE.with(|s| {
+                                            let mut st = s.borrow_mut();
+                                            st.busy = false;
+                                            st.error = Some(e.0.into());
+                                        });
+                                        cx.notify();
+                                    }
+                                });
+                            }
+                        }))
+                        .child(if step < total { crate::t!("join_flow.next") } else { crate::t!("join_flow.finish") }),
+                ),
         );
+    } else {
+        body = body.child(div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("join_flow.loading")));
     }
     crate::ui::invite::modal("onboarding-modal", cx, body)
 }
@@ -668,13 +597,7 @@ fn render_rules(_app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> A
         (st.verification.get(&guild).cloned(), st.rules_accepted, st.error.clone(), st.busy)
     });
     let mut body = div().p(z(24.)).flex().flex_col().gap(z(12.));
-    body = body.child(
-        div()
-            .text_size(z(22.))
-            .font_weight(FontWeight::BOLD)
-            .text_color(c(Palette::TEXT_HEADER))
-            .child(crate::t!("join_flow.rules_title")),
-    );
+    body = body.child(div().text_size(z(22.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_HEADER)).child(crate::t!("join_flow.rules_title")));
     if let Some(v) = data {
         if !v.description.is_empty() {
             body = body.child(div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(v.description.clone()));
@@ -708,75 +631,52 @@ fn render_rules(_app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> A
                         });
                         cx.notify();
                     }))
-                    .child(
-                        div()
-                            .size(z(18.))
-                            .rounded(z(4.))
-                            .border_1()
-                            .border_color(c(Palette::BLURPLE))
-                            .when(accepted, |d| d.bg(c(Palette::BLURPLE))),
-                    )
-                    .child(
-                        div()
-                            .text_size(z(14.))
-                            .text_color(c(Palette::TEXT_HEADER))
-                            .child(crate::t!("join_flow.rules_agree")),
-                    ),
+                    .child(div().size(z(18.)).rounded(z(4.)).border_1().border_color(c(Palette::BLURPLE)).when(accepted, |d| d.bg(c(Palette::BLURPLE))))
+                    .child(div().text_size(z(14.)).text_color(c(Palette::TEXT_HEADER)).child(crate::t!("join_flow.rules_agree"))),
             )
             .when_some(err, |d, e| d.child(div().text_size(z(12.)).text_color(c(Palette::RED)).child(e)))
             .child(
-                div()
-                    .mt(z(8.))
-                    .flex()
-                    .justify_end()
-                    .gap(z(8.))
-                    .child(
-                        div()
-                            .id("rules-submit")
-                            .h(z(38.))
-                            .px(z(20.))
-                            .rounded(z(4.))
-                            .bg(c(Palette::BLURPLE))
-                            .text_color(gpui::white())
-                            .text_size(z(14.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .flex()
-                            .items_center()
-                            .when(accepted && !busy, |d| d.cursor_pointer())
-                            .when(!accepted || busy, |d| d.opacity(0.5))
-                            .on_click(cx.listener(move |a, _, _, cx| {
-                                if !accepted || busy {
-                                    return;
-                                }
-                                STATE.with(|s| s.borrow_mut().busy = true);
-                                a.nav_request(
-                                    NavRequest::SubmitMemberVerification {
-                                        guild,
-                                        version: v.version.clone(),
-                                        rules: v.rules.clone(),
-                                    },
-                                    cx,
-                                    |_, res, cx| {
-                                        if res.is_ok() {
-                                            close_screen(cx);
-                                        } else if let Err(e) = res {
-                                            STATE.with(|s| {
-                                                let mut st = s.borrow_mut();
-                                                st.busy = false;
-                                                st.error = Some(e.0.into());
-                                            });
-                                            cx.notify();
-                                        }
-                                    },
-                                );
-                            }))
-                            .child(crate::t!("join_flow.rules_submit")),
-                    ),
+                div().mt(z(8.)).flex().justify_end().gap(z(8.)).child(
+                    div()
+                        .id("rules-submit")
+                        .h(z(38.))
+                        .px(z(20.))
+                        .rounded(z(4.))
+                        .bg(c(Palette::BLURPLE))
+                        .text_color(gpui::white())
+                        .text_size(z(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .flex()
+                        .items_center()
+                        .when(accepted && !busy, |d| d.cursor_pointer())
+                        .when(!accepted || busy, |d| d.opacity(0.5))
+                        .on_click(cx.listener(move |a, _, _, cx| {
+                            if !accepted || busy {
+                                return;
+                            }
+                            STATE.with(|s| s.borrow_mut().busy = true);
+                            a.nav_request(
+                                NavRequest::SubmitMemberVerification { guild, version: v.version.clone(), rules: v.rules.clone() },
+                                cx,
+                                |_, res, cx| {
+                                    if res.is_ok() {
+                                        close_screen(cx);
+                                    } else if let Err(e) = res {
+                                        STATE.with(|s| {
+                                            let mut st = s.borrow_mut();
+                                            st.busy = false;
+                                            st.error = Some(e.0.into());
+                                        });
+                                        cx.notify();
+                                    }
+                                },
+                            );
+                        }))
+                        .child(crate::t!("join_flow.rules_submit")),
+                ),
             );
     } else {
-        body = body.child(
-            div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("join_flow.loading")),
-        );
+        body = body.child(div().text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("join_flow.loading")));
     }
     crate::ui::invite::modal("rules-modal", cx, body)
 }

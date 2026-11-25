@@ -17,12 +17,7 @@ fn roles() -> Vec<Role> {
         | Permissions::ADD_REACTIONS
         | Permissions::EMBED_LINKS
         | Permissions::ATTACH_FILES;
-    vec![
-        role(G, base),
-        role(MUTED, Permissions::empty()),
-        role(HELPER, Permissions::MANAGE_MESSAGES),
-        role(ADMIN, Permissions::ADMINISTRATOR),
-    ]
+    vec![role(G, base), role(MUTED, Permissions::empty()), role(HELPER, Permissions::MANAGE_MESSAGES), role(ADMIN, Permissions::ADMINISTRATOR)]
 }
 
 fn ow(id: Snowflake, kind: OverwriteType, allow: Permissions, deny: Permissions) -> PermissionOverwrite {

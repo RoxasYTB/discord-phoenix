@@ -31,11 +31,7 @@ impl Emoji {
         let v = v?;
         let name = v.get("name").and_then(Value::as_str).unwrap_or_default().to_owned();
         let id = v.get("id").and_then(snowflake);
-        (id.is_some() || !name.is_empty()).then_some(Self {
-            name,
-            id,
-            animated: v.get("animated").and_then(Value::as_bool).unwrap_or(false),
-        })
+        (id.is_some() || !name.is_empty()).then_some(Self { name, id, animated: v.get("animated").and_then(Value::as_bool).unwrap_or(false) })
     }
 
     pub fn token(&self) -> String {
@@ -140,9 +136,7 @@ fn slot() -> &'static Mutex<HashMap<u64, Arc<Parts>>> {
 
 pub fn record(m: &api::Message) {
     let app = m.application_id.or(m.webhook_id).map(|s| s.0).unwrap_or(m.author.id.0);
-    if m.application_id.is_some()
-        || matches!(m.kind, api::MessageType::ChatInputCommand | api::MessageType::ContextMenuCommand)
-    {
+    if m.application_id.is_some() || matches!(m.kind, api::MessageType::ChatInputCommand | api::MessageType::ContextMenuCommand) {
         interactions().lock().insert(m.id.0, InteractionInfo { app_id: Id(app) });
     }
     let components = m.components.clone();

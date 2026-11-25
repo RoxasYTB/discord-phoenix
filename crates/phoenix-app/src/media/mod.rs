@@ -74,11 +74,7 @@ pub fn gifv_animated(url: &str, w: f32) -> Option<SharedString> {
 
 fn strip_params(url: &str, names: &[&str]) -> String {
     let Some((base, q)) = url.split_once('?') else { return url.to_owned() };
-    let kept: Vec<&str> = q
-        .split('&')
-        .filter(|kv| !names.iter().any(|n| kv.split('=').next() == Some(n)))
-        .filter(|kv| !kv.is_empty())
-        .collect();
+    let kept: Vec<&str> = q.split('&').filter(|kv| !names.iter().any(|n| kv.split('=').next() == Some(n))).filter(|kv| !kv.is_empty()).collect();
     if kept.is_empty() { base.to_owned() } else { format!("{base}?{}", kept.join("&")) }
 }
 
@@ -113,17 +109,7 @@ pub fn avatar_image(url: SharedString, size: f32) -> AnyElement {
         .size(px(size))
         .group(group.clone())
         .child(img(static_variant(&url)).size(px(size)).rounded_full())
-        .child(
-            img(url.clone())
-                .id(anim_id(&url))
-                .absolute()
-                .top_0()
-                .left_0()
-                .size(px(size))
-                .rounded_full()
-                .invisible()
-                .group_hover(group, |s| s.visible()),
-        )
+        .child(img(url.clone()).id(anim_id(&url)).absolute().top_0().left_0().size(px(size)).rounded_full().invisible().group_hover(group, |s| s.visible()))
         .into_any_element()
 }
 
@@ -140,7 +126,13 @@ pub fn gif_hover(key: SharedString, child: impl IntoElement) -> gpui::Stateful<g
     div().id(gpui::ElementId::Name(format!("gif-hover-{key}").into())).child(child).on_hover(move |h, window, _| {
         let changed = HOVERED_GIF.with(|cur| {
             let mut cur = cur.borrow_mut();
-            let next = if *h { Some(key.clone()) } else if cur.as_ref() == Some(&key) { None } else { cur.clone() };
+            let next = if *h {
+                Some(key.clone())
+            } else if cur.as_ref() == Some(&key) {
+                None
+            } else {
+                cur.clone()
+            };
             let changed = *cur != next;
             *cur = next;
             changed
@@ -153,15 +145,20 @@ pub fn gif_hover(key: SharedString, child: impl IntoElement) -> gpui::Stateful<g
 
 pub fn sticker_plays(key: &SharedString) -> bool {
     crate::ui::settings::effects::sticker_autoplay()
-        || (crate::ui::settings::effects::sticker_hover_plays()
-            && HOVERED_STICKER.with(|h| h.borrow().as_ref() == Some(key)))
+        || (crate::ui::settings::effects::sticker_hover_plays() && HOVERED_STICKER.with(|h| h.borrow().as_ref() == Some(key)))
 }
 
 pub fn sticker_hover(key: SharedString, child: impl IntoElement) -> gpui::Stateful<gpui::Div> {
     div().id(gpui::ElementId::Name(format!("sticker-hover-{key}").into())).child(child).on_hover(move |h, window, _| {
         let changed = HOVERED_STICKER.with(|cur| {
             let mut cur = cur.borrow_mut();
-            let next = if *h { Some(key.clone()) } else if cur.as_ref() == Some(&key) { None } else { cur.clone() };
+            let next = if *h {
+                Some(key.clone())
+            } else if cur.as_ref() == Some(&key) {
+                None
+            } else {
+                cur.clone()
+            };
             let changed = *cur != next;
             *cur = next;
             changed
@@ -283,10 +280,7 @@ mod tests {
             Some("https://media.tenor.com/6n0lkxsBEQkAAAAM/cat.gif")
         );
         assert_eq!(g("https://media.giphy.com/media/xyz/giphy.mp4").as_deref(), Some("https://media.giphy.com/media/xyz/giphy.webp"));
-        assert_eq!(
-            super::gifv_animated("https://media.giphy.com/media/xyz/giphy.mp4", 150.).as_deref(),
-            Some("https://media.giphy.com/media/xyz/200w.webp")
-        );
+        assert_eq!(super::gifv_animated("https://media.giphy.com/media/xyz/giphy.mp4", 150.).as_deref(), Some("https://media.giphy.com/media/xyz/200w.webp"));
         assert_eq!(g("https://example.com/a.mp4"), None);
         assert_eq!(
             g("https://images-ext-1.discordapp.net/external/q/https/static.klipy.com/ii/k/4f/0f/x.webp?format=webp&width=4").as_deref(),
@@ -315,16 +309,19 @@ mod tests {
 
     #[test]
     fn cdn_size_is_replaced() {
-        assert_eq!(super::with_cdn_size("https://cdn.discordapp.com/avatars/1/a.png?size=128", 32).as_ref(), "https://cdn.discordapp.com/avatars/1/a.png?size=32");
-        assert_eq!(super::with_cdn_size("https://cdn.discordapp.com/a.webp?size=128&animated=true", 32).as_ref(), "https://cdn.discordapp.com/a.webp?size=32&animated=true");
+        assert_eq!(
+            super::with_cdn_size("https://cdn.discordapp.com/avatars/1/a.png?size=128", 32).as_ref(),
+            "https://cdn.discordapp.com/avatars/1/a.png?size=32"
+        );
+        assert_eq!(
+            super::with_cdn_size("https://cdn.discordapp.com/a.webp?size=128&animated=true", 32).as_ref(),
+            "https://cdn.discordapp.com/a.webp?size=32&animated=true"
+        );
         assert_eq!(super::with_cdn_size("https://cdn.discordapp.com/embed/avatars/2.png", 32).as_ref(), "https://cdn.discordapp.com/embed/avatars/2.png");
     }
 
     #[test]
     fn static_avatar() {
-        assert_eq!(
-            static_variant("https://cdn.discordapp.com/avatars/1/a_x.gif?size=128").as_ref(),
-            "https://cdn.discordapp.com/avatars/1/a_x.png?size=128"
-        );
+        assert_eq!(static_variant("https://cdn.discordapp.com/avatars/1/a_x.gif?size=128").as_ref(), "https://cdn.discordapp.com/avatars/1/a_x.png?size=128");
     }
 }

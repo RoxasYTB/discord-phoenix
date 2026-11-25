@@ -19,9 +19,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let text = gpui_platform::current_platform(true).text_system();
-    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
-        gpui_platform::current_headless_renderer()
-    });
+    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || gpui_platform::current_headless_renderer());
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",

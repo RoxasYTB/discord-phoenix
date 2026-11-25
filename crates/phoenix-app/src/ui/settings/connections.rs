@@ -123,16 +123,7 @@ fn option_row(id: (&'static str, usize), label: SharedString, on: bool, dim: boo
         .items_center()
         .gap(z(12.))
         .cursor(gpui::CursorStyle::OperationNotAllowed)
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(c(tok(idx::TEXT_STRONG)))
-                .child(label),
-        )
+        .child(div().flex_1().min_w_0().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(label))
         .child(controls::switch((id.0, id.1 + 1000), on))
         .when(dim, |d| d.opacity(0.5))
 }

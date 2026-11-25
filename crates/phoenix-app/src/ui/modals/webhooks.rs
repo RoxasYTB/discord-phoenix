@@ -23,11 +23,10 @@ fn icon(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
 }
 
 fn link_text(before: SharedString, link: SharedString, after: SharedString) -> gpui::Div {
-    div()
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(gpui::StyledText::new(format!("{before}{link}{after}")).with_highlights([(before.len()..before.len() + link.len(), gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })]))
+    div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(
+        gpui::StyledText::new(format!("{before}{link}{after}"))
+            .with_highlights([(before.len()..before.len() + link.len(), gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })]),
+    )
 }
 
 fn split3(full: SharedString) -> (SharedString, SharedString, SharedString) {
@@ -60,10 +59,16 @@ pub fn webhook_avatar(w: &Value, size: f32) -> AnyElement {
     crate::ui::avatar_ref(img, size)
 }
 
-pub fn webhook_row(w: &Value, open: bool, on_toggle: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static, body: Option<AnyElement>) -> AnyElement {
+pub fn webhook_row(
+    w: &Value,
+    open: bool,
+    on_toggle: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    body: Option<AnyElement>,
+) -> AnyElement {
     let id = webhook_id(w).unwrap_or(0);
     let name = w.get("name").and_then(Value::as_str).unwrap_or_default().to_owned();
-    let who = w.pointer("/user/global_name").and_then(Value::as_str).or_else(|| w.pointer("/user/username").and_then(Value::as_str)).unwrap_or_default().to_owned();
+    let who =
+        w.pointer("/user/global_name").and_then(Value::as_str).or_else(|| w.pointer("/user/username").and_then(Value::as_str)).unwrap_or_default().to_owned();
     let created = crate::t!("cs.webhook_created", date = snowflake_date(id), user = who);
     div()
         .mb(z(16.))
@@ -72,29 +77,34 @@ pub fn webhook_row(w: &Value, open: bool, on_toggle: impl Fn(&gpui::ClickEvent, 
         .flex()
         .flex_col()
         .child(
-            div()
-                .id(SharedString::from(format!("webhook-{id}")))
-                .py(z(20.))
-                .px(z(16.))
-                .cursor_pointer()
-                .on_click(on_toggle)
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(z(16.))
-                        .child(webhook_avatar(w, 48.))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .child(text(name, 16., 20., idx::TEXT_STRONG).font_weight(FontWeight::MEDIUM).truncate())
-                                .child(div().mt(z(4.)).flex().items_center().gap(z(4.)).child(icon("settings/clock", 16., c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))).child(text(created, 12., 16., idx::TEXT_DEFAULT))),
-                        )
-                        .child(icon("settings/chevron-down", 24., c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).when(!open, |i| i.with_transformation(gpui::Transformation::rotate(gpui::radians(-std::f32::consts::FRAC_PI_2))))),
-                ),
+            div().id(SharedString::from(format!("webhook-{id}"))).py(z(20.)).px(z(16.)).cursor_pointer().on_click(on_toggle).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(z(16.))
+                    .child(webhook_avatar(w, 48.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(text(name, 16., 20., idx::TEXT_STRONG).font_weight(FontWeight::MEDIUM).truncate())
+                            .child(
+                                div()
+                                    .mt(z(4.))
+                                    .flex()
+                                    .items_center()
+                                    .gap(z(4.))
+                                    .child(icon("settings/clock", 16., c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
+                                    .child(text(created, 12., 16., idx::TEXT_DEFAULT)),
+                            ),
+                    )
+                    .child(
+                        icon("settings/chevron-down", 24., c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))
+                            .when(!open, |i| i.with_transformation(gpui::Transformation::rotate(gpui::radians(-std::f32::consts::FRAC_PI_2)))),
+                    ),
+            ),
         )
         .children(body.map(|b| div().px(z(16.)).pb(z(24.)).child(div().mb(z(24.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))).child(b)))
         .into_any_element()
@@ -108,7 +118,15 @@ pub fn webhook_list(list: &[Value], open: Option<u64>, mut row: impl FnMut(&Valu
     d.into_any_element()
 }
 
-fn card(id: &'static str, icon_name: &'static str, title: SharedString, sub: SharedString, action: AnyElement, cx: &mut Context<PhoenixApp>, sec: Option<Section>) -> AnyElement {
+fn card(
+    id: &'static str,
+    icon_name: &'static str,
+    title: SharedString,
+    sub: SharedString,
+    action: AnyElement,
+    cx: &mut Context<PhoenixApp>,
+    sec: Option<Section>,
+) -> AnyElement {
     div()
         .id(id)
         .mb(z(16.))
@@ -134,8 +152,21 @@ fn card(id: &'static str, icon_name: &'static str, title: SharedString, sub: Sha
                         .min_w_0()
                         .flex()
                         .gap(z(16.))
-                        .child(div().size(z(48.)).rounded_full().bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).flex().items_center().justify_center().child(icon(icon_name, 24., c(tok(idx::TEXT_DEFAULT)))))
-                        .child(div().flex_1().min_w_0().flex().flex_col().justify_center().child(text(title, 16., 20., idx::TEXT_STRONG).font_weight(FontWeight::MEDIUM)).child(text(sub, 12., 16., idx::TEXT_DEFAULT).mt(z(4.)))),
+                        .child(div().size(z(48.)).rounded_full().bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).flex().items_center().justify_center().child(icon(
+                            icon_name,
+                            24.,
+                            c(tok(idx::TEXT_DEFAULT)),
+                        )))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .justify_center()
+                                .child(text(title, 16., 20., idx::TEXT_STRONG).font_weight(FontWeight::MEDIUM))
+                                .child(text(sub, 12., 16., idx::TEXT_DEFAULT).mt(z(4.))),
+                        ),
                 )
                 .child(action),
         )
@@ -185,8 +216,24 @@ pub fn integrations(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .mt(z(-4.))
         .child(link_text(a, l, b))
         .child(divider(32.))
-        .child(card("cs-hooks-card", "settings/webhook", crate::t!("cs.webhooks"), crate::t!("cs.n_webhooks", n = nh), if nh > 0 { view } else { create }, cx, (nh > 0).then_some(Section::Webhooks)))
-        .child(card("cs-followed-card", "settings/followed", crate::t!("cs.followed"), crate::t!("cs.n_channels", n = nf), learn, cx, (nf > 0).then_some(Section::Followed)))
+        .child(card(
+            "cs-hooks-card",
+            "settings/webhook",
+            crate::t!("cs.webhooks"),
+            crate::t!("cs.n_webhooks", n = nh),
+            if nh > 0 { view } else { create },
+            cx,
+            (nh > 0).then_some(Section::Webhooks),
+        ))
+        .child(card(
+            "cs-followed-card",
+            "settings/followed",
+            crate::t!("cs.followed"),
+            crate::t!("cs.n_channels", n = nf),
+            learn,
+            cx,
+            (nf > 0).then_some(Section::Followed),
+        ))
         .into_any_element()
 }
 
@@ -212,25 +259,22 @@ fn breadcrumb(last: SharedString, cx: &mut Context<PhoenixApp>) -> AnyElement {
 
 fn expanded(app: &PhoenixApp, s: &State, w: &Value, name: Option<&Entity<InputState>>, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let id = webhook_id(w).unwrap_or(0);
-    let url = w.get("url").and_then(Value::as_str).map(str::to_owned).or_else(|| w.get("token").and_then(Value::as_str).map(|t| format!("https://discord.com/api/webhooks/{id}/{t}")));
+    let url = w
+        .get("url")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .or_else(|| w.get("token").and_then(Value::as_str).map(|t| format!("https://discord.com/api/webhooks/{id}/{t}")));
     let chan = app.channels.get(&s.channel).map(|c| c.name.to_string()).unwrap_or_default();
     div()
         .flex()
-        .child(
-            div()
-                .flex_none()
-                .pr(z(12.))
-                .mr(z(10.))
-                .flex()
-                .flex_col()
-                .items_center()
-                .child(avatar_uploader(w, s.webhook_avatar.as_deref(), cx))
-                .child({
-                    let t = crate::t!("cs.min_size");
-                    let r = t.find("128").map(|i| i..t.len());
-                    div().mt(z(10.)).text_size(z(10.)).line_height(z(10.)).text_color(c(tok(idx::TEXT_MUTED))).child(gpui::StyledText::new(t.clone()).with_highlights(r.map(|r| (r, gpui::HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() }))))
-                }),
-        )
+        .child(div().flex_none().pr(z(12.)).mr(z(10.)).flex().flex_col().items_center().child(avatar_uploader(w, s.webhook_avatar.as_deref(), cx)).child({
+            let t = crate::t!("cs.min_size");
+            let r = t.find("128").map(|i| i..t.len());
+            div().mt(z(10.)).text_size(z(10.)).line_height(z(10.)).text_color(c(tok(idx::TEXT_MUTED))).child(
+                gpui::StyledText::new(t.clone())
+                    .with_highlights(r.map(|r| (r, gpui::HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() }))),
+            )
+        }))
         .child(
             div()
                 .flex_1()
@@ -243,7 +287,13 @@ fn expanded(app: &PhoenixApp, s: &State, w: &Value, name: Option<&Entity<InputSt
                         .flex()
                         .gap(z(20.))
                         .child(div().flex_1().flex().flex_col().child(label(crate::t!("cs.webhook_name")).mb(z(8.))).children(name.map(input_box)))
-                        .child(div().flex_1().flex().flex_col().child(label(crate::t!("cs.webhook_channel")).mb(z(8.))).child(super::settings_form::select_box("cs-hook-chan", format!("# {chan}"), false))),
+                        .child(
+                            div().flex_1().flex().flex_col().child(label(crate::t!("cs.webhook_channel")).mb(z(8.))).child(super::settings_form::select_box(
+                                "cs-hook-chan",
+                                format!("# {chan}"),
+                                false,
+                            )),
+                        ),
                 )
                 .child(divider(24.))
                 .child(
@@ -301,8 +351,14 @@ pub fn webhooks_page(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) 
         .child(breadcrumb(crate::t!("cs.webhooks"), cx))
         .child(link_text(a, l, b))
         .child(divider(32.))
-        .child(div().mb(z(24.)).flex().child(button_sm("cs-new-hook", crate::t!("cs.new_webhook"), BtnKind::Primary).on_click(cx.listener(move |a, _, _, cx| create_webhook(a, channel, cx)))))
-        .when(!hooks.is_empty(), |d| d.child(text(crate::t!("cs.posts_to", channel = format!("#{chan}")), 16., 20., idx::TEXT_DEFAULT).font_weight(FontWeight::MEDIUM).mt(z(24.)).mb(z(16.))))
+        .child(div().mb(z(24.)).flex().child(
+            button_sm("cs-new-hook", crate::t!("cs.new_webhook"), BtnKind::Primary).on_click(cx.listener(move |a, _, _, cx| create_webhook(a, channel, cx))),
+        ))
+        .when(!hooks.is_empty(), |d| {
+            d.child(
+                text(crate::t!("cs.posts_to", channel = format!("#{chan}")), 16., 20., idx::TEXT_DEFAULT).font_weight(FontWeight::MEDIUM).mt(z(24.)).mb(z(16.)),
+            )
+        })
         .child(list)
         .into_any_element()
 }
@@ -310,7 +366,14 @@ pub fn webhooks_page(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) 
 pub fn followed_page(_app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let hooks: Vec<Value> = s.webhooks.iter().flatten().filter(|w| w.get("type").and_then(Value::as_u64) == Some(2)).cloned().collect();
     let list = webhook_list(&hooks, None, |w, _| webhook_row(w, false, |_, _, _| {}, None));
-    div().flex().flex_col().child(breadcrumb(crate::t!("cs.followed"), cx)).child(text(crate::t!("cs.followed_desc"), 14., 18., idx::TEXT_DEFAULT)).child(divider(32.)).child(list).into_any_element()
+    div()
+        .flex()
+        .flex_col()
+        .child(breadcrumb(crate::t!("cs.followed"), cx))
+        .child(text(crate::t!("cs.followed_desc"), 14., 18., idx::TEXT_DEFAULT))
+        .child(divider(32.))
+        .child(list)
+        .into_any_element()
 }
 
 pub fn webhook_dirty(s: &State, cx: &gpui::App) -> Option<(u64, String)> {
@@ -431,10 +494,24 @@ pub fn invites(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
             None => h.flex_1(),
         }
     };
-    d = d.child(div().flex().pb(z(8.)).child(head("admin.inviter", None)).child(head("admin.invite_code", Some(120.))).child(head("admin.uses", Some(60.))).child(head("admin.expires", Some(90.))).child(div().w(z(70.))));
+    d = d.child(
+        div()
+            .flex()
+            .pb(z(8.))
+            .child(head("admin.inviter", None))
+            .child(head("admin.invite_code", Some(120.)))
+            .child(head("admin.uses", Some(60.)))
+            .child(head("admin.expires", Some(90.)))
+            .child(div().w(z(70.))),
+    );
     for (n, inv) in list.iter().enumerate() {
         let code = inv.get("code").and_then(Value::as_str).unwrap_or_default().to_owned();
-        let who = inv.pointer("/inviter/global_name").and_then(Value::as_str).or_else(|| inv.pointer("/inviter/username").and_then(Value::as_str)).unwrap_or("-").to_owned();
+        let who = inv
+            .pointer("/inviter/global_name")
+            .and_then(Value::as_str)
+            .or_else(|| inv.pointer("/inviter/username").and_then(Value::as_str))
+            .unwrap_or("-")
+            .to_owned();
         let uses = inv.get("uses").and_then(Value::as_u64).unwrap_or(0);
         let max = inv.get("max_uses").and_then(Value::as_u64).unwrap_or(0);
         let age = inv.get("max_age").and_then(Value::as_u64).unwrap_or(0);
@@ -451,15 +528,17 @@ pub fn invites(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .child(div().w(z(120.)).child(text(code, 14., 18., idx::TEXT_DEFAULT)))
                 .child(div().w(z(60.)).child(text(if max == 0 { uses.to_string() } else { format!("{uses}/{max}") }, 14., 18., idx::TEXT_DEFAULT)))
                 .child(div().w(z(90.)).child(text(expires, 14., 18., idx::TEXT_DEFAULT)))
-                .child(div().w(z(70.)).child(super::settings_layout::link_btn(("cs-inv", n), crate::t!("admin.revoke"), true).on_click(cx.listener(move |a, _, _, cx| {
-                    with_state(|s| {
-                        if let Some(l) = &mut s.invites {
-                            l.retain(|i| i.get("code").and_then(Value::as_str) != Some(c2.as_str()))
-                        }
-                    });
-                    a.admin_toast(AdminCall::DeleteInvite { code: c2.clone() }, None, cx);
-                    cx.notify();
-                })))),
+                .child(div().w(z(70.)).child(super::settings_layout::link_btn(("cs-inv", n), crate::t!("admin.revoke"), true).on_click(cx.listener(
+                    move |a, _, _, cx| {
+                        with_state(|s| {
+                            if let Some(l) = &mut s.invites {
+                                l.retain(|i| i.get("code").and_then(Value::as_str) != Some(c2.as_str()))
+                            }
+                        });
+                        a.admin_toast(AdminCall::DeleteInvite { code: c2.clone() }, None, cx);
+                        cx.notify();
+                    },
+                )))),
         );
     }
     d.into_any_element()

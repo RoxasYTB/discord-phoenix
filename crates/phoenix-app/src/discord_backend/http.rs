@@ -14,11 +14,7 @@ const ALLOWED_HOSTS: &[&str] = &[
 
 pub fn host_allowed(url: &str) -> bool {
     Url::parse(url).ok().is_some_and(|u| {
-        u.scheme() == "https"
-            && u.host_str().is_some_and(|h| {
-                ALLOWED_HOSTS.contains(&h)
-                    || (h == "discord.com" && u.path().starts_with("/assets/"))
-            })
+        u.scheme() == "https" && u.host_str().is_some_and(|h| ALLOWED_HOSTS.contains(&h) || (h == "discord.com" && u.path().starts_with("/assets/")))
     })
 }
 
@@ -30,17 +26,8 @@ pub struct CdnHttpClient {
 
 impl CdnHttpClient {
     pub fn new(rt: tokio::runtime::Handle, user_agent: &str) -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent(user_agent)
-            .use_rustls_tls()
-            .pool_max_idle_per_host(8)
-            .build()
-            .expect("reqwest client");
-        Self {
-            client,
-            rt,
-            user_agent: HeaderValue::from_str(user_agent).unwrap_or(HeaderValue::from_static("discord-phoenix")),
-        }
+        let client = reqwest::Client::builder().user_agent(user_agent).use_rustls_tls().pool_max_idle_per_host(8).build().expect("reqwest client");
+        Self { client, rt, user_agent: HeaderValue::from_str(user_agent).unwrap_or(HeaderValue::from_static("discord-phoenix")) }
     }
 }
 
@@ -75,8 +62,7 @@ impl HttpClient for CdnHttpClient {
                 }
                 let resp = rb.send().await?;
                 let status = resp.status().as_u16();
-                let headers: Vec<(String, Vec<u8>)> =
-                    resp.headers().iter().map(|(k, v)| (k.as_str().to_owned(), v.as_bytes().to_vec())).collect();
+                let headers: Vec<(String, Vec<u8>)> = resp.headers().iter().map(|(k, v)| (k.as_str().to_owned(), v.as_bytes().to_vec())).collect();
                 let body = resp.bytes().await?;
                 Ok::<_, reqwest::Error>((status, headers, body))
             });

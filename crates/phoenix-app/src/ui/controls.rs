@@ -1,30 +1,17 @@
 use crate::theme::z;
 use std::rc::Rc;
 
-use gpui::{
-    App, Div, ElementId, FontWeight, InteractiveElement, MouseButton, ParentElement, SharedString,
-    Styled, Window, div, prelude::*, relative,
-};
+use gpui::{App, Div, ElementId, FontWeight, InteractiveElement, MouseButton, ParentElement, SharedString, Styled, Window, div, prelude::*, relative};
 
 use crate::theme::{c, generated::idx, tok};
 
-
 pub type OnSet = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
-pub fn marker_slider(
-    id: impl Into<SharedString>,
-    labels: Vec<SharedString>,
-    current: usize,
-    default: Option<usize>,
-    on_set: OnSet,
-) -> Div {
+pub fn marker_slider(id: impl Into<SharedString>, labels: Vec<SharedString>, current: usize, default: Option<usize>, on_set: OnSet) -> Div {
     let id: SharedString = id.into();
     let n = labels.len().max(2);
     let span = (n - 1) as f32;
-    let nums: Vec<f32> = labels
-        .iter()
-        .filter_map(|l| l.chars().filter(|c| c.is_ascii_digit() || *c == '.').collect::<String>().parse().ok())
-        .collect();
+    let nums: Vec<f32> = labels.iter().filter_map(|l| l.chars().filter(|c| c.is_ascii_digit() || *c == '.').collect::<String>().parse().ok()).collect();
     let pos_v: Vec<f32> = match (nums.len() == labels.len() && n == labels.len(), nums.first(), nums.last()) {
         (true, Some(&a), Some(&b)) if b > a => nums.iter().map(|v| (v - a) / (b - a)).collect(),
         _ => (0..n).map(|i| i as f32 / span).collect(),
@@ -122,24 +109,14 @@ pub fn marker_slider(
 }
 
 pub fn nearest(values: &[f32], value: f32) -> usize {
-    values
-        .iter()
-        .enumerate()
-        .min_by(|a, b| (a.1 - value).abs().total_cmp(&(b.1 - value).abs()))
-        .map(|(i, _)| i)
-        .unwrap_or(0)
+    values.iter().enumerate().min_by(|a, b| (a.1 - value).abs().total_cmp(&(b.1 - value).abs())).map(|(i, _)| i).unwrap_or(0)
 }
 
 pub const SWITCH_ROW: &str = "phx-switch-row";
 
 pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
     let (bg, border, hbg, hborder) = if on {
-        (
-            idx::SWITCH_BACKGROUND_SELECTED_DEFAULT,
-            idx::SWITCH_BORDER_SELECTED_DEFAULT,
-            idx::SWITCH_BACKGROUND_SELECTED_HOVER,
-            idx::SWITCH_BORDER_SELECTED_HOVER,
-        )
+        (idx::SWITCH_BACKGROUND_SELECTED_DEFAULT, idx::SWITCH_BORDER_SELECTED_DEFAULT, idx::SWITCH_BACKGROUND_SELECTED_HOVER, idx::SWITCH_BORDER_SELECTED_HOVER)
     } else {
         (idx::SWITCH_BACKGROUND_DEFAULT, idx::SWITCH_BORDER_DEFAULT, idx::SWITCH_BACKGROUND_HOVER, idx::SWITCH_BORDER_HOVER)
     };
@@ -155,10 +132,7 @@ pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
         .bg(c(tok(bg)))
         .cursor_pointer()
         .hover(move |d| d.bg(c(tok(hbg))).border_color(c(tok(hborder))))
-        .when(on, |d| {
-            d.active(|d| d.bg(c(tok(idx::SWITCH_BACKGROUND_ACTIVE))))
-                .group_active(SWITCH_ROW, |d| d.bg(c(tok(idx::SWITCH_BACKGROUND_ACTIVE))))
-        })
+        .when(on, |d| d.active(|d| d.bg(c(tok(idx::SWITCH_BACKGROUND_ACTIVE)))).group_active(SWITCH_ROW, |d| d.bg(c(tok(idx::SWITCH_BACKGROUND_ACTIVE)))))
         .child(
             div()
                 .absolute()
@@ -242,17 +216,9 @@ pub fn checkbox_option_el(id: impl Into<ElementId>, label: gpui::AnyElement, sel
                 .flex()
                 .items_center()
                 .justify_center()
-                .when(selected, |d| {
-                    d.child(gpui::svg().path(crate::icons::path("check")).size(z(16.)).text_color(c(tok(idx::CHECKBOX_ICON_ACTIVE))))
-                }),
+                .when(selected, |d| d.child(gpui::svg().path(crate::icons::path("check")).size(z(16.)).text_color(c(tok(idx::CHECKBOX_ICON_ACTIVE))))),
         )
-        .child(
-            div()
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(c(tok(idx::TEXT_DEFAULT)))
-                .child(label),
-        )
+        .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(label))
 }
 
 pub fn radio_option(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> gpui::Stateful<Div> {
@@ -264,13 +230,7 @@ pub fn radio_option(id: impl Into<ElementId>, label: impl Into<SharedString>, se
         .rounded(z(8.))
         .cursor_pointer()
         .child(radio_indicator(selected))
-        .child(
-            div()
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(c(tok(idx::TEXT_DEFAULT)))
-                .child(label.into()),
-        )
+        .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(label.into()))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -407,9 +367,14 @@ pub fn select_field(id: impl Into<ElementId>, value: impl Into<SharedString>) ->
                 .child(value.into()),
         )
         .child(
-            div().w(z(36.)).h_full().flex().items_center().justify_center().pr(z(4.)).child(
-                gpui::svg().path("icons/chevron.svg").size(z(20.)).text_color(c(tok(idx::TEXT_STRONG))),
-            ),
+            div()
+                .w(z(36.))
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .pr(z(4.))
+                .child(gpui::svg().path("icons/chevron.svg").size(z(20.)).text_color(c(tok(idx::TEXT_STRONG)))),
         )
 }
 
@@ -429,29 +394,14 @@ pub fn control_item(title: impl Into<SharedString>, desc: Option<SharedString>, 
                 .flex_col()
                 .justify_center()
                 .gap(z(4.))
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .line_height(z(20.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(c(tok(idx::TEXT_STRONG)))
-                        .child(title.into()),
-                )
-                .children(desc.filter(|d| !d.is_empty()).map(|d| {
-                    div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(d)
-                })),
+                .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(title.into()))
+                .children(desc.filter(|d| !d.is_empty()).map(|d| div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(d))),
         )
         .children(trailing.map(|t| div().flex_none().flex().items_center().justify_center().child(t)))
 }
 
 pub fn section_title(t: impl Into<SharedString>) -> Div {
-    div()
-        .pb(z(24.))
-        .text_size(z(24.))
-        .line_height(z(32.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(c(tok(idx::TEXT_STRONG)))
-        .child(t.into())
+    div().pb(z(24.)).text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(t.into())
 }
 
 #[cfg(test)]

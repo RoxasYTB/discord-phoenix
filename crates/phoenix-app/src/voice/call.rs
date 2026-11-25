@@ -524,9 +524,7 @@ impl VoiceManager {
                 }
             }
         }
-        if resend
-            && let (Some(gw), Some(t)) = (gw, st.target)
-        {
+        if resend && let (Some(gw), Some(t)) = (gw, st.target) {
             let _ = gw.update_voice_state_video(t.guild.map(Snowflake), Some(Snowflake(t.channel)), st.muted, st.deafened, st.camera_on);
         }
         if restart && st.running.is_some() {
@@ -685,7 +683,13 @@ fn stop_own_stream(st: &mut State, reason: Option<String>) {
 fn on_stream_create(st: &mut State, me: u64, sc: &phoenix_api::gateway::events::StreamCreate) {
     let parsed = super::stream::parse_key(&sc.stream_key);
     if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
-        eprintln!("voice-trace: STREAM_CREATE key={} rtc_server_set={} viewers={} paused={}", sc.stream_key, sc.rtc_server_id.is_some(), sc.viewer_ids.len(), sc.paused);
+        eprintln!(
+            "voice-trace: STREAM_CREATE key={} rtc_server_set={} viewers={} paused={}",
+            sc.stream_key,
+            sc.rtc_server_id.is_some(),
+            sc.viewer_ids.len(),
+            sc.paused
+        );
     }
     if let Some(w) = st.watches.get_mut(&sc.stream_key) {
         w.rtc_server_id = sc.rtc_server_id.clone();
@@ -717,7 +721,11 @@ fn on_stream_server(st: &mut State, me: u64, su: &phoenix_api::gateway::events::
         let generation = o.generation;
         let info = stream_info(endpoint, server_id, me, session_id, su.token.clone());
         let (audio_tx, audio_rx) = mpsc::unbounded_channel();
-        let (conn, events) = connection::connect(VoiceConfig { info, channel_id: st.target.map_or(0, |t| t.channel), user_id: me }, audio_rx, Box::new(|_: connection::AudioIn| {}));
+        let (conn, events) = connection::connect(
+            VoiceConfig { info, channel_id: st.target.map_or(0, |t| t.channel), user_id: me },
+            audio_rx,
+            Box::new(|_: connection::AudioIn| {}),
+        );
         o.conn = Some(conn);
         o.soundshare = None;
         o.audio_tx = Some(audio_tx);
@@ -784,10 +792,7 @@ async fn own_stream_events(generation: u64, key: String, mut events: mpsc::Unbou
                 if st.own.as_ref().is_some_and(|o| o.capture.is_some()) {
                     stream_ui(&st, super::StreamUiEvent::Live(Some(key.clone())));
                     let k = key.clone();
-                    std::thread::Builder::new()
-                        .name("phoenix-stream-preview".into())
-                        .spawn(move || preview_loop(generation, k))
-                        .ok();
+                    std::thread::Builder::new().name("phoenix-stream-preview".into()).spawn(move || preview_loop(generation, k)).ok();
                 }
             }
             VoiceEvent::Stats(s) => {
@@ -827,7 +832,8 @@ fn start_capture(st: &mut State) {
             Err(e) => tracing::warn!("stream audio unavailable: {e}"),
         }
     }
-    match phoenix_voice::media::camera::Camera::start_with(input, w, h, fps, bitrate, false, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
+    match phoenix_voice::media::camera::Camera::start_with(input, w, h, fps, bitrate, false, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e)))
+    {
         Ok(c) => o.capture = Some(c),
         Err(e) => {
             tracing::warn!("screen capture unavailable: {e}");

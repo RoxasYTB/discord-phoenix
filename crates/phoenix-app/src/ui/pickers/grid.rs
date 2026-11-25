@@ -1,8 +1,5 @@
 use crate::ui::tooltip::Tipped as _;
-use gpui::{
-    AnyElement, App, Context, FontWeight, ListOffset, ParentElement, SharedString, Styled, div,
-    img, list, prelude::*, px,
-};
+use gpui::{AnyElement, App, Context, FontWeight, ListOffset, ParentElement, SharedString, Styled, div, img, list, prelude::*, px};
 
 use super::{Pickers, emoji, pick, types::GuildEmoji, with_app};
 use crate::{
@@ -162,11 +159,7 @@ pub fn build(app: &PhoenixApp, query: &str, reaction: bool, cx: &App) -> Grid {
     if let Some(sel) = app.selected_guild {
         guilds.sort_by_key(|g| g.id != sel);
     }
-    let customs: Vec<(&Guild, Vec<GuildEmoji>)> = guilds
-        .into_iter()
-        .map(|g| (g, app.backend.guild_emojis(g.id)))
-        .filter(|(_, e)| !e.is_empty())
-        .collect();
+    let customs: Vec<(&Guild, Vec<GuildEmoji>)> = guilds.into_iter().map(|g| (g, app.backend.guild_emojis(g.id))).filter(|(_, e)| !e.is_empty()).collect();
     let mut grid = Grid {
         guild_names: customs.iter().map(|(g, _)| (g.id, g.name.clone())).collect(),
         premium: app.backend.has_premium(),
@@ -239,11 +232,8 @@ pub fn build(app: &PhoenixApp, query: &str, reaction: bool, cx: &App) -> Grid {
             grid.push_section(crate::i18n::t(&format!("emoji.cat.{cat}"), &[]), SectionIcon::Category(cat), items, true);
         }
     } else {
-        let mut custom: Vec<(u8, GuildEmoji)> = customs
-            .into_iter()
-            .flat_map(|(_, es)| es)
-            .filter_map(|e| emoji::name_score(&e.name.to_lowercase(), &q).map(|s| (s, e)))
-            .collect();
+        let mut custom: Vec<(u8, GuildEmoji)> =
+            customs.into_iter().flat_map(|(_, es)| es).filter_map(|e| emoji::name_score(&e.name.to_lowercase(), &q).map(|s| (s, e))).collect();
         custom.sort_by_key(|(s, _)| *s);
         let mut items: Vec<PickItem> = custom.into_iter().map(|(_, e)| PickItem::Custom(e)).collect();
         items.extend(emoji::search(&q, 300).into_iter().map(PickItem::Unicode));
@@ -364,29 +354,16 @@ fn render_row(ix: usize, cx: &mut App) -> AnyElement {
 
 fn lock_badge() -> impl IntoElement {
     div().absolute().inset_0().flex().items_center().justify_center().child(
-        div()
-            .size(px(20.))
-            .rounded(px(2.))
-            .bg(tk(idx::OPACITY_BLACK_60))
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(crate::ui::icon(crate::assets::Icon::Lock, 14., tk(idx::ICON_STRONG))),
+        div().size(px(20.)).rounded(px(2.)).bg(tk(idx::OPACITY_BLACK_60)).flex().items_center().justify_center().child(crate::ui::icon(
+            crate::assets::Icon::Lock,
+            14.,
+            tk(idx::ICON_STRONG),
+        )),
     )
 }
 
 pub(crate) fn rail() -> gpui::Stateful<gpui::Div> {
-    div()
-        .id("picker-rail")
-        .w(px(48.))
-        .flex_none()
-        .flex_1()
-        .min_h_0()
-        .overflow_y_scroll()
-        .flex()
-        .flex_col()
-        .items_center()
-        .pt(px(8.))
+    div().id("picker-rail").w(px(48.)).flex_none().flex_1().min_h_0().overflow_y_scroll().flex().flex_col().items_center().pt(px(8.))
 }
 
 pub(crate) fn rail_shell(list: impl IntoElement, shortcut: impl IntoElement) -> gpui::Div {
@@ -544,12 +521,7 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
         list_el = list_el.child(
             div().flex_none().flex().justify_center().pb(px(8.)).mb(px(8.)).border_b_1().border_color(tk(idx::BORDER_SUBTLE)).child(
                 rail_item(("emoji-nitro", 0), false, false, 0.)
-                    .child(
-                        gpui::svg()
-                            .path(crate::icons::path("picker/nitro"))
-                            .size(px(24.))
-                            .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)),
-                    )
+                    .child(gpui::svg().path(crate::icons::path("picker/nitro")).size(px(24.)).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)))
                     .tip(crate::t!("picker.see_nitro_emoji")),
             ),
         );
@@ -648,15 +620,7 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
         .flex()
         .flex_row()
         .when(!searching, |d| d.child(sidebar))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .child(div().flex_1().min_h_0().when(searching, |d| d.pt(px(8.))).child(grid_el))
-                .child(footer),
-        )
+        .child(div().flex_1().min_w_0().flex().flex_col().child(div().flex_1().min_h_0().when(searching, |d| d.pt(px(8.))).child(grid_el)).child(footer))
         .into_any_element()
 }
 
@@ -669,11 +633,7 @@ fn newly_badge() -> gpui::Div {
         .px(px(8.))
         .py(px(4.))
         .rounded(px(4.))
-        .bg(gpui::linear_gradient(
-            268.26,
-            gpui::linear_color_stop(gpui::rgb(0x097d8d), 0.),
-            gpui::linear_color_stop(gpui::rgb(0x5ea455), 1.),
-        ))
+        .bg(gpui::linear_gradient(268.26, gpui::linear_color_stop(gpui::rgb(0x097d8d), 0.), gpui::linear_color_stop(gpui::rgb(0x5ea455), 1.)))
         .child(gpui::svg().path(crate::icons::path("picker/sparkle")).size(px(14.)).flex_none().text_color(gpui::white()))
         .child(
             div()
@@ -694,11 +654,7 @@ fn popular_badge() -> gpui::Div {
         .px(px(8.))
         .py(px(4.))
         .rounded(px(4.))
-        .bg(gpui::linear_gradient(
-            268.26,
-            gpui::linear_color_stop(gpui::rgb(0xbf5151), 0.),
-            gpui::linear_color_stop(gpui::rgb(0xda7e40), 1.),
-        ))
+        .bg(gpui::linear_gradient(268.26, gpui::linear_color_stop(gpui::rgb(0xbf5151), 0.), gpui::linear_color_stop(gpui::rgb(0xda7e40), 1.)))
         .child(gpui::svg().path(crate::icons::path("picker/fire")).size(px(14.)).flex_none().text_color(gpui::white()))
         .child(
             div()

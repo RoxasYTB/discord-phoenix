@@ -8,9 +8,9 @@ pub mod props;
 pub mod remote_auth;
 pub mod rest;
 
+pub use build_info::BuildInfo;
 pub use cache::Cache;
 pub use error::{Error, Result};
 pub use gateway::{Gateway, GatewayConfig, GatewayEvent, GatewayHandle};
 pub use props::ClientProperties;
-pub use build_info::BuildInfo;
 pub use rest::RestClient;

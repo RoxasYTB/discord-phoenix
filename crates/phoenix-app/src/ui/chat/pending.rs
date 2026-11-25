@@ -124,11 +124,7 @@ impl PhoenixApp {
             return false;
         }
         let ch = m.channel;
-        let Some(ix) = self
-            .messages
-            .get(&ch)
-            .and_then(|e| e.msgs.iter().rposition(|x| x.nonce == Some(nonce) && x.send_state != SendState::Sent))
-        else {
+        let Some(ix) = self.messages.get(&ch).and_then(|e| e.msgs.iter().rposition(|x| x.nonce == Some(nonce) && x.send_state != SendState::Sent)) else {
             return false;
         };
         PAYLOADS.with(|p| p.borrow_mut().remove(&nonce));

@@ -118,18 +118,11 @@ impl PrimaryGuild {
 
 impl User {
     pub fn display_name(&self) -> &str {
-        self.global_name
-            .as_deref()
-            .filter(|s| !s.is_empty())
-            .unwrap_or(&self.username)
+        self.global_name.as_deref().filter(|s| !s.is_empty()).unwrap_or(&self.username)
     }
 
     pub fn tag(&self) -> String {
-        if self.discriminator.is_empty() || self.discriminator == "0" {
-            self.username.clone()
-        } else {
-            format!("{}#{}", self.username, self.discriminator)
-        }
+        if self.discriminator.is_empty() || self.discriminator == "0" { self.username.clone() } else { format!("{}#{}", self.username, self.discriminator) }
     }
 
     pub fn avatar_url(&self, size: u32) -> String {
@@ -201,9 +194,15 @@ mod nameplate_tests {
 
     #[test]
     fn premium_group_member_from_premium_state() {
-        let m: User = serde_json::from_str(r#"{"id":"1","username":"a","discriminator":"0","premium_type":2,"premium_state":{"premium_source":4,"premium_subscription_group_role":2}}"#).unwrap();
+        let m: User = serde_json::from_str(
+            r#"{"id":"1","username":"a","discriminator":"0","premium_type":2,"premium_state":{"premium_source":4,"premium_subscription_group_role":2}}"#,
+        )
+        .unwrap();
         assert!(m.is_premium_group_member());
-        let owner: User = serde_json::from_str(r#"{"id":"1","username":"a","discriminator":"0","premium_type":2,"premium_state":{"premium_source":4,"premium_subscription_group_role":1}}"#).unwrap();
+        let owner: User = serde_json::from_str(
+            r#"{"id":"1","username":"a","discriminator":"0","premium_type":2,"premium_state":{"premium_source":4,"premium_subscription_group_role":1}}"#,
+        )
+        .unwrap();
         assert!(!owner.is_premium_group_member());
         let solo: User = serde_json::from_str(r#"{"id":"1","username":"a","discriminator":"0","premium_type":2}"#).unwrap();
         assert!(!solo.is_premium_group_member());

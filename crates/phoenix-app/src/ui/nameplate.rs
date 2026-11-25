@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures::AsyncReadExt;
-use gpui::{div, img, prelude::*, AnyElement, App, Global, Hsla, ImageCacheError, RenderImage, Rgba, SharedString};
+use gpui::{AnyElement, App, Global, Hsla, ImageCacheError, RenderImage, Rgba, SharedString, div, img, prelude::*};
 
 use crate::model::User;
 use crate::theme::z;
@@ -102,10 +102,9 @@ impl Fade {
     fn resolve(self, cx: &App) -> f32 {
         match self {
             Fade::Fixed(v) => v,
-            Fade::Measured { place, id, offset, fallback } => cx
-                .try_global::<Widths>()
-                .and_then(|w| w.0.get(&(place_key(place), id)).copied())
-                .map_or(fallback, |w| w + offset),
+            Fade::Measured { place, id, offset, fallback } => {
+                cx.try_global::<Widths>().and_then(|w| w.0.get(&(place_key(place), id)).copied()).map_or(fallback, |w| w + offset)
+            }
         }
     }
 }
@@ -160,23 +159,14 @@ fn bake_masked(bytes: &[u8], start: f32, end: f32) -> Option<RenderImage> {
     Some(RenderImage::new(vec![image::Frame::new(out)]))
 }
 
-fn load_masked(
-    url: &SharedString,
-    start_ratio: f32,
-    end_ratio: f32,
-    cx: &mut App,
-) -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
+fn load_masked(url: &SharedString, start_ratio: f32, end_ratio: f32, cx: &mut App) -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
     let start_q = (start_ratio.clamp(0.0, MAX_RATIO) * 1000.0).round() as u16;
     let end_q = (end_ratio.clamp(0.0, MAX_RATIO) * 1000.0).round() as u16;
     let key = MaskKey { url: url.clone(), start_q, end_q };
 
     let store = cx.default_global::<Store>();
     let same_url = |store: &Store| {
-        store
-            .images
-            .iter()
-            .filter(|(k, _)| k.url == *url)
-            .find_map(|(_, (st, _))| if let State::Ready(img) = st { Some(Ok(img.clone())) } else { None })
+        store.images.iter().filter(|(k, _)| k.url == *url).find_map(|(_, (st, _))| if let State::Ready(img) = st { Some(Ok(img.clone())) } else { None })
     };
     let cached = store.images.get_mut(&key).map(|(st, used)| {
         *used = Instant::now();
@@ -191,12 +181,7 @@ fn load_masked(
     }
 
     if store.images.len() >= MAX_CACHED
-        && let Some(old) = store
-            .images
-            .iter()
-            .filter(|(_, (st, _))| !matches!(st, State::Loading))
-            .min_by_key(|(_, (_, t))| *t)
-            .map(|(k, _)| k.clone())
+        && let Some(old) = store.images.iter().filter(|(_, (st, _))| !matches!(st, State::Loading)).min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
     {
         store.images.remove(&old);
     }
@@ -260,17 +245,11 @@ pub fn layer_with_fade(user: &User, h: f32, place: Place, hovered: bool, selecte
     if let Some(dark_rgb) = pal {
         let rgb = palette_for_theme(dark_rgb);
         let seg = |l: f32, r: f32, a0: f32, a1: f32| {
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .left(gpui::relative(l))
-                .w(gpui::relative(r - l))
-                .bg(gpui::linear_gradient(
-                    90.,
-                    gpui::linear_color_stop(rgba(rgb, a0), 0.),
-                    gpui::linear_color_stop(rgba(rgb, a1), 1.),
-                ))
+            div().absolute().top_0().bottom_0().left(gpui::relative(l)).w(gpui::relative(r - l)).bg(gpui::linear_gradient(
+                90.,
+                gpui::linear_color_stop(rgba(rgb, a0), 0.),
+                gpui::linear_color_stop(rgba(rgb, a1), 1.),
+            ))
         };
         if place == Place::Account {
             let end_a = if crate::theme::is_light() { 0x4D as f32 / 255. } else { 0x66 as f32 / 255. };
@@ -284,31 +263,14 @@ pub fn layer_with_fade(user: &User, h: f32, place: Place, hovered: bool, selecte
                 0x33 as f32 / 255.
             };
             let mid_a = 0x14 as f32 / 255.;
-            d = d
-                .child(seg(0., 0.2, 0., mid_a).rounded_l(z(8.)))
-                .child(seg(0.2, 0.5, mid_a, mid_a))
-                .child(seg(0.5, 1., mid_a, end_a).rounded_r(z(8.)));
+            d = d.child(seg(0., 0.2, 0., mid_a).rounded_l(z(8.))).child(seg(0.2, 0.5, mid_a, mid_a)).child(seg(0.5, 1., mid_a, end_a).rounded_r(z(8.)));
         }
     }
 
     let img_w = h * (16. / 3.);
     if place == Place::Account {
-        let src = if url.starts_with('/') {
-            gpui::ImageSource::from(std::path::PathBuf::from(url.as_ref()))
-        } else {
-            gpui::ImageSource::from(url)
-        };
-        d = d.child(
-            img(src)
-                .h_full()
-                .w(z(img_w))
-                .object_fit(gpui::ObjectFit::Fill)
-                .opacity(base_opacity)
-                .absolute()
-                .top_0()
-                .right_0()
-                .rounded_r(z(8.)),
-        );
+        let src = if url.starts_with('/') { gpui::ImageSource::from(std::path::PathBuf::from(url.as_ref())) } else { gpui::ImageSource::from(url) };
+        d = d.child(img(src).h_full().w(z(img_w)).object_fit(gpui::ObjectFit::Fill).opacity(base_opacity).absolute().top_0().right_0().rounded_r(z(8.)));
     } else {
         d = d.child(
             img(move |_: &mut gpui::Window, cx: &mut App| {

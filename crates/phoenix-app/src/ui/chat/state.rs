@@ -1,8 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use gpui::{
-    AppContext, ClipboardEntry, ClipboardItem, Context, Entity, Image, ListScrollEvent, PathPromptOptions, Pixels,
-    Point, SharedString, Subscription, Window,
+    AppContext, ClipboardEntry, ClipboardItem, Context, Entity, Image, ListScrollEvent, PathPromptOptions, Pixels, Point, SharedString, Subscription, Window,
 };
 use gpui_component::input::{InputEvent, InputState};
 
@@ -215,9 +214,7 @@ impl PhoenixApp {
         let ids: Vec<Id> = self.messages.keys().copied().collect();
         for ch in ids {
             let Some(mut entry) = self.messages.remove(&ch) else { continue };
-            entry.rendered = (0..entry.msgs.len())
-                .map(|i| self.render_msg(&entry.msgs[i], i.checked_sub(1).map(|p| &entry.msgs[p])))
-                .collect();
+            entry.rendered = (0..entry.msgs.len()).map(|i| self.render_msg(&entry.msgs[i], i.checked_sub(1).map(|p| &entry.msgs[p]))).collect();
             self.messages.insert(ch, entry);
         }
         self.message_list.remeasure();
@@ -296,9 +293,7 @@ impl PhoenixApp {
     }
 
     pub fn chat_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let closed = self.chat.menu.take().is_some()
-            || self.chat.confirm_delete.take().is_some()
-            || self.chat.emoji_target.take().is_some();
+        let closed = self.chat.menu.take().is_some() || self.chat.confirm_delete.take().is_some() || self.chat.emoji_target.take().is_some();
         if !closed {
             if self.chat.edit.is_some() {
                 self.cancel_edit(window, cx);
@@ -390,15 +385,7 @@ impl PhoenixApp {
         self.set_reaction_local(channel, msg, emoji, emoji_id, true, cx);
     }
 
-    fn set_reaction_local(
-        &mut self,
-        channel: Id,
-        msg: Id,
-        emoji: SharedString,
-        emoji_id: Option<Id>,
-        add: bool,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_reaction_local(&mut self, channel: Id, msg: Id, emoji: SharedString, emoji_id: Option<Id>, add: bool, cx: &mut Context<Self>) {
         let Some(mut m) = self.find_msg(channel, msg).cloned() else { return };
         if super::pending::is_local(&m) {
             return;
@@ -474,12 +461,7 @@ impl PhoenixApp {
 
     pub fn copy_message_link(&mut self, channel: Id, id: Id, cx: &mut Context<Self>) {
         let guild = self.channels.get(&channel).and_then(|c| c.guild).map(|g| g.0.to_string());
-        let url = format!(
-            "https://discord.com/channels/{}/{}/{}",
-            guild.unwrap_or_else(|| "@me".into()),
-            channel.0,
-            id.0
-        );
+        let url = format!("https://discord.com/channels/{}/{}/{}", guild.unwrap_or_else(|| "@me".into()), channel.0, id.0);
         cx.write_to_clipboard(ClipboardItem::new_string(url));
     }
 
@@ -664,12 +646,7 @@ impl PhoenixApp {
     }
 
     pub fn prompt_attach(&mut self, cx: &mut Context<Self>) {
-        let rx = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: true,
-            prompt: Some(crate::t!("chat.upload")),
-        });
+        let rx = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: true, prompt: Some(crate::t!("chat.upload")) });
         cx.spawn(async move |this, cx| match rx.await {
             Ok(Ok(Some(paths))) => {
                 let _ = this.update(cx, |this, cx| this.add_paths(paths, cx));
@@ -689,19 +666,21 @@ impl PhoenixApp {
     pub fn upload_progress(&mut self, key: u64, cx: &mut Context<Self>) -> Option<crate::backend::UploadProgress> {
         let s = self.chat.sending.iter().find(|s| s.key == key)?;
         let (sent, cancel) = (s.sent.clone(), s.cancel.clone());
-        cx.spawn(async move |this, cx| loop {
-            cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
-            let alive = this
-                .update(cx, |this, cx| {
-                    let alive = this.chat.sending.iter().any(|s| s.key == key);
-                    if alive {
-                        cx.notify();
-                    }
-                    alive
-                })
-                .unwrap_or(false);
-            if !alive {
-                break;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
+                let alive = this
+                    .update(cx, |this, cx| {
+                        let alive = this.chat.sending.iter().any(|s| s.key == key);
+                        if alive {
+                            cx.notify();
+                        }
+                        alive
+                    })
+                    .unwrap_or(false);
+                if !alive {
+                    break;
+                }
             }
         })
         .detach();
@@ -752,8 +731,7 @@ impl PhoenixApp {
         }
         let total: u64 = self.chat.uploads.iter().map(|u| u.bytes.len() as u64).sum::<u64>() + bytes.len() as u64;
         if total > phoenix_api::rest::uploads::MAX_TOTAL_SIZE {
-            self.chat.error =
-                Some(crate::t!("chat.total_too_large", max = phoenix_api::rest::uploads::MAX_TOTAL_SIZE >> 20));
+            self.chat.error = Some(crate::t!("chat.total_too_large", max = phoenix_api::rest::uploads::MAX_TOTAL_SIZE >> 20));
             return false;
         }
         let mut file = pending_file(name, bytes);
@@ -921,12 +899,17 @@ impl PhoenixApp {
         self.chat.next_key += 1;
         if !files.is_empty() {
             let size = files.iter().map(|f| f.bytes.len() as u64).sum();
-            let label: SharedString = if files.len() == 1 {
-                files[0].filename.clone().into()
-            } else {
-                crate::t!("chat.n_files", n = files.len())
-            };
-            self.chat.sending.push(Sending { key, channel: ch, label, size, started: Instant::now(), sent: Arc::new(0.into()), cancel: Arc::default(), nonce: None });
+            let label: SharedString = if files.len() == 1 { files[0].filename.clone().into() } else { crate::t!("chat.n_files", n = files.len()) };
+            self.chat.sending.push(Sending {
+                key,
+                channel: ch,
+                label,
+                size,
+                started: Instant::now(),
+                sent: Arc::new(0.into()),
+                cancel: Arc::default(),
+                nonce: None,
+            });
         }
         let upload = (!files.is_empty()).then_some(key);
         let nonce = self.send_optimistic(ch, text, reply, files, upload, cx);
@@ -996,11 +979,7 @@ mod tests {
                 app.apply_ready(ready, cx);
                 let g = app.guilds[0].id;
                 app.select_guild(Some(g), cx);
-                let ch = app.guild_channels[&g]
-                    .iter()
-                    .copied()
-                    .find(|c| app.channels[c].kind == crate::model::ChannelKind::Text)
-                    .unwrap();
+                let ch = app.guild_channels[&g].iter().copied().find(|c| app.channels[c].kind == crate::model::ChannelKind::Text).unwrap();
                 app.select_channel(ch, cx);
                 assert_eq!(app.upload_limit(), 20 << 20);
                 assert!(!app.push_upload("empty.txt".into(), vec![]));
@@ -1050,10 +1029,7 @@ mod tests {
 
     #[test]
     fn pasted_file_uris() {
-        assert_eq!(
-            file_uris("file:///home/me/a%20b.png\r\nfile:///tmp/c.txt\n"),
-            Some(vec![PathBuf::from("/home/me/a b.png"), PathBuf::from("/tmp/c.txt")])
-        );
+        assert_eq!(file_uris("file:///home/me/a%20b.png\r\nfile:///tmp/c.txt\n"), Some(vec![PathBuf::from("/home/me/a b.png"), PathBuf::from("/tmp/c.txt")]));
         assert_eq!(file_uris("hello"), None);
         assert_eq!(file_uris("file:///a.png\nhttps://x.y/z"), None);
         assert_eq!(file_uris("  "), None);

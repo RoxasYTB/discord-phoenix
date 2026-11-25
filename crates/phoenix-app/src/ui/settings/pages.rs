@@ -113,7 +113,17 @@ fn item_ex(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyEl
         .when(top, |d| d.py(z(10.)))
         .when(!top, |d| d.py(z(12.)).min_h(z(48.)))
         .rounded(z(16.))
-        .child(div().flex_1().min_w_0().flex().flex_col().justify_center().gap(z(4.)).child(title_text(title).when(dim, |d| d.opacity(0.5))).children(desc.map(|d| div().when(top, |d| d.max_w(z(572.))).child(d))))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .justify_center()
+                .gap(z(4.))
+                .child(title_text(title).when(dim, |d| d.opacity(0.5)))
+                .children(desc.map(|d| div().when(top, |d| d.max_w(z(572.))).child(d))),
+        )
         .children(trailing.map(|t| {
             let d = div().flex_none().flex();
             if top { d.items_start().child(t) } else { d.items_center().child(t) }
@@ -152,9 +162,13 @@ fn set_bool(app: &mut PhoenixApp, id: &'static str, b: Bind, v: bool, cx: &mut C
             }
             cx.notify();
         }
-        Bind::Pref(_) => update_local(app, |p| {
-            p.ui.insert(id.to_owned(), v as u64);
-        }, cx),
+        Bind::Pref(_) => update_local(
+            app,
+            |p| {
+                p.ui.insert(id.to_owned(), v as u64);
+            },
+            cx,
+        ),
         Bind::Os(_, s) => {
             s(v);
             cx.notify();
@@ -184,9 +198,13 @@ fn set_pick(app: &mut PhoenixApp, id: &'static str, p: Pick, v: usize, cx: &mut 
         }
         Pick::Synced(_, f) => save(app, f(v), cx),
         Pick::Proto => save(app, SettingsPatch::Proto(id, super::synced_map::pick_wire(id, v)), cx),
-        Pick::Pref(_) => update_local(app, |p| {
-            p.ui.insert(id.to_owned(), v as u64);
-        }, cx),
+        Pick::Pref(_) => update_local(
+            app,
+            |p| {
+                p.ui.insert(id.to_owned(), v as u64);
+            },
+            cx,
+        ),
     }
 }
 
@@ -343,13 +361,7 @@ fn key_group(legend: &'static str, lead: &'static str, rows: &'static [(&'static
         .flex_col()
         .when(!legend.is_empty(), |d| {
             d.child(
-                div()
-                    .pt(z(16.))
-                    .text_size(z(20.))
-                    .line_height(z(24.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(c(tok(idx::TEXT_STRONG)))
-                    .child(tr(legend)),
+                div().pt(z(16.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(tr(legend)),
             )
         })
         .when(!lead.is_empty(), |d| d.child(div().pt(z(4.)).child(desc_text(tr(lead)))))
@@ -384,22 +396,16 @@ fn related_desc(app: &PhoenixApp, title: &str, desc: &'static str) -> AnyElement
 }
 
 fn related(app: &PhoenixApp, icon: &'static str, title: &'static str, desc: &'static str, page: Page, cx: &mut Cx) -> AnyElement {
-    let lead = div()
-        .w(z(48.))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            div()
-                .size(z(48.))
-                .rounded(z(8.))
-                .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(gpui::svg().path(crate::icons::path(icon)).size(z(24.)).text_color(c(tok(idx::ICON_DEFAULT)))),
-        );
+    let lead = div().w(z(48.)).flex_none().flex().items_center().justify_center().child(
+        div()
+            .size(z(48.))
+            .rounded(z(8.))
+            .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(gpui::svg().path(crate::icons::path(icon)).size(z(24.)).text_color(c(tok(idx::ICON_DEFAULT)))),
+    );
     div()
         .id(eid(format!("rel-{title}")))
         .flex()
@@ -420,9 +426,11 @@ fn related(app: &PhoenixApp, icon: &'static str, title: &'static str, desc: &'st
         .child(lead)
         .child(div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(title_text(tr(title))).child(related_desc(app, title, desc)))
         .child(
-            div().flex_none().flex().items_center().child(
-                gpui::svg().path(crate::icons::path("chevron-right")).size(z(24.)).text_color(c(tok(idx::ICON_DEFAULT))),
-            ),
+            div()
+                .flex_none()
+                .flex()
+                .items_center()
+                .child(gpui::svg().path(crate::icons::path("chevron-right")).size(z(24.)).text_color(c(tok(idx::ICON_DEFAULT)))),
         )
         .into_any_element()
 }
@@ -634,10 +642,7 @@ pub(super) fn filter(blocks: &'static [B], q: &str) -> Vec<&'static B> {
     let mut out: Vec<&'static B> = Vec::new();
     for section in blocks.split(|b| matches!(b, B::Divider)) {
         let whole = section.iter().any(|b| matches!(b, B::Title(_)) && block_matches(b, q));
-        let kept: Vec<&'static B> = section
-            .iter()
-            .filter(|b| whole || matches!(b, B::Title(_)) || (!matches!(b, B::Lead(_)) && block_matches(b, q)))
-            .collect();
+        let kept: Vec<&'static B> = section.iter().filter(|b| whole || matches!(b, B::Title(_)) || (!matches!(b, B::Lead(_)) && block_matches(b, q))).collect();
         if kept.iter().all(|b| matches!(b, B::Title(_))) {
             continue;
         }
@@ -774,10 +779,7 @@ fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
             .line_height(z(20.))
             .when(on, |d| d.border_l_2().border_color(c(tok(idx::TEXT_BRAND))).text_color(c(tok(idx::TEXT_BRAND))))
             .when(!on, |d| {
-                d.border_l_1()
-                    .border_color(c(tok(idx::BORDER_SUBTLE)))
-                    .text_color(c(tok(idx::TEXT_SUBTLE)))
-                    .hover(|s| s.text_color(c(tok(idx::TEXT_DEFAULT))))
+                d.border_l_1().border_color(c(tok(idx::BORDER_SUBTLE))).text_color(c(tok(idx::TEXT_SUBTLE))).hover(|s| s.text_color(c(tok(idx::TEXT_DEFAULT))))
             })
             .on_click(cx.listener(move |a, _, _, cx| set_pick(a, "cf-tab", Pick::Ui(0), i, cx)))
             .child(tr(t))
@@ -829,14 +831,7 @@ fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         .gap(z(16.))
         .child(div().flex().flex_col().children(rows))
         .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_MUTED))).child(tr(TABS[tab].1)));
-    div()
-        .py(z(10.))
-        .flex()
-        .flex_col()
-        .gap(z(16.))
-        .child(header)
-        .child(div().flex().gap(z(48.)).child(tabs).child(panel))
-        .into_any_element()
+    div().py(z(10.)).flex().flex_col().gap(z(16.)).child(header).child(div().flex().gap(z(48.)).child(tabs).child(panel)).into_any_element()
 }
 
 static GAMES: &[B] = &[
@@ -873,14 +868,7 @@ fn current_game(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .text_size(z(14.))
                 .line_height(z(18.))
                 .child(div().text_color(c(tok(idx::TEXT_MUTED))).child(tr("sp.rg.cant_find")))
-                .child(
-                    div()
-                        .id("rg-add")
-                        .cursor_pointer()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(c(tok(idx::TEXT_BRAND)))
-                        .child(tr("sp.rg.add")),
-                ),
+                .child(div().id("rg-add").cursor_pointer().font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_BRAND))).child(tr("sp.rg.add"))),
         )
         .into_any_element()
 }
@@ -914,7 +902,11 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
             .child(tr(t))
     };
     let half = |l: bool, a: u32, b: u32| {
-        let d = div().absolute().top_0().h_full().w_1_2().bg(gpui::linear_gradient(95.07, gpui::linear_color_stop(gpui::rgb(a), 0.), gpui::linear_color_stop(gpui::rgb(b), 1.)));
+        let d = div().absolute().top_0().h_full().w_1_2().bg(gpui::linear_gradient(
+            95.07,
+            gpui::linear_color_stop(gpui::rgb(a), 0.),
+            gpui::linear_color_stop(gpui::rgb(b), 1.),
+        ));
         if l { d.left_0().rounded_l(z(16.)) } else { d.right_0().rounded_r(z(16.)) }
     };
     let tier = div()
@@ -933,7 +925,16 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .w(z(327.))
                 .flex()
                 .flex_col()
-                .child(div().h(z(36.)).text_size(z(32.)).line_height(z(24.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(gpui::white()).child(tr("sp.ni.title")))
+                .child(
+                    div()
+                        .h(z(36.))
+                        .text_size(z(32.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .italic()
+                        .text_color(gpui::white())
+                        .child(tr("sp.ni.title")),
+                )
                 .child(
                     div()
                         .flex()
@@ -945,15 +946,11 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                         .child(perk("voice/screen", "sp.ni.p4"))
                         .child(perk("user-profile", "sp.ni.p5")),
                 )
-                .child(
-                    div()
-                        .pt(z(24.))
-                        .flex()
-                        .flex_col()
-                        .gap(z(8.))
-                        .child(overlay_btn("nitro-more", "sp.ni.more", true))
-                        .child(overlay_btn("nitro-manage", "sp.ni.manage", false)),
-                ),
+                .child(div().pt(z(24.)).flex().flex_col().gap(z(8.)).child(overlay_btn("nitro-more", "sp.ni.more", true)).child(overlay_btn(
+                    "nitro-manage",
+                    "sp.ni.manage",
+                    false,
+                ))),
         );
     let gift = div()
         .mt(z(41.))
@@ -969,7 +966,9 @@ fn nitro_page(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .w(z(307.))
                 .flex()
                 .flex_col()
-                .child(div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.ni.gift")))
+                .child(
+                    div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.ni.gift")),
+                )
                 .child(div().pt(z(16.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(tr("sp.ni.gift_d")))
                 .child(div().pt(z(16.)).child(controls::button_icon(eid("nitro-gift"), "gift", tr("sp.ni.gift_btn"), BtnKind::Secondary))),
         );
@@ -1001,8 +1000,19 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
             .items_center()
             .gap(z(10.))
             .child(
-                div().w(z(32.)).h(z(22.)).flex_none().rounded(z(3.)).bg(c(tok(idx::BACKGROUND_MOD_STRONG))).flex().items_center().justify_center()
-                    .text_size(z(8.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_STRONG))).child(src.brand.clone()),
+                div()
+                    .w(z(32.))
+                    .h(z(22.))
+                    .flex_none()
+                    .rounded(z(3.))
+                    .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(z(8.))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(c(tok(idx::TEXT_STRONG)))
+                    .child(src.brand.clone()),
             )
             .child(
                 div()
@@ -1016,11 +1026,25 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                             .flex()
                             .items_center()
                             .gap(z(8.))
-                            .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(src.brand.clone()))
+                            .child(
+                                div()
+                                    .text_size(z(16.))
+                                    .line_height(z(20.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(c(tok(idx::TEXT_DEFAULT)))
+                                    .child(src.brand.clone()),
+                            )
                             .when(src.default, |d| {
                                 d.child(
-                                    div().px(z(4.)).rounded(z(3.)).bg(gpui::rgb(0x4f505a)).text_size(z(12.)).line_height(z(14.)).font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(gpui::white()).child(tr("sp.bl.default")),
+                                    div()
+                                        .px(z(4.))
+                                        .rounded(z(3.))
+                                        .bg(gpui::rgb(0x4f505a))
+                                        .text_size(z(12.))
+                                        .line_height(z(14.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(gpui::white())
+                                        .child(tr("sp.bl.default")),
                                 )
                             }),
                     )
@@ -1050,17 +1074,31 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .items_center()
                 .child(
                     div().size(z(32.)).flex_none().flex().items_center().child(
-                        div().w(z(32.)).h(z(22.)).rounded(z(3.)).bg(c(tok(idx::BRAND_500))).flex().items_center().justify_center()
+                        div()
+                            .w(z(32.))
+                            .h(z(22.))
+                            .rounded(z(3.))
+                            .bg(c(tok(idx::BRAND_500)))
+                            .flex()
+                            .items_center()
+                            .justify_center()
                             .child(gpui::svg().path(crate::icons::path("discord-logo")).size(z(16.)).text_color(gpui::white())),
                     ),
                 )
-                .child(div().ml(z(14.)).flex_1().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(tr("sp.bl.gift")))
+                .child(
+                    div()
+                        .ml(z(14.))
+                        .flex_1()
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .child(tr("sp.bl.gift")),
+                )
                 .child(controls::button_sm(eid("billing-redeem"), tr("sp.bl.redeem"), BtnKind::Secondary)),
         )
         .child(line().mt(z(16.)))
-        .child(
-            div().mt(z(20.)).mb(z(10.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)),
-        )
+        .child(div().mt(z(20.)).mb(z(10.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)))
         .into_any_element()
 }
 
@@ -1078,15 +1116,17 @@ fn billing_history(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .rounded(z(8.))
                 .bg(c(tok(idx::BACKGROUND_BASE_LOWER)))
-                .child(div()
-                .h(z(53.))
-                .flex()
-                .items_center()
-                .border_b_1()
-                .border_color(c(tok(idx::BORDER_SUBTLE)))
-                .child(div().ml(z(21.)).w(z(130.)).flex_none().child(col("sp.bl.date")))
-                .child(div().flex_1().child(col("sp.bl.desc")))
-                .child(div().mr(z(64.)).child(col("sp.bl.amount"))))
+                .child(
+                    div()
+                        .h(z(53.))
+                        .flex()
+                        .items_center()
+                        .border_b_1()
+                        .border_color(c(tok(idx::BORDER_SUBTLE)))
+                        .child(div().ml(z(21.)).w(z(130.)).flex_none().child(col("sp.bl.date")))
+                        .child(div().flex_1().child(col("sp.bl.desc")))
+                        .child(div().mr(z(64.)).child(col("sp.bl.amount"))),
+                )
                 .children(pays.iter().enumerate().map(|(i, p)| {
                     div()
                         .h(z(57.))
@@ -1097,12 +1137,25 @@ fn billing_history(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                         .when(i + 1 < pays.len(), |d| d.border_b_1().border_color(c(tok(idx::BORDER_SUBTLE))))
                         .child(div().w(z(131.)).flex_none().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(p.date.clone()))
                         .child(
-                            div().flex_1().min_w_0().flex().items_center().gap(z(10.))
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .items_center()
+                                .gap(z(10.))
                                 .child(gpui::svg().path(crate::icons::path("shop")).size(z(20.)).flex_none().text_color(c(tok(idx::TEXT_STRONG))))
-                                .child(div().text_size(z(16.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_STRONG))).truncate().child(p.description.clone())),
+                                .child(
+                                    div().text_size(z(16.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_STRONG))).truncate().child(p.description.clone()),
+                                ),
                         )
                         .child(
-                            div().flex().items_center().gap(z(4.)).text_size(z(16.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_STRONG)))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(z(4.))
+                                .text_size(z(16.))
+                                .line_height(z(16.))
+                                .text_color(c(tok(idx::TEXT_STRONG)))
                                 .when(p.orbs, |d| d.child(gpui::svg().path(crate::icons::path("orbs")).size(z(16.)).text_color(c(tok(idx::TEXT_STRONG)))))
                                 .child(p.amount.clone()),
                         )
@@ -1113,19 +1166,12 @@ fn billing_history(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-static BILLING: &[B] = &[
-    B::Title("sp.bl.t1"),
-    B::Custom("sp.bl.t1", billing_sources),
-    B::Divider,
-    B::Title("sp.bl.t2"),
-    B::Custom("sp.bl.t2", billing_history),
-];
+static BILLING: &[B] =
+    &[B::Title("sp.bl.t1"), B::Custom("sp.bl.t1", billing_sources), B::Divider, B::Title("sp.bl.t2"), B::Custom("sp.bl.t2", billing_history)];
 
 static DATA: &[B] = &[
     B::Title("sp.data.t1"),
-    B::Custom("sp.data.core", |_, _| {
-        item(tr("sp.data.core"), Some(super::account::linked_desc(tr("sp.data.core_d"))), None, false).into_any_element()
-    }),
+    B::Custom("sp.data.core", |_, _| item(tr("sp.data.core"), Some(super::account::linked_desc(tr("sp.data.core_d"))), None, false).into_any_element()),
     B::Switch("data-improve", "sp.data.improve", "sp.data.improve_d", Bind::Proto),
     B::Switch("data-personalize", "sp.data.personalize", "sp.data.personalize_d", Bind::Proto),
     B::Switch("data-sponsored", "sp.data.sponsored", "sp.data.sponsored_d", Bind::Proto),
@@ -1164,12 +1210,7 @@ static CONTENT: &[B] = &[
     B::Radios("spam", "sp.cs.spam", "sp.cs.spam_d", &[("sp.cs.spam_all", ""), ("sp.cs.spam_nf", ""), ("sp.cs.spam_none", "")], Pick::Proto),
     B::Divider,
     B::Title("sp.cs.t3"),
-    B::Switch(
-        "server-dms",
-        "sp.cs.dms",
-        "sp.cs.dms_d",
-        Bind::Synced(|s| s.allow_server_dms, SettingsPatch::AllowServerDms),
-    ),
+    B::Switch("server-dms", "sp.cs.dms", "sp.cs.dms_d", Bind::Synced(|s| s.allow_server_dms, SettingsPatch::AllowServerDms)),
     B::Switch("msg-requests", "sp.cs.requests", "sp.cs.requests_d", Bind::Proto),
     B::Divider,
     B::Title("sp.cs.t4"),
@@ -1188,19 +1229,12 @@ static CONTENT: &[B] = &[
     B::Divider,
     B::Title("sp.cs.t6"),
     B::Lead("sp.cs.t6_d"),
-    B::Custom("sp.cs.blocked", |_, _| {
-        item(tr("sp.cs.blocked"), Some(desc_text(tr("sp.cs.blocked_d")).into_any_element()), None, false).into_any_element()
-    }),
+    B::Custom("sp.cs.blocked", |_, _| item(tr("sp.cs.blocked"), Some(desc_text(tr("sp.cs.blocked_d")).into_any_element()), None, false).into_any_element()),
 ];
 
 static NOTIF: &[B] = &[
     B::Title("sp.no.t1"),
-    B::Switch(
-        "desktop-notif",
-        "sp.no.desktop",
-        "sp.no.desktop_d",
-        Bind::Local(|p| p.desktop_notifications, |p, v| p.desktop_notifications = v),
-    ),
+    B::Switch("desktop-notif", "sp.no.desktop", "sp.no.desktop_d", Bind::Local(|p| p.desktop_notifications, |p, v| p.desktop_notifications = v)),
     B::Legend("sp.no.when"),
     B::Switch("n-stream", "sp.no.stream", "", Bind::Proto),
     B::Switch("n-anniv", "sp.no.anniv", "", Bind::Proto),
@@ -1213,12 +1247,7 @@ static NOTIF: &[B] = &[
     B::Sound("snd-msg", "sp.no.msg"),
     B::Sound("snd-msg-cur", "sp.no.msg_cur"),
     B::Sound("snd-ring", "sp.no.ring"),
-    B::Switch(
-        "notif-sounds",
-        "sp.no.mute_all",
-        "sp.no.mute_all_d",
-        Bind::Local(|p| !p.notification_sounds, |p, v| p.notification_sounds = !v),
-    ),
+    B::Switch("notif-sounds", "sp.no.mute_all", "sp.no.mute_all_d", Bind::Local(|p| !p.notification_sounds, |p, v| p.notification_sounds = !v)),
     B::Related("speaker", "settings.page.voice_video", "sp.no.voice_d", Page::VoiceVideo),
     B::Divider,
     B::Title("sp.no.t3"),
@@ -1262,9 +1291,7 @@ fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
             div()
                 .flex()
                 .gap(z(8.))
-                .children(AppTheme::ALL.map(|t| {
-                    super::view::theme_card(t, t == theme).on_click(cx.listener(move |a, _, _, cx| pick_theme(a, t, cx)))
-                }))
+                .children(AppTheme::ALL.map(|t| super::view::theme_card(t, t == theme).on_click(cx.listener(move |a, _, _, cx| pick_theme(a, t, cx)))))
                 .child(
                     div()
                         .id("theme-sync-os")
@@ -1279,9 +1306,13 @@ fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
                         .justify_center()
                         .cursor_pointer()
                         .on_click(cx.listener(|a, _, _, cx| {
-                            update_local(a, |p| {
-                                p.ui.insert("theme-sync".into(), 1);
-                            }, cx)
+                            update_local(
+                                a,
+                                |p| {
+                                    p.ui.insert("theme-sync".into(), 1);
+                                },
+                                cx,
+                            )
                         }))
                         .child(gpui::svg().path(crate::icons::path("refresh")).size(z(24.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
                 ),
@@ -1291,17 +1322,25 @@ fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
 
 fn pick_theme(app: &mut PhoenixApp, t: AppTheme, cx: &mut Cx) {
     if app.prefs.local.flag("theme-sync", false) {
-        update_local(app, |p| {
-            p.ui.insert("theme-sync".into(), 0);
-        }, cx);
+        update_local(
+            app,
+            |p| {
+                p.ui.insert("theme-sync".into(), 0);
+            },
+            cx,
+        );
     }
     if app.prefs.local.flag("theme-devices", true) {
         save(app, SettingsPatch::Theme(t), cx);
     } else {
         let ix = AppTheme::ALL.iter().position(|x| *x == t).unwrap_or(0) as u64;
-        update_local(app, |p| {
-            p.ui.insert(super::LOCAL_THEME.into(), ix);
-        }, cx);
+        update_local(
+            app,
+            |p| {
+                p.ui.insert(super::LOCAL_THEME.into(), ix);
+            },
+            cx,
+        );
     }
 }
 
@@ -1323,7 +1362,14 @@ fn theme_banner(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .flex()
                 .flex_col()
                 .gap(z(4.))
-                .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.ap.banner")))
+                .child(
+                    div()
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(c(tok(idx::TEXT_STRONG)))
+                        .child(tr("sp.ap.banner")),
+                )
                 .child(desc_text(tr("sp.ap.banner_d")).text_color(c(tok(idx::TEXT_DEFAULT)))),
         )
         .child(controls::button(eid("theme-banner-try"), tr("sp.ap.banner_try"), BtnKind::Primary))
@@ -1385,42 +1431,29 @@ fn limited_theme(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .flex()
         .flex_col()
         .gap(z(4.))
-        .child(
+        .child(div().flex().items_center().gap(z(8.)).child(title_text(tr("sp.ap.limited")).font_weight(FontWeight::SEMIBOLD)).children(left.map(|left| {
             div()
                 .flex()
                 .items_center()
-                .gap(z(8.))
-                .child(title_text(tr("sp.ap.limited")).font_weight(FontWeight::SEMIBOLD))
-                .children(left.map(|left| {
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(z(4.))
-                        .px(z(8.))
-                        .h(z(16.))
-                        .rounded_full()
-                        .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
-                        .text_size(z(12.))
-                        .line_height(z(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(c(tok(idx::TEXT_DEFAULT)))
-                        .child(gpui::svg().path(crate::icons::path("picker/clock")).size(z(12.)).text_color(c(tok(idx::TEXT_DEFAULT))))
-                        .child(left)
-                })),
-        )
-        .child(
-            div()
-                .text_size(z(14.))
-                .line_height(z(18.))
-                .text_color(c(tok(idx::TEXT_MUTED)))
-                .child({
-                    let (note, more) = (tr("sp.ap.limited_d"), tr("sp.ap.limited_more"));
-                    let start = note.len() + 1;
-                    let text = format!("{note} {more}");
-                    let end = text.len();
-                    gpui::StyledText::new(text).with_highlights([(start..end, gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })])
-                }),
-        )
+                .gap(z(4.))
+                .px(z(8.))
+                .h(z(16.))
+                .rounded_full()
+                .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
+                .text_size(z(12.))
+                .line_height(z(16.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(gpui::svg().path(crate::icons::path("picker/clock")).size(z(12.)).text_color(c(tok(idx::TEXT_DEFAULT))))
+                .child(left)
+        })))
+        .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_MUTED))).child({
+            let (note, more) = (tr("sp.ap.limited_d"), tr("sp.ap.limited_more"));
+            let start = note.len() + 1;
+            let text = format!("{note} {more}");
+            let end = text.len();
+            gpui::StyledText::new(text).with_highlights([(start..end, gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })])
+        }))
         .child(
             div().pt(z(20.)).child(
                 div()
@@ -1433,7 +1466,11 @@ fn limited_theme(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
                         div()
                             .size_full()
                             .rounded(z(8.))
-                            .bg(gpui::linear_gradient(135., gpui::linear_color_stop(gpui::rgba(0xaf01f380), 0.33), gpui::linear_color_stop(gpui::rgba(0xff669880), 0.67)))
+                            .bg(gpui::linear_gradient(
+                                135.,
+                                gpui::linear_color_stop(gpui::rgba(0xaf01f380), 0.33),
+                                gpui::linear_color_stop(gpui::rgba(0xff669880), 0.67),
+                            ))
                             .child(div().size_full().rounded(z(8.)).bg(gpui::rgba(0x00000033))),
                     ),
             ),
@@ -1487,15 +1524,7 @@ static APPEARANCE: &[B] = &[
 ];
 
 fn slider_row(title: &'static str, desc: &'static str, s: Div) -> AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .py(z(12.))
-        .gap(z(4.))
-        .child(title_text(tr(title)))
-        .child(desc_text(tr(desc)))
-        .child(div().pt(z(8.)).child(s))
-        .into_any_element()
+    div().flex().flex_col().py(z(12.)).gap(z(4.)).child(title_text(tr(title))).child(desc_text(tr(desc))).child(div().pt(z(8.)).child(s)).into_any_element()
 }
 
 fn density_idx(p: &SyncedSettings) -> usize {
@@ -1572,25 +1601,35 @@ static A11Y: &[B] = &[
     B::Related("emoji", "settings.page.appearance", "sp.ac.appearance_d", Page::Appearance),
     B::Divider,
     B::Title("sp.ac.t4"),
-    B::Switch("reduced-motion", "sp.ac.motion", "sp.ac.motion_d", Bind::Local(|p| super::effects::effective_reduced_motion(p, super::effects::os_reduced_motion()), |p, v| {
-        p.reduced_motion = v;
-        p.ui.insert("motion-sync".into(), 0);
-    })),
-    B::Switch("motion-sync", "sp.ac.motion_sync", "", Bind::Local(|p| p.flag("motion-sync", true), |p, v| {
-        if !v {
-            p.reduced_motion = super::effects::os_reduced_motion();
-        }
-        p.ui.insert("motion-sync".into(), u64::from(v));
-    })),
+    B::Switch(
+        "reduced-motion",
+        "sp.ac.motion",
+        "sp.ac.motion_d",
+        Bind::Local(
+            |p| super::effects::effective_reduced_motion(p, super::effects::os_reduced_motion()),
+            |p, v| {
+                p.reduced_motion = v;
+                p.ui.insert("motion-sync".into(), 0);
+            },
+        ),
+    ),
+    B::Switch(
+        "motion-sync",
+        "sp.ac.motion_sync",
+        "",
+        Bind::Local(
+            |p| p.flag("motion-sync", true),
+            |p, v| {
+                if !v {
+                    p.reduced_motion = super::effects::os_reduced_motion();
+                }
+                p.ui.insert("motion-sync".into(), u64::from(v));
+            },
+        ),
+    ),
     B::Switch("gifs", "sp.ac.gifs", "", Bind::Proto),
     B::Switch("anim-emoji", "sp.ac.anim_emoji", "", Bind::Proto),
-    B::Radios(
-        "stickers",
-        "sp.ac.stickers",
-        "",
-        &[("sp.ac.st_always", ""), ("sp.ac.st_inter", "sp.ac.st_inter_d"), ("sp.ac.st_never", "")],
-        Pick::Proto,
-    ),
+    B::Radios("stickers", "sp.ac.stickers", "", &[("sp.ac.st_always", ""), ("sp.ac.st_inter", "sp.ac.st_inter_d"), ("sp.ac.st_never", "")], Pick::Proto),
     B::Divider,
     B::Title("sp.ac.t5"),
     B::Switch("alt-text", "sp.ac.alt", "sp.ac.alt_d", Bind::Proto),
@@ -1670,11 +1709,7 @@ static SYSTEM: &[B] = &[
             ("sp.kb.decline", &["esc"]),
         ],
     ),
-    B::KeyGroup(
-        "sp.kb.g_misc",
-        "",
-        &[("sp.kb.help", &["ctrl", "shift", "h"]), ("sp.kb.search", &["ctrl", "f"]), ("sp.kb.settings", &["ctrl", ","])],
-    ),
+    B::KeyGroup("sp.kb.g_misc", "", &[("sp.kb.help", &["ctrl", "shift", "h"]), ("sp.kb.search", &["ctrl", "f"]), ("sp.kb.settings", &["ctrl", ","])]),
     B::Divider,
     B::Title("sp.sy.t4"),
     B::Action("sp.sy.perf", "sp.sy.perf_d", "sp.sy.capture", false),
@@ -1701,7 +1736,13 @@ fn language_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElemen
         .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(active.native))
         .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_DEFAULT))).whitespace_nowrap().child(active.english))
         .child(
-            div().w(z(36.)).h_full().flex().items_center().justify_center().pr(z(4.))
+            div()
+                .w(z(36.))
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .pr(z(4.))
                 .child(gpui::svg().path("icons/chevron.svg").size(z(20.)).text_color(c(tok(idx::TEXT_STRONG)))),
         );
     let dd = dropdown_with(
@@ -1789,12 +1830,7 @@ static CONNECTIONS: &[B] = &[
 ];
 
 static DEVELOPER: &[B] = &[
-    B::Switch(
-        "dev-mode",
-        "settings.advanced.dev_mode",
-        "sp.dv.mode_d",
-        Bind::Synced(|s| s.developer_mode, SettingsPatch::DeveloperMode),
-    ),
+    B::Switch("dev-mode", "settings.advanced.dev_mode", "sp.dv.mode_d", Bind::Synced(|s| s.developer_mode, SettingsPatch::DeveloperMode)),
     B::Switch("app-test", "sp.dv.test", "sp.dv.test_d", Bind::Ui(false)),
 ];
 
@@ -1844,7 +1880,15 @@ fn hwaccel_banner(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .border_color(c(tok(idx::ICON_FEEDBACK_WARNING)))
         .bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_WARNING)))
         .child(gpui::svg().path(crate::icons::path("warning")).flex_none().size(z(20.)).mr(z(10.)).text_color(c(tok(idx::ICON_FEEDBACK_WARNING))))
-        .child(div().flex_1().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(tr("sp.sy.hwaccel_off")))
+        .child(
+            div()
+                .flex_1()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(tr("sp.sy.hwaccel_off")),
+        )
         .into_any_element()
 }
 
@@ -1879,12 +1923,10 @@ fn updates_section(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         .child(div().flex_1().min_w_0().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(status_color))).child(status_text))
         .child(check_btn);
     if has_release {
-        row = row.child(
-            controls::button(eid("view-update"), crate::t!("update.view_update"), BtnKind::Active).on_click(cx.listener(|_, _, w, cx| {
-                crate::actions::open_modal(crate::ui::modals::Modal::Update, Some(w));
-                cx.notify();
-            })),
-        );
+        row = row.child(controls::button(eid("view-update"), crate::t!("update.view_update"), BtnKind::Active).on_click(cx.listener(|_, _, w, cx| {
+            crate::actions::open_modal(crate::ui::modals::Modal::Update, Some(w));
+            cx.notify();
+        })));
     }
     row.into_any_element()
 }
@@ -1902,14 +1944,20 @@ fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                 .flex()
                 .items_start()
                 .gap(z(16.))
-                .child(div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(controls::section_title(tr("sp.sy.t2"))).child(desc_text(tr("sp.sy.t2_d")).max_w(z(427.))))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(z(4.))
+                        .child(controls::section_title(tr("sp.sy.t2")))
+                        .child(desc_text(tr("sp.sy.t2_d")).max_w(z(427.))),
+                )
                 .child(add),
         )
         .child(info_notice(tr("sp.sy.kb_disabled"), None))
-        .child(info_notice(
-            tr("sp.sy.kb_saved"),
-            Some(controls::button_sm(eid("kb-os"), tr("sp.sy.kb_os"), BtnKind::Secondary)),
-        ));
+        .child(info_notice(tr("sp.sy.kb_saved"), Some(controls::button_sm(eid("kb-os"), tr("sp.sy.kb_os"), BtnKind::Secondary))));
     if n == 0 {
         col = col.child(desc_text(tr("sp.sy.no_kb")));
     }
@@ -1924,12 +1972,8 @@ fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                 .border_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
                 .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
-                .child(
-                    div().flex_1().flex().flex_col().gap(z(8.)).child(title_text(tr("sp.sy.kb_action"))).child(desc_text(tr("sp.sy.kb_unassigned"))),
-                )
-                .child(
-                    div().flex_1().flex().flex_col().gap(z(8.)).child(title_text(tr("sp.sy.kb_keybind"))).child(desc_text(tr("sp.sy.kb_none"))),
-                )
+                .child(div().flex_1().flex().flex_col().gap(z(8.)).child(title_text(tr("sp.sy.kb_action"))).child(desc_text(tr("sp.sy.kb_unassigned"))))
+                .child(div().flex_1().flex().flex_col().gap(z(8.)).child(title_text(tr("sp.sy.kb_keybind"))).child(desc_text(tr("sp.sy.kb_none"))))
                 .child(
                     div()
                         .id(eid(format!("kb-rm-{i}")))
@@ -1972,9 +2016,7 @@ fn a11y_preview(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
             .py(z(2.))
             .rounded(z(8.))
             .border_1()
-            .when(me_, |d| {
-                d.bg(c(tok(idx::REACTION_BACKGROUND_REACTED_DEFAULT))).border_color(c(tok(idx::REACTION_BORDER_REACTED_DEFAULT)))
-            })
+            .when(me_, |d| d.bg(c(tok(idx::REACTION_BACKGROUND_REACTED_DEFAULT))).border_color(c(tok(idx::REACTION_BORDER_REACTED_DEFAULT))))
             .when(!me_, |d| d.bg(c(tok(idx::REACTION_BACKGROUND_DEFAULT))).border_color(gpui::transparent_black()))
             .child(div().text_size(z(16.)).line_height(z(20.)).child(emoji))
             .child(div().text_size(z(16.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(n))
@@ -2006,11 +2048,10 @@ fn a11y_preview(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .justify_between()
         .gap(z(20.))
         .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(z(6.))
-                .children([crate::model::Presence::Idle, crate::model::Presence::Dnd, crate::model::Presence::Online].map(|p| crate::ui::avatar_with_status(Some(me), 32., p, ring))),
+            div().flex().flex_col().gap(z(6.)).children(
+                [crate::model::Presence::Idle, crate::model::Presence::Dnd, crate::model::Presence::Online]
+                    .map(|p| crate::ui::avatar_with_status(Some(me), 32., p, ring)),
+            ),
         )
         .child(controls::button_sm(eid("a11y-sample"), tr("sp.ac.sample_btn"), BtnKind::Primary));
     div()
@@ -2075,17 +2116,11 @@ const THEME_SWATCHES: [(f32, u32, f32, u32, f32); 22] = [
 
 fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
-        div()
-            .id(eid(format!("nitro-theme-{i}")))
-            .flex_none()
-            .size(z(48.))
-            .rounded(z(8.))
-            .cursor_pointer()
-            .bg(gpui::linear_gradient(
-                ang,
-                gpui::linear_color_stop(gpui::rgb(a), pa),
-                gpui::linear_color_stop(gpui::rgb(b), pb),
-            ))
+        div().id(eid(format!("nitro-theme-{i}"))).flex_none().size(z(48.)).rounded(z(8.)).cursor_pointer().bg(gpui::linear_gradient(
+            ang,
+            gpui::linear_color_stop(gpui::rgb(a), pa),
+            gpui::linear_color_stop(gpui::rgb(b), pb),
+        ))
     };
     let custom = div()
         .id("nitro-theme-custom")
@@ -2100,24 +2135,17 @@ fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .justify_center()
         .child(gpui::svg().path(crate::icons::path("palette")).size(z(24.)).text_color(c(tok(idx::ICON_STRONG))))
         .child(
-            div()
-                .absolute()
-                .top(z(-8.))
-                .left(z(-12.))
-                .w(z(72.))
-                .flex()
-                .justify_center()
-                .child(
-                    div()
-                        .px(z(8.))
-                        .rounded_full()
-                        .bg(c(tok(idx::BACKGROUND_BRAND)))
-                        .text_size(z(12.))
-                        .line_height(z(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(gpui::white())
-                        .child(tr("sp.ap.new")),
-                ),
+            div().absolute().top(z(-8.)).left(z(-12.)).w(z(72.)).flex().justify_center().child(
+                div()
+                    .px(z(8.))
+                    .rounded_full()
+                    .bg(c(tok(idx::BACKGROUND_BRAND)))
+                    .text_size(z(12.))
+                    .line_height(z(16.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(gpui::white())
+                    .child(tr("sp.ap.new")),
+            ),
         );
     div()
         .flex()
@@ -2132,15 +2160,7 @@ fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                 .child(gpui::svg().path(crate::icons::path("nitro")).size(z(16.)).text_color(c(tok(idx::TEXT_STRONG)))),
         )
         .child(desc_text(tr("sp.ap.color_themes_d")))
-        .child(
-            div()
-                .pt(z(24.))
-                .flex()
-                .flex_wrap()
-                .gap(z(8.))
-                .child(custom)
-                .children(THEME_SWATCHES.iter().enumerate().map(|(i, s)| tile(i, *s))),
-        )
+        .child(div().pt(z(24.)).flex().flex_wrap().gap(z(8.)).child(custom).children(THEME_SWATCHES.iter().enumerate().map(|(i, s)| tile(i, *s))))
         .into_any_element()
 }
 

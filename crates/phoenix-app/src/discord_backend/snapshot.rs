@@ -203,28 +203,30 @@ fn load() -> Option<(Ui, Core)> {
     events.extend(convert::self_status(&ready));
     events.extend(nav::snapshot(&cache, &ready));
     events.extend(people);
-    let resume = (fresh && other_owner().is_none())
-        .then_some(last_seq)
-        .flatten()
-        .map(|seq| ResumeState { session_id: ready.session_id.clone(), resume_url: ready.resume_gateway_url.clone(), seq });
+    let resume = (fresh && other_owner().is_none()).then_some(last_seq).flatten().map(|seq| ResumeState {
+        session_id: ready.session_id.clone(),
+        resume_url: ready.resume_gateway_url.clone(),
+        seq,
+    });
     Some(((data, events), Core { cache, ready, adapter, resume }))
 }
 
 fn presence_events(events: Vec<AppEvent>) -> impl Iterator<Item = AppEvent> {
     events.into_iter().filter(|e| {
-        matches!(e, AppEvent::PresenceReset | AppEvent::PresenceUpdate { .. } | AppEvent::Activities { .. } | AppEvent::Nav(crate::ui::home::data::NavEvent::Activity { .. }))
+        matches!(
+            e,
+            AppEvent::PresenceReset
+                | AppEvent::PresenceUpdate { .. }
+                | AppEvent::Activities { .. }
+                | AppEvent::Nav(crate::ui::home::data::NavEvent::Activity { .. })
+        )
     })
 }
 
 fn replay(cache: &Cache, adapter: &mut Adapter, people: &mut Vec<AppEvent>) -> (Option<u64>, bool) {
     let Some(jp) = journal_path() else { return (None, false) };
     let Ok(f) = fs::File::open(&jp) else { return (None, false) };
-    let fresh = f
-        .metadata()
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| SystemTime::now().duration_since(t).ok())
-        .is_some_and(|age| age < RESUME_WINDOW);
+    let fresh = f.metadata().and_then(|m| m.modified()).ok().and_then(|t| SystemTime::now().duration_since(t).ok()).is_some_and(|age| age < RESUME_WINDOW);
     let mut last = None;
     for line in std::io::BufReader::new(f).lines() {
         let Ok(line) = line else { break };

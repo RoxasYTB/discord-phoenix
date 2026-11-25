@@ -162,31 +162,19 @@ impl PreloadedUserSettings {
     }
 
     pub fn patch_appearance(theme: Theme, developer_mode: bool) -> Self {
-        Self {
-            appearance: Some(AppearanceSettings { theme: theme.to_proto(), developer_mode, ui_density: 0 }),
-            ..Default::default()
-        }
+        Self { appearance: Some(AppearanceSettings { theme: theme.to_proto(), developer_mode, ui_density: 0 }), ..Default::default() }
     }
     pub fn patch_compact(compact: bool) -> Self {
         Self {
-            text_and_images: Some(TextAndImagesSettings {
-                message_display_compact: Some(BoolValue { value: compact }),
-                ..Default::default()
-            }),
+            text_and_images: Some(TextAndImagesSettings { message_display_compact: Some(BoolValue { value: compact }), ..Default::default() }),
             ..Default::default()
         }
     }
     pub fn patch_locale(locale: &str) -> Self {
-        Self {
-            localization: Some(LocalizationSettings { locale: Some(StringValue { value: locale.to_owned() }) }),
-            ..Default::default()
-        }
+        Self { localization: Some(LocalizationSettings { locale: Some(StringValue { value: locale.to_owned() }) }), ..Default::default() }
     }
     pub fn patch_default_guilds_restricted(v: bool) -> Self {
-        Self {
-            privacy: Some(PrivacySettings { default_guilds_restricted: v, ..Default::default() }),
-            ..Default::default()
-        }
+        Self { privacy: Some(PrivacySettings { default_guilds_restricted: v, ..Default::default() }), ..Default::default() }
     }
 }
 
@@ -438,9 +426,7 @@ impl RestClient {
     pub async fn save_guild_folders(&self, folders: &[FolderProto]) -> Result<Vec<u8>> {
         let raw = self.get_settings_proto_raw().await?;
         let next = with_guild_folders(&raw, folders);
-        let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(next) })))
-            .await?;
+        let b: ProtoBody = self.call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(next) }))).await?;
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
     }
 }
@@ -516,13 +502,7 @@ impl RestClient {
     }
 
     pub async fn patch_settings_proto(&self, patch: &PreloadedUserSettings) -> Result<PreloadedUserSettings> {
-        let b: ProtoBody = self
-            .call(
-                Method::PATCH,
-                "/users/@me/settings-proto/1",
-                Body::Json(json!({ "settings": patch.encode_base64() })),
-            )
-            .await?;
+        let b: ProtoBody = self.call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": patch.encode_base64() }))).await?;
         PreloadedUserSettings::decode_base64(&b.settings)
     }
 
@@ -530,18 +510,14 @@ impl RestClient {
         let b: ProtoBody = self.call(Method::GET, "/users/@me/settings-proto/1", Body::None).await?;
         let mut raw = STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))?;
         raw.extend(change.encode());
-        let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(raw) })))
-            .await?;
+        let b: ProtoBody = self.call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(raw) }))).await?;
         PreloadedUserSettings::decode_base64(&b.settings)
     }
 
     pub async fn save_custom_status(&self, custom: Option<&CustomStatusProto>) -> Result<Vec<u8>> {
         let raw = self.get_settings_proto_raw().await?;
         let next = with_custom_status(&raw, custom);
-        let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(next) })))
-            .await?;
+        let b: ProtoBody = self.call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(next) }))).await?;
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
     }
 
@@ -553,9 +529,7 @@ impl RestClient {
     pub async fn patch_setting_raw(&self, change: &SettingChange) -> Result<Vec<u8>> {
         let mut raw = self.get_settings_proto_raw().await?;
         raw.extend(change.encode());
-        let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(raw) })))
-            .await?;
+        let b: ProtoBody = self.call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(raw) }))).await?;
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
     }
 
@@ -573,12 +547,7 @@ impl RestClient {
     }
 
     pub async fn patch_email_setting(&self, category: &str, on: bool) -> Result<Value> {
-        self.call(
-            Method::PATCH,
-            "/users/@me/email-settings",
-            Body::Json(json!({ "settings": { "categories": { category: on } } })),
-        )
-        .await
+        self.call(Method::PATCH, "/users/@me/email-settings", Body::Json(json!({ "settings": { "categories": { category: on } } }))).await
     }
 
     pub async fn get_settings_json(&self) -> Result<Value> {

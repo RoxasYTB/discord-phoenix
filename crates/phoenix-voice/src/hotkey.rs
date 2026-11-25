@@ -43,11 +43,7 @@ pub fn xdg_trigger(keystroke: &str) -> String {
         .join("+")
 }
 
-pub fn start(
-    control: Arc<AudioControl>,
-    keystroke: &str,
-    status: impl Fn(PortalStatus) + Send + 'static,
-) -> GlobalPtt {
+pub fn start(control: Arc<AudioControl>, keystroke: &str, status: impl Fn(PortalStatus) + Send + 'static) -> GlobalPtt {
     let (tx, rx) = oneshot::channel();
     let trigger = xdg_trigger(keystroke);
     let spawned = std::thread::Builder::new().name("phoenix-ptt-portal".into()).spawn(move || {
@@ -64,12 +60,7 @@ pub fn start(
     GlobalPtt { stop: Some(tx) }
 }
 
-async fn run(
-    control: Arc<AudioControl>,
-    trigger: &str,
-    status: &(impl Fn(PortalStatus) + Send),
-    mut stop: oneshot::Receiver<()>,
-) -> ashpd::Result<()> {
+async fn run(control: Arc<AudioControl>, trigger: &str, status: &(impl Fn(PortalStatus) + Send), mut stop: oneshot::Receiver<()>) -> ashpd::Result<()> {
     let conn = ashpd::zbus::Connection::session().await?;
     if let Ok(id) = APP_ID.parse()
         && let Err(e) = ashpd::register_host_app_with_connection(conn.clone(), id).await
@@ -80,12 +71,7 @@ async fn run(
     let session = gs.create_session(Default::default()).await?;
     let shortcut = NewShortcut::new(SHORTCUT_ID, "Push to Talk").preferred_trigger(Some(trigger));
     let bound = gs.bind_shortcuts(&session, &[shortcut], None, Default::default()).await?.response()?;
-    let desc = bound
-        .shortcuts()
-        .iter()
-        .find(|s| s.id() == SHORTCUT_ID)
-        .map(|s| s.trigger_description().to_string())
-        .unwrap_or_default();
+    let desc = bound.shortcuts().iter().find(|s| s.id() == SHORTCUT_ID).map(|s| s.trigger_description().to_string()).unwrap_or_default();
     status(PortalStatus::Bound(desc));
     let mut down = gs.receive_activated().await?;
     let mut up = gs.receive_deactivated().await?;

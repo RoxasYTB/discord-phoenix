@@ -1,6 +1,6 @@
 use gpui::{
-    App, Bounds, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, Pixels,
-    SharedString, Style, TextAlign, Window, point, px, relative,
+    App, Bounds, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, Pixels, SharedString, Style, TextAlign, Window, point,
+    px, relative,
 };
 
 pub struct NameText {
@@ -150,8 +150,7 @@ impl Element for NameText {
             x += layout.ellipsis + self.spacing;
         }
         if let Some((size, ascent, descent, mut u)) = layout.underline {
-            let (y, thickness) =
-                gpui::underline_geometry(bounds.origin.y, layout.line_height, size, ascent, descent, window.scale_factor());
+            let (y, thickness) = gpui::underline_geometry(bounds.origin.y, layout.line_height, size, ascent, descent, window.scale_factor());
             u.color = u.color.or_else(|| self.colors.first().copied()).or(Some(base));
             if !u.wavy {
                 u.thickness = thickness;

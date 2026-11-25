@@ -12,8 +12,8 @@ pub mod types;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, Keystroke, ListState, ParentElement, Pixels,
-    Point, SharedString, Styled, Subscription, WeakEntity, Window, div, prelude::*, px,
+    AnyElement, App, Context, Entity, FontWeight, Keystroke, ListState, ParentElement, Pixels, Point, SharedString, Styled, Subscription, WeakEntity, Window,
+    div, prelude::*, px,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
 
@@ -192,18 +192,7 @@ pub fn open(app: &mut PhoenixApp, tab: Tab, target: EmojiTarget, window: &mut Wi
     let anchor = (!matches!(target, EmojiTarget::Composer)).then(|| window.mouse_position());
     let grid = grid::build(app, "", matches!(target, EmojiTarget::Reaction { .. }), cx);
     let list = ListState::new(grid.rows.len(), gpui::ListAlignment::Top, px(400.));
-    cx.global_mut::<Pickers>().open = Some(OpenPicker {
-        tab,
-        target,
-        input,
-        grid,
-        list,
-        selected: 0,
-        hovered: None,
-        tone_open: false,
-        anchor,
-        _sub: sub,
-    });
+    cx.global_mut::<Pickers>().open = Some(OpenPicker { tab, target, input, grid, list, selected: 0, hovered: None, tone_open: false, anchor, _sub: sub });
     ensure_tab_data(app, tab, cx);
     cx.notify();
 }
@@ -553,9 +542,7 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
                 0.
             } else if crate::ui::dm_profile_panel::peer(app).is_some() {
                 320.
-            } else if app.selected_guild.is_some()
-                || app.selected_channel.is_some_and(|c| crate::ui::dm_profile_panel::is_group_dm(app, c))
-            {
+            } else if app.selected_guild.is_some() || app.selected_channel.is_some_and(|c| crate::ui::dm_profile_panel::is_group_dm(app, c)) {
                 crate::theme::m::member_list_w()
             } else {
                 0.
@@ -614,11 +601,7 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
                     .rounded(px(8.))
                     .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
                     .border_1()
-                    .border_color(tk(if nav.is_none() && crate::theme::high_contrast() {
-                        idx::BORDER_NORMAL
-                    } else {
-                        idx::BORDER_SUBTLE
-                    }))
+                    .border_color(tk(if nav.is_none() && crate::theme::high_contrast() { idx::BORDER_NORMAL } else { idx::BORDER_SUBTLE }))
                     .shadow(vec![gpui::BoxShadow {
                         color: gpui::hsla(0., 0., 0., 0.24),
                         offset: gpui::point(px(0.), px(12.)),
@@ -633,15 +616,7 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
                     .gap(px(12.))
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .children(nav)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .flex()
-                            .flex_col()
-                            .child(header)
-                            .child(div().flex_1().min_h_0().flex().child(body)),
-                    ),
+                    .child(div().flex_1().min_h_0().flex().flex_col().child(header).child(div().flex_1().min_h_0().flex().child(body))),
             )
             .into_any_element(),
     )
@@ -703,12 +678,8 @@ fn tab_button(label: SharedString, tab: Tab, current: Tab, cx: &mut Context<Phoe
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(tk(if active { idx::TEXT_STRONG } else { idx::TEXT_DEFAULT }))
         .when(active, |d| d.bg(tk(idx::BACKGROUND_MOD_NORMAL)).hover(|s| s.bg(tk(idx::BACKGROUND_MOD_STRONG))))
-        .when(crate::theme::high_contrast(), |d| {
-            d.border_1().border_color(tk(if active { idx::BORDER_NORMAL } else { idx::BORDER_SUBTLE }))
-        })
-        .when(!active, |d| {
-            d.hover(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)).text_color(tk(idx::INTERACTIVE_TEXT_HOVER)))
-        })
+        .when(crate::theme::high_contrast(), |d| d.border_1().border_color(tk(if active { idx::BORDER_NORMAL } else { idx::BORDER_SUBTLE })))
+        .when(!active, |d| d.hover(|s| s.bg(tk(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)).text_color(tk(idx::INTERACTIVE_TEXT_HOVER))))
         .on_click(cx.listener(move |a, _, w, cx| switch_tab(a, tab, w, cx)))
         .child(label)
 }
@@ -741,15 +712,7 @@ pub(crate) fn section_header(lead: Option<AnyElement>, title: SharedString) -> g
 }
 
 pub(crate) fn empty_state(text: SharedString) -> AnyElement {
-    div()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_size(px(14.))
-        .text_color(tk(idx::TEXT_MUTED))
-        .child(text)
-        .into_any_element()
+    div().size_full().flex().items_center().justify_center().text_size(px(14.)).text_color(tk(idx::TEXT_MUTED)).child(text).into_any_element()
 }
 
 pub fn svg_asset(path: &str) -> Option<&'static str> {

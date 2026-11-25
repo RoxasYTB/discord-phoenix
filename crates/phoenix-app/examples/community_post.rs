@@ -47,9 +47,7 @@ fn image(path: &str) -> anyhow::Result<FileUpload> {
 }
 
 async fn own_message(rest: &RestClient, ch: u64, id: u64, me: &str) -> anyhow::Result<Value> {
-    let v = rest
-        .request_json(reqwest::Method::GET, &format!("/channels/{ch}/messages?around={id}&limit=1"), None)
-        .await?;
+    let v = rest.request_json(reqwest::Method::GET, &format!("/channels/{ch}/messages?around={id}&limit=1"), None).await?;
     let m = v
         .as_array()
         .and_then(|a| a.iter().find(|m| m["id"].as_str() == Some(&id.to_string())))
@@ -67,19 +65,15 @@ fn main() -> anyhow::Result<()> {
     let rest_args = args[2..].to_vec();
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     rt.block_on(async move {
-        let token = tokio::task::spawn_blocking(|| KeyringStore.load())
-            .await?
-            .map_err(anyhow::Error::msg)?
-            .ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
+        let token =
+            tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
         let rest = RestClient::new(token.expose(), ClientProperties::linux_desktop());
         let guild = rest.request_json(reqwest::Method::GET, &format!("/guilds/{GUILD}"), None).await?;
         let chan = rest.get_channel(Snowflake(ch)).await?;
         let me = rest.request_json(reqwest::Method::GET, "/users/@me", None).await?;
         let me = me["id"].as_str().unwrap_or_default().to_owned();
         anyhow::ensure!(
-            guild["name"].as_str() == Some(GUILD_NAME)
-                && chan.guild_id == Some(Snowflake(GUILD))
-                && chan.name.as_deref() == Some(expect),
+            guild["name"].as_str() == Some(GUILD_NAME) && chan.guild_id == Some(Snowflake(GUILD)) && chan.name.as_deref() == Some(expect),
             "refusing: guild or channel name does not match"
         );
         println!("guard ok: {GUILD_NAME} / {expect}");

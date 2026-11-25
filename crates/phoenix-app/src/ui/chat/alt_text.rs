@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
 use gpui::{
-    Anchor, AnchoredPositionMode, AnyElement, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, anchored, deferred, div, point, prelude::FluentBuilder,
+    Anchor, AnchoredPositionMode, AnyElement, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement,
+    Styled, anchored, deferred, div, point, prelude::FluentBuilder,
 };
 
 use crate::{
@@ -95,14 +95,7 @@ fn popout(key: SharedString, text: SharedString) -> AnyElement {
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
         .shadow(crate::ui::inbox::popout_shadow())
         .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(
-            div()
-                .mb(z(9.5))
-                .text_size(z(12.))
-                .line_height(z(16.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(crate::t!("chat.alt_title")),
-        )
+        .child(div().mb(z(9.5)).text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).child(crate::t!("chat.alt_title")))
         .child(div().text_size(z(16.)).line_height(z(20.)).child(text))
         .on_mouse_down_out(move |_, window, _| {
             if close() {

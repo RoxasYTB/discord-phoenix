@@ -48,8 +48,8 @@ pub fn output_devices() -> Vec<String> {
 fn find_device(input: bool, name: Option<&str>) -> Option<Device> {
     let host = cpal::default_host();
     if let Some(name) = name {
-        let found = if input { host.input_devices().ok() } else { host.output_devices().ok() }
-            .and_then(|mut it| it.find(|d| d.name().is_ok_and(|n| n == name)));
+        let found =
+            if input { host.input_devices().ok() } else { host.output_devices().ok() }.and_then(|mut it| it.find(|d| d.name().is_ok_and(|n| n == name)));
         if found.is_some() {
             return found;
         }
@@ -63,11 +63,7 @@ fn find_device(input: bool, name: Option<&str>) -> Option<Device> {
 }
 
 fn pick_config(dev: &Device, input: bool) -> Option<SupportedStreamConfig> {
-    let ranges: Vec<_> = if input {
-        dev.supported_input_configs().ok()?.collect()
-    } else {
-        dev.supported_output_configs().ok()?.collect()
-    };
+    let ranges: Vec<_> = if input { dev.supported_input_configs().ok()?.collect() } else { dev.supported_output_configs().ok()?.collect() };
     let ok_fmt = |f: SampleFormat| matches!(f, SampleFormat::F32 | SampleFormat::I16);
     let mut best = None;
     for r in &ranges {
@@ -107,12 +103,7 @@ pub struct AudioEngine {
 }
 
 impl AudioEngine {
-    pub fn start(
-        control: Arc<AudioControl>,
-        input: Option<String>,
-        output: Option<String>,
-        out_tx: mpsc::UnboundedSender<AudioOut>,
-    ) -> Result<Self> {
+    pub fn start(control: Arc<AudioControl>, input: Option<String>, output: Option<String>, out_tx: mpsc::UnboundedSender<AudioOut>) -> Result<Self> {
         let stop = Arc::new(AtomicBool::new(false));
         let mixer = Arc::new(Mutex::new(Mixer::default()));
         let out_queue: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
@@ -477,14 +468,7 @@ impl Drop for MicTest {
     }
 }
 
-fn mix_loop(
-    control: Arc<AudioControl>,
-    stop: Arc<AtomicBool>,
-    mixer: Arc<Mutex<Mixer>>,
-    q: Arc<Mutex<VecDeque<f32>>>,
-    rate: u32,
-    ch: usize,
-) {
+fn mix_loop(control: Arc<AudioControl>, stop: Arc<AtomicBool>, mixer: Arc<Mutex<Mixer>>, q: Arc<Mutex<VecDeque<f32>>>, rate: u32, ch: usize) {
     let mut rs = Resampler::new(RATE, rate, ch);
     let cap = rate as usize * ch * MAX_OUT_MS / 1000;
     let mut next = Instant::now();

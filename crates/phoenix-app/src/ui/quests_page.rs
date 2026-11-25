@@ -13,8 +13,10 @@ pub const CDN: &str = "https://cdn.discordapp.com/";
 pub const TILE_MIN_W: f32 = 336.;
 pub const GAP: f32 = 24.;
 pub const HERO_ART: &str = "https://cdn.discordapp.com/assets/content/fff9144c814ffc3126fdcaf5ec5bc68eff6d09e23ac8af5a3fbe61b05970cda0.png";
-pub const REWARD_ART_SMALL: &str = "https://cdn.discordapp.com/assets/content/d4fc1c99b3e3044530f08ede0156d1d43a13bf78f0f539e240b63f2d4dad3554.webm?format=webp";
-pub const REWARD_ART_LARGE: &str = "https://cdn.discordapp.com/assets/content/864e5841fd9af8da3c50ad6d6220bee54e8c2da2d36d3c85d0a5ae95cdbf095e.webm?format=webp";
+pub const REWARD_ART_SMALL: &str =
+    "https://cdn.discordapp.com/assets/content/d4fc1c99b3e3044530f08ede0156d1d43a13bf78f0f539e240b63f2d4dad3554.webm?format=webp";
+pub const REWARD_ART_LARGE: &str =
+    "https://cdn.discordapp.com/assets/content/864e5841fd9af8da3c50ad6d6220bee54e8c2da2d36d3c85d0a5ae95cdbf095e.webm?format=webp";
 pub const APP_FEATURE: u64 = 26;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,7 +75,8 @@ pub const TASK_FILTERS: [Filter; 2] = [Filter::Play, Filter::Video];
 pub const PINNED_QUEST: u64 = 1410358070831480904;
 pub const STALE_ENROLLMENT_MS: i64 = 20 * 60 * 1000;
 pub const VIDEO_TASKS: [&str; 2] = ["WATCH_VIDEO", "WATCH_VIDEO_ON_MOBILE"];
-pub const PLAY_TASKS: [&str; 7] = ["PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ON_PLAYSTATION", "PLAY_ON_XBOX", "ACHIEVEMENT_IN_GAME", "ACHIEVEMENT_IN_ACTIVITY", "PLAY_ACTIVITY"];
+pub const PLAY_TASKS: [&str; 7] =
+    ["PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ON_PLAYSTATION", "PLAY_ON_XBOX", "ACHIEVEMENT_IN_GAME", "ACHIEVEMENT_IN_ACTIVITY", "PLAY_ACTIVITY"];
 
 pub fn matches(q: &Quest, f: Filter) -> bool {
     match f {
@@ -88,7 +91,9 @@ pub fn matches(q: &Quest, f: Filter) -> bool {
 pub fn apply_filters(list: Vec<Quest>, filters: &[Filter]) -> Vec<Quest> {
     let rewards: Vec<Filter> = filters.iter().copied().filter(|f| REWARD_FILTERS.contains(f)).collect();
     let tasks: Vec<Filter> = filters.iter().copied().filter(|f| TASK_FILTERS.contains(f)).collect();
-    list.into_iter().filter(|q| (rewards.is_empty() || rewards.iter().any(|f| matches(q, *f))) && (tasks.is_empty() || tasks.iter().any(|f| matches(q, *f)))).collect()
+    list.into_iter()
+        .filter(|q| (rewards.is_empty() || rewards.iter().any(|f| matches(q, *f))) && (tasks.is_empty() || tasks.iter().any(|f| matches(q, *f))))
+        .collect()
 }
 
 fn expired(q: &Quest, now: DateTime<Utc>) -> bool {
@@ -316,7 +321,11 @@ pub fn multiplier(q: &Quest) -> Option<String> {
 }
 
 pub fn duration_short(seconds: u64) -> String {
-    if seconds < 60 { crate::t!("quests.seconds_short", n = seconds).to_string() } else { crate::t!("quests.minutes_short", n = seconds.div_ceil(60)).to_string() }
+    if seconds < 60 {
+        crate::t!("quests.seconds_short", n = seconds).to_string()
+    } else {
+        crate::t!("quests.minutes_short", n = seconds.div_ceil(60)).to_string()
+    }
 }
 
 pub fn description(q: &Quest, reward: &str) -> SharedString {
@@ -382,10 +391,24 @@ fn tile(q: &Quest, premium: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let banner_h = 95.;
     let mut top = div().relative().w_full().h(z(146.)).flex_none().rounded_t(z(8.)).overflow_hidden().bg(surface);
     if let Some(h) = q.hero.clone() {
-        top = top.child(div().absolute().top_0().left_0().right_0().h(z(banner_h)).overflow_hidden().bg(tk(idx::BACKGROUND_BASE_LOW)).child(img(h).size_full().object_fit(gpui::ObjectFit::Cover)));
+        top = top.child(
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(z(banner_h))
+                .overflow_hidden()
+                .bg(tk(idx::BACKGROUND_BASE_LOW))
+                .child(img(h).size_full().object_fit(gpui::ObjectFit::Cover)),
+        );
     }
     top = top
-        .child(div().absolute().top_0().left_0().right_0().h(z(banner_h)).bg(gpui::linear_gradient(0., gpui::linear_color_stop(surface, 0.), gpui::linear_color_stop(surface.opacity(0.), 1.))))
+        .child(div().absolute().top_0().left_0().right_0().h(z(banner_h)).bg(gpui::linear_gradient(
+            0.,
+            gpui::linear_color_stop(surface, 0.),
+            gpui::linear_color_stop(surface.opacity(0.), 1.),
+        )))
         .child(
             div()
                 .absolute()
@@ -402,7 +425,9 @@ fn tile(q: &Quest, premium: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         .child(util_button("more-horizontal")),
                 )
                 .child(div().flex_1())
-                .children(q.logotype.clone().map(|l| div().mb(z(4.)).h(z(34.)).w(z(121.)).flex().items_end().child(img(l).max_h(z(34.)).max_w(z(121.)).object_fit(gpui::ObjectFit::Contain))))
+                .children(q.logotype.clone().map(|l| {
+                    div().mb(z(4.)).h(z(34.)).w(z(121.)).flex().items_end().child(img(l).max_h(z(34.)).max_w(z(121.)).object_fit(gpui::ObjectFit::Contain))
+                }))
                 .child(
                     div()
                         .flex()
@@ -459,33 +484,28 @@ fn tile(q: &Quest, premium: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .child(text(12., 16., FontWeight::SEMIBOLD, gpui::white(), m)),
         );
     }
-    let mid = div()
-        .w_full()
-        .h(z(104.))
-        .flex_none()
-        .bg(surface)
-        .flex()
-        .flex_col()
-        .child(
-            div()
-                .w_full()
-                .h(z(104.))
-                .flex()
-                .child(div().pt(z(12.)).pl(z(12.)).pb(z(12.)).child(img(art).size(z(80.)).rounded(z(9.4)).object_fit(gpui::ObjectFit::Cover)))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .p(z(12.))
-                        .flex()
-                        .flex_col()
-                        .justify_center()
-                        .overflow_hidden()
-                        .child(text(12., 16., FontWeight::BOLD, tk(idx::TEXT_BRAND), crate::t!("quests.quest_name", name = q.name.clone()).to_uppercase()).mb(z(4.)))
-                        .child(header)
-                        .child(text(12., 16., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), description(q, &reward_label))),
-                ),
-        );
+    let mid = div().w_full().h(z(104.)).flex_none().bg(surface).flex().flex_col().child(
+        div()
+            .w_full()
+            .h(z(104.))
+            .flex()
+            .child(div().pt(z(12.)).pl(z(12.)).pb(z(12.)).child(img(art).size(z(80.)).rounded(z(9.4)).object_fit(gpui::ObjectFit::Cover)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .p(z(12.))
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .overflow_hidden()
+                    .child(
+                        text(12., 16., FontWeight::BOLD, tk(idx::TEXT_BRAND), crate::t!("quests.quest_name", name = q.name.clone()).to_uppercase()).mb(z(4.)),
+                    )
+                    .child(header)
+                    .child(text(12., 16., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), description(q, &reward_label))),
+            ),
+    );
     let primary: SharedString = match q.task {
         Task::Video { seconds } if !q.enrolled => crate::t!("quests.watch", d = duration_short(seconds)),
         _ if !q.enrolled => crate::t!("quests.accept"),
@@ -553,26 +573,21 @@ fn header_bar(cx: &mut Context<PhoenixApp>) -> AnyElement {
         .flex()
         .items_center()
         .child(gpui::svg().path(crate::icons::path("quests")).size(z(24.)).flex_none().text_color(tk(idx::ICON_STRONG)))
-        .child(div().ml(z(44.)).flex_1().h_full().flex().gap(z(24.)).child(tab("quests-tab-all", crate::t!("quests.all"), !claimed_tab, false)).child(tab("quests-tab-claimed", crate::t!("quests.claimed_tab"), claimed_tab, true)))
-        .child(
-            div()
-                .id("quests-balance")
-                .pl(z(10.))
-                .cursor_pointer()
-                .on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("quests.explore_shop"), cx)))
-                .child(
-                    div()
-                        .h(z(32.))
-                        .px(z(12.))
-                        .rounded(z(8.))
-                        .bg(rgba(0x97979f1f))
-                        .flex()
-                        .items_center()
-                        .gap(z(8.))
-                        .child(orb_icon(20.))
-                        .child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), balance.map(|b| b.to_string()).unwrap_or_default())),
-                ),
-        )
+        .child(div().ml(z(44.)).flex_1().h_full().flex().gap(z(24.)).child(tab("quests-tab-all", crate::t!("quests.all"), !claimed_tab, false)).child(tab(
+            "quests-tab-claimed",
+            crate::t!("quests.claimed_tab"),
+            claimed_tab,
+            true,
+        )))
+        .child(div().id("quests-balance").pl(z(10.)).cursor_pointer().on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("quests.explore_shop"), cx))).child(
+            div().h(z(32.)).px(z(12.)).rounded(z(8.)).bg(rgba(0x97979f1f)).flex().items_center().gap(z(8.)).child(orb_icon(20.)).child(text(
+                16.,
+                20.,
+                FontWeight::SEMIBOLD,
+                tk(idx::TEXT_STRONG),
+                balance.map(|b| b.to_string()).unwrap_or_default(),
+            )),
+        ))
         .into_any_element()
 }
 
@@ -607,25 +622,26 @@ fn hero(cx: &mut Context<PhoenixApp>) -> AnyElement {
         .border_color(tk(idx::BORDER_SUBTLE))
         .bg(gpui::black())
         .child(img(HERO_ART).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
-        .child(div().absolute().inset_0().opacity(0.25).bg(gpui::linear_gradient(0., gpui::linear_color_stop(tk(idx::BRAND_500), 0.), gpui::linear_color_stop(tk(idx::BRAND_500).opacity(0.), 0.33))))
+        .child(div().absolute().inset_0().opacity(0.25).bg(gpui::linear_gradient(
+            0.,
+            gpui::linear_color_stop(tk(idx::BRAND_500), 0.),
+            gpui::linear_color_stop(tk(idx::BRAND_500).opacity(0.), 0.33),
+        )))
         .child(
-            div()
-                .absolute()
-                .inset_0()
-                .p(z(32.))
-                .flex()
-                .flex_col()
-                .justify_end()
-                .child(
-                    div()
-                        .max_w(z(540.))
-                        .flex()
-                        .flex_col()
-                        .gap(z(16.))
-                        .child(text(44., 44., FontWeight::BOLD, tk(idx::TEXT_STRONG), crate::t!("quests.hero_title").to_uppercase()))
-                        .child(text(16., 20., FontWeight::NORMAL, tk(idx::TEXT_STRONG), crate::t!("quests.hero_subtitle")).opacity(0.8))
-                        .child(div().flex().flex_col().items_start().gap(z(7.)).child(overlay_btn("quests-hero-shop", shop, true)).child(overlay_btn("quests-hero-terms", terms, false))),
-                ),
+            div().absolute().inset_0().p(z(32.)).flex().flex_col().justify_end().child(
+                div()
+                    .max_w(z(540.))
+                    .flex()
+                    .flex_col()
+                    .gap(z(16.))
+                    .child(text(44., 44., FontWeight::BOLD, tk(idx::TEXT_STRONG), crate::t!("quests.hero_title").to_uppercase()))
+                    .child(text(16., 20., FontWeight::NORMAL, tk(idx::TEXT_STRONG), crate::t!("quests.hero_subtitle")).opacity(0.8))
+                    .child(div().flex().flex_col().items_start().gap(z(7.)).child(overlay_btn("quests-hero-shop", shop, true)).child(overlay_btn(
+                        "quests-hero-terms",
+                        terms,
+                        false,
+                    ))),
+            ),
         )
         .into_any_element()
 }
@@ -687,11 +703,20 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 w.refresh();
             })
             .relative()
-            .child(gpui::canvas(move |b, _, _| BUTTONS.with(|c| {
-                let mut v = c.get();
-                v[which as usize] = Some(b);
-                c.set(v);
-            }), |_, _, _, _| {}).absolute().inset_0())
+            .child(
+                gpui::canvas(
+                    move |b, _, _| {
+                        BUTTONS.with(|c| {
+                            let mut v = c.get();
+                            v[which as usize] = Some(b);
+                            c.set(v);
+                        })
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .inset_0(),
+            )
             .child(label)
             .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).text_color(tk(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
     };
@@ -702,20 +727,26 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .justify_between()
         .gap(z(16.))
         .child(text(20., 24., FontWeight::MEDIUM, tk(idx::TEXT_STRONG), crate::t!("quests.available_title")))
-        .child(
-            div()
-                .flex()
-                .gap(z(8.))
-                .child(small_btn("quests-sort", sort_label(sort), "chevron", Popout::Sort, false))
-                .child(small_btn("quests-filter", crate::t!("quests.filter"), "inbox/filter", Popout::Filter, false)),
-        );
+        .child(div().flex().gap(z(8.)).child(small_btn("quests-sort", sort_label(sort), "chevron", Popout::Sort, false)).child(small_btn(
+            "quests-filter",
+            crate::t!("quests.filter"),
+            "inbox/filter",
+            Popout::Filter,
+            false,
+        )));
     let mut content = div().w_full().max_w(z(1350.)).mx_auto().px(z(20.)).py(z(24.)).flex().flex_col().child(hero(cx)).child(div().h(z(64.))).child(heading);
     match quests {
         None => content = content.child(text(16., 20., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), crate::t!("common.loading")).mt(z(24.))),
         Some(list) => {
             let list = sort_quests(apply_filters(list, &filters), sort, Utc::now());
             if list.is_empty() {
-                content = content.child(div().py(z(80.)).flex().justify_center().child(text(24., 32., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("quests.none_title"))));
+                content = content.child(div().py(z(80.)).flex().justify_center().child(text(
+                    24.,
+                    32.,
+                    FontWeight::SEMIBOLD,
+                    tk(idx::TEXT_STRONG),
+                    crate::t!("quests.none_title"),
+                )));
             } else {
                 let mut grid = div().mt(z(GAP)).grid().grid_cols(cols as u16).gap(z(GAP));
                 for q in &list {
@@ -777,16 +808,21 @@ fn claimed_tile(q: &Claimed) -> AnyElement {
         .overflow_hidden()
         .bg(gpui::linear_gradient(0., gpui::linear_color_stop(gpui::rgb(0x15193c), 0.), gpui::linear_color_stop(gpui::black(), 0.33)))
         .children(art.map(|a| img(a).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover)))
-        .child(
+        .child(div().absolute().left_0().right_0().bottom_0().h_1_2().bg(gpui::linear_gradient(
+            0.,
+            gpui::linear_color_stop(gpui::rgb(0x242429), 0.),
+            gpui::linear_color_stop(gpui::Hsla::from(gpui::rgb(0x242429)).opacity(0.), 1.),
+        )))
+        .children(q.logotype.clone().map(|l| {
             div()
                 .absolute()
                 .left_0()
                 .right_0()
-                .bottom_0()
-                .h_1_2()
-                .bg(gpui::linear_gradient(0., gpui::linear_color_stop(gpui::rgb(0x242429), 0.), gpui::linear_color_stop(gpui::Hsla::from(gpui::rgb(0x242429)).opacity(0.), 1.))),
-        )
-        .children(q.logotype.clone().map(|l| div().absolute().left_0().right_0().bottom(z(20.)).flex().justify_center().child(img(l).w(z(140.)).max_h(z(36.)).object_fit(gpui::ObjectFit::Contain))))
+                .bottom(z(20.))
+                .flex()
+                .justify_center()
+                .child(img(l).w(z(140.)).max_h(z(36.)).object_fit(gpui::ObjectFit::Contain))
+        }))
         .into_any_element()
 }
 
@@ -846,14 +882,23 @@ fn popout(sort: Sort, filters: &[Filter]) -> Option<AnyElement> {
                 .child(divider())
                 .child(section(crate::t!("quests.filter_type"), &TASK_FILTERS, 10))
                 .child(divider())
-                .child(crate::ui::controls::button("quests-filter-clear", crate::t!("quests.filter_clear"), crate::ui::controls::BtnKind::Secondary).mx(z(-8.)).h(z(32.)).on_click(|_, w, _| {
-                    FILTERS.with(|c| c.borrow_mut().clear());
-                    w.refresh();
-                }));
+                .child(
+                    crate::ui::controls::button("quests-filter-clear", crate::t!("quests.filter_clear"), crate::ui::controls::BtnKind::Secondary)
+                        .mx(z(-8.))
+                        .h(z(32.))
+                        .on_click(|_, w, _| {
+                            FILTERS.with(|c| c.borrow_mut().clear());
+                            w.refresh();
+                        }),
+                );
         }
     }
     let at = BUTTONS.with(|c| c.get()[which as usize]).map_or(gpui::point(pos.x, pos.y - z(16.)), |b| gpui::point(b.right(), b.top() - z(8.)));
-    Some(gpui::deferred(gpui::anchored().position(at).anchor(gpui::Anchor::BottomRight).snap_to_window_with_margin(z(8.)).child(card)).with_priority(20).into_any_element())
+    Some(
+        gpui::deferred(gpui::anchored().position(at).anchor(gpui::Anchor::BottomRight).snap_to_window_with_margin(z(8.)).child(card))
+            .with_priority(20)
+            .into_any_element(),
+    )
 }
 
 #[cfg(test)]

@@ -47,13 +47,7 @@ pub fn widget_ids(widgets: &[Value]) -> Vec<(Kind, Vec<u64>)> {
         .filter_map(|w| {
             let d = w.get("data")?;
             let kind = Kind::parse(d.get("type")?.as_str()?)?;
-            let ids = d
-                .get("games")?
-                .as_array()?
-                .iter()
-                .filter_map(|g| g.get("game_id")?.as_str()?.parse().ok())
-                .take(kind.cap())
-                .collect();
+            let ids = d.get("games")?.as_array()?.iter().filter_map(|g| g.get("game_id")?.as_str()?.parse().ok()).take(kind.cap()).collect();
             Some((kind, ids))
         })
         .collect()

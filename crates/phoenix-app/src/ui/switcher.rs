@@ -1,7 +1,4 @@
-use gpui::{
-    AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Subscription, Window,
-    div, prelude::*, px,
-};
+use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Subscription, Window, div, prelude::*, px};
 use gpui_component::input::{Input, InputEvent, InputState};
 
 use crate::{
@@ -90,9 +87,8 @@ pub fn compute(app: &PhoenixApp, raw: &str) -> Vec<Target> {
                     continue;
                 }
                 if let Some(s) = fuzzy(&ch.name, &q) {
-                    let bonus = if recent.contains(&ch.id) { 60 } else { 0 }
-                        + if ch.unread { 20 } else { 0 }
-                        + if ch.guild == app.selected_guild { 25 } else { 0 };
+                    let bonus =
+                        if recent.contains(&ch.id) { 60 } else { 0 } + if ch.unread { 20 } else { 0 } + if ch.guild == app.selected_guild { 25 } else { 0 };
                     scored.push((s + bonus, Target::Channel(ch.id)));
                 }
             }
@@ -219,7 +215,14 @@ type Row = (AnyElement, SharedString, Option<SharedString>, Option<SharedString>
 pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let empty_query = sw.input.read(cx).value().trim().is_empty();
     let fg = tk(idx::INTERACTIVE_TEXT_DEFAULT);
-    let mut rows = div().id("switcher-results").mt(px(16.)).h(px(236.)).overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("switcher-results")).flex().flex_col();
+    let mut rows = div()
+        .id("switcher-results")
+        .mt(px(16.))
+        .h(px(236.))
+        .overflow_y_scroll()
+        .track_scroll(&crate::ui::chat::scrollbar::handle("switcher-results"))
+        .flex()
+        .flex_col();
     if sw.results.is_empty() {
         rows = rows.child(
             div()
@@ -348,15 +351,7 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                 })),
         );
     }
-    let sym = |s: &'static str| {
-        div()
-            .mx(px(1.))
-            .px(px(2.))
-            .rounded(px(4.))
-            .bg(tk(idx::BACKGROUND_BASE_LOWEST))
-            .font_family(crate::theme::FONT_MONO())
-            .child(s)
-    };
+    let sym = |s: &'static str| div().mx(px(1.)).px(px(2.)).rounded(px(4.)).bg(tk(idx::BACKGROUND_BASE_LOWEST)).font_family(crate::theme::FONT_MONO()).child(s);
     let protip = div()
         .pt(px(10.))
         .flex()
@@ -365,13 +360,7 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
         .text_size(px(12.))
         .line_height(px(16.))
         .text_color(tk(idx::TEXT_DEFAULT))
-        .child(
-            div()
-                .mr(px(3.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(tk(idx::TEXT_FEEDBACK_POSITIVE))
-                .child(crate::t!("switcher.protip_label")),
-        )
+        .child(div().mr(px(3.)).font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_FEEDBACK_POSITIVE)).child(crate::t!("switcher.protip_label")))
         .child(div().mr(px(3.)).child(crate::t!("switcher.protip")))
         .children(["@", "#", "!", "*", "$"].map(sym))
         .child(div().ml(px(3.)).mr(px(3.)).child(crate::t!("switcher.protip_after")))
@@ -415,7 +404,13 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
                         .text_color(tk(idx::TEXT_DEFAULT))
                         .child(Input::new(&sw.input).appearance(false).bordered(false).text_size(px(22.))),
                 )
-                .child(div().h(px(262.)).flex_none().child(crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto).child(rows).children(crate::ui::chat::scrollbar::bar_for("switcher-results", crate::ui::chat::scrollbar::Bar::Auto))))
+                .child(
+                    div().h(px(262.)).flex_none().child(
+                        crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
+                            .child(rows)
+                            .children(crate::ui::chat::scrollbar::bar_for("switcher-results", crate::ui::chat::scrollbar::Bar::Auto)),
+                    ),
+                )
                 .child(protip.pb(px(1.))),
         )
 }

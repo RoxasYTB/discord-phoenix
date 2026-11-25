@@ -51,9 +51,7 @@ impl std::fmt::Debug for Cache {
 
 impl Cache {
     pub fn new(message_cap: usize) -> Self {
-        Self {
-            inner: Arc::new(Inner { state: RwLock::new(State::default()), version: AtomicU64::new(0), message_cap: message_cap.max(1) }),
-        }
+        Self { inner: Arc::new(Inner { state: RwLock::new(State::default()), version: AtomicU64::new(0), message_cap: message_cap.max(1) }) }
     }
 
     pub fn version(&self) -> u64 {
@@ -87,13 +85,7 @@ impl Cache {
 
     pub fn guild_channels(&self, guild: GuildId) -> Vec<Arc<Channel>> {
         let s = self.inner.state.read();
-        let mut v: Vec<_> = s
-            .guild_channels
-            .get(&guild)
-            .into_iter()
-            .flatten()
-            .filter_map(|id| s.channels.get(id).cloned())
-            .collect();
+        let mut v: Vec<_> = s.guild_channels.get(&guild).into_iter().flatten().filter_map(|id| s.channels.get(id).cloned()).collect();
         v.sort_by_key(|c| (c.position.unwrap_or(0), c.id));
         v
     }
@@ -317,11 +309,9 @@ impl Cache {
                 return changed;
             }
             GatewayEvent::GuildRoleCreate(r) | GatewayEvent::GuildRoleUpdate(r) => {
-                return modify_guild(&mut s, r.guild_id, |g| {
-                    match g.roles.iter_mut().find(|x| x.id == r.role.id) {
-                        Some(x) => *x = r.role.clone(),
-                        None => g.roles.push(r.role.clone()),
-                    }
+                return modify_guild(&mut s, r.guild_id, |g| match g.roles.iter_mut().find(|x| x.id == r.role.id) {
+                    Some(x) => *x = r.role.clone(),
+                    None => g.roles.push(r.role.clone()),
                 });
             }
             GatewayEvent::GuildRoleDelete(r) => {
@@ -351,10 +341,7 @@ impl Cache {
                     .and_then(Value::as_array)
                     .and_then(|v| v.iter().find(|m| m.get("user_id").and_then(Value::as_str) == Some(me.as_str())))
                     .cloned();
-                let removed = data
-                    .get("removed_member_ids")
-                    .and_then(Value::as_array)
-                    .is_some_and(|v| v.iter().any(|x| x.as_str() == Some(me.as_str())));
+                let removed = data.get("removed_member_ids").and_then(Value::as_array).is_some_and(|v| v.iter().any(|x| x.as_str() == Some(me.as_str())));
                 let count = data.get("member_count").and_then(Value::as_u64);
                 let preview: Option<Vec<Snowflake>> = data
                     .get("member_ids_preview")

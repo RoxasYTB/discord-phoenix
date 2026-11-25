@@ -39,10 +39,7 @@ impl Snowflake {
     }
 
     pub fn now() -> Self {
-        let ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(DISCORD_EPOCH_MS);
+        let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(DISCORD_EPOCH_MS);
         Self::from_timestamp_ms(ms)
     }
 }
@@ -90,9 +87,7 @@ impl<'de> Deserialize<'de> for Snowflake {
                 Ok(Snowflake(v))
             }
             fn visit_i64<E: de::Error>(self, v: i64) -> Result<Snowflake, E> {
-                u64::try_from(v)
-                    .map(Snowflake)
-                    .map_err(|_| E::custom("negative snowflake"))
+                u64::try_from(v).map(Snowflake).map_err(|_| E::custom("negative snowflake"))
             }
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Snowflake, E> {
                 v.parse().map(Snowflake).map_err(E::custom)

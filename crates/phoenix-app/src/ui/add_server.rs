@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 
-use gpui::{
-    AnyElement, Context, Entity, FontWeight, ParentElement, SharedString, Styled, Window, div, prelude::*, svg,
-};
+use gpui::{AnyElement, Context, Entity, FontWeight, ParentElement, SharedString, Styled, Window, div, prelude::*, svg};
 use gpui_component::input::{Input, InputEvent, InputState};
 
 use crate::{
@@ -76,12 +74,7 @@ pub fn default_server_name(username: &str, is_fr: bool) -> String {
     }
 }
 
-pub fn create_guild_body(
-    name: &str,
-    icon: Option<&str>,
-    template: Option<&str>,
-    community: Option<bool>,
-) -> serde_json::Value {
+pub fn create_guild_body(name: &str, icon: Option<&str>, template: Option<&str>, community: Option<bool>) -> serde_json::Value {
     let mut obj = serde_json::json!({
         "name": name.trim(),
         "icon": icon,
@@ -136,22 +129,18 @@ impl PhoenixApp {
         }
         self.nav.busy = true;
         STATE.with(|s| s.borrow_mut().create_error = None);
-        self.nav_request(
-            NavRequest::CreateGuild { name: name.trim().to_owned(), icon: None, template, community },
-            cx,
-            |this, res, cx| {
-                this.nav.busy = false;
-                match res {
-                    Ok(_) => {
-                        reset();
-                        this.close_overlay(cx);
-                    }
-                    Err(e) => {
-                        STATE.with(|s| s.borrow_mut().create_error = Some(e.0.into()));
-                    }
+        self.nav_request(NavRequest::CreateGuild { name: name.trim().to_owned(), icon: None, template, community }, cx, |this, res, cx| {
+            this.nav.busy = false;
+            match res {
+                Ok(_) => {
+                    reset();
+                    this.close_overlay(cx);
                 }
-            },
-        );
+                Err(e) => {
+                    STATE.with(|s| s.borrow_mut().create_error = Some(e.0.into()));
+                }
+            }
+        });
         cx.notify();
     }
 }
@@ -163,23 +152,8 @@ fn header(title: SharedString, subtitle: SharedString, pad_x: f32) -> gpui::Div 
         .flex()
         .flex_col()
         .items_center()
-        .child(
-            div()
-                .px(z(20.))
-                .text_size(z(24.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(c(Palette::TEXT_HEADER))
-                .text_center()
-                .child(title),
-        )
-        .child(
-            div()
-                .mt(z(8.))
-                .text_size(z(14.))
-                .text_color(c(Palette::TEXT_MUTED))
-                .text_center()
-                .child(subtitle),
-        )
+        .child(div().px(z(20.)).text_size(z(24.)).font_weight(FontWeight::BOLD).text_color(c(Palette::TEXT_HEADER)).text_center().child(title))
+        .child(div().mt(z(8.)).text_size(z(14.)).text_color(c(Palette::TEXT_MUTED)).text_center().child(subtitle))
 }
 
 fn option_row(id: &'static str, icon_name: &str, label: SharedString) -> gpui::Stateful<gpui::Div> {
@@ -208,16 +182,7 @@ fn option_row(id: &'static str, icon_name: &str, label: SharedString) -> gpui::S
                 .justify_center()
                 .child(svg().path(crate::icons::path(icon_name)).size(z(20.)).text_color(c(Palette::TEXT_HEADER))),
         )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_size(z(15.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(Palette::TEXT_HEADER))
-                .text_ellipsis()
-                .child(label),
-        )
+        .child(div().flex_1().min_w_0().text_size(z(15.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_HEADER)).text_ellipsis().child(label))
         .child(svg().path(crate::icons::path("chevron-right")).size(z(18.)).text_color(c(Palette::INTERACTIVE)))
 }
 
@@ -259,10 +224,7 @@ fn primary_btn(id: &'static str, label: SharedString, disabled: bool) -> gpui::S
 }
 
 fn upload_badge() -> gpui::Div {
-    let mut box_el = div()
-        .mt(z(20.))
-        .flex()
-        .justify_center();
+    let mut box_el = div().mt(z(20.)).flex().justify_center();
     if let Some(art) = crate::icons::art::guild_upload() {
         box_el = box_el.child(
             div()
@@ -271,12 +233,7 @@ fn upload_badge() -> gpui::Div {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(
-                    svg()
-                        .path(art.ring.to_string_lossy().to_string())
-                        .size(z(80.))
-                        .text_color(c(Palette::INTERACTIVE)),
-                )
+                .child(svg().path(art.ring.to_string_lossy().to_string()).size(z(80.)).text_color(c(Palette::INTERACTIVE)))
                 .child(
                     div()
                         .absolute()
@@ -322,16 +279,14 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
                 .overflow_y_scroll()
                 .flex()
                 .flex_col()
-                .child(option_row("tpl-own", "plus", crate::t!("add_server.create_own")).on_click(cx.listener(
-                    |_, _, _, cx| {
-                        STATE.with(|s| {
-                            let mut st = s.borrow_mut();
-                            st.template = None;
-                            st.step = Step::Intent;
-                        });
-                        cx.notify();
-                    },
-                )))
+                .child(option_row("tpl-own", "plus", crate::t!("add_server.create_own")).on_click(cx.listener(|_, _, _, cx| {
+                    STATE.with(|s| {
+                        let mut st = s.borrow_mut();
+                        st.template = None;
+                        st.step = Step::Intent;
+                    });
+                    cx.notify();
+                })))
                 .child(
                     div()
                         .mt(z(16.))
@@ -343,62 +298,55 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
                 );
             for t in TEMPLATES {
                 let tid = t.id;
-                list = list.child(option_row(t.id, t.icon, crate::t!(t.label_key)).on_click(cx.listener(
-                    move |_, _, _, cx| {
-                        STATE.with(|s| {
-                            let mut st = s.borrow_mut();
-                            st.template = Some(tid);
-                            st.step = Step::Intent;
-                        });
-                        cx.notify();
-                    },
-                )));
+                list = list.child(option_row(t.id, t.icon, crate::t!(t.label_key)).on_click(cx.listener(move |_, _, _, cx| {
+                    STATE.with(|s| {
+                        let mut st = s.borrow_mut();
+                        st.template = Some(tid);
+                        st.step = Step::Intent;
+                    });
+                    cx.notify();
+                })));
             }
-            div()
-                .flex()
-                .flex_col()
-                .child(header(crate::t!("add_server.title"), crate::t!("add_server.subtitle"), 16.))
-                .child(list)
-                .child(
-                    div()
-                        .p(z(16.))
-                        .bg(c(Palette::BG_SECONDARY))
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .child(
-                            div()
-                                .mb(z(8.))
-                                .text_size(z(18.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(c(Palette::TEXT_HEADER))
-                                .child(crate::t!("add_server.have_invite")),
-                        )
-                        .child(
-                            div()
-                                .id("add-server-go-join")
-                                .w_full()
-                                .h(z(38.))
-                                .rounded(z(4.))
-                                .bg(c(Palette::BG_MOD_HOVER))
-                                .text_color(c(Palette::TEXT_HEADER))
-                                .text_size(z(14.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(|s| s.opacity(0.88))
-                                .on_click(cx.listener(|a, _, window, cx| {
-                                    set_step(Step::Join);
-                                    if let Some(inp) = &a.nav.invite_input {
-                                        inp.update(cx, |s, cx| s.focus(window, cx));
-                                    }
-                                    cx.notify();
-                                }))
-                                .child(crate::t!("invite.join_title")),
-                        ),
-                )
+            div().flex().flex_col().child(header(crate::t!("add_server.title"), crate::t!("add_server.subtitle"), 16.)).child(list).child(
+                div()
+                    .p(z(16.))
+                    .bg(c(Palette::BG_SECONDARY))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .child(
+                        div()
+                            .mb(z(8.))
+                            .text_size(z(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(c(Palette::TEXT_HEADER))
+                            .child(crate::t!("add_server.have_invite")),
+                    )
+                    .child(
+                        div()
+                            .id("add-server-go-join")
+                            .w_full()
+                            .h(z(38.))
+                            .rounded(z(4.))
+                            .bg(c(Palette::BG_MOD_HOVER))
+                            .text_color(c(Palette::TEXT_HEADER))
+                            .text_size(z(14.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.88))
+                            .on_click(cx.listener(|a, _, window, cx| {
+                                set_step(Step::Join);
+                                if let Some(inp) = &a.nav.invite_input {
+                                    inp.update(cx, |s, cx| s.focus(window, cx));
+                                }
+                                cx.notify();
+                            }))
+                            .child(crate::t!("invite.join_title")),
+                    ),
+            )
         }
         Step::Intent => div()
             .flex()
@@ -410,30 +358,22 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
                     .px(z(16.))
                     .flex()
                     .flex_col()
-                    .child(
-                        option_row("intent-friends", "friends", crate::t!("add_server.intent_friends")).on_click(
-                            cx.listener(|_, _, _, cx| {
-                                STATE.with(|s| {
-                                    let mut st = s.borrow_mut();
-                                    st.community = Some(false);
-                                    st.step = Step::Customize;
-                                });
-                                cx.notify();
-                            }),
-                        ),
-                    )
-                    .child(
-                        option_row("intent-comm", "globe", crate::t!("add_server.intent_community")).on_click(
-                            cx.listener(|_, _, _, cx| {
-                                STATE.with(|s| {
-                                    let mut st = s.borrow_mut();
-                                    st.community = Some(true);
-                                    st.step = Step::Customize;
-                                });
-                                cx.notify();
-                            }),
-                        ),
-                    )
+                    .child(option_row("intent-friends", "friends", crate::t!("add_server.intent_friends")).on_click(cx.listener(|_, _, _, cx| {
+                        STATE.with(|s| {
+                            let mut st = s.borrow_mut();
+                            st.community = Some(false);
+                            st.step = Step::Customize;
+                        });
+                        cx.notify();
+                    })))
+                    .child(option_row("intent-comm", "globe", crate::t!("add_server.intent_community")).on_click(cx.listener(|_, _, _, cx| {
+                        STATE.with(|s| {
+                            let mut st = s.borrow_mut();
+                            st.community = Some(true);
+                            st.step = Step::Customize;
+                        });
+                        cx.notify();
+                    })))
                     .child(
                         div()
                             .id("intent-skip")
@@ -455,14 +395,7 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
                             .child(crate::t!("add_server.intent_skip")),
                     ),
             )
-            .child(
-                div()
-                    .p(z(16.))
-                    .bg(c(Palette::BG_SECONDARY))
-                    .flex()
-                    .items_center()
-                    .child(back_btn("intent-back", Step::Templates, cx)),
-            ),
+            .child(div().p(z(16.)).bg(c(Palette::BG_SECONDARY)).flex().items_center().child(back_btn("intent-back", Step::Templates, cx))),
         Step::Customize => {
             let name_input = ensure_name_input(app, window, cx);
             let err = STATE.with(|s| s.borrow().create_error.clone());
@@ -501,16 +434,8 @@ pub fn render_step(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
                                 .text_size(z(15.))
                                 .child(Input::new(&name_input).appearance(false).bordered(false)),
                         )
-                        .when_some(err, |d, e| {
-                            d.child(div().mt(z(6.)).text_size(z(12.)).text_color(c(Palette::RED)).child(e))
-                        })
-                        .child(
-                            div()
-                                .mt(z(8.))
-                                .text_size(z(12.))
-                                .text_color(c(Palette::TEXT_MUTED))
-                                .child(crate::t!("add_server.guidelines")),
-                        ),
+                        .when_some(err, |d, e| d.child(div().mt(z(6.)).text_size(z(12.)).text_color(c(Palette::RED)).child(e)))
+                        .child(div().mt(z(8.)).text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("add_server.guidelines"))),
                 )
                 .child(
                     div()
@@ -573,9 +498,7 @@ fn render_join_step(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div
                 .flex()
                 .items_center()
                 .text_size(z(15.))
-                .when_some(app.nav.invite_input.clone(), |d, i| {
-                    d.child(Input::new(&i).appearance(false).bordered(false))
-                }),
+                .when_some(app.nav.invite_input.clone(), |d, i| d.child(Input::new(&i).appearance(false).bordered(false))),
         );
     body = match preview {
         Some(Ok(p)) => body.child(crate::ui::invite::preview_card(&p)),
@@ -642,31 +565,15 @@ fn render_join_step(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div
                             .text_color(c(Palette::TEXT_HEADER))
                             .child(crate::t!("add_server.no_invite_title")),
                     )
-                    .child(
-                        div()
-                            .text_size(z(12.))
-                            .text_color(c(Palette::TEXT_MUTED))
-                            .child(crate::t!("add_server.no_invite_sub")),
-                    ),
+                    .child(div().text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("add_server.no_invite_sub"))),
             )
             .child(svg().path(crate::icons::path("chevron-right")).size(z(18.)).text_color(c(Palette::INTERACTIVE))),
     );
     div().flex().flex_col().child(body).child(
-        div()
-            .p(z(16.))
-            .bg(c(Palette::BG_SECONDARY))
-            .flex()
-            .items_center()
-            .justify_between()
-            .child(back_btn("join-back", Step::Templates, cx))
-            .child(
-                primary_btn(
-                    "join-go",
-                    if busy { crate::t!("invite.joining") } else { crate::t!("invite.join") },
-                    busy,
-                )
+        div().p(z(16.)).bg(c(Palette::BG_SECONDARY)).flex().items_center().justify_between().child(back_btn("join-back", Step::Templates, cx)).child(
+            primary_btn("join-go", if busy { crate::t!("invite.joining") } else { crate::t!("invite.join") }, busy)
                 .on_click(cx.listener(|a, _, _, cx| a.join_invite(cx))),
-            ),
+        ),
     )
 }
 

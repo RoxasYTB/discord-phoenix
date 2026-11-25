@@ -6,7 +6,7 @@ use crate::{
     theme::{Palette, c, generated::idx, m, tok, z},
     ui::{
         controls::{BtnKind, button_sm},
-        home::data::{NavRequest, NavReply},
+        home::data::{NavReply, NavRequest},
     },
 };
 
@@ -44,11 +44,7 @@ pub fn render(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement 
     let body = if ids.is_empty() {
         empty(spam).into_any_element()
     } else {
-        let title: SharedString = if spam {
-            crate::t!("requests.spam_section", n = ids.len())
-        } else {
-            crate::t!("requests.pending_section", n = ids.len())
-        };
+        let title: SharedString = if spam { crate::t!("requests.spam_section", n = ids.len()) } else { crate::t!("requests.pending_section", n = ids.len()) };
         let mut list = div().id("msg-requests").flex_1().min_h_0().overflow_y_scroll().px(z(24.)).pt(z(24.)).pb(z(24.)).flex().flex_col().child(
             div()
                 .h(z(26.))
@@ -68,16 +64,7 @@ pub fn render(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement 
         }
         list.into_any_element()
     };
-    div()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .flex()
-        .flex_col()
-        .bg(c(Palette::BG_PRIMARY))
-        .child(header(app, spam, cx))
-        .child(body)
-        .into_any_element()
+    div().flex_1().min_w_0().h_full().flex().flex_col().bg(c(Palette::BG_PRIMARY)).child(header(app, spam, cx)).child(body).into_any_element()
 }
 
 fn header(app: &PhoenixApp, spam: bool, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
@@ -148,15 +135,11 @@ fn empty(spam: bool) -> impl IntoElement {
             .flex_col()
             .items_center()
             .child(div().w(z(415.)).h(z(200.)).mb(z(40.)).child(gpui::img(if light { EMPTY_LIGHT } else { EMPTY_DARK }).size_full()))
-            .child(
-                div()
-                    .mt(z(8.))
-                    .text_center()
-                    .text_size(z(16.))
-                    .line_height(z(20.))
-                    .text_color(c(tok(idx::TEXT_MUTED)))
-                    .child(if spam { crate::t!("friends.spam_empty") } else { crate::t!("friends.no_message_requests") }),
-            ),
+            .child(div().mt(z(8.)).text_center().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_MUTED))).child(if spam {
+                crate::t!("friends.spam_empty")
+            } else {
+                crate::t!("friends.no_message_requests")
+            })),
     )
 }
 
@@ -176,7 +159,8 @@ fn row(app: &PhoenixApp, ch: Id, first: bool, spam: bool, cx: &mut Context<Phoen
     let mutual_line = if mutual.is_empty() {
         div().pt(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("requests.no_mutual")).into_any_element()
     } else {
-        let icons = mutual.iter().filter_map(|g| app.guilds.iter().find(|x| x.id == *g)).take(3).map(|g| crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16.));
+        let icons =
+            mutual.iter().filter_map(|g| app.guilds.iter().find(|x| x.id == *g)).take(3).map(|g| crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16.));
         let label = if mutual.len() == 1 { crate::t!("requests.mutual_one", n = 1) } else { crate::t!("requests.mutual_n", n = mutual.len()) };
         div()
             .pt(z(4.))

@@ -41,9 +41,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         MenuItem::action(label, None, move |ev, w, cx: &mut App| e.update(cx, |a, cx| f(a, ev, w, cx)))
     };
     let (u, g) = (o.user, o.guild);
-    let mut items = vec![
-        act(crate::t!("menu.profile"), Rc::new(move |a, ev, w, cx| a.open_profile(u, g, ev.position(), w, cx))),
-    ];
+    let mut items = vec![act(crate::t!("menu.profile"), Rc::new(move |a, ev, w, cx| a.open_profile(u, g, ev.position(), w, cx)))];
     if app.selected_channel.is_some() {
         items.push(act(
             crate::t!("menu.mention"),
@@ -115,8 +113,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         }));
     }
     if let Some(gid) = g.filter(|gid| crate::ui::inbox::has_perm(app.backend.guild_permissions(*gid), MANAGE_ROLES)) {
-        let has: Vec<crate::model::Id> =
-            app.members.get(&gid).and_then(|m| m.iter().find(|m| m.user == u)).map(|m| m.roles.clone()).unwrap_or_default();
+        let has: Vec<crate::model::Id> = app.members.get(&gid).and_then(|m| m.iter().find(|m| m.user == u)).map(|m| m.roles.clone()).unwrap_or_default();
         let mut roles: Vec<&crate::model::Role> = app.roles.get(&gid).into_iter().flatten().filter(|r| r.id != gid).collect();
         roles.sort_by_key(|r| -r.position);
         let rows: Vec<MenuItem> = roles
@@ -124,9 +121,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             .map(|r| {
                 let e = e.clone();
                 let (role, on) = (r.id, has.contains(&r.id));
-                MenuItem::check(r.name.clone(), on, move |_, _, cx: &mut App| {
-                    e.update(cx, |a, cx| a.set_member_role(gid, u, role, !on, cx))
-                })
+                MenuItem::check(r.name.clone(), on, move |_, _, cx: &mut App| e.update(cx, |a, cx| a.set_member_role(gid, u, role, !on, cx)))
             })
             .collect();
         if !rows.is_empty() {

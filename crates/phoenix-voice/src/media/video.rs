@@ -4,12 +4,7 @@ use crate::{Error, Result};
 
 pub fn probe_capabilities() -> crate::codec::LocalCapabilities {
     let ffmpeg = super::ffmpeg::available();
-    crate::codec::LocalCapabilities {
-        hw_av1_encoder: false,
-        h264_encoder: ffmpeg,
-        vp8_encoder: false,
-        decoders: vec![Codec::H264],
-    }
+    crate::codec::LocalCapabilities { hw_av1_encoder: false, h264_encoder: ffmpeg, vp8_encoder: false, decoders: vec![Codec::H264] }
 }
 
 #[derive(Default)]

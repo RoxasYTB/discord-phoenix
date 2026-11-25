@@ -4,9 +4,23 @@ use serde_json::Value;
 use crate::theme::{c, generated::idx, tok, z};
 
 const FADE_MASK: [(f32, f32); 17] = [
-    (0., 0.), (0.047, 0.013), (0.092, 0.049), (0.136, 0.104), (0.18, 0.175), (0.226, 0.259),
-    (0.274, 0.352), (0.326, 0.45), (0.383, 0.55), (0.445, 0.648), (0.514, 0.741), (0.591, 0.825),
-    (0.677, 0.896), (0.773, 0.951), (0.88, 0.987), (0.94, 1.), (1., 1.),
+    (0., 0.),
+    (0.047, 0.013),
+    (0.092, 0.049),
+    (0.136, 0.104),
+    (0.18, 0.175),
+    (0.226, 0.259),
+    (0.274, 0.352),
+    (0.326, 0.45),
+    (0.383, 0.55),
+    (0.445, 0.648),
+    (0.514, 0.741),
+    (0.591, 0.825),
+    (0.677, 0.896),
+    (0.773, 0.951),
+    (0.88, 0.987),
+    (0.94, 1.),
+    (1., 1.),
 ];
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -106,15 +120,8 @@ pub fn build(app: u64, configs: &Value, data: &[(String, String)]) -> Option<App
         .collect();
     items.sort_by_key(|(n, _)| *n);
     let appl = cfg.get("application");
-    let name = appl
-        .and_then(|a| a.get("name"))
-        .or(cfg.get("display_name"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let icon = appl
-        .and_then(|a| a.get("icon")?.as_str())
-        .map(|h| SharedString::from(format!("https://cdn.discordapp.com/app-icons/{app}/{h}.png?size=32")));
+    let name = appl.and_then(|a| a.get("name")).or(cfg.get("display_name")).and_then(Value::as_str).unwrap_or_default().to_owned();
+    let icon = appl.and_then(|a| a.get("icon")?.as_str()).map(|h| SharedString::from(format!("https://cdn.discordapp.com/app-icons/{app}/{h}.png?size=32")));
     Some(AppWidget {
         app_id: app,
         name: name.into(),
@@ -156,7 +163,17 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
         .items_center()
         .gap(z(4.))
         .children(w.icon.clone().map(|u| img(u).size(z(16.)).rounded(z(2.))))
-        .child(div().flex_1().min_w_0().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(col.strong).child(w.name.clone()))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(col.strong)
+                .child(w.name.clone()),
+        )
         .children(col.more.then(|| crate::ui::profile_board::more_button(col.strong)));
     let content = div()
         .flex()
@@ -191,17 +208,11 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
             .children(FADE_MASK.windows(2).map(|w| {
                 let (x0, a0) = w[0];
                 let (x1, a1) = w[1];
-                div()
-                    .absolute()
-                    .top_0()
-                    .bottom_0()
-                    .left(z(204. * x0))
-                    .w(z(204. * (x1 - x0) + 0.5))
-                    .bg(gpui::linear_gradient(
-                        90.,
-                        gpui::linear_color_stop(col.fade.opacity(1. - a0), 0.),
-                        gpui::linear_color_stop(col.fade.opacity(1. - a1), 1.),
-                    ))
+                div().absolute().top_0().bottom_0().left(z(204. * x0)).w(z(204. * (x1 - x0) + 0.5)).bg(gpui::linear_gradient(
+                    90.,
+                    gpui::linear_color_stop(col.fade.opacity(1. - a0), 0.),
+                    gpui::linear_color_stop(col.fade.opacity(1. - a1), 1.),
+                ))
             }))
     });
     let content = if w.contained { content.min_h(z(180.)) } else { content };
@@ -212,7 +223,9 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
             .flex()
             .gap(z(12.))
             .child(match &i.image {
-                Some(u) => img(u.clone()).size(z(48.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))).object_fit(gpui::ObjectFit::Contain).into_any_element(),
+                Some(u) => {
+                    img(u.clone()).size(z(48.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))).object_fit(gpui::ObjectFit::Contain).into_any_element()
+                }
                 None => div().size(z(48.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))).into_any_element(),
             })
             .child(
@@ -226,14 +239,7 @@ pub fn render(w: &AppWidget, col: &WidgetColors) -> Div {
                     .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(col.muted).child(i.value.clone())),
             )
     };
-    let grid = div()
-        .pt(z(24.))
-        .px(z(16.))
-        .pb(z(16.))
-        .flex()
-        .flex_wrap()
-        .gap(z(16.))
-        .children(w.items.iter().map(item));
+    let grid = div().pt(z(24.)).px(z(16.)).pb(z(16.)).flex().flex_wrap().gap(z(16.)).children(w.items.iter().map(item));
     div()
         .relative()
         .rounded(z(16.))
@@ -257,7 +263,13 @@ fn progress_row((pct, it): &(f32, WidgetItem), col: &WidgetColors) -> Div {
         .items_center()
         .gap(z(12.))
         .child(match &it.image {
-            Some(u) => img(u.clone()).size(z(50.)).flex_none().rounded(z(8.)).bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))).object_fit(gpui::ObjectFit::Contain).into_any_element(),
+            Some(u) => img(u.clone())
+                .size(z(50.))
+                .flex_none()
+                .rounded(z(8.))
+                .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
+                .object_fit(gpui::ObjectFit::Contain)
+                .into_any_element(),
             None => div().size(z(50.)).flex_none().rounded(z(8.)).bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))).into_any_element(),
         })
         .child(
@@ -268,9 +280,12 @@ fn progress_row((pct, it): &(f32, WidgetItem), col: &WidgetColors) -> Div {
                 .flex_col()
                 .gap(z(4.))
                 .child(
-                    div().h(z(6.)).w_full().rounded(z(12.)).bg(gpui::hsla(240. / 360., 0.04, 0.608, 0.32)).child(
-                        div().h_full().w(gpui::relative(pct / 100.)).rounded(z(12.)).bg(c(tok(idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT))),
-                    ),
+                    div()
+                        .h(z(6.))
+                        .w_full()
+                        .rounded(z(12.))
+                        .bg(gpui::hsla(240. / 360., 0.04, 0.608, 0.32))
+                        .child(div().h_full().w(gpui::relative(pct / 100.)).rounded(z(12.)).bg(c(tok(idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT)))),
                 )
                 .child(
                     div()
@@ -280,10 +295,33 @@ fn progress_row((pct, it): &(f32, WidgetItem), col: &WidgetColors) -> Div {
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .child(div().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(col.strong).child(it.name.clone()))
-                                .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_SUBTLE))).child(it.value.clone())),
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(z(14.))
+                                        .line_height(z(18.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(col.strong)
+                                        .child(it.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(z(12.))
+                                        .line_height(z(16.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(c(tok(idx::TEXT_SUBTLE)))
+                                        .child(it.value.clone()),
+                                ),
                         )
-                        .child(div().flex_none().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(col.strong).child(format!("{}%", pct.round()))),
+                        .child(
+                            div()
+                                .flex_none()
+                                .text_size(z(14.))
+                                .line_height(z(18.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(col.strong)
+                                .child(format!("{}%", pct.round())),
+                        ),
                 ),
         )
 }
@@ -301,23 +339,24 @@ pub fn render_compact(w: &AppWidget, col: &WidgetColors) -> Div {
         .flex()
         .flex_col()
         .gap(z(2.))
-        .child(div().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(col.strong).child(if w.mini_stat.is_empty() { w.title.clone() } else { w.mini_stat.clone() }))
+        .child(
+            div().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(col.strong).child(if w.mini_stat.is_empty() {
+                w.title.clone()
+            } else {
+                w.mini_stat.clone()
+            }),
+        )
         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::CONTROL_PRIMARY_BACKGROUND_DEFAULT))).child("View All Stats"));
     let hero = w.mini_hero.clone().or_else(|| w.hero.clone()).map(|u| {
         let s = 79.;
-        div()
-            .relative()
-            .size(z(s))
-            .flex_none()
-            .child(img(u).size(z(s)).object_fit(gpui::ObjectFit::Cover))
-            .children(FADE_MASK.windows(2).map(|m| {
-                let ((x0, a0), (x1, a1)) = (m[0], m[1]);
-                div().absolute().top_0().bottom_0().left(z(s * x0)).w(z(s * (x1 - x0) + 0.5)).bg(gpui::linear_gradient(
-                    90.,
-                    gpui::linear_color_stop(col.fade.opacity(1. - a0), 0.),
-                    gpui::linear_color_stop(col.fade.opacity(1. - a1), 1.),
-                ))
-            }))
+        div().relative().size(z(s)).flex_none().child(img(u).size(z(s)).object_fit(gpui::ObjectFit::Cover)).children(FADE_MASK.windows(2).map(|m| {
+            let ((x0, a0), (x1, a1)) = (m[0], m[1]);
+            div().absolute().top_0().bottom_0().left(z(s * x0)).w(z(s * (x1 - x0) + 0.5)).bg(gpui::linear_gradient(
+                90.,
+                gpui::linear_color_stop(col.fade.opacity(1. - a0), 0.),
+                gpui::linear_color_stop(col.fade.opacity(1. - a1), 1.),
+            ))
+        }))
     });
     div()
         .flex()
@@ -358,6 +397,9 @@ mod tests {
         assert_eq!(w.subtitle, "Sub");
         assert_eq!(w.name, "Bot");
         assert_eq!(w.hero.as_deref(), Some("https://cdn.discordapp.com/app-assets/42/7.png?size=512"));
-        assert_eq!(w.items.iter().map(|i| (i.name.to_string(), i.value.to_string())).collect::<Vec<_>>(), vec![("A".into(), "12".into()), ("B".into(), "-".into())]);
+        assert_eq!(
+            w.items.iter().map(|i| (i.name.to_string(), i.value.to_string())).collect::<Vec<_>>(),
+            vec![("A".into(), "12".into()), ("B".into(), "-".into())]
+        );
     }
 }

@@ -27,15 +27,21 @@ fn cell(icon: &str, title: SharedString, description: SharedString, last: bool) 
         .gap(z(16.))
         .py(z(16.))
         .when(!last, |d| d.border_b_1().border_color(tk(idx::BORDER_MUTED)))
-        .child(div().size(z(24.)).flex_none().flex().justify_center().child(gpui::svg().path(crate::icons::path(icon)).size(z(24.)).text_color(tk(idx::ICON_SUBTLE))))
         .child(
             div()
+                .size(z(24.))
+                .flex_none()
                 .flex()
-                .flex_col()
-                .gap(z(2.))
-                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title))
-                .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_SUBTLE, description)),
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path(icon)).size(z(24.)).text_color(tk(idx::ICON_SUBTLE))),
         )
+        .child(div().flex().flex_col().gap(z(2.)).child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title)).child(text(
+            12.,
+            16.,
+            FontWeight::MEDIUM,
+            idx::TEXT_SUBTLE,
+            description,
+        )))
 }
 
 pub fn guide_url() -> String {
@@ -81,38 +87,33 @@ pub fn render(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) -> AnyEl
         .child(cell("circle-check", crate::t!("ignore.hide_title"), crate::t!("ignore.hide_desc"), false))
         .child(cell("circle-check", crate::t!("ignore.mute_title"), crate::t!("ignore.mute_desc"), false))
         .child(cell("info", crate::t!("ignore.still_title"), crate::t!("ignore.still_desc"), true));
-    let block = div()
-        .flex()
-        .flex_col()
-        .gap(z(8.))
-        .child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, crate::t!("ignore.not_enough")))
-        .child(
-            div().rounded(z(8.)).overflow_hidden().border_1().border_color(tk(idx::BORDER_MUTED)).bg(tk(idx::BACKGROUND_BASE_LOWER)).child(
-                div()
-                    .mx(z(16.))
-                    .py(z(16.))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(z(16.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap(z(2.))
-                            .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("ignore.block_instead")))
-                            .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_SUBTLE, crate::t!("ignore.block_desc"))),
-                    )
-                    .child(button("ignore-block", crate::t!("ignore.see_details"), BtnKind::Secondary).h(z(32.)).px(z(12.)).flex_none().on_click(cx.listener(
-                        move |a, _, _, cx| {
-                            crate::actions::close_modal();
-                            a.confirm_block(user, cx);
-                        },
-                    ))),
-            ),
-        );
+    let block = div().flex().flex_col().gap(z(8.)).child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, crate::t!("ignore.not_enough"))).child(
+        div().rounded(z(8.)).overflow_hidden().border_1().border_color(tk(idx::BORDER_MUTED)).bg(tk(idx::BACKGROUND_BASE_LOWER)).child(
+            div()
+                .mx(z(16.))
+                .py(z(16.))
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(z(16.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(z(2.))
+                        .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("ignore.block_instead")))
+                        .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_SUBTLE, crate::t!("ignore.block_desc"))),
+                )
+                .child(button("ignore-block", crate::t!("ignore.see_details"), BtnKind::Secondary).h(z(32.)).px(z(12.)).flex_none().on_click(cx.listener(
+                    move |a, _, _, cx| {
+                        crate::actions::close_modal();
+                        a.confirm_block(user, cx);
+                    },
+                ))),
+        ),
+    );
     let guide = div()
         .id("ignore-guide")
         .flex()

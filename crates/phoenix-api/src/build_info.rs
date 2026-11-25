@@ -2,9 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::props::{
-    DEFAULT_BUILD_NUMBER, DEFAULT_CHROME_VERSION, DEFAULT_CLIENT_VERSION, DEFAULT_ELECTRON_VERSION,
-};
+use crate::props::{DEFAULT_BUILD_NUMBER, DEFAULT_CHROME_VERSION, DEFAULT_CLIENT_VERSION, DEFAULT_ELECTRON_VERSION};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildInfo {
@@ -30,14 +28,10 @@ impl Default for BuildInfo {
 pub fn discord_config_dirs() -> Vec<PathBuf> {
     let Some(home) = crate::paths::home() else { return Vec::new() };
     let xdg = crate::paths::env_dir("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
-    [
-        xdg.join("discord"),
-        home.join(".var/app/com.discordapp.Discord/config/discord"),
-        home.join("snap/discord/current/.config/discord"),
-    ]
-    .into_iter()
-    .filter(|p| p.is_dir())
-    .collect()
+    [xdg.join("discord"), home.join(".var/app/com.discordapp.Discord/config/discord"), home.join("snap/discord/current/.config/discord")]
+        .into_iter()
+        .filter(|p| p.is_dir())
+        .collect()
 }
 
 fn cache_file() -> Option<PathBuf> {
@@ -124,9 +118,8 @@ impl BuildInfo {
             b = cached;
         }
         for dir in discord_config_dirs() {
-            if let Some((ver, ch)) = install_dir(&dir)
-                .and_then(|d| std::fs::read_to_string(d.join("resources/build_info.json")).ok())
-                .and_then(|s| parse_build_info_json(&s))
+            if let Some((ver, ch)) =
+                install_dir(&dir).and_then(|d| std::fs::read_to_string(d.join("resources/build_info.json")).ok()).and_then(|s| parse_build_info_json(&s))
             {
                 b.client_version = ver;
                 if let Some(ch) = ch {
@@ -220,7 +213,13 @@ mod tests {
 
     #[test]
     fn props_follow_build_info() {
-        let b = BuildInfo { build_number: 700_000, client_version: "1.0.200".into(), electron_version: "45.0.0".into(), chrome_version: "153.0.1.2".into(), release_channel: "stable".into() };
+        let b = BuildInfo {
+            build_number: 700_000,
+            client_version: "1.0.200".into(),
+            electron_version: "45.0.0".into(),
+            chrome_version: "153.0.1.2".into(),
+            release_channel: "stable".into(),
+        };
         let p = crate::ClientProperties::from_build_info(&b);
         assert_eq!(p.client_build_number, 700_000);
         assert_eq!(p.client_version, "1.0.200");

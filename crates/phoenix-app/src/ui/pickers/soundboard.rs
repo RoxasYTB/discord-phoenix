@@ -2,8 +2,8 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 use gpui::{
-    AnyElement, App, Bounds, Context, Entity, FontWeight, ListAlignment, ListOffset, ListState, ParentElement, Pixels, SharedString,
-    Styled, Subscription, Window, div, img, list, prelude::*, px,
+    AnyElement, App, Bounds, Context, Entity, FontWeight, ListAlignment, ListOffset, ListState, ParentElement, Pixels, SharedString, Styled, Subscription,
+    Window, div, img, list, prelude::*, px,
 };
 use gpui_component::input::{InputEvent, InputState};
 
@@ -282,8 +282,7 @@ pub fn build_sections(app: &PhoenixApp, i: &Inputs) -> Vec<Section> {
         out.push(Section { kind: Kind::Favorites, key: "favorites".into(), sounds: favs, locked: false });
     }
     let fav_set: HashSet<u64> = favorites.iter().copied().collect();
-    let freq: Vec<SoundboardSound> =
-        played.iter().filter(|id| !fav_set.contains(id)).take(3).filter_map(|id| known.get(&Id(*id)).cloned()).collect();
+    let freq: Vec<SoundboardSound> = played.iter().filter(|id| !fav_set.contains(id)).take(3).filter_map(|id| known.get(&Id(*id)).cloned()).collect();
     if !freq.is_empty() {
         out.push(Section { kind: Kind::Frequent, key: "frequent".into(), sounds: freq, locked: false });
     }
@@ -337,12 +336,7 @@ pub fn build_rows(sections: &[Section], collapsed: &HashSet<String>) -> Vec<Row>
 
 pub fn rebuild(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let nitro = app.backend.has_premium();
-    let (favorites, played) = cx
-        .global::<Pickers>()
-        .frecency
-        .as_ref()
-        .map(|f| (f.favorite_sounds.clone(), f.played_sounds.clone()))
-        .unwrap_or_default();
+    let (favorites, played) = cx.global::<Pickers>().frecency.as_ref().map(|f| (f.favorite_sounds.clone(), f.played_sounds.clone())).unwrap_or_default();
     let query = cx.global::<Pickers>().soundboard.input.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_default();
     let st = &cx.global::<Pickers>().soundboard;
     let top = voice_guild(app).and_then(|g| st.top.get(&g).cloned()).unwrap_or_default();
@@ -486,29 +480,18 @@ pub fn sound_button(app: &PhoenixApp, s: &SoundboardSound, locked: bool, key: (u
     let sound = s.clone();
     let preview = s.clone();
     let can = !locked && crate::voice::soundboard::can_play(app, s);
-    let info = div()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .p(px(8.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap(px(8.))
-        .overflow_hidden()
-        .children(emoji)
-        .child(
-            div()
-                .min_w_0()
-                .overflow_hidden()
-                .line_clamp(2)
-                .text_size(px(12.))
-                .line_height(px(16.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(tk(idx::TEXT_STRONG))
-                .when(!has_emoji, |d| d.text_center())
-                .child(label.clone()),
-        );
+    let info = div().flex_1().min_w_0().h_full().p(px(8.)).flex().items_center().justify_center().gap(px(8.)).overflow_hidden().children(emoji).child(
+        div()
+            .min_w_0()
+            .overflow_hidden()
+            .line_clamp(2)
+            .text_size(px(12.))
+            .line_height(px(16.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(tk(idx::TEXT_STRONG))
+            .when(!has_emoji, |d| d.text_center())
+            .child(label.clone()),
+    );
     let overlay_bg = || div().absolute().inset_0().bg(tk(idx::BACKGROUND_SURFACE_HIGHEST)).opacity(0.8);
     let secondary = |id: &'static str, icon: &str, tip: SharedString| {
         div()
@@ -520,28 +503,19 @@ pub fn sound_button(app: &PhoenixApp, s: &SoundboardSound, locked: bool, key: (u
             .tip(tip)
             .child(named(icon, 16., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
     };
-    let preview_btn = secondary("sb-preview", "speaker", crate::t!("soundboard.preview", name = label))
-        .on_click(move |_, w, cx| {
-            cx.stop_propagation();
-            let p = preview.clone();
-            with_app(cx, w, move |app, _, cx| crate::voice::soundboard::preview(app, &p, cx));
-        });
+    let preview_btn = secondary("sb-preview", "speaker", crate::t!("soundboard.preview", name = label)).on_click(move |_, w, cx| {
+        cx.stop_propagation();
+        let p = preview.clone();
+        with_app(cx, w, move |app, _, cx| crate::voice::soundboard::preview(app, &p, cx));
+    });
     let fav = cx_favorite(app, s.id);
     let fav_btn = div()
         .id(SharedString::from(format!("sb-fav-{}-{}", key.0, key.1)))
         .flex()
         .cursor_pointer()
         .on_click(|_, _, cx| cx.stop_propagation())
-        .tip(if fav {
-            crate::t!("soundboard.unfavorite", name = label)
-        } else {
-            crate::t!("soundboard.favorite", name = label)
-        })
-        .child(if fav {
-            named("star", 16., tk(idx::TEXT_FEEDBACK_WARNING))
-        } else {
-            named("star-outline", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT))
-        });
+        .tip(if fav { crate::t!("soundboard.unfavorite", name = label) } else { crate::t!("soundboard.favorite", name = label) })
+        .child(if fav { named("star", 16., tk(idx::TEXT_FEEDBACK_WARNING)) } else { named("star-outline", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT)) });
     let actions = div()
         .absolute()
         .inset_0()
@@ -553,11 +527,7 @@ pub fn sound_button(app: &PhoenixApp, s: &SoundboardSound, locked: bool, key: (u
         .when(!locked, |d| d.child(div().flex_1().flex().justify_center().child(named("play", 20., tk(idx::INTERACTIVE_TEXT_ACTIVE)))))
         .child(fav_btn);
     let hk = crate::ui::states::key(("sb-sound", s.id.0, key));
-    let hover_layer = div()
-        .absolute()
-        .inset_0()
-        .when(!locked, |d| d.child(overlay_bg()))
-        .child(actions);
+    let hover_layer = div().absolute().inset_0().when(!locked, |d| d.child(overlay_bg())).child(actions);
     let hover_layer = match crate::ui::states::state(hk) {
         Some((true, at)) if at.elapsed() < std::time::Duration::from_millis(OVERLAY_FADE_MS) => {
             use gpui::AnimationExt as _;
@@ -593,8 +563,11 @@ pub fn sound_button(app: &PhoenixApp, s: &SoundboardSound, locked: bool, key: (u
         .flex()
         .child(info)
         .when(locked, |d| {
-            d.child(overlay_bg())
-                .child(div().absolute().inset_0().flex().items_center().justify_center().child(named("lock", 20., tk(idx::INTERACTIVE_TEXT_ACTIVE))))
+            d.child(overlay_bg()).child(div().absolute().inset_0().flex().items_center().justify_center().child(named(
+                "lock",
+                20.,
+                tk(idx::INTERACTIVE_TEXT_ACTIVE),
+            )))
         })
         .child(hover_layer)
         .on_click(move |_, w, cx| {
@@ -656,15 +629,12 @@ fn rail(app: &PhoenixApp, st: &SoundboardState) -> AnyElement {
             Kind::Guild(g) => guild_icon(app, *g, 32.),
             k => section_icon(app, k, 24., color),
         };
-        col = col.child(
-            super::grid::rail_item(("sb-rail", si), guild, is_active, 8.)
-                .tip(section_title(app, &s.kind))
-                .child(content)
-                .on_click(move |_, w, cx| {
-                    ls.scroll_to(ListOffset { item_ix: first, offset_in_item: px(0.) });
-                    with_app(cx, w, |_, _, cx| cx.notify());
-                }),
-        );
+        col = col.child(super::grid::rail_item(("sb-rail", si), guild, is_active, 8.).tip(section_title(app, &s.kind)).child(content).on_click(
+            move |_, w, cx| {
+                ls.scroll_to(ListOffset { item_ix: first, offset_in_item: px(0.) });
+                with_app(cx, w, |_, _, cx| cx.notify());
+            },
+        ));
     }
     div()
         .w(px(RAIL_W))
@@ -726,9 +696,27 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex()
         .items_center()
         .shadow(vec![
-            gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.2), offset: gpui::point(px(0.), px(1.)), blur_radius: px(0.), spread_radius: px(0.), inset: false },
-            gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.04), offset: gpui::point(px(0.), px(1.5)), blur_radius: px(0.), spread_radius: px(0.), inset: false },
-            gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.04), offset: gpui::point(px(0.), px(2.)), blur_radius: px(0.), spread_radius: px(0.), inset: false },
+            gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.2),
+                offset: gpui::point(px(0.), px(1.)),
+                blur_radius: px(0.),
+                spread_radius: px(0.),
+                inset: false,
+            },
+            gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.04),
+                offset: gpui::point(px(0.), px(1.5)),
+                blur_radius: px(0.),
+                spread_radius: px(0.),
+                inset: false,
+            },
+            gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.04),
+                offset: gpui::point(px(0.), px(2.)),
+                blur_radius: px(0.),
+                spread_radius: px(0.),
+                inset: false,
+            },
         ])
         .child(search_box(&input))
         .child(

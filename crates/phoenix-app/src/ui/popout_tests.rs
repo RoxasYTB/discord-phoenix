@@ -321,8 +321,7 @@ fn unreads_tab_shows_messages_without_acking(cx: &mut TestAppContext) {
     for _ in 0..10 {
         h.act(|_, _, cx| cx.notify());
     }
-    let (order, shown): (Vec<Id>, Vec<usize>) =
-        h.read(|a| a.parity.inbox.unreads.iter().filter(|c| c.loaded).map(|c| (c.entry.channel, c.msgs.len())).unzip());
+    let (order, shown): (Vec<Id>, Vec<usize>) = h.read(|a| a.parity.inbox.unreads.iter().filter(|c| c.loaded).map(|c| (c.entry.channel, c.msgs.len())).unzip());
     assert_eq!(order, entries.iter().map(|e| e.channel).collect::<Vec<_>>(), "cards out of the backend order");
     assert!(shown.iter().all(|n| (1..=crate::ui::inbox_unreads::SHOWN).contains(n)), "unexpected message counts {shown:?}");
     assert_eq!(h.acks(), 0, "showing Inbox > Unreads sent a read marker");

@@ -24,34 +24,22 @@ pub fn visible_voice_channel<'a>(app: &'a PhoenixApp, p: &InvitePreview) -> Opti
 
 pub fn voice_users_in_order(ch: &Channel) -> Vec<Id> {
     let streaming = |u: &Id| crate::ui::voice_panel::flags(*u).stream;
-    ch.voice_users
-        .iter()
-        .copied()
-        .filter(streaming)
-        .chain(ch.voice_users.iter().copied().filter(|u| !streaming(u)))
-        .collect()
+    ch.voice_users.iter().copied().filter(streaming).chain(ch.voice_users.iter().copied().filter(|u| !streaming(u))).collect()
 }
 
 pub fn voice_list_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: &Channel) -> AnyElement {
     let users = voice_users_in_order(ch);
     let in_channel = app.voice_channel == Some(ch.id);
-    let guild_name = ch
-        .guild
-        .and_then(|g| app.guilds.iter().find(|x| x.id == g))
-        .map(|g| g.name.clone())
-        .unwrap_or_default();
-    let timer = (!users.is_empty())
-        .then(|| crate::voice::start_time::get(ch.id.0))
-        .flatten()
-        .map(|st| {
-            div()
-                .flex_none()
-                .font_family(crate::theme::FONT_MONO())
-                .text_size(z(12.))
-                .line_height(z(16.))
-                .text_color(tk(idx::TEXT_FEEDBACK_POSITIVE))
-                .child(crate::voice::start_time::format(crate::voice::start_time::now_s() - st))
-        });
+    let guild_name = ch.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.clone()).unwrap_or_default();
+    let timer = (!users.is_empty()).then(|| crate::voice::start_time::get(ch.id.0)).flatten().map(|st| {
+        div()
+            .flex_none()
+            .font_family(crate::theme::FONT_MONO())
+            .text_size(z(12.))
+            .line_height(z(16.))
+            .text_color(tk(idx::TEXT_FEEDBACK_POSITIVE))
+            .child(crate::voice::start_time::format(crate::voice::start_time::now_s() - st))
+    });
     let id = ch.id;
     let open = entity.clone();
     let name = div()
@@ -81,22 +69,16 @@ pub fn voice_list_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: &Chann
                 .flex()
                 .items_center()
                 .gap(z(space::xs()))
-                .child(
-                    div().flex_none().pl(z(2.)).child(
-                        gpui::svg()
-                            .path(crate::icons::path("speaker"))
-                            .size(z(20.))
-                            .text_color(tk(if users.is_empty() { idx::ICON_SUBTLE } else { idx::TEXT_FEEDBACK_POSITIVE })),
-                    ),
-                )
+                .child(div().flex_none().pl(z(2.)).child(gpui::svg().path(crate::icons::path("speaker")).size(z(20.)).text_color(tk(if users.is_empty() {
+                    idx::ICON_SUBTLE
+                } else {
+                    idx::TEXT_FEEDBACK_POSITIVE
+                }))))
                 .child(name),
         )
         .children(timer);
     let list: AnyElement = if users.is_empty() {
-        div()
-            .p(z(space::md()))
-            .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED).child(crate::t!("invite.card.voice_nobody")))
-            .into_any_element()
+        div().p(z(space::md())).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED).child(crate::t!("invite.card.voice_nobody"))).into_any_element()
     } else {
         div()
             .px(z(space::xxs()))
@@ -168,8 +150,7 @@ pub fn stream_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InviteP
     let own = target.id == Some(app.me.id);
     let member = app.guilds.iter().any(|g| g.id == gid);
     let live_here = target.id.is_some_and(|u| {
-        crate::ui::voice_panel::flags(u).stream
-            && p.channel_id.and_then(|c| app.channels.get(&c)).is_some_and(|c| c.voice_users.contains(&u))
+        crate::ui::voice_panel::flags(u).stream && p.channel_id.and_then(|c| app.channels.get(&c)).is_some_and(|c| c.voice_users.contains(&u))
     });
     let key = target.id.zip(p.channel_id).map(|(u, c)| crate::voice::stream::key(Some(gid.0), c.0, u.0));
     let watching = live_here && key.as_ref().is_some_and(|k| app.voice.watching.contains(k));
@@ -288,9 +269,7 @@ pub fn event_status_text(e: &GuildEvent, now: i64) -> String {
             .zip(chrono::DateTime::from_timestamp(e.start, 0))
             .is_some_and(|(a, b)| a.with_timezone(&chrono::Local).date_naive() == b.with_timezone(&chrono::Local).date_naive());
         if same_day {
-            chrono::DateTime::from_timestamp(end, 0)
-                .map(|d| d.with_timezone(&chrono::Local).format("%H:%M").to_string())
-                .unwrap_or_default()
+            chrono::DateTime::from_timestamp(end, 0).map(|d| d.with_timezone(&chrono::Local).format("%H:%M").to_string()).unwrap_or_default()
         } else {
             calendar_label(end, now)
         }
@@ -299,19 +278,11 @@ pub fn event_status_text(e: &GuildEvent, now: i64) -> String {
         EventTime::Canceled => crate::t!("invite.card.event_canceled", date = start).to_string(),
         EventTime::StartingWithinHour => {
             let mins = (e.start - now) / 60;
-            if mins > 0 {
-                crate::t!("invite.card.event_in_minutes", n = mins).to_string()
-            } else {
-                crate::t!("invite.card.event_soon").to_string()
-            }
+            if mins > 0 { crate::t!("invite.card.event_in_minutes", n = mins).to_string() } else { crate::t!("invite.card.event_soon").to_string() }
         }
         EventTime::Started => crate::t!("invite.card.event_soon").to_string(),
         EventTime::Active => {
-            let live = if e.location.is_some() {
-                crate::t!("invite.card.event_happening")
-            } else {
-                crate::t!("invite.card.event_live")
-            };
+            let live = if e.location.is_some() { crate::t!("invite.card.event_happening") } else { crate::t!("invite.card.event_live") };
             match end {
                 Some(end) => crate::t!("invite.card.event_range", start = live, end = end).to_string(),
                 None => live.to_string(),
@@ -335,11 +306,7 @@ fn event_header(e: &GuildEvent, creator: Option<&InviteUser>) -> gpui::Div {
         EventTime::Upcoming => ("calendar", idx::TEXT_BRAND, idx::TEXT_DEFAULT),
     };
     let count = e.user_count;
-    let count_tip = if count == 1 {
-        crate::t!("invite.card.event_people_one", n = count)
-    } else {
-        crate::t!("invite.card.event_people", n = count)
-    };
+    let count_tip = if count == 1 { crate::t!("invite.card.event_people_one", n = count) } else { crate::t!("invite.card.event_people", n = count) };
     let status = div()
         .flex()
         .items_center()
@@ -381,9 +348,7 @@ fn event_header(e: &GuildEvent, creator: Option<&InviteUser>) -> gpui::Div {
         .gap(z(8.))
         .child(status)
         .child(text(20., 24., FontWeight::MEDIUM, idx::TEXT_STRONG).child(e.name.clone()))
-        .when(!e.description.is_empty(), |d| {
-            d.child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).child(e.description.clone()))
-        })
+        .when(!e.description.is_empty(), |d| d.child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).child(e.description.clone())))
 }
 
 pub fn event_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePreview>, e: &GuildEvent) -> AnyElement {
@@ -403,8 +368,12 @@ pub fn event_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePr
         (None, None) => p.channel_name.clone().map(|n| ("speaker", n)),
     };
     let btn = if !member {
-        button_sm(("invite-event", e.id.0), crate::t!("invite.card.event_join"), BtnKind::Active)
-            .on_click(accept_click(entity, p.code.clone(), Some(gid), channel))
+        button_sm(("invite-event", e.id.0), crate::t!("invite.card.event_join"), BtnKind::Active).on_click(accept_click(
+            entity,
+            p.code.clone(),
+            Some(gid),
+            channel,
+        ))
     } else if time == EventTime::Active {
         if external {
             button_sm(("invite-event", e.id.0), crate::t!("invite.card.event_details"), BtnKind::Secondary)
@@ -431,48 +400,34 @@ pub fn event_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePr
             .flex_row_reverse()
     };
     let guild_name = p.guild_name.clone();
-    let details = div()
-        .flex_1()
-        .min_w_0()
-        .flex()
-        .items_center()
-        .gap(z(16.))
-        .child(guild_icon(p, 48., 12., 16.))
-        .child(
-            div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .justify_center()
-                .child(
-                    div().flex().items_center().gap(z(4.)).min_w_0().child(
-                        text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT)
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .child(crate::ui::emoji_text::label(guild_name, 14.)),
-                    ),
-                )
-                .children(place.map(|(icon, name)| {
-                    div()
-                        .mt(z(4.))
-                        .flex()
-                        .items_center()
-                        .gap(z(4.))
+    let details = div().flex_1().min_w_0().flex().items_center().gap(z(16.)).child(guild_icon(p, 48., 12., 16.)).child(
+        div()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .justify_center()
+            .child(
+                div().flex().items_center().gap(z(4.)).min_w_0().child(
+                    text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT)
                         .min_w_0()
-                        .text_color(tk(idx::TEXT_DEFAULT))
-                        .child(gpui::svg().path(crate::icons::path(icon)).size(z(12.)).flex_none().text_color(tk(idx::TEXT_DEFAULT)))
-                        .child(
-                            text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT)
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .child(name),
-                        )
-                })),
-        );
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .child(crate::ui::emoji_text::label(guild_name, 14.)),
+                ),
+            )
+            .children(place.map(|(icon, name)| {
+                div()
+                    .mt(z(4.))
+                    .flex()
+                    .items_center()
+                    .gap(z(4.))
+                    .min_w_0()
+                    .text_color(tk(idx::TEXT_DEFAULT))
+                    .child(gpui::svg().path(crate::icons::path(icon)).size(z(12.)).flex_none().text_color(tk(idx::TEXT_DEFAULT)))
+                    .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT).min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(name))
+            })),
+    );
     wrapper()
         .when_some(e.image.as_ref(), |d, hash| {
             let url: SharedString = format!("https://cdn.discordapp.com/guild-events/{}/{hash}.png?size=1024", e.id.0).into();

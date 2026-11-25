@@ -3,10 +3,10 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use phoenix_api::Gateway;
 use phoenix_api::gateway::zlib::ZlibEncoder;
 use phoenix_api::gateway::{GatewayConfig, GatewayEvent};
 use phoenix_api::models::Snowflake;
-use phoenix_api::Gateway;
 use serde_json::{Value, json};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -173,11 +173,7 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
 
     handle.shutdown();
     assert_eq!(c.recv_close().await, Some(1000));
-    timeout(Duration::from_secs(5), async {
-        while rx.recv().await.is_some() {}
-    })
-    .await
-    .expect("event channel should close after shutdown");
+    timeout(Duration::from_secs(5), async { while rx.recv().await.is_some() {} }).await.expect("event channel should close after shutdown");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -191,12 +187,7 @@ async fn fatal_close_stops() {
     assert!(!c.query.contains("compress"));
     c.ws.send(Message::Text(json!({"op": 10, "d": {"heartbeat_interval": 1000}}).to_string().into())).await.unwrap();
     assert_eq!(c.recv_non_heartbeat(true).await["op"], 2);
-    c.ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
-        code: 4004u16.into(),
-        reason: "Authentication failed.".into(),
-    }))
-    .await
-    .unwrap();
+    c.ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame { code: 4004u16.into(), reason: "Authentication failed.".into() })).await.unwrap();
     let ev = wait_for(&mut rx, |e| matches!(e, GatewayEvent::Fatal { .. })).await;
     assert!(matches!(ev, GatewayEvent::Fatal { code: 4004, .. }));
 }

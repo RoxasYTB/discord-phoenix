@@ -1,7 +1,4 @@
-use gpui::{
-    AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    img, prelude::*, px,
-};
+use gpui::{AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, img, prelude::*, px};
 use gpui_component::input::{Input, InputState};
 
 use crate::{
@@ -20,12 +17,7 @@ fn label(text: SharedString, error: Option<&SharedString>) -> impl IntoElement {
         .text_color(c(if error.is_some() { 0xFA777C } else { Palette::INTERACTIVE }))
         .child(text)
         .map(|d| match error {
-            Some(e) => d.child(
-                div()
-                    .font_weight(FontWeight::NORMAL)
-                    .italic()
-                    .child(SharedString::from(format!("- {e}"))),
-            ),
+            Some(e) => d.child(div().font_weight(FontWeight::NORMAL).italic().child(SharedString::from(format!("- {e}")))),
             None => d.child(div().text_color(c(Palette::RED)).child("*")),
         })
 }
@@ -58,29 +50,17 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
                 .justify_center()
                 .child(crate::t!("login.welcome")),
         )
-        .child(
-            div()
-                .mt(px(8.))
-                .text_size(px(16.))
-                .text_color(c(Palette::INTERACTIVE))
-                .flex()
-                .justify_center()
-                .child(if app.login_with_token {
-                    crate::t!("login.paste_token")
-                } else {
-                    crate::t!("login.excited")
-                }),
-        )
+        .child(div().mt(px(8.)).text_size(px(16.)).text_color(c(Palette::INTERACTIVE)).flex().justify_center().child(if app.login_with_token {
+            crate::t!("login.paste_token")
+        } else {
+            crate::t!("login.excited")
+        }))
         .child(div().h(px(20.)))
         .map(|d| {
             if app.login_with_token {
-                d.child(label(crate::t!("login.token"), err)).child(field(&app.login_token)).child(
-                    div()
-                        .mt(px(8.))
-                        .text_size(px(12.))
-                        .text_color(c(Palette::TEXT_MUTED))
-                        .child(crate::t!("login.token_note")),
-                )
+                d.child(label(crate::t!("login.token"), err))
+                    .child(field(&app.login_token))
+                    .child(div().mt(px(8.)).text_size(px(12.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("login.token_note")))
             } else if app.login_mfa_step {
                 let opts = app.backend.mfa_options();
                 let method = app.login_ui.mfa_method;
@@ -95,28 +75,22 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
                         },
                     ),
                 };
-                let methods: Vec<MfaMethod> = [
-                    (opts.totp, MfaMethod::Totp),
-                    (opts.sms, MfaMethod::Sms),
-                    (opts.backup || opts.totp, MfaMethod::Backup),
-                ]
-                .into_iter()
-                .filter_map(|(on, m)| on.then_some(m))
-                .collect();
+                let methods: Vec<MfaMethod> = [(opts.totp, MfaMethod::Totp), (opts.sms, MfaMethod::Sms), (opts.backup || opts.totp, MfaMethod::Backup)]
+                    .into_iter()
+                    .filter_map(|(on, m)| on.then_some(m))
+                    .collect();
                 d.child(label(title, err))
                     .child(field(&app.login_mfa))
                     .child(div().mt(px(8.)).text_size(px(12.)).text_color(c(Palette::TEXT_MUTED)).child(hint))
-                    .child(div().mt(px(12.)).flex().gap(px(12.)).children(methods.into_iter().filter(|m| *m != method).map(
-                        |m| {
-                            div()
-                                .id(SharedString::from(format!("mfa-{}", m.label())))
-                                .text_size(px(14.))
-                                .text_color(c(Palette::TEXT_LINK))
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |a, _, _, cx| crate::auth::choose_mfa(a, m, cx)))
-                                .child(crate::t!("login.use_method", m = m.label().to_lowercase()))
-                        },
-                    )))
+                    .child(div().mt(px(12.)).flex().gap(px(12.)).children(methods.into_iter().filter(|m| *m != method).map(|m| {
+                        div()
+                            .id(SharedString::from(format!("mfa-{}", m.label())))
+                            .text_size(px(14.))
+                            .text_color(c(Palette::TEXT_LINK))
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |a, _, _, cx| crate::auth::choose_mfa(a, m, cx)))
+                            .child(crate::t!("login.use_method", m = m.label().to_lowercase()))
+                    })))
             } else {
                 d.child(label(crate::t!("login.email"), err))
                     .child(field(&app.login_email))
@@ -178,16 +152,10 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
         );
 
     let (qr_box, qr_title, qr_text): (AnyElement, SharedString, SharedString) = match &app.login_ui.qr {
-        QrState::Code { modules, size, .. } => (
-            qr_code(modules, *size),
-            crate::t!("login.qr_title"),
-            crate::t!("login.qr_hint"),
-        ),
-        QrState::Scanned(name) => (
-            div().text_size(px(48.)).child("✓").into_any_element(),
-            crate::t!("login.check_phone"),
-            crate::t!("login.qr_scanned", name = name),
-        ),
+        QrState::Code { modules, size, .. } => (qr_code(modules, *size), crate::t!("login.qr_title"), crate::t!("login.qr_hint")),
+        QrState::Scanned(name) => {
+            (div().text_size(px(48.)).child("✓").into_any_element(), crate::t!("login.check_phone"), crate::t!("login.qr_scanned", name = name))
+        }
         QrState::Unavailable(e) => (
             div()
                 .id("qr-retry")
@@ -212,44 +180,16 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
         .flex()
         .flex_col()
         .items_center()
-        .child(
-            div()
-                .size(px(176.))
-                .rounded(px(4.))
-                .bg(gpui::white())
-                .p(px(8.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(qr_box),
-        )
-        .child(
-            div()
-                .mt(px(32.))
-                .text_size(px(24.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(Palette::TEXT_HEADER))
-                .child(qr_title),
-        )
-        .child(
-            div()
-                .mt(px(8.))
-                .text_size(px(16.))
-                .text_color(c(Palette::INTERACTIVE))
-                .text_center()
-                .child(qr_text),
-        );
+        .child(div().size(px(176.)).rounded(px(4.)).bg(gpui::white()).p(px(8.)).flex().items_center().justify_center().child(qr_box))
+        .child(div().mt(px(32.)).text_size(px(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_HEADER)).child(qr_title))
+        .child(div().mt(px(8.)).text_size(px(16.)).text_color(c(Palette::INTERACTIVE)).text_center().child(qr_text));
 
     div()
         .size_full()
         .flex()
         .items_center()
         .justify_center()
-        .bg(gpui::linear_gradient(
-            135.,
-            gpui::linear_color_stop(c(0x404EED), 0.),
-            gpui::linear_color_stop(c(0x23272A), 1.),
-        ))
+        .bg(gpui::linear_gradient(135., gpui::linear_color_stop(c(0x404EED), 0.), gpui::linear_color_stop(c(0x23272A), 1.)))
         .child(
             div()
                 .w(px(784.))

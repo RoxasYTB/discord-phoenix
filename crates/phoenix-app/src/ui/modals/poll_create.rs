@@ -151,20 +151,11 @@ pub fn render(_app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> Any
                 .h(z(40.))
                 .px(z(4.))
                 .gap(z(4.))
-                .child(
-                    div()
-                        .id(("poll-answer-emoji", i))
-                        .w(z(38.))
-                        .h(z(18.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .child(emoji_el)
-                        .on_click(cx.listener(move |a, _, w, cx| {
-                            crate::ui::pickers::open_emoji_picker(a, crate::ui::pickers::EmojiTarget::PollAnswer(i), w, cx);
-                        })),
-                )
+                .child(div().id(("poll-answer-emoji", i)).w(z(38.)).h(z(18.)).flex().items_center().justify_center().cursor_pointer().child(emoji_el).on_click(
+                    cx.listener(move |a, _, w, cx| {
+                        crate::ui::pickers::open_emoji_picker(a, crate::ui::pickers::EmojiTarget::PollAnswer(i), w, cx);
+                    }),
+                ))
                 .child(div().flex_1().min_w_0().child(Input::new(a).appearance(false).bordered(false)))
                 .child(
                     div()
@@ -190,27 +181,21 @@ pub fn render(_app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> Any
         );
     }
     if n < MAX_ANSWERS {
-        answers = answers.child(
-            div().flex().justify_end().child(button_icon("poll-add-answer", "plus", crate::t!("poll.add_answer"), BtnKind::Secondary).on_click(cx.listener(
-                |_, _, _, cx| {
-                    update(|s| s.answers.push(AnswerSlot::default()));
-                    cx.notify();
-                },
-            ))),
-        );
+        answers = answers.child(div().flex().justify_end().child(
+            button_icon("poll-add-answer", "plus", crate::t!("poll.add_answer"), BtnKind::Secondary).on_click(cx.listener(|_, _, _, cx| {
+                update(|s| s.answers.push(AnswerSlot::default()));
+                cx.notify();
+            })),
+        ));
     }
     body = body.child(answers);
     let dur = s.duration;
-    let mut duration = div()
-        .mt(z(18.))
-        .relative()
-        .flex()
-        .flex_col()
-        .child(label(crate::t!("poll.duration")))
-        .child(select_field("poll-duration", duration_label(DURATIONS[dur])).on_click(cx.listener(|_, _, _, cx| {
+    let mut duration = div().mt(z(18.)).relative().flex().flex_col().child(label(crate::t!("poll.duration"))).child(
+        select_field("poll-duration", duration_label(DURATIONS[dur])).on_click(cx.listener(|_, _, _, cx| {
             update(|s| s.list_open = !s.list_open);
             cx.notify();
-        })));
+        })),
+    );
     if s.list_open {
         let mut list = div()
             .mt(z(4.))
@@ -298,13 +283,7 @@ fn submit(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
             return;
         }
         s.sending = true;
-        req = Some(crate::commands::ParityRequest::CreatePoll {
-            channel: s.channel,
-            question,
-            answers,
-            hours: DURATIONS[s.duration],
-            multi: s.multi,
-        });
+        req = Some(crate::commands::ParityRequest::CreatePoll { channel: s.channel, question, answers, hours: DURATIONS[s.duration], multi: s.multi });
     });
     let Some(req) = req else { return };
     app.parity_request(req, cx, |a, res, cx| {

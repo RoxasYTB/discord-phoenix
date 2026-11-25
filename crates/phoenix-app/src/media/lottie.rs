@@ -196,13 +196,7 @@ fn path_d(sh: &Value) -> String {
 
 fn ellipse_d(p: [f64; 2], s: [f64; 2]) -> String {
     let (rx, ry) = (s[0] / 2., s[1] / 2.);
-    format!(
-        "M{:.2} {:.2}a{rx:.2} {ry:.2} 0 1 0 {:.2} 0a{rx:.2} {ry:.2} 0 1 0 {:.2} 0Z",
-        p[0] - rx,
-        p[1],
-        2. * rx,
-        -2. * rx
-    )
+    format!("M{:.2} {:.2}a{rx:.2} {ry:.2} 0 1 0 {:.2} 0a{rx:.2} {ry:.2} 0 1 0 {:.2} 0Z", p[0] - rx, p[1], 2. * rx, -2. * rx)
 }
 
 fn rect_d(p: [f64; 2], s: [f64; 2], r: f64) -> String {
@@ -249,11 +243,7 @@ fn geometry(items_: &[Value], f: f64, m: &M, out: &mut Vec<(String, M)>) {
         let d = match ty(it) {
             "sh" => path_d(&value(it.get("ks"), f)),
             "el" => ellipse_d(vec2(&value(it.get("p"), f), [0., 0.]), vec2(&value(it.get("s"), f), [0., 0.])),
-            "rc" => rect_d(
-                vec2(&value(it.get("p"), f), [0., 0.]),
-                vec2(&value(it.get("s"), f), [0., 0.]),
-                num_of(&value(it.get("r"), f), 0.),
-            ),
+            "rc" => rect_d(vec2(&value(it.get("p"), f), [0., 0.]), vec2(&value(it.get("s"), f), [0., 0.]), num_of(&value(it.get("r"), f), 0.)),
             "gr" => {
                 let (gm, _) = transform(group_tr(it), f);
                 geometry(items(it.get("it")), f, &mul(m, &gm), out);

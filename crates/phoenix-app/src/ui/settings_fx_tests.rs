@@ -88,17 +88,15 @@ fn reads_messages_in_the_viewed_channel_only(cx: &mut TestAppContext) {
 #[gpui::test]
 fn composer_markdown_is_styled_while_typing(cx: &mut TestAppContext) {
     let mut h = setup(cx);
-    let ranges = |h: &mut Harness| h.act(|a, _, cx| a.composer.read(cx).decorations().iter().map(|d| (d.range.clone(), d.style.font_weight)).collect::<Vec<_>>());
+    let ranges =
+        |h: &mut Harness| h.act(|a, _, cx| a.composer.read(cx).decorations().iter().map(|d| (d.range.clone(), d.style.font_weight)).collect::<Vec<_>>());
     h.act(|a, w, cx| {
         a.prefs.synced.proto.insert("md-preview", 1);
         a.prefs.synced.proto.insert("legacy-input", 0);
         a.composer.update(cx, |s, cx| s.set_value("a **b**", w, cx));
         crate::ui::chat::rich_input::sync(a, cx);
     });
-    assert_eq!(
-        ranges(&mut h),
-        vec![(2..4, Some(gpui::FontWeight::SEMIBOLD)), (4..5, Some(gpui::FontWeight::BOLD)), (5..7, Some(gpui::FontWeight::SEMIBOLD))]
-    );
+    assert_eq!(ranges(&mut h), vec![(2..4, Some(gpui::FontWeight::SEMIBOLD)), (4..5, Some(gpui::FontWeight::BOLD)), (5..7, Some(gpui::FontWeight::SEMIBOLD))]);
     h.act(|a, _, cx| assert!(!crate::ui::chat::rich_input::needs_sync(a, cx)));
     h.act(|a, _, cx| {
         a.prefs.synced.proto.insert("md-preview", 0);

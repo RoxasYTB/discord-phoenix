@@ -1,8 +1,5 @@
 use crate::theme::z;
-use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div,
-    list, prelude::*, px,
-};
+use gpui::{AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, list, prelude::*, px};
 
 use crate::{
     app::{MemberRow, PhoenixApp},
@@ -89,9 +86,7 @@ fn thread_rows(app: &PhoenixApp, g: Id, mut members: Vec<Member>) -> Vec<ListEnt
             m.presence = app.presence_of(m.user);
         }
     }
-    let name = |m: &Member| {
-        m.nick.clone().or_else(|| app.users.get(&m.user).map(|u| u.display_name.clone())).unwrap_or_default().to_lowercase()
-    };
+    let name = |m: &Member| m.nick.clone().or_else(|| app.users.get(&m.user).map(|u| u.display_name.clone())).unwrap_or_default().to_lowercase();
     members.sort_by_key(name);
     let group_of = |m: &Member| -> String {
         if m.presence == Presence::Offline {
@@ -161,9 +156,26 @@ fn empty_thread() -> gpui::Div {
         .flex()
         .flex_col()
         .items_center()
-        .child(div().w_full().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("members.members")))
+        .child(
+            div()
+                .w_full()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_MUTED)))
+                .child(crate::t!("members.members")),
+        )
         .child(div().mt(z(48.)).child(crate::ui::icon(crate::assets::Icon::Members, 40., c(tok(idx::ICON_MUTED)))))
-        .child(div().mt(z(40.)).text_center().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(crate::t!("thread.nobody")))
+        .child(
+            div()
+                .mt(z(40.))
+                .text_center()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c(tok(idx::TEXT_STRONG)))
+                .child(crate::t!("thread.nobody")),
+        )
         .child(div().mt(z(8.)).text_center().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("thread.nobody_sub")))
 }
 
@@ -191,12 +203,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .w_full()
                 .relative()
                 .group(crate::ui::chat::scrollbar::THIN_FADE_GROUP)
-                .child(
-                    list(app.member_list.clone(), move |ix, _w, cx| row(&entity, ix, cx))
-                        .size_full()
-                        .pr(z(8.))
-                        .pb(z(10.)),
-                )
+                .child(list(app.member_list.clone(), move |ix, _w, cx| row(&entity, ix, cx)).size_full().pr(z(8.)).pb(z(10.)))
                 .children(crate::ui::chat::scrollbar::thin_fade_scrollbar(&app.member_list)),
         )
         .when(nobody, |d| d.child(empty_thread()))
@@ -257,58 +264,53 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
     let now = crate::mock::now();
     let muted = c(Palette::TEXT_MUTED);
     let mut col = div().flex_none().flex().flex_col().child(
-        div()
-            .pt(z(space::lg()))
-            .pb(z(space::xxs()))
-            .pl(z(space::md()))
-            .pr(z(space::xxs()))
-            .child(
-                div()
-                    .h(z(24.))
-                    .my(z(-3.))
-                    .flex()
-                    .items_center()
-                    .text_size(z(14.))
-                    .line_height(z(18.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(muted)
-                    .child(crate::t!("members.activity", n = count))
-                    .child(
+        div().pt(z(space::lg())).pb(z(space::xxs())).pl(z(space::md())).pr(z(space::xxs())).child(
+            div()
+                .h(z(24.))
+                .my(z(-3.))
+                .flex()
+                .items_center()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(crate::t!("members.activity", n = count))
+                .child(
+                    div()
+                        .size(z(24.))
+                        .p(z(4.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(gpui::svg().path(crate::icons::path("gear")).size(z(12.)).text_color(muted)),
+                )
+                .child(div().flex_1())
+                .when(acts.len() > 3, |d| {
+                    let ent = entity.clone();
+                    d.child(
                         div()
-                            .size(z(24.))
-                            .p(z(4.))
+                            .id("activity-expand")
+                            .cursor_pointer()
+                            .on_click(move |_, _, cx| {
+                                ACTIVITY_EXPANDED.fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+                                ent.update(cx, |a, cx| {
+                                    a.member_list.remeasure();
+                                    cx.notify();
+                                });
+                            })
+                            .w(z(24.))
+                            .h(z(18.))
                             .flex()
-                            .items_center()
                             .justify_center()
-                            .child(gpui::svg().path(crate::icons::path("gear")).size(z(12.)).text_color(muted)),
+                            .child(
+                                gpui::svg()
+                                    .path(crate::icons::path(if expanded { "chevron" } else { "chevron-right" }))
+                                    .size(z(18.))
+                                    .text_color(c(Palette::INTERACTIVE)),
+                            ),
                     )
-                    .child(div().flex_1())
-                    .when(acts.len() > 3, |d| {
-                        let ent = entity.clone();
-                        d.child(
-                            div()
-                                .id("activity-expand")
-                                .cursor_pointer()
-                                .on_click(move |_, _, cx| {
-                                    ACTIVITY_EXPANDED.fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
-                                    ent.update(cx, |a, cx| {
-                                        a.member_list.remeasure();
-                                        cx.notify();
-                                    });
-                                })
-                                .w(z(24.))
-                                .h(z(18.))
-                                .flex()
-                                .justify_center()
-                                .child(
-                                    gpui::svg()
-                                        .path(crate::icons::path(if expanded { "chevron" } else { "chevron-right" }))
-                                        .size(z(18.))
-                                        .text_color(c(Palette::INTERACTIVE)),
-                                ),
-                        )
-                    }),
-            ),
+                }),
+        ),
     );
     for e in acts.into_iter().take(if expanded { usize::MAX } else { 3 }) {
         let uid = e.author;
@@ -316,10 +318,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
         let user = user_cow.as_deref();
         let mem = app.members.get(&g).and_then(|ms| crate::member_index::find(ms, g, uid));
         let (role_col, role_grad) = mem.map_or((None, None), |m| app.member_role_style(g, m));
-        let name = mem
-            .and_then(|m| m.nick.clone())
-            .or_else(|| user.map(|u| u.display_name.clone()))
-            .unwrap_or_default();
+        let name = mem.and_then(|m| m.nick.clone()).or_else(|| user.map(|u| u.display_name.clone())).unwrap_or_default();
         let ent = entity.clone();
         let game: SharedString = e.game.clone().unwrap_or_default().into();
         let art = match e.icon.clone() {
@@ -346,11 +345,10 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
         let badge = |ic: &'static str, t: SharedString| badge_in(ic, t, c(Palette::TEXT_MUTED));
         let entry_live = e.live && e.expires_ms.is_none_or(|x| x > now * 1000);
         let live_start = e.started_ms.filter(|_| entry_live).or_else(|| {
-            app.people.activities.get(&uid).and_then(|acts| {
-                acts.iter()
-                    .find(|a| e.game.as_deref().is_some_and(|g| a.name.eq_ignore_ascii_case(g)))
-                    .and_then(|a| a.start)
-            })
+            app.people
+                .activities
+                .get(&uid)
+                .and_then(|acts| acts.iter().find(|a| e.game.as_deref().is_some_and(|g| a.name.eq_ignore_ascii_case(g))).and_then(|a| a.start))
         });
         let time_icon = if e.content_type == 8 { "apps" } else { "game-controller" };
         let time_badge = match live_start {
@@ -404,11 +402,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                                             .text_size(z(14.))
                                             .line_height(z(18.))
                                             .font_weight(FontWeight::MEDIUM)
-                                            .text_color(
-                                                role_col
-                                                    .map(c)
-                                                    .unwrap_or_else(|| c(crate::theme::tok(crate::theme::generated::idx::CHANNELS_DEFAULT))),
-                                            )
+                                            .text_color(role_col.map(c).unwrap_or_else(|| c(crate::theme::tok(crate::theme::generated::idx::CHANNELS_DEFAULT))))
                                             .text_ellipsis(),
                                         user,
                                         false,
@@ -439,13 +433,7 @@ fn activity_section(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id) -> Any
                         ),
                 )
                 .child(
-                    div()
-                        .flex_none()
-                        .size(z(48.))
-                        .rounded(z(4.))
-                        .overflow_hidden()
-                        .when(e.icon.is_none(), |d| d.bg(c(Palette::BG_MOD_SELECTED)))
-                        .child(art),
+                    div().flex_none().size(z(48.)).rounded(z(4.)).overflow_hidden().when(e.icon.is_none(), |d| d.bg(c(Palette::BG_MOD_SELECTED))).child(art),
                 ),
         );
     }
@@ -491,10 +479,7 @@ pub fn header(t: SharedString) -> AnyElement {
 
 fn group_header(app: &PhoenixApp, g: Id, id: &str, count: u32) -> AnyElement {
     let name = group_name(app, g, id);
-    let icon = id
-        .parse::<u64>()
-        .ok()
-        .and_then(|r| app.roles.get(&g)?.iter().find(|x| x.id == Id(r))?.icon.clone());
+    let icon = id.parse::<u64>().ok().and_then(|r| app.roles.get(&g)?.iter().find(|x| x.id == Id(r))?.icon.clone());
     div()
         .pt(z(space::lg()))
         .pb(z(space::xxs()))
@@ -554,11 +539,7 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     if let Some(rows) = rows_for(app, g) {
         return match rows.get(ix) {
             Some(ListEntry::Group { id, count }) => {
-                let n = if *count > 0 {
-                    *count
-                } else {
-                    rows[ix + 1..].iter().take_while(|r| !matches!(r, ListEntry::Group { .. })).count() as u32
-                };
+                let n = if *count > 0 { *count } else { rows[ix + 1..].iter().take_while(|r| !matches!(r, ListEntry::Group { .. })).count() as u32 };
                 group_header(app, g, id, n)
             }
             Some(ListEntry::Member(mem, nick)) => member_row(app, entity, g, mem, nick.as_ref()),
@@ -576,27 +557,13 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     }
 }
 
-fn member_row(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    g: Id,
-    mem: &Member,
-    nick: Option<&SharedString>,
-) -> AnyElement {
-    let hoisted = mem.presence != Presence::Offline
-        && app.roles.get(&g).is_some_and(|rs| rs.iter().any(|r| r.hoist && mem.roles.contains(&r.id)));
+fn member_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Id, mem: &Member, nick: Option<&SharedString>) -> AnyElement {
+    let hoisted = mem.presence != Presence::Offline && app.roles.get(&g).is_some_and(|rs| rs.iter().any(|r| r.hoist && mem.roles.contains(&r.id)));
     let owner = !hoisted && app.guilds.iter().find(|x| x.id == g).and_then(|x| x.owner) == Some(mem.user);
     member_row_in(app, entity, Some(g), mem, nick, owner)
 }
 
-pub fn member_row_in(
-    app: &PhoenixApp,
-    entity: &Entity<PhoenixApp>,
-    g: Option<Id>,
-    mem: &Member,
-    nick: Option<&SharedString>,
-    owner: bool,
-) -> AnyElement {
+pub fn member_row_in(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: Option<Id>, mem: &Member, nick: Option<&SharedString>, owner: bool) -> AnyElement {
     let user_cow = app.member_user(g, mem.user);
     let user = user_cow.as_deref();
     let offline = mem.presence == Presence::Offline;
@@ -608,10 +575,7 @@ pub fn member_row_in(
     let acts = app.people.activities.get(&uid).map(Vec::as_slice).unwrap_or(&[]);
     let streaming = !offline && acts.iter().any(|a| a.kind == crate::presence::ActivityKind::Streaming);
     let in_voice = match g {
-        Some(g) => app
-            .guild_channels
-            .get(&g)
-            .is_some_and(|ids| ids.iter().filter_map(|i| app.channels.get(i)).any(|ch| ch.voice_users.contains(&uid))),
+        Some(g) => app.guild_channels.get(&g).is_some_and(|ids| ids.iter().filter_map(|i| app.channels.get(i)).any(|ch| ch.voice_users.contains(&uid))),
         None => app.channels.values().any(|ch| ch.guild.is_some() && ch.voice_users.contains(&uid)),
     } && !crate::ui::voice_panel::flags(uid).undiscoverable;
     let go_live = in_voice && crate::ui::voice_panel::flags(uid).stream;
@@ -619,177 +583,172 @@ pub fn member_row_in(
     let voice_icon = if go_live { "golive/screen" } else { "speaker" };
     let two_lines = !offline && (in_voice || sub.is_some() || (acts.is_empty() && mem.activity.is_some()));
     let has_plate = user.is_some_and(|u| u.nameplate.is_some());
-    div().py(z(1.)).child(div()
-        .id(("member", mem.user.0))
-        .on_hover({
-            let e = e.clone();
-            move |h, _, cx| {
-                if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(1, uid.0), *h) {
-                    e.update(cx, |_, cx| cx.notify());
-                }
-            }
-        })
-        .group("member-row")
-        .ml(z(8.))
-        .h(z(if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. }))
-        .pl(z(space::xs()))
-        .pr(z(if has_plate { 32. } else { 8. }))
-        .py(z(4.))
-        .rounded(z(8.))
-        .flex()
-        .items_center()
-        .cursor_pointer()
-        .when(offline, |d| d.opacity(0.3))
-        .hover(|s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))).opacity(1.))
-        .active(|s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_ACTIVE))))
-        .relative()
-        .map(|d| crate::ui::focus_ring::ring_inset(d, crate::ui::states::key(("member", uid.0)), 8., 4., 3.))
-        .when_some(
-            user.and_then(|u| {
-                let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
-                let name_w = name.chars().count() as f32 * 9.0
-                    + if tag.is_some() { 56.0 } else { 0.0 }
-                    + if u.bot { 50.0 } else { 0.0 }
-                    + if owner || mem.premium_since.is_some() { 18.0 } else { 0.0 };
-                let sub_chars = sub
-                    .as_ref()
-                    .map(|s| {
-                        s.custom.as_ref().and_then(|c| c.1.as_ref()).map_or(0, |t| t.chars().count())
-                            + s.main.as_ref().map_or(0, |(t, _)| t.chars().count())
-                    })
-                    .unwrap_or(0);
-                let sub_w = if two_lines { sub_chars as f32 * 6.5 + 16.0 } else { 0.0 };
-                let fallback = (26.0 + name_w.max(sub_w) + 30.0).clamp(120.0, 220.0);
-                let row_h = if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. };
-                let fade = crate::ui::nameplate::Fade::Measured {
-                    place: crate::ui::nameplate::Place::Member,
-                    id: uid.0,
-                    offset: 10.,
-                    fallback,
-                };
-                crate::ui::nameplate::layer_with_fade(u, row_h, crate::ui::nameplate::Place::Member, false, sel, fade)
-            }),
-            |d, l| d.child(l),
-        )
-        .when(app.people.popout.as_ref().is_some_and(|p| p.user == uid), |d| {
-            d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))).opacity(1.)
-        })
-        .on_click(move |ev, window, cx| {
-            let at = ev.position();
-            e.update(cx, |a, cx| a.open_profile(uid, g, at, window, cx));
-        })
-        .on_mouse_down(gpui::MouseButton::Right, move |ev, window, cx| {
-            cx.stop_propagation();
-            crate::ui::user_menu::open(uid, g, ev.position, window);
-        })
+    div()
+        .py(z(1.))
         .child(
             div()
-                .relative()
-                .min_w_0()
-                .max_w_full()
+                .id(("member", mem.user.0))
+                .on_hover({
+                    let e = e.clone();
+                    move |h, _, cx| {
+                        if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(1, uid.0), *h) {
+                            e.update(cx, |_, cx| cx.notify());
+                        }
+                    }
+                })
+                .group("member-row")
+                .ml(z(8.))
+                .h(z(if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. }))
+                .pl(z(space::xs()))
+                .pr(z(if has_plate { 32. } else { 8. }))
+                .py(z(4.))
+                .rounded(z(8.))
                 .flex()
                 .items_center()
-                .gap(z(12.))
+                .cursor_pointer()
+                .when(offline, |d| d.opacity(0.3))
+                .hover(|s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))).opacity(1.))
+                .active(|s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_ACTIVE))))
+                .relative()
+                .map(|d| crate::ui::focus_ring::ring_inset(d, crate::ui::states::key(("member", uid.0)), 8., 4., 3.))
+                .when_some(
+                    user.and_then(|u| {
+                        let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
+                        let name_w = name.chars().count() as f32 * 9.0
+                            + if tag.is_some() { 56.0 } else { 0.0 }
+                            + if u.bot { 50.0 } else { 0.0 }
+                            + if owner || mem.premium_since.is_some() { 18.0 } else { 0.0 };
+                        let sub_chars = sub
+                            .as_ref()
+                            .map(|s| {
+                                s.custom.as_ref().and_then(|c| c.1.as_ref()).map_or(0, |t| t.chars().count())
+                                    + s.main.as_ref().map_or(0, |(t, _)| t.chars().count())
+                            })
+                            .unwrap_or(0);
+                        let sub_w = if two_lines { sub_chars as f32 * 6.5 + 16.0 } else { 0.0 };
+                        let fallback = (26.0 + name_w.max(sub_w) + 30.0).clamp(120.0, 220.0);
+                        let row_h = if two_lines { m::MEMBER_ROW_H } else { m::MEMBER_ROW_H - 2. };
+                        let fade = crate::ui::nameplate::Fade::Measured { place: crate::ui::nameplate::Place::Member, id: uid.0, offset: 10., fallback };
+                        crate::ui::nameplate::layer_with_fade(u, row_h, crate::ui::nameplate::Place::Member, false, sel, fade)
+                    }),
+                    |d, l| d.child(l),
+                )
+                .when(app.people.popout.as_ref().is_some_and(|p| p.user == uid), |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))).opacity(1.))
+                .on_click(move |ev, window, cx| {
+                    let at = ev.position();
+                    e.update(cx, |a, cx| a.open_profile(uid, g, at, window, cx));
+                })
+                .on_mouse_down(gpui::MouseButton::Right, move |ev, window, cx| {
+                    cx.stop_propagation();
+                    crate::ui::user_menu::open(uid, g, ev.position, window);
+                })
                 .child(
                     div()
                         .relative()
-                        .flex_none()
-                        .child({
-                            let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
-                            let cut = move |d: gpui::Div| {
-                                d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
-                                    .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
-                            };
-                            let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
-                            let play = sel || crate::ui::avatar_deco::hovered(crate::ui::avatar_deco::hover_key(1, uid.0));
-                            if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
-                                mobile_avatar(user, cut, deco, play)
-                            } else {
-                                crate::ui::avatar_with_status_deco_hover(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut, deco, play)
-                            }
-                        })
-                        .when(streaming, |d| d.child(streaming_dot())),
-                )
-                .child(
-                    div()
-                        .flex_grow_1()
-                        .flex_shrink_1()
                         .min_w_0()
+                        .max_w_full()
                         .flex()
-                        .flex_col()
+                        .items_center()
+                        .gap(z(12.))
                         .child(
                             div()
+                                .relative()
+                                .flex_none()
+                                .child({
+                                    let sel = app.people.popout.as_ref().is_some_and(|p| p.user == uid);
+                                    let cut = move |d: gpui::Div| {
+                                        d.group_hover("member-row", |s| s.bg(c(crate::theme::tok(crate::theme::generated::idx::INTERACTIVE_BACKGROUND_HOVER))))
+                                            .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                                    };
+                                    let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
+                                    let play = sel || crate::ui::avatar_deco::hovered(crate::ui::avatar_deco::hover_key(1, uid.0));
+                                    if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
+                                        mobile_avatar(user, cut, deco, play)
+                                    } else {
+                                        crate::ui::avatar_with_status_deco_hover(user, 32., mem.presence, c(Palette::BG_SECONDARY), cut, deco, play)
+                                    }
+                                })
+                                .when(streaming, |d| d.child(streaming_dot())),
+                        )
+                        .child(
+                            div()
+                                .flex_grow_1()
+                                .flex_shrink_1()
                                 .min_w_0()
                                 .flex()
-                                .items_center()
-                                .gap(z(4.))
+                                .flex_col()
                                 .child(
-                                    crate::fonts::styled_name(div(), user, false)
-                                        .text_size(z(16.))
-                                        .line_height(z(20.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .map(|d| match role_col {
-                                            Some(col) => d.text_color(role_color(Some(col))),
-                                            None if app.people.popout.as_ref().is_some_and(|p| p.user == uid) => {
-                                                d.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
-                                            }
-                                            None => d
-                                                .text_color(c(tok(idx::CHANNELS_DEFAULT)))
-                                                .group_hover("member-row", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))),
-                                        })
+                                    div()
                                         .min_w_0()
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .text_ellipsis()
-                                        .child(crate::fonts::role_name_text(name, user, 16., g.is_some(), role_grad)),
+                                        .flex()
+                                        .items_center()
+                                        .gap(z(4.))
+                                        .child(
+                                            crate::fonts::styled_name(div(), user, false)
+                                                .text_size(z(16.))
+                                                .line_height(z(20.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .map(|d| match role_col {
+                                                    Some(col) => d.text_color(role_color(Some(col))),
+                                                    None if app.people.popout.as_ref().is_some_and(|p| p.user == uid) => {
+                                                        d.text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
+                                                    }
+                                                    None => d
+                                                        .text_color(c(tok(idx::CHANNELS_DEFAULT)))
+                                                        .group_hover("member-row", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))),
+                                                })
+                                                .min_w_0()
+                                                .overflow_hidden()
+                                                .whitespace_nowrap()
+                                                .text_ellipsis()
+                                                .child(crate::fonts::role_name_text(name, user, 16., g.is_some(), role_grad)),
+                                        )
+                                        .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.))))
+                                        .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))
+                                        .when(owner, |d| {
+                                            d.child(
+                                                gpui::svg()
+                                                    .path(crate::icons::path("crown"))
+                                                    .size(z(14.))
+                                                    .flex_none()
+                                                    .text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))),
+                                            )
+                                        })
+                                        .when(mem.premium_since.is_some(), |d| {
+                                            d.child(
+                                                gpui::svg()
+                                                    .path(crate::icons::path("chat/boost"))
+                                                    .size(z(14.))
+                                                    .flex_none()
+                                                    .ml(z(3.))
+                                                    .relative()
+                                                    .top(z(1.))
+                                                    .text_color(c(tok(idx::GUILD_BOOSTING_PINK))),
+                                            )
+                                        }),
                                 )
-                                .when_some(tag, |d, t| d.child(server_tag(&t).my(z(1.))))
-                                .when(user.is_some_and(|u| u.bot), |d| d.child(bot_tag_px(user.is_some_and(|u| u.verified_bot))))
-                                .when(owner, |d| {
-                                    d.child(gpui::svg().path(crate::icons::path("crown")).size(z(14.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_WARNING))))
-                                })
-                                .when(mem.premium_since.is_some(), |d| {
-                                    d.child(
-                                        gpui::svg()
-                                            .path(crate::icons::path("chat/boost"))
-                                            .size(z(14.))
-                                            .flex_none()
-                                            .ml(z(3.))
-                                            .relative()
-                                            .top(z(1.))
-                                            .text_color(c(tok(idx::GUILD_BOOSTING_PINK))),
-                                    )
+                                .when(two_lines, |d| {
+                                    d.child(sub_text(in_voice, voice_icon, user.is_some_and(|u| u.bot), sub, mem.activity.clone().filter(|_| acts.is_empty())))
                                 }),
                         )
-                        .when(two_lines, |d| d.child(sub_text(in_voice, voice_icon, user.is_some_and(|u| u.bot), sub, mem.activity.clone().filter(|_| acts.is_empty())))),
-                )
-                .when(has_plate, |d| d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Member, uid.0))),
-        ))
+                        .when(has_plate, |d| d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Member, uid.0))),
+                ),
+        )
         .into_any_element()
 }
 
 fn streaming_dot() -> gpui::Div {
     let ring = c(Palette::BG_SECONDARY);
-    div()
-        .absolute()
-        .right(px(-4.))
-        .bottom(px(-4.))
-        .size(px(16.))
-        .rounded_full()
-        .bg(ring)
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            div()
-                .size(px(10.))
-                .rounded_full()
-                .bg(c(tok(idx::PLATFORM_TWITCH)))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(gpui::svg().path(crate::icons::path("play")).size(px(6.)).text_color(ring)),
-        )
+    div().absolute().right(px(-4.)).bottom(px(-4.)).size(px(16.)).rounded_full().bg(ring).flex().items_center().justify_center().child(
+        div()
+            .size(px(10.))
+            .rounded_full()
+            .bg(c(tok(idx::PLATFORM_TWITCH)))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(gpui::svg().path(crate::icons::path("play")).size(px(6.)).text_color(ring)),
+    )
 }
 
 pub fn bot_tag_px(verified: bool) -> gpui::Div {
@@ -818,7 +777,6 @@ pub fn verified_check() -> gpui::Div {
         .child(gpui::svg().path(crate::icons::path("check-small-bold")).size_full().text_color(gpui::white()))
         .tip(crate::t!("common.verified_app"))
 }
-
 
 fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) -> gpui::Div, deco: Option<SharedString>, play: bool) -> gpui::Div {
     div()
@@ -919,17 +877,11 @@ fn sub_text(in_voice: bool, voice_icon: &'static str, bot: bool, sub: Option<Sub
     let (custom, main, count) = sub.map(|s| (s.custom, s.main, s.count)).unwrap_or((None, None, 0));
     let total = count + usize::from(in_voice);
     let custom_text = custom.as_ref().is_some_and(|c| c.1.is_some());
-    let text_el = |t: SharedString| div().min_w_0().font_weight(FontWeight::MEDIUM).text_ellipsis().child(crate::ui::emoji_text::status_label(t, 14. * crate::theme::zoom() / 1.375));
-    let mut row = div()
-        .mt(z(-2.))
-        .h(z(16.))
-        .flex()
-        .items_center()
-        .gap(z(4.))
-        .text_size(z(12.))
-        .line_height(z(16.))
-        .text_color(c(Palette::TEXT_MUTED))
-        .overflow_hidden();
+    let text_el = |t: SharedString| {
+        div().min_w_0().font_weight(FontWeight::MEDIUM).text_ellipsis().child(crate::ui::emoji_text::status_label(t, 14. * crate::theme::zoom() / 1.375))
+    };
+    let mut row =
+        div().mt(z(-2.)).h(z(16.)).flex().items_center().gap(z(4.)).text_size(z(12.)).line_height(z(16.)).text_color(c(Palette::TEXT_MUTED)).overflow_hidden();
     let piece = match main {
         Some((t, icon)) => Some((Some(t), icon)),
         None if in_voice => Some((Some(crate::t!("members.in_voice")), Some(voice_icon))),

@@ -22,12 +22,7 @@ impl Default for MentionsQuery {
 }
 
 pub(crate) fn mentions_path(q: MentionsQuery) -> String {
-    let mut s = format!(
-        "/users/@me/mentions?limit={}&roles={}&everyone={}",
-        q.limit.clamp(1, 100),
-        q.roles,
-        q.everyone
-    );
+    let mut s = format!("/users/@me/mentions?limit={}&roles={}&everyone={}", q.limit.clamp(1, 100), q.roles, q.everyone);
     if let Some(b) = q.before {
         s.push_str(&format!("&before={b}"));
     }

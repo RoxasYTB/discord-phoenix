@@ -26,7 +26,12 @@ pub fn note_label(app: &PhoenixApp, u: Id) -> &'static str {
     if app.people.profiles.get(&u).is_some_and(|p| !p.note.is_empty()) { "menu.edit_note" } else { "menu.add_note" }
 }
 
-fn text_form(title: gpui::SharedString, label: gpui::SharedString, initial: String, on: impl Fn(&mut PhoenixApp, String, &mut Context<PhoenixApp>) + 'static) -> Modal {
+fn text_form(
+    title: gpui::SharedString,
+    label: gpui::SharedString,
+    initial: String,
+    on: impl Fn(&mut PhoenixApp, String, &mut Context<PhoenixApp>) + 'static,
+) -> Modal {
     Modal::Form(Form {
         title,
         subtitle: None,
@@ -165,7 +170,9 @@ pub struct VoiceItems {
 
 pub fn voice_items(app: &PhoenixApp, user: Id, guild: Option<Id>, e: &Ent) -> VoiceItems {
     let mut out = VoiceItems::default();
-    let Some(vc) = app.channels.values().find(|c| c.kind != ChannelKind::Category && c.guild.is_some() && c.voice_users.contains(&user)).map(|c| (c.id, c.guild)) else {
+    let Some(vc) =
+        app.channels.values().find(|c| c.kind != ChannelKind::Category && c.guild.is_some() && c.voice_users.contains(&user)).map(|c| (c.id, c.guild))
+    else {
         return out;
     };
     let g = guild.or(vc.1);

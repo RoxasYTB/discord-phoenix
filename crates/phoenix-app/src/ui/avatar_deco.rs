@@ -1,4 +1,4 @@
-use gpui::{img, px, InteractiveElement, SharedString, Styled};
+use gpui::{InteractiveElement, SharedString, Styled, img, px};
 
 use crate::model::User;
 
@@ -52,7 +52,13 @@ pub fn hovered(key: u64) -> bool {
 
 pub fn set_hover(key: u64, hovered: bool) -> bool {
     HOVER.with(|h| {
-        let next = if hovered { Some(key) } else if h.get() == Some(key) { None } else { h.get() };
+        let next = if hovered {
+            Some(key)
+        } else if h.get() == Some(key) {
+            None
+        } else {
+            h.get()
+        };
         h.replace(next) != next
     })
 }

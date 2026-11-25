@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use gpui::{
-    AnyElement, App, Bounds, Context, DispatchPhase, FocusHandle, FontWeight, Hitbox, HitboxBehavior, Hsla, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, SharedString, StatefulInteractiveElement,
-    Styled, WeakEntity, Window, div, prelude::*, px, svg,
+    AnyElement, App, Bounds, Context, DispatchPhase, FocusHandle, FontWeight, Hitbox, HitboxBehavior, Hsla, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, SharedString, StatefulInteractiveElement, Styled, WeakEntity, Window,
+    div, prelude::*, px, svg,
 };
 use phoenix_voice::audio::effects::{self, Handle, Pcm};
 use phoenix_voice::audio::voice_message::{self as vm, Recorder, Recording, Source};
@@ -317,16 +317,8 @@ pub fn start(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let st = store(cx);
     st.next_token += 1;
     let token = st.next_token;
-    st.draft = Some(Draft {
-        channel,
-        phase: Phase::Requesting,
-        started: Instant::now(),
-        token,
-        frozen: Vec::new(),
-        frozen_ms: 0.,
-        collapse: None,
-        entrance: None,
-    });
+    st.draft =
+        Some(Draft { channel, phase: Phase::Requesting, started: Instant::now(), token, frozen: Vec::new(), frozen_ms: 0., collapse: None, entrance: None });
     st.focus_send = true;
     let control = crate::voice::call::manager().control().clone();
     let src = source();
@@ -891,7 +883,11 @@ fn look_wave(l: &Look, now: Instant) -> WaveColors {
     match l.wave_at {
         Some(at) => {
             let t = (ms_between(at, now) / 200.).min(1.);
-            WaveColors { bg: hex_lerp(l.wave_from.bg, to.bg, t), active: hex_lerp(l.wave_from.active, to.active, t), inactive: hex_lerp(l.wave_from.inactive, to.inactive, t) }
+            WaveColors {
+                bg: hex_lerp(l.wave_from.bg, to.bg, t),
+                active: hex_lerp(l.wave_from.active, to.active, t),
+                inactive: hex_lerp(l.wave_from.inactive, to.inactive, t),
+            }
         }
         None => to,
     }
@@ -902,7 +898,8 @@ fn update_look(cx: &mut App, key: &SharedString, played: bool, playing: bool, br
     let wave = (played, playing && brand);
     let st = store(cx);
     let prev = st.looks.get(key).copied();
-    let mut l = prev.unwrap_or(Look { wave, wave_at: None, wave_from: wave_colors(wave.0, wave.1), playing, play_at: None, ripple_from: ripple_target(playing) });
+    let mut l =
+        prev.unwrap_or(Look { wave, wave_at: None, wave_from: wave_colors(wave.0, wave.1), playing, play_at: None, ripple_from: ripple_target(playing) });
     let mut changed = false;
     if l.wave != wave {
         l.wave_from = look_wave(&l, now);
@@ -1309,8 +1306,12 @@ pub fn bar(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) 
                 .items_center()
                 .gap(z(16.))
                 .child(
-                    chat_button("vm-preview-play", if v.playing { "pause" } else { "play" }, if v.playing { crate::t!("voice_msg.pause") } else { crate::t!("voice_msg.play") })
-                        .on_click(move |_, _, cx| toggle(&k1, None, cx)),
+                    chat_button(
+                        "vm-preview-play",
+                        if v.playing { "pause" } else { "play" },
+                        if v.playing { crate::t!("voice_msg.pause") } else { crate::t!("voice_msg.play") },
+                    )
+                    .on_click(move |_, _, cx| toggle(&k1, None, cx)),
                 )
                 .child(
                     div().id("vm-preview-wave").flex_1().min_w_0().ml(z(4.)).h(z(32.)).my(z(-4.)).cursor_pointer().child(
@@ -1332,11 +1333,8 @@ pub fn bar(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) 
                 .into_any_element()
         }
         None => {
-            let (levels, ms) = if recording {
-                (live.iter().map(|&s| f32::from(s) / 255.).collect::<Vec<f32>>(), elapsed.as_secs_f32() * 1000.)
-            } else {
-                (frozen, frozen_ms)
-            };
+            let (levels, ms) =
+                if recording { (live.iter().map(|&s| f32::from(s) / 255.).collect::<Vec<f32>>(), elapsed.as_secs_f32() * 1000.) } else { (frozen, frozen_ms) };
             let warn = if !recording {
                 None
             } else if elapsed >= vm::WARN_IMMINENT {
@@ -1360,7 +1358,10 @@ pub fn bar(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) 
                 .items_center()
                 .gap(z(16.))
                 .when(recording, |d| {
-                    d.child(chat_button("vm-stop", "stop", crate::t!("voice_msg.stop")).on_click(cx.listener(move |a, _, _, cx| stop_recording(a, ch, false, true, cx))))
+                    d.child(
+                        chat_button("vm-stop", "stop", crate::t!("voice_msg.stop"))
+                            .on_click(cx.listener(move |a, _, _, cx| stop_recording(a, ch, false, true, cx))),
+                    )
                 })
                 .child(
                     div().flex_1().min_w_0().h(z(32.)).my(z(-4.)).overflow_hidden().child(
@@ -1464,10 +1465,8 @@ fn ring_key(part: &str, key: &SharedString) -> u64 {
 fn volume_slider(key: SharedString, cx: &App) -> AnyElement {
     let value = slider_value(cx, &key);
     let now = Instant::now();
-    let (bar_hover, bar_at) = cx
-        .try_global::<Store>()
-        .and_then(|s| s.vol_bar.as_ref().filter(|(k, _, _)| *k == key).map(|(_, h, at)| (*h, Some(*at))))
-        .unwrap_or((false, None));
+    let (bar_hover, bar_at) =
+        cx.try_global::<Store>().and_then(|s| s.vol_bar.as_ref().filter(|(k, _, _)| *k == key).map(|(_, h, at)| (*h, Some(*at)))).unwrap_or((false, None));
     let dragging = cx.try_global::<Store>().is_some_and(|s| s.vol_drag.as_ref().is_some_and(|(k, _)| *k == key));
     let lit = bar_hover || dragging;
     let grow = match bar_at {
@@ -1635,7 +1634,8 @@ pub fn player(url: &SharedString, meta: &VoiceMeta, cx: &App) -> AnyElement {
     } else {
         gpui::linear_gradient(151.11, gpui::linear_color_stop(c(tok(idx::BRAND_460)), 0.1655), gpui::linear_color_stop(c(tok(idx::BRAND_560)), 1.0436))
     };
-    let play_hover = gpui::linear_gradient(151.11, gpui::linear_color_stop(c(tok(idx::BRAND_400)), 0.1778), gpui::linear_color_stop(c(tok(idx::BRAND_460)), 0.8222));
+    let play_hover =
+        gpui::linear_gradient(151.11, gpui::linear_color_stop(c(tok(idx::BRAND_400)), 0.1778), gpui::linear_color_stop(c(tok(idx::BRAND_460)), 0.8222));
     let vol_open = cx.try_global::<Store>().is_some_and(|s| {
         let open = s.vol_open.as_ref() == Some(&key) && s.vol_hide_at.is_none_or(|t| Instant::now() < t);
         open || s.vol_drag.as_ref().is_some_and(|(k, _)| *k == key) || s.vol_keys.as_ref() == Some(&key)
@@ -1847,13 +1847,7 @@ pub fn player(url: &SharedString, meta: &VoiceMeta, cx: &App) -> AnyElement {
             ),
         )
         .child(
-            div()
-                .relative()
-                .flex_none()
-                .text_size(z(14.))
-                .line_height(z(18.))
-                .text_color(duration_color)
-                .child(SharedString::from(format_secs(shown as u64))),
+            div().relative().flex_none().text_size(z(14.)).line_height(z(18.)).text_color(duration_color).child(SharedString::from(format_secs(shown as u64))),
         )
         .child(crate::ui::focus_ring::ring(rate, ring_key("rate", &key), 4.))
         .child(crate::ui::focus_ring::ring(vol, ring_key("vol", &key), 4.))
@@ -1862,9 +1856,10 @@ pub fn player(url: &SharedString, meta: &VoiceMeta, cx: &App) -> AnyElement {
 
 pub fn shot_state(app: &PhoenixApp, spec: &str, cx: &mut App) {
     let Some(channel) = app.selected_channel else { return };
-    let found = app.messages.get(&channel).and_then(|e| {
-        e.msgs.iter().rev().find_map(|m| m.attachments.iter().find_map(|a| a.voice.as_ref().map(|v| (a.url.clone(), v.duration_secs as f32))))
-    });
+    let found = app
+        .messages
+        .get(&channel)
+        .and_then(|e| e.msgs.iter().rev().find_map(|m| m.attachments.iter().find_map(|a| a.voice.as_ref().map(|v| (a.url.clone(), v.duration_secs as f32)))));
     for part in spec.split(',').map(str::trim) {
         let (what, arg) = part.split_once(':').unwrap_or((part, ""));
         let f = arg.parse::<f32>().unwrap_or(0.).clamp(0., 1.);
@@ -1905,9 +1900,7 @@ pub fn close_modal(cx: &mut App) -> bool {
 fn flow_text(text: &str) -> Vec<AnyElement> {
     text.split(' ')
         .filter(|w| !w.is_empty())
-        .map(|w| {
-            div().flex_none().whitespace_nowrap().child(SharedString::from(format!("{w}\u{a0}"))).into_any_element()
-        })
+        .map(|w| div().flex_none().whitespace_nowrap().child(SharedString::from(format!("{w}\u{a0}"))).into_any_element())
         .collect()
 }
 
@@ -1927,7 +1920,8 @@ pub fn draft_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
             sub = sub.child(w);
         }
     } else if is_dm {
-        let name: SharedString = peer.map(|u| u.display_name.clone()).filter(|n| !n.is_empty()).or_else(|| peer.map(|u| u.name.clone())).unwrap_or_else(|| ch.name.clone());
+        let name: SharedString =
+            peer.map(|u| u.display_name.clone()).filter(|n| !n.is_empty()).or_else(|| peer.map(|u| u.name.clone())).unwrap_or_else(|| ch.name.clone());
         for w in flow_text(&crate::t!("voice_msg.unsent_body_dm")) {
             sub = sub.child(w);
         }
@@ -1990,7 +1984,11 @@ pub fn draft_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
             )
         } else if group {
             let tags: Vec<String> = recipients.iter().map(|u| u.name.to_string()).collect();
-            (crate::ui::group_dm::group_avatar(app, from, 32. * crate::theme::zoom(), gpui::transparent_black()), ch.name.clone(), Some((false, tags.join(", ").into())))
+            (
+                crate::ui::group_dm::group_avatar(app, from, 32. * crate::theme::zoom(), gpui::transparent_black()),
+                ch.name.clone(),
+                Some((false, tags.join(", ").into())),
+            )
         } else {
             (
                 crate::ui::avatar(peer, 32.),
@@ -2025,7 +2023,14 @@ pub fn draft_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                         .gap(z(2.))
                         .overflow_hidden()
                         .child(
-                            div().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(primary),
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(z(16.))
+                                .line_height(z(20.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                                .child(primary),
                         )
                         .children(secondary.filter(|(_, s)| !s.is_empty()).map(|(chan, s)| {
                             div()
@@ -2035,7 +2040,15 @@ pub fn draft_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                                 .gap(z(2.))
                                 .overflow_hidden()
                                 .text_color(c(tok(idx::TEXT_MUTED)))
-                                .when(chan, |d| d.child(svg().path(crate::ui::sidebar::channel_icon(ch.kind).path()).size(z(12.)).flex_none().text_color(c(tok(idx::TEXT_MUTED)))))
+                                .when(chan, |d| {
+                                    d.child(
+                                        svg()
+                                            .path(crate::ui::sidebar::channel_icon(ch.kind).path())
+                                            .size(z(12.))
+                                            .flex_none()
+                                            .text_color(c(tok(idx::TEXT_MUTED))),
+                                    )
+                                })
                                 .child(div().flex_1().min_w_0().truncate().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).child(s))
                         })),
                 ),
@@ -2073,30 +2086,36 @@ pub fn draft_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                 .flex()
                 .flex_col()
                 .gap(z(8.))
-                .child(div().pr(z(36.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(strong).child(crate::t!("voice_msg.unsent_title")))
+                .child(
+                    div()
+                        .pr(z(36.))
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(strong)
+                        .child(crate::t!("voice_msg.unsent_title")),
+                )
                 .child(sub.text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_SUBTLE)))),
         )
         .children(card_el.map(|el| div().pt(z(16.)).pb(z(8.)).px(z(24.)).flex().flex_col().child(el)))
-        .child(
-            crate::ui::focus_ring::ring(
-                div()
-                    .id("vm-unsent-close")
-                    .absolute()
-                    .top(z(8.))
-                    .right(z(8.))
-                    .size(z(40.))
-                    .rounded(z(8.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
-                    .on_click(move |_, w, cx| close2(w, cx))
-                    .child(svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
-                crate::ui::states::key("vm-unsent-close"),
-                8.,
-            ),
-        )
+        .child(crate::ui::focus_ring::ring(
+            div()
+                .id("vm-unsent-close")
+                .absolute()
+                .top(z(8.))
+                .right(z(8.))
+                .size(z(40.))
+                .rounded(z(8.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
+                .on_click(move |_, w, cx| close2(w, cx))
+                .child(svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
+            crate::ui::states::key("vm-unsent-close"),
+            8.,
+        ))
         .child(
             div()
                 .pt(z(16.))
@@ -2106,12 +2125,18 @@ pub fn draft_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                 .flex_col()
                 .gap(z(8.))
                 .child(crate::ui::focus_ring::ring(
-                    button("vm-unsent-return", crate::t!("voice_msg.unsent_return"), BtnKind::Secondary).relative().w_full().on_click(move |_, w, cx| back2(w, cx)),
+                    button("vm-unsent-return", crate::t!("voice_msg.unsent_return"), BtnKind::Secondary)
+                        .relative()
+                        .w_full()
+                        .on_click(move |_, w, cx| back2(w, cx)),
                     crate::ui::states::key("vm-unsent-return"),
                     8.,
                 ))
                 .child(crate::ui::focus_ring::ring(
-                    button("vm-unsent-discard", crate::t!("voice_msg.unsent_discard"), BtnKind::Critical).relative().w_full().on_click(move |_, w, cx| drop2(w, cx)),
+                    button("vm-unsent-discard", crate::t!("voice_msg.unsent_discard"), BtnKind::Critical)
+                        .relative()
+                        .w_full()
+                        .on_click(move |_, w, cx| drop2(w, cx)),
                     crate::ui::states::key("vm-unsent-discard"),
                     8.,
                 )),

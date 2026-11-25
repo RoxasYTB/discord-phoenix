@@ -59,13 +59,19 @@ macro_rules! f {
 pub fn svg(path: &str) -> Option<&'static str> {
     Some(match path {
         "icons/chat/edit.svg" => f!(r#"<path d="M16.6 2.6a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L9 19.8 3 21l1.2-6zM15 6.4 5.9 15.5l-.6 3.2 3.2-.6L17.6 9z"/>"#),
-        "icons/chat/trash.svg" => f!(r#"<path d="M9 2h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2h4V3a1 1 0 0 1 1-1zM5 8h14l-1 13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm4 3v8h2v-8zm4 0v8h2v-8z"/>"#),
+        "icons/chat/trash.svg" => f!(
+            r#"<path d="M9 2h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2h4V3a1 1 0 0 1 1-1zM5 8h14l-1 13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm4 3v8h2v-8zm4 0v8h2v-8z"/>"#
+        ),
         "icons/chat/more.svg" => f!(r#"<circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>"#),
-        "icons/chat/add-reaction.svg" => f!(r#"<path fill-rule="evenodd" d="M11 2.05V4a8 8 0 1 0 9 9h2A10 10 0 1 1 11 2.05zM8.5 9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM7 14h10a5 5 0 0 1-10 0zM19 1h2v3h3v2h-3v3h-2V6h-3V4h3z"/>"#),
+        "icons/chat/add-reaction.svg" => f!(
+            r#"<path fill-rule="evenodd" d="M11 2.05V4a8 8 0 1 0 9 9h2A10 10 0 1 1 11 2.05zM8.5 9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM7 14h10a5 5 0 0 1-10 0zM19 1h2v3h3v2h-3v3h-2V6h-3V4h3z"/>"#
+        ),
         "icons/chat/copy.svg" => s!(r#"<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 4H5a2 2 0 0 0-2 2v11"/>"#),
         "icons/chat/id.svg" => s!(r#"<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9v6M11 9v6h2a3 3 0 0 0 0-6z"/>"#),
         "icons/chat/unread.svg" => f!(r#"<path d="M4 4h12v2H4v12h12v-4h2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><circle cx="19" cy="6" r="4"/>"#),
-        "icons/chat/link.svg" => s!(r#"<path d="M10 14a4 4 0 0 0 5.7 0l3.5-3.5a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3.5 3.5a4 4 0 0 0 5.7 5.7l1-1"/>"#),
+        "icons/chat/link.svg" => {
+            s!(r#"<path d="M10 14a4 4 0 0 0 5.7 0l3.5-3.5a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3.5 3.5a4 4 0 0 0 5.7 5.7l1-1"/>"#)
+        }
         "icons/chat/thread.svg" => s!(r#"<path d="M4 5h12v8H9l-3 2.5V13H4zM19 9h1v8h-2v2.5L15 17h-4"/>"#),
         "icons/chat/eye.svg" => s!(r#"<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>"#),
         "icons/chat/upload.svg" => s!(r#"<path d="M12 16V4m-5 5 5-5 5 5M4 20h16"/>"#),

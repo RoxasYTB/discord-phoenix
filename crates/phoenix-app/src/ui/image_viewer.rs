@@ -38,35 +38,14 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
     let save = v.original.clone();
 
     let author = v.author.clone().map(|a| {
-        div()
-            .flex()
-            .items_center()
-            .gap(z(12.))
-            .min_w_0()
-            .child(crate::ui::avatar(a.user.as_ref(), 40.))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_size(z(16.))
-                            .line_height(z(22.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(a.color)
-                            .whitespace_nowrap()
-                            .child(a.name),
-                    )
-                    .child(
-                        div()
-                            .text_size(z(12.))
-                            .line_height(z(16.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(tk(idx::TEXT_MUTED))
-                            .child(a.time),
-                    ),
-            )
+        div().flex().items_center().gap(z(12.)).min_w_0().child(crate::ui::avatar(a.user.as_ref(), 40.)).child(
+            div()
+                .flex()
+                .flex_col()
+                .min_w_0()
+                .child(div().text_size(z(16.)).line_height(z(22.)).font_weight(FontWeight::MEDIUM).text_color(a.color).whitespace_nowrap().child(a.name))
+                .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(a.time)),
+        )
     });
 
     let actions = div()
@@ -147,13 +126,13 @@ pub fn render(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
             })
             .child(top_bar)
             .child(
-                div().flex_1().min_h_0().flex().items_center().justify_center().child(
-                    img(v.url.clone())
-                        .id("image-viewer-img")
-                        .w(px(w))
-                        .h(px(h))
-                        .on_click(|_, _, cx| cx.stop_propagation()),
-                ),
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(img(v.url.clone()).id("image-viewer-img").w(px(w)).h(px(h)).on_click(|_, _, cx| cx.stop_propagation())),
             )
             .into_any_element(),
     )

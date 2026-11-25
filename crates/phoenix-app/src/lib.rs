@@ -7,17 +7,17 @@ pub mod backend;
 pub mod commands;
 pub mod diagnostics;
 pub mod discord_backend;
+pub mod fonts;
 pub mod grouping;
-pub mod history_ui;
 pub mod history_detached;
+pub mod history_ui;
 pub mod hwaccel;
 pub mod i18n;
-pub mod fonts;
 pub mod icons;
 pub mod logging;
 pub mod markdown;
-pub mod member_index;
 pub mod media;
+pub mod member_index;
 pub mod mock;
 pub mod mock_showcase;
 pub mod model;
@@ -32,9 +32,9 @@ pub mod sounds;
 pub mod streamer;
 pub mod theme;
 pub mod thread_recent;
-pub mod tts;
 #[cfg(target_os = "linux")]
 pub mod tray;
+pub mod tts;
 #[cfg(not(target_os = "linux"))]
 pub mod tray {
     pub fn running() -> bool {
@@ -49,28 +49,23 @@ pub mod voice;
 
 use std::sync::Arc;
 
-use gpui::{
-    App, AppContext, Bounds, TitlebarOptions, WindowBounds, WindowDecorations, WindowOptions, px, size,
+use gpui::{App, AppContext, Bounds, TitlebarOptions, WindowBounds, WindowDecorations, WindowOptions, px, size};
+use gpui_component::{
+    Root,
+    theme::{Theme, ThemeMode},
 };
-use gpui_component::{Root, theme::{Theme, ThemeMode}};
 
 pub const APP_ID: &str = "discord-phoenix";
 
 fn window_icon() -> Option<Arc<image::RgbaImage>> {
-    image::load_from_memory_with_format(assets::APP_ICON_PNG, image::ImageFormat::Png)
-        .ok()
-        .map(|i| Arc::new(i.to_rgba8()))
+    image::load_from_memory_with_format(assets::APP_ICON_PNG, image::ImageFormat::Png).ok().map(|i| Arc::new(i.to_rgba8()))
 }
 
 pub fn window_options(cx: &App) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        titlebar: Some(TitlebarOptions {
-            title: Some("Discord Phoenix".into()),
-            appears_transparent: true,
-            ..Default::default()
-        }),
+        titlebar: Some(TitlebarOptions { title: Some("Discord Phoenix".into()), appears_transparent: true, ..Default::default() }),
         window_decorations: Some(WindowDecorations::Client),
         app_id: Some(APP_ID.into()),
         icon: window_icon(),

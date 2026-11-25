@@ -84,10 +84,7 @@ pub fn parse_inventory(v: &Value) -> Vec<InventoryEntry> {
                 trending: tr(TRAIT_TRENDING).is_some_and(|t| t.get("trending").is_some_and(|x| !x.is_null() && x != &Value::Bool(false))),
                 streak_days: tr(TRAIT_STREAK).and_then(|t| t.get("streak_count_days")?.as_u64()),
                 application_id: extra.and_then(|x| x.get("application_id")).and_then(id_of),
-                game_name: extra
-                    .and_then(|x| x.get("game_name").or_else(|| x.get("activity_name")))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
+                game_name: extra.and_then(|x| x.get("game_name").or_else(|| x.get("activity_name"))).and_then(Value::as_str).map(str::to_owned),
                 first_time: tr(TRAIT_FIRST_TIME).and_then(|t| t.get("first_time")?.as_bool()).unwrap_or(false),
                 resurrected: tr(TRAIT_RESURRECTED).is_some_and(|t| t.get("resurrected_last_played").is_some_and(|x| !x.is_null())),
                 live: tr(TRAIT_IS_LIVE).and_then(|t| t.get("is_live")?.as_bool()).unwrap_or(false),

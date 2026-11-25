@@ -113,12 +113,8 @@ impl PhoenixApp {
     }
 
     pub fn save_nav_prefs(&self) {
-        let mut last: Vec<(Option<u64>, u64)> = self
-            .last_channel
-            .iter()
-            .filter(|(g, _)| g.is_none_or(|g| self.guilds.iter().any(|x| x.id == g)))
-            .map(|(g, c)| (g.map(|g| g.0), c.0))
-            .collect();
+        let mut last: Vec<(Option<u64>, u64)> =
+            self.last_channel.iter().filter(|(g, _)| g.is_none_or(|g| self.guilds.iter().any(|x| x.id == g))).map(|(g, c)| (g.map(|g| g.0), c.0)).collect();
         last.sort();
         let mut collapsed: Vec<u64> = self.collapsed.iter().map(|i| i.0).collect();
         collapsed.sort();
@@ -178,11 +174,10 @@ impl PhoenixApp {
     }
 
     pub fn open_dm_with(&mut self, user: Id, cx: &mut Context<Self>) {
-        if let Some(existing) = self
-            .dms
-            .iter()
-            .copied()
-            .find(|d| self.channels.get(d).is_some_and(|c| c.voice_users.first() == Some(&user) && self.nav.extras.get(d).is_none_or(|e| e.recipients <= 1)))
+        if let Some(existing) =
+            self.dms.iter().copied().find(|d| {
+                self.channels.get(d).is_some_and(|c| c.voice_users.first() == Some(&user) && self.nav.extras.get(d).is_none_or(|e| e.recipients <= 1))
+            })
         {
             self.select_channel(existing, cx);
             return;

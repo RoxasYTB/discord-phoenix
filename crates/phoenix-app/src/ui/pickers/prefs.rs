@@ -71,10 +71,7 @@ impl Prefs {
             .map(|o| {
                 o.iter()
                     .map(|(k, u)| {
-                        let usage = Usage {
-                            count: u["count"].as_u64().unwrap_or(1) as u32,
-                            last: u["last"].as_i64().unwrap_or(0),
-                        };
+                        let usage = Usage { count: u["count"].as_u64().unwrap_or(1) as u32, last: u["last"].as_i64().unwrap_or(0) };
                         (k.clone(), usage)
                     })
                     .collect()
@@ -137,11 +134,7 @@ impl Prefs {
     }
 
     pub fn to_json(&self) -> Value {
-        let usage: serde_json::Map<String, Value> = self
-            .usage
-            .iter()
-            .map(|(k, u)| (k.clone(), json!({ "count": u.count, "last": u.last })))
-            .collect();
+        let usage: serde_json::Map<String, Value> = self.usage.iter().map(|(k, u)| (k.clone(), json!({ "count": u.count, "last": u.last }))).collect();
         let newly: serde_json::Map<String, Value> = self
             .newly_seen
             .iter()
@@ -214,13 +207,7 @@ mod tests {
         let mut p = Prefs::default();
         let fire = PickItem::Unicode(emoji::index_of("🔥").unwrap());
         let joy = PickItem::Unicode(emoji::index_of("😂").unwrap());
-        let blob = PickItem::Custom(GuildEmoji {
-            id: Id(42),
-            name: "blob".into(),
-            animated: true,
-            guild: Id(1),
-            available: true,
-        });
+        let blob = PickItem::Custom(GuildEmoji { id: Id(42), name: "blob".into(), animated: true, guild: Id(1), available: true });
         let now = 1_000_000_000;
         p.record_at(&fire, now - 40 * 86_400);
         p.record_at(&fire, now - 40 * 86_400);

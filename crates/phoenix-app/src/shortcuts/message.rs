@@ -40,9 +40,7 @@ pub fn speak(text: &str) -> bool {
 
 fn tts_binary() -> Option<std::path::PathBuf> {
     let path = std::env::var_os("PATH")?;
-    ["spd-say", "espeak-ng"]
-        .iter()
-        .find_map(|b| std::env::split_paths(&path).map(|d| d.join(b)).find(|p| p.is_file()))
+    ["spd-say", "espeak-ng"].iter().find_map(|b| std::env::split_paths(&path).map(|d| d.join(b)).find(|p| p.is_file()))
 }
 
 pub fn step_in(ids: &[Id], cur: Option<Id>, step: i32) -> Option<Id> {
@@ -94,10 +92,7 @@ fn dispatch_global(ks: &Keystroke, window: &mut Window, cx: &mut App) -> bool {
             .rev()
             .find(|b| {
                 let s = b.keystrokes();
-                s.len() == 1
-                    && s[0].inner().key == ks.key
-                    && s[0].inner().modifiers == ks.modifiers
-                    && b.action().name().starts_with("phoenix")
+                s.len() == 1 && s[0].inner().key == ks.key && s[0].inner().modifiers == ks.modifiers && b.action().name().starts_with("phoenix")
             })
             .map(|b| b.action().boxed_clone())
     };
@@ -194,7 +189,9 @@ impl PhoenixApp {
                 return true;
             }
         }
-        if m.control && !m.shift && !m.alt
+        if m.control
+            && !m.shift
+            && !m.alt
             && let Some(g) = digit_target(&self.shortcut_rail(), &ks.key)
         {
             self.select_guild(g, cx);
@@ -209,7 +206,12 @@ impl PhoenixApp {
             }
             return false;
         }
-        if at_root && !m.control && !m.alt && !m.platform && self.selected_channel.is_some() && !(on_ring && ks.key == "space")
+        if at_root
+            && !m.control
+            && !m.alt
+            && !m.platform
+            && self.selected_channel.is_some()
+            && !(on_ring && ks.key == "space")
             && let Some(ch) = ks.key_char.as_ref().filter(|c| !c.chars().any(char::is_control))
         {
             set_focused(None);

@@ -56,10 +56,7 @@ pub fn normalize(code: &str) -> &'static str {
         "zh" => "zh-CN",
         "sv" => "sv-SE",
         "nb" | "nn" => "no",
-        _ => LANGUAGES
-            .iter()
-            .find(|l| l.code.eq_ignore_ascii_case(&primary))
-            .map_or("en-US", |l| l.code),
+        _ => LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(&primary)).map_or("en-US", |l| l.code),
     }
 }
 

@@ -30,10 +30,7 @@ pub fn get(id: Id) -> Option<RoleGradient> {
 }
 
 pub fn highest_colored_role<'a>(roles: &'a [Role], member_roles: &[Id]) -> Option<&'a Role> {
-    roles
-        .iter()
-        .filter(|r| member_roles.contains(&r.id) && r.color.is_some_and(|c| c != 0))
-        .max_by_key(|r| (r.position, std::cmp::Reverse(r.id.0)))
+    roles.iter().filter(|r| member_roles.contains(&r.id) && r.color.is_some_and(|c| c != 0)).max_by_key(|r| (r.position, std::cmp::Reverse(r.id.0)))
 }
 
 pub fn style_for_roles(roles: &[Role], member_roles: &[Id]) -> (Option<u32>, Option<RoleGradient>) {
@@ -48,16 +45,7 @@ mod tests {
     use super::*;
 
     fn role(id: u64, position: i32, color: Option<u32>) -> Role {
-        Role {
-            id: Id(id),
-            name: format!("r{id}").into(),
-            color,
-            position,
-            hoist: false,
-            icon: None,
-            managed: false,
-            connection: false,
-        }
+        Role { id: Id(id), name: format!("r{id}").into(), color, position, hoist: false, icon: None, managed: false, connection: false }
     }
 
     #[test]

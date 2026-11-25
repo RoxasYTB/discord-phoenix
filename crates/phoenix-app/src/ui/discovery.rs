@@ -58,7 +58,9 @@ pub fn category_text(c: Category) -> CategoryText {
         Category::Home => ("discovery.cat.home", "discovery.hero_title", "discovery.hero_desc", Some("discovery.popular")),
         Category::Id(1) => ("discovery.cat.gaming", "discovery.cat.gaming", "discovery.cat_desc.gaming", Some("discovery.cat_popular.gaming")),
         Category::Id(2) => ("discovery.cat.music", "discovery.cat.music", "discovery.cat_desc.music", Some("discovery.cat_popular.music")),
-        Category::Id(3) => ("discovery.cat.entertainment", "discovery.cat.entertainment", "discovery.cat_desc.entertainment", Some("discovery.cat_popular.entertainment")),
+        Category::Id(3) => {
+            ("discovery.cat.entertainment", "discovery.cat.entertainment", "discovery.cat_desc.entertainment", Some("discovery.cat_popular.entertainment"))
+        }
         Category::Id(5) => ("discovery.cat.science", "discovery.cat.science", "discovery.cat_desc.science", Some("discovery.cat_popular.science")),
         Category::Id(6) => ("discovery.cat.education", "discovery.cat.education", "discovery.cat_desc.education", Some("discovery.cat_popular.education")),
         _ => ("discovery.cat.hubs", "discovery.cat.hubs", "discovery.cat_desc.hubs", None),
@@ -258,10 +260,13 @@ fn ensure_loaded(app: &PhoenixApp, cat: Category, cx: &mut Context<PhoenixApp>) 
         true
     });
     if go && cat != Category::Hubs {
-        let fut = app.backend.discoverable_guilds(match cat {
-            Category::Id(c) => Some(c),
-            _ => None,
-        }, 0);
+        let fut = app.backend.discoverable_guilds(
+            match cat {
+                Category::Id(c) => Some(c),
+                _ => None,
+            },
+            0,
+        );
         cx.spawn(async move |this, cx| {
             let v = fut.await.unwrap_or(Value::Null);
             STATE.with(|s| s.borrow_mut().lists.insert(cat, Some(parse_guilds(&v))));
@@ -294,7 +299,14 @@ pub fn start_search(app: &PhoenixApp, query: String, category: Option<i64>, cx: 
         let generation = s.search.as_ref().map_or(0, |x| x.generation) + 1;
         let counts = s.search.as_ref().filter(|x| x.query == query).map(|x| x.results.counts.clone()).unwrap_or_default();
         let total = s.search.as_ref().filter(|x| x.query == query).map_or(0, |x| x.results.total);
-        s.search = Some(Search { query: query.clone(), category, results: SearchResults { guilds: Vec::new(), total, counts }, loading: true, done: false, generation });
+        s.search = Some(Search {
+            query: query.clone(),
+            category,
+            results: SearchResults { guilds: Vec::new(), total, counts },
+            loading: true,
+            done: false,
+            generation,
+        });
         generation
     });
     SCROLL.with(|h| h.set_offset(gpui::point(gpui::px(0.), gpui::px(0.))));
@@ -431,17 +443,13 @@ pub fn sidebar(cx: &mut Context<PhoenixApp>) -> AnyElement {
         .flex()
         .flex_col()
         .bg(tk(idx::BACKGROUND_BASE_LOWEST))
-        .child(
-            div()
-                .flex_none()
-                .h(z(HEADER_H))
-                .p(z(16.))
-                .flex()
-                .items_center()
-                .border_b_1()
-                .border_color(tk(idx::BORDER_SUBTLE))
-                .child(text(18., 22., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("discovery.title"))),
-        )
+        .child(div().flex_none().h(z(HEADER_H)).p(z(16.)).flex().items_center().border_b_1().border_color(tk(idx::BORDER_SUBTLE)).child(text(
+            18.,
+            22.,
+            FontWeight::SEMIBOLD,
+            tk(idx::TEXT_STRONG),
+            crate::t!("discovery.title"),
+        )))
         .child(nav)
         .into_any_element()
 }
@@ -465,7 +473,15 @@ fn verified_badge(partner: bool) -> AnyElement {
 
 fn card(g: &DiscoverableGuild, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let group: SharedString = format!("discovery-card-{}", g.id).into();
-    let banner = div().absolute().top_0().left_0().w_full().h(z(BANNER_H)).overflow_hidden().bg(tk(idx::BACKGROUND_SURFACE_HIGH)).children(g.banner.clone().map(|b| img(b).size_full().object_fit(gpui::ObjectFit::Cover)));
+    let banner = div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .w_full()
+        .h(z(BANNER_H))
+        .overflow_hidden()
+        .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
+        .children(g.banner.clone().map(|b| img(b).size_full().object_fit(gpui::ObjectFit::Cover)));
     let maximize = div()
         .absolute()
         .top(z(8.))
@@ -490,10 +506,26 @@ fn card(g: &DiscoverableGuild, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .group_hover(group.clone(), |s| s.bg(tk(idx::BACKGROUND_SURFACE_HIGH)))
         .child(match g.icon.clone() {
             Some(u) => img(u).size_full().rounded(z(12.)).into_any_element(),
-            None => div().size_full().rounded(z(12.)).bg(tk(idx::BACKGROUND_SURFACE_HIGH)).flex().items_center().justify_center().child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), crate::model::acronym(&g.name))).into_any_element(),
+            None => div()
+                .size_full()
+                .rounded(z(12.))
+                .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), crate::model::acronym(&g.name)))
+                .into_any_element(),
         });
     let dot = |col: Hsla| div().size(z(8.)).rounded_full().flex_none().bg(col);
-    let count = |col: Hsla, label: SharedString| div().min_w_0().flex().items_center().gap(z(4.)).child(dot(col)).child(text(12., 16., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), label).overflow_hidden().text_ellipsis().whitespace_nowrap());
+    let count = |col: Hsla, label: SharedString| {
+        div()
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap(z(4.))
+            .child(dot(col))
+            .child(text(12., 16., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), label).overflow_hidden().text_ellipsis().whitespace_nowrap())
+    };
     let details = div()
         .flex_1()
         .min_h_0()
@@ -509,7 +541,9 @@ fn card(g: &DiscoverableGuild, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .items_center()
                 .gap(z(4.))
                 .when(g.verified || g.partnered, |d| d.child(div().ml(z(-2.)).child(verified_badge(g.partnered && !g.verified))))
-                .child(text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), g.name.clone()).min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap()),
+                .child(
+                    text(16., 20., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), g.name.clone()).min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap(),
+                ),
         )
         .child(text(14., 18., FontWeight::NORMAL, tk(idx::TEXT_DEFAULT), g.description.clone()).mt(z(4.)).mb(z(16.)).max_h(z(54.)).overflow_hidden())
         .child(
@@ -590,7 +624,15 @@ fn search_shell() -> gpui::Div {
         .flex()
         .items_center()
         .gap(z(4.))
-        .child(div().flex_none().size(z(22.)).flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("search")).size(z(16.)).text_color(tk(idx::TEXT_DEFAULT))))
+        .child(
+            div()
+                .flex_none()
+                .size(z(22.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("search")).size(z(16.)).text_color(tk(idx::TEXT_DEFAULT))),
+        )
 }
 
 fn search_field(cx: &mut Context<PhoenixApp>) -> gpui::Div {
@@ -665,7 +707,14 @@ fn header_bar(icon: &'static str, cats: &[&'static str]) -> AnyElement {
         );
     }
     bar(
-        div().h_full().flex().items_center().gap(z(20.)).child(gpui::svg().path(crate::icons::path(icon)).flex_none().size(z(24.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE))).child(tabs).into_any_element(),
+        div()
+            .h_full()
+            .flex()
+            .items_center()
+            .gap(z(20.))
+            .child(gpui::svg().path(crate::icons::path(icon)).flex_none().size(z(24.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE)))
+            .child(tabs)
+            .into_any_element(),
         static_search(),
         false,
     )
@@ -713,7 +762,8 @@ fn hero_image() -> std::sync::Arc<gpui::RenderImage> {
 fn hero(lines: &[SharedString], desc: SharedString) -> AnyElement {
     let mut title = div().max_w(z(740.)).flex().flex_col();
     for l in lines {
-        title = title.child(text(44., 44., FontWeight::BOLD, tk(idx::TEXT_STRONG), l.to_uppercase()).font_family(crate::fonts::display_family(crate::fonts::NITRO)));
+        title = title
+            .child(text(44., 44., FontWeight::BOLD, tk(idx::TEXT_STRONG), l.to_uppercase()).font_family(crate::fonts::display_family(crate::fonts::NITRO)));
     }
     div()
         .relative()
@@ -803,8 +853,18 @@ pub fn page(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>)
             .child(div().pt(z(24.)).pl(z(32.)).h(z(48.)).child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!(sec))))
             .child(guild_grid(guilds.as_ref(), cols, (GRID_PAD_X, GRID_PAD_X, 20.), GRID_GAP, cx));
     }
-    let items = CATEGORIES.iter().enumerate().map(|(n, c)| (gpui::ElementId::from(("discovery-cat", n)), crate::t!(category_text(*c).tab), *c == cat, Some(*c))).collect();
-    let left = div().h_full().flex().items_center().gap(z(20.)).child(gpui::svg().path(crate::icons::path("server/server")).flex_none().size(z(24.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE))).child(tab_strip(items, cx));
+    let items = CATEGORIES
+        .iter()
+        .enumerate()
+        .map(|(n, c)| (gpui::ElementId::from(("discovery-cat", n)), crate::t!(category_text(*c).tab), *c == cat, Some(*c)))
+        .collect();
+    let left = div()
+        .h_full()
+        .flex()
+        .items_center()
+        .gap(z(20.))
+        .child(gpui::svg().path(crate::icons::path("server/server")).flex_none().size(z(24.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE)))
+        .child(tab_strip(items, cx));
     div().size_full().relative().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(body).child(bar(left.into_any_element(), search_field(cx), false)).into_any_element()
 }
 
@@ -828,7 +888,8 @@ fn search_page(vw: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
     });
     let names = STATE.with(|s| s.borrow().names.clone()).unwrap_or_default();
     let cols = search_columns(vw);
-    let grid = guild_grid(if res.guilds.is_empty() && loading { None } else { Some(&res.guilds) }, cols, (32., 16., 32.), 16., cx).pr(z(SEARCH_SIDEBAR_W + 16.));
+    let grid =
+        guild_grid(if res.guilds.is_empty() && loading { None } else { Some(&res.guilds) }, cols, (32., 16., 32.), 16., cx).pr(z(SEARCH_SIDEBAR_W + 16.));
     let mut cats = div().flex().flex_col().gap(z(2.));
     for (n, (id, count)) in res.counts.iter().take(SEARCH_SIDEBAR_ROWS).enumerate() {
         let id = *id;
@@ -874,14 +935,13 @@ fn search_page(vw: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .cursor_pointer()
         .on_click(cx.listener(|_, _, w, cx| clear_search(w, cx)))
         .child(gpui::svg().path(crate::icons::path("nav/back")).size(z(18.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE)));
-    let left = div()
-        .h_full()
-        .min_w_0()
-        .flex()
-        .items_center()
-        .gap(z(20.))
-        .child(back)
-        .child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("discovery.search_results", query = query)).min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap());
+    let left = div().h_full().min_w_0().flex().items_center().gap(z(20.)).child(back).child(
+        text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("discovery.search_results", query = query))
+            .min_w_0()
+            .overflow_hidden()
+            .text_ellipsis()
+            .whitespace_nowrap(),
+    );
     div().size_full().relative().bg(tk(idx::BACKGROUND_BASE_LOW)).child(body).child(bar(left.into_any_element(), search_field(cx), true)).into_any_element()
 }
 
@@ -977,15 +1037,8 @@ fn app_card(a: &DirectoryApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .overflow_hidden()
         .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
         .children(a.banner.clone().map(|b| img(b).size_full().object_fit(gpui::ObjectFit::Cover)));
-    let icon = div()
-        .absolute()
-        .left(z(12.))
-        .top(z(140. - 28.))
-        .size(z(56.))
-        .p(z(4.))
-        .rounded(z(12.))
-        .bg(tk(idx::BACKGROUND_BASE_LOW))
-        .child(match a.icon.clone() {
+    let icon =
+        div().absolute().left(z(12.)).top(z(140. - 28.)).size(z(56.)).p(z(4.)).rounded(z(12.)).bg(tk(idx::BACKGROUND_BASE_LOW)).child(match a.icon.clone() {
             Some(u) => img(u).size_full().rounded(z(8.)).into_any_element(),
             None => div().size_full().rounded(z(8.)).bg(tk(idx::BACKGROUND_BASE_LOWEST)).into_any_element(),
         });
@@ -1044,7 +1097,13 @@ fn apps_page(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>
     let colls = APPS.with(|a| a.borrow().1.clone());
     let mut body = div().flex().flex_col().pb(z(16.));
     for (n, c) in colls.unwrap_or_default().iter().enumerate() {
-        body = body.child(div().pt(z(if n == 0 { 24. } else { 16. })).pl(z(32.)).child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), c.title.clone())));
+        body = body.child(div().pt(z(if n == 0 { 24. } else { 16. })).pl(z(32.)).child(text(
+            20.,
+            24.,
+            FontWeight::SEMIBOLD,
+            tk(idx::TEXT_STRONG),
+            c.title.clone(),
+        )));
         let mut grid = div().px(z(32.)).py(z(16.)).grid().grid_cols(cols as u16).gap(z(16.));
         for a in &c.apps {
             grid = grid.child(app_card(a, cx));
@@ -1061,7 +1120,14 @@ fn apps_page(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>
             .child(hero(&[crate::t!("discovery.apps_title1"), crate::t!("discovery.apps_title2")], crate::t!("discovery.apps_desc")))
             .child(body)
     });
-    let cats = ["discovery.apps_cat.featured", "discovery.apps_cat.games", "discovery.apps_cat.entertainment", "discovery.apps_cat.moderation", "discovery.apps_cat.social", "discovery.apps_cat.utilities"];
+    let cats = [
+        "discovery.apps_cat.featured",
+        "discovery.apps_cat.games",
+        "discovery.apps_cat.entertainment",
+        "discovery.apps_cat.moderation",
+        "discovery.apps_cat.social",
+        "discovery.apps_cat.utilities",
+    ];
     div().size_full().relative().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(scroll).child(header_bar("apps", &cats)).into_any_element()
 }
 
@@ -1140,14 +1206,18 @@ mod tests {
 
     #[test]
     fn category_names_accept_plain_and_localized_forms() {
-        let a = parse_category_names(&json!([{"id": 1, "name": "Gaming"}, {"id": "14", "name": {"default": "General Chatting", "localizations": {"fr": "Discussion générale"}}}]), "fr");
+        let a = parse_category_names(
+            &json!([{"id": 1, "name": "Gaming"}, {"id": "14", "name": {"default": "General Chatting", "localizations": {"fr": "Discussion générale"}}}]),
+            "fr",
+        );
         assert_eq!(a.get(&1).map(|x| x.as_ref()), Some("Gaming"));
         assert_eq!(a.get(&14).map(|x| x.as_ref()), Some("Discussion générale"));
     }
 
     #[test]
     fn parses_search_counts() {
-        let v = json!({"guilds": [{"id": "1", "name": "MINECRAFT"}], "total_count": 7796, "categories": [{"id": "-1", "count": 7796}, {"id": "1", "count": 7480}]});
+        let v =
+            json!({"guilds": [{"id": "1", "name": "MINECRAFT"}], "total_count": 7796, "categories": [{"id": "-1", "count": 7796}, {"id": "1", "count": 7480}]});
         let r = parse_search(&v);
         assert_eq!((r.guilds.len(), r.total), (1, 7796));
         assert_eq!(r.counts, vec![(-1, 7796), (1, 7480)]);

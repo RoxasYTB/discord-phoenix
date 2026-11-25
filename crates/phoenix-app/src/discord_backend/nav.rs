@@ -11,10 +11,7 @@ use super::convert::{self, id, sf};
 use crate::{
     backend::{AppEvent, BackendError},
     model::{self, Id, ImageRef},
-    ui::home::data::{
-        ChannelExtra, GuildFolder, InviteKind, InvitePreview, NavEvent, NavReply, NavRequest, RelAction, Relationship,
-        RelationshipKind,
-    },
+    ui::home::data::{ChannelExtra, GuildFolder, InviteKind, InvitePreview, NavEvent, NavReply, NavRequest, RelAction, Relationship, RelationshipKind},
 };
 
 fn rel_kind(k: RelationshipType) -> Option<RelationshipKind> {
@@ -112,9 +109,7 @@ pub fn folders_from_proto(b64: &str) -> Vec<GuildFolder> {
             let mut f = GuildFolder::default();
             for (fnum, fw, fp, fs) in fields(p) {
                 match fnum {
-                    1 if fw == 2 => {
-                        f.guilds.extend(fp.chunks_exact(8).map(|c| Id(u64::from_le_bytes(c.try_into().unwrap()))))
-                    }
+                    1 if fw == 2 => f.guilds.extend(fp.chunks_exact(8).map(|c| Id(u64::from_le_bytes(c.try_into().unwrap())))),
                     1 if fw == 1 => f.guilds.push(Id(fs)),
                     2 => f.id = wrapped_u64(fp).filter(|v| *v != 0),
                     3 => f.name = wrapped_str(fp).filter(|s| !s.is_empty()).map(Into::into),
@@ -189,10 +184,7 @@ fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
         ch.guild_id.is_some_and(|g| {
             let ow = ch.permission_overwrites.iter().find(|o| o.id == g);
             if ch.kind.is_voice() {
-                let mut p = cache
-                    .guild(g)
-                    .and_then(|gd| gd.roles.iter().find(|r| r.id == g).map(|r| r.permissions))
-                    .unwrap_or_default();
+                let mut p = cache.guild(g).and_then(|gd| gd.roles.iter().find(|r| r.id == g).map(|r| r.permissions)).unwrap_or_default();
                 if let Some(o) = ow {
                     p = (p - o.deny) | o.allow;
                 }
@@ -218,11 +210,7 @@ fn extra(cache: &Cache, c: &api::Channel) -> ChannelExtra {
         can_manage_threads: perms.contains(api::Permissions::MANAGE_THREADS),
         nsfw: c.nsfw,
         locked: everyone_denied(c),
-        group_icon: c
-            .icon
-            .as_ref()
-            .filter(|_| group)
-            .map(|h| ImageRef::Url(format!("{}/channel-icons/{}/{h}.png?size=64", api::CDN_BASE, c.id).into())),
+        group_icon: c.icon.as_ref().filter(|_| group).map(|h| ImageRef::Url(format!("{}/channel-icons/{}/{h}.png?size=64", api::CDN_BASE, c.id).into())),
         recipients: if c.kind.is_private() { c.recipient_user_ids().len() } else { 0 },
         group_name: group.then(|| group_name(cache, c)).flatten(),
         members: if group { c.recipient_user_ids().into_iter().map(id).collect() } else { Vec::new() },
@@ -249,8 +237,7 @@ fn group_name(cache: &Cache, c: &api::Channel) -> Option<gpui::SharedString> {
     if c.name.as_deref().is_some_and(|n| !n.is_empty()) || !c.recipients.is_empty() {
         return None;
     }
-    let names: Vec<String> =
-        c.recipient_ids.iter().filter_map(|u| cache.user(*u)).map(|u| u.display_name().to_owned()).collect();
+    let names: Vec<String> = c.recipient_ids.iter().filter_map(|u| cache.user(*u)).map(|u| u.display_name().to_owned()).collect();
     (!names.is_empty()).then(|| names.join(", ").into())
 }
 
@@ -382,11 +369,7 @@ pub fn on_gateway(cache: &Cache, ev: &GatewayEvent) -> Vec<AppEvent> {
 
 fn api_err(e: phoenix_api::Error) -> BackendError {
     let s = e.to_string();
-    BackendError(if s.contains("captcha") || s.contains("Captcha") {
-        "Discord asked for a captcha. Join from the official client once.".into()
-    } else {
-        s
-    })
+    BackendError(if s.contains("captcha") || s.contains("Captcha") { "Discord asked for a captcha. Join from the official client once.".into() } else { s })
 }
 
 fn invite_preview(v: &Value) -> InvitePreview {
@@ -428,19 +411,12 @@ fn invite_preview(v: &Value) -> InvitePreview {
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(|r| s(r.get("global_name")).or_else(|| s(r.get("username")))).map(Into::into).collect())
         .unwrap_or_default();
-    let recipient_users = ch
-        .and_then(|c| c.get("recipients"))
-        .and_then(Value::as_array)
-        .map(|a| a.iter().map(invite_user).collect())
-        .unwrap_or_default();
+    let recipient_users = ch.and_then(|c| c.get("recipients")).and_then(Value::as_array).map(|a| a.iter().map(invite_user).collect()).unwrap_or_default();
     let ev = v.get("guild_scheduled_event").filter(|e| e.is_object());
     InvitePreview {
         code: s(v.get("code")).unwrap_or_default().into(),
         guild: gid.map(Id),
-        guild_name: s(g.and_then(|g| g.get("name")))
-            .or_else(|| s(v.get("channel").and_then(|c| c.get("name"))))
-            .unwrap_or_else(|| "Group DM".into())
-            .into(),
+        guild_name: s(g.and_then(|g| g.get("name"))).or_else(|| s(v.get("channel").and_then(|c| c.get("name")))).unwrap_or_else(|| "Group DM".into()).into(),
         guild_icon: icon,
         channel_name: s(v.get("channel").and_then(|c| c.get("name"))).map(Into::into),
         inviter: inviter.filter(|i| !i.is_empty()).map(Into::into),
@@ -521,12 +497,8 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             NavReply::Invite(Box::new(p))
         }
         NavRequest::FetchInviteEvent(code, event) => {
-            let v = call(
-                Method::GET,
-                format!("/invites/{}?with_counts=true&with_expiration=true&guild_scheduled_event_id={}", enc(&code), sf(event)),
-                None,
-            )
-            .await?;
+            let v = call(Method::GET, format!("/invites/{}?with_counts=true&with_expiration=true&guild_scheduled_event_id={}", enc(&code), sf(event)), None)
+                .await?;
             NavReply::Invite(Box::new(invite_preview(&v)))
         }
         NavRequest::TopEmojis(g) => {
@@ -538,12 +510,7 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             NavReply::Done
         }
         NavRequest::CreateGuild { name, icon, template, community } => {
-            let body = crate::ui::add_server::create_guild_body(
-                &name,
-                icon.as_deref(),
-                template.as_deref(),
-                community,
-            );
+            let body = crate::ui::add_server::create_guild_body(&name, icon.as_deref(), template.as_deref(), community);
             call(Method::POST, "/guilds".into(), Some(body)).await?;
             NavReply::Done
         }
@@ -552,10 +519,7 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             NavReply::Json(v)
         }
         NavRequest::SubmitOnboarding { guild, options, prompts } => {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
             let body = crate::ui::join_flow::onboarding_response_body(&options, &prompts, now);
             call(Method::POST, format!("/guilds/{}/onboarding-responses", sf(guild)), Some(body)).await?;
             NavReply::Done
@@ -574,12 +538,7 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             NavReply::Done
         }
         NavRequest::CreateInvite(ch) => {
-            let v = call(
-                Method::POST,
-                format!("/channels/{}/invites", sf(ch)),
-                Some(json!({ "max_age": 604800, "max_uses": 0, "temporary": false })),
-            )
-            .await?;
+            let v = call(Method::POST, format!("/channels/{}/invites", sf(ch)), Some(json!({ "max_age": 604800, "max_uses": 0, "temporary": false }))).await?;
             let code = v.get("code").and_then(Value::as_str).unwrap_or_default();
             NavReply::Text(format!("https://discord.gg/{code}").into())
         }
@@ -774,12 +733,20 @@ mod tests {
 
     #[test]
     fn thread_list_sync_lists_only_joined_threads() {
-        let t = |i: u64| json!({"id": i.to_string(), "type": 11, "guild_id": "1", "parent_id": "2", "name": format!("t{i}"),
-            "thread_metadata": {"archived": false, "locked": false, "auto_archive_duration": 1440, "archive_timestamp": "2026-11-24T00:00:00+00:00"}});
+        let t = |i: u64| {
+            json!({"id": i.to_string(), "type": 11, "guild_id": "1", "parent_id": "2", "name": format!("t{i}"),
+            "thread_metadata": {"archived": false, "locked": false, "auto_archive_duration": 1440, "archive_timestamp": "2026-11-24T00:00:00+00:00"}})
+        };
         let data = json!({"guild_id": "1", "threads": [t(10), t(11)], "members": [{"id": "11", "user_id": "5", "flags": 1, "join_timestamp": "2026-11-24T00:00:00+00:00"}]});
         let ev = GatewayEvent::Unknown { name: "THREAD_LIST_SYNC".into(), data };
         let out = on_gateway(&Cache::default(), &ev);
-        let ids: Vec<Id> = out.iter().filter_map(|e| match e { AppEvent::Nav(NavEvent::ThreadUpsert(c)) => Some(c.id), _ => None }).collect();
+        let ids: Vec<Id> = out
+            .iter()
+            .filter_map(|e| match e {
+                AppEvent::Nav(NavEvent::ThreadUpsert(c)) => Some(c.id),
+                _ => None,
+            })
+            .collect();
         assert_eq!(ids, vec![Id(11)]);
     }
 
@@ -802,10 +769,8 @@ mod tests {
         assert_eq!(f[0].id, Some(9));
         assert_eq!(f[0].name.as_deref(), Some("ab"));
         assert_eq!(f[0].color, Some(255));
-        let upd = |t: u64| GatewayEvent::Unknown {
-            name: "USER_SETTINGS_PROTO_UPDATE".into(),
-            data: json!({"settings": {"type": t, "proto": b64}, "partial": true}),
-        };
+        let upd =
+            |t: u64| GatewayEvent::Unknown { name: "USER_SETTINGS_PROTO_UPDATE".into(), data: json!({"settings": {"type": t, "proto": b64}, "partial": true}) };
         let out = on_gateway(&Cache::default(), &upd(1));
         assert!(matches!(out.as_slice(), [AppEvent::SettingsChanged, AppEvent::Nav(NavEvent::Folders(f))] if f.len() == 1));
         assert!(on_gateway(&Cache::default(), &upd(2)).is_empty());
@@ -824,7 +789,9 @@ mod tests {
 
     #[test]
     fn invite_kinds_and_profile() {
-        let gdm = invite_preview(&json!({"code":"a","type":1,"channel":{"id":"9","type":3,"name":null,"recipients":[{"username":"x"},{"username":"y"}]},"inviter":{"id":"2","username":"x"}}));
+        let gdm = invite_preview(
+            &json!({"code":"a","type":1,"channel":{"id":"9","type":3,"name":null,"recipients":[{"username":"x"},{"username":"y"}]},"inviter":{"id":"2","username":"x"}}),
+        );
         assert_eq!(gdm.kind, InviteKind::GroupDm);
         assert_eq!(gdm.recipients.len(), 2);
         let friend = invite_preview(&json!({"code":"b","type":2,"inviter":{"id":"3","username":"z","avatar":"h"}}));

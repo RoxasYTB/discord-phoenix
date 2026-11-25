@@ -22,10 +22,12 @@ pub fn render(_app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> Any
     }
     page()
         .child(super::title(crate::t!("gs2.delete_server")))
-        .child(div().mt(z(24.)).flex().child(button("gs2-del-open", crate::t!("gs2.delete_server"), BtnKind::Critical).on_click(cx.listener(move |_, _, _, cx| {
-            super::open_modal(guild, "delete");
-            cx.notify();
-        }))))
+        .child(div().mt(z(24.)).flex().child(button("gs2-del-open", crate::t!("gs2.delete_server"), BtnKind::Critical).on_click(cx.listener(
+            move |_, _, _, cx| {
+                super::open_modal(guild, "delete");
+                cx.notify();
+            },
+        ))))
         .into_any_element()
 }
 
@@ -54,26 +56,31 @@ pub fn modal(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEl
                 .text_color(t(idx::TEXT_DEFAULT))
                 .child(crate::t!("gs2.delete_confirm", name = name)),
         )
-        .child(div().mt(z(20.)).child(text(12., 16., FontWeight::BOLD, if error { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_SUBTLE }, crate::t!("gs2.delete_enter_name").to_uppercase())))
+        .child(div().mt(z(20.)).child(text(
+            12.,
+            16.,
+            FontWeight::BOLD,
+            if error { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_SUBTLE },
+            crate::t!("gs2.delete_enter_name").to_uppercase(),
+        )))
         .children(error.then(|| text(12., 16., FontWeight::MEDIUM, idx::TEXT_FEEDBACK_CRITICAL, crate::t!("gs2.delete_wrong"))))
         .child(super::field(guild, "delete-name", "", cx).mt(z(8.)).when(error, |d| d.border_color(t(idx::BORDER_FEEDBACK_CRITICAL))));
     let close2 = close.clone();
     let n2 = name.clone();
-    let footer = div()
-        .flex()
-        .gap(z(8.))
-        .child(button("gs2-del-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click(move |_, w, cx| close2(w, cx)))
-        .child(button("gs2-del-ok", crate::t!("gs2.delete_server"), BtnKind::Critical).on_click(cx.listener(move |a, _, _, cx| {
-            let typed = super::value(guild, "delete-name", cx).unwrap_or_default();
-            if confirmed(&typed, &n2) {
-                super::close_modal();
-                super::forget_input(guild, "delete-name");
-                write(a, ServerCall::DeleteGuild { guild: sf(guild) }, None, cx);
-            } else {
-                super::set_flag(guild, "delete-error", true);
-            }
-            cx.notify();
-        })));
+    let footer =
+        div().flex().gap(z(8.)).child(button("gs2-del-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click(move |_, w, cx| close2(w, cx))).child(
+            button("gs2-del-ok", crate::t!("gs2.delete_server"), BtnKind::Critical).on_click(cx.listener(move |a, _, _, cx| {
+                let typed = super::value(guild, "delete-name", cx).unwrap_or_default();
+                if confirmed(&typed, &n2) {
+                    super::close_modal();
+                    super::forget_input(guild, "delete-name");
+                    write(a, ServerCall::DeleteGuild { guild: sf(guild) }, None, cx);
+                } else {
+                    super::set_flag(guild, "delete-error", true);
+                }
+                cx.notify();
+            })),
+        );
     crate::ui::modals::card_with(440., crate::t!("gs2.delete_title", name = name), None, body.into_any_element(), Some(footer.into_any_element()), close)
 }
 

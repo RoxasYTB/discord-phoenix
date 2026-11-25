@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{Channel, ChannelId, EmojiId, GuildId, Member, Permissions, Role, RoleId, User, UserId, VoiceState, CDN_BASE, null_default};
+use super::{CDN_BASE, Channel, ChannelId, EmojiId, GuildId, Member, Permissions, Role, RoleId, User, UserId, VoiceState, null_default};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Emoji {

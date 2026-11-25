@@ -29,11 +29,7 @@ pub fn user(u: &api::User) -> model::User {
     let avatar = if u.avatar.is_some() {
         model::ImageRef::Url(u.avatar_url(AVATAR_SIZE).into())
     } else {
-        let idx = if u.discriminator.is_empty() || u.discriminator == "0" {
-            (u.id.0 >> 22) % 6
-        } else {
-            u.discriminator.parse::<u64>().unwrap_or(0) % 5
-        };
+        let idx = if u.discriminator.is_empty() || u.discriminator == "0" { (u.id.0 >> 22) % 6 } else { u.discriminator.parse::<u64>().unwrap_or(0) % 5 };
         model::ImageRef::Default(idx as u8)
     };
     model::User {
@@ -133,11 +129,8 @@ fn forward_snapshot(m: &api::Message) -> Option<(api::Message, model::Forward)> 
         .map(|t| t.timestamp())
         .or_else(|| r.and_then(|r| r.message_id).map(|i| (i.timestamp_ms() / 1000) as i64))
         .unwrap_or(0);
-    let f = model::Forward {
-        guild: r.and_then(|r| r.guild_id).map(id),
-        channel: r.and_then(|r| r.channel_id).map(id).unwrap_or(id(m.channel_id)),
-        timestamp: ts,
-    };
+    let f =
+        model::Forward { guild: r.and_then(|r| r.guild_id).map(id), channel: r.and_then(|r| r.channel_id).map(id).unwrap_or(id(m.channel_id)), timestamp: ts };
     Some((inner, f))
 }
 
@@ -156,12 +149,7 @@ pub fn message(m: &api::Message) -> model::Message {
         return out;
     }
     crate::commands::store::record(m);
-    let reply_to = m
-        .message_reference
-        .as_ref()
-        .filter(|_| m.is_reply())
-        .and_then(|r| r.message_id)
-        .map(id);
+    let reply_to = m.message_reference.as_ref().filter(|_| m.is_reply()).and_then(|r| r.message_id).map(id);
     model::Message {
         id: id(m.id),
         channel: id(m.channel_id),
@@ -171,10 +159,7 @@ pub fn message(m: &api::Message) -> model::Message {
         edited_at: m.edited_timestamp.as_deref().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).map_or(0, |d| d.timestamp()),
         content: m.content.clone().into(),
         reply_to,
-        reply_mentions_author: m
-            .referenced_message
-            .as_ref()
-            .is_some_and(|r| m.mentions.iter().any(|u| u.user.id == r.author.id)),
+        reply_mentions_author: m.referenced_message.as_ref().is_some_and(|r| m.mentions.iter().any(|u| u.user.id == r.author.id)),
         reply_preview: m.referenced_message.as_ref().filter(|_| reply_to.is_some()).map(|r| {
             let nick = r.member.as_ref().and_then(|mb| mb.nick.as_deref()).filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into());
             (id(r.author.id), nick, r.content.clone().into())
@@ -182,42 +167,41 @@ pub fn message(m: &api::Message) -> model::Message {
         reply_voice: m.referenced_message.as_ref().is_some_and(|r| r.flags & phoenix_voice::audio::voice_message::FLAG_IS_VOICE_MESSAGE != 0),
         forward: None,
         author_nick: m.member.as_ref().and_then(|mb| mb.nick.as_deref()).filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into()),
-        embeds: model::merge_embeds_on_url(m
-            .embeds
-            .iter()
-            .filter(|e| e.title.is_some() || e.description.is_some() || e.image.is_some() || e.thumbnail.is_some() || e.author.is_some() || !e.fields.is_empty())
-            .map(|e| model::Embed {
-                color: e.color,
-                provider: e.provider.as_ref().and_then(|p| p.name.clone()).map(Into::into),
-                title: e.title.clone().map(Into::into),
-                description: e.description.clone().map(Into::into),
-                url: e.url.clone().map(Into::into),
-                kind: e.kind.clone().map(Into::into),
-                thumbnail: embed_media(&e.thumbnail, &m.attachments),
-                image: embed_media(&e.image, &m.attachments),
-                images: Vec::new(),
-                video: embed_media(&e.video, &m.attachments),
-                author: e.author.as_ref().map(|a| model::EmbedAuthor {
-                    name: a.name.clone().into(),
-                    url: a.url.clone().map(Into::into),
-                    icon: a.proxy_icon_url.clone().or_else(|| a.icon_url.clone()).map(Into::into),
-                }),
-                fields: e
-                    .fields
-                    .iter()
-                    .map(|f| model::EmbedField { name: f.name.clone().into(), value: f.value.clone().into(), inline: f.inline })
-                    .collect(),
-                footer: e.footer.as_ref().map(|f| model::EmbedFooter {
-                    text: f.text.clone().into(),
-                    icon: f.proxy_icon_url.clone().or_else(|| f.icon_url.clone()).map(Into::into),
-                }),
-                timestamp: e
-                    .timestamp
-                    .as_deref()
-                    .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                    .map(|d| d.timestamp()),
-            })
-            .collect()),
+        embeds: model::merge_embeds_on_url(
+            m.embeds
+                .iter()
+                .filter(|e| {
+                    e.title.is_some() || e.description.is_some() || e.image.is_some() || e.thumbnail.is_some() || e.author.is_some() || !e.fields.is_empty()
+                })
+                .map(|e| model::Embed {
+                    color: e.color,
+                    provider: e.provider.as_ref().and_then(|p| p.name.clone()).map(Into::into),
+                    title: e.title.clone().map(Into::into),
+                    description: e.description.clone().map(Into::into),
+                    url: e.url.clone().map(Into::into),
+                    kind: e.kind.clone().map(Into::into),
+                    thumbnail: embed_media(&e.thumbnail, &m.attachments),
+                    image: embed_media(&e.image, &m.attachments),
+                    images: Vec::new(),
+                    video: embed_media(&e.video, &m.attachments),
+                    author: e.author.as_ref().map(|a| model::EmbedAuthor {
+                        name: a.name.clone().into(),
+                        url: a.url.clone().map(Into::into),
+                        icon: a.proxy_icon_url.clone().or_else(|| a.icon_url.clone()).map(Into::into),
+                    }),
+                    fields: e
+                        .fields
+                        .iter()
+                        .map(|f| model::EmbedField { name: f.name.clone().into(), value: f.value.clone().into(), inline: f.inline })
+                        .collect(),
+                    footer: e.footer.as_ref().map(|f| model::EmbedFooter {
+                        text: f.text.clone().into(),
+                        icon: f.proxy_icon_url.clone().or_else(|| f.icon_url.clone()).map(Into::into),
+                    }),
+                    timestamp: e.timestamp.as_deref().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).map(|d| d.timestamp()),
+                })
+                .collect(),
+        ),
         attachments: m
             .attachments
             .iter()
@@ -245,11 +229,9 @@ pub fn message(m: &api::Message) -> model::Message {
                     original: a.url.clone().into(),
                     spoiler: a.flags & 8 != 0 || a.filename.starts_with("SPOILER_"),
                     description: a.description.clone().filter(|d| !d.is_empty()).map(Into::into),
-                    voice: (kind == model::AttachmentKind::Audio && (m.flags & phoenix_voice::audio::voice_message::FLAG_IS_VOICE_MESSAGE != 0 || a.waveform.is_some()))
-                        .then(|| model::VoiceMeta {
-                            duration_secs: a.duration_secs.unwrap_or(0.),
-                            waveform: a.waveform.clone().unwrap_or_default().into(),
-                        }),
+                    voice: (kind == model::AttachmentKind::Audio
+                        && (m.flags & phoenix_voice::audio::voice_message::FLAG_IS_VOICE_MESSAGE != 0 || a.waveform.is_some()))
+                    .then(|| model::VoiceMeta { duration_secs: a.duration_secs.unwrap_or(0.), waveform: a.waveform.clone().unwrap_or_default().into() }),
                 }
             })
             .chain(m.sticker_items.iter().map(|st| {
@@ -270,23 +252,25 @@ pub fn message(m: &api::Message) -> model::Message {
                 }
             }))
             .collect(),
-        soundboard_sounds: m.soundboard_sounds.iter().map(|s| model::SoundboardSound {
-            id: id(s.sound_id),
-            guild: s.guild_id.map(id),
-            name: s.name.clone().filter(|n| !n.is_empty()).map(Into::into),
-            emoji_id: s.emoji_id.map(id),
-            emoji_name: s.emoji_name.clone().filter(|n| !n.is_empty()).map(Into::into),
-            volume: 1.0,
-            available: true,
-        }).collect(),
+        soundboard_sounds: m
+            .soundboard_sounds
+            .iter()
+            .map(|s| model::SoundboardSound {
+                id: id(s.sound_id),
+                guild: s.guild_id.map(id),
+                name: s.name.clone().filter(|n| !n.is_empty()).map(Into::into),
+                emoji_id: s.emoji_id.map(id),
+                emoji_name: s.emoji_name.clone().filter(|n| !n.is_empty()).map(Into::into),
+                volume: 1.0,
+                available: true,
+            })
+            .collect(),
         reactions: m
             .reactions
             .iter()
             .map(|r| model::Reaction {
                 emoji: match (&r.emoji.id, &r.emoji.name) {
-                    (Some(eid), Some(n)) => {
-                        format!("<{}:{n}:{}>", if r.emoji.animated { "a" } else { "" }, eid.0).into()
-                    }
+                    (Some(eid), Some(n)) => format!("<{}:{n}:{}>", if r.emoji.animated { "a" } else { "" }, eid.0).into(),
                     (_, Some(n)) => n.clone().into(),
                     _ => "?".into(),
                 },
@@ -576,12 +560,7 @@ pub fn guild_order_from_proto(b64: &str) -> Option<Vec<u64>> {
 pub fn guild_order_from_json(v: Option<&Value>) -> Option<Vec<u64>> {
     let v = v?;
     if let Some(Value::Array(folders)) = v.get("guild_folders") {
-        let ids: Vec<u64> = folders
-            .iter()
-            .filter_map(|f| f.get("guild_ids").and_then(Value::as_array))
-            .flatten()
-            .filter_map(snowflake_value)
-            .collect();
+        let ids: Vec<u64> = folders.iter().filter_map(|f| f.get("guild_ids").and_then(Value::as_array)).flatten().filter_map(snowflake_value).collect();
         if !ids.is_empty() {
             return Some(ids);
         }
@@ -687,11 +666,7 @@ pub fn guild_channels(cache: &Cache, guild: api::Snowflake, rc: &ReadCtx) -> Vec
             ordered.push(c);
         }
     }
-    ordered
-        .into_iter()
-        .enumerate()
-        .filter_map(|(i, c)| channel(c, i as i32, rc, voice.remove(&c.id.0).unwrap_or_default()))
-        .collect()
+    ordered.into_iter().enumerate().filter_map(|(i, c)| channel(c, i as i32, rc, voice.remove(&c.id.0).unwrap_or_default())).collect()
 }
 
 pub fn dm_channel(c: &api::Channel, rc: &ReadCtx) -> Option<model::Channel> {
@@ -783,12 +758,7 @@ impl Prefs {
         Self {
             reads: parse_read_state(r.read_state.as_ref()),
             mutes: parse_mutes(r.user_guild_settings.as_ref()),
-            blocked: r
-                .relationships
-                .iter()
-                .filter(|x| x.kind == api::RelationshipType::Blocked)
-                .map(|x| x.id.0)
-                .collect(),
+            blocked: r.relationships.iter().filter(|x| x.kind == api::RelationshipType::Blocked).map(|x| x.id.0).collect(),
         }
     }
     pub fn ctx(&self) -> ReadCtx<'_> {
@@ -811,11 +781,7 @@ pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
     let mut ids: Vec<api::Snowflake> = cache.guilds().iter().filter(|g| !g.unavailable).map(|g| g.id).collect();
     let ready_pos: HashMap<u64, usize> = ready.guilds.iter().enumerate().map(|(i, g)| (g.id.0, i)).collect();
     ids.sort_by_key(|g| ready_pos.get(&g.0).copied().unwrap_or(usize::MAX));
-    let order = ready
-        .user_settings_proto
-        .as_deref()
-        .and_then(guild_order_from_proto)
-        .or_else(|| guild_order_from_json(ready.user_settings.as_ref()));
+    let order = ready.user_settings_proto.as_deref().and_then(guild_order_from_proto).or_else(|| guild_order_from_json(ready.user_settings.as_ref()));
     order_guilds(&mut ids, order.as_deref());
 
     let mut guilds = Vec::new();
@@ -840,15 +806,7 @@ pub fn build_ready(cache: &Cache, ready: &Ready, prefs: &Prefs) -> ReadyData {
     }
     users.insert(me.id.0, me.clone());
 
-    ReadyData {
-        me,
-        users: users.into_values().collect(),
-        guilds,
-        channels,
-        roles: roles_out,
-        dm_channels: dm_channels(cache, &rc),
-        presences: Vec::new(),
-    }
+    ReadyData { me, users: users.into_values().collect(), guilds, channels, roles: roles_out, dm_channels: dm_channels(cache, &rc), presences: Vec::new() }
 }
 
 #[derive(Default)]
@@ -914,10 +872,7 @@ impl MemberList {
                 user: id(u.id),
                 roles: m.member.roles.iter().copied().map(id).collect(),
                 presence: presence(p.and_then(|p| p.get("status")).and_then(Value::as_str).unwrap_or("offline")),
-                activity: p
-                    .and_then(|p| p.get("activities"))
-                    .and_then(Value::as_array)
-                    .and_then(|a| activity(a)),
+                activity: p.and_then(|p| p.get("activities")).and_then(Value::as_array).and_then(|a| activity(a)),
                 nick: m.member.nick.as_deref().filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into()),
                 avatar: member_avatar_url(guild, u.id, &m.member),
                 decoration: member_decoration_url(&m.member),
@@ -954,8 +909,7 @@ impl Adapter {
         let sup_roles = g.is_some_and(|g| self.prefs.mutes.suppress_roles.contains(&g));
         m.mentions_user(self.me)
             || (m.mention_everyone && !sup_every)
-            || (!sup_roles
-                && m.guild_id.and_then(|g| cache.member(g, self.me)).is_some_and(|me| m.mention_roles.iter().any(|r| me.roles.contains(r))))
+            || (!sup_roles && m.guild_id.and_then(|g| cache.member(g, self.me)).is_some_and(|me| m.mention_roles.iter().any(|r| me.roles.contains(r))))
     }
 
     pub fn recount_mentions(&mut self, cache: &Cache, channel: u64, latest_page: &[api::Message]) -> Option<AppEvent> {
@@ -1050,7 +1004,12 @@ impl Adapter {
         out.push(AppEvent::MemberListRows { guild: id(guild), rows });
     }
 
-    pub fn note_authors(&mut self, cache: &Cache, guild: api::GuildId, users: impl IntoIterator<Item = api::Snowflake>) -> (Vec<AppEvent>, Vec<api::Snowflake>) {
+    pub fn note_authors(
+        &mut self,
+        cache: &Cache,
+        guild: api::GuildId,
+        users: impl IntoIterator<Item = api::Snowflake>,
+    ) -> (Vec<AppEvent>, Vec<api::Snowflake>) {
         let mut missing = Vec::new();
         let mut added = false;
         for u in users {
@@ -1078,9 +1037,7 @@ impl Adapter {
     fn emit_members(&self, cache: &Cache, guild: api::GuildId, out: &mut Vec<AppEvent>) {
         let (mut members, users) = self.shown_list(guild.0).map(|l| l.members(guild)).unwrap_or_default();
         let voice: Vec<api::Snowflake> = cache.voice_states(Some(guild)).iter().map(|v| v.user_id).collect();
-        let extra = std::iter::once(self.me)
-            .chain(self.chunked.get(&guild.0).into_iter().flatten().copied())
-            .chain(voice);
+        let extra = std::iter::once(self.me).chain(self.chunked.get(&guild.0).into_iter().flatten().copied()).chain(voice);
         for u in extra {
             if members.iter().any(|m| m.user == id(u)) {
                 continue;
@@ -1089,11 +1046,7 @@ impl Adapter {
                 members.push(model::Member {
                     user: id(u),
                     roles: m.roles.iter().copied().map(id).collect(),
-                    presence: if u == self.me {
-                        model::Presence::Online
-                    } else {
-                        self.statuses.get(&u.0).copied().unwrap_or(model::Presence::Offline)
-                    },
+                    presence: if u == self.me { model::Presence::Online } else { self.statuses.get(&u.0).copied().unwrap_or(model::Presence::Offline) },
                     activity: None,
                     nick: m.nick.as_deref().filter(|n| !n.is_empty()).map(|n| collapse_ws(n).into()),
                     avatar: member_avatar_url(guild, u, &m),
@@ -1116,8 +1069,7 @@ impl Adapter {
                 let mut users = Vec::new();
                 message_users(m, &mut users);
                 out.push(AppEvent::Users(users));
-                let mentioned = self.mentions_me(cache, m)
-                    || (m.guild_id.is_none() && m.author.id != self.me && !self.prefs.blocked.contains(&m.author.id.0));
+                let mentioned = self.mentions_me(cache, m) || (m.guild_id.is_none() && m.author.id != self.me && !self.prefs.blocked.contains(&m.author.id.0));
                 if m.author.id == self.me {
                     self.mark_read(m.channel_id.0, m.id.0);
                 } else if mentioned {
@@ -1279,22 +1231,14 @@ impl Adapter {
                 let rc = self.prefs.ctx();
                 let chs = guild_channels(cache, g.id, &rc);
                 if let Some(gg) = cache.guild(g.id) {
-                    out.push(AppEvent::GuildCreate {
-                        guild: guild_with_threads(cache, &gg, &chs, &self.prefs.ctx()),
-                        channels: chs,
-                        roles: roles(&gg),
-                    });
+                    out.push(AppEvent::GuildCreate { guild: guild_with_threads(cache, &gg, &chs, &self.prefs.ctx()), channels: chs, roles: roles(&gg) });
                 }
                 out.extend(voice_flag_events(cache, Some(g.id)));
             }
             GatewayEvent::GuildUpdate(g) => {
                 if let Some(gg) = cache.guild(g.id) {
                     let chs = guild_channels(cache, g.id, &self.prefs.ctx());
-                    out.push(AppEvent::GuildCreate {
-                        guild: guild_with_threads(cache, &gg, &chs, &self.prefs.ctx()),
-                        channels: chs,
-                        roles: roles(&gg),
-                    });
+                    out.push(AppEvent::GuildCreate { guild: guild_with_threads(cache, &gg, &chs, &self.prefs.ctx()), channels: chs, roles: roles(&gg) });
                 }
             }
             GatewayEvent::GuildDelete(d) => {
@@ -1329,19 +1273,17 @@ impl Adapter {
                     self.emit_members(cache, g, &mut out);
                 }
             }
-            GatewayEvent::ChannelCreate(c) | GatewayEvent::ChannelUpdate(c) | GatewayEvent::ChannelDelete(c) => {
-                match c.guild_id {
-                    Some(g) => self.guild_state(cache, g, &mut out),
-                    None if matches!(ev, GatewayEvent::ChannelDelete(_)) => out.push(AppEvent::DmDelete(id(c.id))),
-                    None => {
-                        out.push(AppEvent::Users(c.recipients.iter().map(user).collect()));
-                        let c = cache.channel(c.id).unwrap_or_else(|| std::sync::Arc::new((**c).clone()));
-                        if let Some(dm) = dm_channel(&c, &self.prefs.ctx()) {
-                            out.push(AppEvent::DmUpsert(dm));
-                        }
+            GatewayEvent::ChannelCreate(c) | GatewayEvent::ChannelUpdate(c) | GatewayEvent::ChannelDelete(c) => match c.guild_id {
+                Some(g) => self.guild_state(cache, g, &mut out),
+                None if matches!(ev, GatewayEvent::ChannelDelete(_)) => out.push(AppEvent::DmDelete(id(c.id))),
+                None => {
+                    out.push(AppEvent::Users(c.recipients.iter().map(user).collect()));
+                    let c = cache.channel(c.id).unwrap_or_else(|| std::sync::Arc::new((**c).clone()));
+                    if let Some(dm) = dm_channel(&c, &self.prefs.ctx()) {
+                        out.push(AppEvent::DmUpsert(dm));
                     }
                 }
-            }
+            },
             GatewayEvent::VoiceStateUpdate(v) => {
                 if let Some(u) = v.member.as_ref().and_then(|m| m.user.as_ref()) {
                     out.push(AppEvent::Users(vec![user(u)]));
@@ -1385,9 +1327,9 @@ pub fn fatal_message(code: u16, reason: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod live_tests;
+#[cfg(test)]
+mod tests;
 
 pub fn forum_tags(c: &api::Channel) -> Vec<crate::commands::ForumTag> {
     c.available_tags
@@ -1406,12 +1348,7 @@ pub fn forum_tags(c: &api::Channel) -> Vec<crate::commands::ForumTag> {
 }
 
 pub fn voice_flag_events(cache: &Cache, guild: Option<api::Snowflake>) -> Vec<AppEvent> {
-    cache
-        .voice_states(guild)
-        .iter()
-        .filter(|v| v.channel_id.is_some())
-        .map(|v| AppEvent::VoiceFlags { user: id(v.user_id), flags: voice_flags(v) })
-        .collect()
+    cache.voice_states(guild).iter().filter(|v| v.channel_id.is_some()).map(|v| AppEvent::VoiceFlags { user: id(v.user_id), flags: voice_flags(v) }).collect()
 }
 
 fn voice_flags(v: &phoenix_api::models::VoiceState) -> crate::model::VoiceFlags {

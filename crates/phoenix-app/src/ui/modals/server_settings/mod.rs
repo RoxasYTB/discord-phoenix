@@ -157,7 +157,13 @@ pub fn side_items(app: &PhoenixApp, guild: Id) -> Vec<SideItem> {
     }
     if visible(app, guild, "menu.gs.delete") {
         out.push(SideItem::Separator);
-        out.push(SideItem::Item { label: crate::t!("menu.gs.delete"), index: section_index("menu.gs.delete"), danger: true, icon: section_icon("menu.gs.delete"), external: false });
+        out.push(SideItem::Item {
+            label: crate::t!("menu.gs.delete"),
+            index: section_index("menu.gs.delete"),
+            danger: true,
+            icon: section_icon("menu.gs.delete"),
+            external: false,
+        });
     }
     out
 }
@@ -272,8 +278,14 @@ pub fn call_for(key: &str, guild: Id, s: &State) -> Option<AdminCall> {
         "guild" => AdminCall::Guild { guild: g },
         "profile" => AdminCall::GuildProfile { guild: g },
         "games" => {
-            let ids: Vec<phoenix_api::models::Snowflake> =
-                s.get("profile")?.get("game_application_ids")?.as_array()?.iter().filter_map(|v| v.as_str()?.parse().ok()).map(phoenix_api::models::Snowflake).collect();
+            let ids: Vec<phoenix_api::models::Snowflake> = s
+                .get("profile")?
+                .get("game_application_ids")?
+                .as_array()?
+                .iter()
+                .filter_map(|v| v.as_str()?.parse().ok())
+                .map(phoenix_api::models::Snowflake)
+                .collect();
             if ids.is_empty() {
                 return None;
             }
@@ -287,13 +299,9 @@ pub fn call_for(key: &str, guild: Id, s: &State) -> Option<AdminCall> {
         "counts" => AdminCall::RoleMemberCounts { guild: g },
         "invites" => AdminCall::GuildInvites { guild: g },
         "bans" => AdminCall::Bans { guild: g },
-        "audit" => AdminCall::AuditLogFiltered {
-            guild: g,
-            user: s.audit_user.map(phoenix_api::models::Snowflake),
-            action: s.audit_action,
-            before: None,
-            limit: 50,
-        },
+        "audit" => {
+            AdminCall::AuditLogFiltered { guild: g, user: s.audit_user.map(phoenix_api::models::Snowflake), action: s.audit_action, before: None, limit: 50 }
+        }
         _ => return None,
     })
 }
@@ -388,7 +396,11 @@ pub fn prepare(s: &mut State, window: &mut Window, cx: &mut Context<PhoenixApp>)
 }
 
 pub fn profile_upload_patch(icon: Option<String>, banner: Option<String>) -> Option<phoenix_api::rest::guild_server::ProfilePatch> {
-    (icon.is_some() || banner.is_some()).then(|| phoenix_api::rest::guild_server::ProfilePatch { icon: icon.map(Some), custom_banner: banner.map(Some), ..Default::default() })
+    (icon.is_some() || banner.is_some()).then(|| phoenix_api::rest::guild_server::ProfilePatch {
+        icon: icon.map(Some),
+        custom_banner: banner.map(Some),
+        ..Default::default()
+    })
 }
 
 pub fn pick_upload(key: &'static str, exts: &'static [&'static str], cx: &mut Context<PhoenixApp>) {
@@ -465,7 +477,10 @@ pub fn pending_writes(s: &State, cx: &gpui::App) -> Vec<AdminCall> {
         let channel = s.edits.widget_channel.unwrap_or_else(|| kit::id_of(&w, "channel_id"));
         out.push(AdminCall::EditWidget { guild: g, enabled, channel: channel.map(phoenix_api::models::Snowflake) });
     }
-    if let Some(patch) = profile_upload_patch(s.uploads.get("icon").and_then(|p| crate::ui::file_pick::data_uri(p)), s.uploads.get("banner").and_then(|p| crate::ui::file_pick::data_uri(p))) {
+    if let Some(patch) = profile_upload_patch(
+        s.uploads.get("icon").and_then(|p| crate::ui::file_pick::data_uri(p)),
+        s.uploads.get("banner").and_then(|p| crate::ui::file_pick::data_uri(p)),
+    ) {
         out.push(AdminCall::Server(phoenix_api::rest::guild_server::ServerCall::SetProfile { guild: g, patch }));
     }
     if let Some(order) = &s.role_order {

@@ -158,17 +158,13 @@ fn step(n: usize, head: SharedString, body: AnyElement) -> gpui::Div {
         .py(z(12.))
         .flex()
         .gap(z(16.))
-        .child(
-            div()
-                .size(z(32.))
-                .flex_none()
-                .rounded_full()
-                .bg(t(idx::BACKGROUND_MOD_NORMAL))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, n.to_string())),
-        )
+        .child(div().size(z(32.)).flex_none().rounded_full().bg(t(idx::BACKGROUND_MOD_NORMAL)).flex().items_center().justify_center().child(text(
+            16.,
+            20.,
+            FontWeight::SEMIBOLD,
+            idx::TEXT_STRONG,
+            n.to_string(),
+        )))
         .child(div().flex_1().min_w_0().flex().flex_col().gap(z(8.)).child(text(16., 20., FontWeight::NORMAL, idx::TEXT_STRONG, head)).child(body))
 }
 
@@ -261,7 +257,13 @@ fn editor(app: &PhoenixApp, guild: Id, d: &AutomodRule, cx: &mut Context<Phoenix
             .flex()
             .flex_col()
             .gap(z(8.))
-            .child(super::area_field(guild, &kw_key, &m.keyword_filter.join(", "), 4, 98., cx).child(div().absolute().right(z(12.)).bottom(z(8.)).child(text(12., 16., FontWeight::NORMAL, idx::TEXT_MUTED, format!("{} / {KEYWORDS_MAX}", m.keyword_filter.len())))))
+            .child(super::area_field(guild, &kw_key, &m.keyword_filter.join(", "), 4, 98., cx).child(div().absolute().right(z(12.)).bottom(z(8.)).child(text(
+                12.,
+                16.,
+                FontWeight::NORMAL,
+                idx::TEXT_MUTED,
+                format!("{} / {KEYWORDS_MAX}", m.keyword_filter.len()),
+            ))))
             .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.am_keywords_hint")))
             .child(
                 div()
@@ -273,28 +275,28 @@ fn editor(app: &PhoenixApp, guild: Id, d: &AutomodRule, cx: &mut Context<Phoenix
                     .flex_col()
                     .gap(z(8.))
                     .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.am_regex")))
-                    .child(
-                        div()
-                            .relative()
-                            .min_h(z(105.))
-                            .p(z(10.))
-                            .rounded(z(8.))
-                            .border_1()
-                            .border_color(t(idx::INPUT_BORDER_DEFAULT))
-                            .child(chips)
-                            .child(div().absolute().right(z(12.)).bottom(z(8.)).child(text(12., 16., FontWeight::NORMAL, idx::TEXT_MUTED, format!("{} / {REGEX_MAX}", m.regex_patterns.len())))),
-                    )
+                    .child(div().relative().min_h(z(105.)).p(z(10.)).rounded(z(8.)).border_1().border_color(t(idx::INPUT_BORDER_DEFAULT)).child(chips).child(
+                        div().absolute().right(z(12.)).bottom(z(8.)).child(text(
+                            12.,
+                            16.,
+                            FontWeight::NORMAL,
+                            idx::TEXT_MUTED,
+                            format!("{} / {REGEX_MAX}", m.regex_patterns.len()),
+                        )),
+                    ))
                     .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!("gs2.am_regex_hint"))),
             )
-            .child(
-                div()
-                    .mt(z(12.))
-                    .flex()
-                    .flex_col()
-                    .gap(z(8.))
-                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.am_allow")))
-                    .child(super::area_field(guild, &format!("am-allow:{}", rule_key(d)), &m.allow_list.join(", "), 3, 78., cx).child(div().absolute().right(z(12.)).bottom(z(8.)).child(text(12., 16., FontWeight::NORMAL, idx::TEXT_MUTED, format!("{} / {ALLOW_MAX}", m.allow_list.len()))))),
-            );
+            .child(div().mt(z(12.)).flex().flex_col().gap(z(8.)).child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("gs2.am_allow"))).child(
+                super::area_field(guild, &format!("am-allow:{}", rule_key(d)), &m.allow_list.join(", "), 3, 78., cx).child(
+                    div().absolute().right(z(12.)).bottom(z(8.)).child(text(
+                        12.,
+                        16.,
+                        FontWeight::NORMAL,
+                        idx::TEXT_MUTED,
+                        format!("{} / {ALLOW_MAX}", m.allow_list.len()),
+                    )),
+                ),
+            ));
         out = out.child(step(1, crate::t!("gs2.am_step_keywords"), keywords.into_any_element()));
     } else if d.trigger_type == trigger::MENTION_SPAM {
         let n = m.mention_total_limit.unwrap_or(20);

@@ -5,8 +5,8 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 
 pub use protocol::{DaveServerMessage, Ready, ServerMessage, SessionDescription, VideoPayload, VoiceConnectInfo};
 
@@ -32,15 +32,7 @@ pub struct GatewayMachine {
 
 impl GatewayMachine {
     pub fn new(info: VoiceConnectInfo) -> Self {
-        Self {
-            info,
-            state: State::Disconnected,
-            seq_ack: None,
-            session_established: false,
-            heartbeat_interval: None,
-            pending_nonce: None,
-            missed_acks: 0,
-        }
+        Self { info, state: State::Disconnected, seq_ack: None, session_established: false, heartbeat_interval: None, pending_nonce: None, missed_acks: 0 }
     }
 
     pub fn state(&self) -> State {

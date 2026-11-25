@@ -315,8 +315,22 @@ pub fn render_demon(window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) -> 
         && let Some(path) = asset_file(SYMBOL)
     {
         let q = (ms - SYMBOL_MS) / 3000.;
-        let (o, s) = if q < 0.05 { (q / 0.15, 0.8 + 0.25 * (q / 0.05)) } else if q < 0.15 { (q / 0.15, 1.05 - 0.05 * ((q - 0.05) / 0.1)) } else { (1., 1.) };
-        let bg = if q < 0.05 { q / 0.05 * 0.2 } else if q < 0.15 { 0.2 } else if q < 0.6 { 0.2 * (1. - (q - 0.15) / 0.45) } else { 0. };
+        let (o, s) = if q < 0.05 {
+            (q / 0.15, 0.8 + 0.25 * (q / 0.05))
+        } else if q < 0.15 {
+            (q / 0.15, 1.05 - 0.05 * ((q - 0.05) / 0.1))
+        } else {
+            (1., 1.)
+        };
+        let bg = if q < 0.05 {
+            q / 0.05 * 0.2
+        } else if q < 0.15 {
+            0.2
+        } else if q < 0.6 {
+            0.2 * (1. - (q - 0.15) / 0.45)
+        } else {
+            0.
+        };
         let w = (cw * 0.8).min(ch * 0.6 * 360. / 280.) * s;
         let h = w * 280. / 360.;
         layer = layer

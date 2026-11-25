@@ -62,11 +62,8 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
     let theme = i.prof.and_then(|p| p.theme);
     let card_bg = tok(idx::CHAT_BACKGROUND_DEFAULT);
     let ring_bg = theme.map(|t| crate::ui::profile_theme::composite(t, t.0)).unwrap_or(card_bg);
-    let effect = i
-        .prof
-        .and_then(|p| p.effect_sku)
-        .and_then(|s| crate::ui::profile_fx::product(app, s, cx))
-        .and_then(|c| crate::ui::profile_fx::effect(&c, 300., cx));
+    let effect =
+        i.prof.and_then(|p| p.effect_sku).and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| crate::ui::profile_fx::effect(&c, 300., cx));
     let e = cx.entity();
     let bio = i.prof.map(|p| p.bio.clone()).filter(|b| !b.is_empty());
     let created = i.prof.map(|p| p.created);
@@ -78,39 +75,30 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
         .child(banner_buttons(app, uid, None, 8., cx))
         .child(div().absolute().left(z(8.)).top(z(49.)).child(avatar_block(&i, 80., 6., ring_bg)));
     let hide_notes = app.prefs.local.streamer_hides_info();
-    let mut body = div()
-        .mx(z(16.))
-        .flex()
-        .flex_col()
-        .gap(z(20.))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(z(8.))
-                .child(name_block(&i, false, (!hide_notes).then(|| crate::ui::profile_note::note_button(uid, cx))))
-                .children(if hide_notes { None } else { crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx) })
-                .children(i.prof.and_then(|p| mutuals_row(p, uid, &cx.entity()))),
-        );
+    let mut body = div().mx(z(16.)).flex().flex_col().gap(z(20.)).child(
+        div()
+            .flex()
+            .flex_col()
+            .gap(z(8.))
+            .child(name_block(&i, false, (!hide_notes).then(|| crate::ui::profile_note::note_button(uid, cx))))
+            .children(if hide_notes { None } else { crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx) })
+            .children(i.prof.and_then(|p| mutuals_row(p, uid, &cx.entity()))),
+    );
     if let Some(b) = bio {
         let e2 = e.clone();
         body = body.child(
-            div()
-                .flex()
-                .flex_col()
-                .child(bio_lines(&b))
-                .child(
-                    div()
-                        .id("dm-panel-full-bio")
-                        .mt(z(8.))
-                        .text_size(z(12.))
-                        .line_height(z(16.))
-                        .text_color(c(tok(idx::TEXT_DEFAULT)))
-                        .cursor_pointer()
-                        .hover(|s| s.underline())
-                        .on_click(move |_, _, cx| e2.update(cx, |a, cx| a.open_profile_modal(uid, cx)))
-                        .child(crate::t!("profile.view_full_bio")),
-                ),
+            div().flex().flex_col().child(bio_lines(&b)).child(
+                div()
+                    .id("dm-panel-full-bio")
+                    .mt(z(8.))
+                    .text_size(z(12.))
+                    .line_height(z(16.))
+                    .text_color(c(tok(idx::TEXT_DEFAULT)))
+                    .cursor_pointer()
+                    .hover(|s| s.underline())
+                    .on_click(move |_, _, cx| e2.update(cx, |a, cx| a.open_profile_modal(uid, cx)))
+                    .child(crate::t!("profile.view_full_bio")),
+            ),
         );
     }
     if let Some(t) = created {
@@ -146,33 +134,33 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
             .child(crate::t!("profile.view_full")),
     );
     div()
-            .w(z(320.))
-            .flex_none()
-            .h_full()
-            .p(z(8.))
-            .bg(c(Palette::BG_PRIMARY))
-            .child(
-                div()
-                    .relative()
-                    .size_full()
-                    .p(z(2.))
-                    .rounded(z(8.))
-                    .overflow_hidden()
-                    .when(theme.is_none(), |d| d.bg(c(card_bg)))
-                    .when_some(theme, |d, t| d.children(theme_backdrop(t, 72.)))
-                    .child(
-                        div()
-                            .relative()
-                            .size_full()
-                            .rounded(z(6.))
-                            .overflow_hidden()
-                            .when_some(theme, |d, t| d.bg(crate::ui::profile_theme::overlay(t)))
-                            .flex()
-                            .flex_col()
-                            .child(div().id("dm-panel-scroll").flex_1().min_h_0().overflow_y_scroll().child(header).child(body))
-                            .child(footer)
-                            .children(effect),
-                    ),
-            )
-            .into_any_element()
+        .w(z(320.))
+        .flex_none()
+        .h_full()
+        .p(z(8.))
+        .bg(c(Palette::BG_PRIMARY))
+        .child(
+            div()
+                .relative()
+                .size_full()
+                .p(z(2.))
+                .rounded(z(8.))
+                .overflow_hidden()
+                .when(theme.is_none(), |d| d.bg(c(card_bg)))
+                .when_some(theme, |d, t| d.children(theme_backdrop(t, 72.)))
+                .child(
+                    div()
+                        .relative()
+                        .size_full()
+                        .rounded(z(6.))
+                        .overflow_hidden()
+                        .when_some(theme, |d, t| d.bg(crate::ui::profile_theme::overlay(t)))
+                        .flex()
+                        .flex_col()
+                        .child(div().id("dm-panel-scroll").flex_1().min_h_0().overflow_y_scroll().child(header).child(body))
+                        .child(footer)
+                        .children(effect),
+                ),
+        )
+        .into_any_element()
 }

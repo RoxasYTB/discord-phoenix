@@ -123,7 +123,13 @@ impl PhoenixApp {
         let starter = s.starter.read(cx).value().trim().to_string();
         if let Some((msg, default)) = s.source.clone() {
             let handle = window.window_handle();
-            let name = if !name.is_empty() { name } else if !default.is_empty() { default } else { crate::t!("thread.default_name").to_string() };
+            let name = if !name.is_empty() {
+                name
+            } else if !default.is_empty() {
+                default
+            } else {
+                crate::t!("thread.default_name").to_string()
+            };
             let thread_name = name.clone();
             self.action(ActionRequest::CreateThread { channel, msg, name }, cx, move |a, r, cx| match r {
                 Ok(ActionReply::Channel(id)) => {
@@ -222,15 +228,8 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                 .child(icon("close", 20., t(idx::INTERACTIVE_ICON_DEFAULT)))
                 .on_click(cx.listener(|a, _: &ClickEvent, _, cx| a.close_create_thread(cx))),
         );
-    let label = |text: SharedString| {
-        div()
-            .mb(z(8.))
-            .text_size(z(16.))
-            .line_height(z(20.))
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(t(idx::TEXT_STRONG))
-            .child(text)
-    };
+    let label =
+        |text: SharedString| div().mb(z(8.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).child(text);
     let checkbox = div()
         .size(z(20.))
         .flex_none()
@@ -247,17 +246,11 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .mb(z(20.))
         .flex()
         .flex_col()
-        .child(
-            div()
-                .my(z(16.))
-                .size(z(64.))
-                .rounded_full()
-                .bg(t(idx::BACKGROUND_MOD_STRONG))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(icon("chat/thread", 32., t(idx::ICON_SUBTLE))),
-        )
+        .child(div().my(z(16.)).size(z(64.)).rounded_full().bg(t(idx::BACKGROUND_MOD_STRONG)).flex().items_center().justify_center().child(icon(
+            "chat/thread",
+            32.,
+            t(idx::ICON_SUBTLE),
+        )))
         .child(
             div()
                 .flex()
@@ -278,31 +271,33 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                             .child(Input::new(&name).appearance(false).bordered(false)),
                     ),
                 )
-                .when(source.is_none(), |d| d.child(
-                    div().flex().flex_col().child(label(crate::t!("thread.private"))).child(
-                        div()
-                            .id("create-thread-private")
-                            .flex()
-                            .gap(z(12.))
-                            .cursor_pointer()
-                            .child(checkbox)
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .text_size(z(16.))
-                                    .line_height(z(20.))
-                                    .text_color(t(idx::TEXT_STRONG))
-                                    .child(crate::t!("thread.private_hint")),
-                            )
-                            .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
-                                if let Some(s) = cx.global_mut::<Slot>().0.as_mut() {
-                                    s.private = !s.private;
-                                }
-                                cx.notify();
-                            })),
-                    ),
-                )),
+                .when(source.is_none(), |d| {
+                    d.child(
+                        div().flex().flex_col().child(label(crate::t!("thread.private"))).child(
+                            div()
+                                .id("create-thread-private")
+                                .flex()
+                                .gap(z(12.))
+                                .cursor_pointer()
+                                .child(checkbox)
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_size(z(16.))
+                                        .line_height(z(20.))
+                                        .text_color(t(idx::TEXT_STRONG))
+                                        .child(crate::t!("thread.private_hint")),
+                                )
+                                .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
+                                    if let Some(s) = cx.global_mut::<Slot>().0.as_mut() {
+                                        s.private = !s.private;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                    )
+                }),
         );
     let composer = div()
         .flex_none()

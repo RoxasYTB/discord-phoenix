@@ -117,10 +117,7 @@ fn message_full() {
 
 #[test]
 fn message_unknown_type_and_int_nonce() {
-    let m: Message = serde_json::from_str(
-        r#"{"id":"1","channel_id":"2","type":250,"nonce":42,"author":{"id":"3","username":"x"},"content":null}"#,
-    )
-    .unwrap();
+    let m: Message = serde_json::from_str(r#"{"id":"1","channel_id":"2","type":250,"nonce":42,"author":{"id":"3","username":"x"},"content":null}"#).unwrap();
     assert_eq!(m.kind, MessageType::Unknown(250));
     assert_eq!(m.nonce, Some(Nonce::Int(42)));
     assert_eq!(m.content, "");
@@ -141,10 +138,7 @@ fn reaction_local_apply() {
 
 #[test]
 fn member_list_update() {
-    let GatewayEvent::GuildMemberListUpdate(l) = parse_dispatch("GUILD_MEMBER_LIST_UPDATE", &fixture("member_list_update.json"))
-    else {
-        panic!()
-    };
+    let GatewayEvent::GuildMemberListUpdate(l) = parse_dispatch("GUILD_MEMBER_LIST_UPDATE", &fixture("member_list_update.json")) else { panic!() };
     assert_eq!(l.online_count, 210);
     assert_eq!(l.ops.len(), 4);
     let MemberListOp::Sync { range, items } = &l.ops[0] else { panic!() };
@@ -158,8 +152,7 @@ fn member_list_update() {
 
 #[test]
 fn voice_events() {
-    let GatewayEvent::VoiceServerUpdate(v) =
-        parse_dispatch("VOICE_SERVER_UPDATE", r#"{"token":"t0k","guild_id":"1","endpoint":"c-cdg07.discord.media:443"}"#)
+    let GatewayEvent::VoiceServerUpdate(v) = parse_dispatch("VOICE_SERVER_UPDATE", r#"{"token":"t0k","guild_id":"1","endpoint":"c-cdg07.discord.media:443"}"#)
     else {
         panic!()
     };

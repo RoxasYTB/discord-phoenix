@@ -1,17 +1,17 @@
-pub mod dsp;
-#[cfg(feature = "opus")]
-pub mod mixer;
 #[cfg(feature = "audio")]
 pub mod device;
+pub mod dsp;
+#[cfg(feature = "audio")]
+pub mod effects;
+#[cfg(feature = "opus")]
+pub mod mixer;
+pub mod ogg;
+#[cfg(feature = "audio")]
+pub mod ogg_opus;
 #[cfg(feature = "audio")]
 pub mod pulse;
 #[cfg(feature = "audio")]
-pub mod effects;
-pub mod ogg;
-#[cfg(feature = "audio")]
 pub mod voice_message;
-#[cfg(feature = "audio")]
-pub mod ogg_opus;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};

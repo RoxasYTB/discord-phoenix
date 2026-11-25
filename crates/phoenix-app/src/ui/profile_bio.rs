@@ -1,8 +1,8 @@
-use gpui::{div, prelude::*, Div, Hsla, InteractiveText, SharedString, StyledText, TextRun};
+use gpui::{Div, Hsla, InteractiveText, SharedString, StyledText, TextRun, div, prelude::*};
 
 use crate::{
-    markdown::{parse_inline, NoResolve},
-    richtext::{rich_inline, ClickTarget, RichText},
+    markdown::{NoResolve, parse_inline},
+    richtext::{ClickTarget, RichText, rich_inline},
     theme::{c, generated::idx, tok, z},
 };
 
@@ -90,7 +90,13 @@ fn line_el(id: u64, t: &RichText, wrap: bool) -> Div {
             row = push(row, last..r.start, &mut k);
         }
         row = row.child(
-            div().flex_none().ml(z(1.4)).mr(z(0.7)).size(z(size)).overflow_hidden().child(crate::media::emoji::emoji_element(token, size * crate::theme::zoom())),
+            div()
+                .flex_none()
+                .ml(z(1.4))
+                .mr(z(0.7))
+                .size(z(size))
+                .overflow_hidden()
+                .child(crate::media::emoji::emoji_element(token, size * crate::theme::zoom())),
         );
         last = r.end;
     }
@@ -132,11 +138,7 @@ pub fn bio(bio: &str, clamp: bool, color: Hsla) -> Div {
     if lines.len() == 1 || !clamp {
         for (n, l) in lines.iter().enumerate() {
             let t = line_rich(l, color, false);
-            let el = if t.emoji.is_empty() {
-                div().child(text_el(id ^ n as u64, &t, 0..t.text.len()))
-            } else {
-                line_el(id ^ n as u64, &t, true)
-            };
+            let el = if t.emoji.is_empty() { div().child(text_el(id ^ n as u64, &t, 0..t.text.len())) } else { line_el(id ^ n as u64, &t, true) };
             col = col.child(if clamp { el.line_clamp(3).max_h(z(54.)).overflow_hidden() } else { el });
         }
         return col;

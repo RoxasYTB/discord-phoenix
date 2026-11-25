@@ -3,8 +3,8 @@ use std::{collections::HashSet, ops::Range};
 pub const HIGHLIGHT_RGBA: u32 = 0xfdb8334d;
 
 const STOP: [&str; 33] = [
-    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such",
-    "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with",
+    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the",
+    "their", "then", "there", "these", "they", "this", "to", "was", "will", "with",
 ];
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -183,9 +183,7 @@ pub fn stem(word: &str) -> String {
             w.truncate(w.len() - s.len());
             if ends(&w, "at") || ends(&w, "bl") || ends(&w, "iz") {
                 w.push(b'e');
-            } else if w.len() >= 2
-                && w[w.len() - 1] == w[w.len() - 2]
-                && matches!(w[w.len() - 1], b'b' | b'd' | b'f' | b'g' | b'm' | b'n' | b'p' | b'r' | b't')
+            } else if w.len() >= 2 && w[w.len() - 1] == w[w.len() - 2] && matches!(w[w.len() - 1], b'b' | b'd' | b'f' | b'g' | b'm' | b'n' | b'p' | b'r' | b't')
             {
                 w.pop();
             } else if r1 >= w.len() && short_syllable_at(&w, w.len()) {
@@ -237,17 +235,8 @@ pub fn stem(word: &str) -> String {
             }
         }
     }
-    const STEP3: [(&str, &str); 9] = [
-        ("ational", "ate"),
-        ("tional", "tion"),
-        ("alize", "al"),
-        ("icate", "ic"),
-        ("iciti", "ic"),
-        ("ative", ""),
-        ("ical", "ic"),
-        ("ness", ""),
-        ("ful", ""),
-    ];
+    const STEP3: [(&str, &str); 9] =
+        [("ational", "ate"), ("tional", "tion"), ("alize", "al"), ("icate", "ic"), ("iciti", "ic"), ("ative", ""), ("ical", "ic"), ("ness", ""), ("ful", "")];
     if let Some(&(s, with)) = STEP3.iter().filter(|(s, _)| ends(&w, s)).max_by_key(|(s, _)| s.len()) {
         let at = w.len() - s.len();
         if at >= r1 && (s != "ative" || at >= r2) {

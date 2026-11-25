@@ -3,7 +3,11 @@ use gpui::{AnyElement, App, FontWeight, IntoElement, ParentElement, SharedString
 use crate::{
     media,
     model::Attachment,
-    theme::{FONT_MONO, c, generated::{global, idx}, tok, z},
+    theme::{
+        FONT_MONO, c,
+        generated::{global, idx},
+        tok, z,
+    },
 };
 
 pub fn loadable(url: &str) -> bool {
@@ -122,21 +126,15 @@ fn control_icon(id: String, name: &str) -> gpui::Stateful<gpui::Div> {
 }
 
 fn track(progress: f32) -> gpui::Div {
-    div()
-        .flex_1()
-        .h(z(24.))
-        .mx(z(7.))
-        .flex()
-        .items_center()
-        .child(
-            div()
-                .relative()
-                .w_full()
-                .h(z(6.))
-                .rounded(z(3.))
-                .bg(c(tok(idx::PRIMARY_300)).opacity(0.3))
-                .child(div().absolute().top_0().left_0().h_full().w(gpui::relative(progress)).bg(tk(idx::BRAND_500))),
-        )
+    div().flex_1().h(z(24.)).mx(z(7.)).flex().items_center().child(
+        div()
+            .relative()
+            .w_full()
+            .h(z(6.))
+            .rounded(z(3.))
+            .bg(c(tok(idx::PRIMARY_300)).opacity(0.3))
+            .child(div().absolute().top_0().left_0().h_full().w(gpui::relative(progress)).bg(tk(idx::BRAND_500))),
+    )
 }
 
 fn duration_label() -> gpui::Div {
@@ -241,13 +239,13 @@ pub fn video_card(a: &Attachment, (w, h): (f32, f32), _cx: &App) -> AnyElement {
         .cursor_pointer()
         .child(img(poster).size_full().object_fit(gpui::ObjectFit::Cover))
         .child(
-            div().absolute().inset_0().flex().items_center().justify_center().child(
-                div()
-                    .p(z(12.))
-                    .rounded_full()
-                    .bg(c(tok(idx::OPACITY_BLACK_60)))
-                    .child(named_icon("play", 24., gpui::white())),
-            ),
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(div().p(z(12.)).rounded_full().bg(c(tok(idx::OPACITY_BLACK_60))).child(named_icon("play", 24., gpui::white()))),
         )
         .child(
             div()
@@ -312,11 +310,7 @@ pub fn video_embed_actions(url: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-pub fn upload_progress_card(
-    app: &crate::app::PhoenixApp,
-    entity: &gpui::Entity<crate::app::PhoenixApp>,
-    msg: &crate::model::Message,
-) -> Option<AnyElement> {
+pub fn upload_progress_card(app: &crate::app::PhoenixApp, entity: &gpui::Entity<crate::app::PhoenixApp>, msg: &crate::model::Message) -> Option<AnyElement> {
     if msg.send_state != crate::model::SendState::Sending {
         return None;
     }

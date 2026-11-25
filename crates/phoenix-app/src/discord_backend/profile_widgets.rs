@@ -18,11 +18,7 @@ impl DiscordBackend {
             if apps.is_empty() {
                 return Ok(Vec::new());
             }
-            let ident = s
-                .rest
-                .request_json(Method::GET, &format!("/users/{uid}/application-identities?with_profiles=true"), None)
-                .await
-                .unwrap_or(Value::Null);
+            let ident = s.rest.request_json(Method::GET, &format!("/users/{uid}/application-identities?with_profiles=true"), None).await.unwrap_or(Value::Null);
             let mut out = Vec::new();
             for app in apps {
                 let Ok(cfg) = s.rest.request_json(Method::GET, &format!("/applications/{app}/widget-configs"), None).await else {
@@ -41,11 +37,7 @@ impl DiscordBackend {
 
     pub(super) fn owned_collectibles_impl(&self) -> BoxFuture<Vec<crate::ui::settings::collectibles::Collectible>> {
         self.with_session(move |_, s| async move {
-            let v = s
-                .rest
-                .request_json(Method::GET, "/users/@me/collectibles-purchases?variants_return_style=2", None)
-                .await
-                .map_err(api_err)?;
+            let v = s.rest.request_json(Method::GET, "/users/@me/collectibles-purchases?variants_return_style=2", None).await.map_err(api_err)?;
             Ok(crate::ui::settings::collectibles::parse_purchases(&v))
         })
     }
@@ -53,11 +45,7 @@ impl DiscordBackend {
     pub(super) fn recent_activity_impl(&self, user: Id) -> BoxFuture<Vec<crate::ui::settings::profile_activity::RecentGame>> {
         use crate::ui::settings::profile_activity as pa;
         self.with_session(move |_, s| async move {
-            let v = s
-                .rest
-                .request_json(Method::GET, &format!("/content-inventory/users/{}/outbox", user.0), None)
-                .await
-                .map_err(api_err)?;
+            let v = s.rest.request_json(Method::GET, &format!("/content-inventory/users/{}/outbox", user.0), None).await.map_err(api_err)?;
             let mut games = pa::parse_outbox(&v);
             let mut ids: Vec<String> = games.iter().filter(|g| g.app_id != 0).map(|g| g.app_id.to_string()).collect();
             ids.dedup();

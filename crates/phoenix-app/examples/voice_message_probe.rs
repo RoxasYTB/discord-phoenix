@@ -33,10 +33,8 @@ fn main() -> anyhow::Result<()> {
     }
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     rt.block_on(async move {
-        let token = tokio::task::spawn_blocking(|| KeyringStore.load())
-            .await?
-            .map_err(anyhow::Error::msg)?
-            .ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
+        let token =
+            tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
         let rest = RestClient::new(token.expose(), ClientProperties::linux_desktop());
         let (channel, expect) = SANDBOX;
         let ch = rest.get_channel(Snowflake(channel)).await?;
@@ -72,7 +70,14 @@ fn main() -> anyhow::Result<()> {
         let m = rest.send_message(Snowflake(channel), msg).await?;
         println!("voice message {} flags {}", m.id, m.flags);
         for a in &m.attachments {
-            println!("  {} {} bytes {:?} duration {:?} waveform {}", a.filename, a.size, a.content_type, a.duration_secs, a.waveform.as_deref().map_or(0, str::len));
+            println!(
+                "  {} {} bytes {:?} duration {:?} waveform {}",
+                a.filename,
+                a.size,
+                a.content_type,
+                a.duration_secs,
+                a.waveform.as_deref().map_or(0, str::len)
+            );
         }
         anyhow::Ok(())
     })

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use std::sync::{Mutex, MutexGuard};
 use phoenix_api::{Cache, gateway::GatewayEvent, models as api};
 use serde_json::Value;
+use std::sync::{Mutex, MutexGuard};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct PinMark {
@@ -65,10 +65,7 @@ fn set_last(c: u64, last: i64) {
 
 pub fn on_gateway(ev: &GatewayEvent) {
     match ev {
-        GatewayEvent::ChannelCreate(c)
-        | GatewayEvent::ChannelUpdate(c)
-        | GatewayEvent::ThreadCreate(c)
-        | GatewayEvent::ThreadUpdate(c) => {
+        GatewayEvent::ChannelCreate(c) | GatewayEvent::ChannelUpdate(c) | GatewayEvent::ThreadCreate(c) | GatewayEvent::ThreadUpdate(c) => {
             if c.last_pin_timestamp.is_some() {
                 let (id, last) = channel_pin(c);
                 set_last(id, last);

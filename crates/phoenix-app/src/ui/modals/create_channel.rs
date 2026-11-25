@@ -129,12 +129,9 @@ fn members_step(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> An
         cx.notify();
     });
     let done = cx.listener(|a, _, _, cx| submit(a, cx));
-    let footer = div()
-        .w_full()
-        .flex()
-        .gap(z(8.))
-        .child(button("cc-back", crate::t!("cc.back"), BtnKind::Secondary).flex_1().on_click(back))
-        .child(button("cc-skip", if s.picked.is_empty() { crate::t!("cc.skip") } else { crate::t!("admin.create_channel") }, BtnKind::Primary).flex_1().on_click(done));
+    let footer = div().w_full().flex().gap(z(8.)).child(button("cc-back", crate::t!("cc.back"), BtnKind::Secondary).flex_1().on_click(back)).child(
+        button("cc-skip", if s.picked.is_empty() { crate::t!("cc.skip") } else { crate::t!("admin.create_channel") }, BtnKind::Primary).flex_1().on_click(done),
+    );
     card(480., crate::t!("cs.add_members"), None, body, Some(footer.into_any_element()), cx)
 }
 
@@ -181,7 +178,13 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                     .flex()
                     .items_center()
                     .text_size(z(16.))
-                    .when(!cat, |d| d.child(div().size(z(30.)).flex().items_center().justify_center().child(icon(private_icon(s.kind, s.private), 20., c(tok(idx::TEXT_DEFAULT))))))
+                    .when(!cat, |d| {
+                        d.child(div().size(z(30.)).flex().items_center().justify_center().child(icon(
+                            private_icon(s.kind, s.private),
+                            20.,
+                            c(tok(idx::TEXT_DEFAULT)),
+                        )))
+                    })
                     .child(div().flex_1().min_w_0().when(cat, |d| d.pl(z(8.))).child(Input::new(i).appearance(false).bordered(false))),
             ),
         );
@@ -206,7 +209,14 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                     .flex()
                     .flex_col()
                     .gap(z(4.))
-                    .child(div().flex().items_center().gap(z(4.)).child(icon("lock", 16., c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))).child(field_label(crate::t!(if cat { "admin.private_category" } else { "admin.private_channel" }))))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(z(4.))
+                            .child(icon("lock", 16., c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
+                            .child(field_label(crate::t!(if cat { "admin.private_category" } else { "admin.private_channel" }))),
+                    )
                     .child(text(crate::t!(if cat { "admin.private_category_desc" } else { "admin.private_channel_desc" }), 14., 18., idx::TEXT_SUBTLE)),
             )
             .child(switch("private-switch", private)),
@@ -224,7 +234,14 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                         .flex()
                         .flex_col()
                         .gap(z(4.))
-                        .child(div().flex().items_center().gap(z(4.)).child(icon("settings/globe", 16., c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))).child(field_label(crate::t!("cc.discoverable"))))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(z(4.))
+                                .child(icon("settings/globe", 16., c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
+                                .child(field_label(crate::t!("cc.discoverable"))),
+                        )
                         .child(text(crate::t!("cc.discoverable_desc"), 14., 18., idx::TEXT_SUBTLE)),
                 )
                 .child(text(crate::t!("cc.none"), 16., 20., idx::TEXT_MUTED)),
@@ -252,11 +269,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
             submit(a, cx);
         }
     });
-    let label = if next {
-        crate::t!("cc.next")
-    } else {
-        crate::t!(if cat { "admin.create_category" } else { "admin.create_channel" })
-    };
+    let label = if next { crate::t!("cc.next") } else { crate::t!(if cat { "admin.create_category" } else { "admin.create_channel" }) };
     let footer = div()
         .w_full()
         .flex()

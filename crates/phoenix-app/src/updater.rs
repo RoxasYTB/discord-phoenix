@@ -96,22 +96,20 @@ impl SemVer {
 
 impl Ord for SemVer {
     fn cmp(&self, other: &Self) -> Ordering {
-        (self.major, self.minor, self.patch)
-            .cmp(&(other.major, other.minor, other.patch))
-            .then_with(|| match (&self.pre, &other.pre) {
-                (None, None) => Ordering::Equal,
-                (None, Some(_)) => Ordering::Greater,
-                (Some(_), None) => Ordering::Less,
-                (Some(a), Some(b)) => {
-                    for (x, y) in a.iter().zip(b.iter()) {
-                        let c = x.cmp(y);
-                        if c != Ordering::Equal {
-                            return c;
-                        }
+        (self.major, self.minor, self.patch).cmp(&(other.major, other.minor, other.patch)).then_with(|| match (&self.pre, &other.pre) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(a), Some(b)) => {
+                for (x, y) in a.iter().zip(b.iter()) {
+                    let c = x.cmp(y);
+                    if c != Ordering::Equal {
+                        return c;
                     }
-                    a.len().cmp(&b.len())
                 }
-            })
+                a.len().cmp(&b.len())
+            }
+        })
     }
 }
 
@@ -197,10 +195,7 @@ pub fn select_asset(assets: &[ReleaseAsset], platform: Platform) -> Option<Relea
 }
 
 pub fn find_sha256sums(assets: &[ReleaseAsset]) -> Option<String> {
-    assets
-        .iter()
-        .find(|a| a.name.eq_ignore_ascii_case("SHA256SUMS.txt") || a.name.eq_ignore_ascii_case("SHA256SUMS"))
-        .map(|a| a.download_url.clone())
+    assets.iter().find(|a| a.name.eq_ignore_ascii_case("SHA256SUMS.txt") || a.name.eq_ignore_ascii_case("SHA256SUMS")).map(|a| a.download_url.clone())
 }
 
 pub fn parse_sha256sums(text: &str, filename: &str) -> Option<String> {
@@ -279,16 +274,7 @@ pub fn parse_releases_json(json: &str, current: &SemVer, include_prerelease: boo
         let body = item.get("body").and_then(Value::as_str).unwrap_or_default().to_owned();
         let html_url = item.get("html_url").and_then(Value::as_str).unwrap_or(RELEASES_PAGE_URL).to_owned();
         let published_at = item.get("published_at").and_then(Value::as_str).unwrap_or_default().to_owned();
-        let info = ReleaseInfo {
-            tag: tag.to_owned(),
-            name,
-            body,
-            html_url,
-            prerelease: is_pre,
-            published_at,
-            asset,
-            sha256sums_url,
-        };
+        let info = ReleaseInfo { tag: tag.to_owned(), name, body, html_url, prerelease: is_pre, published_at, asset, sha256sums_url };
         if best.as_ref().is_none_or(|(b, _)| ver > *b) {
             best = Some((ver, info));
         }
@@ -399,12 +385,7 @@ pub fn check_now(include_beta: bool, on_change: Arc<dyn Fn() + Send + Sync>) {
         };
         let res = rt.block_on(async move {
             let client = http_client()?;
-            let resp = client
-                .get(RELEASES_API_URL)
-                .header("Accept", "application/vnd.github+json")
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
+            let resp = client.get(RELEASES_API_URL).header("Accept", "application/vnd.github+json").send().await.map_err(|e| e.to_string())?;
             if !resp.status().is_success() {
                 return Err(format!("HTTP {}", resp.status().as_u16()));
             }
@@ -719,10 +700,7 @@ mod tests {
             "# checksums\n{digest}  dist/discord-phoenix-0.2.0-x86_64.AppImage\n0000000000000000000000000000000000000000000000000000000000000000 *other.zip\n"
         );
         assert_eq!(parse_sha256sums(&sums, "discord-phoenix-0.2.0-x86_64.AppImage").as_deref(), Some(digest.as_str()));
-        assert_eq!(
-            parse_sha256sums(&sums, "other.zip").as_deref(),
-            Some("0000000000000000000000000000000000000000000000000000000000000000")
-        );
+        assert_eq!(parse_sha256sums(&sums, "other.zip").as_deref(), Some("0000000000000000000000000000000000000000000000000000000000000000"));
         assert!(parse_sha256sums(&sums, "missing.deb").is_none());
     }
 

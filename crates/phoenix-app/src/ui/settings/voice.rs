@@ -6,9 +6,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Bounds, Context, DispatchPhase, Div, ElementId, FontWeight, IntoElement, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, SharedString, Stateful, Styled, canvas, deferred, div, prelude::*,
-    relative,
+    AnyElement, Bounds, Context, DispatchPhase, Div, ElementId, FontWeight, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement, Pixels, SharedString, Stateful, Styled, canvas, deferred, div, prelude::*, relative,
 };
 use phoenix_voice::audio::device::MicTest;
 
@@ -48,42 +47,23 @@ fn h1(t: SharedString) -> Div {
     crate::ui::controls::section_title(t)
 }
 
-
 fn h5(t: impl Into<SharedString>) -> Div {
-    div()
-        .pb(z(8.))
-        .text_size(z(16.))
-        .line_height(z(20.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(c(tok(idx::TEXT_STRONG)))
-        .child(t.into())
+    div().pb(z(8.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(t.into())
 }
-
 
 fn note(t: impl Into<SharedString>) -> Div {
     div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(t.into())
 }
 
-
 fn divider() -> Div {
     div().my(z(50.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))
 }
-
 
 fn knob(id: ElementId, on: bool, disabled: bool) -> gpui::Stateful<Div> {
     crate::ui::controls::switch(id, on).when(disabled, |d| d.opacity(0.5))
 }
 
-
-fn switch_row(
-    id: &'static str,
-    title: SharedString,
-    desc: SharedString,
-    on: bool,
-    disabled: bool,
-    f: impl Fn(&mut VoicePrefs) + 'static,
-    cx: &mut Cx,
-) -> Div {
+fn switch_row(id: &'static str, title: SharedString, desc: SharedString, on: bool, disabled: bool, f: impl Fn(&mut VoicePrefs) + 'static, cx: &mut Cx) -> Div {
     div().child(
         div()
             .id(eid(format!("vs-switch-{id}")))
@@ -129,14 +109,7 @@ fn frac_at(id: &'static str, x: Pixels) -> Option<f32> {
     })
 }
 
-pub(crate) fn slider(
-    id: &'static str,
-    frac: f32,
-    bubble: SharedString,
-    track: Option<(u32, u32)>,
-    on_change: OnSlide,
-    cx: &mut Cx,
-) -> Stateful<Div> {
+pub(crate) fn slider(id: &'static str, frac: f32, bubble: SharedString, track: Option<(u32, u32)>, on_change: OnSlide, cx: &mut Cx) -> Stateful<Div> {
     let frac = frac.clamp(0., 1.);
     let dragging = DRAG.with(Cell::get) == Some(id);
     let weak = cx.entity().downgrade();
@@ -190,15 +163,7 @@ pub(crate) fn slider(
         .cursor_pointer()
         .child(probe)
         .child(
-            div()
-                .absolute()
-                .top(z(10.))
-                .left_0()
-                .w_full()
-                .h(z(4.))
-                .rounded(z(4.))
-                .bg(c(hi))
-                .child(div().h_full().w(relative(frac)).rounded(z(4.)).bg(c(lo))),
+            div().absolute().top(z(10.)).left_0().w_full().h(z(4.)).rounded(z(4.)).bg(c(hi)).child(div().h_full().w(relative(frac)).rounded(z(4.)).bg(c(lo))),
         )
         .child(
             div().absolute().top(z(4.)).left(relative(frac)).w(z(0.)).flex().justify_center().child(
@@ -245,13 +210,7 @@ pub(crate) fn slider(
         )
 }
 
-fn select(
-    id: &'static str,
-    current: Option<String>,
-    options: Vec<String>,
-    f: impl Fn(&mut VoicePrefs, Option<String>) + 'static,
-    cx: &mut Cx,
-) -> Div {
+fn select(id: &'static str, current: Option<String>, options: Vec<String>, f: impl Fn(&mut VoicePrefs, Option<String>) + 'static, cx: &mut Cx) -> Div {
     let open = OPEN_SELECT.with(Cell::get) == Some(id);
     let default_label: SharedString = match options.first() {
         Some(d) => format!("{}: {d}", crate::t!("voice.system_default")).into(),
@@ -369,12 +328,19 @@ fn meter(level_db: f32, active: bool) -> Div {
                 for i in 0..n {
                     let color = if i < lit {
                         let t = (i as f32 + 0.5) * cell / width;
-                        gpui::Hsla::from(gpui::Rgba { r: from.r + (to.r - from.r) * t, g: from.g + (to.g - from.g) * t, b: from.b + (to.b - from.b) * t, a: 1. })
+                        gpui::Hsla::from(gpui::Rgba {
+                            r: from.r + (to.r - from.r) * t,
+                            g: from.g + (to.g - from.g) * t,
+                            b: from.b + (to.b - from.b) * t,
+                            a: 1.,
+                        })
                     } else {
                         c(tok(idx::GRADIENT_PROGRESS_PILL_BACKGROUND))
                     };
                     let o = gpui::point(b.origin.x + gpui::px(i as f32 * cell + inset), b.origin.y + gpui::px(inset));
-                    window.paint_quad(gpui::fill(gpui::Bounds::new(o, gpui::size(gpui::px(cell - 2. * inset), gpui::px(h - 2. * inset))), color).corner_radii(z(2.)));
+                    window.paint_quad(
+                        gpui::fill(gpui::Bounds::new(o, gpui::size(gpui::px(cell - 2. * inset), gpui::px(h - 2. * inset))), color).corner_radii(z(2.)),
+                    );
                 }
             },
         )
@@ -464,13 +430,7 @@ fn ensure_devices(cx: &mut Cx) {
     .detach();
 }
 
-fn pct_slider(
-    id: &'static str,
-    value: u32,
-    max: u32,
-    f: impl Fn(&mut VoicePrefs, u32) + 'static,
-    cx: &mut Cx,
-) -> Stateful<Div> {
+fn pct_slider(id: &'static str, value: u32, max: u32, f: impl Fn(&mut VoicePrefs, u32) + 'static, cx: &mut Cx) -> Stateful<Div> {
     let f = Rc::new(f);
     slider(
         id,
@@ -531,7 +491,13 @@ fn keybind(p: &VoicePrefs, cx: &mut Cx) -> Div {
                 .child(
                     button(
                         "vs-record",
-                        if recording { crate::t!("voice.stop_recording") } else if p.ptt_key.is_some() { crate::t!("voice.edit_keybind") } else { crate::t!("voice.record_keybind") },
+                        if recording {
+                            crate::t!("voice.stop_recording")
+                        } else if p.ptt_key.is_some() {
+                            crate::t!("voice.edit_keybind")
+                        } else {
+                            crate::t!("voice.record_keybind")
+                        },
                         if recording { 0xDA373C } else { 0x4E5058 },
                         if recording { 0xA12D2F } else { 0x6D6F78 },
                     )
@@ -559,12 +525,7 @@ fn keybind(p: &VoicePrefs, cx: &mut Cx) -> Div {
             )
             .mt(z(8.))
             .into_any_element(),
-            div()
-                .mt(z(8.))
-                .text_size(z(12.))
-                .text_color(c(Palette::TEXT_MUTED))
-                .child(SharedString::from(format!("{delay}ms")))
-                .into_any_element(),
+            div().mt(z(8.)).text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)).child(SharedString::from(format!("{delay}ms"))).into_any_element(),
         ]))
 }
 
@@ -597,16 +558,7 @@ fn sensitivity(p: &VoicePrefs, cx: &mut Cx) -> Div {
                 }),
                 cx,
             ))
-            .child(
-                div()
-                    .absolute()
-                    .top(z(8.))
-                    .left(relative(lvl_frac))
-                    .right_0()
-                    .h(z(8.))
-                    .rounded_r(z(4.))
-                    .bg(gpui::black().opacity(0.45)),
-            )
+            .child(div().absolute().top(z(8.)).left(relative(lvl_frac)).right_0().h(z(8.)).rounded_r(z(4.)).bg(gpui::black().opacity(0.45)))
             .into_any_element()
     };
     div()
@@ -636,9 +588,7 @@ fn sensitivity(p: &VoicePrefs, cx: &mut Cx) -> Div {
                 })),
         )
         .child(bar)
-        .when(auto && level.is_none(), |d| {
-            d.child(div().mt(z(8.)).child(note(crate::t!("voice.level_hint"))))
-        })
+        .when(auto && level.is_none(), |d| d.child(div().mt(z(8.)).child(note(crate::t!("voice.level_hint")))))
 }
 
 fn mic_test(app: &PhoenixApp, cx: &mut Cx) -> Div {
@@ -692,11 +642,14 @@ pub fn render(app: &PhoenixApp, cx: &mut Cx) -> Div {
     let p = prefs().lock().clone();
     let (inputs, outputs) = DEVICES.with(|d| d.borrow().clone()).unwrap_or_default();
     div()
-        .on_mouse_down(MouseButton::Left, cx.listener(|_, _, _, cx| {
-            if OPEN_SELECT.with(|o| o.take()).is_some() {
-                cx.notify();
-            }
-        }))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|_, _, _, cx| {
+                if OPEN_SELECT.with(|o| o.take()).is_some() {
+                    cx.notify();
+                }
+            }),
+        )
         .child(h1(crate::t!("sp.vo.t1")))
         .child(
             div()
@@ -827,8 +780,24 @@ fn profile_row(_: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     if p.audio_profile == 2 {
         col = col
             .child(div().mt(z(24.)).child(sensitivity(&p, cx)))
-            .child(div().mt(z(16.)).child(switch_row("echo", crate::t!("voice.echo"), crate::t!("voice.echo_note"), p.echo_cancellation, false, |p| p.echo_cancellation = !p.echo_cancellation, cx)))
-            .child(switch_row("noise", crate::t!("voice.noise"), crate::t!("voice.noise_note"), p.noise_suppression, false, |p| p.noise_suppression = !p.noise_suppression, cx))
+            .child(div().mt(z(16.)).child(switch_row(
+                "echo",
+                crate::t!("voice.echo"),
+                crate::t!("voice.echo_note"),
+                p.echo_cancellation,
+                false,
+                |p| p.echo_cancellation = !p.echo_cancellation,
+                cx,
+            )))
+            .child(switch_row(
+                "noise",
+                crate::t!("voice.noise"),
+                crate::t!("voice.noise_note"),
+                p.noise_suppression,
+                false,
+                |p| p.noise_suppression = !p.noise_suppression,
+                cx,
+            ))
             .child(switch_row("agc", crate::t!("voice.agc"), crate::t!("voice.agc_note"), p.agc, false, |p| p.agc = !p.agc, cx));
     }
     col.into_any_element()
@@ -897,8 +866,7 @@ fn cameras() -> Vec<String> {
 fn camera_select(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     thread_local!(static CAMS: RefCell<Option<Vec<String>>> = const { RefCell::new(None) });
     let cams = CAMS.with(|c| c.borrow_mut().get_or_insert_with(cameras).clone());
-    let opts: Vec<SharedString> =
-        if cams.is_empty() { vec![crate::t!("voice.no_video")] } else { cams.into_iter().map(SharedString::from).collect() };
+    let opts: Vec<SharedString> = if cams.is_empty() { vec![crate::t!("voice.no_video")] } else { cams.into_iter().map(SharedString::from).collect() };
     let cur = app.settings.as_ref().and_then(|s| s.picks.get("vo-camera").copied()).unwrap_or(0).min(opts.len() - 1);
     let dd = super::pages::dropdown(
         app,
@@ -931,27 +899,20 @@ const PRESETS: &[(&str, Option<&str>, bool)] = &[
 const BLUR_IMG: &str = "https://cdn.discordapp.com/assets/content/9b1bb92a5685e3f1d67378826197687bb24f8cf1319a4ab2375fbc8a3fb7d0fe.png";
 
 fn new_badge() -> Div {
-    div()
-        .absolute()
-        .top(z(-3.))
-        .left(z(-6.))
-        .p(z(3.))
-        .rounded_full()
-        .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
-        .child(
-            div()
-                .h(z(16.))
-                .px(z(8.))
-                .rounded_full()
-                .bg(gpui::white())
-                .flex()
-                .items_center()
-                .text_size(z(12.))
-                .line_height(z(16.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(gpui::black())
-                .child(crate::t!("sp.vo.new")),
-        )
+    div().absolute().top(z(-3.)).left(z(-6.)).p(z(3.)).rounded_full().bg(c(tok(idx::BACKGROUND_BASE_LOWEST))).child(
+        div()
+            .h(z(16.))
+            .px(z(8.))
+            .rounded_full()
+            .bg(gpui::white())
+            .flex()
+            .items_center()
+            .text_size(z(12.))
+            .line_height(z(16.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(gpui::black())
+            .child(crate::t!("sp.vo.new")),
+    )
 }
 
 fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
@@ -982,9 +943,7 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                 }))
             })
             .child(inner.absolute().inset_0().rounded(z(4.)).overflow_hidden())
-            .when(cur == i, |d| {
-                d.child(div().absolute().top(z(-4.)).left(z(-4.)).w(z(170.)).h(z(102.)).rounded(z(4.)).border_2().border_color(c(0x5865F2)))
-            })
+            .when(cur == i, |d| d.child(div().absolute().top(z(-4.)).left(z(-4.)).w(z(170.)).h(z(102.)).rounded(z(4.)).border_2().border_color(c(0x5865F2))))
             .when(badge, |d| d.child(new_badge()))
     };
     let mut tiles: Vec<AnyElement> = Vec::new();
@@ -992,7 +951,10 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     tiles.push(
         tile(
             1,
-            div().bg(c(0x1E1F22)).child(gpui::img(BLUR_IMG).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover)).child(label("blur", crate::t!("sp.vo.bg_blur"))),
+            div()
+                .bg(c(0x1E1F22))
+                .child(gpui::img(BLUR_IMG).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
+                .child(label("blur", crate::t!("sp.vo.bg_blur"))),
             false,
             true,
             cx,
@@ -1026,9 +988,15 @@ fn backgrounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         let inner = match img {
             Some(u) => div().bg(c(0x1E1F22)).child(gpui::img(*u).size_full().object_fit(gpui::ObjectFit::Cover)),
             None => div().bg(c(0x1E1F22)).child(
-                div().absolute().top(z(4.)).right(z(4.)).size(z(16.)).flex().items_center().justify_center().child(
-                    gpui::svg().path(crate::icons::path("play")).size(z(12.)).text_color(gpui::white()),
-                ),
+                div()
+                    .absolute()
+                    .top(z(4.))
+                    .right(z(4.))
+                    .size(z(16.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(gpui::svg().path(crate::icons::path("play")).size(z(12.)).text_color(gpui::white())),
             ),
         };
         tiles.push(tile(i, inner, *badge, true, cx).into_any_element());

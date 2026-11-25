@@ -19,10 +19,7 @@ impl DiscordBackend {
                 for id in ids {
                     let Ok(v) = s.rest.request_json(Method::GET, &format!("/games/{id}"), None).await else { continue };
                     if std::env::var_os("PHX_DEBUG_GAMES").is_some() {
-                        let shape: Vec<String> = v
-                            .as_object()
-                            .map(|o| o.iter().map(|(k, x)| format!("{k}:{}", shape_of(x))).collect())
-                            .unwrap_or_default();
+                        let shape: Vec<String> = v.as_object().map(|o| o.iter().map(|(k, x)| format!("{k}:{}", shape_of(x))).collect()).unwrap_or_default();
                         eprintln!("game shape {shape:?}");
                     }
                     games.push(g::parse_game(id, &v));

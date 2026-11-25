@@ -156,13 +156,15 @@ fn range_error(o: &Value, v: f64) -> Option<String> {
     if !low && !high {
         return None;
     }
-    Some(match (min, max) {
-        (Some(a), Some(b)) => crate::t!("slash.err_num_range", min = num_text(a), max = num_text(b)),
-        (Some(a), None) => crate::t!("slash.err_num_min", min = num_text(a)),
-        (None, Some(b)) => crate::t!("slash.err_num_max", max = num_text(b)),
-        _ => unreachable!(),
-    }
-    .to_string())
+    Some(
+        match (min, max) {
+            (Some(a), Some(b)) => crate::t!("slash.err_num_range", min = num_text(a), max = num_text(b)),
+            (Some(a), None) => crate::t!("slash.err_num_min", min = num_text(a)),
+            (None, Some(b)) => crate::t!("slash.err_num_max", max = num_text(b)),
+            _ => unreachable!(),
+        }
+        .to_string(),
+    )
 }
 
 fn length_error(o: &Value, v: &str) -> Option<String> {
@@ -172,14 +174,16 @@ fn length_error(o: &Value, v: &str) -> Option<String> {
     if !min.is_some_and(|m| n < m) && !max.is_some_and(|m| n > m) {
         return None;
     }
-    Some(match (min, max) {
-        (Some(a), Some(b)) if a == b => crate::t!("slash.err_len_exact", n = a),
-        (Some(a), Some(b)) => crate::t!("slash.err_len_range", min = a, max = b),
-        (Some(a), None) => crate::t!("slash.err_len_min", min = a),
-        (None, Some(b)) => crate::t!("slash.err_len_max", max = b),
-        _ => unreachable!(),
-    }
-    .to_string())
+    Some(
+        match (min, max) {
+            (Some(a), Some(b)) if a == b => crate::t!("slash.err_len_exact", n = a),
+            (Some(a), Some(b)) => crate::t!("slash.err_len_range", min = a, max = b),
+            (Some(a), None) => crate::t!("slash.err_len_min", min = a),
+            (None, Some(b)) => crate::t!("slash.err_len_max", max = b),
+            _ => unreachable!(),
+        }
+        .to_string(),
+    )
 }
 
 fn choice_value(o: &Value, raw: &str) -> Option<Value> {
@@ -400,10 +404,13 @@ mod tests {
     #[test]
     fn flat_options() {
         let o = build_options(&schema(), "user:<@!42> reason:being very rude days:3").unwrap();
-        assert_eq!(o, json!([
+        assert_eq!(
+            o,
+            json!([
             {"type":6,"name":"user","value":"42"},
             {"type":3,"name":"reason","value":"being very rude"},
-            {"type":4,"name":"days","value":3}]));
+            {"type":4,"name":"days","value":3}])
+        );
         assert_eq!(build_options(&schema(), "<@7>").unwrap()[0]["value"], "7");
         assert!(build_options(&schema(), "reason:x").is_err());
         assert!(build_options(&schema(), "user:1 days:x").is_err());

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use gpui::{AppContext, InteractiveElement, Context, HeadlessAppContext, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb, size};
+use gpui::{AppContext, Context, HeadlessAppContext, InteractiveElement, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb, size};
 use phoenix_app::{assets::Assets, media::emoji};
 
 static PLAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);

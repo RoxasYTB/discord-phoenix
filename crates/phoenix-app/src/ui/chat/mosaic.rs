@@ -82,9 +82,7 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
                 }),
         )
         .when(spoiler, |d| d.child(div().absolute().inset_0().bg(ca(0x000000E6))))
-        .children(alt.map(|t| {
-            if video { super::alt_text::video_badge(alt_key, t, group.clone()) } else { super::alt_text::badge(alt_key, t) }
-        }))
+        .children(alt.map(|t| if video { super::alt_text::video_badge(alt_key, t, group.clone()) } else { super::alt_text::badge(alt_key, t) }))
         .when(video, |d| {
             d.child(
                 div().absolute().inset_0().flex().items_center().justify_center().child(
@@ -170,37 +168,44 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                 let k = Corners { tl: top, tr: top, bl: bottom, br: bottom };
                 ratio_box(row_aspect(its), 280.).child(cell(its[0], k, cx).absolute().inset_0()).into_any_element()
             }
-            Row::Two => {
-                ratio_box(2., 280.)
-                    .child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .flex()
-                            .flex_row()
-                            .gap(z(GAP))
-                            .child(cell(its[0], Corners { tl: top, bl: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full())
-                            .child(cell(its[1], Corners { tr: top, br: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full()),
-                    )
-                    .into_any_element()
-            }
-            Row::Three => ratio_box(row_aspect(&its[..1]) * 1.5, 350.)
-                .child(div().absolute().inset_0().flex().flex_row().gap(z(GAP)).child({
-                    let mut solo = cell(its[0], Corners { tl: true, bl: true, ..Default::default() }, cx).flex_basis(gpui::relative(0.)).min_w_0().h_full();
-                    solo.style().flex_grow = Some(2.);
-                    solo
-                })
+            Row::Two => ratio_box(2., 280.)
                 .child(
                     div()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
+                        .absolute()
+                        .inset_0()
                         .flex()
-                        .flex_col()
+                        .flex_row()
                         .gap(z(GAP))
-                        .child(cell(its[1], Corners { tr: true, ..Default::default() }, cx).w_full().flex_1().min_h_0())
-                        .child(cell(its[2], Corners { br: true, ..Default::default() }, cx).w_full().flex_1().min_h_0()),
-                ))
+                        .child(cell(its[0], Corners { tl: top, bl: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full())
+                        .child(cell(its[1], Corners { tr: top, br: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full()),
+                )
+                .into_any_element(),
+            Row::Three => ratio_box(row_aspect(&its[..1]) * 1.5, 350.)
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .flex_row()
+                        .gap(z(GAP))
+                        .child({
+                            let mut solo =
+                                cell(its[0], Corners { tl: true, bl: true, ..Default::default() }, cx).flex_basis(gpui::relative(0.)).min_w_0().h_full();
+                            solo.style().flex_grow = Some(2.);
+                            solo
+                        })
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .h_full()
+                                .flex()
+                                .flex_col()
+                                .gap(z(GAP))
+                                .child(cell(its[1], Corners { tr: true, ..Default::default() }, cx).w_full().flex_1().min_h_0())
+                                .child(cell(its[2], Corners { br: true, ..Default::default() }, cx).w_full().flex_1().min_h_0()),
+                        ),
+                )
                 .into_any_element(),
             Row::Four => div()
                 .w_full()

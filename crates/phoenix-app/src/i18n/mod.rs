@@ -86,11 +86,7 @@ pub fn decimal(n: f64, frac: usize) -> String {
 
 fn local_lookup(code: &str, key: &str) -> Option<&'static str> {
     let (en, fr) = local_tables();
-    if code == "fr" {
-        fr.get(key).or_else(|| en.get(key)).copied()
-    } else {
-        en.get(key).copied()
-    }
+    if code == "fr" { fr.get(key).or_else(|| en.get(key)).copied() } else { en.get(key).copied() }
 }
 
 fn fill(s: &str, args: &[(&str, &str)]) -> String {
@@ -212,11 +208,7 @@ mod tests {
     #[test]
     fn placeholders_match_between_locales() {
         let holes = |s: &str| {
-            let mut v: Vec<String> = s
-                .split('{')
-                .skip(1)
-                .filter_map(|p| p.split_once('}').map(|x| x.0.to_owned()))
-                .collect();
+            let mut v: Vec<String> = s.split('{').skip(1).filter_map(|p| p.split_once('}').map(|x| x.0.to_owned())).collect();
             v.sort();
             v
         };

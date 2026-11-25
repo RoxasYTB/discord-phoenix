@@ -11,9 +11,7 @@ fn main() -> anyhow::Result<()> {
     let _ = args.next();
 
     let text = gpui_platform::current_platform(true).text_system();
-    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
-        gpui_platform::current_headless_renderer()
-    });
+    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || gpui_platform::current_headless_renderer());
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -75,7 +73,9 @@ fn main() -> anyhow::Result<()> {
                         archived: true,
                         locked: false,
                     };
-                    app.parity.archived_threads.insert(ch, vec![post(1_250_000_000_000_000_000, "Weekend plans"), post(1_200_000_000_000_000_000, "Old bug report")]);
+                    app.parity
+                        .archived_threads
+                        .insert(ch, vec![post(1_250_000_000_000_000_000, "Weekend plans"), post(1_200_000_000_000_000_000, "Old bug report")]);
                     app.parity.threads_open = true;
                 }
                 cx.notify();

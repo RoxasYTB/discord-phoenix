@@ -121,11 +121,7 @@ pub fn parse_activities(list: &[Value]) -> Vec<Activity> {
 }
 
 pub fn summary(acts: &[Activity]) -> Option<SharedString> {
-    acts.iter()
-        .find(|a| a.kind == ActivityKind::Custom)
-        .or_else(|| acts.first())
-        .map(Activity::headline)
-        .filter(|t| !t.trim().is_empty())
+    acts.iter().find(|a| a.kind == ActivityKind::Custom).or_else(|| acts.first()).map(Activity::headline).filter(|t| !t.trim().is_empty())
 }
 
 pub fn status_str(p: Presence) -> &'static str {
@@ -158,9 +154,7 @@ pub fn list_rows<'a>(items: impl Iterator<Item = &'a Option<MemberListItem>>) ->
     for it in items {
         match it {
             None => rows.push(ListEntry::Loading),
-            Some(MemberListItem::Group { id, count }) => {
-                rows.push(ListEntry::Group { id: id.clone().into(), count: *count })
-            }
+            Some(MemberListItem::Group { id, count }) => rows.push(ListEntry::Group { id: id.clone().into(), count: *count }),
             Some(MemberListItem::Member(m)) => {
                 let Some(u) = &m.member.user else {
                     rows.push(ListEntry::Loading);
@@ -170,19 +164,22 @@ pub fn list_rows<'a>(items: impl Iterator<Item = &'a Option<MemberListItem>>) ->
                 let a = p.and_then(|p| p.get("activities")).and_then(Value::as_array).map(|a| parse_activities(a)).unwrap_or_default();
                 let status = p.and_then(|p| p.get("status")).and_then(Value::as_str).unwrap_or("offline");
                 let uid = Id(u.id.0);
-                rows.push(ListEntry::Member(Member {
-                    user: uid,
-                    roles: m.member.roles.iter().map(|r| Id(r.0)).collect(),
-                    presence: crate::discord_backend::convert::presence(status),
-                    activity: summary(&a),
-                    nick: None,
-                    avatar: None,
-                    decoration: None,
-                    nameplate: crate::discord_backend::convert::member_nameplate(&m.member),
-                    joined_at: m.member.joined_at.as_deref().and_then(iso_to_unix),
-                    rejoined: m.member.flags & 1 != 0,
-                    premium_since: m.member.premium_since.as_deref().and_then(iso_to_unix),
-                }, m.member.nick.clone().filter(|n| !n.is_empty()).map(Into::into)));
+                rows.push(ListEntry::Member(
+                    Member {
+                        user: uid,
+                        roles: m.member.roles.iter().map(|r| Id(r.0)).collect(),
+                        presence: crate::discord_backend::convert::presence(status),
+                        activity: summary(&a),
+                        nick: None,
+                        avatar: None,
+                        decoration: None,
+                        nameplate: crate::discord_backend::convert::member_nameplate(&m.member),
+                        joined_at: m.member.joined_at.as_deref().and_then(iso_to_unix),
+                        rejoined: m.member.flags & 1 != 0,
+                        premium_since: m.member.premium_since.as_deref().and_then(iso_to_unix),
+                    },
+                    m.member.nick.clone().filter(|n| !n.is_empty()).map(Into::into),
+                ));
                 acts.push((uid, a));
             }
         }
@@ -244,9 +241,11 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
         );
     }
     let ext = |h: &str| if h.starts_with("a_") { "gif" } else { "png" };
-    let guild_banner = p.guild_member_profile.as_ref().and_then(|g| Some((g.guild_id?, g.banner.clone()?))).map(|(g, h)| {
-        SharedString::from(format!("https://cdn.discordapp.com/guilds/{}/users/{}/banners/{h}.{}?size=600", g.0, u.id, ext(&h)))
-    });
+    let guild_banner = p
+        .guild_member_profile
+        .as_ref()
+        .and_then(|g| Some((g.guild_id?, g.banner.clone()?)))
+        .map(|(g, h)| SharedString::from(format!("https://cdn.discordapp.com/guilds/{}/users/{}/banners/{h}.{}?size=600", g.0, u.id, ext(&h))));
     let banner = guild_banner.or_else(|| {
         p.user_profile
             .as_ref()
@@ -254,15 +253,8 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
             .or_else(|| u.banner.clone())
             .map(|h| SharedString::from(format!("https://cdn.discordapp.com/banners/{}/{h}.{}?size=600", u.id, ext(&h))))
     });
-    let decoration = u
-        .avatar_decoration_data
-        .as_ref()
-        .and_then(crate::ui::avatar_deco::url);
-    let accent = p
-        .user_profile
-        .as_ref()
-        .and_then(|x| x.theme_colors.as_ref().and_then(|t| t.first().copied()).or(x.accent_color))
-        .or(u.accent_color);
+    let decoration = u.avatar_decoration_data.as_ref().and_then(crate::ui::avatar_deco::url);
+    let accent = p.user_profile.as_ref().and_then(|x| x.theme_colors.as_ref().and_then(|t| t.first().copied()).or(x.accent_color)).or(u.accent_color);
     let gm = p.guild_member.as_ref();
     let fx = [p.guild_member_profile.as_ref(), p.user_profile.as_ref()]
         .into_iter()

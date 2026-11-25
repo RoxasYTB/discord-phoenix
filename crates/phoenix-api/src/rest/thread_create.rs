@@ -29,12 +29,7 @@ pub fn standalone_thread_body(name: &str, kind: u8, auto_archive_minutes: u32) -
 
 impl RestClient {
     pub async fn create_standalone_thread(&self, channel: ChannelId, name: &str, kind: u8, auto_archive_minutes: u32) -> Result<Channel> {
-        self.call(
-            Method::POST,
-            &format!("/channels/{channel}/threads"),
-            Body::Json(standalone_thread_body(name, kind, auto_archive_minutes)),
-        )
-        .await
+        self.call(Method::POST, &format!("/channels/{channel}/threads"), Body::Json(standalone_thread_body(name, kind, auto_archive_minutes))).await
     }
 }
 

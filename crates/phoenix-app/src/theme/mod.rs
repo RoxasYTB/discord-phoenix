@@ -10,11 +10,7 @@ pub mod generated;
 use generated::idx;
 
 pub fn c(hex: u32) -> Hsla {
-    if is_token(hex) {
-        rgba(resolve(hex)).into()
-    } else {
-        rgb(hex).into()
-    }
+    if is_token(hex) { rgba(resolve(hex)).into() } else { rgb(hex).into() }
 }
 
 pub fn ca(hex_rgba: u32) -> Hsla {
@@ -22,11 +18,7 @@ pub fn ca(hex_rgba: u32) -> Hsla {
 }
 
 pub fn c_for(hex: u32, theme: AppTheme) -> Hsla {
-    if is_token(hex) {
-        rgba(resolve_for(hex, theme)).into()
-    } else {
-        rgb(hex).into()
-    }
+    if is_token(hex) { rgba(resolve_for(hex, theme)).into() } else { rgb(hex).into() }
 }
 
 #[allow(non_snake_case)]
@@ -180,16 +172,36 @@ pub fn density() -> Density {
 
 pub mod space {
     use super::density;
-    pub fn xxs() -> f32 { density().scale()[0] }
-    pub fn xs() -> f32 { density().scale()[1] }
-    pub fn sm() -> f32 { density().scale()[2] }
-    pub fn md() -> f32 { density().scale()[3] }
-    pub fn lg() -> f32 { density().scale()[4] }
-    pub fn xl() -> f32 { density().scale()[5] }
-    pub fn xxl() -> f32 { density().scale()[6] }
-    pub fn channels_name_lh() -> f32 { [20., 24., 28.][density() as usize] }
-    pub fn spine_left() -> f32 { [20., 24., 28.][density() as usize] }
-    pub fn category_before() -> f32 { if density() == super::Density::Compact { 8. } else { 16. } }
+    pub fn xxs() -> f32 {
+        density().scale()[0]
+    }
+    pub fn xs() -> f32 {
+        density().scale()[1]
+    }
+    pub fn sm() -> f32 {
+        density().scale()[2]
+    }
+    pub fn md() -> f32 {
+        density().scale()[3]
+    }
+    pub fn lg() -> f32 {
+        density().scale()[4]
+    }
+    pub fn xl() -> f32 {
+        density().scale()[5]
+    }
+    pub fn xxl() -> f32 {
+        density().scale()[6]
+    }
+    pub fn channels_name_lh() -> f32 {
+        [20., 24., 28.][density() as usize]
+    }
+    pub fn spine_left() -> f32 {
+        [20., 24., 28.][density() as usize]
+    }
+    pub fn category_before() -> f32 {
+        if density() == super::Density::Compact { 8. } else { 16. }
+    }
 }
 static STYLE_GEN: AtomicU32 = AtomicU32::new(0);
 
@@ -223,11 +235,7 @@ pub fn resolve(hex: u32) -> u32 {
 }
 
 pub fn resolve_for(hex: u32, theme: AppTheme) -> u32 {
-    if is_token(hex) {
-        generated::THEMES[theme_index(theme) as usize][(hex & 0xFFFF) as usize]
-    } else {
-        hex
-    }
+    if is_token(hex) { generated::THEMES[theme_index(theme) as usize][(hex & 0xFFFF) as usize] } else { hex }
 }
 
 pub fn active() -> AppTheme {

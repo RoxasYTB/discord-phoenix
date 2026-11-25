@@ -61,10 +61,8 @@ mod tests {
 
     #[test]
     fn top_sounds_rank_order() {
-        let t: TopSoundboardSounds = serde_json::from_str(
-            r#"{"items":[{"sound_id":"3","sound_rank":2,"selections":60},{"sound_id":"9","sound_rank":1,"selections":337}]}"#,
-        )
-        .unwrap();
+        let t: TopSoundboardSounds =
+            serde_json::from_str(r#"{"items":[{"sound_id":"3","sound_rank":2,"selections":60},{"sound_id":"9","sound_rank":1,"selections":337}]}"#).unwrap();
         assert_eq!(t.ranked(), vec![crate::models::Snowflake(9), crate::models::Snowflake(3)]);
     }
 }

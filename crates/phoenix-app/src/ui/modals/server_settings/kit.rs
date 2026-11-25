@@ -21,11 +21,7 @@ pub fn h2(t: impl Into<SharedString>) -> Div {
 }
 
 pub fn page_head(title: SharedString, desc: Option<SharedString>) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .child(h2(title))
-        .children(desc.map(|d| text(d, 14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT).mt(z(8.))))
+    div().flex().flex_col().child(h2(title)).children(desc.map(|d| text(d, 14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT).mt(z(8.))))
 }
 
 pub fn legend(title: SharedString, desc: Option<SharedString>) -> Div {
@@ -63,7 +59,14 @@ pub fn divider() -> Div {
     div().flex_none().h(z(1.)).w_full().bg(c(tok(idx::BORDER_STRONG)))
 }
 
-pub fn switch_field(id: &'static str, label: SharedString, desc: Option<SharedString>, on: bool, flip: impl Fn(&mut State) + 'static, cx: &mut Cx) -> AnyElement {
+pub fn switch_field(
+    id: &'static str,
+    label: SharedString,
+    desc: Option<SharedString>,
+    on: bool,
+    flip: impl Fn(&mut State) + 'static,
+    cx: &mut Cx,
+) -> AnyElement {
     div()
         .id(id)
         .flex()
@@ -95,9 +98,31 @@ pub fn select_box(id: impl Into<gpui::ElementId>, value: AnyElement, open: bool)
         .hover(|s| s.border_color(c(tok(idx::INPUT_BORDER_HOVER))))
         .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
         .cursor_pointer()
-        .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(value))
-        .child(gpui::svg().path(crate::icons::path(if open { "chevron-up" } else { "chevron" })).flex_none().mr(z(8.)).size(z(18.)).text_color(c(tok(idx::ICON_STRONG))))
-        .when(open, |d| d.child(div().absolute().top(z(-1.)).bottom(z(-1.)).left(z(-1.)).right(z(-1.)).rounded(z(8.)).border_2().border_color(c(tok(idx::INPUT_BORDER_ACTIVE)))))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(value),
+        )
+        .child(
+            gpui::svg()
+                .path(crate::icons::path(if open { "chevron-up" } else { "chevron" }))
+                .flex_none()
+                .mr(z(8.))
+                .size(z(18.))
+                .text_color(c(tok(idx::ICON_STRONG))),
+        )
+        .when(open, |d| {
+            d.child(
+                div().absolute().top(z(-1.)).bottom(z(-1.)).left(z(-1.)).right(z(-1.)).rounded(z(8.)).border_2().border_color(c(tok(idx::INPUT_BORDER_ACTIVE))),
+            )
+        })
 }
 
 pub fn dropdown(s: &State, id: &'static str, value: AnyElement, opts: Vec<SharedString>, cur: Option<usize>, on_pick: OnPick, cx: &mut Cx) -> AnyElement {
@@ -148,7 +173,11 @@ pub fn dropdown(s: &State, id: &'static str, value: AnyElement, opts: Vec<Shared
                         cx.notify();
                     }))
                     .child(div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(o))
-                    .when(cur == Some(i), |d| d.child(gpui::svg().path(crate::icons::path("circle-check")).flex_none().size(z(20.)).text_color(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW)))))
+                    .when(cur == Some(i), |d| {
+                        d.child(
+                            gpui::svg().path(crate::icons::path("circle-check")).flex_none().size(z(20.)).text_color(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW))),
+                        )
+                    })
             }));
         wrap = wrap.child(gpui::deferred(list).with_priority(30));
     }
@@ -214,7 +243,15 @@ pub fn search_box(input: Option<&gpui::Entity<gpui_component::input::InputState>
         .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
         .flex()
         .items_center()
-        .child(div().size(z(30.)).flex_none().flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("search")).size(z(16.)).text_color(c(tok(idx::INPUT_ICON_DEFAULT)))))
+        .child(
+            div()
+                .size(z(30.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("search")).size(z(16.)).text_color(c(tok(idx::INPUT_ICON_DEFAULT)))),
+        )
         .child(div().flex_1().min_w_0().text_size(z(16.)).children(input.map(|i| gpui_component::input::Input::new(i).appearance(false).bordered(false))))
 }
 

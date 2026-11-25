@@ -1,9 +1,6 @@
 use std::cell::Cell;
 
-use gpui::{
-    AnyElement, Context, FontWeight, Hsla, MouseButton, MouseMoveEvent, MouseUpEvent, ParentElement, SharedString,
-    Styled, Window, div, prelude::*,
-};
+use gpui::{AnyElement, Context, FontWeight, Hsla, MouseButton, MouseMoveEvent, MouseUpEvent, ParentElement, SharedString, Styled, Window, div, prelude::*};
 
 use crate::app::PhoenixApp;
 use crate::assets::Icon;
@@ -80,9 +77,7 @@ pub fn clamp_position(x: f32, y: f32, vw: f32, vh: f32) -> (f32, f32) {
 }
 
 pub fn active(app: &PhoenixApp) -> bool {
-    app.voice_channel.is_some()
-        && !crate::ui::call_view::active(app)
-        && !crate::ui::call_popout::is_open()
+    app.voice_channel.is_some() && !crate::ui::call_view::active(app) && !crate::ui::call_popout::is_open()
 }
 
 pub fn select_subject(app: &PhoenixApp, ch_id: Id) -> Option<(Id, bool)> {
@@ -157,11 +152,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let vh = (f32::from(vp.height) / k).max(PIP_H + TOP_INSET + MARGIN);
 
     let drag = DRAG.with(Cell::get);
-    let (left, top) = if drag.active {
-        clamp_position(drag.cur_pos.0, drag.cur_pos.1, vw, vh)
-    } else {
-        corner_position(corner(), vw, vh)
-    };
+    let (left, top) = if drag.active { clamp_position(drag.cur_pos.0, drag.cur_pos.1, vw, vh) } else { corner_position(corner(), vw, vh) };
 
     let me = user_id == app.me.id;
     let flags = crate::ui::voice_panel::flags(user_id);
@@ -171,17 +162,9 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let video = if is_stream {
         let skey = crate::ui::call_view::stream_key(app, user_id);
         let watching = skey.as_ref().is_some_and(|k| app.voice.watching.contains(k));
-        if me || watching {
-            crate::ui::call_view::stream_image(user_id, me)
-        } else {
-            None
-        }
+        if me || watching { crate::ui::call_view::stream_image(user_id, me) } else { None }
     } else if flags.video {
-        if me {
-            crate::ui::call_view::camera_image()
-        } else {
-            crate::ui::call_view::remote_image(user_id)
-        }
+        if me { crate::ui::call_view::camera_image() } else { crate::ui::call_view::remote_image(user_id) }
     } else {
         None
     };
@@ -204,11 +187,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .h(z(PIP_H))
         .rounded(z(8.))
         .overflow_hidden()
-        .bg(if video.is_some() || is_stream {
-            t(idx::BACKGROUND_BASE_LOWER)
-        } else {
-            tile_color(app, user_id)
-        })
+        .bg(if video.is_some() || is_stream { t(idx::BACKGROUND_BASE_LOWER) } else { tile_color(app, user_id) })
         .border_1()
         .border_color(if speaking { t(idx::STATUS_POSITIVE) } else { t(idx::BORDER_SUBTLE) })
         .shadow(crate::ui::inbox::popout_shadow())
@@ -219,13 +198,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 let mx = f32::from(ev.position.x) / k;
                 let my = f32::from(ev.position.y) / k;
                 DRAG.with(|d| {
-                    d.set(DragState {
-                        active: true,
-                        moved: false,
-                        start_mouse: (mx, my),
-                        start_pos: (left, top),
-                        cur_pos: (left, top),
-                    });
+                    d.set(DragState { active: true, moved: false, start_mouse: (mx, my), start_pos: (left, top), cur_pos: (left, top) });
                 });
                 cx.stop_propagation();
                 cx.notify();

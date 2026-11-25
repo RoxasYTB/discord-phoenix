@@ -16,8 +16,12 @@ pub const SECTION: &str = "menu.gs.safety";
 
 pub const RISKY: [u64; 11] = [1 << 3, 1 << 1, 1 << 2, 1 << 4, 1 << 5, 1 << 13, 1 << 17, 1 << 28, 1 << 29, 1 << 30, 1 << 40];
 
-pub const LEVELS: [(&str, &str); 4] =
-    [("gs2.vl_low", "gs2.vl_low_desc"), ("gs2.vl_medium", "gs2.vl_medium_desc"), ("gs2.vl_high", "gs2.vl_high_desc"), ("gs2.vl_highest", "gs2.vl_highest_desc")];
+pub const LEVELS: [(&str, &str); 4] = [
+    ("gs2.vl_low", "gs2.vl_low_desc"),
+    ("gs2.vl_medium", "gs2.vl_medium_desc"),
+    ("gs2.vl_high", "gs2.vl_high_desc"),
+    ("gs2.vl_highest", "gs2.vl_highest_desc"),
+];
 
 pub fn risky_everyone(guild: &Value) -> usize {
     let gid = super::str_of(guild, "id");
@@ -106,20 +110,15 @@ fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(z(16.))
-                        .child(art)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!(key)))
-                                .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_DEFAULT, crate::t!("gs2.enabled_of", on = on, of = of))),
-                        ),
-                )
+                .child(div().flex().items_center().gap(z(16.)).child(art).child(
+                    div().flex().flex_col().child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!(key))).child(text(
+                        12.,
+                        16.,
+                        FontWeight::MEDIUM,
+                        idx::TEXT_DEFAULT,
+                        crate::t!("gs2.enabled_of", on = on, of = of),
+                    )),
+                ))
                 .child(button_sm(("gs2-safety-edit", i), crate::t!("gs2.edit"), BtnKind::Secondary).on_click(cx.listener(move |_, _, _, cx| {
                     set_sub(guild, SECTION, target.clone());
                     cx.notify();
@@ -134,7 +133,18 @@ fn subpage(guild: Id, key: &'static str, cx: &mut Context<PhoenixApp>) -> gpui::
 }
 
 fn item(id: impl Into<gpui::ElementId>) -> gpui::Stateful<gpui::Div> {
-    div().id(id.into()).mb(z(8.)).p(z(16.)).flex().items_start().justify_between().gap(z(16.)).bg(t(idx::CARD_BACKGROUND_DEFAULT)).border_1().border_color(t(idx::BORDER_SUBTLE)).rounded(z(8.))
+    div()
+        .id(id.into())
+        .mb(z(8.))
+        .p(z(16.))
+        .flex()
+        .items_start()
+        .justify_between()
+        .gap(z(16.))
+        .bg(t(idx::CARD_BACKGROUND_DEFAULT))
+        .border_1()
+        .border_color(t(idx::BORDER_SUBTLE))
+        .rounded(z(8.))
 }
 
 fn item_text(head: SharedString, body: Option<SharedString>) -> gpui::Div {
@@ -231,14 +241,10 @@ fn dm_spam(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyElem
             )
             .child(icon("chevron-right", 24., idx::ICON_DEFAULT)),
     );
-    for (i, (h, d)) in [
-        ("gs2.dm_hide", Some("gs2.dm_hide_desc")),
-        ("gs2.dm_filter", Some("gs2.dm_filter_desc")),
-        ("gs2.links_warn", None),
-        ("gs2.spam_delete", None),
-    ]
-    .into_iter()
-    .enumerate()
+    for (i, (h, d)) in
+        [("gs2.dm_hide", Some("gs2.dm_hide_desc")), ("gs2.dm_filter", Some("gs2.dm_filter_desc")), ("gs2.links_warn", None), ("gs2.spam_delete", None)]
+            .into_iter()
+            .enumerate()
     {
         p = p.child(item(("gs2-dm", i)).child(item_text(crate::t!(h), d.map(|d| crate::t!(d)))).child(locked_on(("gs2-dm-sw", i))));
     }
@@ -266,19 +272,17 @@ fn permissions(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> Any
     let g2 = g.clone();
     subpage(guild, "gs2.perms_title", cx)
         .child(item("gs2-mfa").child(item_text(crate::t!("gs2.mfa"), Some(crate::t!("gs2.mfa_desc")))).child(mfa_switch))
-        .child(
-            item("gs2-prune").child(item_text(crate::t!("gs2.prune_admin"), Some(crate::t!("gs2.prune_admin_desc")))).child(
-                div().w(z(72.)).flex().justify_end().child(switch("gs2-prune-sw", prune).on_click(cx.listener(move |a, _, _, cx| {
-                    let mut feats = features(&g2);
-                    if prune {
-                        feats.retain(|x| x != "PRUNE_REQUIRES_ADMIN");
-                    } else {
-                        feats.push("PRUNE_REQUIRES_ADMIN".into());
-                    }
-                    write(a, ServerCall::EditSafety { guild: sf(guild), edit: SafetyEdit { features: Some(feats), ..Default::default() } }, None, cx);
-                }))),
-            ),
-        )
+        .child(item("gs2-prune").child(item_text(crate::t!("gs2.prune_admin"), Some(crate::t!("gs2.prune_admin_desc")))).child(
+            div().w(z(72.)).flex().justify_end().child(switch("gs2-prune-sw", prune).on_click(cx.listener(move |a, _, _, cx| {
+                let mut feats = features(&g2);
+                if prune {
+                    feats.retain(|x| x != "PRUNE_REQUIRES_ADMIN");
+                } else {
+                    feats.push("PRUNE_REQUIRES_ADMIN".into());
+                }
+                write(a, ServerCall::EditSafety { guild: sf(guild), edit: SafetyEdit { features: Some(feats), ..Default::default() } }, None, cx);
+            }))),
+        ))
         .child(
             item("gs2-risky")
                 .child(item_text(crate::t!("gs2.risky"), Some(crate::t!("gs2.risky_desc", n = risky))))
@@ -288,7 +292,8 @@ fn permissions(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> Any
 }
 
 pub fn verification_modal(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let cur = fetch(app, guild, ServerCall::Guild { guild: sf(guild) }, cx).and_then(|g| g.get("verification_level").and_then(Value::as_u64)).unwrap_or(0) as usize;
+    let cur =
+        fetch(app, guild, ServerCall::Guild { guild: sf(guild) }, cx).and_then(|g| g.get("verification_level").and_then(Value::as_u64)).unwrap_or(0) as usize;
     let picked = super::with(|s| s.text.get(&(guild, "verification".to_owned())).and_then(|v| v.parse::<usize>().ok())).unwrap_or(cur.max(1));
     let e = cx.entity();
     let close: crate::ui::modal::Action = Rc::new(move |_, cx| {
@@ -298,18 +303,15 @@ pub fn verification_modal(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixA
         });
         e.update(cx, |_, cx| cx.notify());
     });
-    let mut body = div()
-        .flex()
-        .flex_col()
-        .child(
-            div()
-                .pb(z(24.))
-                .text_size(z(16.))
-                .line_height(z(20.))
-                .text_color(t(idx::TEXT_DEFAULT))
-                .child(crate::t!("gs2.verification_modal_desc"))
-                .child(div().font_weight(FontWeight::SEMIBOLD).child(crate::t!("gs2.verification_modal_reco"))),
-        );
+    let mut body = div().flex().flex_col().child(
+        div()
+            .pb(z(24.))
+            .text_size(z(16.))
+            .line_height(z(20.))
+            .text_color(t(idx::TEXT_DEFAULT))
+            .child(crate::t!("gs2.verification_modal_desc"))
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(crate::t!("gs2.verification_modal_reco"))),
+    );
     for (i, (h, d)) in LEVELS.iter().enumerate() {
         let lvl = i + 1;
         body = body.child(
@@ -326,14 +328,13 @@ pub fn verification_modal(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixA
                     cx.notify();
                 }))
                 .child(div().pt(z(0.)).child(radio_indicator(picked == lvl)))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(z(4.))
-                        .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(h)))
-                        .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!(d))),
-                ),
+                .child(div().flex().flex_col().gap(z(4.)).child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(h))).child(text(
+                    14.,
+                    18.,
+                    FontWeight::NORMAL,
+                    idx::TEXT_SUBTLE,
+                    crate::t!(d),
+                ))),
         );
     }
     let close2 = close.clone();
@@ -368,7 +369,13 @@ pub fn content_filter(guild: Id, g: &Value, cx: &mut Context<PhoenixApp>) -> gpu
             .border_1()
             .border_color(t(if on { idx::BORDER_NORMAL } else { idx::BORDER_SUBTLE }))
             .when(disabled, |d| d.opacity(0.5))
-            .child(div().flex_1().flex().flex_col().child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(h))).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE, d)))
+            .child(div().flex_1().flex().flex_col().child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(h))).child(text(
+                14.,
+                18.,
+                FontWeight::NORMAL,
+                idx::TEXT_SUBTLE,
+                d,
+            )))
     };
     let mut d = div()
         .mt(z(40.))
@@ -393,7 +400,12 @@ pub fn content_filter(guild: Id, g: &Value, cx: &mut Context<PhoenixApp>) -> gpu
             let d = if disabled { crate::t!("gs2.ecf_community_only") } else { crate::t!(desc) };
             group = group.child(row(("gs2-ecf", i), h, d, u64::from(v) == level, disabled).when(!disabled, |r| {
                 r.cursor_pointer().on_click(cx.listener(move |a, _, _, cx| {
-                    write(a, ServerCall::EditSafety { guild: sf(guild), edit: SafetyEdit { explicit_content_filter: Some(v), ..Default::default() } }, None, cx);
+                    write(
+                        a,
+                        ServerCall::EditSafety { guild: sf(guild), edit: SafetyEdit { explicit_content_filter: Some(v), ..Default::default() } },
+                        None,
+                        cx,
+                    );
                 }))
             }));
         }

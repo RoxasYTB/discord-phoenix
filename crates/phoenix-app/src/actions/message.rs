@@ -63,12 +63,8 @@ impl PhoenixApp {
 
     pub fn open_thread_form(&mut self, channel: Id, msg: Id, cx: &mut Context<Self>) {
         self.chat.menu = None;
-        let initial: String = self
-            .messages
-            .get(&channel)
-            .and_then(|x| x.msgs.iter().find(|m| m.id == msg))
-            .map(|m| m.content.chars().take(40).collect())
-            .unwrap_or_default();
+        let initial: String =
+            self.messages.get(&channel).and_then(|x| x.msgs.iter().find(|m| m.id == msg)).map(|m| m.content.chars().take(40).collect()).unwrap_or_default();
         open_modal(
             Modal::Form(Form {
                 title: crate::t!("thread.create_title"),

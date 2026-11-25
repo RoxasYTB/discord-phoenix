@@ -86,14 +86,7 @@ fn option(o: &OnboardingOption) -> gpui::Div {
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .line_height(z(20.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(t(idx::TEXT_STRONG))
-                        .child(o.title.clone()),
-                )
+                .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).child(o.title.clone()))
                 .when(!o.description.is_empty(), |d| {
                     d.child(div().mt(z(4.)).text_size(z(12.)).line_height(z(16.)).text_color(t(idx::TEXT_DEFAULT)).child(o.description.clone()))
                 }),
@@ -193,9 +186,14 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
         .flex()
         .items_center()
         .gap(z(4.))
-        .child(div().size(z(30.)).flex().items_center().justify_center().child(
-            gpui::svg().path(crate::icons::path("search")).size(z(16.)).flex_none().text_color(t(idx::TEXT_DEFAULT)),
-        ))
+        .child(
+            div()
+                .size(z(30.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("search")).size(z(16.)).flex_none().text_color(t(idx::TEXT_DEFAULT))),
+        )
         .when_some(input.clone(), |d, i| {
             d.child(div().flex_1().min_w_0().child(Input::new(&i).appearance(false).bordered(false).pl(z(0.)).text_size(z(16.)).line_height(z(20.))))
         })
@@ -234,7 +232,15 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
                         .min_w_0()
                         .flex()
                         .flex_col()
-                        .child(div().mb(z(8.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("community.browse_intro_title")))
+                        .child(
+                            div()
+                                .mb(z(8.))
+                                .text_size(z(20.))
+                                .line_height(z(24.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(t(idx::TEXT_STRONG))
+                                .child(crate::t!("community.browse_intro_title")),
+                        )
                         .child(div().text_size(z(16.)).line_height(z(20.)).text_color(t(idx::TEXT_DEFAULT)).child(crate::t!("community.browse_intro")))
                         .child(
                             div()
@@ -271,13 +277,30 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
                     .pb(z(10.))
                     .flex()
                     .items_center()
-                    .child(div().flex_1().min_w_0().text_ellipsis().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).child(crate::ui::emoji_text::label(cat.name.clone(), 20.)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_ellipsis()
+                            .text_size(z(20.))
+                            .line_height(z(24.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(t(idx::TEXT_STRONG))
+                            .child(crate::ui::emoji_text::label(cat.name.clone(), 20.)),
+                    )
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(z(24.))
-                            .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).child(crate::t!("community.follow_category")))
+                            .child(
+                                div()
+                                    .text_size(z(16.))
+                                    .line_height(z(20.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(t(idx::TEXT_STRONG))
+                                    .child(crate::t!("community.follow_category")),
+                            )
                             .child(crate::ui::controls::switch(("cr-follow", cat.id.0), followed).cursor_default()),
                     ),
             );
@@ -295,7 +318,9 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
                 if last.is_some() {
                     sub = sub.child(div().flex_none().mx(z(8.)).size(z(4.)).rounded(z(4.)).bg(t(idx::BORDER_SUBTLE)));
                 }
-                sub = sub.child(div().flex_1().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(topic.lines().next().unwrap_or("").to_owned().into(), 12.)));
+                sub = sub.child(
+                    div().flex_1().min_w_0().text_ellipsis().child(crate::ui::emoji_text::label(topic.lines().next().unwrap_or("").to_owned().into(), 12.)),
+                );
             }
             let mut row = div()
                 .py(z(10.))
@@ -351,7 +376,16 @@ fn browse_body(app: &PhoenixApp, page: &Page, groups: Vec<(Option<Id>, Vec<Id>)>
             crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
                 .flex_1()
                 .min_h_0()
-                .child(div().id("community-browse-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("community-browse-scroll")).pr(z(24.)).child(list))
+                .child(
+                    div()
+                        .id("community-browse-scroll")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .track_scroll(&crate::ui::chat::scrollbar::handle("community-browse-scroll"))
+                        .pr(z(24.))
+                        .child(list),
+                )
                 .children(crate::ui::chat::scrollbar::bar_for("community-browse-scroll", crate::ui::chat::scrollbar::Bar::Auto)),
         )
         .into_any_element()
@@ -408,7 +442,15 @@ fn profile_column(app: &PhoenixApp, guild: Id) -> gpui::Div {
         .when_some(bio, |d, b| d.child(crate::ui::profile_bio::bio(&b, false, t(idx::TEXT_MUTED))))
         .when(!info.roles.is_empty(), |d| {
             d.child(div().my(z(16.)).h(px(1.)).bg(t(idx::BORDER_SUBTLE)))
-                .child(div().mb(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_MUTED)).child(crate::t!("community.roles")))
+                .child(
+                    div()
+                        .mb(z(8.))
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t(idx::TEXT_MUTED))
+                        .child(crate::t!("community.roles")),
+                )
                 .child(roles)
         });
     div()
@@ -417,7 +459,14 @@ fn profile_column(app: &PhoenixApp, guild: Id) -> gpui::Div {
         .pb(z(32.))
         .flex()
         .flex_col()
-        .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("community.my_profile")))
+        .child(
+            div()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t(idx::TEXT_STRONG))
+                .child(crate::t!("community.my_profile")),
+        )
         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("community.my_profile_sub")))
         .child(card)
 }
@@ -498,9 +547,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .items_center()
         .border_b_1()
         .border_color(t(idx::BORDER_SUBTLE))
-        .child(div().size(z(32.)).flex().items_center().justify_center().child(
-            gpui::svg().path(crate::icons::path("channel-browse")).size(z(20.)).flex_none().text_color(t(idx::ICON_MUTED)),
-        ))
+        .child(
+            div()
+                .size(z(32.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("channel-browse")).size(z(20.)).flex_none().text_color(t(idx::ICON_MUTED))),
+        )
         .child(
             div()
                 .mr(z(8.))
@@ -541,18 +595,20 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .border_b_1()
         .border_color(t(idx::BORDER_SUBTLE))
         .child(tab("cr-tab-customize", crate::t!("community.customize"), !browse, false))
-        .child(tab("cr-tab-browse", crate::t!("community.browse"), browse, true).child(
-            div()
-                .h(z(16.))
-                .px(z(4.))
-                .rounded_full()
-                .bg(t(idx::BADGE_SECONDARY_BACKGROUND))
-                .text_color(t(idx::BADGE_SECONDARY_TEXT))
-                .text_size(z(12.))
-                .line_height(z(16.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(SharedString::from(count.to_string())),
-        ));
+        .child(
+            tab("cr-tab-browse", crate::t!("community.browse"), browse, true).child(
+                div()
+                    .h(z(16.))
+                    .px(z(4.))
+                    .rounded_full()
+                    .bg(t(idx::BADGE_SECONDARY_BACKGROUND))
+                    .text_color(t(idx::BADGE_SECONDARY_TEXT))
+                    .text_size(z(12.))
+                    .line_height(z(16.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(SharedString::from(count.to_string())),
+            ),
+        );
     if browse {
         return Some(
             div()
@@ -574,7 +630,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .pr(z(16.))
         .flex()
         .flex_col()
-        .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("community.questions")))
+        .child(
+            div()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t(idx::TEXT_STRONG))
+                .child(crate::t!("community.questions")),
+        )
         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("community.questions_sub")));
     match &page.prompts {
         None => body = body.child(div().mt(z(16.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("common.loading"))),

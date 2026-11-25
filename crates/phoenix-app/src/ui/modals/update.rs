@@ -28,12 +28,7 @@ pub(crate) fn render_inline(inline: &Inline) -> AnyElement {
                 el = el.italic();
             }
             if span.style.has(Style::CODE) {
-                el = el
-                    .px(z(4.))
-                    .py(z(1.))
-                    .rounded(z(4.))
-                    .bg(c(tok(idx::BACKGROUND_BASE_LOWER)))
-                    .text_size(z(13.));
+                el = el.px(z(4.)).py(z(1.)).rounded(z(4.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).text_size(z(13.));
             }
             if span.style.has(Style::LINK) {
                 el = el.text_color(c(tok(idx::TEXT_LINK)));
@@ -92,12 +87,7 @@ fn render_markdown(body: &str) -> AnyElement {
             }
             Block::Quote(inline) => {
                 col = col.child(
-                    div()
-                        .pl(z(10.))
-                        .border_l_4()
-                        .border_color(c(tok(idx::BORDER_NORMAL)))
-                        .text_color(c(tok(idx::TEXT_SUBTLE)))
-                        .child(render_inline(&inline)),
+                    div().pl(z(10.)).border_l_4().border_color(c(tok(idx::BORDER_NORMAL))).text_color(c(tok(idx::TEXT_SUBTLE))).child(render_inline(&inline)),
                 );
             }
             Block::Code { code, .. } => {
@@ -121,20 +111,12 @@ fn render_markdown(body: &str) -> AnyElement {
 pub fn render(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let status = updater::status();
     let Some(release) = status.release().cloned() else {
-        let body = div()
-            .text_size(z(14.))
-            .text_color(c(tok(idx::TEXT_SUBTLE)))
-            .child(crate::t!("update.up_to_date"));
+        let body = div().text_size(z(14.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(crate::t!("update.up_to_date"));
         return super::card(460., crate::t!("update.modal_title"), None, body.into_any_element(), None, cx);
     };
 
     let current = crate::diagnostics::VERSION;
-    let size_part = release
-        .asset
-        .as_ref()
-        .filter(|a| a.size > 0)
-        .map(|a| format!(" • {}", updater::format_bytes(a.size)))
-        .unwrap_or_default();
+    let size_part = release.asset.as_ref().filter(|a| a.size > 0).map(|a| format!(" • {}", updater::format_bytes(a.size))).unwrap_or_default();
     let subtitle: SharedString = format!("v{current} → {}{size_part}", release.tag).into();
 
     let mut body = div().flex().flex_col().gap(z(12.));
@@ -153,56 +135,46 @@ pub fn render(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .justify_between()
                 .gap(z(8.))
                 .child(div().text_size(z(13.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(asset.name.clone()))
-                .when(asset.size > 0, |d| {
-                    d.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(updater::format_bytes(asset.size)))
-                }),
+                .when(asset.size > 0, |d| d.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(updater::format_bytes(asset.size)))),
         );
     }
 
-    body = body.child(
-        div()
-            .id("update-notes-scroll")
-            .max_h(z(320.))
-            .overflow_y_scroll()
-            .pr(z(4.))
-            .child(render_markdown(&release.body)),
-    );
+    body = body.child(div().id("update-notes-scroll").max_h(z(320.)).overflow_y_scroll().pr(z(4.)).child(render_markdown(&release.body)));
 
     match &status {
         UpdateStatus::Downloading { downloaded, total, .. } => {
             let pct = if *total > 0 { ((*downloaded as f64 / *total as f64) * 100.0).min(100.0) } else { 0.0 };
             let label = format!("{} ({} / {})", crate::t!("update.downloading"), updater::format_bytes(*downloaded), updater::format_bytes(*total));
             body = body.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(z(6.))
-                    .child(div().text_size(z(13.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(label))
-                    .child(
-                        div()
-                            .w_full()
-                            .h(z(6.))
-                            .rounded(z(3.))
-                            .bg(c(tok(idx::BACKGROUND_BASE_LOWER)))
-                            .overflow_hidden()
-                            .child(div().h_full().w(gpui::relative((pct / 100.0) as f32)).bg(c(tok(idx::STATUS_POSITIVE)))),
-                    ),
+                div().flex().flex_col().gap(z(6.)).child(div().text_size(z(13.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(label)).child(
+                    div()
+                        .w_full()
+                        .h(z(6.))
+                        .rounded(z(3.))
+                        .bg(c(tok(idx::BACKGROUND_BASE_LOWER)))
+                        .overflow_hidden()
+                        .child(div().h_full().w(gpui::relative((pct / 100.0) as f32)).bg(c(tok(idx::STATUS_POSITIVE)))),
+                ),
             );
         }
         UpdateStatus::Verifying(_) => {
             body = body.child(div().text_size(z(13.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(crate::t!("update.verifying")));
         }
         UpdateStatus::ReadyToRestart { .. } => {
-            body = body.child(div().text_size(z(13.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_FEEDBACK_POSITIVE))).child(crate::t!("update.ready_restart")));
-        }
-        UpdateStatus::Installed { path, .. } => {
             body = body.child(
                 div()
                     .text_size(z(13.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(tok(idx::TEXT_FEEDBACK_POSITIVE)))
-                    .child(format!("{} {}", crate::t!("update.downloaded_to"), path.display())),
+                    .child(crate::t!("update.ready_restart")),
             );
+        }
+        UpdateStatus::Installed { path, .. } => {
+            body = body.child(div().text_size(z(13.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_FEEDBACK_POSITIVE))).child(format!(
+                "{} {}",
+                crate::t!("update.downloaded_to"),
+                path.display()
+            )));
         }
         UpdateStatus::Error(err) => {
             body = body.child(div().text_size(z(13.)).text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child(err.clone()));
@@ -211,12 +183,12 @@ pub fn render(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
     }
 
     let open_url = release.html_url.clone();
-    let open_btn = button("update-open-release", crate::t!("update.open_release"), BtnKind::Secondary)
-        .on_click(move |_, _, cx| cx.open_url(&open_url));
+    let open_btn = button("update-open-release", crate::t!("update.open_release"), BtnKind::Secondary).on_click(move |_, _, cx| cx.open_url(&open_url));
 
     let primary_btn = match status {
-        UpdateStatus::ReadyToRestart { path, .. } => button("update-restart", crate::t!("update.restart"), BtnKind::Active)
-            .on_click(move |_, _, _| updater::restart_app(&path)),
+        UpdateStatus::ReadyToRestart { path, .. } => {
+            button("update-restart", crate::t!("update.restart"), BtnKind::Active).on_click(move |_, _, _| updater::restart_app(&path))
+        }
         UpdateStatus::Downloading { .. } | UpdateStatus::Verifying(_) => {
             button("update-busy", crate::t!("update.downloading"), BtnKind::Secondary).opacity(0.6)
         }

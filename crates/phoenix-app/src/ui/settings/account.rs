@@ -65,13 +65,7 @@ pub fn mask_phone(p: &str) -> String {
 }
 
 pub(super) fn value(t: impl Into<SharedString>) -> Div {
-    div()
-        .text_size(z(16.))
-        .line_height(z(20.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .whitespace_nowrap()
-        .child(t.into())
+    div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).whitespace_nowrap().child(t.into())
 }
 
 pub(super) fn value_chevron(v: Option<SharedString>) -> AnyElement {
@@ -103,12 +97,7 @@ pub(super) fn reveal_button(id: &'static str, shown: bool, on: impl Fn(&mut Phoe
 pub(super) fn linked_desc(t: SharedString) -> AnyElement {
     let link = gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() };
     let (plain, hl) = bracket_runs(&t, link);
-    div()
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_SUBTLE)))
-        .child(gpui::StyledText::new(plain).with_highlights(hl))
-        .into_any_element()
+    div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(gpui::StyledText::new(plain).with_highlights(hl)).into_any_element()
 }
 
 fn leading_item(icon: &'static str, bg: gpui::Hsla, title: SharedString, desc: SharedString, trailing: AnyElement) -> AnyElement {
@@ -198,12 +187,7 @@ pub fn activity_restricted() -> Vec<u64> {
 pub(super) fn bold_desc(t: SharedString) -> AnyElement {
     let strong = gpui::HighlightStyle { font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() };
     let (plain, hl) = bracket_runs(&t, strong);
-    div()
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_SUBTLE)))
-        .child(gpui::StyledText::new(plain).with_highlights(hl))
-        .into_any_element()
+    div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(gpui::StyledText::new(plain).with_highlights(hl)).into_any_element()
 }
 
 fn bracket_runs(t: &str, style: gpui::HighlightStyle) -> (String, Vec<(std::ops::Range<usize>, gpui::HighlightStyle)>) {

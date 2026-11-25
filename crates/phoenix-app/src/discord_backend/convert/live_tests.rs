@@ -62,7 +62,10 @@ fn foreign_message_marks_unread_and_everyone_counts_as_mention() {
     assert_eq!(channel_unread(&out, CH), Some((true, 0)));
     let out = feed(&cache, &mut a, &msg(700000000000000061, CH, true, 200000000000000003, true));
     assert_eq!(channel_unread(&out, CH), Some((true, 1)));
-    let g = out.iter().find_map(|x| match x { AppEvent::GuildUnread { mentions, unread, .. } => Some((*unread, *mentions)), _ => None });
+    let g = out.iter().find_map(|x| match x {
+        AppEvent::GuildUnread { mentions, unread, .. } => Some((*unread, *mentions)),
+        _ => None,
+    });
     assert_eq!(g, Some((true, 1)));
 }
 
@@ -71,7 +74,13 @@ fn every_dm_message_counts_as_a_mention() {
     let (cache, mut a) = setup();
     for (i, n) in [(900000000000000600, 1), (900000000000000601, 2)] {
         let out = feed(&cache, &mut a, &msg(i, DM, false, 200000000000000002, false));
-        let dm = out.iter().find_map(|x| match x { AppEvent::DmUpsert(c) => Some(c), _ => None }).expect("dm upsert");
+        let dm = out
+            .iter()
+            .find_map(|x| match x {
+                AppEvent::DmUpsert(c) => Some(c),
+                _ => None,
+            })
+            .expect("dm upsert");
         assert!(dm.unread);
         assert_eq!(dm.mentions, n);
     }
@@ -84,7 +93,10 @@ fn ack_from_the_official_client_clears_unread() {
     let ack = parse_dispatch("MESSAGE_ACK", &format!(r#"{{"channel_id":"{CH}","message_id":"700000000000000061","version":3}}"#));
     let out = feed(&cache, &mut a, &ack);
     assert_eq!(channel_unread(&out, CH), Some((false, 0)));
-    let g = out.iter().find_map(|x| match x { AppEvent::GuildUnread { mentions, unread, .. } => Some((*unread, *mentions)), _ => None });
+    let g = out.iter().find_map(|x| match x {
+        AppEvent::GuildUnread { mentions, unread, .. } => Some((*unread, *mentions)),
+        _ => None,
+    });
     assert_eq!(g, Some((false, 0)));
 }
 
@@ -97,7 +109,10 @@ fn guild_update_renames_the_guild() {
     let out = feed(&cache, &mut a, &parse_dispatch("GUILD_UPDATE", &g.to_string()));
     let (name, chans) = out
         .iter()
-        .find_map(|x| match x { AppEvent::GuildCreate { guild, channels, .. } => Some((guild.name.clone(), channels.len())), _ => None })
+        .find_map(|x| match x {
+            AppEvent::GuildCreate { guild, channels, .. } => Some((guild.name.clone(), channels.len())),
+            _ => None,
+        })
         .expect("guild upsert");
     assert_eq!(name.as_ref(), "Renamed");
     assert!(chans > 0, "channels kept across GUILD_UPDATE");
@@ -112,7 +127,10 @@ fn guild_settings_update_from_another_client_mutes_live() {
         GatewayEvent::Unknown { name: "USER_GUILD_SETTINGS_UPDATE".into(), data: d }
     };
     let out = feed(&cache, &mut a, &upd(true));
-    let ch = out.iter().find_map(|x| match x { AppEvent::GuildChannels { channels, .. } => channels.iter().find(|c| c.id.0 == CH).cloned(), _ => None });
+    let ch = out.iter().find_map(|x| match x {
+        AppEvent::GuildChannels { channels, .. } => channels.iter().find(|c| c.id.0 == CH).cloned(),
+        _ => None,
+    });
     assert!(ch.expect("channel listed").muted);
     feed(&cache, &mut a, &upd(false));
     assert!(!a.prefs.mutes.guilds.contains(&300000000000000001) && !a.prefs.mutes.channels.contains(&CH));
@@ -123,7 +141,13 @@ fn presence_with_profile_updates_the_user() {
     let (cache, mut a) = setup();
     let raw = r#"{"user":{"id":"200000000000000002","username":"alice2","global_name":"Alice Two","avatar":"abc"},"status":"online","activities":[]}"#;
     let out = feed(&cache, &mut a, &parse_dispatch("PRESENCE_UPDATE", raw));
-    let u = out.iter().find_map(|x| match x { AppEvent::Users(u) => u.first().cloned(), _ => None }).expect("user refreshed");
+    let u = out
+        .iter()
+        .find_map(|x| match x {
+            AppEvent::Users(u) => u.first().cloned(),
+            _ => None,
+        })
+        .expect("user refreshed");
     assert_eq!(u.display_name.as_ref(), "Alice Two");
     assert!(matches!(u.avatar, model::ImageRef::Url(_)));
     let out = feed(&cache, &mut a, &parse_dispatch("PRESENCE_UPDATE", r#"{"user":{"id":"200000000000000002"},"status":"idle"}"#));
@@ -140,7 +164,10 @@ fn joined_thread_messages_make_the_guild_unread() {
     feed(&cache, &mut a, &parse_dispatch("THREAD_CREATE", &raw));
     a.prefs.reads.insert(th, ReadMark { last_read: 700000000000000050, mentions: 0 });
     let out = feed(&cache, &mut a, &msg(700000000000000070, th, true, 200000000000000003, true));
-    let g = out.iter().find_map(|x| match x { AppEvent::GuildUnread { mentions, unread, .. } => Some((*unread, *mentions)), _ => None });
+    let g = out.iter().find_map(|x| match x {
+        AppEvent::GuildUnread { mentions, unread, .. } => Some((*unread, *mentions)),
+        _ => None,
+    });
     assert_eq!(g, Some((true, 1)));
 }
 
@@ -150,6 +177,12 @@ fn sessions_replace_sets_my_status() {
     let d = serde_json::json!([{"session_id": "abc", "status": "online"}, {"session_id": "all", "status": "dnd", "activities": [{"type": 4, "name": "Custom Status", "state": "busy"}]}]);
     let out = feed(&cache, &mut a, &GatewayEvent::Unknown { name: "SESSIONS_REPLACE".into(), data: d });
     assert!(out.iter().any(|x| matches!(x, AppEvent::PresenceUpdate { user, presence: model::Presence::Dnd } if user.0 == ME)));
-    let acts = out.iter().find_map(|x| match x { AppEvent::Activities { user, activities } if user.0 == ME => Some(activities), _ => None }).expect("own activities");
+    let acts = out
+        .iter()
+        .find_map(|x| match x {
+            AppEvent::Activities { user, activities } if user.0 == ME => Some(activities),
+            _ => None,
+        })
+        .expect("own activities");
     assert_eq!(acts[0].state.as_deref(), Some("busy"));
 }

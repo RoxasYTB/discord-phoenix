@@ -187,31 +187,27 @@ fn tier_card(tier: u8, perks: &[Perk], active: bool) -> AnyElement {
         (false, 2) => rgb(0x211e40),
         _ => rgb(0x201d3d),
     };
-    let gem_box = div()
-        .absolute()
-        .left(z(24.))
-        .top(z(24.))
-        .size(z(40.))
-        .rounded_full()
-        .bg(border)
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            div()
-                .size(z(30.))
-                .rounded_full()
-                .bg(if active { pink } else { rgb(0x474464).into() })
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(img(TIER_ICONS[(tier as usize).saturating_sub(1).min(2)]).size(z(24.))),
-        );
-    let title = text(24., 30., FontWeight::SEMIBOLD, if active { tk(idx::TEXT_STRONG) } else { muted }, crate::t!(match tier {
-        1 => "boost.level1",
-        2 => "boost.level2",
-        _ => "boost.level3",
-    }))
+    let gem_box = div().absolute().left(z(24.)).top(z(24.)).size(z(40.)).rounded_full().bg(border).flex().items_center().justify_center().child(
+        div()
+            .size(z(30.))
+            .rounded_full()
+            .bg(if active { pink } else { rgb(0x474464).into() })
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(img(TIER_ICONS[(tier as usize).saturating_sub(1).min(2)]).size(z(24.))),
+    );
+    let title = text(
+        24.,
+        30.,
+        FontWeight::SEMIBOLD,
+        if active { tk(idx::TEXT_STRONG) } else { muted },
+        crate::t!(match tier {
+            1 => "boost.level1",
+            2 => "boost.level2",
+            _ => "boost.level3",
+        }),
+    )
     .flex_none();
     let badge = div()
         .h(z(30.))
@@ -228,12 +224,13 @@ fn tier_card(tier: u8, perks: &[Perk], active: bool) -> AnyElement {
     for p in perks.iter().take(4) {
         let col = if active { tk(idx::TEXT_DEFAULT) } else { muted };
         list = list.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(z(8.))
-                .child(gpui::svg().path(crate::icons::path(p.icon)).flex_none().size(z(20.)).text_color(col))
-                .child(text(16., 20., FontWeight::MEDIUM, col, perk_text(p.key))),
+            div().flex().items_center().gap(z(8.)).child(gpui::svg().path(crate::icons::path(p.icon)).flex_none().size(z(20.)).text_color(col)).child(text(
+                16.,
+                20.,
+                FontWeight::MEDIUM,
+                col,
+                perk_text(p.key),
+            )),
         );
     }
     list = list.child(text(16., 20., FontWeight::MEDIUM, muted, crate::t!("boost.and_more")));
@@ -261,20 +258,45 @@ fn value_cell(v: Cell4, boosted: bool) -> AnyElement {
     match v {
         Cell4::Bool(true) => gpui::svg().path(crate::icons::path("check")).size(z(24.)).text_color(tk(idx::TEXT_STRONG)).into_any_element(),
         Cell4::Bool(false) => gpui::svg().path(crate::icons::path("close-small")).size(z(24.)).text_color(tk(idx::INTERACTIVE_MUTED)).into_any_element(),
-        _ => text(16., 20., if boosted { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM }, if boosted { tk(idx::TEXT_STRONG) } else { tk(idx::TEXT_MUTED) }, cell_text(v).unwrap_or_default()).into_any_element(),
+        _ => text(
+            16.,
+            20.,
+            if boosted { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM },
+            if boosted { tk(idx::TEXT_STRONG) } else { tk(idx::TEXT_MUTED) },
+            cell_text(v).unwrap_or_default(),
+        )
+        .into_any_element(),
     }
 }
 
 fn perks_table(current: u8) -> AnyElement {
     let cell = || div().flex_1().min_w_0().px(z(16.));
     let tier_cell = || cell().flex().flex_col().items_center().justify_center().text_center();
-    let mut header = div().w_full().flex().items_start().py(z(16.)).border_b_1().border_color(tk(idx::BORDER_NORMAL)).child(cell().child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), crate::t!("boost.t.perks"))));
+    let mut header = div().w_full().flex().items_start().py(z(16.)).border_b_1().border_color(tk(idx::BORDER_NORMAL)).child(cell().child(text(
+        20.,
+        24.,
+        FontWeight::SEMIBOLD,
+        tk(idx::TEXT_DEFAULT),
+        crate::t!("boost.t.perks"),
+    )));
     for (n, key) in ["boost.t.unboosted", "boost.level1", "boost.level2", "boost.level3"].iter().enumerate() {
-        header = header.child(tier_cell().child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), crate::t!(key))).child(text(14., 18., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), boosts_label(TIER_BOOSTS[n]))));
+        header = header.child(tier_cell().child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_DEFAULT), crate::t!(key))).child(text(
+            14.,
+            18.,
+            FontWeight::MEDIUM,
+            tk(idx::TEXT_MUTED),
+            boosts_label(TIER_BOOSTS[n]),
+        )));
     }
     let mut table = div().w_full().flex().flex_col().child(header);
     for (i, row) in PERK_ROWS.iter().enumerate() {
-        let mut r = div().w_full().flex().items_center().py(z(16.)).when(i + 1 < PERK_ROWS.len(), |d| d.border_b_1().border_color(tk(idx::BORDER_NORMAL))).child(cell().child(text(16., 20., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), crate::t!(row.label))));
+        let mut r = div()
+            .w_full()
+            .flex()
+            .items_center()
+            .py(z(16.))
+            .when(i + 1 < PERK_ROWS.len(), |d| d.border_b_1().border_color(tk(idx::BORDER_NORMAL)))
+            .child(cell().child(text(16., 20., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), crate::t!(row.label))));
         for (n, v) in row.values.iter().enumerate() {
             r = r.child(tier_cell().child(value_cell(*v, n > 0)));
         }
@@ -294,12 +316,16 @@ fn perks_table(current: u8) -> AnyElement {
         .border_color(pink)
         .child(
             div().absolute().top(z(-12.)).left_0().right_0().flex().justify_center().child(
-                div()
-                    .px(z(8.))
-                    .py(z(4.))
-                    .rounded(z(4.))
-                    .bg(pink)
-                    .child(text(12., 16., FontWeight::SEMIBOLD, gpui::white(), if current >= 3 { crate::t!("boost.t.current") } else { crate::t!("boost.t.recommended") }.to_uppercase()).whitespace_nowrap()),
+                div().px(z(8.)).py(z(4.)).rounded(z(4.)).bg(pink).child(
+                    text(
+                        12.,
+                        16.,
+                        FontWeight::SEMIBOLD,
+                        gpui::white(),
+                        if current >= 3 { crate::t!("boost.t.current") } else { crate::t!("boost.t.recommended") }.to_uppercase(),
+                    )
+                    .whitespace_nowrap(),
+                ),
             ),
         );
     div()
@@ -402,7 +428,15 @@ fn faq() -> AnyElement {
                 .when(on, |d| d.child(text(14., 18., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), crate::t!(a)).pt(z(8.)))),
         );
     }
-    div().w_full().flex().flex_col().items_start().child(section_heading(crate::t!("boost.faq.heading")).w_full()).child(div().h(z(32.))).child(list).into_any_element()
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .items_start()
+        .child(section_heading(crate::t!("boost.faq.heading")).w_full())
+        .child(div().h(z(32.)))
+        .child(list)
+        .into_any_element()
 }
 
 fn unavailable_notice() -> AnyElement {
@@ -410,16 +444,13 @@ fn unavailable_notice() -> AnyElement {
         .flex()
         .justify_center()
         .mb(z(32.))
-        .child(
-            div()
-                .px(z(16.))
-                .py(z(8.))
-                .rounded_full()
-                .bg(gpui::hsla(0., 0., 1., 0.1))
-                .border_2()
-                .border_color(gpui::white())
-                .child(text(16., 20., FontWeight::MEDIUM, gpui::white(), crate::t!("boost.unavailable").to_uppercase())),
-        )
+        .child(div().px(z(16.)).py(z(8.)).rounded_full().bg(gpui::hsla(0., 0., 1., 0.1)).border_2().border_color(gpui::white()).child(text(
+            16.,
+            20.,
+            FontWeight::MEDIUM,
+            gpui::white(),
+            crate::t!("boost.unavailable").to_uppercase(),
+        )))
         .into_any_element()
 }
 
@@ -437,12 +468,13 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .border_color(gpui::hsla(0., 0., 1., 0.16))
         .shadow_sm()
         .child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, f32::from(z(70.))));
-    let count = div()
-        .flex()
-        .items_center()
-        .gap(z(2.))
-        .child(gem(18., if g.boosts > 0 { pink } else { gpui::hsla(0., 0., 1., 0.6) }).flex_none())
-        .child(text(16., 20., FontWeight::SEMIBOLD, white, boosts_label(g.boosts)));
+    let count = div().flex().items_center().gap(z(2.)).child(gem(18., if g.boosts > 0 { pink } else { gpui::hsla(0., 0., 1., 0.6) }).flex_none()).child(text(
+        16.,
+        20.,
+        FontWeight::SEMIBOLD,
+        white,
+        boosts_label(g.boosts),
+    ));
     let server = div()
         .flex()
         .flex_col()
@@ -494,31 +526,35 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .right_0()
         .min_h(z(1280.))
         .overflow_hidden()
-        .child(
-            div().absolute().inset_0().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(div().absolute().inset_0().bg(gpui::linear_gradient(
-                180.,
-                gpui::linear_color_stop(rgba(0x9c59d199), 0.),
-                gpui::linear_color_stop(rgba(0x9c59d100), 0.8),
-            ))),
-        )
+        .child(div().absolute().inset_0().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(div().absolute().inset_0().bg(gpui::linear_gradient(
+            180.,
+            gpui::linear_color_stop(rgba(0x9c59d199), 0.),
+            gpui::linear_color_stop(rgba(0x9c59d100), 0.8),
+        ))))
         .child(img(HEADER_IMAGE).w_full().object_fit(gpui::ObjectFit::Cover));
-    let video = div()
-        .w_full()
-        .flex()
-        .justify_center()
-        .mb(z(40.))
-        .child(
-            div()
-                .relative()
-                .w(z(772.))
-                .h(z(435.))
-                .rounded(z(16.))
-                .overflow_hidden()
-                .border_1()
-                .border_color(tk(idx::BORDER_SUBTLE))
-                .child(img(VIDEO_THUMB).size_full().object_fit(gpui::ObjectFit::Cover))
-                .child(div().absolute().inset_0().flex().items_center().justify_center().child(div().size(z(76.)).rounded_full().bg(gpui::white()).flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("play")).size(z(36.)).text_color(gpui::black())))),
-        );
+    let video = div().w_full().flex().justify_center().mb(z(40.)).child(
+        div()
+            .relative()
+            .w(z(772.))
+            .h(z(435.))
+            .rounded(z(16.))
+            .overflow_hidden()
+            .border_1()
+            .border_color(tk(idx::BORDER_SUBTLE))
+            .child(img(VIDEO_THUMB).size_full().object_fit(gpui::ObjectFit::Cover))
+            .child(
+                div().absolute().inset_0().flex().items_center().justify_center().child(
+                    div()
+                        .size(z(76.))
+                        .rounded_full()
+                        .bg(gpui::white())
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(gpui::svg().path(crate::icons::path("play")).size(z(36.)).text_color(gpui::black())),
+                ),
+            ),
+    );
     let content = div()
         .relative()
         .w_full()
@@ -579,9 +615,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     .absolute()
     .size_0();
     Some(
-        gpui::deferred(div().id("boost-layer").absolute().inset_0().occlude().child(scroller).child(close_btn).child(keys))
-            .with_priority(5)
-            .into_any_element(),
+        gpui::deferred(div().id("boost-layer").absolute().inset_0().occlude().child(scroller).child(close_btn).child(keys)).with_priority(5).into_any_element(),
     )
 }
 

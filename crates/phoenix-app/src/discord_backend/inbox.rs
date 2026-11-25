@@ -140,11 +140,8 @@ impl Ctx<'_> {
         let rc = self.prefs.ctx();
         for g in guild_order {
             let all = self.cache.guild_channels(sf(*g));
-            let mut threads: Vec<_> = all
-                .iter()
-                .filter(|t| t.kind.is_thread() && t.member.is_some())
-                .filter(|t| !t.thread_metadata.as_ref().is_some_and(|m| m.archived))
-                .collect();
+            let mut threads: Vec<_> =
+                all.iter().filter(|t| t.kind.is_thread() && t.member.is_some()).filter(|t| !t.thread_metadata.as_ref().is_some_and(|m| m.archived)).collect();
             threads.sort_by_key(|t| t.id.0);
             for ch in super::convert::guild_channels(self.cache, sf(*g), &rc) {
                 if ch.kind == crate::model::ChannelKind::Category {

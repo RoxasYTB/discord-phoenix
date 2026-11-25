@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gpui::{div, img, prelude::*, Context, Div, FontWeight, Global, Hsla, SharedString};
+use gpui::{Context, Div, FontWeight, Global, Hsla, SharedString, div, img, prelude::*};
 
 use crate::{
     app::PhoenixApp,
@@ -68,14 +68,7 @@ fn title(k: Kind) -> SharedString {
 }
 
 fn cover(g: &crate::ui::profile_games::Game, col: &Colors) -> Div {
-    div()
-        .w(z(88.))
-        .h(z(117.))
-        .flex_none()
-        .rounded(z(8.))
-        .overflow_hidden()
-        .bg(col.cover)
-        .children(g.cover.clone().map(|u| img(u).size_full()))
+    div().w(z(88.)).h(z(117.)).flex_none().rounded(z(8.)).overflow_hidden().bg(col.cover).children(g.cover.clone().map(|u| img(u).size_full()))
 }
 
 thread_local! {
@@ -125,9 +118,15 @@ pub fn card(w: &GameWidget, col: &Colors) -> Option<Div> {
     let body = if w.kind == Kind::Favorite {
         let g = &w.games[0];
         div().flex().gap(z(16.)).child(cover(g, col)).child(
-            div().flex_1().min_w_0().pl(z(7.)).flex().flex_col().justify_center().gap(z(4.)).child(
-                div().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(col.strong).child(g.name.clone()),
-            ),
+            div()
+                .flex_1()
+                .min_w_0()
+                .pl(z(7.))
+                .flex()
+                .flex_col()
+                .justify_center()
+                .gap(z(4.))
+                .child(div().truncate().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(col.strong).child(g.name.clone())),
         )
     } else {
         div().flex().flex_wrap().gap(z(16.)).children(w.games.iter().map(|g| cover(g, col)))

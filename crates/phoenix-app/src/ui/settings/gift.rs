@@ -28,11 +28,7 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
             .child(gpui::svg().path(crate::icons::path(ic)).flex_none().size(z(12.)).mt(z(2.)).text_color(c(tok(idx::TEXT_DEFAULT))))
             .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr(k)))
     };
-    let store = |k: &'static str| {
-        controls::button_sm(eid(format!("gift-store-{k}")), tr(k), BtnKind::Secondary)
-            .bg(gpui::white())
-            .text_color(gpui::black())
-    };
+    let store = |k: &'static str| controls::button_sm(eid(format!("gift-store-{k}")), tr(k), BtnKind::Secondary).bg(gpui::white()).text_color(gpui::black());
     div()
         .flex()
         .items_center()
@@ -56,31 +52,18 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
                 .gap(z(24.))
                 .w(z(350.))
                 .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(z(12.))
-                        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.gi.buy")))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(z(8.))
-                                .child(item("shop", "sp.gi.b1"))
-                                .child(item("nitro", "sp.gi.b2"))
-                                .child(item("file", "sp.gi.b3"))
-                                .child(item("info", "sp.gi.b4")),
-                        ),
+                    div().flex().flex_col().gap(z(12.)).child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.gi.buy"))).child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(z(8.))
+                            .child(item("shop", "sp.gi.b1"))
+                            .child(item("nitro", "sp.gi.b2"))
+                            .child(item("file", "sp.gi.b3"))
+                            .child(item("info", "sp.gi.b4")),
+                    ),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .gap(z(12.))
-                        .child(store("sp.gi.s1"))
-                        .child(store("sp.gi.s2"))
-                        .child(store("sp.gi.s3"))
-                        .child(store("sp.gi.s4")),
-                ),
+                .child(div().flex().gap(z(12.)).child(store("sp.gi.s1")).child(store("sp.gi.s2")).child(store("sp.gi.s3")).child(store("sp.gi.s4"))),
         )
         .child(
             div()
@@ -114,27 +97,13 @@ pub(super) fn redeem(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
                         .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, tr("sp.gi.code_label")))
                         .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED, tr("sp.gi.code_desc"))),
                 )
-                .child(
-                    div()
-                        .h(z(40.))
-                        .rounded(z(8.))
-                        .border_1()
-                        .border_color(c(tok(idx::INPUT_BORDER_DEFAULT)))
-                        .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT))),
-                ),
+                .child(div().h(z(40.)).rounded(z(8.)).border_1().border_color(c(tok(idx::INPUT_BORDER_DEFAULT))).bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))),
         )
         .child(controls::button(eid("gift-redeem"), tr("sp.gi.redeem"), BtnKind::Primary))
         .into_any_element()
 }
 
-const BADGES: &[(&str, u32)] = &[
-    ("sp.gi.t1", 1),
-    ("sp.gi.t2", 2),
-    ("sp.gi.t3", 3),
-    ("sp.gi.t4", 6),
-    ("sp.gi.t5", 10),
-    ("sp.gi.t6", 20),
-];
+const BADGES: &[(&str, u32)] = &[("sp.gi.t1", 1), ("sp.gi.t2", 2), ("sp.gi.t3", 3), ("sp.gi.t4", 6), ("sp.gi.t5", 10), ("sp.gi.t6", 20)];
 
 pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let mut grid = div().flex().justify_center().gap(z(8.));
@@ -148,15 +117,13 @@ pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
                 .items_center()
                 .gap(z(8.))
                 .child(gpui::svg().path(crate::icons::path("gift")).size(z(44.)).text_color(c(tok(idx::ICON_MUTED))))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .gap(z(2.))
-                        .child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_MUTED, tr(k)))
-                        .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!("sp.gi.gifted", n = n))),
-                ),
+                .child(div().flex().flex_col().items_center().gap(z(2.)).child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_MUTED, tr(k))).child(text(
+                    12.,
+                    16.,
+                    FontWeight::NORMAL,
+                    idx::TEXT_SUBTLE,
+                    crate::t!("sp.gi.gifted", n = n),
+                ))),
         );
     }
     div()
@@ -174,15 +141,12 @@ pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
                 .child(grid)
                 .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE, tr("sp.gi.footer")).text_center()),
         )
-        .child(
-            div()
-                .p(z(24.))
-                .rounded_b(z(12.))
-                .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
-                .flex()
-                .justify_end()
-                .child(controls::button_icon(eid("gift-send"), "gift", tr("sp.gi.send"), BtnKind::Primary)),
-        )
+        .child(div().p(z(24.)).rounded_b(z(12.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).flex().justify_end().child(controls::button_icon(
+            eid("gift-send"),
+            "gift",
+            tr("sp.gi.send"),
+            BtnKind::Primary,
+        )))
         .into_any_element()
 }
 
@@ -198,11 +162,13 @@ pub(super) fn purchased(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyE
 
 pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let data = super::subscriptions::get().unwrap_or_default();
-    let mut head = div()
-        .flex()
-        .flex_col()
-        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")).mb(z(16.)))
-        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
+    let mut head = div().flex().flex_col().child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")).mb(z(16.))).child(text(
+        16.,
+        20.,
+        FontWeight::NORMAL,
+        idx::TEXT_DEFAULT,
+        tr("sp.su.desc"),
+    ));
     if let Some(sq) = &data.squad {
         head = head.child(div().mt(z(16.)).child(squad_card(sq)));
     }
@@ -247,7 +213,15 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
         .pb(z(12.))
         .border_b_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
-        .child(div().text_size(z(16.)).line_height(z(18.)).font_weight(FontWeight::EXTRA_BOLD).italic().text_color(c(tok(idx::TEXT_STRONG))).child(tr("sp.su.squad").to_uppercase()))
+        .child(
+            div()
+                .text_size(z(16.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .italic()
+                .text_color(c(tok(idx::TEXT_STRONG)))
+                .child(tr("sp.su.squad").to_uppercase()),
+        )
         .child(
             div()
                 .h(z(16.))
@@ -316,14 +290,7 @@ fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {
         .overflow_hidden()
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
         .child(wash)
-        .child(
-            div()
-                .relative()
-                .pt(z(4.))
-                .px(z(24.))
-                .child(header)
-                .child(div().flex().min_h(z(320.)).child(left).child(right)),
-        )
+        .child(div().relative().pt(z(4.)).px(z(24.)).child(header).child(div().flex().min_h(z(320.)).child(left).child(right)))
         .into_any_element()
 }
 

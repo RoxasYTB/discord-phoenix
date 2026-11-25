@@ -59,12 +59,7 @@ pub fn ensure_with(avatar: &str, cx: &mut App, done: impl FnOnce(&mut App) + 'st
 
 pub fn dominant_png(bytes: &[u8]) -> Option<u32> {
     let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png).ok()?.to_rgba8();
-    let px: Vec<[u8; 3]> = img
-        .pixels()
-        .step_by(10)
-        .filter(|p| p[3] >= 125 && !(p[0] > 250 && p[1] > 250 && p[2] > 250))
-        .map(|p| [p[0], p[1], p[2]])
-        .collect();
+    let px: Vec<[u8; 3]> = img.pixels().step_by(10).filter(|p| p[3] >= 125 && !(p[0] > 250 && p[1] > 250 && p[2] > 250)).map(|p| [p[0], p[1], p[2]]).collect();
     let [r, g, b] = palette(&px, 5).first().copied().unwrap_or([0, 0, 0]);
     Some((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b))
 }

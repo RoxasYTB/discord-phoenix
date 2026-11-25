@@ -35,13 +35,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::An
             .px(z(16.))
             .bg(super::tk(idx::BACKGROUND_MOD_NORMAL))
             .child(
-                div()
-                    .flex_1()
-                    .text_size(z(14.))
-                    .line_height(z(18.))
-                    .font_weight(gpui::FontWeight::NORMAL)
-                    .text_color(super::tk(idx::TEXT_DEFAULT))
-                    .child(text),
+                div().flex_1().text_size(z(14.)).line_height(z(18.)).font_weight(gpui::FontWeight::NORMAL).text_color(super::tk(idx::TEXT_DEFAULT)).child(text),
             )
             .children(action)
             .into_any_element(),

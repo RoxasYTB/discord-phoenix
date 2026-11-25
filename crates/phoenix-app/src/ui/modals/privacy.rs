@@ -207,12 +207,14 @@ pub fn render_security_with(s: &Security, close: crate::ui::modal::Action, frame
         .flex_col()
         .gap(z(16.))
         .child(super::settings_form::dropdown("sec-hours", PAUSE_HOURS.iter().map(|h| hours_label(*h)).collect(), sel, s.open, toggle, pick, cx))
-        .child(pause_card("sec-invites", crate::t!("admin.pause_invites"), crate::t!("admin.pause_invites_desc"), s.invites, locked).on_click(cx.listener(move |_, _, _, cx| {
-            if !locked {
-                with_sec(|s| s.invites = !s.invites);
-            }
-            cx.notify();
-        })))
+        .child(pause_card("sec-invites", crate::t!("admin.pause_invites"), crate::t!("admin.pause_invites_desc"), s.invites, locked).on_click(cx.listener(
+            move |_, _, _, cx| {
+                if !locked {
+                    with_sec(|s| s.invites = !s.invites);
+                }
+                cx.notify();
+            },
+        )))
         .child(pause_card("sec-dms", crate::t!("admin.pause_dms"), crate::t!("admin.pause_dms_desc"), s.dms, false).on_click(cx.listener(|_, _, _, cx| {
             with_sec(|s| s.dms = !s.dms);
             cx.notify();
@@ -225,18 +227,20 @@ pub fn render_security_with(s: &Security, close: crate::ui::modal::Action, frame
         .flex()
         .gap(z(8.))
         .child(button("sec-cancel", crate::t!("common.cancel"), BtnKind::Secondary).flex_1().on_click(move |_, w, cx| c2(w, cx)))
-        .child(button("sec-save", crate::t!("admin.security_save"), BtnKind::Primary).flex_1().when(!dirty, |b| b.opacity(0.5)).on_click(cx.listener(move |a, _, w, cx| {
-            if !dirty {
-                return;
-            }
-            let mut call = None;
-            with_sec(|s| call = Some(s.call(now_unix())));
-            c_save(w, cx);
-            if let Some(call) = call {
-                a.admin_toast(call, Some(crate::t!("admin.security_saved")), cx);
-            }
-            cx.notify();
-        })));
+        .child(button("sec-save", crate::t!("admin.security_save"), BtnKind::Primary).flex_1().when(!dirty, |b| b.opacity(0.5)).on_click(cx.listener(
+            move |a, _, w, cx| {
+                if !dirty {
+                    return;
+                }
+                let mut call = None;
+                with_sec(|s| call = Some(s.call(now_unix())));
+                c_save(w, cx);
+                if let Some(call) = call {
+                    a.admin_toast(call, Some(crate::t!("admin.security_saved")), cx);
+                }
+                cx.notify();
+            },
+        )));
     if framed {
         return super::card_with(480., crate::t!("menu.security_actions"), None, body.into_any_element(), Some(footer.into_any_element()), close);
     }

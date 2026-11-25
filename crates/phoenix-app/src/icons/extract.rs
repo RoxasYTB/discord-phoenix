@@ -97,10 +97,7 @@ fn literal_attrs(obj: &str) -> Vec<(String, String)> {
 }
 
 fn attr_ok(k: &str) -> bool {
-    matches!(
-        k,
-        "d" | "cx" | "cy" | "r" | "rx" | "ry" | "x" | "y" | "width" | "height" | "points" | "fillRule" | "clipRule" | "transform"
-    )
+    matches!(k, "d" | "cx" | "cy" | "r" | "rx" | "ry" | "x" | "y" | "width" | "height" | "points" | "fillRule" | "clipRule" | "transform")
 }
 
 fn by_path(js: &str, prefix: &str) -> Option<String> {
@@ -149,11 +146,7 @@ fn build(body: &str, second: bool) -> Option<String> {
     let svg_open = svg_at + "(\"svg\",".len();
     let svg_close = close_brace(body.as_bytes(), svg_open)?;
     let root = &body[svg_open + 1..svg_close];
-    let view_box = literal_attrs(root)
-        .into_iter()
-        .find(|(k, _)| k == "viewBox")
-        .map(|(_, v)| v)
-        .unwrap_or_else(|| "0 0 24 24".into());
+    let view_box = literal_attrs(root).into_iter().find(|(k, _)| k == "viewBox").map(|(_, v)| v).unwrap_or_else(|| "0 0 24 24".into());
     let secondary = body.find("secondaryColor:").map(|i| {
         let v = &body[i + "secondaryColor:".len()..];
         v[..v.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')).unwrap_or(v.len())].to_owned()
@@ -188,9 +181,7 @@ fn build(body: &str, second: bool) -> Option<String> {
     if shapes.is_empty() {
         return None;
     }
-    Some(format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" fill="black">{shapes}</svg>"#
-    ))
+    Some(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" fill="black">{shapes}</svg>"#))
 }
 
 #[cfg(test)]

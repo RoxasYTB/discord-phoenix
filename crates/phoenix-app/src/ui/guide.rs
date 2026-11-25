@@ -161,13 +161,7 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
         .bg(t(idx::BACKGROUND_SURFACE_HIGH))
         .child(div().w_full().pt(gpui::relative(0.25)))
         .when_some(art, |d, h| {
-            d.child(
-                gpui::img(cdn(format!("home-headers/{}/{h}.png?size=1536", gid.0)))
-                    .absolute()
-                    .inset_0()
-                    .size_full()
-                    .object_fit(gpui::ObjectFit::Cover),
-            )
+            d.child(gpui::img(cdn(format!("home-headers/{}/{h}.png?size=1536", gid.0))).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
         });
     let invite = crate::ui::controls::button("guide-invite", crate::t!("guide.invite"), crate::ui::controls::BtnKind::Secondary)
         .on_click(cx.listener(move |a, _, _, cx| a.open_invite_people(gid, cx)));
@@ -176,16 +170,7 @@ fn header(app: &PhoenixApp, g: &Guild, cx: &Context<PhoenixApp>) -> gpui::Div {
         .flex()
         .flex_col()
         .child(art)
-        .child(
-            div()
-                .mt(z(-50.))
-                .mb(z(16.))
-                .size(z(108.))
-                .p(z(4.))
-                .rounded(z(30.))
-                .bg(t(idx::BACKGROUND_BASE_LOW))
-                .child(icon(g, 100., 26.)),
-        )
+        .child(div().mt(z(-50.)).mb(z(16.)).size(z(108.)).p(z(4.)).rounded(z(30.)).bg(t(idx::BACKGROUND_BASE_LOW)).child(icon(g, 100., 26.)))
         .child(
             div()
                 .flex()
@@ -211,13 +196,7 @@ fn resource(i: usize, r: &GuideEntry, preview: Option<&Preview>, cx: &Context<Ph
     let ch = r.channel;
     let text = Some(r.description.clone()).filter(|d| !d.is_empty()).or_else(|| preview.and_then(|p| p.text.clone()));
     let thumb: Option<AnyElement> = match (&r.icon, preview.and_then(|p| p.media.clone())) {
-        (Some(h), _) => Some(
-            gpui::img(cdn(format!("resource-channels/{}/{h}.jpg?size=128", ch.0)))
-                .size(z(72.))
-                .rounded(z(8.))
-                .flex_none()
-                .into_any_element(),
-        ),
+        (Some(h), _) => Some(gpui::img(cdn(format!("resource-channels/{}/{h}.jpg?size=128", ch.0))).size(z(72.)).rounded(z(8.)).flex_none().into_any_element()),
         (None, Some((url, w, h))) => {
             let (w, h) = (w.max(1) as f32, h.max(1) as f32);
             let (tw, th) = if h > w { (72. * w / h, 72.) } else { (72., 72. * h / w) };
@@ -362,8 +341,9 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
         .overflow_hidden()
         .flex()
         .flex_col()
-        .child(
-            div().relative().h(z(120.)).w_full().flex_none().overflow_hidden().bg(t(idx::BACKGROUND_MOD_STRONG)).when_some(p.custom_banner_hash.clone(), |d, h| {
+        .child(div().relative().h(z(120.)).w_full().flex_none().overflow_hidden().bg(t(idx::BACKGROUND_MOD_STRONG)).when_some(
+            p.custom_banner_hash.clone(),
+            |d, h| {
                 d.child(
                     gpui::img(cdn(format!("discovery-splashes/{}/{h}.jpg?size=640", gid.0)))
                         .absolute()
@@ -371,8 +351,8 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
                         .size_full()
                         .object_fit(gpui::ObjectFit::Cover),
                 )
-            }),
-        )
+            },
+        ))
         .child(
             div().mt(z(-34.)).px(z(16.)).child(
                 div().size(z(70.)).rounded(z(22.)).bg(t(idx::BACKGROUND_SURFACE_HIGHEST)).flex().items_center().justify_center().child(icon(g, 64., 19.)),
@@ -463,11 +443,7 @@ fn action_row(i: usize, a: &GuideEntry, cx: &Context<PhoenixApp>) -> AnyElement 
                 }),
         )
         .child(
-            gpui::svg()
-                .path(crate::icons::path(if a.action_type == 1 { "chat" } else { "chevron" }))
-                .size(z(16.))
-                .flex_none()
-                .text_color(t(idx::ICON_MUTED)),
+            gpui::svg().path(crate::icons::path(if a.action_type == 1 { "chat" } else { "chevron" })).size(z(16.)).flex_none().text_color(t(idx::ICON_MUTED)),
         )
         .into_any_element()
 }
@@ -486,10 +462,23 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         .items_center()
         .border_b_1()
         .border_color(t(idx::BORDER_SUBTLE))
-        .child(div().size(z(32.)).flex().items_center().justify_center().child(
-            gpui::svg().path(crate::icons::path("signpost")).size(z(20.)).flex_none().text_color(t(idx::ICON_MUTED)),
-        ))
-        .child(div().mr(z(8.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).child(crate::t!("guild.top.guide")));
+        .child(
+            div()
+                .size(z(32.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("signpost")).size(z(20.)).flex_none().text_color(t(idx::ICON_MUTED))),
+        )
+        .child(
+            div()
+                .mr(z(8.))
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(t(idx::TEXT_STRONG))
+                .child(crate::t!("guild.top.guide")),
+        );
     let mut main = div().flex_1().min_w_0().flex().flex_col();
     match &page.data {
         None => main = main.child(div().mt(z(16.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("common.loading"))),
@@ -508,12 +497,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                     .gap(z(8.));
                 if !authors.is_empty() {
                     wcard = wcard.child(
-                        div()
-                            .text_size(z(14.))
-                            .line_height(z(18.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(t(idx::TEXT_STRONG))
-                            .child(authors.join(", ")),
+                        div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(authors.join(", ")),
                     );
                 }
                 wcard = wcard.child(crate::ui::profile_bio::bio(&d.welcome_message, false, t(idx::TEXT_DEFAULT)));
@@ -535,7 +519,12 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             }
             if !d.resources.is_empty() {
                 let mut col = div().mt(z(16.)).flex().flex_col().gap(z(8.)).child(
-                    div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_STRONG)).child(crate::t!("guide.resources")),
+                    div()
+                        .text_size(z(20.))
+                        .line_height(z(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(t(idx::TEXT_STRONG))
+                        .child(crate::t!("guide.resources")),
                 );
                 for (i, r) in d.resources.iter().enumerate() {
                     col = col.child(resource(i, r, page.previews.get(&r.channel), cx));
@@ -569,7 +558,15 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
                     .flex_1()
                     .min_h_0()
-                    .child(div().id("guide-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("guide-scroll")).child(body))
+                    .child(
+                        div()
+                            .id("guide-scroll")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .track_scroll(&crate::ui::chat::scrollbar::handle("guide-scroll"))
+                            .child(body),
+                    )
                     .children(crate::ui::chat::scrollbar::bar_for("guide-scroll", crate::ui::chat::scrollbar::Bar::Auto)),
             )
             .into_any_element(),

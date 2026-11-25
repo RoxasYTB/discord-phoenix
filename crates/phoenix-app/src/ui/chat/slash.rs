@@ -119,10 +119,7 @@ pub fn builtins(app: &PhoenixApp) -> Vec<SlashCommand> {
 fn all_slash(app: &PhoenixApp, cx: &App) -> Vec<SlashCommand> {
     let Some(ch) = app.selected_channel else { return vec![] };
     let cached = cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch));
-    builtins(app)
-        .into_iter()
-        .chain(cached.into_iter().flatten().filter(|c| c.kind == 1).cloned())
-        .collect()
+    builtins(app).into_iter().chain(cached.into_iter().flatten().filter(|c| c.kind == 1).cloned()).collect()
 }
 
 fn matches(app: &PhoenixApp, q: &str, cx: &App) -> Vec<SlashCommand> {
@@ -134,10 +131,7 @@ fn matches(app: &PhoenixApp, q: &str, cx: &App) -> Vec<SlashCommand> {
         v.truncate(50);
         return v;
     }
-    let mut scored: Vec<(u8, SlashCommand)> = all
-        .into_iter()
-        .filter_map(|c| slash::score(&c.name, &c.description, c.options(), q).map(|s| (s, c)))
-        .collect();
+    let mut scored: Vec<(u8, SlashCommand)> = all.into_iter().filter_map(|c| slash::score(&c.name, &c.description, c.options(), q).map(|s| (s, c))).collect();
     scored.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.name.cmp(&b.1.name)));
     scored.truncate(25);
     scored.into_iter().map(|(_, c)| c).collect()
@@ -177,11 +171,7 @@ fn fill_option(app: &mut PhoenixApp, cmd_name: &str, opt_name: &str, val: Option
     let cur = text(app, cx);
     let next = if let Some(v) = val {
         let prefix = format!("{opt_name}:");
-        if let Some(pos) = cur.rfind(&prefix) {
-            format!("{}{prefix}{v} ", &cur[..pos])
-        } else {
-            format!("{} {opt_name}:{v} ", cur.trim_end())
-        }
+        if let Some(pos) = cur.rfind(&prefix) { format!("{}{prefix}{v} ", &cur[..pos]) } else { format!("{} {opt_name}:{v} ", cur.trim_end()) }
     } else if cur.trim_end().ends_with(&format!("/{cmd_name}")) {
         format!("/{cmd_name} {opt_name}:")
     } else {
@@ -259,11 +249,7 @@ pub fn submit(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     let vals = match slash::leaf_values(&cmd.leaf, &args, &auto) {
         Ok(v) => v,
         Err(err) => {
-            app.chat.error = Some(if err.option.is_empty() {
-                err.message.into()
-            } else {
-                format!("{}: {}", err.option, err.message).into()
-            });
+            app.chat.error = Some(if err.option.is_empty() { err.message.into() } else { format!("{}: {}", err.option, err.message).into() });
             cx.notify();
             return true;
         }
@@ -320,10 +306,7 @@ pub fn submit(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     let guild = app.channels.get(&ch).and_then(|c| c.guild);
     let nonce = next_nonce();
     let bot = cmd.bot_id.or(cmd.app_id).unwrap_or(Id(0));
-    command_msg::track(
-        nonce,
-        command_msg::Pending { channel: ch, app_name: cmd.app_name.clone(), phase: command_msg::Phase::Sending, interaction: None },
-    );
+    command_msg::track(nonce, command_msg::Pending { channel: ch, app_name: cmd.app_name.clone(), phase: command_msg::Phase::Sending, interaction: None });
     let ph = command_msg::placeholder(app, ch, nonce, bot, &cmd.name, cmd.kind, None);
     app.append_message(ph, cx);
     let fut = app.backend.parity(ParityRequest::RunCommand { guild, channel: ch, command: cmd.raw.clone(), options, nonce });
@@ -481,17 +464,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 .children(crate::ui::chat::scrollbar::bar_for("slash-list", crate::ui::chat::scrollbar::Bar::Thin));
             return Some(anchor(popup().max_h(z(490.)).h(z((items.len() as f32 * 56. + 52.).min(490.))).child(list)));
         }
-        let mut rail = div()
-            .w(z(48.))
-            .h_full()
-            .flex_none()
-            .bg(super::tk(idx::BACKGROUND_BASE_LOWEST))
-            .pt(z(16.))
-            .pb(z(8.))
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap(z(8.));
+        let mut rail =
+            div().w(z(48.)).h_full().flex_none().bg(super::tk(idx::BACKGROUND_BASE_LOWEST)).pt(z(16.)).pb(z(8.)).flex().flex_col().items_center().gap(z(8.));
         let mut last_app: Option<&str> = None;
         for (i, cmd) in items.iter().enumerate() {
             if last_app != Some(cmd.app_name.as_str()) {
@@ -501,27 +475,18 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 last_app = Some(cmd.app_name.as_str());
                 rail = rail.child(div().size(z(32.)).flex_none().rounded(z(4.)).cursor_pointer().child(app_icon(cmd, 32.)));
                 list = list.child(
-                    div()
-                        .h(z(32.))
-                        .flex_none()
-                        .pl(z(8.))
-                        .pr(z(4.))
-                        .flex()
-                        .items_center()
-                        .gap(z(6.))
-                        .child(app_icon(cmd, 16.))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .text_size(fz(14.))
-                                .line_height(fz(18.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(c(tok(idx::TEXT_DEFAULT)))
-                                .child(SharedString::from(cmd.app_name.clone())),
-                        ),
+                    div().h(z(32.)).flex_none().pl(z(8.)).pr(z(4.)).flex().items_center().gap(z(6.)).child(app_icon(cmd, 16.)).child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_size(fz(14.))
+                            .line_height(fz(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(c(tok(idx::TEXT_DEFAULT)))
+                            .child(SharedString::from(cmd.app_name.clone())),
+                    ),
                 );
             }
             list = list.child(command_row(i, sel, cmd, cx));
@@ -569,7 +534,15 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 .bg(super::tk(idx::BACKGROUND_MOD_NORMAL))
                 .flex()
                 .text_size(fz(14.))
-                .child(div().px(z(8.)).py(z(1.)).rounded_l(z(4.)).bg(super::tk(idx::BACKGROUND_SURFACE_HIGH)).text_color(c(tok(idx::TEXT_DEFAULT))).child(SharedString::from(n.to_owned())))
+                .child(
+                    div()
+                        .px(z(8.))
+                        .py(z(1.))
+                        .rounded_l(z(4.))
+                        .bg(super::tk(idx::BACKGROUND_SURFACE_HIGH))
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .child(SharedString::from(n.to_owned())),
+                )
                 .child(div().px(z(8.)).py(z(1.)).text_color(c(tok(idx::TEXT_MUTED))).child(type_hint(kind)))
                 .when(req && !filled, |d| d.child(div().pr(z(6.)).text_color(c(Palette::RED)).child("*")))
                 .on_click(cx.listener(move |a, _, w, cx| fill_option(a, &cn, &on, None, w, cx))),
@@ -630,12 +603,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         .p(z(12.))
         .gap(z(6.))
         .child(chips)
-        .child(
-            div()
-                .text_size(fz(12.))
-                .text_color(c(tok(idx::TEXT_MUTED)))
-                .child(SharedString::from(desc.unwrap_or(cmd.description.clone()))),
-        )
+        .child(div().text_size(fz(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(SharedString::from(desc.unwrap_or(cmd.description.clone()))))
         .children(choices_el);
     Some(anchor(bar))
 }

@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
-use serde_json::{Value, json};
 use serde_json::value::RawValue;
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until, timeout};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -153,13 +153,7 @@ impl GatewayHandle {
         self.tx.send(cmd).map_err(|_| crate::Error::Closed)
     }
 
-    pub fn update_voice_state(
-        &self,
-        guild: Option<GuildId>,
-        channel: Option<ChannelId>,
-        self_mute: bool,
-        self_deaf: bool,
-    ) -> crate::Result<()> {
+    pub fn update_voice_state(&self, guild: Option<GuildId>, channel: Option<ChannelId>, self_mute: bool, self_deaf: bool) -> crate::Result<()> {
         self.update_voice_state_video(guild, channel, self_mute, self_deaf, false)
     }
 
@@ -171,22 +165,11 @@ impl GatewayHandle {
         self_deaf: bool,
         self_video: bool,
     ) -> crate::Result<()> {
-        self.send(GatewayCommand::UpdateVoiceState(UpdateVoiceState {
-            guild_id: guild,
-            channel_id: channel,
-            self_mute,
-            self_deaf,
-            self_video,
-        }))
+        self.send(GatewayCommand::UpdateVoiceState(UpdateVoiceState { guild_id: guild, channel_id: channel, self_mute, self_deaf, self_video }))
     }
 
     pub fn update_presence(&self, status: &str) -> crate::Result<()> {
-        self.send(GatewayCommand::UpdatePresence(UpdatePresence {
-            since: 0,
-            activities: vec![],
-            status: status.into(),
-            afk: false,
-        }))
+        self.send(GatewayCommand::UpdatePresence(UpdatePresence { since: 0, activities: vec![], status: status.into(), afk: false }))
     }
 
     pub fn subscribe_guild(&self, guild: GuildId, sub: GuildSubscription) -> crate::Result<()> {
@@ -289,11 +272,7 @@ struct Runner {
     healthy: bool,
 }
 
-async fn run(
-    config: GatewayConfig,
-    cmd_rx: mpsc::UnboundedReceiver<GatewayCommand>,
-    ev_tx: mpsc::UnboundedSender<GatewayEvent>,
-) {
+async fn run(config: GatewayConfig, cmd_rx: mpsc::UnboundedReceiver<GatewayCommand>, ev_tx: mpsc::UnboundedSender<GatewayEvent>) {
     let session = config
         .resume
         .as_ref()
@@ -410,13 +389,9 @@ impl Runner {
             GatewayCommand::UpdateVoiceState(v) => (op::VOICE_STATE_UPDATE, serde_json::to_value(v).ok()?),
             GatewayCommand::UpdatePresence(v) => (op::PRESENCE_UPDATE, serde_json::to_value(v).ok()?),
             GatewayCommand::RequestGuildMembers(v) => (op::REQUEST_GUILD_MEMBERS, serde_json::to_value(v).ok()?),
-            GatewayCommand::RequestSoundboardSounds(v) => {
-                (op::REQUEST_SOUNDBOARD_SOUNDS, serde_json::to_value(v).ok()?)
-            }
+            GatewayCommand::RequestSoundboardSounds(v) => (op::REQUEST_SOUNDBOARD_SOUNDS, serde_json::to_value(v).ok()?),
             GatewayCommand::LazyRequest(v) => (op::LAZY_REQUEST, serde_json::to_value(v).ok()?),
-            GatewayCommand::GuildSubscriptionsBulk(m) => {
-                (op::GUILD_SUBSCRIPTIONS_BULK, json!({ "subscriptions": m }))
-            }
+            GatewayCommand::GuildSubscriptionsBulk(m) => (op::GUILD_SUBSCRIPTIONS_BULK, json!({ "subscriptions": m })),
             GatewayCommand::Raw { op, d } => (*op, d.clone()),
             GatewayCommand::Shutdown => return None,
         };

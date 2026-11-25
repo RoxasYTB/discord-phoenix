@@ -1,9 +1,9 @@
-use aes_gcm::aead::{AeadInPlace, KeyInit};
 use aes_gcm::Aes128Gcm;
+use aes_gcm::aead::{AeadInPlace, KeyInit};
 
 use super::ratchet::KeyRatchet;
 use crate::codec::Codec;
-use crate::{leb128, Error, Result};
+use crate::{Error, Result, leb128};
 
 type Aes128Gcm8 = Aes128Gcm;
 
@@ -147,12 +147,7 @@ fn nonce_bytes(truncated: u32) -> [u8; 12] {
 }
 
 fn emulates_start_code(data: &[u8], clear: &[Range]) -> bool {
-    data.windows(3).enumerate().any(|(i, w)| {
-        w[0] == 0
-            && w[1] == 0
-            && w[2] <= 3
-            && !clear.iter().any(|r| i >= r.offset && i + 3 <= r.offset + r.len)
-    })
+    data.windows(3).enumerate().any(|(i, w)| w[0] == 0 && w[1] == 0 && w[2] <= 3 && !clear.iter().any(|r| i >= r.offset && i + 3 <= r.offset + r.len))
 }
 
 pub struct FrameEncryptor {
@@ -286,11 +281,7 @@ impl FrameDecryptor {
             return Ok(frame.to_vec());
         }
         if !is_encrypted(frame) {
-            return if self.allow_passthrough {
-                Ok(frame.to_vec())
-            } else {
-                Err(Error::Crypto("unencrypted frame while E2EE required"))
-            };
+            return if self.allow_passthrough { Ok(frame.to_vec()) } else { Err(Error::Crypto("unencrypted frame while E2EE required")) };
         }
         let f = parse_footer(frame)?;
         let body = &frame[..f.body_len];
@@ -318,10 +309,7 @@ mod tests {
     use crate::dave::ratchet::{HashRatchet, StaticRatchet};
 
     fn pair() -> (FrameEncryptor, FrameDecryptor) {
-        (
-            FrameEncryptor::new(Box::new(HashRatchet::new(&[9u8; 16]))),
-            FrameDecryptor::new(Box::new(HashRatchet::new(&[9u8; 16]))),
-        )
+        (FrameEncryptor::new(Box::new(HashRatchet::new(&[9u8; 16]))), FrameDecryptor::new(Box::new(HashRatchet::new(&[9u8; 16]))))
     }
 
     #[test]

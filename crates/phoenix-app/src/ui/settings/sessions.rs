@@ -69,9 +69,7 @@ pub fn parse(v: &Value) -> Vec<Session> {
                 os: s(&info, "os"),
                 platform: s(&info, "platform"),
                 location: s(&info, "location").or_else(|| s(&info, "ip")),
-                last_used: s(e, "approx_last_used_time")
-                    .and_then(|t| chrono::DateTime::parse_from_rfc3339(&t).ok())
-                    .map_or(0, |t| t.timestamp()),
+                last_used: s(e, "approx_last_used_time").and_then(|t| chrono::DateTime::parse_from_rfc3339(&t).ok()).map_or(0, |t| t.timestamp()),
             }
         })
         .collect()
@@ -101,11 +99,7 @@ pub fn from_now(secs: i64) -> String {
     let months = r(d / 86400. * 4800. / 146_097.);
     let years = r(d / 86400. * 400. / 146_097.);
     let unit = |n: u64, u: &str| {
-        if n <= 1 {
-            crate::t!(&format!("unit.{u}_a")).to_string()
-        } else {
-            format!("{n} {}", crate::t!(&format!("unit.{u}_many")))
-        }
+        if n <= 1 { crate::t!(&format!("unit.{u}_a")).to_string() } else { format!("{n} {}", crate::t!(&format!("unit.{u}_many"))) }
     };
     let what = if seconds <= 44 {
         crate::t!("settings.devices.few_seconds").to_string()

@@ -92,17 +92,11 @@ fn guild_lifecycle_and_roles() {
     let gid = g.id;
     cache.apply(&GatewayEvent::GuildCreate(Box::new(g)));
     assert_eq!(cache.guild_channels(gid).len(), 1);
-    cache.apply(&parse_dispatch(
-        "GUILD_ROLE_CREATE",
-        r#"{"guild_id":"300000000000000003","role":{"id":"9","name":"new","permissions":"0"}}"#,
-    ));
+    cache.apply(&parse_dispatch("GUILD_ROLE_CREATE", r#"{"guild_id":"300000000000000003","role":{"id":"9","name":"new","permissions":"0"}}"#));
     assert_eq!(cache.guild(gid).unwrap().roles.len(), 2);
     cache.apply(&parse_dispatch("GUILD_ROLE_DELETE", r#"{"guild_id":"300000000000000003","role_id":"9"}"#));
     assert_eq!(cache.guild(gid).unwrap().roles.len(), 1);
-    cache.apply(&parse_dispatch(
-        "CHANNEL_CREATE",
-        r#"{"id":"5","type":0,"guild_id":"300000000000000003","name":"new","position":1}"#,
-    ));
+    cache.apply(&parse_dispatch("CHANNEL_CREATE", r#"{"id":"5","type":0,"guild_id":"300000000000000003","name":"new","position":1}"#));
     assert_eq!(cache.guild_channels(gid).len(), 2);
     cache.apply(&parse_dispatch("GUILD_DELETE", r#"{"id":"300000000000000003","unavailable":true}"#));
     assert!(cache.guild(gid).unwrap().unavailable);
@@ -114,10 +108,7 @@ fn guild_lifecycle_and_roles() {
 #[test]
 fn voice_state_tracking() {
     let cache = Cache::default();
-    cache.apply(&parse_dispatch(
-        "VOICE_STATE_UPDATE",
-        r#"{"guild_id":"1","channel_id":"2","user_id":"3","session_id":"s"}"#,
-    ));
+    cache.apply(&parse_dispatch("VOICE_STATE_UPDATE", r#"{"guild_id":"1","channel_id":"2","user_id":"3","session_id":"s"}"#));
     assert_eq!(cache.voice_states(Some(Snowflake(1))).len(), 1);
     cache.apply(&parse_dispatch("VOICE_STATE_UPDATE", r#"{"guild_id":"1","channel_id":null,"user_id":"3","session_id":"s"}"#));
     assert!(cache.voice_states(Some(Snowflake(1))).is_empty());

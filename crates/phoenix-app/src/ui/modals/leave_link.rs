@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, StyledText, Styled, TextRun, div, prelude::*};
+use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, StyledText, TextRun, div, prelude::*};
 
 use super::{Modal, card, close_action};
 use crate::{
@@ -42,8 +42,7 @@ pub fn parts(url: &str) -> Option<Parts> {
 
 fn discord_host(host: &str) -> bool {
     let h = host.to_lowercase();
-    DISCORD_HOSTS.contains(&h.as_str())
-        || ["discordapp.com", "discord.com", "discordmerch.com"].iter().any(|d| h == *d || h.ends_with(&format!(".{d}")))
+    DISCORD_HOSTS.contains(&h.as_str()) || ["discordapp.com", "discord.com", "discordmerch.com"].iter().any(|d| h == *d || h.ends_with(&format!(".{d}")))
 }
 
 pub fn trusted(app: &PhoenixApp, text: &str, url: &str) -> bool {
@@ -104,11 +103,7 @@ pub fn render(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .border_color(c(tok(idx::BORDER_SUBTLE)))
         .text_size(z(16.))
         .line_height(z(20.))
-        .child(styled(vec![
-            span(format!("{}{}", p.protocol, p.authority), s.protocol),
-            span(p.host.clone(), !s.protocol),
-            span(p.rest.clone(), false),
-        ]));
+        .child(styled(vec![span(format!("{}{}", p.protocol, p.authority), s.protocol), span(p.host.clone(), !s.protocol), span(p.rest.clone(), false)]));
     let (lead, target) = if s.protocol {
         (crate::t!("link.trust_protocol"), p.protocol.trim_end_matches(':').to_owned())
     } else {
@@ -132,25 +127,23 @@ pub fn render(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
             let close = close_action(cx);
             move |_, w, cx| close(w, cx)
         }))
-        .child(
-            button("leave-link-go", if s.protocol { crate::t!("link.open") } else { crate::t!("link.visit") }, BtnKind::Primary)
-                .flex_1()
-                .on_click(cx.listener(|a, _, _, cx| {
-                    let taken = with_modal(|m| match m.take() {
-                        Some(Modal::LeaveLink(s)) => Some(s),
-                        other => {
-                            *m = other;
-                            None
-                        }
-                    });
-                    if let Some(s) = taken {
-                        confirm(a, &s);
-                        cx.open_url(&s.url);
+        .child(button("leave-link-go", if s.protocol { crate::t!("link.open") } else { crate::t!("link.visit") }, BtnKind::Primary).flex_1().on_click(
+            cx.listener(|a, _, _, cx| {
+                let taken = with_modal(|m| match m.take() {
+                    Some(Modal::LeaveLink(s)) => Some(s),
+                    other => {
+                        *m = other;
+                        None
                     }
-                    close_modal();
-                    cx.notify();
-                })),
-        );
+                });
+                if let Some(s) = taken {
+                    confirm(a, &s);
+                    cx.open_url(&s.url);
+                }
+                close_modal();
+                cx.notify();
+            }),
+        ));
     let subtitle = if s.protocol { crate::t!("link.leaving_app") } else { crate::t!("link.leaving_site") };
     card(480., crate::t!("link.leaving"), Some(subtitle), body.into_any_element(), Some(footer.into_any_element()), cx)
 }

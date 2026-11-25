@@ -109,10 +109,7 @@ fn write(channel: u64, json: &[u8]) {
     opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
     opts.mode(0o600);
-    let ok = opts
-        .open(&tmp)
-        .and_then(|mut f| f.write_all(json))
-        .is_ok();
+    let ok = opts.open(&tmp).and_then(|mut f| f.write_all(json)).is_ok();
     if !(ok && fs::rename(&tmp, &p).is_ok()) {
         let _ = fs::remove_file(&tmp);
     }
@@ -122,12 +119,8 @@ fn write(channel: u64, json: &[u8]) {
 }
 
 fn trim(d: &std::path::Path) {
-    let mut files: Vec<(SystemTime, PathBuf)> = fs::read_dir(d)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .collect();
+    let mut files: Vec<(SystemTime, PathBuf)> =
+        fs::read_dir(d).into_iter().flatten().flatten().filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path()))).collect();
     if files.len() <= DISK_CAP {
         return;
     }

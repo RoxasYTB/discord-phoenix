@@ -101,11 +101,8 @@ fn frame(kind: Kind, item: &Value) -> Option<FrameSpec> {
         item.get(k).or_else(|| item.get(&camel)).and_then(Value::as_f64).unwrap_or(0.) as f32
     };
     let raw = item.get("layers")?.as_array()?;
-    let staple = raw
-        .iter()
-        .filter(|l| l.get("id").and_then(Value::as_str).is_some())
-        .map(|l| l.get("type").and_then(Value::as_str) == Some("staple"))
-        .collect();
+    let staple =
+        raw.iter().filter(|l| l.get("id").and_then(Value::as_str).is_some()).map(|l| l.get("type").and_then(Value::as_str) == Some("staple")).collect();
     let layers = raw
         .iter()
         .filter_map(|l| {
@@ -130,9 +127,17 @@ fn frame(kind: Kind, item: &Value) -> Option<FrameSpec> {
 }
 
 fn item(kind: Kind, sku: u64, name: SharedString, it: &Value) -> Collectible {
-    Collectible { sku, kind, name, preview: preview(kind, it), full: full(kind, it), effects: effects(kind, it), frame: frame(kind, it),
+    Collectible {
+        sku,
+        kind,
+        name,
+        preview: preview(kind, it),
+        full: full(kind, it),
+        effects: effects(kind, it),
+        frame: frame(kind, it),
         persistent: kind == Kind::Effect && it.get("animationType").and_then(Value::as_u64) == Some(1),
-        static_frame: (kind == Kind::Effect).then(|| it.get("staticFrameSrc").and_then(Value::as_str).map(|s| s.to_owned().into())).flatten() }
+        static_frame: (kind == Kind::Effect).then(|| it.get("staticFrameSrc").and_then(Value::as_str).map(|s| s.to_owned().into())).flatten(),
+    }
 }
 
 pub fn parse_product(v: &Value) -> Option<Collectible> {

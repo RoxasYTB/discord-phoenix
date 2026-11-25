@@ -1,8 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use phoenix_api::rest::search::{
-    Gif, GifFormat, HasFilter, SearchOutcome, SearchQuery, SearchSort, Sticker,
-};
+use phoenix_api::rest::search::{Gif, GifFormat, HasFilter, SearchOutcome, SearchQuery, SearchSort, Sticker};
 
 use super::{Inner, Session, api_err, convert, sf};
 use crate::{
@@ -19,15 +17,7 @@ pub(super) fn guild_emojis(s: &Session, guild: Id) -> Vec<GuildEmoji> {
     let Some(g) = s.cache.guild(sf(guild)) else { return Vec::new() };
     g.emojis
         .iter()
-        .filter_map(|e| {
-            Some(GuildEmoji {
-                id: convert::id(e.id?),
-                name: e.name.clone()?.into(),
-                animated: e.animated,
-                guild,
-                available: e.available,
-            })
-        })
+        .filter_map(|e| Some(GuildEmoji { id: convert::id(e.id?), name: e.name.clone()?.into(), animated: e.animated, guild, available: e.available }))
         .collect()
 }
 
@@ -53,12 +43,7 @@ fn sticker(st: &Sticker) -> StickerData {
 
 pub(super) fn guild_stickers(s: &Session, guild: Id) -> Vec<StickerData> {
     let Some(g) = s.cache.guild(sf(guild)) else { return Vec::new() };
-    g.stickers
-        .iter()
-        .filter_map(|v| serde_json::from_value::<Sticker>(v.clone()).ok())
-        .filter(|st| st.available)
-        .map(|st| sticker(&st))
-        .collect()
+    g.stickers.iter().filter_map(|v| serde_json::from_value::<Sticker>(v.clone()).ok()).filter(|st| st.available).map(|st| sticker(&st)).collect()
 }
 
 pub(super) async fn sticker_packs(s: Arc<Session>) -> Result<Vec<StickerPackData>, BackendError> {
@@ -66,11 +51,7 @@ pub(super) async fn sticker_packs(s: Arc<Session>) -> Result<Vec<StickerPackData
     let packs = s.rest.get_sticker_packs(&locale).await.map_err(api_err)?;
     Ok(packs
         .iter()
-        .map(|p| StickerPackData {
-            id: convert::id(p.id),
-            name: p.name.clone().into(),
-            stickers: p.stickers.iter().map(sticker).collect(),
-        })
+        .map(|p| StickerPackData { id: convert::id(p.id), name: p.name.clone().into(), stickers: p.stickers.iter().map(sticker).collect() })
         .collect())
 }
 
@@ -87,11 +68,7 @@ pub(super) async fn gif_trending(s: Arc<Session>) -> Result<GifHome, BackendErro
     let t = s.rest.gif_trending(&locale, PREVIEW).await.map_err(api_err)?;
     Ok(GifHome {
         trending_preview: t.gifs.first().map(|g| gif(g).preview),
-        categories: t
-            .categories
-            .iter()
-            .map(|c| GifCategoryTile { name: c.name.clone().into(), preview: c.src.clone().into() })
-            .collect(),
+        categories: t.categories.iter().map(|c| GifCategoryTile { name: c.name.clone().into(), preview: c.src.clone().into() }).collect(),
     })
 }
 

@@ -358,7 +358,8 @@ impl Backend for ReadOnly {
         self.0.collectible_product(sku)
     }
     fn action(&self, req: phoenix_app::actions::ActionRequest) -> BoxFuture<phoenix_app::actions::ActionReply> {
-        let admin_get = matches!(&req, phoenix_app::actions::ActionRequest::Admin(c) if phoenix_api::rest::guild_manage::build(c).method == reqwest::Method::GET);
+        let admin_get =
+            matches!(&req, phoenix_app::actions::ActionRequest::Admin(c) if phoenix_api::rest::guild_manage::build(c).method == reqwest::Method::GET);
         match req {
             _ if admin_get => self.0.action(req),
             phoenix_app::actions::ActionRequest::Reminders => self.0.action(req),
@@ -496,11 +497,7 @@ fn env_favorites() -> Option<phoenix_api::rest::favorites::Favorites> {
 
 fn cdp(expr: &str) -> Option<String> {
     let home = std::env::var("HOME").ok()?;
-    let out = std::process::Command::new("node")
-        .arg(format!("{home}/discord-phoenix-ref/cdp.mjs"))
-        .args(["eval", expr])
-        .output()
-        .ok()?;
+    let out = std::process::Command::new("node").arg(format!("{home}/discord-phoenix-ref/cdp.mjs")).args(["eval", expr]).output().ok()?;
     let s = String::from_utf8(out.stdout).ok()?;
     Some(s.trim().trim_matches('"').to_string())
 }
@@ -687,17 +684,16 @@ fn main() -> anyhow::Result<()> {
     .split(',')
     .filter_map(|s| s.trim().parse().ok())
     .collect();
-    let in_voice = env_or_cdp("PHX_IN_VOICE", "(!!document.querySelector('[class*=rtcConnectionStatus_]'))+''").as_deref()
-        == Some("true");
+    let in_voice = env_or_cdp("PHX_IN_VOICE", "(!!document.querySelector('[class*=rtcConnectionStatus_]'))+''").as_deref() == Some("true");
     let show_members = env_or_cdp("PHX_MEMBERS", "(!!document.querySelector('[class*=membersWrap_]'))+''").as_deref() != Some("false");
     let wait: u64 = std::env::var("PHX_WAIT").ok().and_then(|v| v.parse().ok()).unwrap_or(15);
-    println!("target guild={guild:?} channel={channel:?} size={w}x{h} theme={theme:?} compact={compact} density={density:?} font={font_px} mute={self_mute} deaf={self_deaf}");
+    println!(
+        "target guild={guild:?} channel={channel:?} size={w}x{h} theme={theme:?} compact={compact} density={density:?} font={font_px} mute={self_mute} deaf={self_deaf}"
+    );
 
     let t0 = std::time::Instant::now();
     let text = gpui_platform::current_platform(true).text_system();
-    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
-        gpui_platform::current_headless_renderer()
-    });
+    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || gpui_platform::current_headless_renderer());
     let fonts: Vec<std::borrow::Cow<'static, [u8]>> = [
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
@@ -754,9 +750,7 @@ fn main() -> anyhow::Result<()> {
         cx.update(|cx| {
             let app = v.read(cx);
             for d in &app.dms {
-                let group = app.channels.get(d).is_some_and(|c| {
-                    c.voice_users.first().and_then(|u| app.users.get(u)).is_none_or(|u| u.display_name != c.name)
-                });
+                let group = app.channels.get(d).is_some_and(|c| c.voice_users.first().and_then(|u| app.users.get(u)).is_none_or(|u| u.display_name != c.name));
                 println!("dm {} group={group}", d.0);
             }
             for g in &app.guilds {
@@ -788,14 +782,12 @@ fn main() -> anyhow::Result<()> {
             app.nav.expanded_folders.extend(open_folders.iter().copied());
             app.show_members = show_members;
             if in_voice {
-                app.voice_channel = app
-                    .channels
-                    .values()
-                    .find(|c| c.guild.is_some() && c.voice_users.contains(&app.me.id))
-                    .map(|c| c.id);
+                app.voice_channel = app.channels.values().find(|c| c.guild.is_some() && c.voice_users.contains(&app.me.id)).map(|c| c.id);
             }
             let view = std::env::var("PHX_VIEW").unwrap_or_else(|_| {
-                let home = guild.is_none() && channel.is_none() && std::env::var("PHX_ROUTE").ok().or_else(|| cdp("location.pathname")).as_deref() == Some("/channels/@me");
+                let home = guild.is_none()
+                    && channel.is_none()
+                    && std::env::var("PHX_ROUTE").ok().or_else(|| cdp("location.pathname")).as_deref() == Some("/channels/@me");
                 if home { "friends".into() } else { String::new() }
             });
             let tab = std::env::var("PHX_TAB").unwrap_or_default();
@@ -831,9 +823,10 @@ fn main() -> anyhow::Result<()> {
                 app.selected_channel = None;
             } else if let (Some(g), None) = (guild, channel) {
                 app.select_guild(Some(g), cx);
-                let first = app.guild_channels.get(&g).and_then(|l| {
-                    l.iter().copied().find(|id| app.channels.get(id).is_some_and(|c| c.kind == phoenix_app::model::ChannelKind::Text))
-                });
+                let first = app
+                    .guild_channels
+                    .get(&g)
+                    .and_then(|l| l.iter().copied().find(|id| app.channels.get(id).is_some_and(|c| c.kind == phoenix_app::model::ChannelKind::Text)));
                 if let Some(c) = first {
                     app.open_channel_chat(c, cx);
                 }
@@ -939,7 +932,15 @@ fn main() -> anyhow::Result<()> {
             if let Some(c) = app.selected_channel.and_then(|c| app.messages.get(&c)) {
                 for m in c.msgs.iter().rev().take(12) {
                     let u = app.users.get(&m.author);
-                    println!("msg {} author {} dn={:?} author_nick={:?} member_nick={:?} reply_to={:?}", m.id.0, m.author.0, u.map(|u| u.display_name.clone()), m.author_nick, app.member_nick(m.author), m.reply_to.map(|r| r.0));
+                    println!(
+                        "msg {} author {} dn={:?} author_nick={:?} member_nick={:?} reply_to={:?}",
+                        m.id.0,
+                        m.author.0,
+                        u.map(|u| u.display_name.clone()),
+                        m.author_nick,
+                        app.member_nick(m.author),
+                        m.reply_to.map(|r| r.0)
+                    );
                 }
             }
         });
@@ -965,9 +966,7 @@ fn main() -> anyhow::Result<()> {
         let mut feed = phoenix_app::ui::activity_traits::entries();
         let mut front = Vec::new();
         for (u, g) in &want {
-            let hit = feed.iter().position(|e| {
-                e.game.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(g)) && u.is_none_or(|u| e.author.0 == u)
-            });
+            let hit = feed.iter().position(|e| e.game.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(g)) && u.is_none_or(|u| e.author.0 == u));
             if let Some(i) = hit {
                 front.push(feed.remove(i));
             }
@@ -975,10 +974,12 @@ fn main() -> anyhow::Result<()> {
         println!("feed sync: {}/{} Discord cards matched", front.len(), want.len());
         front.extend(feed);
         phoenix_app::ui::activity_traits::seed(front);
-        cx.update(|cx| v.update(cx, |a, cx| {
-            a.member_list.remeasure();
-            cx.notify();
-        }));
+        cx.update(|cx| {
+            v.update(cx, |a, cx| {
+                a.member_list.remeasure();
+                cx.notify();
+            })
+        });
         pump(&mut cx, 500);
     }
     eprintln!("[{:.1}s] waited", t0.elapsed().as_secs_f32());
@@ -1008,7 +1009,15 @@ fn main() -> anyhow::Result<()> {
             let entries = a.backend.inbox_unreads(&order);
             eprintln!("unreads: {} guilds in order, {} entries from the backend", order.len(), entries.len());
             for e in entries.iter().take(20) {
-                eprintln!("  entry {} guild {:?} sort {} mentions {} ack {} last {}", e.channel.0, e.guild.map(|g| g.0), e.sort, e.mentions, e.oldest_read.0, e.newest.0);
+                eprintln!(
+                    "  entry {} guild {:?} sort {} mentions {} ack {} last {}",
+                    e.channel.0,
+                    e.guild.map(|g| g.0),
+                    e.sort,
+                    e.mentions,
+                    e.oldest_read.0,
+                    e.newest.0
+                );
             }
             let i = &a.parity.inbox;
             eprintln!("cards: {} (loading {})", i.unreads.len(), i.unreads_loading);
@@ -1139,14 +1148,29 @@ fn main() -> anyhow::Result<()> {
                 "settings" => {
                     phoenix_app::ui::settings::open(app, cx);
                     let pages = [
-                        P::MyAccount, P::Profiles, P::DataPrivacy, P::PrivacySafety, P::Devices, P::Connections,
-                        P::Notifications, P::Keybinds, P::Language, P::Appearance, P::Accessibility, P::VoiceVideo,
-                        P::Advanced, P::System, P::ActivityPrivacy, P::RegisteredGames, P::Nitro, P::ServerBoost,
-                        P::Subscriptions, P::GiftInventory, P::Billing,
+                        P::MyAccount,
+                        P::Profiles,
+                        P::DataPrivacy,
+                        P::PrivacySafety,
+                        P::Devices,
+                        P::Connections,
+                        P::Notifications,
+                        P::Keybinds,
+                        P::Language,
+                        P::Appearance,
+                        P::Accessibility,
+                        P::VoiceVideo,
+                        P::Advanced,
+                        P::System,
+                        P::ActivityPrivacy,
+                        P::RegisteredGames,
+                        P::Nitro,
+                        P::ServerBoost,
+                        P::Subscriptions,
+                        P::GiftInventory,
+                        P::Billing,
                     ];
-                    if let (Some(s), Some(p)) =
-                        (app.settings.as_mut(), pages.into_iter().find(|p| format!("{p:?}").eq_ignore_ascii_case(&arg)))
-                    {
+                    if let (Some(s), Some(p)) = (app.settings.as_mut(), pages.into_iter().find(|p| format!("{p:?}").eq_ignore_ascii_case(&arg))) {
                         s.page = p;
                     }
                     use phoenix_app::ui::settings::nested::Nested as N;
@@ -1176,7 +1200,13 @@ fn main() -> anyhow::Result<()> {
                 "server_settings" => {
                     if let Some(g) = app.selected_guild {
                         let (section, sub) = arg.split_once('/').unwrap_or((arg.as_str(), ""));
-                        let index = section.parse().unwrap_or_else(|_| phoenix_app::ui::modals::server_settings::section_index(&if section.starts_with("menu.") { section.to_owned() } else { format!("menu.gs.{section}") }));
+                        let index = section.parse().unwrap_or_else(|_| {
+                            phoenix_app::ui::modals::server_settings::section_index(&if section.starts_with("menu.") {
+                                section.to_owned()
+                            } else {
+                                format!("menu.gs.{section}")
+                            })
+                        });
                         app.open_server_settings(g, index, cx);
                         phoenix_app::ui::server_pages::open_sub(g, sub);
                     }
@@ -1256,7 +1286,11 @@ fn main() -> anyhow::Result<()> {
                     if let Some(g) = app.selected_guild {
                         match kind.as_str() {
                             "chansettings" => {
-                                let target = std::env::var("PHX_CS_CHANNEL").ok().and_then(|v| v.parse::<u64>().ok()).map(phoenix_app::model::Id).or(app.selected_channel);
+                                let target = std::env::var("PHX_CS_CHANNEL")
+                                    .ok()
+                                    .and_then(|v| v.parse::<u64>().ok())
+                                    .map(phoenix_app::model::Id)
+                                    .or(app.selected_channel);
                                 if let Some(c) = target {
                                     app.open_channel_settings(c, cx);
                                     use phoenix_app::ui::modals::channel_settings::Section as S;
@@ -1309,11 +1343,7 @@ fn main() -> anyhow::Result<()> {
                         Some((c, m.id))
                     });
                     if let Some((c, m)) = pick {
-                        if kind == "reactions" {
-                            app.open_reactions(c, m, 0, cx)
-                        } else {
-                            app.open_forward(c, m, cx)
-                        }
+                        if kind == "reactions" { app.open_reactions(c, m, 0, cx) } else { app.open_forward(c, m, cx) }
                     }
                 }
                 "guildnotify" => {
@@ -1375,12 +1405,21 @@ fn main() -> anyhow::Result<()> {
                     if arg == "emoji" {
                         phoenix_app::ui::pickers::open_emoji_picker(app, phoenix_app::ui::pickers::EmojiTarget::Status, window, cx);
                     } else if !arg.is_empty() {
-                        phoenix_app::ui::modals::custom_status::pick_emoji(phoenix_app::ui::modals::custom_status::StatusEmoji { id: None, name: arg.clone().into(), animated: false });
+                        phoenix_app::ui::modals::custom_status::pick_emoji(phoenix_app::ui::modals::custom_status::StatusEmoji {
+                            id: None,
+                            name: arg.clone().into(),
+                            animated: false,
+                        });
                     }
                 }
                 "plaintextlang" | "plaintextmd" => {
                     let url = app.selected_channel.and_then(|c| app.messages.get(&c)).and_then(|m| {
-                        m.msgs.iter().rev().flat_map(|m| m.attachments.iter()).find(|a| phoenix_app::ui::chat::plaintext::previewable(&a.filename)).map(|a| a.url.clone())
+                        m.msgs
+                            .iter()
+                            .rev()
+                            .flat_map(|m| m.attachments.iter())
+                            .find(|a| phoenix_app::ui::chat::plaintext::previewable(&a.filename))
+                            .map(|a| a.url.clone())
                     });
                     if let Some(u) = url {
                         if kind == "plaintextmd" {
@@ -1443,11 +1482,7 @@ fn main() -> anyhow::Result<()> {
                         .selected_channel
                         .and_then(|f| app.parity.forums.get(&f))
                         .and_then(|v| v.posts.iter().chain(v.archived.iter()).nth(n))
-                        .map(|p| phoenix_app::model::ThreadRef {
-                            id: p.thread,
-                            name: p.title.clone().into(),
-                            message_count: p.message_count,
-                        });
+                        .map(|p| phoenix_app::model::ThreadRef { id: p.thread, name: p.title.clone().into(), message_count: p.message_count });
                     if let Some(r) = post {
                         app.open_thread(r, window, cx);
                     }
@@ -1745,7 +1780,12 @@ fn main() -> anyhow::Result<()> {
             let fps = it.next().and_then(|r| r.parse().ok()).unwrap_or(30u32);
             cx.update_window(win.into(), |_, _, cx| {
                 v.update(cx, |app, _| {
-                    drop(app.backend.voice_control(V::StartStream { source: phoenix_app::voice::StreamSource::TestPattern, resolution, fps, sound: std::env::var_os("PHX_VOICE_STREAM_SOUND").is_some() }))
+                    drop(app.backend.voice_control(V::StartStream {
+                        source: phoenix_app::voice::StreamSource::TestPattern,
+                        resolution,
+                        fps,
+                        sound: std::env::var_os("PHX_VOICE_STREAM_SOUND").is_some(),
+                    }))
                 })
             })?;
             let hold: u64 = std::env::var("PHX_VOICE_STREAM_HOLD").ok().and_then(|v| v.parse().ok()).unwrap_or(8000);
@@ -1778,7 +1818,11 @@ fn main() -> anyhow::Result<()> {
             for t in 0..10 {
                 pump(&mut cx, 1000);
                 let owner = phoenix_app::voice::stream::parse_key(&key).map_or(0, |k| k.owner);
-                println!("watch t={t} watching={} frame={:?}", phoenix_app::voice::call::watching(&key), phoenix_app::voice::call::stream_frame(owner).map(|f| (f.width, f.height, f.pts_us)));
+                println!(
+                    "watch t={t} watching={} frame={:?}",
+                    phoenix_app::voice::call::watching(&key),
+                    phoenix_app::voice::call::stream_frame(owner).map(|f| (f.width, f.height, f.pts_us))
+                );
             }
         }
         if std::env::var("PHX_VOICE_OPEN").as_deref() == Ok("soundboard") {

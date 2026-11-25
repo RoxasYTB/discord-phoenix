@@ -4,10 +4,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use crate::{
-    backend::*,
-    model::*,
-};
+use crate::{backend::*, model::*};
 
 pub const ME: Id = Id(1);
 
@@ -98,10 +95,7 @@ impl Default for MockBackend {
 }
 
 pub fn now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 fn user(i: usize) -> User {
@@ -150,7 +144,13 @@ impl MockBackend {
                 acronym: acronym(name),
                 icon: ImageRef::Default((gi % 5) as u8),
                 unread: gi % 3 == 1,
-                mentions: if gi == 3 { 4 } else if gi == 5 { 1 } else { 0 },
+                mentions: if gi == 3 {
+                    4
+                } else if gi == 5 {
+                    1
+                } else {
+                    0
+                },
                 banner_color: *banner,
                 owner: Some(Id(2)),
                 discoverable: gi == 0,
@@ -161,14 +161,7 @@ impl MockBackend {
                 member_count: None,
             });
             let layout: &[(&str, &[(&str, ChannelKind)])] = &[
-                (
-                    "Information",
-                    &[
-                        ("welcome", ChannelKind::Text),
-                        ("announcements", ChannelKind::Announcement),
-                        ("rules", ChannelKind::Text),
-                    ],
-                ),
+                ("Information", &[("welcome", ChannelKind::Text), ("announcements", ChannelKind::Announcement), ("rules", ChannelKind::Text)]),
                 (
                     "Text Channels",
                     &[
@@ -181,12 +174,7 @@ impl MockBackend {
                 ),
                 (
                     "Voice Channels",
-                    &[
-                        ("Lounge", ChannelKind::Voice),
-                        ("Pair Programming", ChannelKind::Voice),
-                        ("Stage", ChannelKind::Stage),
-                        ("AFK", ChannelKind::Voice),
-                    ],
+                    &[("Lounge", ChannelKind::Voice), ("Pair Programming", ChannelKind::Voice), ("Stage", ChannelKind::Stage), ("AFK", ChannelKind::Voice)],
                 ),
             ];
             let mut pos = 0;
@@ -237,9 +225,36 @@ impl MockBackend {
                 }
             }
             let role_list = vec![
-                Role { id: Id(gid.0 * 10 + 1), name: "Admin".into(), color: Some(0xE74C3C), position: 3, hoist: true, icon: None, managed: false, connection: false },
-                Role { id: Id(gid.0 * 10 + 2), name: "Moderator".into(), color: Some(0x3498DB), position: 2, hoist: true, icon: None, managed: false, connection: false },
-                Role { id: Id(gid.0 * 10 + 3), name: "Contributor".into(), color: Some(0x2ECC71), position: 1, hoist: true, icon: None, managed: false, connection: false },
+                Role {
+                    id: Id(gid.0 * 10 + 1),
+                    name: "Admin".into(),
+                    color: Some(0xE74C3C),
+                    position: 3,
+                    hoist: true,
+                    icon: None,
+                    managed: false,
+                    connection: false,
+                },
+                Role {
+                    id: Id(gid.0 * 10 + 2),
+                    name: "Moderator".into(),
+                    color: Some(0x3498DB),
+                    position: 2,
+                    hoist: true,
+                    icon: None,
+                    managed: false,
+                    connection: false,
+                },
+                Role {
+                    id: Id(gid.0 * 10 + 3),
+                    name: "Contributor".into(),
+                    color: Some(0x2ECC71),
+                    position: 1,
+                    hoist: true,
+                    icon: None,
+                    managed: false,
+                    connection: false,
+                },
             ];
             let mut ms = Vec::new();
             for u in &users {
@@ -307,10 +322,7 @@ impl MockBackend {
 
     fn generate_history(inner: &mut Inner, channel: Id) -> Vec<Message> {
         let mut rng = Lcg(channel.0.wrapping_mul(2654435761));
-        let n = std::env::var("PHOENIX_MOCK_HISTORY")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(120 + (rng.next() % 200) as usize);
+        let n = std::env::var("PHOENIX_MOCK_HISTORY").ok().and_then(|v| v.parse().ok()).unwrap_or(120 + (rng.next() % 200) as usize);
         let mut ts = now() - n as i64 * 150 - 86_400;
         let mut out: Vec<Message> = Vec::with_capacity(n);
         let mut author = Id(2);
@@ -400,7 +412,8 @@ impl MockBackend {
             }
         }
         if let Some(ch) = inner.channels.iter().find(|c| c.id == channel && c.name == "showcase" && c.guild == inner.guilds.first().map(|g| g.id)) {
-            let (guild, general) = (ch.guild.unwrap_or_default(), inner.channels.iter().find(|c| c.guild == ch.guild && c.name == "general").map_or(channel, |c| c.id));
+            let (guild, general) =
+                (ch.guild.unwrap_or_default(), inner.channels.iter().find(|c| c.guild == ch.guild && c.name == "general").map_or(channel, |c| c.id));
             out.extend(crate::mock_showcase::messages(channel, guild, general, &mut inner.next_id, ts));
         }
         out
@@ -442,9 +455,7 @@ impl MockBackend {
 
 impl Backend for MockBackend {
     fn app_directory_collections(&self, _locale: String) -> BoxFuture<serde_json::Value> {
-        let app = |id: u64, name: &str, desc: &str, pos: i64| {
-            serde_json::json!({"position": pos, "application": {"id": id.to_string(), "name": name, "description": desc}})
-        };
+        let app = |id: u64, name: &str, desc: &str, pos: i64| serde_json::json!({"position": pos, "application": {"id": id.to_string(), "name": name, "description": desc}});
         let v = serde_json::json!([
             {"title": "Promoted", "type": 5, "position": 1, "application_directory_collection_items": [
                 app(9001, "Pixel Garden", "Grow a shared garden with friends.", 1),
@@ -512,9 +523,7 @@ impl Backend for MockBackend {
     }
 
     fn restore_session(&self) -> Option<BoxFuture<ReadyData>> {
-        std::env::var("PHOENIX_MOCK_AUTOLOGIN")
-            .is_ok_and(|v| !v.is_empty() && v != "0")
-            .then(|| self.login(Credentials::Token("mock-token".into())))
+        std::env::var("PHOENIX_MOCK_AUTOLOGIN").is_ok_and(|v| !v.is_empty() && v != "0").then(|| self.login(Credentials::Token("mock-token".into())))
     }
 
     fn login(&self, creds: Credentials) -> BoxFuture<ReadyData> {
@@ -650,9 +659,7 @@ impl Backend for MockBackend {
                 i.history.insert(channel, h);
             }
             let h = &i.history[&channel];
-            let end = before
-                .and_then(|b| h.iter().position(|m| m.id == b))
-                .unwrap_or(h.len());
+            let end = before.and_then(|b| h.iter().position(|m| m.id == b)).unwrap_or(h.len());
             let start = end.saturating_sub(limit as usize);
             h[start..end].to_vec()
         })
@@ -759,11 +766,7 @@ impl Backend for MockBackend {
         let inner = self.inner.clone();
         Box::pin(async move {
             let mut i = inner.lock().map_err(|_| BackendError("poisoned".into()))?;
-            let m = i
-                .history
-                .get_mut(&channel)
-                .and_then(|h| h.iter_mut().find(|m| m.id == id))
-                .ok_or_else(|| BackendError("Unknown Message".into()))?;
+            let m = i.history.get_mut(&channel).and_then(|h| h.iter_mut().find(|m| m.id == id)).ok_or_else(|| BackendError("Unknown Message".into()))?;
             m.content = content.into();
             m.edited = true;
             Ok(m.clone())
@@ -777,9 +780,7 @@ impl Backend for MockBackend {
     fn join_voice(&self, channel: Option<Id>) -> BoxFuture<()> {
         self.emit_later(Duration::from_millis(50), move || AppEvent::VoiceStateUpdate { channel, user: ME, own: true });
         if channel.is_some() {
-            self.emit_later(Duration::from_millis(60), || {
-                AppEvent::Voice(crate::voice::VoiceUiEvent::Status(crate::voice::VoiceStatus::Connected))
-            });
+            self.emit_later(Duration::from_millis(60), || AppEvent::Voice(crate::voice::VoiceUiEvent::Status(crate::voice::VoiceStatus::Connected)));
             self.emit_later(Duration::from_millis(70), || AppEvent::Voice(crate::voice::VoiceUiEvent::Ping(38)));
         }
         Box::pin(async { Ok(()) })
@@ -809,13 +810,7 @@ impl Backend for MockBackend {
                 i.history.insert(channel, h);
             }
             let h = &i.history[&channel];
-            h.iter()
-                .rev()
-                .filter(|m| !m.content.is_empty())
-                .step_by(4)
-                .take(3)
-                .map(|m| Message { pinned: true, ..m.clone() })
-                .collect()
+            h.iter().rev().filter(|m| !m.content.is_empty()).step_by(4).take(3).map(|m| Message { pinned: true, ..m.clone() }).collect()
         })
     }
 
@@ -824,8 +819,7 @@ impl Backend for MockBackend {
         self.delayed(move || {
             let Ok(i) = inner.lock() else { return Default::default() };
             let q = req.content.unwrap_or_default().to_lowercase();
-            let mut hits: Vec<Message> =
-                i.history.values().flatten().filter(|m| q.is_empty() || m.content.to_lowercase().contains(&q)).cloned().collect();
+            let mut hits: Vec<Message> = i.history.values().flatten().filter(|m| q.is_empty() || m.content.to_lowercase().contains(&q)).cloned().collect();
             hits.sort_by_key(|m| std::cmp::Reverse(m.id.0));
             let total = hits.len() as u32;
             hits.truncate(25);
@@ -887,18 +881,32 @@ impl Backend for MockBackend {
                 ]))
             }),
             ParityRequest::ServerGuide { guild } => {
-                let chans: Vec<Id> = self.inner.lock().map(|i| i.channels.iter().filter(|c| c.guild == Some(guild) && c.kind == crate::model::ChannelKind::Text).map(|c| c.id).take(2).collect()).unwrap_or_default();
+                let chans: Vec<Id> = self
+                    .inner
+                    .lock()
+                    .map(|i| i.channels.iter().filter(|c| c.guild == Some(guild) && c.kind == crate::model::ChannelKind::Text).map(|c| c.id).take(2).collect())
+                    .unwrap_or_default();
                 Box::pin(async move {
                     use crate::commands::guide::{GuideEmoji, GuideEntry, GuideTrait, GuildGuide, GuildProfile};
-                    let entry = |channel: Id, title: &str, description: &str| GuideEntry { channel, title: title.into(), description: description.into(), ..Default::default() };
+                    let entry = |channel: Id, title: &str, description: &str| GuideEntry {
+                        channel,
+                        title: title.into(),
+                        description: description.into(),
+                        ..Default::default()
+                    };
                     let mut resources = Vec::new();
                     if let Some(&c) = chans.first() {
-                        resources.push(entry(c, "Start here", "Welcome to **Phoenix Lounge**. Read the rules and pick your roles to unlock the rest of the server."));
+                        resources.push(entry(
+                            c,
+                            "Start here",
+                            "Welcome to **Phoenix Lounge**. Read the rules and pick your roles to unlock the rest of the server.",
+                        ));
                     }
                     if let Some(&c) = chans.get(1) {
                         resources.push(entry(c, "Frequently asked questions", "Answers to the questions newcomers ask the most."));
                     }
-                    let tr = |label: &str, emoji: &str| GuideTrait { label: label.into(), emoji: GuideEmoji { name: Some(emoji.into()), ..Default::default() } };
+                    let tr =
+                        |label: &str, emoji: &str| GuideTrait { label: label.into(), emoji: GuideEmoji { name: Some(emoji.into()), ..Default::default() } };
                     Ok(ParityReply::Guide(Box::new(GuildGuide {
                         enabled: true,
                         resources,
@@ -928,7 +936,8 @@ mod tests {
     fn settings_writes_apply_offline() {
         let b = MockBackend::new();
         let m = Default::default();
-        let s = futures::executor::block_on(b.save_settings(SettingsPatch::Proto("data-sponsored", synced_map::bool_wire(&m, "data-sponsored", false)))).unwrap();
+        let s =
+            futures::executor::block_on(b.save_settings(SettingsPatch::Proto("data-sponsored", synced_map::bool_wire(&m, "data-sponsored", false)))).unwrap();
         assert!(!s.flag("data-sponsored"));
         assert!(synced_map::disabled(&s.proto, s.compact, "data-third"));
         let s = futures::executor::block_on(b.save_settings(SettingsPatch::Proto("share-profile", synced_map::pick_wire("share-profile", 2)))).unwrap();

@@ -89,11 +89,8 @@ impl ClientProperties {
 }
 
 pub fn os_locale_tag() -> String {
-    let raw = ["LC_ALL", "LC_MESSAGES", "LANG"]
-        .iter()
-        .filter_map(|k| std::env::var(k).ok())
-        .find(|v| !v.is_empty() && v != "C" && v != "POSIX")
-        .unwrap_or_default();
+    let raw =
+        ["LC_ALL", "LC_MESSAGES", "LANG"].iter().filter_map(|k| std::env::var(k).ok()).find(|v| !v.is_empty() && v != "C" && v != "POSIX").unwrap_or_default();
     let base = raw.split(['.', '@']).next().unwrap_or("");
     if base.len() < 2 {
         return "en-US".into();
@@ -122,11 +119,7 @@ pub fn discord_locale_for(tag: &str) -> String {
 }
 
 pub fn accept_language(locale: &str, os_tag: &str) -> String {
-    if locale.eq_ignore_ascii_case(os_tag) {
-        locale.into()
-    } else {
-        format!("{locale},{os_tag};q=0.9")
-    }
+    if locale.eq_ignore_ascii_case(os_tag) { locale.into() } else { format!("{locale},{os_tag};q=0.9") }
 }
 
 pub fn os_timezone() -> Option<String> {

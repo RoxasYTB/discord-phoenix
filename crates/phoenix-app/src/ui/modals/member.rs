@@ -32,23 +32,22 @@ fn date(unix: i64) -> String {
 pub fn mod_view(app: &PhoenixApp, guild: Id, user: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let u = app.users.get(&user);
     let member = app.members.get(&guild).and_then(|m| m.iter().find(|m| m.user == user));
-    let roles: Vec<&crate::model::Role> = member
-        .map(|m| app.roles.get(&guild).into_iter().flatten().filter(|r| m.roles.contains(&r.id)).collect())
-        .unwrap_or_default();
+    let roles: Vec<&crate::model::Role> =
+        member.map(|m| app.roles.get(&guild).into_iter().flatten().filter(|r| m.roles.contains(&r.id)).collect()).unwrap_or_default();
     let guild_name = app.guilds.iter().find(|g| g.id == guild).map(|g| g.name.clone()).unwrap_or_default();
-    let head = div()
-        .flex()
-        .items_center()
-        .gap(z(12.))
-        .pb(z(12.))
-        .child(crate::ui::avatar(u, 56.))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .child(div().text_size(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(u.map(|u| u.display_name.clone()).unwrap_or_default()))
-                .child(div().text_size(z(14.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(u.map(|u| u.name.clone()).unwrap_or_default())),
-        );
+    let head = div().flex().items_center().gap(z(12.)).pb(z(12.)).child(crate::ui::avatar(u, 56.)).child(
+        div()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .text_size(z(20.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(c(tok(idx::TEXT_STRONG)))
+                    .child(u.map(|u| u.display_name.clone()).unwrap_or_default()),
+            )
+            .child(div().text_size(z(14.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(u.map(|u| u.name.clone()).unwrap_or_default())),
+    );
     let mut chips = div().flex().flex_wrap().gap(z(4.)).py(z(8.));
     for r in &roles {
         chips = chips.child(
@@ -86,7 +85,13 @@ pub fn call_card(app: &PhoenixApp, _channel: Id, user: Id, cx: &mut Context<Phoe
         .gap(z(12.))
         .py(z(16.))
         .child(crate::ui::avatar(u, 80.))
-        .child(div().text_size(z(20.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(u.map(|u| u.display_name.clone()).unwrap_or_default()))
+        .child(
+            div()
+                .text_size(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c(tok(idx::TEXT_STRONG)))
+                .child(u.map(|u| u.display_name.clone()).unwrap_or_default()),
+        )
         .child(div().text_size(z(14.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(crate::t!("call.ringing")));
     let footer = button("call-hangup", crate::t!("call.hang_up"), BtnKind::Critical).on_click(cx.listener(|_, _, _, cx| {
         close_modal();

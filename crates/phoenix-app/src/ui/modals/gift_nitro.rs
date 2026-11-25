@@ -88,9 +88,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                 .gap(z(8.))
                 .child(avatar(u, 24.))
                 .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(name))
-                .when(!handle.is_empty(), |d| {
-                    d.child(div().text_size(z(13.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(handle))
-                }),
+                .when(!handle.is_empty(), |d| d.child(div().text_size(z(13.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_MUTED))).child(handle))),
         );
     }
 
@@ -204,16 +202,14 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         .flex()
         .gap(z(8.))
         .child(button("gift-cancel", crate::t!("common.cancel"), BtnKind::Secondary).flex_1().on_click(move |_, w, cx| close(w, cx)))
-        .child(
-            button("gift-next", crate::t!("gift.next"), BtnKind::Primary).flex_1().on_click(cx.listener(|_, _, _, cx| {
-                with_modal(|m| {
-                    if let Some(Modal::GiftNitro(st)) = m {
-                        st.notice = true;
-                    }
-                });
-                cx.notify();
-            })),
-        )
+        .child(button("gift-next", crate::t!("gift.next"), BtnKind::Primary).flex_1().on_click(cx.listener(|_, _, _, cx| {
+            with_modal(|m| {
+                if let Some(Modal::GiftNitro(st)) = m {
+                    st.notice = true;
+                }
+            });
+            cx.notify();
+        })))
         .into_any_element();
 
     card(480., crate::t!("nitro.gift"), Some(crate::t!("gift.subtitle")), body.into_any_element(), Some(footer), cx)

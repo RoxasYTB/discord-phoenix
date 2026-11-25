@@ -97,8 +97,7 @@ impl H264Packetizer {
     }
 
     pub fn packetize_prepared(&self, au: &[u8], max_payload: usize) -> Result<Vec<Vec<u8>>> {
-        let nals: Vec<std::borrow::Cow<'_, [u8]>> =
-            split_annex_b(au).into_iter().map(std::borrow::Cow::Borrowed).collect();
+        let nals: Vec<std::borrow::Cow<'_, [u8]>> = split_annex_b(au).into_iter().map(std::borrow::Cow::Borrowed).collect();
         packetize_nals(&nals, max_payload)
     }
 }

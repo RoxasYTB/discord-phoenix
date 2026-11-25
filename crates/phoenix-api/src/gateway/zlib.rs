@@ -30,10 +30,7 @@ impl ZlibStream {
         loop {
             let before_in = self.inflater.total_in();
             let before_out = self.inflater.total_out();
-            let status = self
-                .inflater
-                .decompress(input, &mut buf, FlushDecompress::Sync)
-                .map_err(|e| e.to_string())?;
+            let status = self.inflater.decompress(input, &mut buf, FlushDecompress::Sync).map_err(|e| e.to_string())?;
             let consumed = (self.inflater.total_in() - before_in) as usize;
             let produced = (self.inflater.total_out() - before_out) as usize;
             self.out.extend_from_slice(&buf[..produced]);
@@ -46,9 +43,7 @@ impl ZlibStream {
             }
         }
         self.pending.clear();
-        String::from_utf8(std::mem::take(&mut self.out))
-            .map(Some)
-            .map_err(|e| e.to_string())
+        String::from_utf8(std::mem::take(&mut self.out)).map(Some).map_err(|e| e.to_string())
     }
 }
 
@@ -73,9 +68,7 @@ impl ZlibEncoder {
         loop {
             out.reserve(4096);
             let before_in = self.deflater.total_in();
-            self.deflater
-                .compress_vec(input, &mut out, flate2::FlushCompress::Sync)
-                .expect("deflate");
+            self.deflater.compress_vec(input, &mut out, flate2::FlushCompress::Sync).expect("deflate");
             let consumed = (self.deflater.total_in() - before_in) as usize;
             input = &input[consumed..];
             if input.is_empty() && out.len() < out.capacity() {

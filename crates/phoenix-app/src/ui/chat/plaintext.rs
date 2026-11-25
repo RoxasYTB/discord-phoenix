@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use futures::AsyncReadExt;
 use gpui::{
-    AnyElement, App, Entity, FontWeight, IntoElement, ParentElement, SharedString, StyledText, Styled, div,
+    AnyElement, App, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, StyledText, div,
     http_client::{AsyncBody, Request},
     prelude::*,
 };
@@ -534,7 +534,9 @@ fn icon_button(id: impl Into<gpui::ElementId>, icon: &str) -> gpui::Stateful<gpu
 }
 
 fn lang_button(id: &'static str, url: SharedString, above: bool) -> gpui::Stateful<gpui::Div> {
-    icon_button(id, "angle-brackets").tooltip(crate::ui::tooltip::tip(crate::t!("plaintext.language"))).on_click(move |ev, w, cx: &mut App| open_language_picker(url.clone(), ev.position(), above, w, cx))
+    icon_button(id, "angle-brackets")
+        .tooltip(crate::ui::tooltip::tip(crate::t!("plaintext.language")))
+        .on_click(move |ev, w, cx: &mut App| open_language_picker(url.clone(), ev.position(), above, w, cx))
 }
 
 pub fn open_language_picker(url: SharedString, pos: gpui::Point<gpui::Pixels>, above: bool, w: &mut gpui::Window, cx: &mut App) {
@@ -651,7 +653,17 @@ pub fn render(a: &Attachment, cx: &App) -> Option<AnyElement> {
     let url = a.url.clone();
     let Some(e) = entry(&url) else {
         fetch(url, cx);
-        return Some(div().mt(z(4.)).min_w(z(302.)).h(z(118.)).rounded_t(z(4.)).border_1().border_color(tk(idx::BORDER_SUBTLE)).bg(tk(idx::BACKGROUND_BASE_LOWER)).into_any_element());
+        return Some(
+            div()
+                .mt(z(4.))
+                .min_w(z(302.))
+                .h(z(118.))
+                .rounded_t(z(4.))
+                .border_1()
+                .border_color(tk(idx::BORDER_SUBTLE))
+                .bg(tk(idx::BACKGROUND_BASE_LOWER))
+                .into_any_element(),
+        );
     };
     if e.failed {
         return None;
@@ -739,7 +751,12 @@ pub fn render(a: &Attachment, cx: &App) -> Option<AnyElement> {
                     update(&u1, |e| e.expanded = !e.expanded);
                     w.refresh();
                 })
-                .child(gpui::svg().path(crate::icons::path(if e.expanded { "chevron-up" } else { "chevron" })).size(z(20.)).text_color(tk(idx::CONTROL_SECONDARY_TEXT_DEFAULT))),
+                .child(
+                    gpui::svg()
+                        .path(crate::icons::path(if e.expanded { "chevron-up" } else { "chevron" }))
+                        .size(z(20.))
+                        .text_color(tk(idx::CONTROL_SECONDARY_TEXT_DEFAULT)),
+                ),
         )
     });
     let name = div()
@@ -747,7 +764,17 @@ pub fn render(a: &Attachment, cx: &App) -> Option<AnyElement> {
         .overflow_hidden()
         .flex()
         .flex_col()
-        .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(z(14.)).line_height(z(18.)).text_color(tk(idx::TEXT_DEFAULT)).child(a.filename.clone()))
+        .child(
+            div()
+                .min_w_0()
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .text_color(tk(idx::TEXT_DEFAULT))
+                .child(a.filename.clone()),
+        )
         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_SUBTLE)).child(size_label(a.size)));
     let open_url = a.url.clone();
     let footer = div()
@@ -771,14 +798,19 @@ pub fn render(a: &Attachment, cx: &App) -> Option<AnyElement> {
             let filename = a.filename.clone();
             let size = a.size;
             move |_, w, _| {
-                crate::actions::open_modal(crate::ui::modals::Modal::PlaintextFull { url: open_url.clone(), filename: filename.clone(), size, viewport: None }, Some(w));
+                crate::actions::open_modal(
+                    crate::ui::modals::Modal::PlaintextFull { url: open_url.clone(), filename: filename.clone(), size, viewport: None },
+                    Some(w),
+                );
             }
         }))
-        .child(icon_button("plaintext-more", "more-horizontal").ml(z(16.)).mr(z(4.)).tooltip(crate::ui::tooltip::tip(crate::t!("plaintext.more"))).on_click(move |ev, w, _| {
-            let p = ev.position();
-            MENU.with(|m| *m.borrow_mut() = Some((u2.clone(), p)));
-            w.refresh();
-        }));
+        .child(icon_button("plaintext-more", "more-horizontal").ml(z(16.)).mr(z(4.)).tooltip(crate::ui::tooltip::tip(crate::t!("plaintext.more"))).on_click(
+            move |ev, w, _| {
+                let p = ev.position();
+                MENU.with(|m| *m.borrow_mut() = Some((u2.clone(), p)));
+                w.refresh();
+            },
+        ));
     let menu = MENU.with(|m| m.borrow().clone()).filter(|(u, _)| *u == url).map(|(u, pos)| {
         let md = MARKDOWN.contains(&lang.as_str());
         let dl = u.clone();
@@ -810,7 +842,13 @@ pub fn render(a: &Attachment, cx: &App) -> Option<AnyElement> {
     Some(div().mt(z(4.)).w(z(card_w)).max_w_full().flex().flex_col().child(text_box).child(footer).children(menu).children(picker).into_any_element())
 }
 
-pub fn render_full(url: &SharedString, filename: &SharedString, size: u64, viewport: Option<gpui::Size<gpui::Pixels>>, cx: &mut gpui::Context<crate::app::PhoenixApp>) -> AnyElement {
+pub fn render_full(
+    url: &SharedString,
+    filename: &SharedString,
+    size: u64,
+    viewport: Option<gpui::Size<gpui::Pixels>>,
+    cx: &mut gpui::Context<crate::app::PhoenixApp>,
+) -> AnyElement {
     let e = entry(url).unwrap_or_default();
     let lang = e.language(filename);
     let as_md = e.renders_markdown(filename);
@@ -847,15 +885,7 @@ pub fn render_full(url: &SharedString, filename: &SharedString, size: u64, viewp
         .flex()
         .flex_col()
         .pb(z(16.))
-        .child(
-            div()
-                .id("plaintext-full-body")
-                .flex_1()
-                .min_h_0()
-                .overflow_scroll()
-                .bg(tk(idx::BACKGROUND_BASE_LOWER))
-                .child(content),
-        )
+        .child(div().id("plaintext-full-body").flex_1().min_h_0().overflow_scroll().bg(tk(idx::BACKGROUND_BASE_LOWER)).child(content))
         .child(
             div()
                 .flex()
@@ -872,7 +902,9 @@ pub fn render_full(url: &SharedString, filename: &SharedString, size: u64, viewp
                         .min_w_0()
                         .flex()
                         .flex_col()
-                        .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(z(14.)).line_height(z(18.)).child(filename.clone()))
+                        .child(
+                            div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(z(14.)).line_height(z(18.)).child(filename.clone()),
+                        )
                         .child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::TEXT_SUBTLE)).child(size_label(size))),
                 )
                 .child(div().flex_grow(200.).min_w(z(16.)))

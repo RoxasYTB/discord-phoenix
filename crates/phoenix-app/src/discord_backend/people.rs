@@ -39,16 +39,8 @@ impl DiscordBackend {
     pub(super) fn people_status(&self, status: Presence, custom: Option<String>) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
             let custom = custom.filter(|t| !t.trim().is_empty());
-            let activities = custom
-                .as_ref()
-                .map(|t| vec![json!({"type": 4, "name": "Custom Status", "state": t})])
-                .unwrap_or_default();
-            let _ = s.gateway.send(GatewayCommand::UpdatePresence(UpdatePresence {
-                since: 0,
-                activities,
-                status: status_str(status).into(),
-                afk: false,
-            }));
+            let activities = custom.as_ref().map(|t| vec![json!({"type": 4, "name": "Custom Status", "state": t})]).unwrap_or_default();
+            let _ = s.gateway.send(GatewayCommand::UpdatePresence(UpdatePresence { since: 0, activities, status: status_str(status).into(), afk: false }));
             let cs = custom.map(|t| CustomStatus { text: Some(t), ..Default::default() });
             s.rest.update_status_settings(Some(status_str(status)), Some(cs.as_ref())).await.map_err(api_err)
         })
@@ -120,10 +112,7 @@ mod tests {
         let e = StatusEmoji { id: Some(Id(42)), name: "dance".into(), animated: true };
         let d = draft("Lunch", Some(e), ClearAfter::Minutes30, now).unwrap();
         let p = custom_status_proto(&d);
-        assert_eq!(
-            p,
-            CustomStatusProto { text: "Lunch".into(), emoji_id: 42, emoji_name: "dance".into(), expires_at_ms: now + 1_800_000, created_at_ms: now }
-        );
+        assert_eq!(p, CustomStatusProto { text: "Lunch".into(), emoji_id: 42, emoji_name: "dance".into(), expires_at_ms: now + 1_800_000, created_at_ms: now });
         assert_eq!(
             custom_activity(&d),
             json!({"name": "Custom Status", "type": 4, "state": "Lunch", "timestamps": {"end": now + 1_800_000}, "emoji": {"id": "42", "name": "dance", "animated": true}})

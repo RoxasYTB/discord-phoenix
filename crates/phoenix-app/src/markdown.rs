@@ -109,7 +109,13 @@ pub fn format_timestamp(ts: i64, style: char) -> Option<String> {
     let dt = Local.timestamp_opt(ts, 0).single()?;
     Some(match style {
         't' => crate::i18n::clock(dt),
-        'T' => if crate::ui::settings::effects::hour24().unwrap_or(crate::i18n::locale() != "en") { dt.format("%H:%M:%S").to_string() } else { dt.format("%-I:%M:%S %p").to_string() },
+        'T' => {
+            if crate::ui::settings::effects::hour24().unwrap_or(crate::i18n::locale() != "en") {
+                dt.format("%H:%M:%S").to_string()
+            } else {
+                dt.format("%-I:%M:%S %p").to_string()
+            }
+        }
         'd' => crate::i18n::short_date(dt),
         'D' => crate::i18n::long_date(dt.date_naive()),
         'F' => crate::i18n::full_datetime(dt),
@@ -179,19 +185,13 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
             flush(&mut quote, true, &mut blocks, &mut spoilers);
             let body = &after[..end];
             let (lang, code) = match body.find('\n') {
-                Some(nl)
-                    if !body[..nl].trim().is_empty()
-                        && !body[..nl].trim().contains(char::is_whitespace) =>
-                {
+                Some(nl) if !body[..nl].trim().is_empty() && !body[..nl].trim().contains(char::is_whitespace) => {
                     (Some(body[..nl].trim().to_string()), &body[nl + 1..])
                 }
                 Some(0) => (None, &body[1..]),
                 _ => (None, body),
             };
-            blocks.push(Block::Code {
-                lang,
-                code: code.trim_end_matches('\n').to_string(),
-            });
+            blocks.push(Block::Code { lang, code: code.trim_end_matches('\n').to_string() });
             rest = &after[end + 3..];
             rest = rest.strip_prefix('\n').unwrap_or(rest);
             continue;
@@ -248,11 +248,7 @@ pub fn parse_emoji_links(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
 
 pub fn parse_inline(src: &str, r: &dyn MentionResolver, spoiler_counter: &mut usize) -> Inline {
     let mut out = Inline::default();
-    let mut ctx = Ctx {
-        out: &mut out,
-        r,
-        spoilers: spoiler_counter,
-    };
+    let mut ctx = Ctx { out: &mut out, r, spoilers: spoiler_counter };
     ctx.run(src, Style::PLAIN, None);
     out
 }
@@ -263,28 +259,15 @@ struct Ctx<'a> {
     spoilers: &'a mut usize,
 }
 
-const DELIMS: &[(&str, Style)] = &[
-    ("**", Style::BOLD),
-    ("__", Style::UNDERLINE),
-    ("~~", Style::STRIKE),
-    ("||", Style::SPOILER),
-    ("*", Style::ITALIC),
-    ("_", Style::ITALIC),
-];
+const DELIMS: &[(&str, Style)] =
+    &[("**", Style::BOLD), ("__", Style::UNDERLINE), ("~~", Style::STRIKE), ("||", Style::SPOILER), ("*", Style::ITALIC), ("_", Style::ITALIC)];
 
 impl Ctx<'_> {
     fn push(&mut self, text: &str, style: Style, spoiler: Option<usize>) {
         self.push_full(text, style, None, None, spoiler)
     }
 
-    fn push_full(
-        &mut self,
-        text: &str,
-        style: Style,
-        link: Option<String>,
-        mention: Option<Mention>,
-        spoiler: Option<usize>,
-    ) {
+    fn push_full(&mut self, text: &str, style: Style, link: Option<String>, mention: Option<Mention>, spoiler: Option<usize>) {
         if text.is_empty() {
             return;
         }
@@ -303,13 +286,7 @@ impl Ctx<'_> {
             last.range.end = end;
             return;
         }
-        self.out.spans.push(Span {
-            range: start..end,
-            style,
-            link,
-            mention,
-            spoiler,
-        });
+        self.out.spans.push(Span { range: start..end, style, link, mention, spoiler });
     }
 
     fn run(&mut self, src: &str, style: Style, spoiler: Option<usize>) {
@@ -445,9 +422,7 @@ impl Ctx<'_> {
             if (c == b'h') && (rest.starts_with("https://") || rest.starts_with("http://")) {
                 let at_boundary = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
                 if at_boundary {
-                    let end = rest
-                        .find(|ch: char| ch.is_whitespace() || ch == '<' || ch == '>')
-                        .unwrap_or(rest.len());
+                    let end = rest.find(|ch: char| ch.is_whitespace() || ch == '<' || ch == '>').unwrap_or(rest.len());
                     let mut url = &rest[..end];
                     while url.ends_with(['.', ',', ')', '!', '?', ':', ';']) {
                         url = &url[..url.len() - 1];
@@ -533,10 +508,7 @@ fn find_close(body: &str, d: &str) -> Option<usize> {
 }
 
 pub fn clickable(inline: &Inline) -> impl Iterator<Item = &Span> {
-    inline
-        .spans
-        .iter()
-        .filter(|s| s.link.is_some() || s.spoiler.is_some())
+    inline.spans.iter().filter(|s| s.link.is_some() || s.spoiler.is_some())
 }
 
 #[cfg(test)]
@@ -552,10 +524,7 @@ mod tests {
             (id == 7).then(|| "general".into())
         }
         fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<SoundboardMention> {
-            (guild_id == 9 && sound_id == 77).then(|| SoundboardMention {
-                name: "Chime".into(),
-                emoji_name: Some("🎵".into()),
-            })
+            (guild_id == 9 && sound_id == 77).then(|| SoundboardMention { name: "Chime".into(), emoji_name: Some("🎵".into()) })
         }
     }
 
@@ -603,16 +572,7 @@ mod tests {
     fn bold_italic_nested() {
         let i = inline("a **b *c* d** e");
         assert_eq!(i.text, "a b c d e");
-        assert_eq!(
-            styled(&i),
-            vec![
-                ("a ", Style::PLAIN),
-                ("b ", Style::BOLD),
-                ("c", Style::BOLD | Style::ITALIC),
-                (" d", Style::BOLD),
-                (" e", Style::PLAIN),
-            ]
-        );
+        assert_eq!(styled(&i), vec![("a ", Style::PLAIN), ("b ", Style::BOLD), ("c", Style::BOLD | Style::ITALIC), (" d", Style::BOLD), (" e", Style::PLAIN),]);
     }
 
     #[test]
@@ -668,10 +628,7 @@ mod tests {
         let i = inline("hi <@42> in <#7>, <@!99> @everyone");
         assert_eq!(i.text, "hi @wumpus in #general, @Unknown user @everyone");
         let m: Vec<_> = i.spans.iter().filter_map(|s| s.mention.clone()).collect();
-        assert_eq!(
-            m,
-            vec![Mention::User(42), Mention::Channel(7), Mention::User(99), Mention::Everyone]
-        );
+        assert_eq!(m, vec![Mention::User(42), Mention::Channel(7), Mention::User(99), Mention::Everyone]);
     }
 
     #[test]
@@ -686,10 +643,7 @@ mod tests {
         let b = parse("before\n```rust\nfn main() {}\n```\nafter", &R);
         assert_eq!(b.len(), 3);
         assert!(matches!(&b[0], Block::Paragraph(i) if i.text == "before"));
-        assert_eq!(
-            b[1],
-            Block::Code { lang: Some("rust".into()), code: "fn main() {}".into() }
-        );
+        assert_eq!(b[1], Block::Code { lang: Some("rust".into()), code: "fn main() {}".into() });
         assert!(matches!(&b[2], Block::Paragraph(i) if i.text == "after"));
     }
 

@@ -113,16 +113,7 @@ fn cat_header(title: SharedString, subtitle: Option<AnyElement>, trailing: Optio
         .flex()
         .items_center()
         .gap(z(24.))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap(z(4.))
-                .child(text(24., 32., FontWeight::MEDIUM, idx::TEXT_STRONG, title))
-                .children(subtitle),
-        )
+        .child(div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(text(24., 32., FontWeight::MEDIUM, idx::TEXT_STRONG, title)).children(subtitle))
         .children(trailing.map(|t| div().flex_none().flex().gap(z(16.)).child(t)))
 }
 
@@ -150,12 +141,7 @@ fn links(t: SharedString, color: usize, size: f32, line: f32) -> AnyElement {
             _ => plain.push(ch),
         }
     }
-    div()
-        .text_size(z(size))
-        .line_height(z(line))
-        .text_color(c(tok(color)))
-        .child(gpui::StyledText::new(plain).with_highlights(hl))
-        .into_any_element()
+    div().text_size(z(size)).line_height(z(line)).text_color(c(tok(color))).child(gpui::StyledText::new(plain).with_highlights(hl)).into_any_element()
 }
 
 fn critical_secondary(id: &'static str, label: SharedString) -> gpui::Stateful<Div> {
@@ -196,36 +182,24 @@ fn session_row(icon: &'static str, muted: bool, label: SharedString, sub: Option
         .flex()
         .items_center()
         .gap(z(16.))
-        .child(
-            div()
-                .w(z(48.))
-                .h(z(48.))
-                .rounded(z(8.))
-                .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(gpui::svg().path(crate::icons::path(icon)).size(z(24.)).flex_none().text_color(c(tok(if muted { idx::ICON_MUTED } else { idx::TEXT_DEFAULT })))),
-        )
+        .child(div().w(z(48.)).h(z(48.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_MOD_MUTED))).flex().items_center().justify_center().child(
+            gpui::svg().path(crate::icons::path(icon)).size(z(24.)).flex_none().text_color(c(tok(if muted { idx::ICON_MUTED } else { idx::TEXT_DEFAULT }))),
+        ))
         .child(
             div()
                 .w_full()
                 .flex()
                 .flex_col()
                 .gap(z(4.))
-                .child(
-                    div()
-                        .flex()
-                        .gap(z(10.))
-                        .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, label))
-                        .children(sub.map(|s| {
-                            div()
-                                .flex()
-                                .gap(z(10.))
-                                .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_SUBTLE, "\u{2022}"))
-                                .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_SUBTLE, s))
-                        })),
-                )
+                .child(div().flex().gap(z(10.)).child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, label)).children(sub.map(|s| {
+                    div().flex().gap(z(10.)).child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_SUBTLE, "\u{2022}")).child(text(
+                        16.,
+                        20.,
+                        FontWeight::MEDIUM,
+                        idx::TEXT_SUBTLE,
+                        s,
+                    ))
+                })))
                 .child(desc),
         )
         .children(trailing)
@@ -426,13 +400,11 @@ fn mfa(app: &PhoenixApp, cx: &mut Cx) -> Div {
         .child(cat_header(crate::t!("settings.mfa.app"), Some(subtitle(crate::t!("settings.mfa.app_d"))), None))
         .child(div().h(z(1.)));
     if info.mfa {
-        out = out.child(
-            div().child(controls::control_item(
-                crate::t!("settings.account.mfa_on"),
-                None,
-                Some(critical_secondary("mfa-app-remove", crate::t!("settings.mfa.remove")).into_any_element()),
-            )),
-        );
+        out = out.child(div().child(controls::control_item(
+            crate::t!("settings.account.mfa_on"),
+            None,
+            Some(critical_secondary("mfa-app-remove", crate::t!("settings.mfa.remove")).into_any_element()),
+        )));
     }
     if info.mfa && info.sms {
         let shown = SHOW_PHONE.with(std::cell::Cell::get) && !streamer;
@@ -443,7 +415,13 @@ fn mfa(app: &PhoenixApp, cx: &mut Cx) -> Div {
             .flex_wrap()
             .items_center()
             .gap(z(4.))
-            .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!(if shown { "settings.mfa.sms_full" } else { "settings.mfa.sms_ending" }, phone = digits)))
+            .child(text(
+                14.,
+                18.,
+                FontWeight::NORMAL,
+                idx::TEXT_SUBTLE,
+                crate::t!(if shown { "settings.mfa.sms_full" } else { "settings.mfa.sms_ending" }, phone = digits),
+            ))
             .child(
                 div()
                     .id("mfa-sms-reveal")
@@ -458,20 +436,25 @@ fn mfa(app: &PhoenixApp, cx: &mut Cx) -> Div {
                     }))
                     .child(if shown { crate::t!("common.hide") } else { crate::t!("common.reveal") }),
             );
-        out = out
-            .child(divider())
-            .child(cat_header(crate::t!("settings.mfa.sms"), None, None))
-            .child(div().h(z(1.)))
-            .child(
-                div()
-                    .flex()
-                    .gap(z(12.))
-                    .mx(z(-12.))
-                    .p(z(12.))
-                    .rounded(z(16.))
-                    .child(div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("settings.account.mfa_on"))).child(line))
-                    .child(div().flex_none().flex().items_center().child(critical_secondary("mfa-sms-remove", crate::t!("settings.mfa.remove")))),
-            );
+        out = out.child(divider()).child(cat_header(crate::t!("settings.mfa.sms"), None, None)).child(div().h(z(1.))).child(
+            div()
+                .flex()
+                .gap(z(12.))
+                .mx(z(-12.))
+                .p(z(12.))
+                .rounded(z(16.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(z(4.))
+                        .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("settings.account.mfa_on")))
+                        .child(line),
+                )
+                .child(div().flex_none().flex().items_center().child(critical_secondary("mfa-sms-remove", crate::t!("settings.mfa.remove")))),
+        );
     }
     if info.mfa {
         out = out
@@ -522,7 +505,8 @@ fn family_hero(cx: &mut Cx) -> Div {
     let link = crate::t!("settings.family.learn_more");
     let full = format!("{body}{link}");
     let range = body.len()..full.len();
-    let styled = gpui::StyledText::new(full).with_highlights([(range.clone(), gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })]);
+    let styled =
+        gpui::StyledText::new(full).with_highlights([(range.clone(), gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })]);
     let text_block = div()
         .max_w(z(364.))
         .flex()
@@ -583,22 +567,24 @@ fn family_feature(icon: &'static str, title: &str, desc: &str) -> Div {
 
 fn family_section(title: &str, desc: Option<&str>, rows: &[(&'static str, &str, &str)]) -> Div {
     let last = rows.len().saturating_sub(1);
-    let group = div().rounded(z(12.)).overflow_hidden().bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER))).flex().flex_col().children(rows.iter().enumerate().map(|(ix, (icon, h, d))| {
-        let color = if *icon == "close-small" { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_STRONG };
-        div()
-            .relative()
-            .p(z(12.))
-            .flex()
-            .items_center()
-            .child(div().flex_none().ml(z(12.)).mr(z(16.)).child(gpui::svg().path(crate::icons::path(icon)).size(z(20.)).text_color(c(tok(color)))))
-            .child(
-                div()
-                    .min_w_0()
-                    .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(h)).mb(z(4.)))
-                    .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!(d)).max_w(z(500.))),
-            )
-            .when(ix < last, |r| r.child(div().absolute().bottom_0().right_0().left(z(60.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))))
-    }));
+    let group = div().rounded(z(12.)).overflow_hidden().bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER))).flex().flex_col().children(rows.iter().enumerate().map(
+        |(ix, (icon, h, d))| {
+            let color = if *icon == "close-small" { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_STRONG };
+            div()
+                .relative()
+                .p(z(12.))
+                .flex()
+                .items_center()
+                .child(div().flex_none().ml(z(12.)).mr(z(16.)).child(gpui::svg().path(crate::icons::path(icon)).size(z(20.)).text_color(c(tok(color)))))
+                .child(
+                    div()
+                        .min_w_0()
+                        .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(h)).mb(z(4.)))
+                        .child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!(d)).max_w(z(500.))),
+                )
+                .when(ix < last, |r| r.child(div().absolute().bottom_0().right_0().left(z(60.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE)))))
+        },
+    ));
     div()
         .flex()
         .flex_col()
@@ -672,12 +658,13 @@ fn family_step(n: usize, title: &str, desc: &str) -> Div {
                 .justify_center()
                 .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_BRAND, n.to_string())),
         )
-        .child(
-            div()
-                .min_w_0()
-                .child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!(title)))
-                .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!(desc))),
-        )
+        .child(div().min_w_0().child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!(title))).child(text(
+            14.,
+            18.,
+            FontWeight::MEDIUM,
+            idx::TEXT_MUTED,
+            crate::t!(desc),
+        )))
 }
 
 fn family_members() -> Div {
@@ -711,7 +698,13 @@ fn family_members() -> Div {
         );
     let connected = div()
         .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_DEFAULT, crate::t!("settings.family.connected", count = 0, max = 8)).mb(z(8.)))
-        .child(div().p(z(32.)).flex().flex_col().items_center().justify_center().child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!("settings.family.none"))));
+        .child(div().p(z(32.)).flex().flex_col().items_center().justify_center().child(text(
+            14.,
+            18.,
+            FontWeight::MEDIUM,
+            idx::TEXT_MUTED,
+            crate::t!("settings.family.none"),
+        )));
     div().max_w(z(800.)).flex().flex_col().gap(z(32.)).child(banner).child(connected)
 }
 

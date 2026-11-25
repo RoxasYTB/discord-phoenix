@@ -76,7 +76,8 @@ fn game_icon(app: &Value, size: u32) -> Option<SharedString> {
 
 pub fn top_game_ids(top: &Value, selected: &[String]) -> Vec<String> {
     let Some(map) = top.as_object() else { return Vec::new() };
-    let mut ids: Vec<(&String, f64)> = map.iter().filter(|(k, _)| !selected.contains(k)).map(|(k, v)| (k, v.get("score").and_then(Value::as_f64).unwrap_or(0.))).collect();
+    let mut ids: Vec<(&String, f64)> =
+        map.iter().filter(|(k, _)| !selected.contains(k)).map(|(k, v)| (k, v.get("score").and_then(Value::as_f64).unwrap_or(0.))).collect();
     ids.sort_by(|a, b| b.1.total_cmp(&a.1));
     ids.into_iter().map(|(k, _)| k.clone()).collect()
 }
@@ -96,8 +97,14 @@ fn members_play(app: &PhoenixApp, s: &State, cx: &mut Cx) -> Option<Vec<Value>> 
 }
 
 pub fn games(s: &State) -> Vec<Value> {
-    let order: Vec<String> =
-        s.get("profile").and_then(|p| p.get("game_application_ids")).and_then(Value::as_array).into_iter().flatten().filter_map(|v| v.as_str().map(str::to_owned)).collect();
+    let order: Vec<String> = s
+        .get("profile")
+        .and_then(|p| p.get("game_application_ids"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_str().map(str::to_owned))
+        .collect();
     let apps = s.list("games");
     order.iter().filter_map(|id| apps.iter().find(|a| kit::s(a, "id") == *id).cloned()).collect()
 }
@@ -165,8 +172,22 @@ fn banners(s: &State, guild: u64, cx: &mut Cx) -> AnyElement {
                     (None, Some(u)) => Some(gpui::img(u.clone()).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover)),
                     _ => None,
                 })
-                .child(div().absolute().inset_0().bg(c(tok(idx::BACKGROUND_SCRIM))).opacity(if has_image { 0. } else { 1. }).group_hover("ss-banner-up", |s| s.opacity(1.)))
-                .child(gpui::svg().path(crate::icons::path("image-plus")).size(z(24.)).text_color(gpui::white()).opacity(if has_image { 0. } else { 1. }).group_hover("ss-banner-up", |s| s.opacity(1.))),
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(c(tok(idx::BACKGROUND_SCRIM)))
+                        .opacity(if has_image { 0. } else { 1. })
+                        .group_hover("ss-banner-up", |s| s.opacity(1.)),
+                )
+                .child(
+                    gpui::svg()
+                        .path(crate::icons::path("image-plus"))
+                        .size(z(24.))
+                        .text_color(gpui::white())
+                        .opacity(if has_image { 0. } else { 1. })
+                        .group_hover("ss-banner-up", |s| s.opacity(1.)),
+                ),
         )
         .into_any_element();
     cells.push(up);
@@ -198,14 +219,26 @@ fn trait_inputs(s: &State) -> AnyElement {
             .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
             .flex()
             .items_center()
+            .child(div().size(z(30.)).flex_none().flex().items_center().justify_center().child(match em {
+                Some(e) => emoji(&e, 20.),
+                None => gpui::svg().path(crate::icons::path("emoji")).size(z(20.)).text_color(c(tok(idx::ICON_SUBTLE))).into_any_element(),
+            }))
             .child(
-                div().size(z(30.)).flex_none().flex().items_center().justify_center().child(match em {
-                    Some(e) => emoji(&e, 20.),
-                    None => gpui::svg().path(crate::icons::path("emoji")).size(z(20.)).text_color(c(tok(idx::ICON_SUBTLE))).into_any_element(),
-                }),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(z(16.))
+                    .children(s.inputs.get(TRAIT_KEYS[i]).map(|i| gpui_component::input::Input::new(i).appearance(false).bordered(false))),
             )
-            .child(div().flex_1().min_w_0().text_size(z(16.)).children(s.inputs.get(TRAIT_KEYS[i]).map(|i| gpui_component::input::Input::new(i).appearance(false).bordered(false))))
-            .child(div().size(z(30.)).flex_none().flex().items_center().justify_center().child(gpui::svg().path(crate::icons::path("close-small")).size(z(16.)).text_color(c(tok(idx::ICON_SUBTLE)))))
+            .child(
+                div()
+                    .size(z(30.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(gpui::svg().path(crate::icons::path("close-small")).size(z(16.)).text_color(c(tok(idx::ICON_SUBTLE)))),
+            )
     };
     div()
         .flex()
@@ -261,7 +294,12 @@ fn games_section(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         grid = grid.child(row);
     }
     let mut parts = vec![
-        kit::select_box("ss-games", text(crate::t!("gs.profile.games_search"), 16., 20., FontWeight::NORMAL, idx::INPUT_PLACEHOLDER_TEXT_DEFAULT).into_any_element(), false).into_any_element(),
+        kit::select_box(
+            "ss-games",
+            text(crate::t!("gs.profile.games_search"), 16., 20., FontWeight::NORMAL, idx::INPUT_PLACEHOLDER_TEXT_DEFAULT).into_any_element(),
+            false,
+        )
+        .into_any_element(),
         grid.into_any_element(),
     ];
     if let Some(members) = members_play(app, s, cx).filter(|l| !l.is_empty()) {
@@ -289,7 +327,15 @@ fn games_section(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
             );
         }
         parts.push(div().h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))).into_any_element());
-        parts.push(div().flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.profile.members_play"), 12., 16., FontWeight::SEMIBOLD, idx::TEXT_MUTED)).child(tiles).into_any_element());
+        parts.push(
+            div()
+                .flex()
+                .flex_col()
+                .gap(z(8.))
+                .child(text(crate::t!("gs.profile.members_play"), 12., 16., FontWeight::SEMIBOLD, idx::TEXT_MUTED))
+                .child(tiles)
+                .into_any_element(),
+        );
     }
     kit::fieldset(crate::t!("gs.profile.games"), Some(crate::t!("gs.profile.games_desc")), parts).into_any_element()
 }
@@ -311,11 +357,8 @@ fn private_section(s: &State, cx: &mut Cx) -> AnyElement {
         )
         .child(text(crate::t!("gs.profile.private_note"), 12., 16., FontWeight::NORMAL, idx::TEXT_MUTED));
     let _ = cx;
-    let card = div()
-        .flex_1()
-        .min_w_0()
-        .opacity(if private { 1. } else { 0.5 })
-        .child(
+    let card =
+        div().flex_1().min_w_0().opacity(if private { 1. } else { 0.5 }).child(
             div()
                 .rounded(z(16.))
                 .border_1()
@@ -325,7 +368,9 @@ fn private_section(s: &State, cx: &mut Cx) -> AnyElement {
                 .flex()
                 .flex_col()
                 .child(div().h(z(120.)).bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
-                .child(div().px(z(16.)).mt(z(-34.)).child(div().size(z(70.)).rounded(z(20.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).border_4().border_color(c(tok(idx::BACKGROUND_SURFACE_HIGH)))))
+                .child(div().px(z(16.)).mt(z(-34.)).child(
+                    div().size(z(70.)).rounded(z(20.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).border_4().border_color(c(tok(idx::BACKGROUND_SURFACE_HIGH))),
+                ))
                 .child(div().px(z(16.)).my(z(8.)).child(text(crate::t!("gs.profile.private_title"), 20., 24., FontWeight::MEDIUM, idx::TEXT_STRONG)))
                 .child(div().px(z(16.)).mb(z(16.)).child(text(crate::t!("gs.profile.private_body"), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE))),
         );
@@ -345,7 +390,9 @@ pub fn preview(s: &State, guild: u64) -> AnyElement {
     };
     let banner: AnyElement = match (s.edits.banner_preset, banner_url(guild, &p)) {
         (Some(i), _) if i < BANNERS.len() => div().h(z(120.)).bg(gradient(BANNERS[i].1, BANNERS[i].2)).into_any_element(),
-        _ if s.uploads.contains_key("banner") => gpui::img(s.uploads["banner"].clone()).w_full().h(z(120.)).object_fit(gpui::ObjectFit::Cover).into_any_element(),
+        _ if s.uploads.contains_key("banner") => {
+            gpui::img(s.uploads["banner"].clone()).w_full().h(z(120.)).object_fit(gpui::ObjectFit::Cover).into_any_element()
+        }
         (_, Some(u)) => gpui::img(u).w_full().h(z(120.)).object_fit(gpui::ObjectFit::Cover).into_any_element(),
         _ => div().h(z(120.)).bg(gradient(BANNERS[0].1, BANNERS[0].2)).into_any_element(),
     };
@@ -369,20 +416,18 @@ pub fn preview(s: &State, guild: u64) -> AnyElement {
                 .items_center()
                 .gap(z(4.))
                 .child(text(name, 16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG).truncate())
-                .when(kit::n(&p, "visibility") == 1 || g.get("features").and_then(Value::as_array).is_some_and(|f| f.iter().any(|x| x == "DISCOVERABLE")), |d| {
-                    d.child(gpui::svg().path(crate::icons::path("discovery-badge")).size(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))))
-                })
+                .when(
+                    kit::n(&p, "visibility") == 1 || g.get("features").and_then(Value::as_array).is_some_and(|f| f.iter().any(|x| x == "DISCOVERABLE")),
+                    |d| d.child(gpui::svg().path(crate::icons::path("discovery-badge")).size(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT)))),
+                )
                 .when(!tag.is_empty(), |d| {
-                    d.child(
-                        div()
-                            .px(z(4.))
-                            .rounded(z(4.))
-                            .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
-                            .flex()
-                            .items_center()
-                            .gap(z(2.))
-                            .child(text(tag.clone(), 12., 16., FontWeight::SEMIBOLD, idx::TEXT_DEFAULT)),
-                    )
+                    d.child(div().px(z(4.)).rounded(z(4.)).bg(c(tok(idx::BACKGROUND_MOD_STRONG))).flex().items_center().gap(z(2.)).child(text(
+                        tag.clone(),
+                        12.,
+                        16.,
+                        FontWeight::SEMIBOLD,
+                        idx::TEXT_DEFAULT,
+                    )))
                 }),
         )
         .child(
@@ -390,8 +435,20 @@ pub fn preview(s: &State, guild: u64) -> AnyElement {
                 .flex()
                 .flex_wrap()
                 .gap_x(z(8.))
-                .child(div().flex().items_center().gap(z(4.)).child(dot(c(tok(idx::TEXT_STATUS_ONLINE)))).child(text(crate::t!("gs.profile.online", n = kit::fmt_int(online)), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE)))
-                .child(div().flex().items_center().gap(z(4.)).child(dot(c(tok(idx::TEXT_STATUS_OFFLINE)))).child(text(crate::t!("gs.profile.members", n = kit::fmt_int(members)), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE))),
+                .child(div().flex().items_center().gap(z(4.)).child(dot(c(tok(idx::TEXT_STATUS_ONLINE)))).child(text(
+                    crate::t!("gs.profile.online", n = kit::fmt_int(online)),
+                    14.,
+                    18.,
+                    FontWeight::NORMAL,
+                    idx::TEXT_SUBTLE,
+                )))
+                .child(div().flex().items_center().gap(z(4.)).child(dot(c(tok(idx::TEXT_STATUS_OFFLINE)))).child(text(
+                    crate::t!("gs.profile.members", n = kit::fmt_int(members)),
+                    14.,
+                    18.,
+                    FontWeight::NORMAL,
+                    idx::TEXT_SUBTLE,
+                ))),
         )
         .child(text(since_label(guild), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE));
     let games = games(s);
@@ -403,9 +460,14 @@ pub fn preview(s: &State, guild: u64) -> AnyElement {
         .gap(z(16.))
         .child(text(kit::s(&p, "description"), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE))
         .when(!games.is_empty(), |d| {
-            d.child(div().flex().gap(z(4.)).children(games.iter().filter_map(|a| game_icon(a, 64)).map(|u| {
-                gpui::img(u).size(z(26.)).rounded(z(4.)).border_1().border_color(c(tok(idx::BORDER_MUTED)))
-            })))
+            d.child(
+                div().flex().gap(z(4.)).children(
+                    games
+                        .iter()
+                        .filter_map(|a| game_icon(a, 64))
+                        .map(|u| gpui::img(u).size(z(26.)).rounded(z(4.)).border_1().border_color(c(tok(idx::BORDER_MUTED)))),
+                ),
+            )
         })
         .child(div().flex().flex_wrap().gap(z(4.)).children(traits(s).into_iter().map(|(e, l)| {
             div()
@@ -442,7 +504,10 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let icon_buttons = div()
         .flex()
         .gap(z(8.))
-        .child(kit::btn_sm("ss-icon-change", crate::t!("gs.profile.icon_change"), BtnKind::Primary).on_click(cx.listener(|_, _, _, cx| super::pick_upload("icon", &crate::ui::file_pick::IMAGES, cx))))
+        .child(
+            kit::btn_sm("ss-icon-change", crate::t!("gs.profile.icon_change"), BtnKind::Primary)
+                .on_click(cx.listener(|_, _, _, cx| super::pick_upload("icon", &crate::ui::file_pick::IMAGES, cx))),
+        )
         .child(kit::critical_secondary("ss-icon-remove", crate::t!("gs.profile.icon_remove")));
     let left = div()
         .flex_1()
@@ -452,7 +517,11 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .flex_col()
         .gap(z(40.))
         .child(page_head(crate::t!("menu.gs.profile"), Some(crate::t!("gs.profile.desc"))))
-        .child(field(crate::t!("gs.profile.name"), None, s.inputs.get("name").map(|i| super::super::input_box(i).into_any_element()).unwrap_or_else(|| div().h(z(40.)).into_any_element())))
+        .child(field(
+            crate::t!("gs.profile.name"),
+            None,
+            s.inputs.get("name").map(|i| super::super::input_box(i).into_any_element()).unwrap_or_else(|| div().h(z(40.)).into_any_element()),
+        ))
         .child(divider())
         .child(field(crate::t!("gs.profile.icon"), Some(crate::t!("gs.profile.icon_desc")), icon_buttons))
         .child(divider())

@@ -19,10 +19,7 @@ fn main() -> anyhow::Result<()> {
         Ok("general") => GENERAL,
         _ => SANDBOX,
     };
-    let chunk = std::env::var("PROBE_CHUNK_KIB")
-        .ok()
-        .and_then(|c| c.parse::<usize>().ok())
-        .map_or(phoenix_api::rest::uploads::UPLOAD_CHUNK, |k| k * 1024);
+    let chunk = std::env::var("PROBE_CHUNK_KIB").ok().and_then(|c| c.parse::<usize>().ok()).map_or(phoenix_api::rest::uploads::UPLOAD_CHUNK, |k| k * 1024);
     anyhow::ensure!(chunk.is_multiple_of(256 * 1024), "chunk must be a multiple of 256 KiB");
     let mut files = Vec::new();
     for spec in &args[2..] {
@@ -44,10 +41,8 @@ fn main() -> anyhow::Result<()> {
     }
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     rt.block_on(async move {
-        let token = tokio::task::spawn_blocking(|| KeyringStore.load())
-            .await?
-            .map_err(anyhow::Error::msg)?
-            .ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
+        let token =
+            tokio::task::spawn_blocking(|| KeyringStore.load()).await?.map_err(anyhow::Error::msg)?.ok_or_else(|| anyhow::anyhow!("no token in keyring"))?;
         let rest = RestClient::new(token.expose(), ClientProperties::linux_desktop());
         let ch = rest.get_channel(Snowflake(channel)).await?;
         let guild = rest.request_json(reqwest::Method::GET, &format!("/guilds/{TEST_GUILD}"), None).await?;

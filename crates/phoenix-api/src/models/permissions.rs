@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{GuildId, PermissionOverwrite, OverwriteType, Role, RoleId, UserId};
+use super::{GuildId, OverwriteType, PermissionOverwrite, Role, RoleId, UserId};
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -82,21 +82,11 @@ impl<'de> Deserialize<'de> for Permissions {
     }
 }
 
-pub fn compute_base_permissions(
-    guild_id: GuildId,
-    owner_id: Option<UserId>,
-    user_id: UserId,
-    member_roles: &[RoleId],
-    roles: &[Role],
-) -> Permissions {
+pub fn compute_base_permissions(guild_id: GuildId, owner_id: Option<UserId>, user_id: UserId, member_roles: &[RoleId], roles: &[Role]) -> Permissions {
     if owner_id == Some(user_id) {
         return Permissions::all();
     }
-    let mut perms = roles
-        .iter()
-        .find(|r| r.id == guild_id)
-        .map(|r| r.permissions)
-        .unwrap_or_default();
+    let mut perms = roles.iter().find(|r| r.id == guild_id).map(|r| r.permissions).unwrap_or_default();
     for role in roles.iter().filter(|r| member_roles.contains(&r.id)) {
         perms |= role.permissions;
     }
@@ -106,39 +96,24 @@ pub fn compute_base_permissions(
     perms
 }
 
-pub fn apply_overwrites(
-    base: Permissions,
-    guild_id: GuildId,
-    user_id: UserId,
-    member_roles: &[RoleId],
-    overwrites: &[PermissionOverwrite],
-) -> Permissions {
+pub fn apply_overwrites(base: Permissions, guild_id: GuildId, user_id: UserId, member_roles: &[RoleId], overwrites: &[PermissionOverwrite]) -> Permissions {
     if base.contains(Permissions::ADMINISTRATOR) {
         return Permissions::all();
     }
     let mut perms = base;
-    if let Some(ow) = overwrites
-        .iter()
-        .find(|o| o.id == guild_id && o.kind == OverwriteType::Role)
-    {
+    if let Some(ow) = overwrites.iter().find(|o| o.id == guild_id && o.kind == OverwriteType::Role) {
         perms &= !ow.deny;
         perms |= ow.allow;
     }
     let mut allow = Permissions::empty();
     let mut deny = Permissions::empty();
-    for ow in overwrites
-        .iter()
-        .filter(|o| o.kind == OverwriteType::Role && member_roles.contains(&o.id))
-    {
+    for ow in overwrites.iter().filter(|o| o.kind == OverwriteType::Role && member_roles.contains(&o.id)) {
         allow |= ow.allow;
         deny |= ow.deny;
     }
     perms &= !deny;
     perms |= allow;
-    if let Some(ow) = overwrites
-        .iter()
-        .find(|o| o.id == user_id && o.kind == OverwriteType::Member)
-    {
+    if let Some(ow) = overwrites.iter().find(|o| o.id == user_id && o.kind == OverwriteType::Member) {
         perms &= !ow.deny;
         perms |= ow.allow;
     }
@@ -146,10 +121,7 @@ pub fn apply_overwrites(
         return Permissions::empty();
     }
     if !perms.contains(Permissions::SEND_MESSAGES) {
-        perms &= !(Permissions::SEND_TTS_MESSAGES
-            | Permissions::MENTION_EVERYONE
-            | Permissions::EMBED_LINKS
-            | Permissions::ATTACH_FILES);
+        perms &= !(Permissions::SEND_TTS_MESSAGES | Permissions::MENTION_EVERYONE | Permissions::EMBED_LINKS | Permissions::ATTACH_FILES);
     }
     perms
 }

@@ -2,8 +2,8 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use gpui::{
-    Bounds, Context, DispatchPhase, InteractiveElement, IntoElement, MouseButton, MouseMoveEvent, MouseUpEvent,
-    ParentElement, Pixels, Styled, canvas, div, prelude::*,
+    Bounds, Context, DispatchPhase, InteractiveElement, IntoElement, MouseButton, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Styled, canvas, div,
+    prelude::*,
 };
 
 use crate::app::PhoenixApp;
@@ -90,28 +90,22 @@ pub fn handle(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     .left_0()
     .size_full();
     let dragging = DRAG.with(Cell::get);
-    div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .size_full()
-        .child(probe)
-        .child(
-            div()
-                .id("sidebar-resize")
-                .absolute()
-                .top(z(12.))
-                .bottom_0()
-                .right_0()
-                .w(z(4.))
-                .cursor_ew_resize()
-                .when(dragging, |d| d.bg(c(Palette::BG_MOD_SELECTED)))
-                .hover(|s| s.bg(c(Palette::BG_MOD_SELECTED)))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                    DRAG.with(|d| d.set(true));
-                    cx.stop_propagation();
-                }),
-        )
+    div().absolute().top_0().left_0().size_full().child(probe).child(
+        div()
+            .id("sidebar-resize")
+            .absolute()
+            .top(z(12.))
+            .bottom_0()
+            .right_0()
+            .w(z(4.))
+            .cursor_ew_resize()
+            .when(dragging, |d| d.bg(c(Palette::BG_MOD_SELECTED)))
+            .hover(|s| s.bg(c(Palette::BG_MOD_SELECTED)))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                DRAG.with(|d| d.set(true));
+                cx.stop_propagation();
+            }),
+    )
 }
 
 #[cfg(test)]

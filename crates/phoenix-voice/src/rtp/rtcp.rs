@@ -29,13 +29,7 @@ impl SenderReport {
     }
 
     pub fn from_sender(s: &super::RtpSender, now: std::time::SystemTime) -> Self {
-        Self {
-            ssrc: s.ssrc,
-            ntp_timestamp: ntp_time(now),
-            rtp_timestamp: s.last_timestamp,
-            packet_count: s.packets_sent,
-            octet_count: s.octets_sent,
-        }
+        Self { ssrc: s.ssrc, ntp_timestamp: ntp_time(now), rtp_timestamp: s.last_timestamp, packet_count: s.packets_sent, octet_count: s.octets_sent }
     }
 }
 
@@ -69,11 +63,7 @@ pub fn parse(mut p: &[u8]) -> Result<Vec<Feedback>> {
         let pt = p[1];
         let len = (u16::from_be_bytes([p[2], p[3]]) as usize + 1) * 4;
         let pkt = p.get(..len).ok_or(Error::Malformed("rtcp length"))?;
-        let u32at = |o: usize| -> Result<u32> {
-            pkt.get(o..o + 4)
-                .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
-                .ok_or(Error::Malformed("rtcp field"))
-        };
+        let u32at = |o: usize| -> Result<u32> { pkt.get(o..o + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]])).ok_or(Error::Malformed("rtcp field")) };
         match (pt, fmt) {
             (PT_PSFB, 1) => out.push(Feedback::Pli { media_ssrc: u32at(8)? }),
             (PT_RTPFB, 1) => {

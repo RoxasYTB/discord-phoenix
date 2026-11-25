@@ -67,7 +67,8 @@ pub fn render(app: &PhoenixApp, r: &Reactions, cx: &mut Context<PhoenixApp>) -> 
     let list = reactions(app, r.channel, r.msg);
     let guild = app.channels.get(&r.channel).and_then(|c| c.guild);
     let manage = has(app, guild, crate::actions::ADMINISTRATOR) || has(app, guild, MANAGE_MESSAGES);
-    let mut tabs = div().id("rx-tabs").w(z(216.)).flex_none().overflow_y_scroll().py(z(8.)).px(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).flex().flex_col().gap(z(2.));
+    let mut tabs =
+        div().id("rx-tabs").w(z(216.)).flex_none().overflow_y_scroll().py(z(8.)).px(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).flex().flex_col().gap(z(2.));
     for (i, x) in list.iter().enumerate() {
         let on = i == r.selected;
         tabs = tabs.child(
@@ -109,7 +110,13 @@ pub fn render(app: &PhoenixApp, r: &Reactions, cx: &mut Context<PhoenixApp>) -> 
                         .items_center()
                         .gap(z(8.))
                         .child(crate::ui::avatar(user, 24.))
-                        .child(div().text_size(z(16.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(user.map(|u| u.display_name.clone()).unwrap_or_default()))
+                        .child(
+                            div()
+                                .text_size(z(16.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(c(tok(idx::TEXT_STRONG)))
+                                .child(user.map(|u| u.display_name.clone()).unwrap_or_default()),
+                        )
                         .child(div().text_size(z(14.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(user.map(|u| u.name.clone()).unwrap_or_default())),
                 );
             }

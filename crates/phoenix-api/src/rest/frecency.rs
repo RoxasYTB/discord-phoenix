@@ -116,12 +116,8 @@ impl FrecencyUserSettings {
     }
 
     pub fn played_sounds_ranked(&self) -> Vec<u64> {
-        let mut v: Vec<(u64, &FrecencyItem)> = self
-            .played_sound_frecency
-            .iter()
-            .flat_map(|p| p.played_sounds.iter())
-            .filter_map(|(k, it)| k.parse::<u64>().ok().map(|id| (id, it)))
-            .collect();
+        let mut v: Vec<(u64, &FrecencyItem)> =
+            self.played_sound_frecency.iter().flat_map(|p| p.played_sounds.iter()).filter_map(|(k, it)| k.parse::<u64>().ok().map(|id| (id, it))).collect();
         v.sort_by(|a, b| rank(b.1).cmp(&rank(a.1)).then_with(|| a.0.cmp(&b.0)));
         v.into_iter().map(|(id, _)| id).collect()
     }
@@ -144,19 +140,14 @@ impl FrecencyUserSettings {
     }
 
     pub fn favorite_gifs(&self) -> Vec<(String, FavoriteGif)> {
-        let mut v: Vec<(String, FavoriteGif)> =
-            self.favorite_gifs.iter().flat_map(|f| f.gifs.iter()).map(|(k, g)| (k.clone(), g.clone())).collect();
+        let mut v: Vec<(String, FavoriteGif)> = self.favorite_gifs.iter().flat_map(|f| f.gifs.iter()).map(|(k, g)| (k.clone(), g.clone())).collect();
         v.sort_by_key(|g| std::cmp::Reverse(g.1.order));
         v
     }
 
     pub fn applications_ranked(&self) -> Vec<u64> {
-        let mut v: Vec<(u64, &FrecencyItem)> = self
-            .application_frecency
-            .iter()
-            .flat_map(|a| a.applications.iter())
-            .filter_map(|(k, it)| k.parse::<u64>().ok().map(|id| (id, it)))
-            .collect();
+        let mut v: Vec<(u64, &FrecencyItem)> =
+            self.application_frecency.iter().flat_map(|a| a.applications.iter()).filter_map(|(k, it)| k.parse::<u64>().ok().map(|id| (id, it))).collect();
         v.sort_by(|a, b| rank(b.1).cmp(&rank(a.1)).then_with(|| a.0.cmp(&b.0)));
         v.into_iter().map(|(id, _)| id).collect()
     }
@@ -328,10 +319,8 @@ impl FrecencyUserSettings {
         let mut extra: Vec<&String> = map.keys().filter(|k| !keys.contains(k)).collect();
         extra.sort();
         keys.extend(extra.into_iter().cloned());
-        let mut scored: Vec<(String, i64)> = js_key_order(&keys)
-            .into_iter()
-            .filter_map(|k| map.get(&k).and_then(|it| reaction_frecency(it, max, now_ms)).map(|f| (k, f)))
-            .collect();
+        let mut scored: Vec<(String, i64)> =
+            js_key_order(&keys).into_iter().filter_map(|k| map.get(&k).and_then(|it| reaction_frecency(it, max, now_ms)).map(|f| (k, f))).collect();
         scored.sort_by_key(|(_, f)| std::cmp::Reverse(*f));
         scored.into_iter().map(|(k, _)| k).collect()
     }
@@ -379,12 +368,8 @@ mod tests {
                 ]),
             }),
             sticker_frecency: Some(StickerFrecency { stickers: HashMap::from([(1, item(3, 1)), (2, item(9, 1))]) }),
-            emoji_frecency: Some(EmojiFrecency {
-                emojis: HashMap::from([("joy".into(), item(10, 4)), ("123".into(), item(20, 1))]),
-            }),
-            application_frecency: Some(ApplicationFrecency {
-                applications: HashMap::from([("100".into(), item(5, 1)), ("200".into(), item(15, 2))]),
-            }),
+            emoji_frecency: Some(EmojiFrecency { emojis: HashMap::from([("joy".into(), item(10, 4)), ("123".into(), item(20, 1))]) }),
+            application_frecency: Some(ApplicationFrecency { applications: HashMap::from([("100".into(), item(5, 1)), ("200".into(), item(15, 2))]) }),
             favorite_soundboard_sounds: Some(FavoriteSoundboardSounds { sound_ids: vec![7, 8], ordered_sound_ids: vec![] }),
             played_sound_frecency: Some(PlayedSoundFrecency {
                 played_sounds: HashMap::from([("3".into(), item(202, 4)), ("1568753632852054267".into(), item(730, 23))]),

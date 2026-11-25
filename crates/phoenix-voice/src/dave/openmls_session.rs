@@ -46,10 +46,7 @@ impl OpenMlsSession {
         let provider = OpenMlsRustCrypto::default();
         let signer = SignatureKeyPair::new(CIPHERSUITE.signature_algorithm()).map_err(mls("signature key"))?;
         signer.store(provider.storage()).map_err(mls("store signer"))?;
-        let credential = CredentialWithKey {
-            credential: BasicCredential::new(user_id.to_be_bytes().to_vec()).into(),
-            signature_key: signer.public().into(),
-        };
+        let credential = CredentialWithKey { credential: BasicCredential::new(user_id.to_be_bytes().to_vec()).into(), signature_key: signer.public().into() };
         Ok(Self { provider, signer, user_id, group_id, credential, external_sender: None, pending: None, group: None, our_commit: None })
     }
 
@@ -58,11 +55,7 @@ impl OpenMlsSession {
     }
 
     fn join_config() -> MlsGroupJoinConfig {
-        MlsGroupJoinConfig::builder()
-            .use_ratchet_tree_extension(true)
-            .wire_format_policy(PURE_PLAINTEXT_WIRE_FORMAT_POLICY)
-            .max_past_epochs(0)
-            .build()
+        MlsGroupJoinConfig::builder().use_ratchet_tree_extension(true).wire_format_policy(PURE_PLAINTEXT_WIRE_FORMAT_POLICY).max_past_epochs(0).build()
     }
 
     fn drop_groups(&mut self) {
@@ -87,14 +80,8 @@ impl OpenMlsSession {
             .max_past_epochs(0)
             .with_group_context_extensions(ext)
             .build();
-        let g = MlsGroup::new_with_group_id(
-            &self.provider,
-            &self.signer,
-            &cfg,
-            GroupId::from_slice(&self.group_id.to_be_bytes()),
-            self.credential.clone(),
-        )
-        .map_err(mls("create group"))?;
+        let g = MlsGroup::new_with_group_id(&self.provider, &self.signer, &cfg, GroupId::from_slice(&self.group_id.to_be_bytes()), self.credential.clone())
+            .map_err(mls("create group"))?;
         self.pending = Some(g);
         Ok(())
     }
@@ -165,8 +152,7 @@ impl MlsSession for OpenMlsSession {
                         return Err(Error::Mls("proposal not from external sender".into()));
                     }
                     if let Proposal::Add(add) = qp.proposal() {
-                        let uid = credential_user_id(add.key_package().leaf_node().credential())
-                            .ok_or(Error::Mls("add: bad credential".into()))?;
+                        let uid = credential_user_id(add.key_package().leaf_node().credential()).ok_or(Error::Mls("add: bad credential".into()))?;
                         if !recognized.contains(&uid) {
                             return Err(Error::Mls(format!("add for unrecognized user {uid}")));
                         }
@@ -228,7 +214,10 @@ impl MlsSession for OpenMlsSession {
     }
 
     fn process_welcome(&mut self, _transition_id: u16, welcome: &[u8], recognized_user_ids: &[u64]) -> Result<()> {
-        let w = match MlsMessageIn::tls_deserialize_exact(welcome).ok().and_then(|m| match m.extract() { MlsMessageBodyIn::Welcome(w) => Some(w), _ => None }) {
+        let w = match MlsMessageIn::tls_deserialize_exact(welcome).ok().and_then(|m| match m.extract() {
+            MlsMessageBodyIn::Welcome(w) => Some(w),
+            _ => None,
+        }) {
             Some(w) => w,
             None => Welcome::tls_deserialize_exact(welcome).map_err(mls("welcome"))?,
         };
@@ -253,9 +242,7 @@ impl MlsSession for OpenMlsSession {
 
     fn export_sender_secret(&self, user_id: u64) -> Result<[u8; 16]> {
         let g = self.group.as_ref().ok_or(Error::Mls("not in group".into()))?;
-        let v = g
-            .export_secret(self.provider.crypto(), super::EXPORTER_LABEL, &user_id.to_le_bytes(), 16)
-            .map_err(mls("export"))?;
+        let v = g.export_secret(self.provider.crypto(), super::EXPORTER_LABEL, &user_id.to_le_bytes(), 16).map_err(mls("export"))?;
         v.try_into().map_err(|_| Error::Mls("export length".into()))
     }
 
@@ -289,15 +276,10 @@ mod tests {
             Self { provider, signer }
         }
         fn external_sender(&self) -> Vec<u8> {
-            ExternalSender::new(self.signer.public().into(), BasicCredential::new(b"voice".to_vec()).into())
-                .tls_serialize_detached()
-                .unwrap()
+            ExternalSender::new(self.signer.public().into(), BasicCredential::new(b"voice".to_vec()).into()).tls_serialize_detached().unwrap()
         }
         fn add(&self, kp: &[u8], epoch: u64) -> Vec<u8> {
-            let kp = KeyPackageIn::tls_deserialize_exact(kp)
-                .unwrap()
-                .validate(self.provider.crypto(), ProtocolVersion::Mls10)
-                .unwrap();
+            let kp = KeyPackageIn::tls_deserialize_exact(kp).unwrap().validate(self.provider.crypto(), ProtocolVersion::Mls10).unwrap();
             ExternalProposal::new_add::<OpenMlsRustCrypto>(
                 kp,
                 GroupId::from_slice(&42u64.to_be_bytes()),

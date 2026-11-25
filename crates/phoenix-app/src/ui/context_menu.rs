@@ -2,8 +2,8 @@ use crate::theme::z;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, ClickEvent, FontWeight, IntoElement, MouseButton, ParentElement, Pixels, Point,
-    SharedString, Styled, Window, anchored, deferred, div, prelude::*, svg,
+    AnyElement, App, ClickEvent, FontWeight, IntoElement, MouseButton, ParentElement, Pixels, Point, SharedString, Styled, Window, anchored, deferred, div,
+    prelude::*, svg,
 };
 
 use crate::theme::{c, generated::idx, tok};
@@ -60,9 +60,7 @@ fn nav_of(items: &[MenuItem]) -> Vec<Nav> {
                 items
                     .iter()
                     .map(|i| match i {
-                        MenuItem::Action { on_click, .. } | MenuItem::Check { on_click, .. } => {
-                            Some(on_click.clone())
-                        }
+                        MenuItem::Action { on_click, .. } | MenuItem::Check { on_click, .. } => Some(on_click.clone()),
                         _ => None,
                     })
                     .collect(),
@@ -92,10 +90,7 @@ fn step(ok: &[bool], cur: Option<usize>, dir: isize) -> Option<usize> {
 }
 
 fn keyboard_click(pos: Point<Pixels>) -> ClickEvent {
-    ClickEvent::Keyboard(gpui::KeyboardClickEvent {
-        button: gpui::KeyboardButton::Enter,
-        bounds: gpui::Bounds::new(pos, gpui::size(z(0.), z(0.))),
-    })
+    ClickEvent::Keyboard(gpui::KeyboardClickEvent { button: gpui::KeyboardButton::Enter, bounds: gpui::Bounds::new(pos, gpui::size(z(0.), z(0.))) })
 }
 
 fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: &mut Window, cx: &mut App) -> bool {
@@ -180,11 +175,7 @@ fn set_open_sub(v: Option<usize>, w: &mut Window) {
 }
 
 impl MenuItem {
-    pub fn action(
-        label: impl Into<SharedString>,
-        icon: Option<SharedString>,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn action(label: impl Into<SharedString>, icon: Option<SharedString>, on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         Self::Action { label: label.into(), icon, subtext: None, danger: false, on_click: Rc::new(on_click) }
     }
 
@@ -192,27 +183,15 @@ impl MenuItem {
         Self::Disabled { label: label.into(), icon }
     }
 
-    pub fn danger(
-        label: impl Into<SharedString>,
-        icon: Option<SharedString>,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn danger(label: impl Into<SharedString>, icon: Option<SharedString>, on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         Self::Action { label: label.into(), icon, subtext: None, danger: true, on_click: Rc::new(on_click) }
     }
 
-    pub fn check(
-        label: impl Into<SharedString>,
-        checked: bool,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn check(label: impl Into<SharedString>, checked: bool, on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         Self::Check { label: label.into(), checked, radio: false, subtext: None, on_click: Rc::new(on_click) }
     }
 
-    pub fn radio(
-        label: impl Into<SharedString>,
-        checked: bool,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn radio(label: impl Into<SharedString>, checked: bool, on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         Self::Check { label: label.into(), checked, radio: true, subtext: None, on_click: Rc::new(on_click) }
     }
 
@@ -263,7 +242,13 @@ thread_local! {
 fn row_h(item: &MenuItem) -> f32 {
     match item {
         MenuItem::Separator => 17.,
-        MenuItem::Disabled { icon, .. } => if icon.is_some() { 36. } else { 34. },
+        MenuItem::Disabled { icon, .. } => {
+            if icon.is_some() {
+                36.
+            } else {
+                34.
+            }
+        }
         MenuItem::Custom(_) => 60.,
         MenuItem::Action { icon, subtext, .. } => {
             let text: f32 = 18. + if subtext.is_some() { 18. } else { 0. };
@@ -292,9 +277,7 @@ fn row(id: (&'static str, usize), lit: bool, danger: bool) -> gpui::Stateful<gpu
         .line_height(z(18.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(c(tok(if danger { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_STRONG })))
-        .when(lit, |d| {
-            d.bg(c(tok(if danger { idx::BACKGROUND_FEEDBACK_MOD_CRITICAL } else { idx::INTERACTIVE_BACKGROUND_HOVER })))
-        })
+        .when(lit, |d| d.bg(c(tok(if danger { idx::BACKGROUND_FEEDBACK_MOD_CRITICAL } else { idx::INTERACTIVE_BACKGROUND_HOVER }))))
         .when(!lit, |d| d.hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))))
         .active(move |s| s.bg(c(tok(if danger { idx::BACKGROUND_FEEDBACK_MOD_CRITICAL } else { idx::BACKGROUND_MOD_SUBTLE }))))
 }
@@ -328,14 +311,12 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
             MenuItem::Submenu { label, items, icon, subtext } => {
                 let open = open_sub == Some(ix);
                 if open {
-                    sub_panel = Some(
-                        div()
-                            .absolute()
-                            .top(z(top))
-                            .left_full()
-                            .ml(z(-SUB_OVERLAP))
-                            .child(gpui::anchored().snap_to_window_with_margin(z(VIEWPORT_PAD)).child(panel_at("context-submenu", 1, items, dismiss.clone()))),
-                    );
+                    sub_panel =
+                        Some(
+                            div().absolute().top(z(top)).left_full().ml(z(-SUB_OVERLAP)).child(
+                                gpui::anchored().snap_to_window_with_margin(z(VIEWPORT_PAD)).child(panel_at("context-submenu", 1, items, dismiss.clone())),
+                            ),
+                        );
                 }
                 row(("menu-sub", ix), open || lit, false)
                     .on_hover(move |h, w, _| {
@@ -360,14 +341,11 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                                 .child(s),
                         )
                     }))
-                    .child(
-                        svg()
-                            .path(crate::icons::path(CHEVRON))
-                            .ml(z(8.))
-                            .size(z(20.))
-                            .flex_none()
-                            .text_color(if open || lit { gpui::white() } else { c(tok(idx::TEXT_MUTED)) }),
-                    )
+                    .child(svg().path(crate::icons::path(CHEVRON)).ml(z(8.)).size(z(20.)).flex_none().text_color(if open || lit {
+                        gpui::white()
+                    } else {
+                        c(tok(idx::TEXT_MUTED))
+                    }))
                     .into_any_element()
             }
             MenuItem::Check { label, checked, radio, subtext, on_click } => {
@@ -390,9 +368,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                         .flex()
                         .items_center()
                         .justify_center()
-                        .when(checked, |d| {
-                            d.child(svg().path(crate::icons::path(CHECK)).size(z(18.)).text_color(gpui::white()))
-                        })
+                        .when(checked, |d| d.child(svg().path(crate::icons::path(CHECK)).size(z(18.)).text_color(gpui::white())))
                 };
                 row(("menu-check", ix), lit, false)
                     .on_hover(move |h, w, _| {
@@ -469,23 +445,20 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                         if let Some(token) = name.strip_prefix(EMOJI_ICON) {
                             return d.child(div().mr(z(8.)).size(z(20.)).flex_none().child(crate::media::emoji::emoji_element(token, 20.)));
                         }
-                        let path: SharedString =
-                            if name.ends_with(".svg") { name } else { crate::icons::path(&name) };
+                        let path: SharedString = if name.ends_with(".svg") { name } else { crate::icons::path(&name) };
                         d.child(svg().path(path).mr(z(8.)).size(z(20.)).flex_none().text_color(icon_fg))
                     })
-                    .child(
-                        div().flex_1().min_w_0().flex().flex_col().child(label_box(label)).when_some(subtext, |d, s| {
-                            d.child(
-                                div()
-                                    .mt(z(2.))
-                                    .text_size(z(12.))
-                                    .line_height(z(16.))
-                                    .font_weight(FontWeight::NORMAL)
-                                    .text_color(c(tok(if lit { idx::TEXT_SUBTLE } else { idx::TEXT_MUTED })))
-                                    .child(s),
-                            )
-                        }),
-                    )
+                    .child(div().flex_1().min_w_0().flex().flex_col().child(label_box(label)).when_some(subtext, |d, s| {
+                        d.child(
+                            div()
+                                .mt(z(2.))
+                                .text_size(z(12.))
+                                .line_height(z(16.))
+                                .font_weight(FontWeight::NORMAL)
+                                .text_color(c(tok(if lit { idx::TEXT_SUBTLE } else { idx::TEXT_MUTED })))
+                                .child(s),
+                        )
+                    }))
                     .when_some(shortcut, |d, k| d.child(div().flex_none().ml(z(8.)).max_h(z(18.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).child(k)))
                     .on_click(move |ev, w, cx| {
                         on_click(ev, w, cx);
@@ -545,10 +518,7 @@ pub fn render_anchored_at(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<M
         move |_, _, w, _| {
             VIEW_H.with(|v| v.set(f32::from(w.viewport_size().height) / f32::from(z(1.))));
             w.on_key_event(move |ev: &gpui::KeyDownEvent, phase, w, cx| {
-                if phase == gpui::DispatchPhase::Capture
-                    && !ev.keystroke.modifiers.modified()
-                    && handle_key(&ev.keystroke.key, &nav, pos, &kd, w, cx)
-                {
+                if phase == gpui::DispatchPhase::Capture && !ev.keystroke.modifiers.modified() && handle_key(&ev.keystroke.key, &nav, pos, &kd, w, cx) {
                     cx.stop_propagation();
                 }
             });
@@ -569,13 +539,7 @@ pub fn render_anchored_at(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<M
             .on_mouse_down(MouseButton::Left, move |_, w, cx| d1(w, cx))
             .on_mouse_down(MouseButton::Right, move |_, w, cx| d2(w, cx))
             .child(keys)
-            .child(
-                anchored()
-                    .anchor(corner)
-                    .position(pos)
-                    .snap_to_window_with_margin(z(VIEWPORT_PAD))
-                    .child(panel("context-menu", items, dismiss)),
-            ),
+            .child(anchored().anchor(corner).position(pos).snap_to_window_with_margin(z(VIEWPORT_PAD)).child(panel("context-menu", items, dismiss))),
     )
     .with_priority(priority)
     .into_any_element()

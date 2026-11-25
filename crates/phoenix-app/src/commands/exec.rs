@@ -37,9 +37,8 @@ pub fn merge_commands(indexes: &[CommandIndex]) -> Vec<SlashCommand> {
             }
             let app = idx.applications.iter().find(|a| a.id == c.application_id);
             let app_name = app.map(|a| a.name.clone()).unwrap_or_default();
-            let app_icon = app.and_then(|a| {
-                a.icon.as_ref().map(|i| format!("https://cdn.discordapp.com/app-icons/{}/{i}.png?size=64&keep_aspect_ratio=false", a.id))
-            });
+            let app_icon =
+                app.and_then(|a| a.icon.as_ref().map(|i| format!("https://cdn.discordapp.com/app-icons/{}/{i}.png?size=64&keep_aspect_ratio=false", a.id)));
             let raw = serde_json::to_value(c).unwrap_or(Value::Null);
             let leaves = if c.kind == 1 { slash::leaves(&raw) } else { vec![(Vec::new(), json!({}))] };
             for (path, leaf) in leaves {
@@ -118,24 +117,12 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
             ParityReply::Done
         }
         ParityRequest::Component { guild, channel, message, app, flags, custom_id, kind, values } => {
-            let body = cmd::component_body(
-                sf(app),
-                target(guild, channel),
-                &session,
-                sf(message),
-                flags,
-                &custom_id,
-                kind,
-                values.as_deref(),
-            );
+            let body = cmd::component_body(sf(app), target(guild, channel), &session, sf(message), flags, &custom_id, kind, values.as_deref());
             rest.create_interaction(body).await.map_err(e)?;
             ParityReply::Done
         }
         ParityRequest::ModalSubmit { guild, channel, app, modal, custom_id, fields } => {
-            let rows: Vec<Value> = fields
-                .into_iter()
-                .map(|(id, v)| json!({ "type": 1, "components": [{ "type": 4, "custom_id": id, "value": v }] }))
-                .collect();
+            let rows: Vec<Value> = fields.into_iter().map(|(id, v)| json!({ "type": 1, "components": [{ "type": 4, "custom_id": id, "value": v }] })).collect();
             let body = cmd::modal_body(sf(app), target(guild, channel), &session, sf(modal), &custom_id, json!(rows));
             rest.create_interaction(body).await.map_err(e)?;
             ParityReply::Done
@@ -209,12 +196,7 @@ pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> R
             ParityReply::Inventory(out)
         }
         ParityRequest::SetSaved { channel, message: m, saved } => {
-            if saved {
-                rest.save_message(sf(channel), sf(m)).await
-            } else {
-                rest.unsave_message(sf(channel), sf(m)).await
-            }
-            .map_err(e)?;
+            if saved { rest.save_message(sf(channel), sf(m)).await } else { rest.unsave_message(sf(channel), sf(m)).await }.map_err(e)?;
             ParityReply::Done
         }
         ParityRequest::VotePoll { channel, message: m, answers } => {

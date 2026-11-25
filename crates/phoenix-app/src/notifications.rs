@@ -153,7 +153,9 @@ fn parse_entry(e: &Value, default: Level, now_ms: i64) -> GuildPrefs {
     for o in list {
         if let Some(id) = snowflake(o.get("channel_id")) {
             let (muted, until) = read_mute(o, now_ms);
-            g.channels.insert(id, ChannelPrefs {
+            g.channels.insert(
+                id,
+                ChannelPrefs {
                     level: Level::from_value(o.get("message_notifications")),
                     muted,
                     until,
@@ -382,10 +384,10 @@ pub fn show_message(p: &NotifyPrefs, f: &MessageFacts, c: &crate::sounds::Messag
 }
 
 fn blocked_user(cache: &Cache, user: api::Snowflake) -> bool {
-    cache.relationships().iter().any(|r| {
-        (matches!(r.kind, api::RelationshipType::Blocked) || r.user_ignored)
-            && r.user.as_ref().map(|u| u.id).or(r.user_id).unwrap_or(r.id) == user
-    })
+    cache
+        .relationships()
+        .iter()
+        .any(|r| (matches!(r.kind, api::RelationshipType::Blocked) || r.user_ignored) && r.user.as_ref().map(|u| u.id).or(r.user_id).unwrap_or(r.id) == user)
 }
 
 pub fn facts(cache: &Cache, me: api::Snowflake, m: &api::Message) -> MessageFacts {
@@ -451,7 +453,11 @@ pub fn build(cache: &Cache, m: &api::Message) -> Option<Toast> {
     let chan = look.chan(&ch);
     let guild = m.guild_id.or(ch.guild_id).map(|g| g.0);
     let author = look.member_name(guild, &m.author);
-    let member_avatar = m.member.as_ref().and_then(|mb| mb.avatar.clone()).or_else(|| guild.and_then(|g| cache.member(api::Snowflake(g), m.author.id)).and_then(|mb| mb.avatar.clone()));
+    let member_avatar = m
+        .member
+        .as_ref()
+        .and_then(|mb| mb.avatar.clone())
+        .or_else(|| guild.and_then(|g| cache.member(api::Snowflake(g), m.author.id)).and_then(|mb| mb.avatar.clone()));
     Some(Toast {
         tag: chan.id,
         title: content::title(&look, &author, &chan, m),
@@ -937,7 +943,11 @@ mod tests {
         assert!(!show_message(&p, &v, &c), "voice chat only while connected");
         assert!(show_message(&p, &MessageFacts { in_voice: true, ..v }, &c));
         assert!(show_message(&p, &MessageFacts { mentions_me: true, ..v }, &c));
-        let t = |flags: Option<u64>, parent: u64| MessageFacts { thread: Some(ThreadFacts { joined_flags: flags, muted: false }), parent: Some(parent), ..f(Some(1), 99) };
+        let t = |flags: Option<u64>, parent: u64| MessageFacts {
+            thread: Some(ThreadFacts { joined_flags: flags, muted: false }),
+            parent: Some(parent),
+            ..f(Some(1), 99)
+        };
         assert!(!show_message(&p, &t(None, 20), &c), "not joined");
         assert!(show_message(&p, &t(Some(0), 20), &c), "inherits all messages");
         assert!(!show_message(&p, &t(Some(0), 30), &c), "parent set to mentions");
@@ -952,7 +962,17 @@ mod tests {
     #[test]
     fn friend_request_toasts() {
         let u = api::User { id: api::Snowflake(7), username: "bob".into(), ..Default::default() };
-        let r = |kind, ignored| api::Relationship { id: api::Snowflake(7), kind, user: Some(u.clone()), user_id: None, nickname: None, since: None, user_ignored: ignored, is_spam_request: false, note: None };
+        let r = |kind, ignored| api::Relationship {
+            id: api::Snowflake(7),
+            kind,
+            user: Some(u.clone()),
+            user_id: None,
+            nickname: None,
+            since: None,
+            user_ignored: ignored,
+            is_spam_request: false,
+            note: None,
+        };
         let t = relationship_toast(&r(api::RelationshipType::IncomingRequest, false), false).unwrap();
         assert_eq!((t.tag, t.title.as_str(), t.target), (7, "bob", Target::Pending(7)));
         assert_eq!(t.body, crate::t!("notif.friend_request").to_string());
@@ -1158,7 +1178,10 @@ mod tests {
         assert!(thread_create_toast(&on, &cache, me, &thread(2, 204), &c).is_none(), "parent is not a forum");
         assert!(thread_create_toast(&on, &cache, me, &thread(2, 200), &MessageCtx { dnd: true, ..c }).is_none(), "DND");
         assert!(thread_create_toast(&on, &cache, me, &thread(2, 200), &MessageCtx { focused: true, selected: Some(200), ..c }).is_none(), "forum open");
-        assert!(thread_create_toast(&on, &cache, me, &thread(2, 200), &MessageCtx { focused: false, selected: Some(200), ..c }).is_some(), "window in background");
+        assert!(
+            thread_create_toast(&on, &cache, me, &thread(2, 200), &MessageCtx { focused: false, selected: Some(200), ..c }).is_some(),
+            "window in background"
+        );
 
         let off = NotifyPrefs::from_ready(Some(&json!([
             {"guild_id": "100", "message_notifications": 0, "channel_overrides": [{"channel_id": "200", "flags": NEW_FORUM_THREADS_OFF}]}
@@ -1212,9 +1235,7 @@ mod tests {
         let cache = event_cache();
         let me = api::Snowflake(1);
         let p = NotifyPrefs::default();
-        let stage = |host: &str, channel: &str| {
-            json!({"id": "500", "guild_id": "100", "channel_id": channel, "host_id": host, "topic": "Live Q&A", "send_start_notification": true})
-        };
+        let stage = |host: &str, channel: &str| json!({"id": "500", "guild_id": "100", "channel_id": channel, "host_id": host, "topic": "Live Q&A", "send_start_notification": true});
         let st = stage_instance_toast(&p, &cache, me, &stage("2", "202")).unwrap();
         assert_eq!((st.tag, st.target, st.round), (500, Target::Voice(202), false));
         assert_eq!(st.title, crate::t!("notif.stage_title", guild = "TestGuild").to_string());

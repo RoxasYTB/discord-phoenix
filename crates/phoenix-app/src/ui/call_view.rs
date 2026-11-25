@@ -167,8 +167,7 @@ pub fn grid(n: usize, w: f32, h: f32, gap: f32) -> (usize, f32) {
     let mut best = (1, 0.0f32);
     for cols in 1..=n {
         let rows = n.div_ceil(cols);
-        let tw = ((w - gap * (cols - 1) as f32) / cols as f32)
-            .min((h - gap * (rows - 1) as f32) / rows as f32 * 16. / 9.);
+        let tw = ((w - gap * (cols - 1) as f32) / cols as f32).min((h - gap * (rows - 1) as f32) / rows as f32 * 16. / 9.);
         if tw > best.1 {
             best = (cols, tw);
         }
@@ -196,13 +195,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .gap(z(16.))
                 .bg(t(idx::BLACK))
                 .child(glyph(POPOUT, 40., t(idx::INTERACTIVE_TEXT_DEFAULT)))
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(t(idx::TEXT_STRONG))
-                        .child(crate::t!("call.popped_out_notice")),
-                )
+                .child(div().text_size(z(16.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_STRONG)).child(crate::t!("call.popped_out_notice")))
                 .child(
                     div()
                         .id("call-bring-back")
@@ -271,17 +264,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             .px(z(8.))
             .flex()
             .flex_col()
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .pt(z(72.))
-                    .pb(z(8.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(render_tile(app, &tiles[fi], fw, fw * 9. / 16., fade, cx)),
-            )
+            .child(div().flex_1().min_h_0().pt(z(72.)).pb(z(8.)).flex().items_center().justify_center().child(render_tile(
+                app,
+                &tiles[fi],
+                fw,
+                fw * 9. / 16.,
+                fade,
+                cx,
+            )))
             .relative()
             .when(open, |d| {
                 d.child(
@@ -343,16 +333,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .child(tiles_el)
         .child(bottom_controls(app, collapse(w + 16.), cx));
 
-    let root = div()
-        .flex_1()
-        .min_w_0()
-        .size_full()
-        .overflow_hidden()
-        .flex()
-        .flex_row()
-        .bg(t(idx::BACKGROUND_BASE_LOWEST))
-        .child(call)
-        .children(stream_menu(app, cx));
+    let root =
+        div().flex_1().min_w_0().size_full().overflow_hidden().flex().flex_row().bg(t(idx::BACKGROUND_BASE_LOWEST)).child(call).children(stream_menu(app, cx));
     Some(if chat_open() {
         root.child(
             div()
@@ -400,7 +382,13 @@ fn stream_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElem
                 .flex()
                 .flex_col()
                 .gap(z(8.))
-                .child(div().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::INTERACTIVE_TEXT_DEFAULT)).child(crate::t!("voice.stream_volume")))
+                .child(
+                    div()
+                        .text_size(z(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t(idx::INTERACTIVE_TEXT_DEFAULT))
+                        .child(crate::t!("voice.stream_volume")),
+                )
                 .child(crate::ui::settings::voice::slider(
                     "stream-volume",
                     vol as f32 / 200.,
@@ -453,11 +441,7 @@ fn strip_button(open: bool, fade: f32, cx: &mut Context<PhoenixApp>) -> impl Int
             .hover(|s| s.bg(t(idx::PRIMARY_700)))
             .shadow(crate::ui::inbox::popout_shadow())
             .cursor_pointer()
-            .tip(if open {
-                crate::t!("call.hide_members")
-            } else {
-                crate::t!("call.show_members")
-            })
+            .tip(if open { crate::t!("call.hide_members") } else { crate::t!("call.show_members") })
             .child(named(if open { "chevron" } else { "chevron-up" }, 24., white))
             .child(named("members", 24., white))
             .on_click(cx.listener(|_, _, _, cx| {
@@ -493,34 +477,22 @@ fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) 
                 .child(name),
         )
         .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(z(20.))
-                .child(
-                    div()
-                        .id("call-chat")
-                        .size(z(24.))
-                        .rounded(z(8.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .tip(if open {
-                            crate::t!("call.hide_chat")
-                        } else {
-                            crate::t!("call.show_chat")
-                        })
-                        .child(named(
-                            "chat",
-                            24.,
-                            t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT }),
-                        ))
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            set_chat_open(!chat_open());
-                            cx.notify();
-                        })),
-                ),
+            div().flex().items_center().gap(z(20.)).child(
+                div()
+                    .id("call-chat")
+                    .size(z(24.))
+                    .rounded(z(8.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .tip(if open { crate::t!("call.hide_chat") } else { crate::t!("call.show_chat") })
+                    .child(named("chat", 24., t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT })))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        set_chat_open(!chat_open());
+                        cx.notify();
+                    })),
+            ),
         )
 }
 
@@ -647,13 +619,11 @@ fn solo_tile(w: f32, h: f32) -> AnyElement {
                 .items_center()
                 .justify_center()
                 .child(gpui::img(SOLO_ART).w(z(400f32.min((w - 32.).max(0.)))).h(z(210f32.min((h - 32. - 40. - 24.).max(0.)))).mb(z(24.)))
-                .child(
-                    div()
-                        .flex()
-                        .gap(z(8.))
-                        .child(solo_button("call-solo-invite", "invite", crate::t!("call.invite_voice")))
-                        .child(solo_button("call-solo-activity", "apps", crate::t!("call.choose_activity"))),
-                ),
+                .child(div().flex().gap(z(8.)).child(solo_button("call-solo-invite", "invite", crate::t!("call.invite_voice"))).child(solo_button(
+                    "call-solo-activity",
+                    "apps",
+                    crate::t!("call.choose_activity"),
+                ))),
         )
         .into_any_element()
 }
@@ -860,16 +830,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
                 None => d.child(avatar(u, 80. * crate::theme::zoom())),
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))
-            .child(
-                div()
-                    .absolute()
-                    .left(z(4.))
-                    .bottom(z(4.))
-                    .right(z(4.))
-                    .flex()
-                    .opacity(fade)
-                    .child(pill(state_icon, Some(name))),
-            )
+            .child(div().absolute().left(z(4.)).bottom(z(4.)).right(z(4.)).flex().opacity(fade).child(pill(state_icon, Some(name))))
             .when(speaking || sb, |d| {
                 d.child(
                     div()
@@ -943,28 +904,11 @@ fn center_button(
 }
 
 fn section() -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(z(8.))
-        .p(z(4.))
-        .rounded(z(12.))
-        .border_1()
-        .border_color(t(idx::BORDER_MUTED))
-        .bg(t(idx::BACKGROUND_SURFACE_HIGH))
+    div().flex().items_center().gap(z(8.)).p(z(4.)).rounded(z(12.)).border_1().border_color(t(idx::BORDER_MUTED)).bg(t(idx::BACKGROUND_SURFACE_HIGH))
 }
 
 fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .size(z(24.))
-        .rounded(z(8.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .cursor_pointer()
-        .tip(tip)
-        .child(icon)
+    div().id(id).size(z(24.)).rounded(z(8.)).flex().items_center().justify_center().cursor_pointer().tip(tip).child(icon)
 }
 
 fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
@@ -994,9 +938,7 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                 .flex_1()
                 .flex()
                 .gap(z(24.))
-                .when(level < Collapse::NoInvite, |d| {
-                    d.child(tray_icon("call-invite", named("invite", 24., tray), crate::t!("call.invite")))
-                }),
+                .when(level < Collapse::NoInvite, |d| d.child(tray_icon("call-invite", named("invite", 24., tray), crate::t!("call.invite")))),
         )
         .child(
             div()
@@ -1033,37 +975,31 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                             cx,
                         )),
                 )
-                .when(level < Collapse::Minimal, |d| d.child(
-                    section()
-                        .child(center_button(
-                            "call-screen",
-                            glyph("icons/voice/screen.svg", 20., icon_color(screen_look)),
-                            screen_look,
-                            false,
-                            crate::ui::go_live::label(app),
-                            crate::ui::go_live::toggle,
-                            cx,
-                        ))
-                        .child(center_button(
-                            "call-activity",
-                            glyph("icons/voice/activity.svg", 20., white),
-                            Look::Dark,
-                            false,
-                            crate::t!("voice.start_activity"),
-                            |_, _| {},
-                            cx,
-                        ))
-                        .child(crate::ui::pickers::soundboard::call_button(app, cx))
-                        .child(center_button(
-                            "call-more",
-                            named("more-horizontal", 20., white),
-                            Look::Dark,
-                            false,
-                            crate::t!("call.more"),
-                            |_, _| {},
-                            cx,
-                        )),
-                ))
+                .when(level < Collapse::Minimal, |d| {
+                    d.child(
+                        section()
+                            .child(center_button(
+                                "call-screen",
+                                glyph("icons/voice/screen.svg", 20., icon_color(screen_look)),
+                                screen_look,
+                                false,
+                                crate::ui::go_live::label(app),
+                                crate::ui::go_live::toggle,
+                                cx,
+                            ))
+                            .child(center_button(
+                                "call-activity",
+                                glyph("icons/voice/activity.svg", 20., white),
+                                Look::Dark,
+                                false,
+                                crate::t!("voice.start_activity"),
+                                |_, _| {},
+                                cx,
+                            ))
+                            .child(crate::ui::pickers::soundboard::call_button(app, cx))
+                            .child(center_button("call-more", named("more-horizontal", 20., white), Look::Dark, false, crate::t!("call.more"), |_, _| {}, cx)),
+                    )
+                })
                 .child(
                     div()
                         .id("call-disconnect")
@@ -1077,11 +1013,7 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                         .hover(|s| s.bg(t(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_HOVER)))
                         .cursor_pointer()
                         .tip(crate::t!("voice.disconnect"))
-                        .child(crate::ui::icon(
-                            crate::assets::Icon::PhoneHangup,
-                            20. * crate::theme::zoom(),
-                            t(idx::CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT),
-                        ))
+                        .child(crate::ui::icon(crate::assets::Icon::PhoneHangup, 20. * crate::theme::zoom(), t(idx::CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT)))
                         .on_click(cx.listener(|a, _, _, cx| a.join_voice(None, cx))),
                 ),
         )
@@ -1091,13 +1023,11 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
                 .flex()
                 .justify_end()
                 .gap(z(24.))
-                .child(
-                    tray_icon("call-popout", glyph(POPOUT, 24., tray), crate::t!("call.popout")).on_click(cx.listener(|_, _, _, cx| {
-                        let app_entity = cx.entity();
-                        cx.defer(move |cx| crate::ui::call_popout::open(app_entity, cx));
-                        cx.notify();
-                    })),
-                )
+                .child(tray_icon("call-popout", glyph(POPOUT, 24., tray), crate::t!("call.popout")).on_click(cx.listener(|_, _, _, cx| {
+                    let app_entity = cx.entity();
+                    cx.defer(move |cx| crate::ui::call_popout::open(app_entity, cx));
+                    cx.notify();
+                })))
                 .child(
                     tray_icon("call-fullscreen", glyph(FULLSCREEN, 24., tray), crate::t!("call.fullscreen"))
                         .on_click(cx.listener(|_, _, w, _| w.toggle_fullscreen())),

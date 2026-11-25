@@ -4,11 +4,11 @@ use phoenix_voice::codec::{Codec, LocalCapabilities};
 use phoenix_voice::crypto::{EncryptionMode, TransportCipher};
 use phoenix_voice::dave::frame::{FrameDecryptor, FrameEncryptor};
 use phoenix_voice::dave::ratchet::HashRatchet;
-use phoenix_voice::media::mock::MockEncoderFactory;
 use phoenix_voice::media::VideoFrame;
+use phoenix_voice::media::mock::MockEncoderFactory;
 use phoenix_voice::rtp::h264::H264Depacketizer;
 use phoenix_voice::rtp::rtcp::Feedback;
-use phoenix_voice::rtp::{parse_packet, Depacketizer};
+use phoenix_voice::rtp::{Depacketizer, parse_packet};
 use phoenix_voice::session::{StreamEvent, StreamKind, StreamParams, StreamSsrcs, VideoSessionManager};
 
 fn frame(i: u64) -> VideoFrame {
@@ -16,12 +16,7 @@ fn frame(i: u64) -> VideoFrame {
 }
 
 fn caps() -> LocalCapabilities {
-    LocalCapabilities {
-        hw_av1_encoder: true,
-        h264_encoder: true,
-        vp8_encoder: true,
-        decoders: vec![Codec::H264, Codec::Vp8, Codec::Av1, Codec::H265],
-    }
+    LocalCapabilities { hw_av1_encoder: true, h264_encoder: true, vp8_encoder: true, decoders: vec![Codec::H264, Codec::Vp8, Codec::Av1, Codec::H265] }
 }
 
 const ALL: [Codec; 4] = [Codec::H265, Codec::Av1, Codec::H264, Codec::Vp8];
@@ -31,11 +26,7 @@ const SCR: StreamSsrcs = StreamSsrcs { ssrc: 200, rtx_ssrc: 201 };
 
 #[test]
 fn camera_and_screen_fallback_independently_without_panic() {
-    let factory = MockEncoderFactory {
-        unavailable: vec![],
-        fail_after: vec![(Codec::Av1, 3), (Codec::H264, 5)],
-        ..Default::default()
-    };
+    let factory = MockEncoderFactory { unavailable: vec![], fail_after: vec![(Codec::Av1, 3), (Codec::H264, 5)], ..Default::default() };
     let mut m = VideoSessionManager::new(caps(), ALL.to_vec(), Arc::new(factory), 3_000_000);
     assert_eq!(m.start(StreamKind::Camera, CAM, P).unwrap(), Codec::Av1);
     assert_eq!(m.start(StreamKind::Screen, SCR, P).unwrap(), Codec::Av1);

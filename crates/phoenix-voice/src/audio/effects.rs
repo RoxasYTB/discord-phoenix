@@ -149,10 +149,13 @@ fn prepare() {
         (f, s.voices.iter().filter(|v| v.buf.as_ref().is_none_or(|(r, c, _)| Some((*r, *c)) != f)).map(|v| v.pcm.clone()).collect())
     };
     let Some((rate, ch)) = fmt else { return };
-    let done: Vec<(Arc<Pcm>, Arc<Vec<f32>>)> = todo.into_iter().map(|p| {
-        let b = Arc::new(p.adapt(rate, ch));
-        (p, b)
-    }).collect();
+    let done: Vec<(Arc<Pcm>, Arc<Vec<f32>>)> = todo
+        .into_iter()
+        .map(|p| {
+            let b = Arc::new(p.adapt(rate, ch));
+            (p, b)
+        })
+        .collect();
     let mut s = lock();
     for v in s.voices.iter_mut().filter(|v| v.buf.as_ref().is_none_or(|(r, c, _)| (*r, *c) != (rate, ch))) {
         if let Some((_, b)) = done.iter().find(|(p, _)| Arc::ptr_eq(p, &v.pcm)) {
