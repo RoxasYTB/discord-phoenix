@@ -86,6 +86,7 @@ impl PhoenixApp {
 pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement> {
     let mut out: Vec<AnyElement> = crate::ui::user_menu::render(app, cx).into_iter().collect();
     let widget_menu = crate::ui::profile_board::menu();
+    let stream_menu = crate::ui::voice_row::stream_menu(cx.entity());
     out.extend(crate::ui::nav_menus::render(app, cx));
     out.extend(crate::ui::thread_menu::render(app, cx));
     out.extend(crate::ui::extra_menus::render(app, cx));
@@ -147,6 +148,7 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         out.push(status_picker::render(app, window, cx));
     }
     out.extend(widget_menu);
+    out.extend(stream_menu);
     out
 }
 

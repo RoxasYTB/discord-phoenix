@@ -488,6 +488,24 @@ pub fn watch_from_sidebar(app: &mut crate::app::PhoenixApp, key: String, cx: &mu
     cx.notify();
 }
 
+thread_local! {
+    static STREAM_MENU: std::cell::Cell<Option<(gpui::Point<gpui::Pixels>, Id)>> = const { std::cell::Cell::new(None) };
+}
+
+pub fn stream_menu(entity: gpui::Entity<crate::app::PhoenixApp>) -> Option<AnyElement> {
+    let (pos, user) = STREAM_MENU.with(|m| m.get())?;
+    let close: crate::ui::context_menu::Dismiss = std::rc::Rc::new(|w: &mut gpui::Window, _: &mut gpui::App| {
+        STREAM_MENU.with(|m| m.set(None));
+        w.refresh();
+    });
+    let c2 = close.clone();
+    let items = vec![crate::ui::context_menu::MenuItem::action(crate::t!("profile.view_all_activity"), None, move |_, w, cx| {
+        c2(w, cx);
+        entity.update(cx, |a, cx| a.open_profile_modal_at(user, 0, cx));
+    })];
+    Some(crate::ui::context_menu::render(pos, items, close))
+}
+
 pub fn stream_activity_card(
     app: &crate::app::PhoenixApp,
     user: Id,
@@ -547,9 +565,16 @@ pub fn stream_activity_card(
         )
         .child(
             div()
+                .id(("profile-stream-more", user.0))
                 .flex()
                 .mr(z(4.))
                 .cursor_pointer()
+                .tooltip(crate::ui::tooltip::tip(crate::t!("profile.more")))
+                .on_click(move |ev: &gpui::ClickEvent, window, cx| {
+                    cx.stop_propagation();
+                    STREAM_MENU.with(|m| m.set(Some((ev.position(), user))));
+                    window.refresh();
+                })
                 .child(svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
         );
     let watch_key = key.clone();
