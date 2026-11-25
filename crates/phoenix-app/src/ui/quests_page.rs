@@ -204,7 +204,7 @@ fn tile(q: &Quest, premium: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let banner_h = 95.;
     let mut top = div().relative().w_full().h(z(146.)).flex_none().rounded_t(z(8.)).overflow_hidden().bg(surface);
     if let Some(h) = q.hero.clone() {
-        top = top.child(div().absolute().top_0().left_0().right_0().h(z(banner_h)).bg(tk(idx::BACKGROUND_BASE_LOW)).child(img(h).size_full().object_fit(gpui::ObjectFit::Cover)));
+        top = top.child(div().absolute().top_0().left_0().right_0().h(z(banner_h)).overflow_hidden().bg(tk(idx::BACKGROUND_BASE_LOW)).child(img(h).size_full().object_fit(gpui::ObjectFit::Cover)));
     }
     top = top
         .child(div().absolute().top_0().left_0().right_0().h(z(banner_h)).bg(gpui::linear_gradient(0., gpui::linear_color_stop(surface, 0.), gpui::linear_color_stop(surface.opacity(0.), 1.))))
