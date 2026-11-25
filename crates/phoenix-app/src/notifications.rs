@@ -661,7 +661,7 @@ mod tests {
     #[test]
     fn friend_request_toasts() {
         let u = api::User { id: api::Snowflake(7), username: "bob".into(), ..Default::default() };
-        let r = |kind, ignored| api::Relationship { id: api::Snowflake(7), kind, user: Some(u.clone()), user_id: None, nickname: None, since: None, user_ignored: ignored };
+        let r = |kind, ignored| api::Relationship { id: api::Snowflake(7), kind, user: Some(u.clone()), user_id: None, nickname: None, since: None, user_ignored: ignored, is_spam_request: false, note: None };
         let t = relationship_toast(&r(api::RelationshipType::IncomingRequest, false), false).unwrap();
         assert_eq!((t.tag, t.title.as_str(), t.target), (7, "bob", Target::Pending(7)));
         assert_eq!(t.body, crate::t!("notif.friend_request").to_string());

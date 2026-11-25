@@ -176,6 +176,10 @@ pub struct Relationship {
     pub since: Option<String>,
     #[serde(default)]
     pub user_ignored: bool,
+    #[serde(default)]
+    pub is_spam_request: bool,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 #[cfg(test)]

@@ -39,6 +39,8 @@ fn relationship(r: &api::Relationship) -> Option<Relationship> {
         nickname: r.nickname.clone().filter(|n| !n.is_empty()).map(Into::into),
         since: r.since.as_deref().and_then(crate::presence::iso_to_unix),
         ignored: r.user_ignored,
+        spam: r.is_spam_request,
+        note: r.note.clone().filter(|n| !n.is_empty()).map(Into::into),
     })
 }
 
@@ -559,21 +561,14 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             NavReply::Done
         }
         NavRequest::Relationship { user, action } => {
-            let path = format!("/users/@me/relationships/{}", sf(user));
-            match action {
-                RelAction::Accept => call(Method::PUT, path, Some(json!({}))).await?,
-                RelAction::Block => call(Method::PUT, path, Some(json!({ "type": 2 }))).await?,
-                RelAction::Remove => call(Method::DELETE, path, None).await?,
-                RelAction::AddByName(name) => {
-                    let name = name.trim().trim_start_matches('@').to_owned();
-                    call(
-                        Method::POST,
-                        "/users/@me/relationships".into(),
-                        Some(json!({ "username": name, "discriminator": Value::Null })),
-                    )
-                    .await?
-                }
-            };
+            let (m, path, body) = rel_request(user.0, &action);
+            if matches!(action, RelAction::AddByTag { .. } | RelAction::Accept) {
+                return match rest.request_json(m, &path, body).await {
+                    Ok(_) => Ok(NavReply::Done),
+                    Err(e) => Err(BackendError(add_friend_failure(&e).encode())),
+                };
+            }
+            call(m, path, body).await?;
             NavReply::Done
         }
         NavRequest::OpenDm(user) => {
@@ -628,6 +623,34 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
     })
 }
 
+pub(crate) fn rel_request(user: u64, action: &RelAction) -> (Method, String, Option<Value>) {
+    let one = format!("/users/@me/relationships/{user}");
+    let all = "/users/@me/relationships".to_owned();
+    match action {
+        RelAction::Accept => (Method::PUT, one, Some(json!({}))),
+        RelAction::AcceptStranger => (Method::PUT, one, Some(json!({ "confirm_stranger_request": true }))),
+        RelAction::Block => (Method::PUT, one, Some(json!({ "type": 2 }))),
+        RelAction::Remove => (Method::DELETE, one, None),
+        RelAction::Ignore => (Method::PUT, format!("/users/@me/relationships/{user}/ignore"), None),
+        RelAction::ClearPending => (Method::DELETE, format!("{all}?relationship_type=3"), None),
+        RelAction::ClearSpamAndIgnored => (Method::DELETE, format!("{all}?relationship_type=3"), Some(json!({ "filters": [1, 2] }))),
+        RelAction::AddByTag { tag, note } => (Method::POST, all, Some(crate::ui::home::add_friend::request_body(tag, note.as_deref()))),
+    }
+}
+
+fn add_friend_failure(e: &phoenix_api::Error) -> crate::ui::home::add_friend::Failure {
+    use crate::ui::home::add_friend::Failure;
+    match e {
+        phoenix_api::Error::Api { status, body, raw } => Failure {
+            status: *status,
+            code: (body.code != 0).then_some(body.code),
+            note_rejected: serde_json::from_str::<Value>(raw).ok().is_some_and(|v| v.get("note").is_some_and(|n| !n.is_null())),
+        },
+        phoenix_api::Error::RateLimited { .. } => Failure { status: 429, code: None, note_rejected: false },
+        _ => Failure { status: 0, code: None, note_rejected: false },
+    }
+}
+
 fn settings_path(guild: Option<Id>) -> String {
     match guild {
         Some(g) => format!("/users/@me/guilds/{}/settings", sf(g)),
@@ -639,6 +662,43 @@ fn settings_body(channel: Option<Id>, fields: Value) -> Value {
     match channel {
         Some(ch) => json!({ "channel_overrides": { sf(ch).to_string(): fields } }),
         None => fields,
+    }
+}
+
+#[cfg(test)]
+mod rel_tests {
+    use super::*;
+
+    #[test]
+    fn relationship_requests_match_the_client() {
+        let (m, p, b) = rel_request(5, &RelAction::Accept);
+        assert_eq!((m, p.as_str(), b), (Method::PUT, "/users/@me/relationships/5", Some(json!({}))));
+        let (_, _, b) = rel_request(5, &RelAction::AcceptStranger);
+        assert_eq!(b, Some(json!({ "confirm_stranger_request": true })));
+        let (m, p, b) = rel_request(5, &RelAction::Ignore);
+        assert_eq!((m, p.as_str(), b), (Method::PUT, "/users/@me/relationships/5/ignore", None));
+        let (m, p, b) = rel_request(5, &RelAction::Remove);
+        assert_eq!((m, p.as_str(), b), (Method::DELETE, "/users/@me/relationships/5", None));
+        let (m, p, b) = rel_request(0, &RelAction::ClearPending);
+        assert_eq!((m, p.as_str(), b), (Method::DELETE, "/users/@me/relationships?relationship_type=3", None));
+        let (_, _, b) = rel_request(0, &RelAction::ClearSpamAndIgnored);
+        assert_eq!(b, Some(json!({ "filters": [1, 2] })));
+        let (m, p, b) = rel_request(0, &RelAction::AddByTag { tag: "wumpus".into(), note: Some("hey".into()) });
+        assert_eq!((m, p.as_str()), (Method::POST, "/users/@me/relationships"));
+        assert_eq!(b, Some(json!({ "username": "wumpus", "discriminator": null, "note": "hey" })));
+    }
+
+    #[test]
+    fn add_friend_errors_keep_status_and_code() {
+        let e = phoenix_api::Error::Api {
+            status: 400,
+            body: Box::new(phoenix_api::error::ApiErrorBody { code: 80007, ..Default::default() }),
+            raw: r#"{"code":80007,"message":"x"}"#.into(),
+        };
+        let f = add_friend_failure(&e);
+        assert_eq!((f.status, f.code, f.note_rejected), (400, Some(80007), false));
+        let e = phoenix_api::Error::Api { status: 400, body: Box::default(), raw: r#"{"note":["bad"]}"#.into() };
+        assert!(add_friend_failure(&e).note_rejected);
     }
 }
 

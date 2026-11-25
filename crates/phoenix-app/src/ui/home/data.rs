@@ -20,6 +20,8 @@ pub struct Relationship {
     pub nickname: Option<SharedString>,
     pub since: Option<i64>,
     pub ignored: bool,
+    pub spam: bool,
+    pub note: Option<SharedString>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -113,9 +115,13 @@ pub enum NavEvent {
 #[derive(Clone, Debug)]
 pub enum RelAction {
     Accept,
+    AcceptStranger,
     Remove,
     Block,
-    AddByName(String),
+    AddByTag { tag: String, note: Option<String> },
+    Ignore,
+    ClearPending,
+    ClearSpamAndIgnored,
 }
 
 #[derive(Clone, Debug)]
@@ -195,7 +201,12 @@ pub struct NavState {
     pub friends_search: Option<gpui::Entity<gpui_component::input::InputState>>,
     pub invite_preview: Option<Result<InvitePreview, SharedString>>,
     pub invite_code: Option<String>,
-    pub add_friend_result: Option<Result<SharedString, SharedString>>,
+    pub add_friend: crate::ui::home::add_friend::FormState,
+    pub add_friend_note: Option<gpui::Entity<gpui_component::input::TextareaState>>,
+    pub add_friend_reset: bool,
+    pub revealed_notes: HashSet<Id>,
+    pub tab_initialized: bool,
+    pub add_friend_success_tag: Option<SharedString>,
     pub busy: bool,
     pub dragging: Option<Id>,
     pub prefs_loaded: bool,
@@ -239,6 +250,10 @@ impl NavState {
                 }
                 self.extras = extras.into_iter().collect();
                 self.message_requests = message_requests;
+                if !self.tab_initialized {
+                    self.tab_initialized = true;
+                    self.friends_tab = crate::ui::home::friends::initial_tab(&self.relationships);
+                }
             }
             NavEvent::RelationshipUpsert(r) => {
                 self.relationships.retain(|x| x.user != r.user);

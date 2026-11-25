@@ -1,3 +1,4 @@
+pub mod add_friend;
 pub mod data;
 pub mod friends;
 pub mod nitro;

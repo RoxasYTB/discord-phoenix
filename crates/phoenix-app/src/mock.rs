@@ -536,6 +536,8 @@ impl Backend for MockBackend {
                     nickname: None,
                     since: Some(1_700_000_000),
                     ignored: false,
+                    spam: false,
+                    note: None,
                 })
                 .collect();
             self.emit_later(Duration::from_millis(30), move || {

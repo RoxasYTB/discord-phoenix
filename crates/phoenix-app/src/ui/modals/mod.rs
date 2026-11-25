@@ -7,6 +7,7 @@ pub mod channel_settings;
 pub mod create_channel;
 pub mod custom_status;
 pub mod forward;
+pub mod friend_requests;
 pub mod gdm;
 pub mod gdm_cleanup;
 pub mod go_live;
@@ -113,6 +114,9 @@ pub enum Modal {
     CustomStatus(custom_status::CustomStatus),
     ActiveThreads(crate::model::Id),
     PlaintextFull { url: SharedString, filename: SharedString, size: u64, viewport: Option<gpui::Size<gpui::Pixels>> },
+    SpamRequests,
+    ClearPending(usize),
+    AcceptStranger(crate::model::Id),
 }
 
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -202,6 +206,9 @@ pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
 }
 
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    if with_modal(|m| matches!(m, Some(Modal::SpamRequests))) && friend_requests::other_requests(&app.nav.relationships).is_empty() {
+        close_modal();
+    }
     with_modal(|m| {
         Some(match m.as_ref()? {
             Modal::Form(f) => form(f, cx),
@@ -229,6 +236,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::CustomStatus(s) => custom_status::render(app, s, cx),
             Modal::ActiveThreads(g) => active_threads::render(app, *g, cx),
             Modal::PlaintextFull { url, filename, size, viewport } => crate::ui::chat::plaintext::render_full(url, filename, *size, *viewport, cx),
+            Modal::SpamRequests => friend_requests::render_spam(app, cx),
+            Modal::ClearPending(n) => friend_requests::render_clear(*n, cx),
+            Modal::AcceptStranger(u) => friend_requests::render_stranger(*u, cx),
         })
     })
 }
@@ -313,7 +323,7 @@ fn truncate_utf16(s: &str, max: usize) -> &str {
     s
 }
 
-fn clamp_insert(old: &str, new: &str, max: usize) -> Option<(String, usize)> {
+pub(crate) fn clamp_insert(old: &str, new: &str, max: usize) -> Option<(String, usize)> {
     if utf16_len(new) <= max {
         return None;
     }

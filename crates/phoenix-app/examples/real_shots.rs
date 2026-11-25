@@ -1304,6 +1304,24 @@ fn main() -> anyhow::Result<()> {
                 }
                 "accounts" => app.open_switch_accounts(cx),
                 "gdmclean" => app.open_gdm_cleanup(cx),
+                "spamreq" => app.open_spam_requests(cx),
+                "clearpending" => app.confirm_clear_pending(arg.parse().unwrap_or(5), cx),
+                "stranger" => phoenix_app::actions::open_modal(phoenix_app::ui::modals::Modal::AcceptStranger(Id(arg.parse().unwrap_or(0))), None),
+                "addfriend" => {
+                    use phoenix_app::ui::home::add_friend as af;
+                    match arg.split_once(':') {
+                        Some(("ok", tag)) => {
+                            app.nav.add_friend.on_success(tag);
+                            app.nav.add_friend_success_tag = Some(tag.to_owned().into());
+                        }
+                        Some(("err", code)) => {
+                            let f = af::Failure { status: 400, code: code.parse().ok(), note_rejected: false };
+                            app.nav.add_friend.on_error(af::inline_error(&f, "wumpus"));
+                        }
+                        _ => app.nav.add_friend.on_change(arg),
+                    }
+                    cx.notify();
+                }
                 "discovery" => {
                     use phoenix_app::ui::discovery as d;
                     let apps = arg == "apps" || arg.starts_with("app:");
