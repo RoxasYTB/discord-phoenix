@@ -217,7 +217,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                         .cursor_pointer()
                         .child(crate::t!("call.return_main"))
                         .on_click(cx.listener(|_, _, _, cx| {
-                            cx.defer(|cx| crate::ui::call_popout::close(cx));
+                            cx.defer(crate::ui::call_popout::close);
                             cx.notify();
                         })),
                 )
