@@ -399,10 +399,12 @@ impl LineWrapper {
     }
 
     /// PHOENIX PATCH (ellipsis): end truncation of one shaped line, like Chromium's
-    /// `text-overflow: ellipsis`. Keeps the longest prefix of whole graphemes whose
-    /// shaped advance plus the affix fits in `truncate_width`, and keeps the spaces and
-    /// punctuation before the affix. `layout` must be the unwrapped shaping of `line`.
-    /// Per-character advances (`truncate_line`) ignore kerning and cut one glyph early.
+    /// `text-overflow: ellipsis` (`LineTruncator::TruncateChild`). Keeps the longest prefix
+    /// of whole graphemes (an emoji sequence is one) whose shaped end fits in `truncate_width`
+    /// minus the affix width rounded up to a LayoutUnit (1/64 of a device pixel), and keeps
+    /// the spaces and punctuation before the affix. When nothing fits, the first grapheme is
+    /// kept, as Chromium does for the first box of a line. `layout` must be the unwrapped
+    /// shaping of `line`. Per-character advances (`truncate_line`) ignore kerning.
     pub fn truncate_line_end_shaped<'a>(
         &mut self,
         line: SharedString,
@@ -410,20 +412,14 @@ impl LineWrapper {
         truncate_width: Pixels,
         truncation_affix: &str,
         runs: &'a [TextRun],
+        scale_factor: f32,
     ) -> (SharedString, Cow<'a, [TextRun]>) {
         let affix_width: Pixels = truncation_affix
             .chars()
             .map(|c| self.width_for_char(c))
             .sum();
-        let budget = truncate_width - affix_width;
-        let mut cut = 0;
-        for (ix, grapheme) in line.grapheme_indices(true) {
-            let end = ix + grapheme.len();
-            if layout.x_for_index(end) > budget {
-                break;
-            }
-            cut = end;
-        }
+        let affix_width = crate::elements::ceil_to_layout_unit(affix_width, scale_factor);
+        let cut = shaped_end_cut(&line, |ix| layout.x_for_index(ix), truncate_width - affix_width);
         let result = SharedString::from(format!("{}{truncation_affix}", &line[..cut]));
         let mut runs = runs.to_vec();
         update_runs_after_truncation(&result, truncation_affix, &mut runs, TruncateFrom::End);
@@ -621,6 +617,21 @@ fn width_for_char(
         char_widths.other.insert(c, width);
         width
     }
+}
+
+fn shaped_end_cut(line: &str, x_for_index: impl Fn(usize) -> Pixels, budget: Pixels) -> usize {
+    let mut cut = 0;
+    for (ix, grapheme) in line.grapheme_indices(true) {
+        let end = ix + grapheme.len();
+        if x_for_index(end) > budget {
+            if cut == 0 {
+                cut = end;
+            }
+            break;
+        }
+        cut = end;
+    }
+    cut
 }
 
 fn update_runs_after_truncation(
@@ -1243,6 +1254,85 @@ mod tests {
         let (truncated, _) =
             wrapper.truncate_wrapped_line(text.into(), px(72.), 2, "…", &runs, TruncateFrom::End);
         assert_eq!(truncated.as_ref(), "aaaa bbbb…");
+    }
+
+    fn grapheme_ends(text: &str, from: usize, xs: &[f32]) -> impl Fn(usize) -> Pixels {
+        let table: Vec<(usize, f32)> = text
+            .grapheme_indices(true)
+            .enumerate()
+            .map(|(i, (ix, g))| {
+                let x = if i < from {
+                    xs[0] * (i + 1) as f32 / (from + 1) as f32
+                } else if i - from < xs.len() {
+                    xs[i - from]
+                } else {
+                    xs[xs.len() - 1] + 10. * (i - from - xs.len() + 1) as f32
+                };
+                (ix + g.len(), x)
+            })
+            .collect();
+        move |ix| px(table.iter().find(|(end, _)| *end >= ix).map_or(0., |(_, x)| *x))
+    }
+
+    #[test]
+    fn shaped_end_cut_keeps_the_last_glyph_that_fits_like_chromium() {
+        let ellipsis_14 = crate::elements::ceil_to_layout_unit(px(10.15), 1.5);
+        assert!((f32::from(ellipsis_14) * 96. - 975.).abs() < 1e-2);
+        let group = "du D\u{e9}veloppement";
+        let x = grapheme_ends(group, 3, &[167.119, 174.315, 180.811, 188.007]);
+        let cut = shaped_end_cut(group, &x, px(18340. / 96.) - ellipsis_14);
+        assert_eq!(&group[..cut], "du D\u{e9}v");
+        let cut = shaped_end_cut(group, &x, px(190.667) - ellipsis_14);
+        assert_eq!(&group[..cut], "du D\u{e9}");
+
+        let ellipsis_16 = crate::elements::ceil_to_layout_unit(px(11.232), 1.5);
+        let placeholder = "\u{30fb}honeypot";
+        let x = grapheme_ends(placeholder, 3, &[263.682, 271.794, 279.314, 288.194]);
+        let cut = shaped_end_cut(placeholder, &x, px(27904. / 96.) - ellipsis_16);
+        assert_eq!(&placeholder[..cut], "\u{30fb}honey");
+        let cut = shaped_end_cut(placeholder, &x, px(290.) - ellipsis_16);
+        assert_eq!(&placeholder[..cut], "\u{30fb}hone");
+    }
+
+    #[test]
+    fn shaped_end_truncation_counts_an_emoji_as_one_glyph() {
+        let mut wrapper = build_wrapper();
+        let ell = f32::from(crate::elements::ceil_to_layout_unit(wrapper.width_for_char('\u{2026}'), 1.));
+        let text = "a\u{1f469}\u{200d}\u{1f680}bc";
+        let advance = 10.;
+        let mut x = 0.;
+        let glyphs: Vec<ShapedGlyph> = text
+            .char_indices()
+            .map(|(ix, c)| {
+                let glyph = ShapedGlyph {
+                    id: crate::GlyphId(0),
+                    position: crate::point(px(x), px(0.)),
+                    index: ix,
+                    is_emoji: c > '\u{2000}',
+                };
+                if c != '\u{200d}' && c != '\u{1f680}' {
+                    x += if c > '\u{2000}' { 2. * advance } else { advance };
+                }
+                glyph
+            })
+            .collect();
+        let layout = crate::LineLayout {
+            font_size: px(16.),
+            width: px(x),
+            ascent: px(12.),
+            descent: px(4.),
+            runs: vec![crate::ShapedRun { font_id: FontId(0), glyphs }],
+            len: text.len(),
+        };
+        let runs = generate_test_runs(&[text.len()]);
+        let truncate = |wrapper: &mut LineWrapper, width: f32| {
+            wrapper
+                .truncate_line_end_shaped(text.into(), &layout, px(width), "\u{2026}", &runs, 1.)
+                .0
+        };
+        assert_eq!(truncate(&mut wrapper, 30.01 + ell), "a\u{1f469}\u{200d}\u{1f680}\u{2026}");
+        assert_eq!(truncate(&mut wrapper, 29. + ell), "a\u{2026}");
+        assert_eq!(truncate(&mut wrapper, 1.), "a\u{2026}");
     }
 
     #[test]

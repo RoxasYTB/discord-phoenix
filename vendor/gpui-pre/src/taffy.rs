@@ -426,8 +426,18 @@ impl From<LayoutId> for NodeId {
     }
 }
 
+// PHOENIX PATCH (measured width, docs/gpui-patches.md): Chromium rounds a text box up to a
+// LayoutUnit, 1/64 of a device pixel. A whole device pixel per measured sibling took up to
+// 1 dp from the box of an ellipsized text and cut it one glyph early ("Dé…" for "Dév…").
 fn snap_measured_size_to_device_pixels(size: Size<Pixels>, scale_factor: f32) -> Size<f32> {
-    size.map(|d| ceil_to_device_pixel(d.0.max(0.0), scale_factor))
+    Size {
+        width: ceil_to_device_layout_unit(size.width.0.max(0.0), scale_factor),
+        height: ceil_to_device_pixel(size.height.0.max(0.0), scale_factor),
+    }
+}
+
+fn ceil_to_device_layout_unit(logical: f32, scale_factor: f32) -> f32 {
+    (logical * scale_factor * 64.).ceil() / 64.
 }
 
 fn border_widths_to_taffy(
@@ -765,6 +775,28 @@ impl From<Size<Pixels>> for Size<AvailableSpace> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn measured_width_rounds_up_to_a_device_layout_unit() {
+        let snapped = snap_measured_size_to_device_pixels(
+            Size {
+                width: Pixels(24.958),
+                height: Pixels(17.9),
+            },
+            1.5,
+        );
+        assert_eq!(snapped.width, 37.4375);
+        assert_eq!(snapped.height, 27.0);
+        let exact = snap_measured_size_to_device_pixels(
+            Size {
+                width: Pixels(191.0 + 2.0 / 96.0),
+                height: Pixels(18.0),
+            },
+            1.5,
+        );
+        assert!((exact.width / 1.5 - (191.0 + 2.0 / 96.0)).abs() < 1e-3);
+        assert_eq!(exact.height, 27.0);
+    }
 
     #[test]
     fn border_widths_to_taffy_use_stroke_snapping() {

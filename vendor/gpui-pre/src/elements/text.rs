@@ -743,6 +743,7 @@ impl TextLayout {
                                 truncate_width,
                                 &truncation_affix,
                                 &runs,
+                                window.scale_factor(),
                             )
                         } else {
                             line_wrapper.truncate_line(
@@ -799,7 +800,7 @@ impl TextLayout {
                     size.height += line_size.height;
                     size.width = size.width.max(line_size.width);
                 }
-                size.width = ceil_to_layout_unit(size.width);
+                size.width = ceil_to_layout_unit(size.width, window.scale_factor());
 
                 element_state.0.borrow_mut().replace(TextLayoutInner {
                     lines,
@@ -845,7 +846,7 @@ impl TextLayout {
                 size.height += line_size.height;
                 size.width = size.width.max(line_size.width);
             }
-            size.width = ceil_to_layout_unit(size.width);
+            size.width = ceil_to_layout_unit(size.width, window.scale_factor());
             element_state.lines = lines;
             element_state.wrap_width = Some(width);
             element_state.size = Some(size);
@@ -1370,10 +1371,11 @@ impl IntoElement for InteractiveText {
 }
 
 // PHOENIX PATCH (text width, docs/gpui-patches.md): Chromium keeps a text box at its shaped
-// width rounded up to a LayoutUnit (1/64 px). Upstream rounded it up to a whole logical pixel,
-// so "APP" (23.16px) took 24px and every inline row after a text drifted by up to 1px.
-fn ceil_to_layout_unit(width: Pixels) -> Pixels {
-    crate::px((f32::from(width) * 64.).ceil() / 64.)
+// width rounded up to a LayoutUnit (1/64 of a device pixel). Upstream rounded it up to a whole
+// logical pixel, so "APP" (23.16px) took 24px and every inline row after a text drifted.
+pub(crate) fn ceil_to_layout_unit(width: Pixels, scale_factor: f32) -> Pixels {
+    let units = 64. * scale_factor.max(f32::EPSILON);
+    crate::px((f32::from(width) * units).ceil() / units)
 }
 
 #[cfg(test)]
@@ -1382,9 +1384,12 @@ mod tests {
 
     #[test]
     fn text_width_rounds_up_to_a_layout_unit() {
-        assert_eq!(ceil_to_layout_unit(crate::px(23.1625)), crate::px(23.171875));
-        assert_eq!(ceil_to_layout_unit(crate::px(24.)), crate::px(24.));
-        assert_eq!(ceil_to_layout_unit(crate::px(0.)), crate::px(0.));
+        assert_eq!(ceil_to_layout_unit(crate::px(23.1625), 1.), crate::px(23.171875));
+        assert_eq!(ceil_to_layout_unit(crate::px(24.), 1.), crate::px(24.));
+        assert_eq!(ceil_to_layout_unit(crate::px(0.), 1.), crate::px(0.));
+        assert_eq!(ceil_to_layout_unit(crate::px(24.), 1.5), crate::px(24.));
+        let w = f32::from(ceil_to_layout_unit(crate::px(23.1625), 1.5));
+        assert!((w * 96. - 2224.).abs() < 1e-2);
     }
 
     #[test]
