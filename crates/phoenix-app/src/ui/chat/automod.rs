@@ -11,6 +11,8 @@ use crate::{
 pub const AVATAR_PNG: &str = "https://discord.com/assets/32336875baac6ac1.png";
 pub const AVATAR_GIF: &str = "https://discord.com/assets/d9bd8932f55dc4ba.gif";
 
+pub const CONTENT_BLOCK: usize = 0xA0;
+
 pub const ACTION_SET_COMPLETED: u8 = 1;
 pub const ACTION_DELETE_USER_MESSAGE: u8 = 3;
 pub const ACTION_SUBMIT_FEEDBACK: u8 = 4;
@@ -46,9 +48,11 @@ pub fn data(msg: &Message) -> Option<Data> {
 pub enum Header {
     Plain(&'static str),
     Channel(&'static str),
+    AppModal(&'static str),
+    AppMessage(&'static str),
 }
 
-pub fn header(d: &Data) -> Header {
+pub fn header(d: &Data, interaction_user_known: bool) -> Header {
     if d.get("quarantine_user").is_some() {
         let key = match d.get("quarantine_user_action") {
             Some("block_profile_update") => match d.get("block_profile_update_type") {
@@ -76,7 +80,18 @@ pub fn header(d: &Data) -> Header {
     if let Some(o) = d.get("guild_room_note_outcome") {
         return Header::Channel(if o == "blocked" { "sys.am_note_blocked" } else { "sys.am_note_flagged" });
     }
-    Header::Channel(if d.get("decision_outcome") == Some("blocked") { "sys.am_blocked" } else { "sys.am_flagged" })
+    let blocked = d.get("decision_outcome") == Some("blocked");
+    if d.get("application_name").is_some() {
+        if d.get("interaction_callback_type") == Some("MODAL") && interaction_user_known {
+            return Header::AppModal(if blocked { "sys.am_appmsg_modal_blocked" } else { "sys.am_appmsg_modal_flagged" });
+        }
+        return Header::AppMessage(if blocked { "sys.am_appmsg_blocked" } else { "sys.am_appmsg_flagged" });
+    }
+    Header::Channel(if blocked { "sys.am_blocked" } else { "sys.am_flagged" })
+}
+
+pub fn interaction_user(d: &Data) -> Option<Id> {
+    d.get("interaction_user_id").and_then(|v| v.trim().parse::<u64>().ok()).map(Id)
 }
 
 pub fn timeout_text(code: &str, raw: Option<&str>) -> Option<String> {
@@ -184,26 +199,35 @@ pub fn buttons(d: &Data, manage_messages: bool) -> Buttons {
 }
 
 pub fn highlight(content: &str, word: Option<&str>) -> Vec<(String, bool)> {
-    let Some(w) = word.filter(|w| !w.is_empty()) else { return vec![(content.to_string(), false)] };
-    let edge_ok = |s: &str, i: usize| i == 0 || s[..i].chars().next_back().is_some_and(char::is_whitespace);
-    let tail_ok = |s: &str, i: usize| i + w.len() == s.len() || s[i + w.len()..].chars().next().is_some_and(char::is_whitespace);
-    let mut from = 0;
-    while let Some(p) = content[from..].find(w) {
-        let at = from + p;
-        if edge_ok(content, at) && tail_ok(content, at) {
-            let mut out = Vec::new();
-            if at > 0 {
-                out.push((content[..at].to_string(), false));
-            }
-            out.push((w.to_string(), true));
-            if at + w.len() < content.len() {
-                out.push((content[at + w.len()..].to_string(), false));
-            }
-            return out;
-        }
-        from = at + content[at..].chars().next().map_or(1, char::len_utf8);
+    let mut out = Vec::new();
+    match word.filter(|w| !w.is_empty()) {
+        Some(w) => split_highlight(content, w, 0, &mut out),
+        None => out.push((content.to_string(), false)),
     }
-    vec![(content.to_string(), false)]
+    out.retain(|(t, _)| !t.is_empty());
+    out
+}
+
+fn split_highlight(s: &str, w: &str, depth: u8, out: &mut Vec<(String, bool)>) {
+    let edge_ok = |i: usize| i == 0 || s[..i].chars().next_back().is_some_and(char::is_whitespace);
+    let tail_ok = |i: usize| i + w.len() == s.len() || s[i + w.len()..].chars().next().is_some_and(char::is_whitespace);
+    let mut from = 0;
+    let found = loop {
+        let Some(p) = (depth <= 10).then(|| s.get(from..).and_then(|r| r.find(w))).flatten() else { break None };
+        let at = from + p;
+        if edge_ok(at) && tail_ok(at) {
+            break Some(at);
+        }
+        from = at + s[at..].chars().next().map_or(1, char::len_utf8);
+    };
+    match found {
+        Some(at) => {
+            split_highlight(&s[..at], w, depth + 1, out);
+            out.push((w.to_string(), true));
+            split_highlight(&s[at + w.len()..], w, depth + 1, out);
+        }
+        None => out.push((s.to_string(), false)),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -390,18 +414,48 @@ fn channel_chip(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ch
         .into_any_element()
 }
 
+fn username(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, uid: Id, key: &'static str) -> AnyElement {
+    let user = app.users.get(&uid);
+    let (name_color, gradient) = app.author_role_style(uid);
+    let name_color = name_color.map(c).unwrap_or_else(|| c(Palette::TEXT_HEADER));
+    let name: SharedString = msg
+        .author_nick
+        .clone()
+        .filter(|_| uid == msg.author)
+        .or_else(|| app.member_nick(uid))
+        .or_else(|| user.map(|u| u.display_name.clone()))
+        .unwrap_or_else(|| crate::t!("sys.someone"));
+    crate::fonts::styled_name(div().font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()), user, false)
+        .id((key, msg.id.0))
+        .on_click(super::message_ext::open_user(entity, uid, msg.channel))
+        .child(crate::fonts::role_name_text(name, user, 16., app.selected_guild.is_some(), gradient))
+        .into_any_element()
+}
+
 fn header_text(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, d: &Data) -> Vec<AnyElement> {
     let ch = d.get("channel_id").and_then(|v| v.parse::<u64>().ok()).map(Id);
-    let (key, with_channel) = match header(d) {
+    let iu = interaction_user(d).filter(|u| app.users.contains_key(u));
+    let h = header(d, iu.is_some());
+    let (key, with_channel) = match h {
         Header::Plain(k) => (k, false),
-        Header::Channel(k) => (k, true),
+        Header::Channel(k) | Header::AppMessage(k) => (k, true),
+        Header::AppModal(k) => (k, false),
     };
     let strong = |w: String| div().text_color(tk(idx::TEXT_STRONG)).child(w).into_any_element();
+    let bold = |w: String| div().text_color(tk(idx::TEXT_STRONG)).font_weight(FontWeight::SEMIBOLD).child(w).into_any_element();
+    let app_name = d.get("application_name").unwrap_or_default().to_string();
     let mut out = Vec::new();
-    for seg in parse_template(&crate::i18n::t(key, &[]), &[("ch", String::new())]) {
+    for seg in parse_template(&crate::i18n::t(key, &[]), &[("ch", String::new()), ("app", app_name)]) {
         match seg {
             Seg::Link(..) if with_channel => out.push(channel_chip(app, entity, msg, ch)),
-            Seg::Text(t) | Seg::Strong(t) | Seg::Name(t) | Seg::Link(_, t) => out.extend(words(&t).into_iter().map(strong)),
+            Seg::Name(n) if n == "owner" => out.push(username(app, entity, msg, msg.author, "automod-owner")),
+            Seg::Name(n) if n == "iu" => {
+                if let Some(u) = iu {
+                    out.push(username(app, entity, msg, u, "automod-iu"));
+                }
+            }
+            Seg::Strong(t) => out.extend(words(&t).into_iter().map(bold)),
+            Seg::Text(t) | Seg::Name(t) | Seg::Link(_, t) => out.extend(words(&t).into_iter().map(strong)),
             Seg::Author => {}
         }
     }
@@ -410,30 +464,11 @@ fn header_text(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, d: 
 
 fn flagged_message(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, d: &Data, footer_row: Vec<Foot>, reason: Option<String>) -> AnyElement {
     let user = app.users.get(&msg.author);
-    let (name_color, gradient) = app.author_role_style(msg.author);
-    let name_color = name_color.map(c).unwrap_or_else(|| c(Palette::TEXT_HEADER));
-    let name: SharedString = msg
-        .author_nick
-        .clone()
-        .or_else(|| app.member_nick(msg.author))
-        .or_else(|| user.map(|u| u.display_name.clone()))
-        .unwrap_or_else(|| crate::t!("sys.someone"));
-    let author = crate::fonts::styled_name(div().font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()), user, false)
-        .id(("automod-author", msg.id.0))
-        .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
-        .child(crate::fonts::role_name_text(name, user, 16., app.selected_guild.is_some(), gradient));
-    let content: Vec<AnyElement> = highlight(&d.content, d.get("keyword_matched_content"))
-        .into_iter()
-        .flat_map(|(t, hl)| {
-            words(&t).into_iter().map(move |w| {
-                if hl {
-                    div().bg(c(tok(idx::YELLOW_300)).opacity(0.3)).child(w).into_any_element()
-                } else {
-                    div().child(w).into_any_element()
-                }
-            })
-        })
-        .collect();
+    let author = username(app, entity, msg, msg.author, "automod-author");
+    let revealed = |i: usize| app.revealed.contains(&(msg.id, i));
+    let segments = highlight(&d.content, d.get("keyword_matched_content"));
+    let rich = crate::richtext::highlighted_inline(&segments, &app.resolver_with_sounds(&[], msg.channel), &revealed, tk(idx::TEXT_DEFAULT), c(tok(idx::YELLOW_300)).opacity(0.3));
+    let content = (!rich.text.is_empty()).then(|| super::rich(entity, msg.id, CONTENT_BLOCK, &rich, None));
     let row: Vec<AnyElement> = footer_row
         .into_iter()
         .map(|f| match f {
@@ -457,7 +492,7 @@ fn flagged_message(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message,
                 .min_h(z(44.))
                 .child(div().absolute().left(z(16.)).top(z(2.)).size(z(40.)).child(crate::ui::avatar(user, avatar_px)))
                 .child(div().flex().items_center().h(z(22.)).line_height(z(22.)).child(author))
-                .child(div().flex().flex_wrap().line_height(z(22.)).text_color(tk(idx::TEXT_DEFAULT)).children(content))
+                .child(div().text_color(tk(idx::TEXT_DEFAULT)).children(content))
                 .when(!row.is_empty(), |el| el.child(div().flex().items_center().flex_wrap().mt(z(2.)).children(row)))
                 .children(reason.map(|r| {
                     div().mt(z(4.)).px(z(8.)).pt(z(4.)).pb(z(6.)).rounded(z(4.)).line_height(z(20.)).bg(tk(idx::BACKGROUND_MOD_NORMAL)).child(small(r, idx::TEXT_DEFAULT))
@@ -691,7 +726,7 @@ mod tests {
     #[test]
     fn blocked_message() {
         let x = d(&[("rule_name", "Gros mots"), ("channel_id", "5"), ("keyword", "nul*"), ("keyword_matched_content", "nul"), ("decision_outcome", "blocked")], "c'est nul ici");
-        assert_eq!(header(&x), Header::Channel("sys.am_blocked"));
+        assert_eq!(header(&x, false), Header::Channel("sys.am_blocked"));
         assert_eq!(crate::i18n::t_in("fr", "sys.am_blocked", &[]), "a bloqué un message dans [{ch}]");
         assert_eq!(
             footer("fr", &x),
@@ -704,8 +739,8 @@ mod tests {
     #[test]
     fn flagged_message_with_delete_button() {
         let x = d(&[("rule_name", "Liens"), ("channel_id", "5"), ("flagged_message_id", "9"), ("decision_outcome", "flagged")], "https://x");
-        assert_eq!(header(&x), Header::Channel("sys.am_flagged"));
-        assert_eq!(header(&d(&[], "")), Header::Channel("sys.am_flagged"));
+        assert_eq!(header(&x, false), Header::Channel("sys.am_flagged"));
+        assert_eq!(header(&d(&[], ""), false), Header::Channel("sys.am_flagged"));
         assert_eq!(buttons(&x, true), Buttons { jump: true, delete: true });
         assert!(!buttons(&x, false).delete);
         let done = d(&[("flagged_message_id", "9"), ("alert_actions_execution", r#"{"actions":{"3":{"actor":"1","ts":"2026-11-25T10:00:00Z"},"1":{"actor":"1","ts":"2026-11-25T10:01:00Z"}}}"#)], "");
@@ -731,16 +766,47 @@ mod tests {
     #[test]
     fn name_or_profile_flagged() {
         let x = d(&[("quarantine_user", "nickname"), ("quarantine_user_action", "quarantine_user"), ("quarantine_event", "username_update"), ("rule_name", "Pseudos")], "");
-        assert_eq!(header(&x), Header::Plain("sys.am_q_username"));
+        assert_eq!(header(&x, false), Header::Plain("sys.am_q_username"));
         assert_eq!(footer("fr", &x).last(), Some(&Foot::Text("Raison\u{a0}: Pseudo".into())));
         let nick = d(&[("quarantine_user", "username"), ("quarantine_user_action", "block_profile_update"), ("block_profile_update_type", "nickname_update")], "");
-        assert_eq!(header(&nick), Header::Plain("sys.am_nick_update"));
+        assert_eq!(header(&nick, false), Header::Plain("sys.am_nick_update"));
         assert_eq!(footer("en", &nick), vec![Foot::Dot, Foot::Text("Reason: Username".into())]);
         assert_eq!(quarantine_field("en", "display_name"), "Display Name");
         let unknown = d(&[("quarantine_user", "bio"), ("quarantine_user_action", "quarantine_user"), ("quarantine_event", "other")], "");
-        assert_eq!(header(&unknown), Header::Channel("sys.am_flagged"));
-        assert_eq!(header(&d(&[("quarantine_user", "bio"), ("quarantine_user_action", "block_guest_join")], "")), Header::Plain("sys.am_guest_join"));
-        assert_eq!(header(&d(&[("voice_channel_status_outcome", "blocked")], "")), Header::Channel("sys.am_vc_blocked"));
+        assert_eq!(header(&unknown, false), Header::Channel("sys.am_flagged"));
+        assert_eq!(header(&d(&[("quarantine_user", "bio"), ("quarantine_user_action", "block_guest_join")], ""), false), Header::Plain("sys.am_guest_join"));
+        assert_eq!(header(&d(&[("voice_channel_status_outcome", "blocked")], ""), false), Header::Channel("sys.am_vc_blocked"));
+    }
+
+    #[test]
+    fn application_variants() {
+        let modal = d(&[("application_name", "Bot"), ("interaction_callback_type", "MODAL"), ("interaction_user_id", "77"), ("decision_outcome", "flagged")], "");
+        assert_eq!(interaction_user(&modal), Some(Id(77)));
+        assert_eq!(header(&modal, true), Header::AppModal("sys.am_appmsg_modal_flagged"));
+        assert_eq!(header(&modal, false), Header::AppMessage("sys.am_appmsg_flagged"));
+        let blocked = d(&[("application_name", "Bot"), ("interaction_callback_type", "MODAL"), ("interaction_user_id", "77"), ("decision_outcome", "blocked")], "");
+        assert_eq!(header(&blocked, true), Header::AppModal("sys.am_appmsg_modal_blocked"));
+        let msg = d(&[("application_name", "Bot"), ("interaction_callback_type", "CHANNEL_MESSAGE_WITH_SOURCE"), ("decision_outcome", "blocked")], "");
+        assert_eq!(header(&msg, true), Header::AppMessage("sys.am_appmsg_blocked"));
+        let vc = d(&[("application_name", "Bot"), ("voice_channel_status_outcome", "flagged")], "");
+        assert_eq!(header(&vc, true), Header::Channel("sys.am_vc_flagged"));
+        let segs = parse_template(&crate::i18n::t_in("en", "sys.am_appmsg_modal_blocked", &[]), &[("ch", String::new()), ("app", "Bot".into())]);
+        assert_eq!(
+            segs,
+            vec![
+                Seg::Text("has blocked ".into()),
+                Seg::Strong("Bot".into()),
+                Seg::Text("'s modal from being shown to ".into()),
+                Seg::Name("iu".into()),
+                Seg::Text(". The interaction with ".into()),
+                Seg::Strong("Bot".into()),
+                Seg::Text(" was started by ".into()),
+                Seg::Name("owner".into()),
+                Seg::Text(".".into()),
+            ]
+        );
+        let fr = parse_template(&crate::i18n::t_in("fr", "sys.am_appmsg_flagged", &[]), &[("ch", String::new()), ("app", "Bot".into())]);
+        assert_eq!(fr, vec![Seg::Text("a signalé le message de ".into()), Seg::Strong("Bot".into()), Seg::Text(" dans ".into()), Seg::Link(0, String::new()), Seg::Text(", envoyé par ".into()), Seg::Name("owner".into())]);
     }
 
     #[test]
@@ -769,6 +835,10 @@ mod tests {
         assert_eq!(highlight("nullement nul", Some("nul")), vec![("nullement ".into(), false), ("nul".into(), true)]);
         assert_eq!(highlight("annuler", Some("nul")), vec![("annuler".into(), false)]);
         assert_eq!(highlight("x", None), vec![("x".into(), false)]);
+        assert_eq!(highlight("nul, nul et nul", Some("nul")), vec![("nul, ".into(), false), ("nul".into(), true), (" et ".into(), false), ("nul".into(), true)]);
+        assert_eq!(highlight("nul nul", Some("nul")), vec![("nul".into(), true), (" ".into(), false), ("nul".into(), true)]);
+        let many = vec!["x"; 14].join(" ");
+        assert_eq!(highlight(&many, Some("x")).iter().filter(|(_, h)| *h).count(), 11);
     }
 
     #[test]

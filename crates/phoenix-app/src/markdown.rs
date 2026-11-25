@@ -234,6 +234,18 @@ pub use link::title_for as link_title_attr;
 
 thread_local! {
     static EMOJI_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static NO_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn no_links() -> bool {
+    NO_LINKS.with(std::cell::Cell::get)
+}
+
+pub fn parse_inline_without_links(src: &str, r: &dyn MentionResolver, spoiler_counter: &mut usize) -> Inline {
+    let prev = NO_LINKS.with(|e| e.replace(true));
+    let out = parse_inline(src, r, spoiler_counter);
+    NO_LINKS.with(|e| e.set(prev));
+    out
 }
 
 fn emoji_links() -> bool {
@@ -425,6 +437,7 @@ impl Ctx<'_> {
             }
 
             if c == b'['
+                && !no_links()
                 && let Some(m) = link::match_at(rest)
             {
                 let label = &rest[m.label.clone()];
@@ -450,6 +463,7 @@ impl Ctx<'_> {
 
             if matches!(c, b'h' | b's')
                 && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+                && !no_links()
                 && let Some(url) = bare_url(rest)
             {
                 self.push(&src[plain_start..i], style, spoiler);

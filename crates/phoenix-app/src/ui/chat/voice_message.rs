@@ -1503,7 +1503,14 @@ fn ring_key(part: &str, key: &SharedString) -> u64 {
     crate::ui::states::key(("vm-ring", part, key.as_ref()))
 }
 
-fn volume_slider(key: SharedString, cx: &App) -> AnyElement {
+const VOICE_SLIDER_LEFT: f32 = slider_left(-8.);
+const ATTACHMENT_SLIDER_LEFT: f32 = slider_left(-4.);
+
+const fn slider_left(margin_inline_start: f32) -> f32 {
+    70. - 78. + margin_inline_start
+}
+
+fn volume_slider(key: SharedString, left: f32, cx: &App) -> AnyElement {
     let value = slider_value(cx, &key);
     let now = Instant::now();
     let (bar_hover, bar_at) = cx
@@ -1585,7 +1592,7 @@ fn volume_slider(key: SharedString, cx: &App) -> AnyElement {
         div()
             .id(gpui::ElementId::Name(format!("vm-volslider-{key}").into()))
             .absolute()
-            .left(z(-16.))
+            .left(z(left))
             .top(z(-144.))
             .w(z(54.))
             .h(z(140.))
@@ -1843,7 +1850,7 @@ pub fn player(url: &SharedString, meta: &VoiceMeta, cx: &App) -> AnyElement {
                 _ => {}
             }
         })
-        .when(vol_open, |d| d.child(volume_slider(key.clone(), cx)));
+        .when(vol_open, |d| d.child(volume_slider(key.clone(), VOICE_SLIDER_LEFT, cx)));
     div()
         .id(id("player"))
         .mt(z(4.))
@@ -2437,7 +2444,7 @@ pub fn attachment_controls(url: &SharedString, cx: &App) -> AnyElement {
                 window.refresh();
             }
         })
-        .when(vol_open, |d| d.child(volume_slider(key.clone(), cx)));
+        .when(vol_open, |d| d.child(volume_slider(key.clone(), ATTACHMENT_SLIDER_LEFT, cx)));
     div()
         .id(gpui::ElementId::Name(format!("acontrols-{url}").into()))
         .mt(z(4.))
@@ -2518,6 +2525,12 @@ mod tests {
         assert!(b.reset);
         assert!(b.current(t0 + Duration::from_millis(100)) < 0.01);
         assert_eq!(b.current(t0 + Duration::from_millis(151)), 0.);
+    }
+
+    #[test]
+    fn volume_popout_offsets_follow_the_wrapper_margin() {
+        assert_eq!(VOICE_SLIDER_LEFT, -16.);
+        assert_eq!(ATTACHMENT_SLIDER_LEFT, -12.);
     }
 
     #[test]

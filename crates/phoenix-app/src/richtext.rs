@@ -322,6 +322,39 @@ pub fn apply_highlights(parsed: &[Block], blocks: &mut [RBlock], hl: &crate::sea
     }
 }
 
+pub fn highlighted_inline(segments: &[(String, bool)], r: &dyn MentionResolver, revealed: &dyn Fn(usize) -> bool, base: Hsla, bg: Hsla) -> RichText {
+    let mut inline = Inline::default();
+    let mut spoilers = 0usize;
+    let mut marks: Vec<Range<usize>> = Vec::new();
+    for (text, hl) in segments.iter().filter(|(t, _)| !t.is_empty()) {
+        let at = inline.text.len();
+        if *hl {
+            inline.text.push_str(text);
+            let range = at..inline.text.len();
+            inline.spans.push(markdown::Span { range: range.clone(), style: Style::PLAIN, link: None, mention: None, spoiler: None });
+            marks.push(range);
+        } else {
+            let part = markdown::parse_inline_without_links(text, r, &mut spoilers);
+            inline.text.push_str(&part.text);
+            inline.spans.extend(part.spans.into_iter().map(|mut s| {
+                s.range = s.range.start + at..s.range.end + at;
+                s
+            }));
+        }
+    }
+    let parsed = [Block::Paragraph(inline)];
+    let mut blocks = render_blocks(&parsed, revealed, base);
+    color_role_mentions(&parsed, &mut blocks, r);
+    let Some(RBlock::Text(mut t)) = blocks.pop() else {
+        return RichText { text: SharedString::default(), runs: Vec::new(), click_ranges: Vec::new(), click_targets: Vec::new(), emoji: Vec::new() };
+    };
+    t.emoji.retain(|(e, _)| !marks.iter().any(|m| m.start < e.end && e.start < m.end));
+    if !marks.is_empty() {
+        t.runs = split_runs(&t.runs, &marks, bg);
+    }
+    t
+}
+
 pub fn split_runs(runs: &[TextRun], ranges: &[Range<usize>], bg: Hsla) -> Vec<TextRun> {
     let total: usize = runs.iter().map(|r| r.len).sum();
     let mut cuts: Vec<usize> = Vec::with_capacity(runs.len() + ranges.len() * 2 + 1);
@@ -453,6 +486,35 @@ mod emoji_tests {
         assert_eq!(lit(&blocks[0]), ["serveur", "Serveur", "serveur", "serveur"]);
         assert!(matches!(blocks.last(), Some(RBlock::Code { .. })));
     }
+    #[test]
+    fn automod_content_keeps_markdown_around_the_raw_keyword() {
+        struct R;
+        impl MentionResolver for R {
+            fn user(&self, _: u64) -> Option<String> {
+                Some("Alex".into())
+            }
+            fn channel(&self, _: u64) -> Option<String> {
+                None
+            }
+        }
+        let bg = Hsla { h: 0.1, s: 1., l: 0.5, a: 0.3 };
+        let segs = vec![("**gros** <@1> https://x.y ".to_string(), false), ("<:nul:5>".to_string(), true), (" [a](https://b.c) 👍".to_string(), false)];
+        let t = highlighted_inline(&segs, &R, &|_| true, Hsla::default(), bg);
+        assert_eq!(t.text.as_ref(), "gros @Alex https://x.y <:nul:5> [a](https://b.c) 👍");
+        assert_eq!(t.runs[0].font.weight, FontWeight::BOLD);
+        assert!(matches!(t.click_targets.as_slice(), [ClickTarget::Mention(Mention::User(1))]));
+        let mut at = 0;
+        let mut lit = Vec::new();
+        for run in &t.runs {
+            if run.background_color == Some(bg) {
+                lit.push(t.text[at..at + run.len].to_string());
+            }
+            at += run.len;
+        }
+        assert_eq!(lit, ["<:nul:5>"]);
+        assert_eq!(t.emoji.iter().map(|(_, e)| e.to_string()).collect::<Vec<_>>(), ["👍"]);
+    }
+
     #[test]
     fn jumbo_up_to_thirty_emoji() {
         let block = |s: String| RBlock::Text(RichText { emoji: emoji_ranges(&s), text: s.into(), runs: vec![], click_ranges: vec![], click_targets: vec![] });

@@ -237,9 +237,13 @@ pub fn messages(channel: Id, guild: Id, other_channel: Id, next_id: &mut u64, ts
     let oc = other_channel.0.to_string();
     let raid_at = (chrono::Utc::now() - chrono::Duration::minutes(25)).to_rfc3339();
     push(5, am("auto_moderation_message", &[("rule_name", "Block spam words"), ("channel_id", &oc), ("keyword", "free nitro"), ("keyword_matched_content", "free nitro"), ("decision_outcome", "blocked")], "get your free nitro here"), &mut out);
-    push(6, am("auto_moderation_message", &[("rule_name", "Flag invite links"), ("channel_id", &oc), ("flagged_message_id", "42"), ("decision_outcome", "flagged")], "join my server discord.gg/example"), &mut out);
+    push(6, am("auto_moderation_message", &[("rule_name", "Flag invite links"), ("channel_id", &oc), ("flagged_message_id", "42"), ("decision_outcome", "flagged")], "<@3> join my **server** 🔥 https://discord.gg/example ||now||"), &mut out);
     push(7, am("auto_moderation_message", &[("rule_name", "Mention spam"), ("channel_id", &oc), ("keyword", "@everyone"), ("timeout_duration", "600"), ("decision_outcome", "blocked")], "@everyone look at this"), &mut out);
     push(8, am("auto_moderation_message", &[("rule_name", "Member names"), ("quarantine_user", "nickname"), ("quarantine_user_action", "quarantine_user"), ("quarantine_event", "username_update")], ""), &mut out);
+    for (cb, outcome) in [("MODAL", "flagged"), ("MODAL", "blocked"), ("CHANNEL_MESSAGE_WITH_SOURCE", "flagged"), ("CHANNEL_MESSAGE_WITH_SOURCE", "blocked")] {
+        let fields = [("rule_name", "Block spam words"), ("channel_id", &*oc), ("application_name", "Phoenix Bot"), ("interaction_callback_type", cb), ("interaction_user_id", "7"), ("keyword", "nitro"), ("keyword_matched_content", "nitro"), ("decision_outcome", outcome)];
+        push(6, am("auto_moderation_message", &fields, "Claim your *free* nitro, <@7>"), &mut out);
+    }
     push(4, am("auto_moderation_notification", &[("notification_type", "raid"), ("join_attempts", "120"), ("raid_datetime", &raid_at), ("raid_type", "JOIN_RAID")], ""), &mut out);
     push(4, am("auto_moderation_notification", &[("notification_type", "mention_raid"), ("raid_datetime", &raid_at)], ""), &mut out);
     push(4, am("auto_moderation_notification", &[("notification_type", "activity_alerts_enabled"), ("action_by_user_id", "3")], ""), &mut out);
