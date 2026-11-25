@@ -312,7 +312,7 @@ fn text_like(k: ChannelKind) -> bool {
 
 fn channels(app: &PhoenixApp, b: &Boost, q: &str, guild: Option<Id>, voice_only: bool, limit: usize) -> Vec<Hit> {
     let toks = tokens(q, q.is_empty());
-    let mut hits: Vec<(Hit, (usize, i64))> = Vec::new();
+    let mut hits: Vec<(Hit, (i64, usize))> = Vec::new();
     let pool: Vec<&crate::model::Channel> = match guild {
         Some(g) => app.guild_channels.get(&g).into_iter().flatten().filter_map(|id| app.channels.get(id)).collect(),
         None => app.channels.values().filter(|c| c.guild.is_some()).collect(),
@@ -492,16 +492,9 @@ fn recently_talked(app: &PhoenixApp) -> Vec<Target> {
     out
 }
 
-fn as_target(app: &PhoenixApp, id: Id, mode: Option<Mode>) -> Option<Target> {
+fn as_target(app: &PhoenixApp, id: Id) -> Option<Target> {
     let ch = app.channels.get(&id)?;
-    let t = if ch.guild.is_some() { Target::Channel(id) } else { Target::Dm(id) };
-    let ok = match mode {
-        None => true,
-        Some(Mode::Text) => ch.guild.is_some() && !is_voice(ch.kind),
-        Some(Mode::Voice) => ch.guild.is_some() && is_voice(ch.kind),
-        _ => false,
-    };
-    ok.then_some(t)
+    Some(if ch.guild.is_some() { Target::Channel(id) } else { Target::Dm(id) })
 }
 
 fn sections(app: &PhoenixApp) -> Vec<Row> {
@@ -512,7 +505,7 @@ fn sections(app: &PhoenixApp) -> Vec<Row> {
         if Some(*id) == current {
             continue;
         }
-        if let Some(t) = as_target(app, *id, None) {
+        if let Some(t) = as_target(app, *id) {
             previous.push(Row::Hit(t));
             if taken.len() < 3 {
                 taken.insert(*id);
@@ -527,7 +520,7 @@ fn sections(app: &PhoenixApp) -> Vec<Row> {
     let mentioned: Vec<Target> = mentioned
         .into_iter()
         .filter(|id| Some(*id) != current && !taken.contains(id))
-        .filter_map(|id| as_target(app, id, None))
+        .filter_map(|id| as_target(app, id))
         .collect();
     if !mentioned.is_empty() {
         rest.push(Row::Header(crate::t!("switcher.mentions")));
@@ -764,7 +757,7 @@ pub fn render(app: &PhoenixApp, sw: &Switcher, cx: &mut Context<PhoenixApp>) -> 
             }
             Target::Dm(id) => {
                 let Some(ch) = app.channels.get(&id) else { continue };
-                let user = app.users.values().find(|u| u.display_name == ch.name || u.name == ch.name);
+                let user = dm_recipient(app, id).and_then(|u| app.users.get(&u));
                 (avatar(user, 20.), ch.name.clone(), user.map(|u| u.name.clone()), None, None)
             }
             Target::User(id) => {

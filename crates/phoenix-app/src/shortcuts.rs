@@ -6,6 +6,8 @@ use gpui::{
 };
 
 pub mod message;
+#[cfg(test)]
+mod keyboard_tests;
 
 use crate::{
     app::{CONTEXT, PhoenixApp},
@@ -55,8 +57,24 @@ actions!(
         ZoomIn,
         ZoomOut,
         ZoomReset,
+        NextSection,
+        PrevSection,
     ]
 );
+
+pub const BACK_KEY: u64 = 0x7068_785f_6261_636b;
+pub const ACCOUNT_KEY: u64 = 0x7068_785f_6163_6374;
+const HOME_RAIL_KEY: u64 = 1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Section {
+    Back,
+    Rail,
+    Channels,
+    Account,
+    Messages,
+    Members,
+}
 
 pub const ZOOM_SCALES: [u32; 11] = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
 
@@ -187,6 +205,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl--", ZoomOut, ctx),
         KeyBinding::new("ctrl-shift--", ZoomOut, ctx),
         KeyBinding::new("ctrl-0", ZoomReset, ctx),
+        KeyBinding::new("f6", NextSection, ctx),
+        KeyBinding::new("shift-f6", PrevSection, ctx),
         KeyBinding::new("ctrl-shift-0", ZoomReset, ctx),
         KeyBinding::new("ctrl-à", ZoomReset, ctx),
     ]);
@@ -390,6 +410,98 @@ impl PhoenixApp {
         self.message_list.scroll_by(if up { -d } else { d });
     }
 
+    pub fn sections(&self) -> Vec<Section> {
+        let mut v = vec![Section::Back, Section::Rail];
+        if self.selected_guild.is_some() && self.selected_channel.is_some() {
+            v.push(Section::Channels);
+        }
+        v.push(Section::Account);
+        if self.selected_channel.and_then(|c| self.messages.get(&c)).is_some_and(|m| !m.msgs.is_empty()) {
+            v.push(Section::Messages);
+        }
+        if self.first_member().is_some() {
+            v.push(Section::Members);
+        }
+        v
+    }
+
+    fn first_member(&self) -> Option<Id> {
+        let g = self.selected_guild.filter(|_| self.show_members)?;
+        let ms = self.members.get(&g)?;
+        self.member_rows.iter().find_map(|r| match r {
+            crate::app::MemberRow::Member(i) => ms.get(*i).map(|m| m.user),
+            crate::app::MemberRow::Header(_) => None,
+        })
+    }
+
+    fn rail_key(id: u64) -> u64 {
+        ui::states::key(("rail-row", id))
+    }
+
+    fn section_key(&self, s: Section) -> Option<u64> {
+        match s {
+            Section::Back => Some(BACK_KEY),
+            Section::Rail => Some(Self::rail_key(self.selected_guild.map_or(HOME_RAIL_KEY, |g| g.0))),
+            Section::Channels => self.selected_channel.map(|c| ui::states::key(("chrow", c.0))),
+            Section::Account => Some(ACCOUNT_KEY),
+            Section::Messages => None,
+            Section::Members => self.first_member().map(|u| ui::states::key(("member", u.0))),
+        }
+    }
+
+    pub fn current_section(&self, window: &gpui::Window) -> Option<Section> {
+        if message::focused().is_some() && self.focus.is_focused(window) {
+            return Some(Section::Messages);
+        }
+        let k = ui::focus_ring::focused_key(window)?;
+        if k == BACK_KEY {
+            return Some(Section::Back);
+        }
+        if k == ACCOUNT_KEY {
+            return Some(Section::Account);
+        }
+        let rail = std::iter::once(HOME_RAIL_KEY)
+            .chain(self.guilds.iter().map(|g| g.id.0))
+            .chain(self.dms.iter().map(|d| d.0))
+            .chain(self.nav.folders.iter().filter_map(|f| f.id).map(|id| id | (1 << 63)));
+        if rail.map(Self::rail_key).any(|r| r == k) {
+            return Some(Section::Rail);
+        }
+        let chan = self.sidebar_rows.iter().any(|r| match r {
+            crate::app::SidebarRow::Channel(id) | crate::app::SidebarRow::Thread(id) => ui::states::key(("chrow", id.0)) == k,
+            _ => false,
+        });
+        if chan {
+            return Some(Section::Channels);
+        }
+        let member = self.selected_guild.and_then(|g| self.members.get(&g)).is_some_and(|ms| ms.iter().any(|m| ui::states::key(("member", m.user.0)) == k));
+        member.then_some(Section::Members)
+    }
+
+    pub fn jump_section(&mut self, back: bool, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let secs = self.sections();
+        let n = secs.len();
+        let at = self.current_section(window).and_then(|c| secs.iter().position(|s| *s == c));
+        let next = match at {
+            None => 0,
+            Some(i) if back => (i + n - 1) % n,
+            Some(i) => (i + 1) % n,
+        };
+        self.focus_section(secs[next], window, cx);
+    }
+
+    pub fn focus_section(&mut self, s: Section, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if s == Section::Messages {
+            self.focus_last_message(window, cx);
+            return;
+        }
+        message::clear_focused();
+        if let Some(k) = self.section_key(s) {
+            ui::focus_ring::focus_key(k, window, cx);
+        }
+        cx.notify();
+    }
+
     fn copy_channel_link(&self, cx: &mut Context<Self>) {
         let Some(ch) = self.selected_channel else { return };
         let guild = self.channels.get(&ch).and_then(|c| c.guild).map_or("@me".to_string(), |g| g.0.to_string());
@@ -488,6 +600,8 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
         }
     }))
     .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url("https://support.discord.com")))
+    .on_action(cx.listener(|a, _: &NextSection, w, cx| a.jump_section(false, w, cx)))
+    .on_action(cx.listener(|a, _: &PrevSection, w, cx| a.jump_section(true, w, cx)))
 }
 
 pub const MESSAGE_SHORTCUTS: &[(&str, &str)] = &[

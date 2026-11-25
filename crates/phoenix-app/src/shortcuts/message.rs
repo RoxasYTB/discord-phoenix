@@ -20,6 +20,10 @@ fn set_focused(v: Option<(Id, Id)>) {
     FOCUSED.with(|f| f.set(v));
 }
 
+pub fn clear_focused() {
+    set_focused(None);
+}
+
 pub fn speak(text: &str) -> bool {
     if text.trim().is_empty() {
         return false;

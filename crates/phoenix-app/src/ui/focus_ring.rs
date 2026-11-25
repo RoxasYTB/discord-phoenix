@@ -43,6 +43,18 @@ pub fn tab_focused(handle: &FocusHandle, window: &Window) -> bool {
     handle.is_focused(window) && TABBED.with(|t| t.borrow().as_ref() == Some(handle))
 }
 
+pub fn focus_key(key: u64, window: &mut Window, cx: &mut App) -> bool {
+    let Some(h) = HANDLES.with(|h| h.borrow().get(&key).cloned()) else { return false };
+    window.focus(&h, cx);
+    TABBED.with(|t| *t.borrow_mut() = Some(h));
+    window.refresh();
+    true
+}
+
+pub fn focused_key(window: &Window) -> Option<u64> {
+    HANDLES.with(|h| h.borrow().iter().find(|(_, f)| f.is_focused(window)).map(|(k, _)| *k))
+}
+
 pub fn owns_focus(window: &Window) -> bool {
     HANDLES.with(|h| h.borrow().values().any(|f| f.is_focused(window)))
 }

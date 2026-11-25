@@ -1240,6 +1240,7 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                     }
                 }))
                 .overflow_hidden()
+                .map(|d| crate::ui::focus_ring::ring_inset(d, crate::shortcuts::ACCOUNT_KEY, 4., 4., 4.))
                 .child(crate::ui::avatar_with_status_deco(
                     Some(&app.me),
                     32.,
