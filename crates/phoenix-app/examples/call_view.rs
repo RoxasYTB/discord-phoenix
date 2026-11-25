@@ -81,12 +81,19 @@ fn main() -> anyhow::Result<()> {
                 };
                 let Some(lounge) = target else { return };
                 if dm && let Some(ch) = app.channels.get_mut(&lounge) {
-                    ch.voice_users = vec![me, Id(3)];
+                    ch.voice_users = vec![me, Id(3), Id(4), Id(5), Id(6), Id(7)];
                 }
                 if let Some(ch) = app.channels.get_mut(&lounge)
                     && !ch.voice_users.contains(&me)
                 {
                     ch.voice_users.insert(0, me);
+                }
+                if !dm && let Some(ch) = app.channels.get_mut(&lounge) {
+                    for u in [Id(3), Id(4), Id(5), Id(6), Id(7)] {
+                        if !ch.voice_users.contains(&u) {
+                            ch.voice_users.push(u);
+                        }
+                    }
                 }
                 app.voice_channel = Some(lounge);
                 app.open_channel_chat(lounge, cx);
@@ -99,7 +106,10 @@ fn main() -> anyhow::Result<()> {
                 phoenix_app::ui::call_view::set_strip_open(!no_strip);
                 phoenix_app::ui::voice_panel::set_flags(me, VoiceFlags { stream: !voice_only, ..Default::default() });
                 phoenix_app::ui::call_view::set_split_height(split, false);
+                phoenix_app::ui::voice_panel::set_flags(Id(3), VoiceFlags { video: !voice_only, ..Default::default() });
                 phoenix_app::ui::voice_panel::set_flags(Id(4), VoiceFlags { self_mute: true, ..Default::default() });
+                phoenix_app::ui::voice_panel::set_flags(Id(5), VoiceFlags { server_mute: true, ..Default::default() });
+                phoenix_app::ui::voice_panel::set_flags(Id(6), VoiceFlags { server_deaf: true, ..Default::default() });
                 phoenix_app::ui::voice_panel::set_flags(Id(7), VoiceFlags { self_deaf: true, ..Default::default() });
                 app.voice.speaking.insert(Id(3));
                 phoenix_app::ui::call_menus::open(menu);

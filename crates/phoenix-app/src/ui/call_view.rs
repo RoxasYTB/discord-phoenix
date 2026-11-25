@@ -255,7 +255,11 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         Focus::Auto => tiles.iter().position(|t| t.stream),
     };
     let (fade, fading) = overlay_opacity();
-    if fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active() || crate::ui::voice_effects::has_effects() {
+    let ring_fading = ch.voice_users.iter().any(|&u| {
+        let active = app.voice.is_speaking(u) || crate::voice::soundboard::is_user_playing(u);
+        crate::ui::voice_panel::speaking_fade(u, active).1
+    });
+    if fading || ring_fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active() || crate::ui::voice_effects::has_effects() {
         window.request_animation_frame();
     }
 
@@ -376,7 +380,11 @@ pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, 
     let max = (column_h - SPLIT_CHAT_RESERVE).max(SPLIT_MIN_H);
     let h = if popped { SPLIT_POPPED_H } else { split_height(stored_split_height(), column_h, video) };
     let (fade, fading) = overlay_opacity();
-    if video && (fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active()) {
+    let ring_fading = ch.voice_users.iter().any(|&u| {
+        let active = app.voice.is_speaking(u) || crate::voice::soundboard::is_user_playing(u);
+        crate::ui::voice_panel::speaking_fade(u, active).1
+    });
+    if ring_fading || (video && (fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active())) {
         window.request_animation_frame();
     }
     let header = header.bg(gpui::transparent_black()).border_color(gpui::transparent_black());
@@ -443,8 +451,38 @@ fn m_header() -> f32 {
     crate::theme::m::HEADER_H + 1.
 }
 
+fn voice_status_icon(f: crate::model::VoiceFlags, local_muted: bool) -> Option<(&'static str, bool)> {
+    if f.server_deaf {
+        Some(("headphones-deny", true))
+    } else if f.server_mute || local_muted {
+        Some(("mic-deny", true))
+    } else if f.self_deaf {
+        Some(("headphones-off", false))
+    } else if f.self_mute {
+        Some(("mic-off", false))
+    } else {
+        None
+    }
+}
+
 fn voice_avatar(app: &PhoenixApp, user: Id, size: f32) -> AnyElement {
-    let speaking = app.voice.is_speaking(user);
+    let me = user == app.me.id;
+    let mut f = crate::ui::voice_panel::flags(user);
+    if me {
+        f.self_mute = app.mic_muted;
+        f.self_deaf = app.deafened;
+    }
+    let local_muted = !me && crate::ui::voice_panel::prefs().lock().user(user).muted;
+    let muted = f.self_mute || f.server_mute;
+    let deaf = f.self_deaf || f.server_deaf;
+    let can_ring = !muted && !deaf && !local_muted;
+    let sb = crate::voice::soundboard::is_user_playing(user);
+    let active = can_ring && (app.voice.is_speaking(user) || sb);
+    let (ring_alpha, _) = crate::ui::voice_panel::speaking_fade(user, active);
+    let ring_color = t(if sb { idx::BRAND_500 } else { idx::STATUS_SPEAKING });
+    let status = voice_status_icon(f, local_muted);
+    let (badge_box, badge_icon) = if size >= 72. { (24., 16.) } else { (16., 10.) };
+    let cutout = c(tok(idx::BACKGROUND_SURFACE_HIGH));
     div()
         .id(SharedString::from(format!("dm-call-avatar-{}", user.0)))
         .relative()
@@ -453,14 +491,69 @@ fn voice_avatar(app: &PhoenixApp, user: Id, size: f32) -> AnyElement {
         .flex_none()
         .rounded_full()
         .child(avatar(app.users.get(&user), size * crate::theme::zoom()))
-        .when(speaking, |d| {
+        .when(ring_alpha > 0.001, |d| {
             d.child(
                 div()
                     .absolute()
                     .inset_0()
                     .rounded_full()
+                    .opacity(ring_alpha)
                     .border(z(2.))
-                    .border_color(t(idx::STATUS_POSITIVE)),
+                    .border_color(ring_color)
+                    .child(div().size_full().rounded_full().border(z(1.)).border_color(t(idx::BACKGROUND_BASE_LOWER))),
+            )
+        })
+        .when(f.stream, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .top(z(-2.))
+                    .right(z(-6.))
+                    .h(z(16.))
+                    .px(z(6.))
+                    .rounded_full()
+                    .bg(t(idx::BACKGROUND_FEEDBACK_NOTIFICATION))
+                    .flex()
+                    .items_center()
+                    .text_size(z(10.))
+                    .line_height(z(14.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(t(idx::WHITE))
+                    .child(crate::t!("voice.live")),
+            )
+        })
+        .when(f.video && !f.stream, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .right_0()
+                    .size(z(badge_box))
+                    .rounded_full()
+                    .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
+                    .border(z(2.))
+                    .border_color(cutout)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(glyph("icons/voice/camera.svg", badge_icon - 2., t(idx::WHITE))),
+            )
+        })
+        .when_some(status, |d, (icon_name, _)| {
+            d.child(
+                div()
+                    .absolute()
+                    .bottom_0()
+                    .right_0()
+                    .size(z(badge_box))
+                    .rounded_full()
+                    .bg(t(idx::RED_400))
+                    .border(z(2.))
+                    .border_color(cutout)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(named(icon_name, badge_icon, t(idx::WHITE))),
             )
         })
         .into_any_element()
@@ -1065,13 +1158,12 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
                     .child(pill(Some(glyph("icons/voice/screen.svg", 16., white).into_any_element()), Some(name))),
             )
     } else {
-        let state_icon = if f.self_deaf || f.server_deaf {
-            Some(crate::ui::icon(crate::assets::Icon::HeadphonesOff, 16. * crate::theme::zoom(), white).into_any_element())
-        } else if f.self_mute || f.server_mute {
-            Some(crate::ui::icon(crate::assets::Icon::MicOff, 16. * crate::theme::zoom(), white).into_any_element())
-        } else {
-            None
-        };
+        let local_muted = !me && crate::ui::voice_panel::prefs().lock().user(tile.user).muted;
+        let state_icon = voice_status_icon(f, local_muted).map(|(name, critical)| {
+            let color = if critical { t(idx::ICON_FEEDBACK_CRITICAL) } else { white };
+            named(name, 16., color).into_any_element()
+        });
+        let (ring_alpha, _) = crate::ui::voice_panel::speaking_fade(tile.user, speaking || sb);
         base.bg(tile_color(app, tile.user))
             .flex()
             .items_center()
@@ -1081,6 +1173,21 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
                 None => d.child(avatar(u, 80. * crate::theme::zoom())),
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))
+            .when(f.video, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .top(z(8.))
+                        .right(z(8.))
+                        .p(z(6.))
+                        .rounded_full()
+                        .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(glyph("icons/voice/camera.svg", 16., t(idx::CONTROL_OVERLAY_SECONDARY_TEXT_DEFAULT))),
+                )
+            })
             .child(
                 div()
                     .absolute()
@@ -1091,14 +1198,15 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
                     .opacity(fade)
                     .child(pill(state_icon, Some(name))),
             )
-            .when(speaking || sb, |d| {
+            .when(ring_alpha > 0.001, |d| {
                 d.child(
                     div()
                         .absolute()
                         .inset_0()
                         .rounded(z(8.))
+                        .opacity(ring_alpha)
                         .border(z(2.))
-                        .border_color(t(if sb { idx::BRAND_500 } else { idx::STATUS_POSITIVE }))
+                        .border_color(t(if sb { idx::BRAND_500 } else { idx::STATUS_SPEAKING }))
                         .child(div().size_full().rounded(z(6.)).border(z(1.)).border_color(t(idx::BLACK))),
                 )
             })
@@ -1403,5 +1511,16 @@ mod tests {
         let (cols, w) = grid(1, 800., 300., 8.);
         assert_eq!(cols, 1);
         assert!((w - 300. * 16. / 9.).abs() < 0.01);
+    }
+
+    #[test]
+    fn voice_status_icon_follows_client_priority() {
+        use crate::model::VoiceFlags;
+        assert_eq!(super::voice_status_icon(VoiceFlags::default(), false), None);
+        assert_eq!(super::voice_status_icon(VoiceFlags { self_mute: true, ..Default::default() }, false), Some(("mic-off", false)));
+        assert_eq!(super::voice_status_icon(VoiceFlags { self_deaf: true, self_mute: true, ..Default::default() }, false), Some(("headphones-off", false)));
+        assert_eq!(super::voice_status_icon(VoiceFlags { server_mute: true, self_deaf: true, ..Default::default() }, false), Some(("mic-deny", true)));
+        assert_eq!(super::voice_status_icon(VoiceFlags { server_deaf: true, server_mute: true, ..Default::default() }, false), Some(("headphones-deny", true)));
+        assert_eq!(super::voice_status_icon(VoiceFlags::default(), true), Some(("mic-deny", true)));
     }
 }

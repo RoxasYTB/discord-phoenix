@@ -388,20 +388,55 @@ fn signal_bars(color: Hsla) -> impl IntoElement {
         .children([6., 10., 14.].map(|h| div().w(z(3.)).h(z(h)).rounded(z(1.)).bg(color)))
 }
 
+thread_local! {
+    static SPEAK_FADE: std::cell::RefCell<std::collections::HashMap<u64, (bool, Option<std::time::Instant>)>> = Default::default();
+}
+
+pub const SPEAK_FADE_MS: u64 = 100;
+
+pub fn speaking_fade(user: Id, active: bool) -> (f32, bool) {
+    SPEAK_FADE.with(|m| {
+        let mut m = m.borrow_mut();
+        let entry = m.entry(user.0).or_insert((active, None));
+        if entry.0 != active {
+            entry.0 = active;
+            entry.1 = Some(std::time::Instant::now());
+        }
+        let Some(since) = entry.1 else {
+            return (if active { 1. } else { 0. }, false);
+        };
+        let p = (since.elapsed().as_secs_f32() / (SPEAK_FADE_MS as f32 / 1000.)).clamp(0., 1.);
+        let eased = 1. - (1. - p) * (1. - p);
+        if p >= 1. {
+            entry.1 = None;
+            (if active { 1. } else { 0. }, false)
+        } else {
+            (if active { eased } else { 1. - eased }, true)
+        }
+    })
+}
+
 pub fn speaking_ring(avatar: AnyElement, size: f32, speaking: bool) -> AnyElement {
+    speaking_ring_alpha(avatar, size, if speaking { 1. } else { 0. }, false)
+}
+
+pub fn speaking_ring_alpha(avatar: AnyElement, size: f32, alpha: f32, soundboard: bool) -> AnyElement {
+    let color = t(if soundboard { idx::BRAND_500 } else { idx::STATUS_SPEAKING });
     div()
         .size(px(size))
         .flex_none()
         .relative()
         .child(avatar)
-        .when(speaking, |d| {
+        .when(alpha > 0.001, |d| {
             d.child(
                 div()
                     .absolute()
                     .inset_0()
                     .rounded_full()
-                    .border_2()
-                    .border_color(t(idx::GREEN_360)),
+                    .opacity(alpha)
+                    .border(z(2.))
+                    .border_color(color)
+                    .child(div().size_full().rounded_full().border(z(1.)).border_color(t(idx::BACKGROUND_BASE_LOWER))),
             )
         })
         .into_any_element()
@@ -643,7 +678,12 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
             }
         })
         .children(crate::ui::voice_row::stream_preview(app, user, entity.clone()))
-        .child(speaking_ring(crate::ui::avatar_cdn(u, 24., 32), 24., speaking))
+        .child(speaking_ring_alpha(
+            crate::ui::avatar_cdn(u, 24., 32),
+            24.,
+            speaking_fade(user, speaking || crate::voice::soundboard::is_user_playing(user)).0,
+            crate::voice::soundboard::is_user_playing(user),
+        ))
         .child(
             div()
                 .flex_1()
@@ -674,12 +714,12 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
                 .items_center()
                 .gap(z(4.))
                 .when(f.video, |d| d.child(asset_icon(VIDEO, 16., state)))
-                .when(local_muted, |d| d.child(icon(Icon::MicOff, 16., red)))
-                .when(f.server_mute && !local_muted, |d| d.child(icon(Icon::MicOff, 16., red)))
+                .when(local_muted, |d| d.child(svg().path(crate::icons::path("mic-deny")).size(z(16.)).flex_none().text_color(red)))
+                .when(f.server_mute && !local_muted, |d| d.child(svg().path(crate::icons::path("mic-deny")).size(z(16.)).flex_none().text_color(red)))
                 .when((f.self_mute || f.self_deaf) && !f.server_mute && !local_muted, |d| {
                     d.child(icon(Icon::MicOff, 16., state))
                 })
-                .when(f.server_deaf, |d| d.child(icon(Icon::HeadphonesOff, 16., red)))
+                .when(f.server_deaf, |d| d.child(svg().path(crate::icons::path("headphones-deny")).size(z(16.)).flex_none().text_color(red)))
                 .when(f.self_deaf && !f.server_deaf, |d| d.child(icon(Icon::HeadphonesOff, 16., state)))
                 .when(f.stream, |d| {
                     d.child(
