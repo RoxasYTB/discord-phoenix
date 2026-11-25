@@ -544,7 +544,8 @@ impl Backend for DiscordBackend {
 
     fn parity(&self, req: crate::commands::ParityRequest) -> BoxFuture<crate::commands::ParityReply> {
         self.with_session(move |inner, s| async move {
-            let emit: crate::backend::EventSink = Arc::new(move |e| inner.emit(e));
+            let sink = inner.clone();
+            let emit: crate::backend::EventSink = Arc::new(move |e| sink.emit(e));
             let reply = crate::commands::exec::request(s.rest.clone(), req, emit).await?;
             if let crate::commands::ParityReply::Messages(ref msgs) = reply {
                 let mut by_guild: std::collections::HashMap<api::Snowflake, Vec<api::Snowflake>> = std::collections::HashMap::new();
