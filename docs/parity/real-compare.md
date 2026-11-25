@@ -460,3 +460,49 @@ RESTANT(S)", swatches and ring line up), Voice content 3.3 → 3.0 %, Discover c
 "4 625 124 membres" (the third card changed with the live featured list). Follow-up: Discover dots
 `.dotOnline_9dea1c` green-360 / `.dotOffline_9dea1c` primary-300 (the member dot was text-muted),
 mic meter height 28 (size md in Voice settings, measured 24 px pills).
+
+## Glitch hunt 6 (2026-11-25, wt/glitch6)
+
+Offscreen renders only, no CDP pass: `real_shots` with every location and setting given by env
+(`PHX_GUILD` / `PHX_CHANNEL` = `#phoenix`, `PHX_THEME`, `PHX_DENSITY`, `PHX_FONT`, `PHX_AUDIO`,
+`PHX_SIDEBAR_W`, `PHX_NO_SCROLL`, `PHX_NO_FEED_SYNC`, …) and a `node` stub first in `PATH`, so the
+example never reaches the client. 1536×840 at dpr 1.5 (plus 1024×640 and dpr 1), Onyx, dark and
+light; 26 user settings pages, 18 server settings pages, 15 popouts / menus / modals, Friends and a
+member profile. Demo: `views` (11 scenes), `content_shots` (Onyx, light), `theme_shots` (dark and
+light at 150 %, Onyx at 100 %), `dialog_shots`. Renders stay in `/mnt/windata/project-phoenix/compare/glitch6`.
+References: CSS and JS of the local client cache (`~/discord-phoenix-ref/current-client`).
+
+### Fixed
+
+| Zone | Glitch | Client reference | Fix |
+|---|---|---|---|
+| Settings › Connected devices | rows with a log out ✕ started their text 3 px left of the current device row | the 48 px icon tile does not shrink | `settings/nested.rs` `session_row`: tile `flex_none`, text column `flex_1 min_w_0` |
+| Settings › Voice & Video | long device names cut mid-glyph (« …par défaut: Lo, ») | `.value_uFkqU2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}` | `settings/voice.rs` `select`: `text_ellipsis` |
+| Profile editor | « Ajouter des pronoms » cut (« …pronon ») | dump `vanilla-settings-profile-editor-switcher`: `sizer_CJLDJI` 133.6 px, padding 0 5px, 14/18 | input padding 5 px, 14/18 |
+| Settings › Nitro | super reactions and custom emoji had the same smiley, order swapped | module `f8ea05…` list `es`: Upload, `ReactionIcon` (KjrZ8Z), `SuperReactionIcon` (taMwg/), `ScreenArrowIcon`, `UserSquareIcon` | `pages.rs` perks + `super-reaction`, `user-square` icons (extracted, with fallbacks) |
+| Settings and modal text inputs | text 22 px from the field edge and 14 px high (double padding) | `.input_0PLWhS{padding-inline:var(--space-12)}`, font inherited (16 px) | `modals::input_box`: input `px 0`, 16/20; channel name field keeps its 10 px inset |
+| Server settings › Soundboard | local sentence without plural / no-break spaces | `HHCdvU` | `discord.yml` `gs.expr.sound_slots` |
+| Quick switcher | scrollbar drawn over the guild names on the right | `.scroller_a1DYes{margin-inline-end:-17px}` | `switcher.rs`: host `mr -17`, rows keep 16 px for the bar |
+| Guild rail | acronyms sized 16/14/12 (1–2 letters too small, 7+ overflowed) | module 67811 `A=[18,18,16,16,14,12,10]`, `A[len-1]` | `server_bar.rs` |
+| Chat system messages | boost / pin / join / group sentences jumped below the author and were cut at the column edge (worse at 150 %) | inline text in the client | `chat/system.rs`: text fragments flow word by word (`message_ext::words`) |
+| Chat « started a thread: » | empty thread name when the thread is not loaded | chunk `2b1d25…` `threadName: channelName ?? message.content` | fallback to `message.content` + « See all threads » |
+| Event cards | voice events: empty location icon (`voice` is not an icon); external events: calendar | `LocationIcon` for a location, the channel otherwise | `events.rs`: `speaker` / `event/location` |
+| View as role bar | back button with an empty icon (`chevron-left` does not exist) | module 792831 arrow, direction LEFT, 16 px | `arrow-left` built-in polygon |
+
+Verified on new renders (int-bin c99c0823 for the first five rows).
+
+### Checked, not bugs
+
+- Server settings › Members « 1mo », « 9a », « 2 j »: client strings `XzBNbS`, `I1E8p6`, `GBLpQ8`.
+- Threads popout « anciens fils » lowercase: client `wUNQ+w`.
+- « View All Stats » in English on app widget cards: hard-coded in the client (`8e7aee…`).
+- Boost page, long guild names wrap: `.guildDetails_rH8mBz` has no ellipsis.
+- Thin scrollbars always visible in settings: `.thin_*` thumb has no fade.
+- 🖤 role icon next to some names in chat: the Twemoji black heart.
+
+### Open (not fixed here)
+
+- Server settings › Accès is an empty page (title only, generic fallback): the page is not built.
+- Server tag preview: the « Lily » sample hard-codes the tag text `GLAD`, and the « currently using » sample shows an empty avatar circle; the client chunk of this page is not in the cache, so not changed.
+- Friends › Active Now: a game without an image (Brawlhalla) leaves an empty 32 px tile; client fallback not found in the cache.
+- Demo only: `content_shots` shows a raw `<sound:900:901>` token in a message (markdown, wt/dm-call); `views forum` / `post` render the offline error state, and `dialog_shots` has no avatars (harness prefetch).
