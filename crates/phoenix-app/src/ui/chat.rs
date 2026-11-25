@@ -40,6 +40,7 @@ pub mod command_msg;
 pub mod slash;
 pub mod spoiler;
 pub mod system;
+pub mod embed_rules;
 pub use state::ChatState;
 
 pub(crate) fn tk(i: usize) -> gpui::Hsla {
@@ -2102,11 +2103,16 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                 div()
                     .flex_1()
                     .min_w_0()
+                    .flex()
+                    .flex_wrap()
                     .text_size(z(12.))
                     .line_height(z(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(tk(idx::TEXT_DEFAULT))
-                    .child(SharedString::from(parts.join(" \u{2022} "))),
+                    .children(parts.into_iter().enumerate().flat_map(|(i, p)| {
+                        let sep = (i > 0).then(|| div().mx(z(4.)).child("\u{2022}").into_any_element());
+                        sep.into_iter().chain(std::iter::once(div().child(SharedString::from(p)).into_any_element()))
+                    })),
             )
     });
 
@@ -2123,7 +2129,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
             .child(
                 div()
                     .text_size(z(14.))
-                    .line_height(z(18.))
+                    .line_height(z(22.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tk(idx::TEXT_STRONG))
                     .when(url.is_some(), |d| d.hover(|s| s.underline()))
@@ -2147,14 +2153,16 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
 
     div()
         .mt(z(4.))
-        .max_w(z(516.))
+        .max_w(z(embed_rules::max_width(e).map_or(521., |w| w.min(521.))))
         .flex()
         .rounded(z(4.))
         .overflow_hidden()
         .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
-        .border_1()
+        .border_t_1()
+        .border_r_1()
+        .border_b_1()
         .border_color(tk(idx::BORDER_SUBTLE))
-        .child(div().w(z(4.)).flex_none().bg(e.color.map(c).unwrap_or_else(|| tk(idx::BORDER_NORMAL))))
+        .child(div().w(z(4.)).flex_none().bg(embed_rules::border_color(e).map(c).unwrap_or_else(|| tk(idx::BORDER_NORMAL))))
         .child(
             div()
                 .flex_1()
@@ -2181,7 +2189,12 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                         .when_some(e.description.clone().filter(|_| !matches!(e.kind.as_deref(), Some("image" | "video" | "gifv"))), |d, t| d.child(embed_markdown(app, entity, &t, 14.)))
                         .children(fields)
                         .when_some(big, |d, m| {
-                            let size = media::fit(m.width, m.height, 400., 300.);
+                            let (mw, mh) = embed_rules::media_max(e);
+                            let (sw, sh) = match e.video.as_ref().filter(|v| e.kind.as_deref() == Some("video") && v.width > 0 && v.height > 0) {
+                                Some(v) => (v.width, v.height),
+                                None => (m.width, m.height),
+                            };
+                            let size = media::fit(sw, sh, mw, mh);
                             let original = m.url.clone();
                             let video = (e.kind.as_deref() == Some("video")).then(|| e.url.clone().unwrap_or_else(|| m.url.clone()));
                             d.child(

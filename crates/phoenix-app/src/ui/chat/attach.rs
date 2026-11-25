@@ -62,6 +62,53 @@ fn hover_download(group: SharedString, url: SharedString) -> AnyElement {
         .into_any_element()
 }
 
+const FILE_RULES: [(&str, &[&str]); 9] = [
+    ("acrobat", &["pdf"]),
+    ("sketch", &["sketch"]),
+    ("ai", &["ai"]),
+    ("archive", &["rar", "zip", "7z", "tar", "tar.gz"]),
+    (
+        "code",
+        &[
+            "c++", "cpp", "cc", "c", "h", "hpp", "mm", "m", "json", "js", "ts", "rb", "rake", "py", "asm", "fs", "pyc", "dtd", "cgi", "bat", "rss", "java", "graphml", "idb", "lua", "o", "gml", "prl", "sls", "conf",
+            "cmake", "make", "sln", "vbe", "cxx", "wbf", "vbs", "r", "wml", "php", "bash", "applescript", "fcgi", "yaml", "ex", "exs", "sh", "ml", "actionscript",
+        ],
+    ),
+    ("document", &["txt", "rtf", "doc", "docx", "md", "pages", "ppt", "pptx", "pptm", "key", "log"]),
+    ("spreadsheet", &["xls", "xlsx", "numbers", "csv"]),
+    ("webcode", &["html", "xhtml", "htm", "xml", "xsd", "css", "styl"]),
+    ("audio", &["mp3", "ogg", "opus", "wav", "aiff", "flac"]),
+];
+
+pub fn file_class(filename: &str) -> &'static str {
+    let name = filename.to_lowercase();
+    if name.ends_with(".pdf") {
+        return "acrobat";
+    }
+    if name.contains(".ae") {
+        return "ae";
+    }
+    FILE_RULES.iter().skip(1).find(|(_, exts)| exts.iter().any(|x| name.ends_with(&format!(".{x}")))).map_or("unknown", |(k, _)| *k)
+}
+
+pub fn file_icon_url(class: &str) -> &'static str {
+    match class {
+        "acrobat" => "https://discord.com/assets/a42338c030af6d9c.svg",
+        "ae" => "https://discord.com/assets/88b289225ff6142a.svg",
+        "ai" => "https://discord.com/assets/93636da24d7ab467.svg",
+        "archive" => "https://discord.com/assets/f89b66e97ea52ba7.svg",
+        "audio" => "https://discord.com/assets/a6db1d05d35f13d0.svg",
+        "code" => "https://discord.com/assets/f4bad77442422ded.svg",
+        "document" => "https://discord.com/assets/9ebe3ef63aafee84.svg",
+        "ps" => "https://discord.com/assets/1084490cf680dd7c.svg",
+        "sketch" => "https://discord.com/assets/c9f0992f0ab98d49.svg",
+        "spreadsheet" => "https://discord.com/assets/b8ca4488a6d443bc.svg",
+        "video" => "https://discord.com/assets/98178bd2173d947a.svg",
+        "webcode" => "https://discord.com/assets/6e688b0c124e0ca8.svg",
+        _ => "https://discord.com/assets/94660b205108a49f.svg",
+    }
+}
+
 pub fn file_card(a: &Attachment) -> AnyElement {
     let url = a.url.clone();
     let group: SharedString = format!("file-{}", a.url).into();
@@ -83,7 +130,7 @@ pub fn file_card(a: &Attachment) -> AnyElement {
                 .shadow(crate::ui::inbox::low_shadow())
                 .flex()
                 .items_center()
-                .child(named_icon("file", 40., tk(idx::TEXT_LINK)).w(z(30.)).h(z(40.)).mr(z(8.)))
+                .child(img(SharedString::new_static(file_icon_url(file_class(&a.filename)))).flex_none().w(z(30.)).h(z(40.)).mr(z(8.)))
                 .child(
                     div()
                         .flex_1()
@@ -403,6 +450,26 @@ pub fn upload_progress_card(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn file_icons_follow_the_client_name_rules() {
+        assert_eq!(super::file_class("Introduction à la cyber V1.3fr.pdf"), "acrobat");
+        assert_eq!(super::file_class("REPORT.PDF"), "acrobat");
+        assert_eq!(super::file_class("clip.aep"), "ae");
+        assert_eq!(super::file_class("my.aesthetic.png"), "ae");
+        assert_eq!(super::file_class("logs.tar.gz"), "archive");
+        assert_eq!(super::file_class("backup.gz"), "unknown");
+        assert_eq!(super::file_class("main.rs"), "unknown");
+        assert_eq!(super::file_class("main.c"), "code");
+        assert_eq!(super::file_class("notes.md"), "document");
+        assert_eq!(super::file_class("data.csv"), "spreadsheet");
+        assert_eq!(super::file_class("page.html"), "webcode");
+        assert_eq!(super::file_class("song.flac"), "audio");
+        assert_eq!(super::file_class("photo.png"), "unknown");
+        assert_eq!(super::file_class("README"), "unknown");
+        assert!(super::file_icon_url("acrobat").ends_with("a42338c030af6d9c.svg"));
+        assert!(super::file_icon_url("unknown").ends_with("94660b205108a49f.svg"));
+    }
+
     use super::human_size;
 
     #[test]
