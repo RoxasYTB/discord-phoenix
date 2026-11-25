@@ -82,7 +82,7 @@ pub fn plural(code: &str, n: f64) -> &'static str {
         return if matches!(lang, "cs" | "lt") { "many" } else { "other" };
     }
     let i = n.abs() as u64;
-    if i != 0 && i % 1_000_000 == 0 && d.plural.get(1) == Some(&b'o') {
+    if i != 0 && i.is_multiple_of(1_000_000) && d.plural.get(1) == Some(&b'o') {
         let lang = code.split('-').next().unwrap_or("");
         if matches!(lang, "fr" | "es" | "it" | "pt") {
             return "many";

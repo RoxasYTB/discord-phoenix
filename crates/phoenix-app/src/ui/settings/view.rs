@@ -277,22 +277,6 @@ fn devices() -> Div {
     )
 }
 
-pub const LOCALES: &[(&str, &str)] = &[
-    ("en-US", "English, US"),
-    ("en-GB", "English, UK"),
-    ("fr", "Français"),
-    ("de", "Deutsch"),
-    ("es-ES", "Español"),
-    ("it", "Italiano"),
-    ("pt-BR", "Português do Brasil"),
-    ("nl", "Nederlands"),
-    ("pl", "Polski"),
-    ("ru", "Русский"),
-    ("ja", "日本語"),
-    ("ko", "한국어"),
-    ("zh-CN", "中文"),
-];
-
 
 pub(super) fn theme_card(t: AppTheme, selected: bool) -> Stateful<Div> {
     div()
