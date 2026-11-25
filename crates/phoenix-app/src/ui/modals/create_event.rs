@@ -22,6 +22,8 @@ pub const LOCATION_MAX: usize = 100;
 pub const DESCRIPTION_MAX: usize = 1000;
 const CREATE_EVENTS: u64 = 1 << 44;
 const MANAGE_EVENTS: u64 = 1 << 33;
+const CREATE_INVITE: u64 = 1;
+pub const COVER_EDIT_ICON: &str = "https://discord.com/assets/8f18dfd4baacebf4.svg";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -66,6 +68,9 @@ pub struct State {
     pub description: Option<Entity<TextareaState>>,
     pub saving: bool,
     pub error: Option<SharedString>,
+    pub cover: Option<std::path::PathBuf>,
+    pub done: bool,
+    pub link: Option<SharedString>,
 }
 
 pub fn default_start(now: DateTime<Local>) -> i64 {
@@ -175,6 +180,30 @@ pub fn recur_options(start: i64) -> Vec<(Recur, SharedString)> {
     v
 }
 
+fn is_locked(app: &PhoenixApp, id: Id) -> bool {
+    app.nav.extras.get(&id).is_some_and(|e| e.locked)
+}
+
+fn channel_icon(kind: Kind, locked: bool) -> &'static str {
+    match (kind, locked) {
+        (Kind::Stage, false) => "stage",
+        (Kind::Stage, true) => "stage-lock",
+        (_, false) => "speaker",
+        (_, true) => "voice-lock",
+    }
+}
+
+pub fn event_link(code: &str, event: Option<Id>) -> String {
+    match event {
+        Some(e) => format!("https://discord.gg/{code}?event={}", e.0),
+        None => format!("https://discord.gg/{code}"),
+    }
+}
+
+fn default_text_channel(app: &PhoenixApp, guild: Id) -> Option<Id> {
+    app.guild_channels.get(&guild).into_iter().flatten().filter_map(|id| app.channels.get(id)).find(|c| c.kind == ChannelKind::Text).map(|c| c.id)
+}
+
 fn voice_channels(app: &PhoenixApp, guild: Id, kind: ChannelKind) -> Vec<(Id, SharedString)> {
     app.guild_channels
         .get(&guild)
@@ -227,7 +256,7 @@ pub fn prepare(s: &mut State, window: &mut Window, cx: &mut Context<PhoenixApp>)
         s.topic = Some(cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("event.topic_ph"))));
     }
     if s.description.is_none() {
-        s.description = Some(cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 10).placeholder(crate::t!("event.description_ph"))));
+        s.description = Some(cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 10)));
     }
 }
 
@@ -331,18 +360,23 @@ fn location_step(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> A
         Some(k) => {
             let list = if k == Kind::Stage { stages } else { voices };
             let label = if k == Kind::Stage { crate::t!("event.stage_channel") } else { crate::t!("event.select_channel") };
-            let current = s.channel.and_then(|id| list.iter().find(|(c, _)| *c == id)).map(|(_, n)| n.clone()).unwrap_or_default();
+            let current = s.channel.and_then(|id| list.iter().find(|(c, _)| *c == id)).map(|(id, n)| (*id, n.clone()));
+            let locked = current.as_ref().is_some_and(|(id, _)| is_locked(app, *id));
             let open = s.open == Some(Open::Channel);
-            let opts = list.iter().map(|(id, n)| (n.clone(), id.0 as i64, Some(*id) == s.channel)).collect();
+            let opts = list.iter().map(|(id, n)| (channel_icon(k, is_locked(app, *id)), n.clone(), id.0 as i64, Some(*id) == s.channel)).collect();
             col = col.child(
                 div()
                     .relative()
                     .flex()
                     .flex_col()
                     .child(field_label(label, true))
-                    .child(select_field("event-channel", current).when(open, |d| d.border_color(c(tok(idx::INPUT_BORDER_ACTIVE)))).on_click(cx.listener(toggle(Open::Channel))))
+                    .child(
+                        channel_field(current.map(|(_, n)| (channel_icon(k, locked), n)))
+                            .when(open, |d| d.border_color(c(tok(idx::INPUT_BORDER_ACTIVE))))
+                            .on_click(cx.listener(toggle(Open::Channel))),
+                    )
                     .when(open, |d| {
-                        d.child(dropdown(
+                        d.child(channel_list(
                             opts,
                             Rc::new(|v| {
                                 set_state(|s| {
@@ -352,12 +386,143 @@ fn location_step(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> A
                             }),
                             cx,
                         ))
-                    }),
+                    })
+                    .when(locked, |d| d.child(text(crate::t!("event.private_hint"), 14., 18., idx::TEXT_SUBTLE).mt(z(8.)))),
             );
         }
         None => {}
     }
     col.into_any_element()
+}
+
+fn channel_field(current: Option<(&'static str, SharedString)>) -> gpui::Stateful<gpui::Div> {
+    let (icon, name) = match current {
+        Some((i, n)) => (Some(i), n),
+        None => (None, SharedString::default()),
+    };
+    select_field("event-channel", SharedString::default()).child(
+        div()
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left(z(12.))
+            .right(z(40.))
+            .flex()
+            .items_center()
+            .gap(z(8.))
+            .when_some(icon, |d, i| d.child(gpui::svg().path(crate::icons::path(i)).size(z(24.)).flex_none().text_color(c(tok(idx::TEXT_STRONG)))))
+            .child(div().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(name)),
+    )
+    .relative()
+}
+
+fn channel_list(options: Vec<(&'static str, SharedString, i64, bool)>, pick: Rc<dyn Fn(i64)>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let mut col = div()
+        .id("event-channel-list")
+        .absolute()
+        .top(z(8.))
+        .left_0()
+        .right_0()
+        .max_h(z(220.))
+        .overflow_y_scroll()
+        .p(z(4.))
+        .rounded(z(8.))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
+        .flex()
+        .flex_col();
+    for (n, (icon, name, v, sel)) in options.into_iter().enumerate() {
+        let pick = pick.clone();
+        col = col.child(
+            div()
+                .id(("event-channel-opt", n))
+                .h(z(40.))
+                .px(z(8.))
+                .rounded(z(4.))
+                .flex()
+                .items_center()
+                .gap(z(8.))
+                .cursor_pointer()
+                .text_size(z(16.))
+                .text_color(c(tok(if sel { idx::TEXT_STRONG } else { idx::TEXT_DEFAULT })))
+                .when(sel, |d| d.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
+                .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    pick(v);
+                    cx.notify();
+                }))
+                .child(gpui::svg().path(crate::icons::path(icon)).size(z(24.)).flex_none().text_color(c(tok(if sel { idx::TEXT_STRONG } else { idx::TEXT_DEFAULT }))))
+                .child(div().min_w_0().truncate().child(name)),
+        );
+    }
+    div().relative().child(gpui::deferred(col).with_priority(30)).into_any_element()
+}
+
+fn pick_cover(cx: &mut Context<PhoenixApp>) {
+    crate::ui::file_pick::pick(&crate::ui::file_pick::IMAGES, cx, |_, path, _| set_state(|s| s.cover = Some(path)));
+}
+
+fn cover_field(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let Some(path) = s.cover.clone() else {
+        return div()
+            .flex()
+            .child(button("event-cover", crate::t!("event.cover_upload"), BtnKind::Primary).h(z(32.)).text_size(z(14.)).on_click(cx.listener(|_, _, _, cx| pick_cover(cx))))
+            .into_any_element();
+    };
+    div()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .id("event-cover-preview")
+                .group("event-cover")
+                .relative()
+                .w_full()
+                .h(z(138.))
+                .mb(z(8.))
+                .cursor_pointer()
+                .on_click(cx.listener(|_, _, _, cx| pick_cover(cx)))
+                .child(div().size_full().rounded(z(8.)).overflow_hidden().child(gpui::img(path).size_full().object_fit(gpui::ObjectFit::Cover)))
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .rounded(z(8.))
+                        .bg(gpui::hsla(0., 0., 0., 0.6))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_size(z(12.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(gpui::white())
+                        .opacity(0.)
+                        .group_hover("event-cover", |d| d.opacity(1.))
+                        .child(crate::t!("event.cover_change")),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .right_0()
+                        .size(z(28.))
+                        .rounded_full()
+                        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(gpui::img(SharedString::from(COVER_EDIT_ICON)).size(z(18.))),
+                ),
+        )
+        .child(
+            div().flex().child(
+                button("event-cover-remove", crate::t!("event.cover_remove"), BtnKind::Primary).h(z(32.)).text_size(z(14.)).on_click(cx.listener(|_, _, _, cx| {
+                    set_state(|s| s.cover = None);
+                    cx.notify();
+                })),
+            ),
+        )
+        .into_any_element()
 }
 
 fn pick_date(which: Open) -> Rc<dyn Fn(CalPick)> {
@@ -486,7 +651,7 @@ fn info_step(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .gap(z(4.))
         .child(text(crate::t!("event.cover"), 16., 20., idx::TEXT_STRONG).font_weight(FontWeight::MEDIUM))
         .child(text(crate::t!("event.cover_hint"), 14., 18., idx::TEXT_SUBTLE))
-        .child(div().flex().child(button("event-cover", crate::t!("event.cover_upload"), BtnKind::Primary).h(z(32.)).text_size(z(14.))));
+        .child(cover_field(s, cx));
     let form = div()
         .flex()
         .flex_col()
@@ -500,7 +665,9 @@ fn info_step(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .flex_col()
                 .child(field_label(crate::t!("event.description"), false))
                 .children(s.description.as_ref().map(|a| {
+                    let empty = a.read(cx).value().is_empty();
                     div()
+                        .relative()
                         .min_h(z(44.))
                         .px(z(10.))
                         .py(z(12.))
@@ -509,6 +676,19 @@ fn info_step(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         .border_1()
                         .border_color(c(tok(idx::INPUT_BORDER_DEFAULT)))
                         .text_size(z(16.))
+                        .when(empty, |d| {
+                            d.child(
+                                div()
+                                    .absolute()
+                                    .top(z(12.))
+                                    .left(z(10.))
+                                    .right(z(10.))
+                                    .text_size(z(16.))
+                                    .line_height(z(20.))
+                                    .text_color(c(tok(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT)))
+                                    .child(crate::t!("event.description_ph")),
+                            )
+                        })
                         .child(Textarea::new(a).appearance(false).bordered(false))
                 })),
         )
@@ -567,7 +747,143 @@ pub fn validity(s: &State, cx: &gpui::App) -> [bool; 3] {
     ]
 }
 
+fn success_slide(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let link = s.link.clone();
+    let copy = link.clone();
+    div()
+        .relative()
+        .w(z(440.))
+        .p(z(8.))
+        .flex()
+        .flex_col()
+        .items_center()
+        .child(
+            div()
+                .id("event-success-close")
+                .absolute()
+                .top(z(4.))
+                .right(z(4.))
+                .cursor_pointer()
+                .text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))
+                .hover(|d| d.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))))
+                .on_click(cx.listener(|_, _, _, cx| {
+                    close_modal();
+                    cx.notify();
+                }))
+                .child(gpui::svg().path(crate::icons::path("close-small")).size(z(24.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
+        )
+        .child(
+            div()
+                .size(z(64.))
+                .rounded_full()
+                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(gpui::svg().path(crate::icons::path("calendar")).size(z(30.)).text_color(c(tok(idx::TEXT_STRONG)))),
+        )
+        .child(text(crate::t!("event.success_title"), 24., 32., idx::TEXT_STRONG).font_weight(FontWeight::SEMIBOLD).mt(z(24.)).text_center())
+        .child(text(crate::t!("event.success_body"), 16., 20., idx::TEXT_DEFAULT).mt(z(8.)).text_center())
+        .child(
+            div()
+                .mt(z(24.))
+                .w_full()
+                .h(z(40.))
+                .rounded(z(8.))
+                .border_1()
+                .border_color(c(tok(idx::INPUT_BORDER_DEFAULT)))
+                .bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
+                .flex()
+                .items_center()
+                .child(div().flex_1().min_w_0().pl(z(10.)).mr(z(10.)).truncate().text_size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(link.unwrap_or_default()))
+                .child(
+                    button("event-success-copy", crate::t!("common.copy"), BtnKind::Primary)
+                        .h(z(32.))
+                        .mr(z(4.))
+                        .text_size(z(14.))
+                        .when(copy.is_none(), |d| d.opacity(0.5).cursor_default())
+                        .on_click(cx.listener(move |a, _, _, cx| {
+                            if let Some(l) = &copy {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(l.to_string()));
+                                a.parity_toast(crate::t!("gs.eng.copied"), cx);
+                            }
+                        })),
+                ),
+        )
+        .child(text(crate::t!("invite.expires"), 12., 16., idx::TEXT_DEFAULT).mt(z(8.)).w_full())
+        .into_any_element()
+}
+
+const CONFETTI: usize = 160;
+const CONFETTI_COLORS: [usize; 4] = [idx::TEXT_BRAND, idx::TEXT_FEEDBACK_POSITIVE, idx::TEXT_FEEDBACK_WARNING, idx::TEXT_FEEDBACK_CRITICAL];
+
+pub fn confetti_at(n: usize, width: f32, frame: f32) -> (f32, f32) {
+    let mut seed = (n as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let mut rnd = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed % 10_000) as f32 / 10_000.
+    };
+    let right = n % 2 == 1;
+    let ox = if right { width } else { 0. } - 100. + 200. * rnd();
+    let oy = -100. + 200. * rnd();
+    let speed_x = 20. + 40. * rnd();
+    let mut vx = if right { speed_x } else { -speed_x } * 0.25;
+    let mut vy = -(20. + 40. * rnd()) * 0.25;
+    let (mut x, mut y) = (ox, oy);
+    let mut f = 0.;
+    while f < frame {
+        vx *= 0.96;
+        vy = vy * 0.96 + 0.25;
+        x += vx;
+        y += vy;
+        f += 1.;
+    }
+    (x, y)
+}
+
+fn confetti(width: f32) -> AnyElement {
+    use gpui::{Animation, AnimationExt};
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_0()
+        .with_animation("event-confetti", Animation::new(std::time::Duration::from_millis(3000)), move |d, t| {
+            let frame = t * 180.;
+            let fade = if t > 0.8 { (1. - t) / 0.2 } else { 1. };
+            d.children((0..CONFETTI).map(|n| {
+                let (x, y) = confetti_at(n, width, frame);
+                let size = if n % 3 == 0 { 6. } else { 8. };
+                div()
+                    .absolute()
+                    .left(z(x))
+                    .top(z(y))
+                    .w(z(size))
+                    .h(z(if n % 2 == 0 { size } else { size / 2. }))
+                    .when(n % 4 == 0, |d| d.rounded_full())
+                    .bg(c(tok(CONFETTI_COLORS[n % CONFETTI_COLORS.len()])))
+                    .opacity(fade)
+            }))
+        })
+        .into_any_element()
+}
+
 pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    if s.done {
+        let close = crate::ui::modals::close_action(cx);
+        let el = div()
+            .relative()
+            .w(z(482.))
+            .rounded(z(12.))
+            .bg(c(tok(idx::MODAL_BACKGROUND)))
+            .border_1()
+            .border_color(c(tok(idx::BORDER_NORMAL)))
+            .child(div().p(z(16.)).child(success_slide(s, cx)))
+            .when(!crate::ui::settings::effects::reduced_motion(), |d| d.child(confetti(482.)));
+        return crate::ui::modal::frame("event-backdrop", close, el);
+    }
     let valid = validity(s, cx);
     let ok = valid.iter().take(s.step + 1).all(|v| *v);
     let slide = match s.step {
@@ -663,6 +979,9 @@ impl PhoenixApp {
             description: None,
             saving: false,
             error: None,
+            cover: None,
+            done: false,
+            link: None,
         };
         open_modal(Modal::CreateEvent(Box::new(state)), None);
         cx.notify();
@@ -712,11 +1031,39 @@ impl PhoenixApp {
             s.saving = true;
             s.error = None;
         });
-        self.action(req, cx, |a, r, cx| {
+        let target = with_modal(|m| match m {
+            Some(Modal::CreateEvent(s)) => Some((s.guild, if s.kind == Some(Kind::External) { None } else { s.channel })),
+            _ => None,
+        });
+        self.action(req, cx, move |a, r, cx| {
             match r {
-                Ok(_) => {
-                    close_modal();
-                    a.parity_toast(crate::t!("event.created"), cx);
+                Ok(reply) => {
+                    let event = match &reply {
+                        crate::actions::ActionReply::Json(v) => v.get("id").and_then(|v| v.as_str()).and_then(|v| v.parse().ok()).map(Id),
+                        _ => None,
+                    };
+                    let (guild, channel) = target.unwrap_or((Id(0), None));
+                    let invite_channel = channel.or_else(|| default_text_channel(a, guild));
+                    let can = crate::ui::inbox::has_perm(a.backend.guild_permissions(guild), CREATE_INVITE);
+                    let public = invite_channel.is_some_and(|ch| !is_locked(a, ch));
+                    if let Some(ch) = invite_channel {
+                        a.nav_request(crate::ui::home::data::NavRequest::CreateInvite(ch), cx, move |_, res, cx| {
+                            if let Ok(crate::ui::home::data::NavReply::Text(url)) = res {
+                                let code = url.rsplit('/').next().unwrap_or_default().to_owned();
+                                set_state(|s| s.link = Some(event_link(&code, event).into()));
+                            }
+                            cx.notify();
+                        });
+                    }
+                    if can && public {
+                        set_state(|s| {
+                            s.saving = false;
+                            s.done = true;
+                        });
+                    } else {
+                        close_modal();
+                        a.parity_toast(crate::t!("event.created"), cx);
+                    }
                 }
                 Err(e) => set_state(|s| {
                     s.saving = false;
@@ -743,6 +1090,7 @@ pub fn create_request(s: &State, cx: &gpui::App) -> Option<ActionRequest> {
         end_unix: s.end.map(|e| e.max(0) as u64),
         place,
         recurrence: recurrence_rule(s.recur, s.start),
+        image: s.cover.as_deref().and_then(crate::ui::file_pick::data_uri),
     })
 }
 
@@ -767,6 +1115,23 @@ mod tests {
         assert_eq!(schedule_error(Some(Kind::External), 100, Some(90), 0), Some("event.err_end_before"));
         assert_eq!(schedule_error(Some(Kind::Voice), 100, None, 0), None);
         assert_eq!(topic_error(" "), Some("event.err_topic"));
+    }
+
+    #[test]
+    fn event_links_carry_the_event_id() {
+        assert_eq!(event_link("abc", Some(Id(42))), "https://discord.gg/abc?event=42");
+        assert_eq!(event_link("abc", None), "https://discord.gg/abc");
+    }
+
+    #[test]
+    fn confetti_rises_then_falls_from_both_corners() {
+        let (lx, ly) = confetti_at(0, 482., 0.);
+        let (rx, _) = confetti_at(1, 482., 0.);
+        assert!(lx < 100. && rx > 382.);
+        let (lx2, ly2) = confetti_at(0, 482., 20.);
+        assert!(lx2 < lx && ly2 < ly);
+        let (_, ly3) = confetti_at(0, 482., 180.);
+        assert!(ly3 > ly2);
     }
 
     #[test]

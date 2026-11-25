@@ -1387,9 +1387,18 @@ fn main() -> anyhow::Result<()> {
                                     app.set_event_kind(k, cx);
                                 }
                                 let step = arg.split(':').nth(1).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+                                let cover = std::env::var("PHX_EVENT_COVER").ok().map(std::path::PathBuf::from);
                                 phoenix_app::actions::with_modal(|m| {
                                     if let Some(phoenix_app::ui::modals::Modal::CreateEvent(s)) = m {
                                         s.step = step.min(2);
+                                        s.cover = cover;
+                                        if std::env::var("PHX_EVENT_OPEN").as_deref() == Ok("channel") {
+                                            s.open = Some(phoenix_app::ui::modals::create_event::Open::Channel);
+                                        }
+                                        if step >= 3 {
+                                            s.done = true;
+                                            s.link = Some("https://discord.gg/hTKzmak?event=1".into());
+                                        }
                                     }
                                 });
                             }
