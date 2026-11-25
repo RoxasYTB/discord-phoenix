@@ -347,7 +347,7 @@ pub fn start(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
                     cx.background_spawn(async move { rec.cancel() }).detach();
                 }
                 Err(e) => {
-                    eprintln!("discord-phoenix: voice message recording: {e}");
+                    tracing::warn!("voice message recording: {e}");
                     if ours {
                         st.draft = None;
                         app.parity_toast(crate::t!("voice_msg.failed_start"), cx);
@@ -416,7 +416,7 @@ fn stop_recording(app: &mut PhoenixApp, channel: Id, interrupted: bool, by_butto
                     .detach();
                 }
                 Err(e) => {
-                    eprintln!("discord-phoenix: voice message finalize: {e}");
+                    tracing::warn!("voice message finalize: {e}");
                     st.draft = None;
                     app.parity_toast(crate::t!("voice_msg.failed_send"), cx);
                 }
@@ -510,7 +510,7 @@ fn upload(app: &mut PhoenixApp, channel: Id, rec: Arc<Recording>, cx: &mut Conte
                 }
             }
             Err(e) => {
-                eprintln!("discord-phoenix: voice message upload: {}", e.0);
+                tracing::warn!("voice message upload: {}", e.0);
                 app.parity_toast(crate::t!("voice_msg.failed_send"), cx);
             }
         });

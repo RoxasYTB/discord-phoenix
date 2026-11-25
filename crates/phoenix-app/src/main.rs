@@ -3,6 +3,7 @@ use std::sync::Arc;
 use phoenix_app::{assets::Assets, backend::Backend, discord_backend::DiscordBackend, mock::MockBackend};
 
 fn main() {
+    phoenix_app::logging::init();
     phoenix_app::hwaccel::apply_at_startup();
     phoenix_app::perf::start();
     phoenix_app::autostart::refresh();

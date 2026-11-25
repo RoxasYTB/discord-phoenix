@@ -351,7 +351,7 @@ fn ensure_message_authors(inner: &Inner, s: &Session, msgs: &[api::Message]) {
 }
 
 fn tracing_warn(msg: &str) {
-    eprintln!("discord-phoenix: {msg}");
+    tracing::warn!("{msg}");
 }
 
 async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<GatewayEvent>) {

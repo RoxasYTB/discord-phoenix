@@ -186,7 +186,7 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, frame: &[u8], size: (u32
                 v.insert(d);
             }
             Err(e) => {
-                eprintln!("discord-phoenix: video decoder unavailable: {e}");
+                tracing::warn!("video decoder unavailable: {e}");
                 return;
             }
         }
@@ -230,7 +230,7 @@ fn start_camera(st: &mut State) {
     match phoenix_voice::media::camera::Camera::start(input, w, h, fps, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
         Ok(c) => st.camera = Some(c),
         Err(e) => {
-            eprintln!("discord-phoenix: camera unavailable: {e}");
+            tracing::warn!("camera unavailable: {e}");
             conn.video(phoenix_voice::connection::VideoOut::Stop);
         }
     }
@@ -258,7 +258,7 @@ fn start_engine(control: &Arc<AudioControl>, st: &State, out_tx: mpsc::Unbounded
     match AudioEngine::start(control.clone(), st.input.clone(), st.output.clone(), out_tx) {
         Ok(e) => Some(e),
         Err(e) => {
-            eprintln!("discord-phoenix: audio devices unavailable: {e}");
+            tracing::warn!("audio devices unavailable: {e}");
             None
         }
     }
@@ -808,13 +808,13 @@ fn start_capture(st: &mut State) {
     if let (Some(src), Some(tx)) = (o.sound.clone(), o.audio_tx.clone()) {
         match phoenix_voice::media::soundshare::Soundshare::start(src, tx) {
             Ok(s) => o.soundshare = Some(s),
-            Err(e) => eprintln!("discord-phoenix: stream audio unavailable: {e}"),
+            Err(e) => tracing::warn!("stream audio unavailable: {e}"),
         }
     }
     match phoenix_voice::media::camera::Camera::start_with(input, w, h, fps, bitrate, false, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
         Ok(c) => o.capture = Some(c),
         Err(e) => {
-            eprintln!("discord-phoenix: screen capture unavailable: {e}");
+            tracing::warn!("screen capture unavailable: {e}");
             conn.video(phoenix_voice::connection::VideoOut::Stop);
         }
     }

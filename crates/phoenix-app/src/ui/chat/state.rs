@@ -676,7 +676,7 @@ impl PhoenixApp {
             }
             Ok(Ok(None)) | Err(_) => {}
             Ok(Err(e)) => {
-                eprintln!("file chooser failed: {e:#}");
+                tracing::warn!("file chooser failed: {e:#}");
                 let _ = this.update(cx, |this, cx| {
                     this.chat.error = Some(crate::t!("chat.picker_failed", e = format!("{e:#}")));
                     cx.notify();

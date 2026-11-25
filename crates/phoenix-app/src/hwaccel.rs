@@ -53,7 +53,7 @@ pub fn relaunch_command() -> std::io::Result<Command> {
 pub fn relaunch(cx: &mut gpui::App) {
     match relaunch_command().and_then(|mut c| c.spawn()) {
         Ok(_) => cx.quit(),
-        Err(e) => eprintln!("discord-phoenix: relaunch: {e}"),
+        Err(e) => tracing::warn!("relaunch: {e}"),
     }
 }
 

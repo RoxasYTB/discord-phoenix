@@ -195,7 +195,7 @@ pub fn play_own(app: &mut PhoenixApp, sound: SoundboardSound, cx: &mut Context<P
     let fut = app.backend.send_soundboard_sound(ch, sound.clone());
     std::thread::spawn(move || {
         if let Err(e) = futures::executor::block_on(fut) {
-            eprintln!("discord-phoenix: soundboard send failed: {}", e.0);
+            tracing::warn!("soundboard send failed: {}", e.0);
         }
     });
     let me = app.me.id;

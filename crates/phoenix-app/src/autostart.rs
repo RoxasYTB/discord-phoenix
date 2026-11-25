@@ -64,7 +64,7 @@ pub fn set(on: bool) {
     let Some(d) = dir() else { return };
     let res = if on { std::env::current_exe().and_then(|exe| install_in(&d, &exe)) } else { uninstall_in(&d) };
     if let Err(e) = res {
-        eprintln!("discord-phoenix: autostart: {e}");
+        tracing::warn!("autostart: {e}");
     }
 }
 

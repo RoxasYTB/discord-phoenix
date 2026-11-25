@@ -175,7 +175,7 @@ pub fn spawn(cx: &mut App) {
     let spawned = std::thread::Builder::new().name("phoenix-tray".into()).spawn(move || {
         let icons = icons();
         if let Err(e) = zbus::block_on(serve(tx, state_rx, labels, icons)) {
-            eprintln!("tray icon unavailable: {e}");
+            tracing::warn!("tray icon unavailable: {e}");
         }
         RUNNING.store(false, Ordering::Relaxed);
     });

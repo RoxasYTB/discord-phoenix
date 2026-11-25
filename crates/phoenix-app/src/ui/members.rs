@@ -135,7 +135,7 @@ fn ensure_thread_list(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) {
             Ok(m) => m,
             Err(e) => {
                 if std::env::var_os("PHX_DEBUG").is_some() {
-                    eprintln!("thread members: {}", e.0);
+                    tracing::warn!("thread members: {}", e.0);
                 }
                 return;
             }

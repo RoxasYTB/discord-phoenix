@@ -431,7 +431,29 @@ fn subnav(rows: Vec<SharedString>) -> Div {
         })))
 }
 
-fn footer() -> Div {
+static DEBUG_COPIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn copy_debug_info(app: &mut PhoenixApp, window: &mut Window, cx: &mut Cx) {
+    let gpu = window.gpu_specs().map(crate::diagnostics::Gpu::from);
+    let text = crate::diagnostics::Report::collect(gpu, &app.prefs.local).render();
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+    DEBUG_COPIED.store(true, std::sync::atomic::Ordering::Relaxed);
+    cx.notify();
+    cx.spawn(async move |this, cx| {
+        cx.background_executor().timer(std::time::Duration::from_secs(2)).await;
+        DEBUG_COPIED.store(false, std::sync::atomic::Ordering::Relaxed);
+        let _ = this.update(cx, |_, cx| cx.notify());
+    })
+    .detach();
+}
+
+fn open_log_dir(cx: &mut gpui::App) {
+    let Some(dir) = crate::logging::log_dir() else { return };
+    let _ = std::fs::create_dir_all(&dir);
+    cx.open_with_system(&dir);
+}
+
+fn footer(cx: &mut Cx) -> Div {
     static INFO: std::sync::OnceLock<phoenix_api::build_info::BuildInfo> = std::sync::OnceLock::new();
     let b = INFO.get_or_init(phoenix_api::build_info::BuildInfo::detect_fast);
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
@@ -447,6 +469,26 @@ fn footer() -> Div {
         .flex_col()
         .gap(z(4.))
         .child(note(line.into(), idx::TEXT_MUTED))
+        .child(note(crate::diagnostics::version_line().into(), idx::TEXT_MUTED).id("settings-phoenix-version"))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(z(4.))
+                .child(
+                    link(
+                        "settings-copy-debug",
+                        note(
+                            if DEBUG_COPIED.load(std::sync::atomic::Ordering::Relaxed) { crate::t!("settings.footer.debug_copied") } else { crate::t!("settings.footer.copy_debug") },
+                            idx::TEXT_LINK,
+                        ),
+                    )
+                    .on_click(cx.listener(|a, _, window, cx| copy_debug_info(a, window, cx))),
+                )
+                .child(bullet())
+                .child(link("settings-open-logs", note(crate::t!("settings.footer.open_logs"), idx::TEXT_LINK)).on_click(|_, _, cx| open_log_dir(cx))),
+        )
         .child(
             div()
                 .flex()
@@ -709,7 +751,7 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
                 }
                 cx.notify();
             })));
-            sec = sec.child(footer());
+            sec = sec.child(footer(cx));
         }
         list = list.child(sec);
     }
