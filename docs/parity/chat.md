@@ -23,6 +23,7 @@ CSS under ~/discord-phoenix-ref/current-client/css. Tokens are from `theme::gene
 | reply avatar | 738015 replyAvatar_ | size/margin | 16px / 4px | chat.rs | ✅ |
 | reply author name | live `username_2i8Bfm … clickable_2i8Bfm` role=button aria-expanded; CSS `.username_2i8Bfm.clickable_2i8Bfm:hover{cursor:pointer;text-decoration:underline}` | click / hover | opens the profile popout; pointer + underline | chat.rs reply (`reply-author`, message_ext::open_user) | ✅ (was not clickable) |
 | names in pins, inbox and search results | same `username_2i8Bfm clickable_2i8Bfm` message header | click / hover | profile popout, without jumping to the message; pointer + underline | ui/inbox.rs cozy_message, ui/search.rs result_card + reply_line (`open_user` stops propagation) | ✅ (were plain text) |
+| names in system messages | client system lines use the same clickable username (`username_2i8Bfm clickable_2i8Bfm`) | click | author, added/removed user and poll author open the profile popout | ui/chat/system.rs (`sys-author`, `sys-target`, `sys-poll-author`) | ✅ (underlined on hover but did nothing) |
 | hover bg | 524434 message_:hover | background | --message-background-hover | chat.rs | ✅ (was mod-muted) |
 | mention | 524434 mentioned_ | bg / hover / bar | --message-mentioned-background-default/-hover, 2px --icon-feedback-warning | chat.rs | ✅ |
 | replying | 524434 replying_ | bg / hover / bar | --message-highlight-background-default, --brand-10a, --brand-500 | chat.rs | ✅ (was mention colours) |

@@ -42,11 +42,11 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         .unwrap_or_else(|| crate::t!("sys.someone"));
     let name_color = app.author_color(msg.author).map(c).unwrap_or_else(|| c(Palette::TEXT_HEADER));
     let target = |t: Option<crate::model::Id>| t.filter(|t| *t != msg.author);
-    let other: Option<(SharedString, SharedString)> = match msg.kind {
+    let other: Option<(crate::model::Id, SharedString, SharedString)> = match msg.kind {
         MessageKind::RecipientAdd(t) | MessageKind::RecipientRemove(t) => target(t).map(|t| {
             let n = app.users.get(&t).map(|u| u.display_name.clone()).unwrap_or_else(|| crate::t!("sys.someone"));
             let tail = if matches!(msg.kind, MessageKind::RecipientAdd(_)) { "sys.recipient_add_tail" } else { "sys.recipient_kick_tail" };
-            (n, crate::i18n::t(tail, &[]))
+            (t, n, crate::i18n::t(tail, &[]))
         }),
         _ => None,
     };
@@ -125,6 +125,8 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
                 author,
                 false,
             )
+            .id(("sys-author", msg.id.0))
+            .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
             .child(match crate::ui::role_gradient::for_author(app, msg.author) {
                 Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
                 None => crate::fonts::name_text(name, author, 16.),
@@ -153,9 +155,11 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             }))
             .child(".")
         })
-        .when_some(other, |d, (n, tail)| {
+        .when_some(other, |d, (uid, n, tail)| {
             d.child(
                 div()
+                    .id(("sys-target", msg.id.0))
+                    .on_click(super::message_ext::open_user(entity, uid, msg.channel))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(c(Palette::TEXT_HEADER))
                     .cursor_pointer()
@@ -293,6 +297,7 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                 author_user,
                 false,
             )
+            .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
             .child(match crate::ui::role_gradient::for_author(app, msg.author) {
                 Some(stops) => crate::fonts::name_text_with(name, author_user, 16., Some(stops)),
                 None => crate::fonts::name_text(name, author_user, 16.),
