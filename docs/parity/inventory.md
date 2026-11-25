@@ -6,15 +6,15 @@ Légende : ✅ présent et conforme, ⚠ partiel (entrée inerte, rendu non mesu
 
 ## Synthèse
 
-| zone | éléments | ✅ | ⚠ | ❌ | fermé par wt/inventory |
+| zone | éléments | ✅ | ⚠ | ❌ | fermé par wt/inventory2 |
 |---|---|---|---|---|---|
-| Menus contextuels (clic droit, sous-menus compris) | 22 | 15 | 6 | 1 | image (Copier / Enregistrer), groupe privé (Invitations, Modifier le groupe), dossier (Paramètres du dossier) ; zone de texte passée de ❌ à ⚠ |
-| Menus « … », popouts-menus | 18 | 6 | 4 | 8 | ligne d'ami, « … » du profil, « … » de la visionneuse ; « + » complété |
-| Modales | 46 | 29 | 10 | 7 | Modifier le groupe, Paramètres du dossier, Retirer l'ami, Bloquer ; Invitations du groupe en ⚠ |
-| Pages | 32 | 26 | 1 | 5 | — |
-| **Total** | **118** | **76** | **21** | **21** | 12 éléments fermés, 2 passés de ❌ à ⚠ |
+| Menus contextuels (clic droit, sous-menus compris) | 22 | 18 | 3 | 1 | « Déplacer vers › » des catégories |
+| Menus « … », popouts-menus | 18 | 12 | 2 | 4 | `switch-accounts-submenu`, `clean-up-inactive-gdms`, `settings-footer-more-menu`, `plaintext-preview-overflow-menu` ; « Fils actifs » du menu serveur |
+| Modales | 47 | 35 | 9 | 3 | Mettre à jour le message programmé (Modifier le message), Ignorer, Nettoyage des Groupes privés, Changer de compte, Fils actifs ; Statut personnalisé et Programmer un message restent ⚠ |
+| Pages | 32 | 27 | 2 | 3 | Quêtes passée de ❌ à ⚠ |
+| **Total** | **119** | **92** | **16** | **11** | 11 éléments fermés, 1 passé de ❌ à ⚠ (avant ce lot : 76 ✅, 21 ⚠, 21 ❌ sur 118) |
 
-Une ligne compte comme ⚠ dès qu'une partie reste inerte ou non mesurée, même si l'essentiel est conforme. Les compteurs « ✅ » incluent les éléments fermés par ce lot.
+Une ligne compte comme ⚠ dès qu'une partie reste inerte ou non mesurée, même si l'essentiel est conforme. Le décompte est refait à partir des tableaux ci-dessous (premier symbole de la colonne statut).
 
 ## 1. Menus contextuels (clic droit)
 
@@ -176,19 +176,14 @@ Lot 2 (wt/inventory) :
 - « Déplacer vers… » des serveurs et des dossiers (module 816581 / 865815) : sous-menu « Dossier » (Aucun dossier, puis les dossiers ; l'actuel est grisé), « Premier / Dernier dans la liste » ou « dans le dossier », grisés en tête et en fin, absents s'il n'y a qu'un élément. Le déplacement réécrit l'arbre (`gdm::move_tree`, testé) puis l'enregistre comme le glisser-déposer.
 - Le glisser-déposer du rail et les dossiers enregistrent désormais `guild_folders` dans `settings-proto/1` comme le client (`saveGuildFolders`), au lieu du `PATCH /users/@me/settings` JSON hérité.
 
-Reste, par ordre de visibilité :
+Reste, par ordre de visibilité (après wt/inventory2) :
 
-1. Pages Quêtes et Découvrir (stubs visibles sur le rail et dans les MP).
-2. « Déplacer vers › » des catégories, Fils actifs, Boost, Annuaire d'applications.
-3. Calendrier et champ d'heure de la modale « Programmer un message », « Modifier le message » programmé.
-4. Nettoyage des Groupes privés, Changer de compte, modale de statut personnalisé, confirmation « Ignorer ».
-5. Menus vidéo (vitesse, transcription), aperçu des fichiers texte, menu « … » des paramètres.
-
-Lot inventory2 (wt/inventory2, 25/11) :
-
-- Messages programmés testés en vrai dans #phoenix avec `examples/schedule_probe.rs` : création, lecture de la liste, reprogrammation (+5 min), modification du texte (`PATCH` `content` + `flags`), annulation (`DELETE`) puis, dans une seconde passe, envoi immédiat (`POST …/send`, le message est arrivé dans #phoenix avec le texte modifié). La première passe a révélé que la liste réelle porte à la fois `id` et `scheduled_message_id` : l'alias serde rejetait toute liste non vide (corrigé, test avec les deux champs). La sonde a dû être compilée deux fois (la première version ne pouvait pas lire la liste).
-- Pilote CDP `~/discord-phoenix-ref/inventory2/drv.mjs` : refuse de démarrer si `requestAnimationFrame` ne tourne pas (fenêtre non peinte : les menus et modales du client restent figés et les clics s'accumulent), ferme le calque transparent `scrim_od1dl1` qui apparaît en arrivant sur Aperture Sciences (il absorbe le premier clic), chien de garde qui referme tout. `runpasses.sh` n'agit qu'après 5 minutes de route stable sur `/channels/@me`.
-- Incidents : à 05:57 le rendu du client a cessé de répondre au CDP pendant ~20 minutes, puis le client a redémarré (route `/app`) ; un second passage ouvrant le calendrier a dépassé son délai à 06:27. Aucune écriture n'est partie hors `science` et `migrate-command-scope` (arrivée sur Aperture, déjà signalée dans le brief).
+1. Page Découvrir (Serveurs, Applications, Jeux, Quêtes) et l'annuaire d'applications du menu serveur (« Annuaire d'applications » ouvre l'onglet Applications de Découvrir) : données GET prêtes (`discoverable_guilds`, `discovery_categories`, `app_directory_collections`), mise en page à relever en direct ; la fenêtre du client n'a pas été peinte assez longtemps pendant ce lot.
+2. Boost du menu serveur et rangée « Boosts de serveur » : calque `BoostedGuildPerksModalConnected` (module 233824), à relever en direct, sans achat.
+3. Quêtes : bannière héros, sections, recherche, filtres et tri, comparaison en direct.
+4. Statut personnalisé : sélecteur d'émoji et envoi de la durée ; calendrier et liste d'heures de « Programmer un message » à comparer au client.
+5. Aperçu texte : sélecteur de langue et rendu Markdown.
+6. Menus du lecteur vidéo : hors périmètre tant que Phoenix n'a pas de lecteur intégré.
 
 ## Vérifications sur le vrai compte (25/11, `real_shots` 1536×840 @1,5, #phoenix ; client CDP sur #général)
 
