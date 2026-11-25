@@ -1225,6 +1225,11 @@ fn main() -> anyhow::Result<()> {
                             phoenix_app::ui::modals::Modal::CreatePoll(phoenix_app::ui::modals::poll_create::State::new(ch)),
                             Some(window),
                         );
+                        if arg == "emoji" {
+                            use phoenix_app::ui::modals::poll_create as pc;
+                            pc::pick_emoji(1, pc::AnswerEmoji { id: None, name: "\u{1f525}".into(), animated: false });
+                            phoenix_app::ui::pickers::open_emoji_picker(app, phoenix_app::ui::pickers::EmojiTarget::PollAnswer(0), window, cx);
+                        }
                     }
                 }
                 "thread_create" => {
