@@ -153,16 +153,31 @@ pub fn items(app: &PhoenixApp, e: &Entity<PhoenixApp>, t: Id, place: Place) -> V
         }
         Place::Toolbar | Place::Sidebar | Place::ForumToolbar => {
             let (join_first, leave_last) = if st.joined { (None, Some(membership)) } else { (Some(membership), None) };
-            let top = act(e, crate::t!("thread.jump_top"), move |a, _, cx| a.jump_thread_top(t, cx));
             if place == Place::Sidebar {
                 let full = act(e, crate::t!("thread.open_full"), move |a, _, cx| a.open_thread_full(t, cx));
                 push_group(&mut out, join_first.into_iter().chain([full]).collect());
-                push_group(&mut out, [Some(top), edit].into_iter().flatten().collect());
-            } else {
-                push_group(&mut out, join_first.into_iter().collect());
-                let split = act(e, crate::t!("thread.open_split"), move |a, w, cx| a.open_thread_split(t, w, cx));
-                push_group(&mut out, [Some(top), edit, Some(split)].into_iter().flatten().collect());
+                push_group(&mut out, vec![mute_item(app, e, t), notify_item(app, e, t)]);
+                push_group(&mut out, edit.into_iter().collect());
+                let search = act(e, crate::t!("thread.search"), move |a, w, cx| {
+                    a.open_thread_full(t, cx);
+                    crate::ui::search::open(a, w, cx);
+                })
+                .with_icon("viewer/open");
+                let pins = act(e, crate::t!("thread.pins"), move |a, _, cx| {
+                    a.open_thread_full(t, cx);
+                    a.toggle_pins(cx);
+                })
+                .with_icon("viewer/open");
+                push_group(&mut out, vec![search, pins]);
+                push_group(&mut out, [archive, lock, delete].into_iter().flatten().collect());
+                push_group(&mut out, leave_last.into_iter().collect());
+                push_group(&mut out, [link, id_item].into_iter().flatten().collect());
+                return out;
             }
+            let top = act(e, crate::t!("thread.jump_top"), move |a, _, cx| a.jump_thread_top(t, cx));
+            push_group(&mut out, join_first.into_iter().collect());
+            let split = act(e, crate::t!("thread.open_split"), move |a, w, cx| a.open_thread_split(t, w, cx));
+            push_group(&mut out, [Some(top), edit, Some(split)].into_iter().flatten().collect());
             push_group(&mut out, vec![crate::actions::channel::favorite_item(app, e, t)]);
             push_group(&mut out, [archive, lock, delete].into_iter().flatten().collect());
             push_group(&mut out, leave_last.into_iter().collect());
