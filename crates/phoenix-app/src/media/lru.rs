@@ -42,30 +42,58 @@ impl LruImageCache {
         self.items.is_empty()
     }
 
-    fn used(&self) -> u64 {
-        self.items.values().filter_map(|(i, _)| i.get()?.ok()).map(|i| bytes_of(&i)).sum()
-    }
-
-    fn evict(&mut self, window: &mut Window, cx: &mut App) {
-        let mut used = self.used();
-        if used <= self.budget {
-            return;
-        }
-        let mut order: Vec<(u64, u64)> = self.items.iter().map(|(k, (_, t))| (*t, *k)).collect();
-        order.sort_unstable();
-        let fresh = self.tick.saturating_sub(KEEP_RECENT);
-        for (t, k) in order {
-            if used <= self.budget * 9 / 10 || t >= fresh {
-                break;
-            }
+    fn evict(&mut self, protected: u64, window: &mut Window, cx: &mut App) {
+        let mut entries: Vec<(u64, u64, u64)> = self
+            .items
+            .iter()
+            .filter_map(|(k, (item, t))| {
+                let bytes = item.get()?.ok().map(|img| bytes_of(&img))?;
+                Some((*t, *k, bytes))
+            })
+            .collect();
+        let victims = select_evictions(&mut entries, self.budget, self.tick, KEEP_RECENT, protected);
+        for k in victims {
             if let Some((item, _)) = self.items.remove(&k)
                 && let Some(Ok(img)) = item.get()
             {
-                used = used.saturating_sub(bytes_of(&img));
                 cx.drop_image(img, Some(window));
             }
         }
     }
+}
+
+fn select_evictions(entries: &mut [(u64, u64, u64)], budget: u64, tick: u64, keep_recent: u64, protected: u64) -> Vec<u64> {
+    let mut used: u64 = entries.iter().map(|(_, _, b)| *b).sum();
+    if used <= budget {
+        return Vec::new();
+    }
+    entries.sort_unstable_by_key(|(t, k, _)| (*t, *k));
+    let fresh = tick.saturating_sub(keep_recent);
+    let target = budget * 9 / 10;
+    let mut victims = Vec::new();
+    for &(t, k, bytes) in entries.iter() {
+        if used <= target || t >= fresh {
+            break;
+        }
+        if k == protected {
+            continue;
+        }
+        used = used.saturating_sub(bytes);
+        victims.push(k);
+    }
+    if used > budget {
+        for &(t, k, bytes) in entries.iter() {
+            if used <= budget {
+                break;
+            }
+            if t < fresh || k == protected {
+                continue;
+            }
+            used = used.saturating_sub(bytes);
+            victims.push(k);
+        }
+    }
+    victims
 }
 
 impl ImageCache for LruImageCache {
@@ -77,8 +105,8 @@ impl ImageCache for LruImageCache {
         let entry = self.items.entry(key).or_insert_with(|| (ImageCacheItem::new(resource, cx), tick));
         entry.1 = tick;
         let out = entry.0.use_image(window);
-        if inserted && self.items.len().is_multiple_of(32) {
-            self.evict(window, cx);
+        if (inserted && self.items.len() >= 4) || self.tick.is_multiple_of(16) {
+            self.evict(key, window, cx);
         }
         out
     }
@@ -99,4 +127,29 @@ pub fn init(cx: &mut App) {
 
 pub fn chat() -> Option<Entity<LruImageCache>> {
     CHAT.with_borrow(|s| s.as_ref()?.upgrade())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evicts_oldest_first_when_over_budget() {
+        let mut entries = vec![(1, 10, 50), (2, 20, 50), (3, 30, 50)];
+        let victims = select_evictions(&mut entries, 100, 500, 100, 30);
+        assert_eq!(victims, vec![10, 20]);
+    }
+
+    #[test]
+    fn enforces_strict_budget_on_recent_burst() {
+        let mut entries = vec![(100, 1, 60), (101, 2, 60), (102, 3, 60)];
+        let victims = select_evictions(&mut entries, 100, 102, 256, 3);
+        assert_eq!(victims, vec![1, 2]);
+    }
+
+    #[test]
+    fn keeps_everything_under_budget() {
+        let mut entries = vec![(1, 10, 40), (2, 20, 40)];
+        assert!(select_evictions(&mut entries, 100, 500, 100, 20).is_empty());
+    }
 }

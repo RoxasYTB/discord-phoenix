@@ -663,7 +663,7 @@ impl PhoenixApp {
 
     pub(crate) fn render_msg(&self, m: &Message, prev: Option<&Message>) -> RenderedMessage {
         let revealed = |i: usize| self.revealed.contains(&(m.id, i));
-        let (parsed, mut blocks, mentions_me, preview) =
+        let (parsed, mut blocks, mentions_me, preview, preview_mentions) =
             richtext::build(&m.content, &self.resolver_with_sounds(&m.soundboard_sounds, m.channel), self.me.id, &revealed);
         if m.send_state == crate::model::SendState::Failed {
             blocks = richtext::render_blocks(&parsed, &revealed, ui::chat::tk(crate::theme::generated::idx::TEXT_FEEDBACK_CRITICAL));
@@ -677,6 +677,7 @@ impl PhoenixApp {
             blocks,
             mentions_me,
             preview,
+            preview_mentions,
             parsed,
         }
     }

@@ -86,8 +86,8 @@ pub fn ui_font() -> Font {
     Font { fallbacks: Some(crate::fonts::ui_fallbacks()), ..font(FONT_UI()) }
 }
 
-fn run_for(len: usize, style: Style, revealed: bool, base: Hsla) -> TextRun {
-    let mut f = if style.has(Style::CODE) { font(FONT_MONO()) } else { ui_font() };
+fn run_for(len: usize, style: Style, revealed: bool, base: Hsla, ui: &Font) -> TextRun {
+    let mut f = if style.has(Style::CODE) { font(FONT_MONO()) } else { ui.clone() };
     if style.has(Style::BOLD) {
         f.weight = FontWeight::BOLD;
     }
@@ -146,9 +146,10 @@ pub fn rich_inline(inline: &Inline, revealed: &dyn Fn(usize) -> bool, base: Hsla
     let mut runs = Vec::with_capacity(inline.spans.len());
     let mut click_ranges = Vec::new();
     let mut click_targets = Vec::new();
+    let ui = ui_font();
     for s in &inline.spans {
         let rev = s.spoiler.is_some_and(|i| crate::ui::settings::effects::spoilers_always() || revealed(i));
-        runs.push(run_for(s.range.len(), s.style, rev, base));
+        runs.push(run_for(s.range.len(), s.style, rev, base, &ui));
         if let Some(sp) = s.spoiler
             && !rev
         {
@@ -225,6 +226,7 @@ pub struct RenderedMessage {
     pub blocks: Vec<RBlock>,
     pub mentions_me: bool,
     pub preview: SharedString,
+    pub preview_mentions: Vec<Range<usize>>,
     pub parsed: Vec<Block>,
 }
 
@@ -233,7 +235,7 @@ pub fn build(
     resolver: &dyn MentionResolver,
     me: Id,
     revealed: &dyn Fn(usize) -> bool,
-) -> (Vec<Block>, Vec<RBlock>, bool, SharedString) {
+) -> (Vec<Block>, Vec<RBlock>, bool, SharedString, Vec<Range<usize>>) {
     let parsed = markdown::parse(content, resolver);
     let mentions_me = parsed.iter().filter_map(Block::inline).any(|i| {
         i.spans.iter().any(|s| {
@@ -242,10 +244,10 @@ pub fn build(
                 || matches!(s.mention, Some(Mention::Role(r)) if resolver.has_role(r))
         })
     });
-    let (preview, _) = preview_with_mentions(&parsed);
+    let (preview, preview_mentions) = preview_with_mentions(&parsed);
     let mut blocks = render_blocks(&parsed, revealed, c(Palette::TEXT_NORMAL));
     color_role_mentions(&parsed, &mut blocks, resolver);
-    (parsed, blocks, mentions_me, preview.into())
+    (parsed, blocks, mentions_me, preview.into(), preview_mentions)
 }
 
 pub fn preview_with_mentions(parsed: &[Block]) -> (String, Vec<Range<usize>>) {
@@ -355,6 +357,9 @@ pub fn split_runs(runs: &[TextRun], ranges: &[Range<usize>], bg: Hsla) -> Vec<Te
 }
 
 pub fn emoji_ranges(text: &str) -> Vec<(Range<usize>, SharedString)> {
+    if text.is_ascii() && !text.as_bytes().contains(&b'<') {
+        return Vec::new();
+    }
     let custom = crate::media::emoji::find_custom(text);
     let mut out: Vec<(Range<usize>, SharedString)> = Vec::new();
     let mut ci = custom.iter().peekable();
@@ -377,6 +382,22 @@ pub fn emoji_ranges(text: &str) -> Vec<(Range<usize>, SharedString)> {
         i += text[i..].chars().next().map_or(1, char::len_utf8);
     }
     out
+}
+
+pub fn is_jumbo_text(t: &RichText) -> bool {
+    let mut last = 0;
+    let mut n = 0;
+    for (r, _) in &t.emoji {
+        if !t.text[last..r.start].trim().is_empty() {
+            return false;
+        }
+        last = r.end;
+        n += 1;
+    }
+    if !t.text[last..].trim().is_empty() {
+        return false;
+    }
+    n > 0 && n <= 30
 }
 
 pub fn is_jumbo(blocks: &[RBlock]) -> bool {
@@ -414,7 +435,7 @@ mod emoji_tests {
             }
         }
         let hl = crate::search_highlight::Highlighter::new("serveur", false);
-        let (parsed, mut blocks, _, _) = build("le **serveur** <@1> [serveur](https://x.y) `serveur` <:serveur:12>\n```\nserveur\n```", &R, Id(9), &|_| true);
+        let (parsed, mut blocks, _, _, _) = build("le **serveur** <@1> [serveur](https://x.y) `serveur` <:serveur:12>\n```\nserveur\n```", &R, Id(9), &|_| true);
         apply_highlights(&parsed, &mut blocks, &hl);
         let lit = |b: &RBlock| -> Vec<String> {
             let t = b.text().unwrap();
@@ -449,5 +470,25 @@ mod emoji_tests {
         assert_eq!(emoji_ranges("a → b ★ ∞ ✓ ■ ♡ ↗ x").len(), 1);
         let e: Vec<String> = emoji_ranges("\u{1FAE9} ☺ 1\u{20E3} 🙂\u{200D}↔\u{FE0F} ❤\u{FE0F}\u{200D}🔥").into_iter().map(|(_, s)| s.to_string()).collect();
         assert_eq!(e, vec!["\u{1FAE9}", "☺", "1\u{20E3}", "🙂\u{200D}↔\u{FE0F}", "❤\u{FE0F}\u{200D}🔥"]);
+    }
+
+    #[test]
+    fn builds_five_thousand_synthetic_messages() {
+        const SAMPLES: [&str; 6] = [
+            "plain ascii message without markdown",
+            "has **bold**, *italic*, and `inline code`",
+            "check https://example.com and <#100>",
+            "> quoted line\nfollow up text",
+            "```rust\nfn main() {}\n```",
+            "emoji 👍 and <:custom:42>",
+        ];
+        let mut total_blocks = 0usize;
+        for i in 0..5000 {
+            let src = SAMPLES[i % SAMPLES.len()];
+            let (_, blocks, _, preview, _) = build(src, &crate::markdown::NoResolve, Id(1), &|_| false);
+            assert!(!preview.is_empty());
+            total_blocks += blocks.len();
+        }
+        assert!(total_blocks >= 5000);
     }
 }

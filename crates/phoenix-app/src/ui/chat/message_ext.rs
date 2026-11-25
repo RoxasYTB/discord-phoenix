@@ -458,6 +458,11 @@ pub(crate) fn words(text: &str, range: std::ops::Range<usize>) -> Vec<std::ops::
     out
 }
 
+pub(crate) fn has_code(t: &crate::richtext::RichText) -> bool {
+    let mono = gpui::font(crate::theme::FONT_MONO()).family;
+    t.runs.iter().any(|r| r.font.family == mono && r.background_color != Some(r.color))
+}
+
 pub(crate) fn code_ranges(t: &crate::richtext::RichText) -> Vec<std::ops::Range<usize>> {
     let mono = gpui::font(crate::theme::FONT_MONO()).family;
     let mut out: Vec<std::ops::Range<usize>> = Vec::new();
@@ -547,7 +552,7 @@ pub fn rich_with_emoji_scaled(
     t: &crate::richtext::RichText,
     k: f32,
 ) -> AnyElement {
-    let jumbo = crate::richtext::is_jumbo(&[crate::richtext::RBlock::Text(t.clone())]);
+    let jumbo = crate::richtext::is_jumbo_text(t);
     let k = k * crate::theme::font_scale();
     let size = k * if jumbo { 48. } else { 22. };
     let mut row = div().flex().flex_wrap().items_center().text_size(z(16. * k)).line_height(z(22. * k));

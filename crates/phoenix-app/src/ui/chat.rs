@@ -984,28 +984,35 @@ pub(crate) fn message(
     if msg.edited && !edited_after_embeds && !last_text.is_some_and(|l| l + 1 == n_blocks) {
         content = content.child(edited_marker(edited_at));
     }
-    media::set_current_author(Some(media::ViewerAuthor {
-        user: author.cloned(),
-        name: name.clone(),
-        color,
-        time: r.time_full.clone(),
-    }));
+    let has_media = !msg.attachments.is_empty() || !msg.embeds.is_empty();
+    if has_media {
+        media::set_current_author(Some(media::ViewerAuthor {
+            user: author.cloned(),
+            name: name.clone(),
+            color,
+            time: r.time_full.clone(),
+        }));
+    }
     content = content.children(invite_embed::render(app, entity, msg.author, &msg.content, cx));
-    let visual: Vec<&Attachment> = msg.attachments.iter().filter(|a| mosaic::is_visual(a)).collect();
-    if visual.len() >= 2 && crate::ui::settings::effects::inline_attachments() {
-        content = content.child(mosaic::render(&visual, cx));
-        for a in msg.attachments.iter().filter(|a| !mosaic::is_visual(a)) {
-            content = content.child(div().mt(z(4.)).child(attachment(a, cx)));
-        }
-    } else {
-        for a in &msg.attachments {
-            content = content.child(attachment(a, cx));
+    if !msg.attachments.is_empty() {
+        let visual: Vec<&Attachment> = msg.attachments.iter().filter(|a| mosaic::is_visual(a)).collect();
+        if visual.len() >= 2 && crate::ui::settings::effects::inline_attachments() {
+            content = content.child(mosaic::render(&visual, cx));
+            for a in msg.attachments.iter().filter(|a| !mosaic::is_visual(a)) {
+                content = content.child(div().mt(z(4.)).child(attachment(a, cx)));
+            }
+        } else {
+            for a in &msg.attachments {
+                content = content.child(attachment(a, cx));
+            }
         }
     }
     for e in msg.embeds.iter().filter(show_embed) {
         content = content.child(embed(app, e, cx));
     }
-    media::set_current_author(None);
+    if has_media {
+        media::set_current_author(None);
+    }
     if let Some(f) = &msg.forward {
         content = div().flex().flex_col().min_w_0().text_size(fz(16.)).text_color(c(Palette::TEXT_NORMAL)).child(forward::wrap(app, f, content));
     }
@@ -1038,13 +1045,14 @@ pub(crate) fn message(
     let reply = msg.reply_to.map(|rid| {
         let found = entry.index_of(rid);
         let (ru, (preview, mranges), rnick) = match found {
-            Some(p) => (app.member_user(app.selected_guild, entry.msgs[p].author), {
-                let (t, m) = crate::richtext::preview_with_mentions(&entry.rendered[p].parsed);
-                (SharedString::from(t), m)
-            }, entry.msgs[p].author_nick.clone().or_else(|| app.member_nick(entry.msgs[p].author)).or_else(|| {
-                let a = entry.msgs[p].author;
-                entry.msgs.iter().rev().filter(|m| m.author == a).find_map(|m| m.author_nick.clone())
-            })),
+            Some(p) => (
+                app.member_user(app.selected_guild, entry.msgs[p].author),
+                (entry.rendered[p].preview.clone(), entry.rendered[p].preview_mentions.clone()),
+                entry.msgs[p].author_nick.clone().or_else(|| app.member_nick(entry.msgs[p].author)).or_else(|| {
+                    let a = entry.msgs[p].author;
+                    entry.msgs.iter().rev().take(64).filter(|m| m.author == a).find_map(|m| m.author_nick.clone())
+                }),
+            ),
             None => match &msg.reply_preview {
                 Some((a, nick, text)) => (
                     app.member_user(app.selected_guild, *a),
@@ -1179,23 +1187,25 @@ pub(crate) fn message(
 
     let reply = reply.or_else(|| msg.interaction.as_ref().filter(|_| msg.reply_to.is_none()).map(|cu| command_msg::header(app, entity, msg, cu, compact, cx)));
 
-    let role_dot = app.author_role_dot(msg.author);
-    let author_name = crate::fonts::styled_name(div(), author, false)
-        .flex_none()
-        .when(role_dot.is_some(), |d| d.flex().items_center())
-        .text_size(fz(16.))
-        .line_height(fz(22.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(color)
-        .id(("msg-author", id.0))
-        .cursor_pointer()
-        .hover(|s| s.underline())
-        .on_click(message_ext::open_author(entity, msg))
-        .child(match crate::ui::role_gradient::for_author(app, msg.author) {
-            Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
-            None => crate::fonts::name_text(name, author, 16.),
-        })
-        .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col))));
+    let author_name = (compact || r.group_start).then(|| {
+        let role_dot = app.author_role_dot(msg.author);
+        crate::fonts::styled_name(div(), author, false)
+            .flex_none()
+            .when(role_dot.is_some(), |d| d.flex().items_center())
+            .text_size(fz(16.))
+            .line_height(fz(22.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(color)
+            .id(("msg-author", id.0))
+            .cursor_pointer()
+            .hover(|s| s.underline())
+            .on_click(message_ext::open_author(entity, msg))
+            .child(match crate::ui::role_gradient::for_author(app, msg.author) {
+                Some(stops) => crate::fonts::name_text_with(name, author, 16., Some(stops)),
+                None => crate::fonts::name_text(name, author, 16.),
+            })
+            .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col))))
+    });
 
     let base = div()
         .id(("msg", id.0))
@@ -1269,7 +1279,7 @@ pub(crate) fn message(
                                 .child(avatar(author, 16. * crate::theme::font_scale())),
                         )
                     })
-                    .child(author_name)
+                    .children(author_name)
                     .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, false)))
                     .when_some(app.author_role_icon(msg.author), |d, u| d.child(role_icon(u)))
                     .when(app.is_new_member(msg.author), |d| d.child(new_member_badge(msg.id)))
@@ -1323,7 +1333,7 @@ pub(crate) fn message(
                         .flex()
                         .items_center()
                         .h(fz(22.))
-                        .child(author_name)
+                        .children(author_name)
                         .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(server_tag_chip(&tg, false)))
                         .when_some(app.author_role_icon(msg.author), |d, u| d.child(role_icon(u)))
                     .when(app.is_new_member(msg.author), |d| d.child(new_member_badge(msg.id)))
@@ -1459,7 +1469,7 @@ fn with_edited(t: &RichText) -> (SharedString, Vec<gpui::TextRun>) {
 }
 
 fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: Option<i64>) -> AnyElement {
-    if !t.emoji.is_empty() || t.has_mention() || !message_ext::code_ranges(t).is_empty() {
+    if !t.emoji.is_empty() || t.has_mention() || message_ext::has_code(t) {
         let el = message_ext::rich_with_emoji(entity, msg, bi, t);
         if let Some(at) = edited {
             return div()
@@ -1823,7 +1833,7 @@ fn embed_blocks(app: &PhoenixApp, src: &str) -> std::rc::Rc<[RBlock]> {
 fn embed_markdown(app: &PhoenixApp, src: &str, size: f32) -> AnyElement {
     let blocks = embed_blocks(app, src);
     let mut d = div().flex().flex_col().text_size(fz(size)).line_height(z(18.)).min_w_0();
-    for b in blocks.iter().cloned() {
+    for b in blocks.iter() {
         d = d.child(match b {
             RBlock::Code { code, runs, .. } => div()
                 .my(z(4.))
@@ -1833,22 +1843,23 @@ fn embed_markdown(app: &PhoenixApp, src: &str, size: f32) -> AnyElement {
                 .font_family(FONT_MONO())
                 .text_size(z(12.))
                 .line_height(z(16.))
-                .child(StyledText::new(code).with_runs(runs))
+                .child(StyledText::new(code.clone()).with_runs(runs.clone()))
                 .into_any_element(),
             RBlock::Quote(t) => div()
                 .flex()
                 .child(div().w(z(4.)).rounded(z(4.)).bg(c(Palette::INTERACTIVE_MUTED)).flex_none())
-                .child(div().pl(z(12.)).child(StyledText::new(t.text).with_runs(t.runs)))
+                .child(div().pl(z(12.)).child(StyledText::new(t.text.clone()).with_runs(t.runs.clone())))
                 .into_any_element(),
             b => {
-                let t = b.text().cloned().unwrap_or_else(|| RichText {
+                let empty = RichText {
                     text: "".into(),
                     runs: vec![],
                     click_ranges: vec![],
                     click_targets: vec![],
                     emoji: vec![],
-                });
-                let el = embed_text(&t, size);
+                };
+                let t = b.text().unwrap_or(&empty);
+                let el = embed_text(t, size);
                 match b {
                     RBlock::Heading(..) => el.font_weight(FontWeight::BOLD).text_size(z(size + 2.)),
                     RBlock::Subtext(_) => el.text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)),

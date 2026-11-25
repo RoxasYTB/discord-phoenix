@@ -76,7 +76,7 @@ fn markdown_lines(
     line: Option<f32>,
 ) -> AnyElement {
     let k = if reduced { 0.875 } else { 1. };
-    let (parsed, mut blocks, _, _) = richtext::build(text, &Names(app), app.me.id, &|_| true);
+    let (parsed, mut blocks, _, _, _) = richtext::build(text, &Names(app), app.me.id, &|_| true);
     if let Some(hl) = hl {
         richtext::apply_highlights(&parsed, &mut blocks, hl);
     }

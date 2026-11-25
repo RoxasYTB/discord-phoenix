@@ -109,6 +109,39 @@ pub fn page_resolver(app: &PhoenixApp, msgs: &[Message]) -> PageResolver {
     out
 }
 
+struct MessagePageResolver<'a> {
+    base: &'a PageResolver,
+    sounds: &'a [crate::model::SoundboardSound],
+}
+
+impl MentionResolver for MessagePageResolver<'_> {
+    fn user(&self, id: u64) -> Option<String> {
+        self.base.user(id)
+    }
+    fn channel(&self, id: u64) -> Option<String> {
+        self.base.channel(id)
+    }
+    fn role(&self, id: u64) -> Option<String> {
+        self.base.role(id)
+    }
+    fn role_color(&self, id: u64) -> Option<u32> {
+        self.base.role_color(id)
+    }
+    fn has_role(&self, id: u64) -> bool {
+        self.base.has_role(id)
+    }
+    fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<SoundboardMention> {
+        self.sounds
+            .iter()
+            .find(|s| s.id.0 == sound_id && (guild_id == 0 || s.guild.is_none_or(|g| g.0 == guild_id)))
+            .map(|sound| SoundboardMention {
+                name: sound.name.as_ref().map(ToString::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| "Unknown".into()),
+                emoji_name: sound.emoji_name.as_ref().map(ToString::to_string),
+            })
+            .or_else(|| self.base.soundboard(guild_id, sound_id))
+    }
+}
+
 pub fn render_page(
     msgs: &[Message],
     resolver: &PageResolver,
@@ -119,20 +152,12 @@ pub fn render_page(
     (0..msgs.len())
         .map(|i| {
             let (m, prev) = (&msgs[i], i.checked_sub(1).map(|p| &msgs[p]));
-            let mut message_resolver = PageResolver {
-                users: resolver.users.clone(),
-                channels: resolver.channels.clone(),
-                roles: resolver.roles.clone(),
-                ..PageResolver::default()
+            let message_resolver = MessagePageResolver {
+                base: resolver,
+                sounds: &m.soundboard_sounds,
             };
-            for sound in &m.soundboard_sounds {
-                message_resolver.sounds.insert((sound.guild.map_or(0, |id| id.0), sound.id.0), SoundboardMention {
-                    name: sound.name.as_ref().map(ToString::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| "Unknown".into()),
-                    emoji_name: sound.emoji_name.as_ref().map(ToString::to_string),
-                });
-            }
             let rev = |s: usize| revealed.contains(&(m.id, s));
-            let (parsed, blocks, mentions_me, preview) = richtext::build(&m.content, &message_resolver, me, &rev);
+            let (parsed, blocks, mentions_me, preview, preview_mentions) = richtext::build(&m.content, &message_resolver, me, &rev);
             RenderedMessage {
                 group_start: grouping::starts_group(prev, m, utc_offset),
                 day_divider: (prev.is_none() || grouping::day_divider(prev, m, utc_offset))
@@ -142,6 +167,7 @@ pub fn render_page(
                 blocks,
                 mentions_me,
                 preview,
+                preview_mentions,
                 parsed,
             }
         })

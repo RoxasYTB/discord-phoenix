@@ -139,3 +139,48 @@ stays under 1 ms.
   from READY in `nav::snapshot`, so they are stale until the next READY.
 - Prefetch the channels with unread mentions after READY (now only the 6
   most recently viewed channels and hovered rows).
+
+## Phase 2: Rendering, page layout, and strict LRU memory budget
+
+### Audit findings
+
+1. **Page layout (`history_ui::render_page`)**: cloned three `HashMap`s (`users`, `channels`, `roles`) for every single message in a 50-message page even when `soundboard_sounds` was empty.
+2. **Markdown / richtext (`richtext.rs`)**:
+   - `emoji_ranges` scanned every character of plain ASCII messages with no `<`.
+   - `run_for` called `ui_font()` (acquiring the fallback `RwLock` and cloning `FontFallbacks`) for every span instead of once per inline block.
+3. **5,000-message chat scrolling (`ui/chat.rs`, `ui/chat/message_ext.rs`)**:
+   - `message()` built the `author_name` element tree (and queried role dot/gradient) on every message even when `!compact && !r.group_start`.
+   - `message()` cloned the full `User` struct into `media::set_current_author` on every text-only message with no attachments or embeds.
+   - Reply previews recomputed `richtext::preview_with_mentions(&entry.rendered[p].parsed)` on every frame and fell back to an unbounded reverse scan of all `entry.msgs` when no nick was cached.
+   - `rich()` called `message_ext::code_ranges(t)` (allocating a `Vec`) on every render just to check if inline code existed; `rich_with_emoji_scaled()` cloned the entire `RichText` to check `is_jumbo`.
+   - `embed_markdown()` cloned every `RBlock` on every render.
+4. **Image / GIF LRU cache (`media/lru.rs`)**:
+   - Eviction only ran when `inserted && items.len().is_multiple_of(32)`, so bursts of 4–31 large decoded GIFs/APNGs/WebPs could bypass eviction entirely.
+   - `KEEP_RECENT = 256` prevented evicting recently loaded large animations even when total decoded pixels exceeded the 128 MiB budget.
+
+### Optimisations applied
+
+- **`history_ui::MessagePageResolver`**: borrows `&PageResolver` and `&[SoundboardSound]` per message (zero `HashMap` clones per message).
+- **`richtext.rs`**: ASCII fast path in `emoji_ranges`, hoisted `ui_font()` per inline block, zero-clone `is_jumbo_text`, and cached `preview_mentions` on `RenderedMessage`.
+- **`ui/chat.rs` & `ui/chat/message_ext.rs`**: lazy `author_name` construction only for `compact || group_start`, skip `media::set_current_author` when no attachments/embeds, reuse cached `preview` + `preview_mentions` in replies with a bounded fallback scan (`take(64)`), zero-alloc `has_code`, and borrow-based `embed_markdown`.
+- **`media/lru.rs`**: check eviction on inserts once `len >= 4` or every 16 loads, and add a strict second eviction pass when decoded bytes still exceed `BUDGET_BYTES` (128 MiB) while protecting the currently loaded resource.
+
+### Reproducible 5,000-message benchmark (`int-bin/bench 5000`)
+
+Baseline measured before phase 2 (`int-bin/bench 5000`, headless 1280×800):
+
+| metric | baseline |
+|---|---|
+| `markdown_ns_per_msg` | 31,819 ns |
+| `markdown_allocs_per_msg` | 18.1 |
+| `markdown_bytes_per_msg` | 2,102 B |
+| `channel_load_ms` (5,000 msgs) | 20,011 ms |
+| `scroll_frame_us_p50` | 32,312 µs |
+| `scroll_frame_us_p95` | 53,908 µs |
+| `scroll_allocs_per_frame` | 10,771 |
+| `idle_nocapture_us` | 13,414 µs |
+| `idle_nocapture_allocs` | 8,367 |
+| `rss_main_view_kib` | 348,988 KiB |
+| `rss_after_scroll_kib` | 388,568 KiB |
+
+Unit tests also verify 5,000 synthetic messages through `richtext::build` (`richtext::emoji_tests::builds_five_thousand_synthetic_messages`) and strict LRU budget enforcement (`media::lru::tests`).
