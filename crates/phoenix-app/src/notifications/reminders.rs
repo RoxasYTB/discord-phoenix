@@ -74,19 +74,19 @@ pub fn on_saved_message_delete(data: &Value) {
 }
 
 pub fn restart() -> u64 {
-    let gen = RUN.fetch_add(1, Ordering::SeqCst) + 1;
+    let run_id = RUN.fetch_add(1, Ordering::SeqCst) + 1;
     list().clear();
     WAKE.notify_waiters();
-    gen
+    run_id
 }
 
-pub async fn run(cache: Cache, gen: u64) {
+pub async fn run(cache: Cache, run_id: u64) {
     let mut floor = i64::MIN;
     loop {
         let notified = WAKE.notified();
         tokio::pin!(notified);
         notified.as_mut().enable();
-        if RUN.load(Ordering::SeqCst) != gen {
+        if RUN.load(Ordering::SeqCst) != run_id {
             return;
         }
         let now = now_ms().max(floor);
@@ -98,7 +98,7 @@ pub async fn run(cache: Cache, gen: u64) {
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_millis((e.due_ms - now).max(0) as u64)) => {
                 floor = e.due_ms;
-                if RUN.load(Ordering::SeqCst) != gen {
+                if RUN.load(Ordering::SeqCst) != run_id {
                     return;
                 }
                 super::on_reminder_due(&cache, &e);
