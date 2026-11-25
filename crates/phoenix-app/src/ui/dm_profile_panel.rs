@@ -27,7 +27,7 @@ pub fn peer(app: &PhoenixApp) -> Option<Id> {
     ch.voice_users.first().copied()
 }
 
-fn ensure_profile(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) {
+pub(crate) fn ensure_profile(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) {
     if app.people.profiles.contains_key(&uid) || !REQUESTED.with(|r| r.borrow_mut().insert(uid)) {
         return;
     }

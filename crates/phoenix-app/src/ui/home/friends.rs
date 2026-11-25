@@ -12,14 +12,14 @@ use crate::{
     model::{Id, Presence},
     theme::{Palette, c, generated::idx, m, tok},
     ui::{
-        avatar_with_status, badge, icon,
+        badge, icon,
         home::data::{FriendsTab, HomeView, NavRequest, RelAction, Relationship, RelationshipKind},
     },
 };
 
 pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     if app.nav.home == HomeView::MessageRequests {
-        return message_requests(app, cx).into_any_element();
+        return crate::ui::home::requests::render(app, cx);
     }
     if app.nav.friends_tab == FriendsTab::AddFriend && app.nav.add_friend_input.is_none() {
         ensure_add_input(app, window, cx);
@@ -1238,68 +1238,6 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
         col = col.child(card);
     }
     col
-}
-
-fn message_requests(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
-    let reqs: Vec<Id> = app.nav.message_requests.iter().copied().filter(|c| app.channels.contains_key(c)).collect();
-    let mut body = div().id("msg-requests").flex_1().overflow_y_scroll().p(z(20.)).flex().flex_col();
-    if reqs.is_empty() {
-        body = body.child(
-            div()
-                .pt(z(160.))
-                .flex()
-                .justify_center()
-                .text_size(z(16.))
-                .text_color(c(Palette::TEXT_MUTED))
-                .child(crate::t!("friends.no_message_requests")),
-        );
-    }
-    for id in reqs {
-        let ch = &app.channels[&id];
-        let u = ch.voice_users.first().and_then(|u| app.users.get(u));
-        body = body.child(
-            div()
-                .id(("req", id.0))
-                .h(z(62.))
-                .flex()
-                .items_center()
-                .gap(z(12.))
-                .border_t_1()
-                .border_color(c(Palette::DIVIDER))
-                .cursor_pointer()
-                .hover(|s| s.bg(c(Palette::BG_MOD_HOVER)))
-                .on_click(cx.listener(move |a, _, _, cx| a.select_channel(id, cx)))
-                .child(avatar_with_status(u, 32., Presence::Offline, c(Palette::BG_PRIMARY)))
-                .child(div().text_size(z(16.)).text_color(c(Palette::TEXT_HEADER)).child(ch.name.clone())),
-        );
-    }
-    div()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .flex()
-        .flex_col()
-        .bg(c(Palette::BG_PRIMARY))
-        .child(
-            div()
-                .h(px(m::HEADER_H))
-                .flex_none()
-                .px(z(16.))
-                .flex()
-                .items_center()
-                .gap(z(8.))
-                .border_b_1()
-                .border_color(c(Palette::HEADER_SHADOW))
-                .child(icon(Icon::Inbox, 24., c(Palette::CHANNEL_ICON)))
-                .child(
-                    div()
-                        .text_size(z(16.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(c(Palette::TEXT_HEADER))
-                        .child(crate::t!("friends.message_requests")),
-                ),
-        )
-        .child(body)
 }
 
 #[cfg(test)]

@@ -101,6 +101,7 @@ pub enum NavEvent {
         threads: Vec<Channel>,
         extras: Vec<(Id, ChannelExtra)>,
         message_requests: Vec<Id>,
+        spam_requests: Vec<Id>,
     },
     RelationshipUpsert(Relationship),
     RelationshipRemove(Id),
@@ -136,6 +137,8 @@ pub enum NavRequest {
     Relationship { user: Id, action: RelAction },
     OpenDm(Id),
     CloseDm(Id),
+    MessageRequest { channel: Id, accept: bool },
+    RejectMessageRequests(Vec<Id>),
     AckChannel(Id),
     AckGuild(Id),
     Mute { guild: Option<Id>, channel: Option<Id>, muted: bool, secs: Option<u32> },
@@ -191,6 +194,8 @@ pub struct NavState {
     pub extras: HashMap<Id, ChannelExtra>,
     pub activities: HashMap<Id, SharedString>,
     pub message_requests: Vec<Id>,
+    pub spam_requests: Vec<Id>,
+    pub requests_spam_tab: bool,
     pub home: HomeView,
     pub friends_tab: FriendsTab,
     pub guild_menu: bool,
@@ -241,7 +246,8 @@ impl NavState {
 
     pub fn apply(&mut self, ev: NavEvent) {
         match ev {
-            NavEvent::Snapshot { relationships, folders, threads, extras, message_requests } => {
+            NavEvent::Snapshot { relationships, folders, threads, extras, message_requests, spam_requests } => {
+                self.spam_requests = spam_requests;
                 self.relationships = relationships;
                 self.folders = folders;
                 self.threads.clear();

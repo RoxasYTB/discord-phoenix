@@ -813,6 +813,11 @@ fn main() -> anyhow::Result<()> {
                     "add" => F::AddFriend,
                     _ => F::Online,
                 };
+            } else if view == "requests" {
+                app.select_guild(None, cx);
+                app.nav.home = phoenix_app::ui::home::data::HomeView::MessageRequests;
+                app.nav.requests_spam_tab = tab == "spam";
+                app.selected_channel = None;
             } else if view == "discovery" {
                 app.select_guild(None, cx);
                 app.selected_channel = None;

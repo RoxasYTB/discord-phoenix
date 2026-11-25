@@ -274,9 +274,10 @@ pub fn snapshot(cache: &Cache, ready: &Ready) -> Vec<AppEvent> {
     }
     let banners = cache.guilds().iter().map(|g| (id(g.id), g.properties.banner.clone())).collect();
     extras.extend(cache.private_channels().iter().map(|c| (id(c.id), extra(cache, c))));
-    let message_requests = cache.private_channels().iter().filter(|c| c.is_message_request).map(|c| id(c.id)).collect();
+    let message_requests = cache.private_channels().iter().filter(|c| c.is_message_request && !c.is_spam).map(|c| id(c.id)).collect();
+    let spam_requests = cache.private_channels().iter().filter(|c| c.is_spam).map(|c| id(c.id)).collect();
     vec![
-        AppEvent::Nav(NavEvent::Snapshot { relationships, folders, threads, extras, message_requests }),
+        AppEvent::Nav(NavEvent::Snapshot { relationships, folders, threads, extras, message_requests, spam_requests }),
         AppEvent::Nav(NavEvent::Banners(banners)),
     ]
 }
@@ -587,6 +588,17 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
                 voice_users: c.recipient_user_ids().first().copied().map(id).into_iter().collect(),
             })
         }
+        NavRequest::MessageRequest { channel, accept } => {
+            let (m, path, body) = message_request_call(channel.0, accept);
+            call(m, path, body).await?;
+            NavReply::Done
+        }
+        NavRequest::RejectMessageRequests(ids) => {
+            for (m, path, body) in reject_batches(&ids) {
+                call(m, path, body).await?;
+            }
+            NavReply::Done
+        }
         NavRequest::CloseDm(ch) => {
             call(Method::DELETE, format!("/channels/{}?silent=false", sf(ch)), None).await?;
             NavReply::Done
@@ -638,6 +650,20 @@ pub(crate) fn rel_request(user: u64, action: &RelAction) -> (Method, String, Opt
     }
 }
 
+pub(crate) fn message_request_call(channel: u64, accept: bool) -> (Method, String, Option<Value>) {
+    let path = format!("/channels/{channel}/recipients/@me");
+    if accept { (Method::PUT, path, Some(json!({ "consent_status": 2 }))) } else { (Method::DELETE, path, None) }
+}
+
+pub(crate) fn reject_batches(ids: &[Id]) -> Vec<(Method, String, Option<Value>)> {
+    ids.chunks(50)
+        .map(|c| {
+            let ids: Vec<String> = c.iter().map(|i| i.0.to_string()).collect();
+            (Method::PUT, "/channels/recipients/@me/batch-reject".to_owned(), Some(json!({ "channel_ids": ids })))
+        })
+        .collect()
+}
+
 fn add_friend_failure(e: &phoenix_api::Error) -> crate::ui::home::add_friend::Failure {
     use crate::ui::home::add_friend::Failure;
     match e {
@@ -686,6 +712,20 @@ mod rel_tests {
         let (m, p, b) = rel_request(0, &RelAction::AddByTag { tag: "wumpus".into(), note: Some("hey".into()) });
         assert_eq!((m, p.as_str()), (Method::POST, "/users/@me/relationships"));
         assert_eq!(b, Some(json!({ "username": "wumpus", "discriminator": null, "note": "hey" })));
+    }
+
+    #[test]
+    fn message_request_calls_match_the_client() {
+        let (m, p, b) = message_request_call(7, true);
+        assert_eq!((m, p.as_str(), b), (Method::PUT, "/channels/7/recipients/@me", Some(json!({ "consent_status": 2 }))));
+        let (m, p, b) = message_request_call(7, false);
+        assert_eq!((m, p.as_str(), b), (Method::DELETE, "/channels/7/recipients/@me", None));
+        let ids: Vec<Id> = (1..=120).map(Id).collect();
+        let batches = reject_batches(&ids);
+        assert_eq!(batches.len(), 3);
+        assert_eq!(batches[0].1, "/channels/recipients/@me/batch-reject");
+        assert_eq!(batches[2].2.as_ref().unwrap()["channel_ids"].as_array().unwrap().len(), 20);
+        assert_eq!(batches[0].2.as_ref().unwrap()["channel_ids"][0], json!("1"));
     }
 
     #[test]

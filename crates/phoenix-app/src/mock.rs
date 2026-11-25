@@ -559,6 +559,7 @@ impl Backend for MockBackend {
                     threads: vec![],
                     extras: vec![],
                     message_requests: vec![],
+                    spam_requests: vec![],
                 })
             });
         }

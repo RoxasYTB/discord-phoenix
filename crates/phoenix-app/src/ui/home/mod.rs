@@ -2,6 +2,7 @@ pub mod add_friend;
 pub mod data;
 pub mod friends;
 pub mod nitro;
+pub mod requests;
 pub mod topic;
 
 use gpui::{AnyElement, Context, IntoElement, SharedString, Window};
