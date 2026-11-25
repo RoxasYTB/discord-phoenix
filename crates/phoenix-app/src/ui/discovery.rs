@@ -134,6 +134,22 @@ pub fn parse_search(v: &Value) -> SearchResults {
 
 pub const SEARCH_SIDEBAR_ROWS: usize = 8;
 
+pub fn parse_category_names(v: &Value, locale: &str) -> std::collections::HashMap<i64, SharedString> {
+    let list = v.as_array().or_else(|| v.get("categories").and_then(Value::as_array)).cloned().unwrap_or_default();
+    list.iter()
+        .filter_map(|c| {
+            let id = c["id"].as_i64().or_else(|| c["id"].as_str()?.parse().ok())?;
+            let n = &c["name"];
+            let name = n
+                .as_str()
+                .or_else(|| n["localizations"][locale].as_str())
+                .or_else(|| n["localizations"][locale.split('-').next().unwrap_or(locale)].as_str())
+                .or_else(|| n["default"].as_str())?;
+            Some((id, SharedString::from(name.to_owned())))
+        })
+        .collect()
+}
+
 #[derive(Default)]
 struct Search {
     query: String,
@@ -258,10 +274,7 @@ fn ensure_loaded(app: &PhoenixApp, cat: Category, cx: &mut Context<PhoenixApp>) 
         let fut = app.backend.discovery_categories(crate::i18n::locale().to_string());
         cx.spawn(async move |this, cx| {
             let v = fut.await.unwrap_or(Value::Null);
-            let map = v
-                .as_array()
-                .map(|a| a.iter().filter_map(|c| Some((c["id"].as_i64()?, SharedString::from(c["name"].as_str()?.to_owned())))).collect())
-                .unwrap_or_default();
+            let map = parse_category_names(&v, crate::i18n::locale());
             STATE.with(|s| s.borrow_mut().names = Some(map));
             let _ = this.update(cx, |_, cx| cx.notify());
         })
@@ -768,6 +781,9 @@ pub fn page(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>)
         return apps_page(app, window, cx);
     }
     ensure_input(app, window, cx);
+    if let Some(i) = INPUT.with(|i| i.borrow().clone()) {
+        crate::ui::locale_inputs::keep_placeholder(&i, "discovery.search", window, cx);
+    }
     let cat = category();
     ensure_loaded(app, cat, cx);
     let vw = f32::from(window.viewport_size().width) / crate::theme::zoom() - crate::ui::sidebar_resize::width() - 72.;
@@ -1119,6 +1135,13 @@ mod tests {
         assert_eq!(CATEGORIES.len(), 7);
         assert_eq!(category_text(Category::Id(1)).section, Some("discovery.cat_popular.gaming"));
         assert!(category_text(Category::Hubs).section.is_none());
+    }
+
+    #[test]
+    fn category_names_accept_plain_and_localized_forms() {
+        let a = parse_category_names(&json!([{"id": 1, "name": "Gaming"}, {"id": "14", "name": {"default": "General Chatting", "localizations": {"fr": "Discussion générale"}}}]), "fr");
+        assert_eq!(a.get(&1).map(|x| x.as_ref()), Some("Gaming"));
+        assert_eq!(a.get(&14).map(|x| x.as_ref()), Some("Discussion générale"));
     }
 
     #[test]
