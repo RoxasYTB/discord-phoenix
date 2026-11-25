@@ -331,7 +331,7 @@ pub fn message(m: &api::Message) -> model::Message {
             let ms = |t: &str| chrono::DateTime::parse_from_rfc3339(t).ok().map(|d| d.timestamp_millis());
             model::CallInfo {
                 participants: c.participants.iter().map(|p| id(*p)).collect(),
-                duration_ms: c.ended_timestamp.as_deref().and_then(ms).map(|end| end - ms(&m.timestamp).unwrap_or(m.id.timestamp_ms() as i64)),
+                duration_ms: c.ended_timestamp.as_deref().and_then(ms).map(|end| end - ms(m.timestamp.as_str()).unwrap_or(m.id.timestamp_ms() as i64)),
             }
         }),
     }

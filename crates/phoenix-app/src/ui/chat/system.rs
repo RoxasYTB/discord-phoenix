@@ -236,7 +236,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
             SysIcon::Named(name, size, tint) => div()
                 .absolute()
                 .left(z(44. - size / 2.))
-                .top(z(13. - size / 2.))
+                .top(z(15. - size / 2.))
                 .child(
                     gpui::svg()
                         .path(crate::icons::path(name))
