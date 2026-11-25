@@ -340,12 +340,16 @@ impl UpdateStatus {
 
 static STATE: OnceLock<RwLock<UpdateStatus>> = OnceLock::new();
 static REV: AtomicU64 = AtomicU64::new(0);
+static MOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn state() -> &'static RwLock<UpdateStatus> {
     STATE.get_or_init(|| RwLock::new(UpdateStatus::Idle))
 }
 
 fn set_status(next: UpdateStatus, on_change: &dyn Fn()) {
+    if MOCKED.load(AtomicOrdering::Relaxed) {
+        return;
+    }
     *state().write() = next;
     REV.fetch_add(1, AtomicOrdering::Relaxed);
     on_change();
@@ -364,6 +368,7 @@ pub fn available_release() -> Option<ReleaseInfo> {
 }
 
 pub fn set_mock_available(release: ReleaseInfo) {
+    MOCKED.store(true, AtomicOrdering::Relaxed);
     *state().write() = UpdateStatus::Available(release);
     REV.fetch_add(1, AtomicOrdering::Relaxed);
 }
@@ -377,6 +382,9 @@ fn http_client() -> Result<reqwest::Client, String> {
 }
 
 pub fn check_now(include_beta: bool, on_change: Arc<dyn Fn() + Send + Sync>) {
+    if MOCKED.load(AtomicOrdering::Relaxed) {
+        return;
+    }
     if matches!(status(), UpdateStatus::Checking | UpdateStatus::Downloading { .. } | UpdateStatus::Verifying(_)) {
         return;
     }
