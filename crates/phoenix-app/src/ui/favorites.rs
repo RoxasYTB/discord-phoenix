@@ -529,7 +529,7 @@ pub fn render_thread_settings(s: &ThreadSettings, cx: &mut Context<PhoenixApp>) 
             (crate::t!("fav.auto_never"), None, d.auto_add == AutoAdd::Never),
         ],
         false,
-        std::rc::Rc::new(move |n| set_draft(|s| s.draft.auto_add = modes[n])),
+        std::rc::Rc::new(move |n: usize| set_draft(|s| s.draft.auto_add = modes[n])),
         cx,
     );
     let timing = if d.prune { Some(d.days) } else { None };
@@ -544,7 +544,7 @@ pub fn render_thread_settings(s: &ThreadSettings, cx: &mut Context<PhoenixApp>) 
         Some(crate::t!("fav.prune_desc")),
         prune_opts,
         false,
-        std::rc::Rc::new(|n| {
+        std::rc::Rc::new(|n: usize| {
             set_draft(|s| match PRUNE_DAYS.get(n) {
                 Some(&days) => {
                     s.draft.prune = true;
@@ -561,7 +561,7 @@ pub fn render_thread_settings(s: &ThreadSettings, cx: &mut Context<PhoenixApp>) 
         None,
         vec![(crate::t!("fav.scope_auto"), None, !d.all), (crate::t!("fav.scope_all"), None, d.all)],
         !d.prune,
-        std::rc::Rc::new(|n| set_draft(|s| s.draft.all = n == 1)),
+        std::rc::Rc::new(|n: usize| set_draft(|s| s.draft.all = n == 1)),
         cx,
     );
     let body = div()

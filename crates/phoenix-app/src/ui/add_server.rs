@@ -90,9 +90,8 @@ pub fn create_guild_body(
     name: &str,
     icon: Option<&str>,
     template: Option<&str>,
-    community: Option<bool>,
+    _community: Option<bool>,
 ) -> serde_json::Value {
-    let _ = community;
     serde_json::json!({
         "name": name.trim(),
         "icon": icon,
