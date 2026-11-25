@@ -247,6 +247,7 @@ pub fn on_resync(app: &mut App, r: Resync, cx: &mut Context<App>) {
     let (home, discovery) = (app.nav.home, crate::ui::discovery::current());
     app.apply_ready(r.0, cx);
     app.forums_after_resync();
+    crate::ui::quests_page::after_resync();
     if guild.is_none() || app.guilds.iter().any(|g| Some(g.id) == guild) {
         app.select_guild(guild, cx);
     }

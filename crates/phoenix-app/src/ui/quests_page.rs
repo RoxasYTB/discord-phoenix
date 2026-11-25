@@ -223,6 +223,8 @@ thread_local! {
     static QUESTS: RefCell<Option<Vec<Quest>>> = const { RefCell::new(None) };
     static BALANCE: Cell<Option<u64>> = const { Cell::new(None) };
     static REQUESTED: Cell<bool> = const { Cell::new(false) };
+    static FAILED: Cell<bool> = const { Cell::new(false) };
+    static CLAIMED_FAILED: Cell<bool> = const { Cell::new(false) };
 }
 
 fn asset(v: &Value) -> Option<SharedString> {
@@ -328,6 +330,17 @@ pub fn description(q: &Quest, reward: &str) -> SharedString {
     }
 }
 
+pub fn after_resync() {
+    if FAILED.with(|f| f.replace(false)) {
+        QUESTS.with(|q| *q.borrow_mut() = None);
+        REQUESTED.with(|r| r.set(false));
+    }
+    if CLAIMED_FAILED.with(|f| f.replace(false)) {
+        CLAIMED.with(|c| *c.borrow_mut() = None);
+        CLAIMED_REQUESTED.with(|r| r.set(false));
+    }
+}
+
 fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     if REQUESTED.with(|r| r.replace(true)) {
         return;
@@ -335,7 +348,9 @@ fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let fut = app.backend.quests();
     let bal = app.backend.orbs_balance();
     cx.spawn(async move |this, cx| {
-        let v = fut.await.unwrap_or(Value::Null);
+        let r = fut.await;
+        FAILED.with(|f| f.set(r.is_err()));
+        let v = r.unwrap_or(Value::Null);
         QUESTS.with(|q| *q.borrow_mut() = Some(parse(&v, Utc::now())));
         let b = bal.await.ok().flatten();
         BALANCE.with(|c| c.set(b));
@@ -759,7 +774,9 @@ fn ensure_claimed(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     }
     let fut = app.backend.directory_get("/quests/@me/claimed".into());
     cx.spawn(async move |this, cx| {
-        let v = fut.await.unwrap_or(Value::Null);
+        let r = fut.await;
+        CLAIMED_FAILED.with(|f| f.set(r.is_err()));
+        let v = r.unwrap_or(Value::Null);
         CLAIMED.with(|c| *c.borrow_mut() = Some(parse_claimed(&v)));
         let _ = this.update(cx, |_, cx| cx.notify());
     })
@@ -859,6 +876,19 @@ fn popout(sort: Sort, filters: &[Filter]) -> Option<AnyElement> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_quests_are_asked_again_after_resync() {
+        REQUESTED.with(|r| r.set(true));
+        FAILED.with(|f| f.set(true));
+        QUESTS.with(|q| *q.borrow_mut() = Some(Vec::new()));
+        after_resync();
+        assert!(!REQUESTED.with(|r| r.get()));
+        assert!(QUESTS.with(|q| q.borrow().is_none()));
+        REQUESTED.with(|r| r.set(true));
+        after_resync();
+        assert!(REQUESTED.with(|r| r.get()));
+    }
 
     fn sample() -> Value {
         serde_json::json!({"quests": [
