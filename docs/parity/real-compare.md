@@ -272,7 +272,7 @@ with Escape, then the layer's "Fermer" button if Escape did not close it (it did
 restores tab 0), `set-*` for every 2026 sidebar entry, `srv-*`, `chanset-*`, `home`, `discovery`,
 `quests`. Sizes 1536×840 and 1280×720, dpr 1.5, page zoom 125 %. Scores = `compare.py` mismatch %
 (pixels off by more than 24/255). "Before" = int-bin 97c3b9a0 (views first rendered after lot 1:
-dbacd367), "after" = int-bin after the last merge of this branch.
+dbacd367), "after" = int-bin cf929fbd.
 
 Writes seen: `POST /science` and `/metrics/v2` (telemetry) on most passes, nothing else, except
 ⚠ one `POST /channels/:id/messages/:id/ack` when the `dm` view opened a DM (12:37): the DM had an
@@ -289,7 +289,58 @@ published anywhere.
 
 ### Scores
 
-SCORES_PLACEHOLDER
+| Size | View | Title | Rail | Channels | Header | Messages | Composer | Members | DM panel | User panel | Popout | Search | Set. nav | Set. content | Overall before → after |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1536×840 | channel | 1.5 | 3.1 → 7.1 | 2.9 → 5.9 | 2.4 | 8.3 → 24.6 | 3.6 | 28.6 → 13.5 | — | 7.3 | — | — | — | — | 9.4 → **15.2** |
+| 1536×840 | members | 1.5 | 3.1 | 2.9 | 2.4 | 8.3 → 24.6 | 3.6 | 28.6 → 13.4 | — | 7.3 | — | — | — | — | 9.4 → **14.4** |
+| 1536×840 | phx | 1.5 | 2.9 | 9.2 | 2.3 | 16.2 → 29.5 | 3.5 | 28.9 → 29.0 | — | 8.1 | — | — | — | — | 14.3 → **20.4** |
+| 1536×840 | pins | 1.5 | 3.1 | 2.9 | 2.4 | 14.9 → 24.7 | 3.1 | 28.9 → 14.3 | — | 7.3 | 15.2 → 15.3 | — | — | — | 12.4 → **14.6** |
+| 1536×840 | threads | 1.5 | 3.1 → 7.1 | 2.9 → 5.9 | 2.6 | 9.6 → 23.4 | 3.6 | 27.1 → 14.4 | — | 7.3 | 6.1 | — | — | — | 9.7 → **14.9** |
+| 1536×840 | plus | 1.5 | 3.1 | 2.9 | 2.4 | 7.0 → 19.3 | 3.3 | 23.0 → 14.4 | — | 7.3 | 11.1 → 11.0 | — | — | — | 7.9 → **12.2** |
+| 1536×840 | emoji | 1.5 | 3.1 | 2.9 | 2.4 | 18.4 → 26.2 | 3.4 | 24.3 → 14.3 | — | 7.3 | 28.0 → 28.2 | — | — | — | 13.3 → **15.3** |
+| 1536×840 | gif | 1.5 | 3.1 | 2.9 | 2.4 | 11.7 → 19.5 | 3.3 | 22.9 → 14.3 | — | 7.3 | 12.0 | — | — | — | 10.0 → **12.2** |
+| 1536×840 | sticker | 1.5 | 3.6 → 3.1 | 2.9 | 2.4 | 11.2 → 17.9 | 3.3 | 22.9 → 14.3 | — | 7.3 | 10.7 → 8.1 | — | — | — | 9.8 → **11.5** |
+| 1536×840 | search | 1.5 | 7.4 → 3.3 | 5.9 → 2.9 | 2.5 | 12.4 → 24.8 | 5.1 | — | — | 7.3 | — | 16.1 | — | — | 9.7 → **16.3** |
+| 1536×840 | profile | 1.5 | 3.1 → 7.1 | 2.9 → 5.9 | 2.4 | 16.6 → 29.9 | 5.8 → 6.1 | 29.1 → 14.6 | — | 7.6 → 7.3 | 30.6 → 29.8 | — | — | — | 13.4 → **18.0** |
+| 1536×840 | home | 1.3 | 5.6 → 5.3 | 5.9 → 10.3 | 5.0 | 10.0 → 9.0 | 7.4 → 9.8 | — | — | 7.6 | — | — | — | — | 8.3 → **8.7** |
+| 1536×840 | dm | 2.1 | 5.3 | 6.0 → 18.9 | 3.3 | 5.2 | 3.5 | — | 7.0 | 7.4 → 7.5 | — | — | — | — | 5.4 → **8.2** |
+| 1536×840 | discovery | 1.5 | 5.1 → 5.2 | 1.5 | 7.6 | 14.8 | 31.6 → 38.6 | — | — | 7.2 | — | — | — | — | 11.7 → **12.1** |
+| 1536×840 | quests | 1.4 | 5.6 → 5.3 | 5.9 → 10.2 | 6.1 → 5.3 | 46.5 | 21.0 | — | — | 7.6 | — | — | — | — | 31.0 → **31.9** |
+| 1536×840 | inbox-0 | 2.4 → 1.3 | 8.4 → 5.3 | 31.5 → 10.6 | 10.8 → 5.6 | 12.0 → 8.6 | 11.5 → 9.1 | — | — | 7.6 | 8.7 → 9.9 | — | — | — | 15.5 → **8.5** |
+| 1536×840 | inbox-1 | 2.4 → 1.3 | 8.4 → 5.3 | 31.5 → 10.3 | 10.9 → 5.7 | 15.6 → 14.3 | 10.9 → 9.1 | — | — | 7.6 | 17.5 → 21.2 | — | — | — | 17.6 → **11.9** |
+| 1536×840 | inbox-2 | 2.4 → 1.3 | 8.4 → 36.2 | 31.5 → 10.3 | 10.7 → 5.5 | 11.1 → 7.1 | 11.6 → 8.4 | — | — | 7.6 → 7.7 | 6.6 | — | — | — | 14.9 → **9.0** |
+| 1536×840 | inbox-3 | 2.4 → 1.3 | 8.4 → 36.2 | 31.5 → 10.3 | 10.7 → 5.5 | 10.9 → 7.0 | 11.6 → 8.4 | — | — | 7.6 → 7.7 | 6.2 | — | — | — | 14.8 → **8.9** |
+| 1536×840 | inbox-4 | 2.4 → 1.3 | 8.4 → 36.2 | 31.5 → 10.3 | 10.7 → 5.5 | 10.5 → 6.6 | 11.6 → 8.4 | — | — | 7.6 → 7.7 | 5.3 | — | — | — | 14.6 → **8.7** |
+| 1536×840 | set-account | 0.7 | 2.0 → 15.1 | 2.2 | 0.2 | 1.6 → 1.5 | 1.4 → 2.6 | — | — | 2.1 | — | — | 2.8 | 1.4 → 1.5 | 1.7 → **2.3** |
+| 1536×840 | set-privacy | 0.7 | 2.0 → 15.1 | 2.4 | 1.1 | 9.5 → 9.4 | 4.2 → 4.5 | — | — | 2.1 | — | — | 3.1 | 8.1 → 8.0 | 6.7 → **7.2** |
+| 1536×840 | set-msgperms | 0.7 | 2.0 → 1.5 | 2.2 | 1.2 | 6.5 → 6.4 | 5.3 → 6.5 | — | — | 2.4 → 2.3 | — | — | 2.7 → 2.8 | 5.7 | 4.9 → **4.9** |
+| 1536×840 | set-notifications | 0.7 | 2.0 → 1.5 | 2.0 | 0.3 | 4.4 → 4.3 | 1.8 → 2.3 | — | — | 2.1 → 2.0 | — | — | 2.5 | 3.8 → 3.7 | 3.3 → **3.3** |
+| 1536×840 | set-voice | 0.7 | 2.0 → 1.5 | 10.8 | 0.3 | 3.5 | 2.4 → 2.8 | — | — | 2.7 → 2.6 | — | — | 15.0 | 3.0 | 4.7 → **4.6** |
+| 1536×840 | set-appearance | 0.7 | 2.0 → 1.5 | 11.3 | 0.2 | 4.3 → 4.2 | 8.8 → 10.5 | — | — | 16.6 → 16.5 | — | — | 15.7 | 4.2 → 4.3 | 5.6 → **5.7** |
+| 1536×840 | set-accessibility | 0.7 | 1.5 | 11.7 | 0.3 | 4.5 | 3.0 | — | — | 16.5 | — | — | 16.3 | 3.9 | — → **5.5** |
+| 1536×840 | set-system | 0.7 | 2.0 → 1.5 | 11.8 | 0.2 | 5.6 → 5.5 | 6.9 → 8.5 | — | — | 16.9 → 16.5 | — | — | 16.4 | 5.1 | 6.4 → **6.4** |
+| 1536×840 | set-language | 0.7 | 0.3 | 12.0 | 0.5 | 1.2 → 1.1 | 1.5 → 2.8 | — | — | 17.1 | — | — | 16.7 | 1.1 → 1.2 | 3.4 → **3.5** |
+| 1536×840 | set-games | 0.7 | 0.3 | 11.9 | 0.5 | 4.1 | 3.1 → 3.9 | — | — | 16.8 | — | — | 16.5 | 3.6 | 5.2 → **5.3** |
+| 1536×840 | set-activity | 0.7 | 0.3 | 14.7 | 1.2 | 5.1 | 6.9 → 7.3 | — | — | 16.4 | — | — | 20.5 | 4.7 | 6.7 → **6.7** |
+| 1280×720 | home | 1.6 | 34.4 → 3.9 | 9.4 | 6.1 | 8.3 → 9.6 | 10.9 → 8.4 | — | — | 7.1 | — | — | — | — | 9.8 → **8.6** |
+| 1280×720 | discovery | 1.9 | 34.2 → 3.3 | 1.7 | 9.5 → 9.4 | 14.9 → 11.1 | 6.6 | — | — | 7.1 | — | — | — | — | 11.3 → **7.6** |
+| 1280×720 | quests | 1.8 | 34.4 → 3.5 | 9.9 → 9.7 | 7.4 → 6.4 | 55.2 | 2.1 → 2.5 | — | — | 7.1 | — | — | — | — | 34.6 → **32.8** |
+| 1280×720 | inbox-0 | 1.6 | 34.4 → 3.8 | 9.9 → 9.7 | 4.7 | 29.2 → 27.6 | 11.6 → 8.4 | — | — | 7.1 | 37.7 → 36.6 | — | — | — | 21.1 → **18.3** |
+| 1280×720 | inbox-1 | 1.6 | 34.4 → 3.5 | 9.9 → 9.7 | 4.8 | 19.2 → 11.7 | 11.6 | — | — | 7.1 | 22.3 → 12.0 | — | — | — | 15.7 → **10.0** |
+| 1280×720 | inbox-2 | 1.6 | 34.4 → 3.5 | 9.9 → 9.7 | 4.5 | 8.9 → 8.2 | 11.6 | — | — | 7.1 | 6.6 | — | — | — | 10.2 → **8.1** |
+| 1280×720 | inbox-3 | 1.6 | 34.4 → 3.7 | 9.9 → 9.7 | 4.5 | 8.5 → 7.8 | 10.4 → 8.4 | — | — | 7.1 | 6.3 | — | — | — | 9.9 → **7.7** |
+| 1280×720 | inbox-4 | 1.6 | 34.4 → 3.7 | 9.9 → 9.7 | 4.5 | 8.0 → 7.1 | 10.5 → 7.4 | — | — | 7.1 | 5.5 | — | — | — | 9.7 → **7.3** |
+| 1280×720 | set-account | 0.9 | 7.7 → 1.3 | 2.0 | 0.3 | 1.7 → 1.6 | 5.3 → 5.0 | — | — | 2.5 | — | — | 2.9 | 1.8 → 1.7 | 2.2 → **1.8** |
+| 1280×720 | set-privacy | 1.8 → 0.9 | 9.6 → 1.4 | 2.5 → 2.3 | 1.6 → 1.2 | 11.4 → 11.3 | 13.0 → 11.7 | — | — | 2.5 | — | — | 3.2 | 9.7 → 9.5 | 8.2 → **7.6** |
+| 1280×720 | set-msgperms | 1.7 → 0.9 | 1.1 → 1.0 | 2.2 | 1.7 → 1.2 | 8.9 → 8.8 | 9.2 → 8.2 | — | — | 2.4 | — | — | 2.9 | 7.5 → 7.4 | 6.1 → **6.0** |
+| 1280×720 | set-notifications | 1.7 → 0.9 | 1.3 → 7.0 | 1.9 | 0.7 → 0.3 | 5.9 | 10.2 → 8.4 | — | — | 2.3 | — | — | 2.5 | 5.4 → 5.2 | 4.5 → **4.6** |
+| 1280×720 | set-voice | 4.3 → 0.9 | 15.0 → 12.6 | 10.4 | 0.7 → 0.3 | 4.6 → 4.5 | 5.7 → 3.9 | — | — | 16.6 → 16.3 | — | — | 16.6 | 4.0 → 3.8 | 6.5 → **6.1** |
+| 1280×720 | set-appearance | 4.3 → 0.9 | 15.3 → 13.0 | 10.6 | 0.7 → 0.3 | 5.9 → 5.8 | 5.1 → 3.2 | — | — | 16.3 | — | — | 17.0 | 4.9 → 4.6 | 7.2 → **6.7** |
+| 1280×720 | set-accessibility | 4.3 → 0.9 | 9.8 → 8.1 | 10.9 | 0.7 → 0.3 | 6.4 | 4.9 → 3.6 | — | — | 16.3 | — | — | 17.5 | 5.3 → 5.1 | 7.3 → **6.9** |
+| 1280×720 | set-system | 1.7 → 0.9 | 14.2 → 14.1 | 10.8 | 0.7 → 0.3 | 6.9 → 6.8 | 8.4 → 7.4 | — | — | 16.3 | — | — | 17.5 | 5.9 → 5.7 | 7.8 → **7.7** |
+| 1280×720 | set-language | 2.6 → 0.9 | 16.5 → 14.7 | 10.9 | 0.8 → 0.3 | 1.5 | 4.7 → 3.4 | — | — | 17.0 | — | — | 17.7 | 1.7 → 1.5 | 4.9 → **4.6** |
+| 1280×720 | set-games | 1.8 → 0.9 | 15.7 → 13.9 | 10.8 → 10.6 | 0.8 → 0.4 | 4.3 → 4.2 | 7.0 → 5.7 | — | — | 16.3 | — | — | 17.0 | 3.9 → 3.7 | 6.4 → **6.1** |
+| 1280×720 | set-activity | 2.6 → 0.9 | 17.8 → 16.0 | 14.2 | 1.7 → 1.3 | 7.2 | 4.7 → 2.9 | — | — | 16.2 | — | — | 22.8 | 5.9 → 5.7 | 8.9 → **8.6** |
 
 Reading: the two sides are minutes apart (the Phoenix render runs after the CDP pass), so new
 messages, unread DMs at the top of the rail, presence changes and the inbox unread list count as
@@ -314,6 +365,7 @@ user panel visible beside the settings layer.
 | **Small** — quests header: selected tab underlined | live `/quest-home` 13:13: both tabs `border-bottom: 0`, `::after` transparent, colour oklab(0.873) = text-default | `quests_page.rs` |
 | **Small** — collapsed category hides the selected channel's thread | channel list `computeState`: selected channel (or parent of the selected thread) or expanded unmuted category → `activeJoinedRelevantThreads`, otherwise `activeJoinedUnreadThreads`; a channel with listed threads stays visible | `sidebar.rs` |
 | **High** — "Voix connectée" panel with live controls while another session of the account (official client, phone) is in voice | the client's RTC panel follows its own RTC connection; other sessions only show in the channel's voice rows and the "Transférer la voix sur cet appareil" handoff item (`PlwgdU`) | `VoiceStateUpdate { own }` (voice state `session_id` = gateway session), `app.rs` sets `voice_channel` only for its own session |
+| **Medium** — Friend rows show English presence summary ("Playing Valorant with Medal") | client draws the green activity icon and the activity name, followed by the custom status after a bullet | `friends.rs` (`cf929fbd`) |
 | compare tool — inbox over Home rendered over the last guild | — | `real_shots` selects Home when the client was on Home |
 
 ### Gaps still open, by visibility
