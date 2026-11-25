@@ -483,6 +483,14 @@ pub fn visible(text: &str, expanded: bool, bytes_left: u64) -> (String, Option<(
     (shown, notice)
 }
 
+static INVISIBLE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"\p{Cf}|\p{Zl}|\p{Zp}|[\p{Cc}&&[^\n\t]]|[\p{Zs}&&[^ ]]|\x{34F}|\x{17B4}|\x{17B5}|\x{1160}|\x{3164}|\x{FFA0}").expect("static regex")
+});
+
+pub fn sanitize(text: &str) -> String {
+    INVISIBLE.replace_all(text, "").into_owned()
+}
+
 fn fetch(url: SharedString, cx: &App) {
     update(&url, |_| {});
     let http = cx.http_client();
@@ -503,7 +511,7 @@ fn fetch(url: SharedString, cx: &App) {
                 if left > 0 {
                     text.pop();
                 }
-                done = Some((text, left));
+                done = Some((sanitize(&text), left));
             }
         }
         update(&url, |e| match done {
@@ -885,6 +893,12 @@ pub fn render_full(url: &SharedString, filename: &SharedString, size: u64, viewp
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fetched_text_drops_the_characters_the_client_strips() {
+        assert_eq!(sanitize("a\r\nb\tc\u{FEFF}d\u{200B}e\u{00A0}f\u{3164}g\u{2028}h"), "a\nb\tcdefgh");
+        assert_eq!(sanitize("fn main() {\n    x\n}"), "fn main() {\n    x\n}");
+    }
 
     #[test]
     fn previewable_extensions_come_from_the_client_list() {
