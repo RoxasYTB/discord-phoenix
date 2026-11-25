@@ -466,7 +466,8 @@ pub fn render(app: &PhoenixApp, channel: Id, window: &mut Window, cx: &mut Conte
         .min_w_0()
         .pr(z(8.))
         .relative()
-        .py(z(super::composer::text_pad_y()))
+        .pt(z(super::composer::text_pad_y() - super::composer::TEXT_LIFT))
+        .pb(z(super::composer::text_pad_y() + super::composer::TEXT_LIFT))
         .text_size(fz(16.))
         .line_height(fz(22.))
         .text_color(c(tok(idx::TEXT_DEFAULT)))
@@ -490,7 +491,7 @@ pub fn render(app: &PhoenixApp, channel: Id, window: &mut Window, cx: &mut Conte
             d.child(
                 div()
                     .absolute()
-                    .top(z(super::composer::text_pad_y() - 1.5))
+                    .top(z(super::composer::text_pad_y() - super::composer::TEXT_LIFT))
                     .h(fz(22.))
                     .left_0()
                     .right_0()
@@ -560,7 +561,7 @@ pub fn render(app: &PhoenixApp, channel: Id, window: &mut Window, cx: &mut Conte
             div()
                 .relative()
                 .px(z(crate::theme::space::xs()))
-                .mb(z(crate::theme::space::xs() - 0.8))
+                .mb(z(crate::theme::space::xs()))
                 .child(div().absolute().top(z(-24.)).left_0().right_0().child(super::composer::typing(app, window)))
                 .child(
                     div()

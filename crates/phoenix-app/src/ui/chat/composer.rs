@@ -819,7 +819,7 @@ pub(super) fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement + us
         .children(cooldown(app))
 }
 
-const TEXT_LIFT: f32 = 1.;
+pub(super) const TEXT_LIFT: f32 = 1.;
 
 pub(super) fn text_pad_y() -> f32 {
     ((56. - 22. * crate::theme::font_scale()) / 2.).max(0.)
