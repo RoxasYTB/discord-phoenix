@@ -33,6 +33,11 @@ fn denied<T: Send + 'static>() -> BoxFuture<T> {
 }
 
 const SEND_TEST_CHANNEL: u64 = 1403447573389381652;
+const SANDBOX_CHANNEL: u64 = 1574797385463496724;
+
+fn send_allowed(ch: u64) -> bool {
+    ch == SEND_TEST_CHANNEL || ch == SANDBOX_CHANNEL
+}
 const VOICE_TEST_CHANNEL: u64 = 1574900893613039696;
 
 fn voice_test_allowed(channel: Option<Id>) -> bool {
@@ -116,7 +121,7 @@ impl Backend for ReadOnly {
         nonce: u64,
         progress: Option<phoenix_app::backend::UploadProgress>,
     ) -> BoxFuture<Message> {
-        if std::env::var_os("PHX_SEND").is_none() || ch.0 != SEND_TEST_CHANNEL || !content.starts_with(SEND_PREFIX) || reply.is_some() {
+        if std::env::var_os("PHX_SEND").is_none() || !send_allowed(ch.0) || !content.starts_with(SEND_PREFIX) || reply.is_some() {
             return denied();
         }
         let hold = std::env::var("PHX_SEND_HOLD").ok().and_then(|v| v.parse().ok()).unwrap_or(4000u64);
@@ -137,7 +142,7 @@ impl Backend for ReadOnly {
         })
     }
     fn preupload(&self, ch: Id, key: u64, filename: String, bytes: Arc<Vec<u8>>) {
-        if std::env::var_os("PHX_SEND").is_some() && ch.0 == SEND_TEST_CHANNEL {
+        if std::env::var_os("PHX_SEND").is_some() && send_allowed(ch.0) {
             eprintln!("preupload started: {filename} ({} bytes)", bytes.len());
             self.0.preupload(ch, key, filename, bytes);
         }
@@ -1719,7 +1724,7 @@ fn main() -> anyhow::Result<()> {
         pump(&mut cx, 800);
     }
     if let Some(what) = std::env::var("PHX_SEND").ok().filter(|w| !w.trim().is_empty()) {
-        anyhow::ensure!(channel.map(|c| c.0) == Some(SEND_TEST_CHANNEL), "PHX_SEND only works in the test channel");
+        anyhow::ensure!(channel.is_some_and(|c| send_allowed(c.0)), "PHX_SEND only works in the test channels");
         let text = format!("{SEND_PREFIX}{}", what.trim());
         if let Ok(path) = std::env::var("PHX_SEND_FILE") {
             let bytes = std::fs::read(&path)?;
