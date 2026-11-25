@@ -198,7 +198,8 @@ mod tests {
         assert_eq!(anchor_at(&ranges, &targets, 6).map(|a| a.0), Some(0..9));
         assert_eq!(anchor_at(&ranges, &targets, 12).map(|a| a.0), Some(10..15));
         assert_eq!(anchor_at(&ranges, &targets, 9), None);
-        assert_eq!(anchor_at(&[0..3], &[ClickTarget::Spoiler(0)], 1), None);
+        let spoiler: Vec<Range<usize>> = std::iter::once(0..3).collect();
+        assert_eq!(anchor_at(&spoiler, &[ClickTarget::Spoiler(0)], 1), None);
     }
 
     #[test]
