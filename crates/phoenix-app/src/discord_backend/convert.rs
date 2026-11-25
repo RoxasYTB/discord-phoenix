@@ -318,6 +318,7 @@ pub fn message(m: &api::Message) -> model::Message {
         webhook_name: m.webhook_id.map(|_| m.author.username.clone().into()),
         application_id: m.application_id.map(id),
         has_mentions: !m.mentions.is_empty() || !m.mention_roles.is_empty() || m.mention_everyone,
+        tts: m.tts,
     }
 }
 

@@ -79,9 +79,38 @@ pub fn cached_commands(app: &PhoenixApp, cx: &App) -> Vec<SlashCommand> {
     cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch)).cloned().unwrap_or_default()
 }
 
+pub const TTS_ID: &str = "-4";
+
+pub fn builtins(app: &PhoenixApp) -> Vec<SlashCommand> {
+    let Some(ch) = app.selected_channel else { return vec![] };
+    if !crate::tts::can_use_command(app, ch) {
+        return vec![];
+    }
+    vec![SlashCommand {
+        name: "tts".into(),
+        description: crate::t!("tts.cmd_desc").to_string(),
+        app_name: crate::t!("slash.built_in").to_string(),
+        app_icon: None,
+        raw: serde_json::json!({
+            "id": TTS_ID,
+            "name": "tts",
+            "type": 1,
+            "options": [{"name": "message", "type": 3, "required": true, "description": crate::t!("tts.cmd_message").to_string()}],
+        }),
+    }]
+}
+
+fn is_builtin(cmd: &SlashCommand) -> bool {
+    cmd.raw.get("id").and_then(Value::as_str) == Some(TTS_ID)
+}
+
 fn matches(app: &PhoenixApp, q: &str, cx: &App) -> Vec<SlashCommand> {
     let Some(ch) = app.selected_channel else { return vec![] };
-    let Some(all) = cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch)) else { return vec![] };
+    let cached = cx.try_global::<SlashUi>().and_then(|s| s.cache.get(&ch));
+    if cached.is_none() {
+        return vec![];
+    }
+    let all: Vec<SlashCommand> = builtins(app).into_iter().chain(cached.into_iter().flatten().cloned()).collect();
     let q = q.to_lowercase();
     let mut v: Vec<SlashCommand> = all.iter().filter(|c| c.name.to_lowercase().starts_with(&q)).cloned().collect();
     if v.is_empty() && !q.is_empty() {
@@ -94,6 +123,9 @@ fn matches(app: &PhoenixApp, q: &str, cx: &App) -> Vec<SlashCommand> {
 
 fn find(app: &PhoenixApp, name: &str, cx: &App) -> Option<SlashCommand> {
     let ch = app.selected_channel?;
+    if let Some(b) = builtins(app).into_iter().find(|c| c.name == name) {
+        return Some(b);
+    }
     cx.try_global::<SlashUi>()?.cache.get(&ch)?.iter().find(|c| c.name == name).cloned()
 }
 
@@ -134,6 +166,29 @@ pub fn submit(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     let Some((name, args)) = slash::split_invocation(t.trim()) else { return false };
     let Some(cmd) = find(app, name, cx) else { return false };
     let Some(ch) = app.selected_channel else { return false };
+    if is_builtin(&cmd) {
+        let message = args.trim().to_owned();
+        if message.is_empty() {
+            return true;
+        }
+        app.composer.update(cx, |s, cx| s.set_value("", window, cx));
+        app.chat.error = None;
+        let fut = app.backend.send_tts_message(ch, message);
+        cx.spawn(async move |this, cx| match fut.await {
+            Ok(m) => {
+                let _ = this.update(cx, |a, cx| a.append_message(m, cx));
+            }
+            Err(e) => {
+                let _ = this.update(cx, |a, cx| {
+                    a.chat.error = Some(crate::t!("slash.failed", e = format!("{e:?}")));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+        cx.notify();
+        return true;
+    }
     if let Err(e) = slash::build_options(&cmd.raw, args) {
         app.chat.error = Some(e.into());
         cx.notify();

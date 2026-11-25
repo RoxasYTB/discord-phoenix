@@ -759,6 +759,17 @@ impl Backend for DiscordBackend {
         })
     }
 
+    fn send_tts_message(&self, channel: Id, content: String) -> BoxFuture<Message> {
+        self.with_session(move |_, s| async move {
+            let mut msg = CreateMessage::text(content);
+            msg.tts = true;
+            msg.nonce = Some(crate::ui::chat::pending::make_nonce().to_string());
+            let m = s.rest.send_message(sf(channel), msg).await.map_err(api_err)?;
+            s.adapter.lock().mark_read(m.channel_id.0, m.id.0);
+            Ok(convert::message(&m))
+        })
+    }
+
     fn edit_message(&self, channel: Id, msg: Id, content: String) -> BoxFuture<Message> {
         self.with_session(move |_, s| async move {
             let m = s.rest.edit_message(sf(channel), sf(msg), &content).await.map_err(api_err)?;

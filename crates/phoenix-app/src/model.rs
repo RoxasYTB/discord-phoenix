@@ -285,6 +285,7 @@ pub struct Message {
     pub webhook_name: Option<SharedString>,
     pub application_id: Option<Id>,
     pub has_mentions: bool,
+    pub tts: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

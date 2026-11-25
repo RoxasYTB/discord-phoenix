@@ -29,6 +29,7 @@ pub mod sounds;
 pub mod streamer;
 pub mod theme;
 pub mod thread_recent;
+pub mod tts;
 #[cfg(target_os = "linux")]
 pub mod tray;
 #[cfg(not(target_os = "linux"))]
@@ -90,6 +91,7 @@ pub fn open_main_window(backend: Arc<dyn backend::Backend>, cx: &mut App) {
         let view = cx.new(|cx| app::PhoenixApp::new(backend, window, cx));
         tray::set_target(cx, view.downgrade());
         streamer::watch(view.downgrade(), cx);
+        tts::enable_output();
         let weak = view.downgrade();
         window.on_window_should_close(cx, move |w, cx| {
             let hide = tray::running() && weak.upgrade().is_some_and(|v| v.read(cx).prefs.local.minimize_to_tray);

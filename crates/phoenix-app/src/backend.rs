@@ -134,6 +134,14 @@ pub trait Backend: Send + Sync + 'static {
     }
     fn send_message(&self, channel: Id, content: String, reply_to: Option<Id>) -> BoxFuture<Message>;
     fn edit_message(&self, channel: Id, id: Id, content: String) -> BoxFuture<Message>;
+    fn send_tts_message(&self, channel: Id, content: String) -> BoxFuture<Message> {
+        let fut = self.send_message(channel, content, None);
+        Box::pin(async move {
+            let mut m = fut.await?;
+            m.tts = true;
+            Ok(m)
+        })
+    }
     fn trigger_typing(&self, channel: Id) -> BoxFuture<()>;
     fn join_voice(&self, channel: Option<Id>) -> BoxFuture<()>;
     fn voice_control(&self, control: crate::voice::VoiceControl) -> BoxFuture<()> {

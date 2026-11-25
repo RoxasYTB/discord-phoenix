@@ -246,7 +246,16 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     items.push(MenuItem::action(crate::t!("msg.copy_link"), ic(ChatIcon::Link), move |_, _, cx| {
         ee.update(cx, |a, cx| a.copy_message_link(ch, id, cx))
     }));
-    items.push(stub("msg.speak", "menu/speak"));
+    if msg.is_some_and(|m| !m.content.is_empty()) {
+        let ee = e.clone();
+        let label = if crate::tts::speaking(ch, id) { crate::t!("tts.stop") } else { crate::t!("msg.speak") };
+        items.push(MenuItem::action(label, Some(crate::icons::path("menu/speak")), move |_, _, cx| {
+            ee.update(cx, |a, cx| {
+                a.chat.menu = None;
+                crate::tts::toggle_message(a, ch, id, cx)
+            })
+        }));
+    }
     items.push(MenuItem::Separator);
     if has_reactions && manage {
         let emojis: Vec<MenuItem> = msg

@@ -647,7 +647,7 @@ impl PhoenixApp {
         Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: &[], me: self.me.id, guild: self.selected_guild }
     }
 
-    fn resolver_with_sounds<'a>(&'a self, sounds: &'a [crate::model::SoundboardSound], channel: Id) -> Resolver<'a> {
+    pub(crate) fn resolver_with_sounds<'a>(&'a self, sounds: &'a [crate::model::SoundboardSound], channel: Id) -> Resolver<'a> {
         let guild = self.channels.get(&channel).or_else(|| self.nav.find_thread(channel)).and_then(|c| c.guild).or(self.selected_guild);
         Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: sounds, me: self.me.id, guild }
     }
@@ -722,6 +722,7 @@ impl PhoenixApp {
     }
 
     pub(crate) fn append_message(&mut self, m: Message, cx: &mut Context<Self>) {
+        crate::tts::on_message(self, &m);
         if self.take_echo(&m, cx) {
             return;
         }
@@ -820,6 +821,7 @@ impl PhoenixApp {
             AppEvent::MessageUpdate(m) => self.replace_message(m, cx),
             AppEvent::HistoryRefresh { channel, messages } => crate::history_ui::on_refresh(self, channel, messages, cx),
             AppEvent::MessageDelete { channel, id } => {
+                crate::tts::on_message_delete(channel, id);
                 if let Some(mut e) = self.messages.remove(&channel) {
                     if let Some(ix) = e.index_of(id) {
                         e.msgs.remove(ix);
@@ -1399,6 +1401,7 @@ impl Render for PhoenixApp {
         crate::sounds::set_focused(window.is_window_active());
         crate::media::emoji::sync_motion(self.prefs.synced.flag("anim-emoji"), window.is_window_active());
         crate::ui::settings::effects::sync(self, cx.reduce_motion());
+        crate::tts::sync(self);
         self.chat_sync_style();
         if ui::focus_ring::sync(window, cx) {
             cx.notify();
