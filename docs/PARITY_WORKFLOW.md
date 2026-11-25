@@ -111,3 +111,4 @@ Les noms, messages, URLs et autres contenus réels n’apparaissent jamais dans 
 
 - `PHX_MOUSE=x,y` envoie un déplacement de souris (px logiques) avant la capture. Le pilote de balayage place la souris du client en `W-2,H-2` (dans la liste des membres à 1280×720) : passer la même position pour comparer les états de survol, par exemple la scrollbar fine `thin fade`.
 - `PHX_PROTO=id=valeur,...` force des réglages synchronisés (ids de `ui/settings/synced_map.rs`) en mémoire seulement, par exemple `PHX_PROTO=alt-text=1` pour le badge ALT. Rien n'est envoyé au compte.
+- `PHX_LOCAL=id=valeur,...` fait de même pour les préférences locales (`LocalPrefs::ui`), par exemple `PHX_LOCAL=streamer=1` pour le bandeau du mode streamer ou `PHX_LOCAL=indicators=1` pour les indicateurs d'interrupteur. Rien n'est écrit dans `settings.json`.

@@ -67,7 +67,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     if !me && friend {
         items.push(act(crate::t!("menu.call"), Rc::new(move |a, _, _, cx| a.open_call_ui(u, cx))));
     }
-    if !me {
+    if !me && !app.prefs.local.streamer_hides_info() {
         items.push(
             act(crate::t!(crate::actions::user::note_label(app, u)), Rc::new(move |a, ev, w, cx| a.open_profile(u, g, ev.position(), w, cx)))
                 .with_subtext(crate::t!("menu.note_subtext")),

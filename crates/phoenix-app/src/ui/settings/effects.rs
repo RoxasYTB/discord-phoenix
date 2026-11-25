@@ -10,8 +10,11 @@ static REDUCED_MOTION: AtomicBool = AtomicBool::new(false);
 static INLINE_ATTACHMENTS: AtomicBool = AtomicBool::new(true);
 static ALT_TEXT: AtomicBool = AtomicBool::new(false);
 static STICKER_MODE: AtomicU8 = AtomicU8::new(0);
+static OS_REDUCED_MOTION: AtomicBool = AtomicBool::new(false);
+static SWITCH_ICONS: AtomicBool = AtomicBool::new(false);
 
-pub fn sync(app: &PhoenixApp) {
+pub fn sync(app: &PhoenixApp, os_reduced_motion: bool) {
+    OS_REDUCED_MOTION.store(os_reduced_motion, Relaxed);
     let p = &app.prefs;
     let always = match p.synced.pick("spoilers") {
         1 => true,
@@ -28,7 +31,8 @@ pub fn sync(app: &PhoenixApp) {
         crate::theme::bump_style_generation();
     }
     GIF_AUTOPLAY.store(p.synced.flag("gifs"), Relaxed);
-    REDUCED_MOTION.store(p.local.reduced_motion, Relaxed);
+    REDUCED_MOTION.store(effective_reduced_motion(&p.local, os_reduced_motion), Relaxed);
+    SWITCH_ICONS.store(p.local.flag("indicators", false), Relaxed);
     STICKER_MODE.store(p.synced.pick("stickers") as u8, Relaxed);
     INLINE_ATTACHMENTS.store(p.synced.flag("media-uploads"), Relaxed);
     ALT_TEXT.store(p.synced.flag("alt-text"), Relaxed);
@@ -48,6 +52,18 @@ pub fn hour24() -> Option<bool> {
 
 pub fn gif_autoplay() -> bool {
     GIF_AUTOPLAY.load(Relaxed)
+}
+
+pub fn effective_reduced_motion(local: &crate::ui::settings::LocalPrefs, os: bool) -> bool {
+    if local.flag("motion-sync", true) { os } else { local.reduced_motion }
+}
+
+pub fn os_reduced_motion() -> bool {
+    OS_REDUCED_MOTION.load(Relaxed)
+}
+
+pub fn switch_icons() -> bool {
+    SWITCH_ICONS.load(Relaxed)
 }
 
 pub fn reduced_motion() -> bool {
@@ -80,4 +96,21 @@ pub fn alt_text() -> bool {
 
 pub fn underline_links() -> bool {
     UNDERLINE_LINKS.load(Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::settings::LocalPrefs;
+
+    #[test]
+    fn reduced_motion_follows_the_system_while_synced() {
+        let mut p = LocalPrefs::default();
+        assert!(effective_reduced_motion(&p, true));
+        assert!(!effective_reduced_motion(&p, false));
+        p.ui.insert("motion-sync".into(), 0);
+        assert!(!effective_reduced_motion(&p, true));
+        p.reduced_motion = true;
+        assert!(effective_reduced_motion(&p, false));
+    }
 }

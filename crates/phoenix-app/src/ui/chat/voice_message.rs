@@ -361,7 +361,7 @@ fn take_recorder(cx: &mut App, channel: Id) -> Option<(Recorder, u64)> {
 
 fn stop_recording(app: &mut PhoenixApp, channel: Id, interrupted: bool, by_button: bool, cx: &mut Context<PhoenixApp>) {
     let Some((rec, token)) = take_recorder(cx, channel) else { return };
-    if by_button && !app.prefs.local.reduced_motion {
+    if by_button && !crate::ui::settings::effects::reduced_motion() {
         let st = store(cx);
         if let Some(d) = st.draft.as_mut() {
             d.collapse = Some(Instant::now());
@@ -1188,7 +1188,7 @@ pub fn bar(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) 
     let st = cx.try_global::<Store>()?;
     let d = st.draft.as_ref().filter(|d| d.channel == channel)?;
     let key = draft_key(channel);
-    let reduced = app.prefs.local.reduced_motion;
+    let reduced = crate::ui::settings::effects::reduced_motion();
     let recording = matches!(d.phase, Phase::Recording(_));
     let can_send = matches!(d.phase, Phase::Recording(_) | Phase::Recorded(_));
     let elapsed = d.started.elapsed();

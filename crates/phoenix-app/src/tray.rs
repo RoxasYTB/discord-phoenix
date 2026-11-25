@@ -22,6 +22,7 @@ pub struct TrayState {
     pub deafened: bool,
     pub speaking: bool,
     pub unread: bool,
+    pub count: u32,
 }
 
 impl TrayState {
@@ -45,16 +46,33 @@ impl TrayState {
 
     fn from_app(a: &crate::app::PhoenixApp) -> Self {
         let connected = a.voice_channel.is_some();
-        let badge = a.prefs.local.flag("badge", true);
-        let unread = badge && a.channels.values().any(|c| c.mentions > 0 || (c.unread && c.guild.is_none()));
+        let dms = || a.channels.values().filter(|c| c.guild.is_none());
+        let mentions = a.guilds.iter().map(|g| g.mentions).sum::<u32>() + dms().map(|c| c.mentions).sum::<u32>();
+        let pending = a.nav.count(crate::ui::home::data::RelationshipKind::Incoming) as u32;
+        let any_unread = a.guilds.iter().any(|g| g.unread) || dms().any(|c| c.unread);
         Self {
             connected,
             muted: a.mic_muted || a.deafened,
             deafened: a.deafened,
             speaking: connected && crate::voice::call::manager().control().transmitting(),
-            unread,
+            unread: unread_icon(a.prefs.local.flag("badge", true), any_unread, mentions, pending),
+            count: mentions + pending,
         }
     }
+}
+
+pub fn unread_icon(badge: bool, any_unread: bool, mentions: u32, pending: u32) -> bool {
+    badge && (any_unread || mentions > 0 || pending > 0)
+}
+
+pub const LAUNCHER_PATH: &str = "/com/canonical/unity/launcherentry/discord_phoenix";
+
+pub fn launcher_uri() -> String {
+    format!("application://{}.desktop", crate::APP_ID)
+}
+
+pub fn launcher_props(count: u32) -> HashMap<&'static str, zbus::zvariant::Value<'static>> {
+    HashMap::from([("count", zbus::zvariant::Value::from(i64::from(count))), ("count-visible", zbus::zvariant::Value::from(count > 0))])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -254,7 +272,12 @@ async fn serve(
     )
     .await?;
     RUNNING.store(true, Ordering::Relaxed);
+    let mut count = 0;
     while let Some(st) = states.next().await {
+        if st.count != count {
+            count = st.count;
+            let _ = conn.emit_signal(None::<&str>, LAUNCHER_PATH, "com.canonical.Unity.LauncherEntry", "Update", &(launcher_uri(), launcher_props(count))).await;
+        }
         let item = conn.object_server().interface::<_, Item>("/StatusNotifierItem").await?;
         let icon_changed = {
             let mut i = item.get_mut().await;
@@ -476,5 +499,23 @@ mod tests {
         assert_eq!(idle, vec![ID_OPEN, ID_SEP_META, ID_ACK, ID_SEP_QUIT, ID_QUIT]);
         let call = menu_ids(&TrayState { connected: true, ..Default::default() });
         assert_eq!(call, vec![ID_OPEN, ID_SEP_VOICE, ID_MUTE, ID_DEAFEN, ID_VOICE_SETTINGS, ID_SEP_META, ID_ACK, ID_SEP_QUIT, ID_QUIT]);
+    }
+
+    #[test]
+    fn unread_icon_follows_the_badge_setting() {
+        assert!(unread_icon(true, true, 0, 0));
+        assert!(unread_icon(true, false, 2, 0));
+        assert!(unread_icon(true, false, 0, 1));
+        assert!(!unread_icon(true, false, 0, 0));
+        assert!(!unread_icon(false, true, 3, 1));
+    }
+
+    #[test]
+    fn launcher_entry_carries_the_count() {
+        assert_eq!(launcher_uri(), "application://discord-phoenix.desktop");
+        let p = launcher_props(4);
+        assert_eq!(p["count"], zbus::zvariant::Value::from(4i64));
+        assert_eq!(p["count-visible"], zbus::zvariant::Value::from(true));
+        assert_eq!(launcher_props(0)["count-visible"], zbus::zvariant::Value::from(false));
     }
 }

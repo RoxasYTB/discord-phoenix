@@ -19,6 +19,9 @@ pub fn svg(path: &str) -> Option<String> {
                 .to_owned(),
         );
     }
+    if let Some(icon) = switch_icon(path) {
+        return Some(icon);
+    }
     let body = match path.strip_prefix("status/")?.strip_suffix(".svg")? {
         "online" => CIRCLE.to_owned(),
         "offline" => format!("{CIRCLE} M75 50 A25 25 0 1 0 25 50 A25 25 0 1 0 75 50 Z"),
@@ -35,6 +38,17 @@ pub fn svg(path: &str) -> Option<String> {
 }
 
 pub const MOBILE: &str = "status/mobile.svg";
+pub const SWITCH_ON: &str = "switch/on.svg";
+pub const SWITCH_OFF: &str = "switch/off.svg";
+
+fn switch_icon(path: &str) -> Option<String> {
+    let (a, b) = match path {
+        SWITCH_OFF => ("M4.10585 5.3837L5.37864 4.11091L11.884 10.61632L10.6112 11.88912L4.10585 5.3837Z", "M10.61632 4.11091L11.88912 5.3837L5.3837 11.88912L4.11091 10.61632L10.61632 4.11091Z"),
+        SWITCH_ON => ("M6.31649 11.88304L5.0437 10.61032L11.44792 4.20604L12.72072 5.47883L6.31649 11.88304Z", "M3.26914 8.87224L4.54194 7.59943L7.5588 10.61632L6.28601 11.88912L3.26914 8.87224Z"),
+        _ => return None,
+    };
+    Some(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="translate(4 4)" fill="white"><path d="{a}"/><path d="{b}"/></g></svg>"#))
+}
 
 const CIRCLE: &str = "M100 50 A50 50 0 1 0 0 50 A50 50 0 1 0 100 50 Z";
 
@@ -97,5 +111,14 @@ mod tests {
             assert!(s.contains("<path"), "{p}");
             assert!(!s.contains("NaN"), "{p}");
         }
+    }
+
+    #[test]
+    fn switch_indicators_use_the_client_paths() {
+        let on = svg(SWITCH_ON).unwrap();
+        let off = svg(SWITCH_OFF).unwrap();
+        assert!(on.contains("M6.31649 11.88304") && on.contains("translate(4 4)"));
+        assert!(off.contains("M4.10585 5.3837") && off.contains("M10.61632 4.11091"));
+        assert!(svg("switch/other.svg").is_none());
     }
 }

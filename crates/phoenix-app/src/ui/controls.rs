@@ -172,7 +172,18 @@ pub fn switch(id: impl Into<ElementId>, on: bool) -> gpui::Stateful<Div> {
                     idx::SWITCH_THUMB_BACKGROUND_SELECTED_DEFAULT
                 } else {
                     idx::SWITCH_THUMB_BACKGROUND_DEFAULT
-                })))),
+                }))))
+                .when(crate::ui::settings::effects::switch_icons(), |d| {
+                    d.child(
+                        gpui::svg()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .size(z(24.))
+                            .path(if on { crate::ui::status_svg::SWITCH_ON } else { crate::ui::status_svg::SWITCH_OFF })
+                            .text_color(c(tok(if on { idx::SWITCH_THUMB_ICON_ACTIVE } else { idx::SWITCH_THUMB_ICON_DEFAULT }))),
+                    )
+                }),
         )
 }
 

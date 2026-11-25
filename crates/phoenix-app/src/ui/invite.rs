@@ -324,7 +324,11 @@ pub fn render(app: &PhoenixApp, ov: &Overlay, _window: &mut Window, cx: &mut Con
         Overlay::InviteLink { guild, link } => {
             let name = app.guilds.iter().find(|g| g.id == *guild).map(|g| g.name.clone()).unwrap_or_default();
             let link = link.clone();
-            let shown: SharedString = link.clone().unwrap_or_else(|| crate::t!("invite.creating"));
+            let shown: SharedString = match &link {
+                Some(_) if crate::streamer::hides_invites(&app.prefs.local) => crate::t!("streamer.invite_hidden"),
+                Some(l) => l.clone(),
+                None => crate::t!("invite.creating"),
+            };
             let inner = div()
                 .p(z(16.))
                 .flex()

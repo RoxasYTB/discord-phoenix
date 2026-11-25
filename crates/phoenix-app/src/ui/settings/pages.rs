@@ -1469,8 +1469,16 @@ static A11Y: &[B] = &[
     B::Related("emoji", "settings.page.appearance", "sp.ac.appearance_d", Page::Appearance),
     B::Divider,
     B::Title("sp.ac.t4"),
-    B::Switch("reduced-motion", "sp.ac.motion", "sp.ac.motion_d", Bind::Local(|p| p.reduced_motion, |p, v| p.reduced_motion = v)),
-    B::Switch("motion-sync", "sp.ac.motion_sync", "", Bind::Pref(true)),
+    B::Switch("reduced-motion", "sp.ac.motion", "sp.ac.motion_d", Bind::Local(|p| super::effects::effective_reduced_motion(p, super::effects::os_reduced_motion()), |p, v| {
+        p.reduced_motion = v;
+        p.ui.insert("motion-sync".into(), 0);
+    })),
+    B::Switch("motion-sync", "sp.ac.motion_sync", "", Bind::Local(|p| p.flag("motion-sync", true), |p, v| {
+        if !v {
+            p.reduced_motion = super::effects::os_reduced_motion();
+        }
+        p.ui.insert("motion-sync".into(), u64::from(v));
+    })),
     B::Switch("gifs", "sp.ac.gifs", "", Bind::Proto),
     B::Switch("anim-emoji", "sp.ac.anim_emoji", "", Bind::Proto),
     B::Radios(

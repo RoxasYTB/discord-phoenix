@@ -691,12 +691,14 @@ fn popout_card_inner(
                 .id(("profile-name", uid.0))
                 .cursor_pointer()
                 .on_click(move |_, _, cx| e_name.update(cx, |a, cx| a.open_profile_modal(uid, cx)))
-                .child(name_block(&i, false, (uid != app.me.id).then(|| crate::ui::profile_note::note_button(uid, cx)))),
+                .child(name_block(&i, false, (uid != app.me.id && !app.prefs.local.streamer_hides_info()).then(|| crate::ui::profile_note::note_button(uid, cx)))),
         );
     if uid == app.me.id {
         body = body.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(status_label(i.presence)));
     }
-    body = body.children(crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx));
+    if !app.prefs.local.streamer_hides_info() {
+        body = body.children(crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx));
+    }
     match i.prof {
         None => {
             body = body.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("profile.loading")));

@@ -110,7 +110,7 @@ pub fn demon_active() -> bool {
     with(|s| s.demon.is_some())
 }
 
-pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<PhoenixApp>) -> bool {
+pub fn on_key(_app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<PhoenixApp>) -> bool {
     let m = ks.modifiers;
     if m.control && m.alt && m.shift && ks.key == "w" {
         toggle_lofi();
@@ -127,7 +127,7 @@ pub fn on_key(app: &mut PhoenixApp, ks: &gpui::Keystroke, cx: &mut Context<Phoen
         }
         demon_combo(&s.keys)
     });
-    if fire && !app.prefs.local.reduced_motion {
+    if fire && !crate::ui::settings::effects::reduced_motion() {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64) | 1;
         with(|s| {
             s.demon = Some((Instant::now(), seed));

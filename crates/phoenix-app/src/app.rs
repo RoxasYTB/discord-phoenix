@@ -1398,39 +1398,63 @@ impl Render for PhoenixApp {
         crate::theme::sync(&self.prefs, window, cx);
         crate::sounds::set_focused(window.is_window_active());
         crate::media::emoji::sync_motion(self.prefs.synced.flag("anim-emoji"), window.is_window_active());
-        crate::ui::settings::effects::sync(self);
+        crate::ui::settings::effects::sync(self, cx.reduce_motion());
         self.chat_sync_style();
         if ui::focus_ring::sync(window, cx) {
             cx.notify();
         }
         let body = match self.screen {
             Screen::Login => ui::login::render(self, window, cx).into_any_element(),
-            Screen::Main => div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .child(ui::title_bar::render(self, window, cx))
-                .child(div().flex_1().min_h_0().flex().flex_row().child(
+            Screen::Main => {
+                let title = ui::title_bar::render(self, window, cx).into_any_element();
+                let rail = ui::server_bar::render(self, cx).into_any_element();
+                let notice = crate::streamer::notice(self, cx);
+                let shift = notice.is_some();
+                let below_notice = |el: gpui::AnyElement, grow: bool| {
+                    if !shift {
+                        return el;
+                    }
                     div()
-                        .flex_none()
+                        .when(grow, |d| d.flex_1().min_w_0())
+                        .when(!grow, |d| d.flex_none())
                         .h_full()
                         .flex()
                         .flex_col()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_h_0()
-                                .flex()
-                                .flex_row()
-                                .child(ui::server_bar::render(self, cx))
-                                .child(ui::sidebar::render(self, cx)),
-                        )
-                        .child(ui::sidebar::panels(self, cx)),
-                )
-                .child(ui::home::main_pane(self, window, cx)))
-                .into_any_element(),
+                        .child(div().flex_none().h(crate::theme::z(crate::streamer::NOTICE_H)))
+                        .child(div().flex_1().min_h_0().flex().child(el))
+                        .into_any_element()
+                };
+                let sidebar = below_notice(ui::sidebar::render(self, cx).into_any_element(), false);
+                let panels = ui::sidebar::panels(self, cx).into_any_element();
+                let pane = below_notice(ui::home::main_pane(self, window, cx), true);
+                div()
+                    .size_full()
+                    .flex()
+                    .flex_col()
+                    .child(title)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .flex()
+                            .flex_row()
+                            .relative()
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .h_full()
+                                    .flex()
+                                    .flex_col()
+                                    .child(div().flex_1().min_h_0().flex().flex_row().child(rail).child(sidebar))
+                                    .child(panels),
+                            )
+                            .child(pane)
+                            .children(notice),
+                    )
+                    .into_any_element()
+            }
         };
-        let (sx, sy) = ui::shake::offset(window, self.prefs.local.reduced_motion || cx.reduce_motion()).unwrap_or((0., 0.));
+        let (sx, sy) = ui::shake::offset(window, crate::ui::settings::effects::reduced_motion()).unwrap_or((0., 0.));
         let body = div().size_full().relative().left(px(sx)).top(px(sy)).child(body).into_any_element();
         div()
             .id("phoenix-root")
