@@ -473,7 +473,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .text_color(tk(idx::TEXT_STRONG))
                         .child(crate::ui::emoji_text::label(name.clone(), 16.)),
                 ))
-                .when(kind == ChannelKind::Announcement && thread_parent.is_none(), |d| d.child(crate::ui::forum::follow_button()))
+                .when_some(ch.filter(|_| kind == ChannelKind::Announcement && thread_parent.is_none()).map(|c| c.id), |d, id| d.child(crate::ui::forum::follow_button(id)))
                 .when(discoverable, |d| {
                     d.child(div().flex_none().ml(z(4.)).mr(z(12.)).size(z(4.)).rounded_full().bg(tk(idx::BACKGROUND_MOD_STRONG)))
                         .child(

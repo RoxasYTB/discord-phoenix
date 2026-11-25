@@ -104,8 +104,8 @@ pub fn is_op(app: &PhoenixApp, channel: Id, author: Id) -> bool {
         .is_some_and(|p| p.owner == Some(author))
 }
 
-pub fn follow_button() -> gpui::Stateful<gpui::Div> {
-    div().id("announcement-follow").flex_none().py(z(4.)).px(z(8.)).mr(z(8.)).child(
+pub fn follow_button(channel: Id) -> gpui::Stateful<gpui::Div> {
+    div().id("announcement-follow").flex_none().py(z(4.)).px(z(8.)).mr(z(8.)).on_click(move |_, w, _| crate::ui::modals::follow::open(channel, w)).child(
         div()
             .h(z(32.))
             .px(z(12.))

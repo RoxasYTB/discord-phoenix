@@ -98,6 +98,7 @@ pub enum AdminCall {
     CreateWebhook { channel: Snowflake, name: String },
     EditWebhook { webhook: Snowflake, body: Value },
     DeleteWebhook { webhook: Snowflake },
+    FollowChannel { channel: Snowflake, webhook_channel: Snowflake },
     GuildInvites { guild: Snowflake },
     DeleteInvite { code: String },
     Integrations { guild: Snowflake },
@@ -283,6 +284,7 @@ pub fn build(call: &AdminCall) -> ApiReq {
         C::CreateWebhook { channel, name } => req(Method::POST, format!("/channels/{channel}/webhooks"), Some(json!({ "name": name }))),
         C::EditWebhook { webhook, body } => req(Method::PATCH, format!("/webhooks/{webhook}"), Some(body.clone())),
         C::DeleteWebhook { webhook } => req(Method::DELETE, format!("/webhooks/{webhook}"), None),
+        C::FollowChannel { channel, webhook_channel } => req(Method::POST, format!("/channels/{channel}/followers"), Some(json!({ "webhook_channel_id": webhook_channel }))),
         C::GuildInvites { guild } => req(Method::GET, format!("/guilds/{guild}/invites"), None),
         C::DeleteInvite { code } => req(Method::DELETE, format!("/invites/{code}"), None),
         C::Integrations { guild } => req(Method::GET, format!("/guilds/{guild}/integrations"), None),
@@ -591,6 +593,8 @@ mod tests {
         let w = build(&AdminCall::CreateWebhook { channel: C, name: "Phoenix test".into() });
         assert_eq!((w.method, w.path.as_str(), w.body), (Method::POST, "/channels/2/webhooks", Some(json!({ "name": "Phoenix test" }))));
         assert_eq!(build(&AdminCall::DeleteWebhook { webhook: Snowflake(9) }).path, "/webhooks/9");
+        let f = build(&AdminCall::FollowChannel { channel: C, webhook_channel: Snowflake(7) });
+        assert_eq!((f.method, f.path.as_str(), f.body), (Method::POST, "/channels/2/followers", Some(json!({ "webhook_channel_id": "7" }))));
         let p = build(&AdminCall::PatchChannel { channel: C, body: json!({ "rate_limit_per_user": 5 }) });
         assert_eq!((p.method, p.body), (Method::PATCH, Some(json!({ "rate_limit_per_user": 5 }))));
     }

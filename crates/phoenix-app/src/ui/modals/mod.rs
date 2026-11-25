@@ -6,6 +6,7 @@ pub mod channel_perms_data;
 pub mod channel_settings;
 pub mod create_channel;
 pub mod custom_status;
+pub mod follow;
 pub mod forward;
 pub mod friend_requests;
 pub mod gdm;
@@ -106,6 +107,7 @@ pub enum Modal {
     CreatePoll(poll_create::State),
     GoLive(go_live::State),
     LeaveLink(leave_link::State),
+    Follow(follow::State),
     EditGroup(gdm::EditGroup),
     GroupInvites(gdm::Invites),
     FolderSettings(gdm::Folder),
@@ -232,6 +234,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::CreatePoll(s) => poll_create::render(app, s, cx),
             Modal::GoLive(s) => go_live::render(app, s, cx),
             Modal::LeaveLink(s) => leave_link::render(s, cx),
+            Modal::Follow(s) => follow::render(app, s, cx),
             Modal::EditGroup(g) => gdm::render_edit_group(g, cx),
             Modal::GroupInvites(s) => gdm::render_invites(s, cx),
             Modal::FolderSettings(f) => gdm::render_folder(f, cx),
