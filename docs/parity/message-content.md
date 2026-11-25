@@ -124,8 +124,16 @@ parsing in `discord_backend/nav.rs` `invite_preview`.
 | Button | `123213` + `461888` | full width sm (32, radius 8, 14/18 medium), `active` = --control-connected-*; member → "Aller sur le serveur"; member verification + manual approval → "Postule pour rejoindre"; valid invite → "Rejoindre"; missing roles → "Accepter" | ✅ Rejoindre live (rgb(0,133,69)); "Aller sur le serveur" opens the server and channel; "Accepter" and the application status ❌ (no invite roles / applications data) |
 | Long cards | `dK` | over 292px the card collapses with "Afficher plus" / "Dissimuler les détails" | ❌ not implemented |
 | Legacy card | `wrapper_jsxF_b` | padding 16, 1px --border-subtle, radius 8, --background-surface-high, max 432 / min 160; title body-sm/medium --text-muted mb 12; content wrap gap 16; 48px icon; title 16/20, detail 14/16 --interactive-text-default; splash 64px | ⚠ from CSS, no live sample (needs a voice / hub invite) |
-| Invalid card | `dJ` | title "Tu as été invité(e), mais" (own message: "Tu as envoyé une invitation, mais"), 48px box radius 12 --opacity-red-12 bg + border, 26px EnvelopeIcon --icon-feedback-critical; "Lien d'invitation invalide" heading-sm/medium --text-feedback-critical, "Demander une nouvelle invitation" body-sm 14/16 | ✅ live 302.4 × 111.6 |
+| Invalid card | `dJ` | title "Tu as été invité(e), mais" (own message: "Tu as envoyé une invitation, mais"), 48px box radius 12 --opacity-red-12 bg + border, 26px EnvelopeIcon --icon-feedback-critical; "Lien d'invitation invalide" heading-sm/medium --text-feedback-critical, "Demander une nouvelle invitation" body-sm 14/16 --interactive-text-default | ✅ live 302.4 × 111.6 |
 | Group DM card | `dL` | "Tu as été invité(e) à" (own: "Tu as envoyé une invitation pour"), icon only when the group has one, name = group name or recipients ("a, b", "a, b, et c", "a et b autres", "Sans nom"), "N membres", full-width "Rejoindre le groupe privé" or disabled secondary "Rejoint" | ⚠ from JS, no live sample; the 3 recipient avatars ❌ |
 | Friend card | `dk` | "Tu as reçu un lien d'ami" (own: "Tu as envoyé un lien d'ami"), 48px avatar, username twice, "Ajouter" (active) / "Envoyer un message" (secondary, friends) / disabled own | ⚠ from JS, no live sample |
 | Join actions | `acceptInviteAndTransitionToInviteChannel` | `POST /invites/{code}` then open the server | ✅ coded, never run on the real account (`real_shots` denies it) |
 | Stream, voice v2, event, application cards | `dX`, `d7`/`cf`, `dc.Ay`, `d_` | | ❌ a voice invite of a server you can see uses the voice v2 card in the client, Phoenix draws the legacy card; event invites draw the guild card |
+
+Real comparison (2026-11-25, int-bin 4ad5b6ae, 1536×840 @1.5, private captures in
+`/mnt/windata/project-phoenix/compare/invites/cmp/`): the #phoenix test message (one guild invite,
+one dead invite, posted from the official client) and the #général pins popout scrolled to its
+two guild invites. Cards match in size, banner gradient, icon, counts, date and button; the chat
+cards only appeared once `invite_embed` remeasured the message list after resolving (GPUI list
+rows are not redrawn by `refresh_windows`) and retried requests that fail before the session is
+ready.

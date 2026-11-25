@@ -369,7 +369,7 @@ fn invalid(own: bool) -> AnyElement {
                 info(
                     crate::t!("invite.card.invalid").into_any_element(),
                     Some(
-                        text(14., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT)
+                        text(14., 16., FontWeight::NORMAL, idx::INTERACTIVE_TEXT_DEFAULT)
                             .child(detail)
                             .into_any_element(),
                     ),
