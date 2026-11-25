@@ -581,9 +581,11 @@ fn guild_inner(g: &Guild, size: f32) -> AnyElement {
                 7.
             } else {
                 match g.acronym.chars().count() {
-                    0..=4 => 16.,
+                    0..=2 => 18.,
+                    3 | 4 => 16.,
                     5 => 14.,
-                    _ => 12.,
+                    6 => 12.,
+                    _ => 10.,
                 }
             }))
             .font_weight(FontWeight::MEDIUM)
