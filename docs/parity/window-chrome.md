@@ -63,3 +63,32 @@ action raises it with the token above. Revisit if GPUI gains `hide`/`show` for W
 - **Multi-window Call Popout** (`ui/call_popout.rs`): `call-popout` button in `call_view.rs` and `pip.rs` opens a secondary frameless GPUI window (`cx.open_window`) observing `PhoenixApp` for live state sync (tiles, video/stream, mute/deafen/disconnect), with clean return to the main window on close.
 - **Narrow windows**: the custom compact mode (member list hidden under 940 px, channel drawer under 720 px) was removed: the 2026 client has neither. The real thresholds are in `responsive.md` (section "Width thresholds from the client CSS and JS"). Window minimum 940×500 and default 1280×720 from `discord_desktop_core` `core.asar` (`MIN_WIDTH=settings.get("MIN_WIDTH",940)`, `MIN_HEIGHT … 500`, `width:1280,height:720`).
 - **Window Shortcuts** (`shortcuts.rs`): `F11` toggles fullscreen (`ToggleFullscreen`), `Ctrl+`/`Ctrl-`/`Ctrl+0` step page zoom (50–200 %).
+
+## Task bar icon and the rail's media badge (2026-11-25)
+
+The reported capture (red Phoenix icon, green "screen" circle top right, red "1" bottom right) is not drawn by the
+desktop app on the task bar. Its colours are exactly two client tokens: green (61,158,96) = `--green-new-40`
+(`--green-360`, `--status-positive`) and red (210,45,57) = `--red-new-50`. It is the server rail's guild icon
+(the Project Phoenix server's icon) with `upperBadge_` and `lowerBadge_`.
+
+What the desktop app does with the OS icon, read in `core.asar` and `app.asar` of app 1.0.171 and the web bundle:
+
+| Item | Client | Phoenix | Status |
+|---|---|---|---|
+| Badge count | web `setBadge(n)`: macOS `dock.setBadge`, Windows `APP_BADGE_SET` → `win.setOverlayIcon(badge-N.ico)` (`app/images/badges/badge-1..11.ico`, 11 = unread dot), Linux `app.setBadgeCount(n >= 0 ? n : 0)` | Unity `com.canonical.Unity.LauncherEntry.Update` with `count` / `count-visible` (tray.rs `launcher_props`), the same number | ✅ |
+| Overlay icons on Linux | none: `setOverlayIcon` is Windows only, no `setIcon` call in core.asar | none | ✅ |
+| Window icon | static | static (GPUI 0.3.12 exposes no window icon API and no `xdg_toplevel` handle) | ➖ |
+| KDE Plasma task manager | draws the count badge from LauncherEntry and its own audio stream indicator top right (`AudioStream.qml`, `audio-volume-high-symbolic`) when the process has a playing PulseAudio stream; the count badge moves down then (`TaskBadgeOverlay.qml` `shiftBadgeDown`) | same, KDE-side | ✅ (KDE behaviour, not app code) |
+
+### Rail media badge (`server_bar.rs` `guild_media` / `media_state`)
+
+Source: web bundle `GuildMediaStateStore.getGuildMediaState` and the badge factory (`oi`) next to `upperBadge`.
+
+| Rule | Client | Phoenix | Status |
+|---|---|---|---|
+| Icon priority | event → Calendar, live stage → Stage, screenshare → `ScreenIcon`, video → `VideoIcon`, audio → `VoiceNormalIcon`, activity → Apps | screenshare → `golive/screen`, video → `video-call`, audio → `speaker` | ✅ / ❌ event, stage and activity states not modelled |
+| Colour | `iconBadge_` `--icon-overlay-dark`, `isCurrentUserConnected_` `--status-positive` | same tokens | ✅ |
+| Not connected to the guild | audio: any voice state of a non-blocked, non-ignored user in a visible, non-AFK, non-stage, non-muted channel; video: same with camera on; screenshare: any application stream of a non-blocked owner in a non-muted channel (one streamer is enough) | `Presence` list from `voice_users` + `voice_panel::flags` | ✅ unit tests `media_tests` |
+| Muted guild | no badge unless the user is connected there | same | ✅ |
+| Connected guild | audio on, video = the voice channel has a camera on, screenshare = the current user's own stream (`getActiveStreamForUser(me, guild)`), green | same, own stream = `go_live::live` or own `self_stream` | ✅ |
+| Folder (collapsed) | only the selected voice guild: audio = !video, video, own screenshare, green | `folder_media` | ✅ |

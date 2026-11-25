@@ -397,18 +397,100 @@ fn mention_badge(n: u32) -> impl IntoElement {
         .child(badge(n).bg(c(Palette::NOTIFICATION)))
 }
 
-fn voice_badge(app: &PhoenixApp, g: &Guild) -> Option<AnyElement> {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MediaState {
+    pub audio: bool,
+    pub video: bool,
+    pub screenshare: bool,
+    pub connected: bool,
+}
+
+impl MediaState {
+    pub fn icon(&self) -> Option<&'static str> {
+        if self.screenshare {
+            Some("golive/screen")
+        } else if self.video {
+            Some("video-call")
+        } else if self.audio {
+            Some("speaker")
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Presence {
+    pub eligible: bool,
+    pub channel_muted: bool,
+    pub hidden_user: bool,
+    pub flags: crate::model::VoiceFlags,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Here {
+    pub channel_has_video: bool,
+    pub self_stream: bool,
+}
+
+pub fn media_state(here: Option<Here>, guild_muted: bool, presences: &[Presence]) -> MediaState {
+    if let Some(h) = here {
+        return MediaState { audio: true, video: h.channel_has_video, screenshare: h.self_stream, connected: true };
+    }
+    if guild_muted {
+        return MediaState::default();
+    }
+    let seen = |p: &&Presence| !p.hidden_user && p.eligible && !p.channel_muted;
+    MediaState {
+        audio: presences.iter().any(|p| seen(&p)),
+        video: presences.iter().filter(seen).any(|p| p.flags.video),
+        screenshare: presences.iter().any(|p| !p.hidden_user && !p.channel_muted && p.flags.stream),
+        connected: false,
+    }
+}
+
+pub fn guild_media(app: &PhoenixApp, g: &Guild) -> MediaState {
+    let Some(chans) = app.guild_channels.get(&g.id) else { return MediaState::default() };
+    let prefs = app.backend.notify_prefs();
+    let flags = crate::ui::voice_panel::flags;
+    if let Some(v) = app.voice_channel.filter(|v| chans.contains(v)) {
+        let users = app.channels.get(&v).map(|c| c.voice_users.as_slice()).unwrap_or_default();
+        let me = app.me.id;
+        let here = Here {
+            channel_has_video: users.iter().any(|u| flags(*u).video),
+            self_stream: crate::ui::go_live::live(app) || flags(me).stream,
+        };
+        return media_state(Some(here), false, &[]);
+    }
+    let guild_muted = prefs.as_ref().is_some_and(|p| p.is_guild_muted(Some(g.id.0)));
+    let mut presences = Vec::new();
+    for ch in chans.iter().filter_map(|c| app.channels.get(c)) {
+        if ch.voice_users.is_empty() {
+            continue;
+        }
+        let eligible = ch.kind != crate::model::ChannelKind::Stage && g.afk_channel != Some(ch.id);
+        let channel_muted = prefs.as_ref().is_some_and(|p| p.is_channel_muted(Some(g.id.0), ch.id.0));
+        for &u in &ch.voice_users {
+            let hidden_user = app.nav.is_blocked(u) || app.nav.is_ignored(u);
+            presences.push(Presence { eligible, channel_muted, hidden_user, flags: flags(u) });
+        }
+    }
+    media_state(None, guild_muted, &presences)
+}
+
+pub fn folder_media(app: &PhoenixApp, guilds: &[&Guild]) -> MediaState {
+    guilds
+        .iter()
+        .map(|g| guild_media(app, g))
+        .find(|s| s.connected)
+        .map(|s| MediaState { audio: !s.video, ..s })
+        .unwrap_or_default()
+}
+
+fn voice_badge(state: MediaState) -> Option<AnyElement> {
     use crate::theme::{generated::idx, tok};
-    let chans = app.guild_channels.get(&g.id)?;
-    let connected = app.voice_channel.is_some_and(|v| chans.contains(&v));
-    let busy = connected || chans.iter().filter_map(|c| app.channels.get(c)).any(|c| !c.voice_users.is_empty());
-    if !busy {
-        return None;
-    }
-    if !connected && app.backend.notify_prefs().is_some_and(|p| p.is_guild_muted(Some(g.id.0))) {
-        return None;
-    }
-    let bg = tok(if connected { idx::STATUS_POSITIVE } else { idx::ICON_OVERLAY_DARK });
+    let icon = state.icon()?;
+    let bg = tok(if state.connected { idx::STATUS_POSITIVE } else { idx::ICON_OVERLAY_DARK });
     Some(
         div()
             .absolute()
@@ -419,7 +501,7 @@ fn voice_badge(app: &PhoenixApp, g: &Guild) -> Option<AnyElement> {
             .bg(c(Palette::BG_TERTIARY))
             .child(
                 div().size(z(16.)).rounded_full().bg(c(bg)).flex().items_center().justify_center().child(
-                    gpui::svg().path(crate::icons::path("speaker")).size(z(12.)).text_color(gpui::white()),
+                    gpui::svg().path(crate::icons::path(icon)).size(z(12.)).text_color(gpui::white()),
                 ),
             )
             .into_any_element(),
@@ -677,7 +759,7 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, _nested: bool
                 .relative()
                 .size(z(ICON))
                 .child(icon_box)
-                .children(voice_badge(app, g))
+                .children(voice_badge(guild_media(app, g)))
                 .when(g.mentions > 0, |d| d.child(mention_badge(g.mentions))),
         )
         .when(hover, |d| d.child(right_tooltip(g.name.clone(), ICON)))
@@ -764,6 +846,7 @@ fn folder(
                 .relative()
                 .size(z(FOLDER))
                 .child(head_inner)
+                .when(!open, |d| d.children(voice_badge(folder_media(app, guilds))))
                 .when(!open && mentions > 0, |d| d.child(mention_badge(mentions))),
         )
         .when(hover, |d| d.child(right_tooltip(name.clone(), FOLDER)));
@@ -830,4 +913,52 @@ fn action(entity: &Entity<PhoenixApp>, id: &'static str, i: Icon, label: SharedS
                 .child(icon(i, 20. * crate::theme::zoom(), if hover || selected { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
         )
         .when(hover, |d| d.child(right_tooltip(label, ICON)))
+}
+
+#[cfg(test)]
+mod media_tests {
+    use super::*;
+    use crate::model::VoiceFlags;
+
+    fn p(stream: bool, video: bool) -> Presence {
+        Presence { eligible: true, channel_muted: false, hidden_user: false, flags: VoiceFlags { stream, video, ..Default::default() } }
+    }
+
+    #[test]
+    fn one_streamer_is_enough_for_the_screen_badge() {
+        let s = media_state(None, false, &[p(false, false), p(true, false), p(false, false)]);
+        assert_eq!(s, MediaState { audio: true, video: false, screenshare: true, connected: false });
+        assert_eq!(s.icon(), Some("golive/screen"));
+    }
+
+    #[test]
+    fn icon_priority_is_screen_then_video_then_voice() {
+        assert_eq!(media_state(None, false, &[p(false, true)]).icon(), Some("video-call"));
+        assert_eq!(media_state(None, false, &[p(false, false)]).icon(), Some("speaker"));
+        assert_eq!(media_state(None, false, &[p(true, true)]).icon(), Some("golive/screen"));
+        assert_eq!(media_state(None, false, &[]).icon(), None);
+    }
+
+    #[test]
+    fn connected_guild_is_green_and_shows_own_stream_only() {
+        let s = media_state(Some(Here { channel_has_video: false, self_stream: false }), true, &[p(true, false)]);
+        assert_eq!(s, MediaState { audio: true, video: false, screenshare: false, connected: true });
+        assert_eq!(s.icon(), Some("speaker"));
+        let live = media_state(Some(Here { channel_has_video: true, self_stream: true }), false, &[]);
+        assert!(live.connected);
+        assert_eq!(live.icon(), Some("golive/screen"));
+    }
+
+    #[test]
+    fn muted_guilds_channels_and_hidden_users_are_skipped() {
+        assert_eq!(media_state(None, true, &[p(true, true)]), MediaState::default());
+        let muted = Presence { channel_muted: true, ..p(true, true) };
+        assert_eq!(media_state(None, false, &[muted]).icon(), None);
+        let blocked = Presence { hidden_user: true, ..p(true, false) };
+        assert_eq!(media_state(None, false, &[blocked]).icon(), None);
+        let afk = Presence { eligible: false, ..p(false, true) };
+        assert_eq!(media_state(None, false, &[afk]).icon(), None);
+        let afk_stream = Presence { eligible: false, ..p(true, false) };
+        assert_eq!(media_state(None, false, &[afk_stream]).icon(), Some("golive/screen"));
+    }
 }

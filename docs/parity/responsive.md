@@ -28,7 +28,7 @@ Offscreen check without a zoom setting: `PHX_W=<css width> PHX_SCALE=<dpr × zoo
 | Header toolbar buttons | Threads, notifications, pins, member list: all four stay at every width (32 px, gap 10, padding-left 10, search margin 4). No overflow menu | unchanged | ✅ |
 | Channel title | `titleWrapper_` is flex-shrink 0: the title keeps its full width and `children_` (flex 1, overflow hidden) clips it once the search is at 64 px (children_ 138 → 109 → 9). No ellipsis on the title | title `flex_shrink(0)` except thread titles (flex 0 1 auto) | ✅ (was shrinking to "Di") |
 | Composer buttons | `channelTextArea_` ≥ 450 px: gift, GIF, sticker, emoji, apps. Below (449.8 measured): gift, emoji, apps. Nothing else hides, even at 2 px | `full_buttons` from a width probe on the text area | ✅ |
-| Server rail badges | Icon 40 px; `upperBadge_` 16 px at (24, 0), `lowerBadge_` 16 px at (24, 24), cut-out rings; the two never touch | same boxes at 100 % (pixel check on `theme_shots` at dpr 2) | ✅ (layout); rasterisation at 150/200 % not compared against a live capture at that zoom |
+| Server rail badges | Icon 40 px; `upperBadge_` 16 px at (24, 0) (icon choice: window-chrome.md "Rail media badge"), `lowerBadge_` 16 px at (24, 24), cut-out rings; the two never touch | same boxes at 100 % (pixel check on `theme_shots` at dpr 2) | ✅ (layout); rasterisation at 150/200 % not compared against a live capture at that zoom |
 
 Offscreen check after the merge (7b62021, `theme_shots` demo data, 1280×800 at dpr 2): at 150 %
 (853 CSS px) the title stays whole, the topic takes the remaining room, the search is about 175 px (read off the image) and
