@@ -72,8 +72,9 @@ pub fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
     let live = e.status == 2;
     let ch_kind = e.channel.and_then(|ch| app.channels.get(&ch)).map(|ch| ch.kind);
     let loc_icon = match ch_kind {
-        Some(crate::model::ChannelKind::Voice) => "voice",
+        Some(crate::model::ChannelKind::Voice) => "speaker",
         Some(crate::model::ChannelKind::Stage) => "stage",
+        _ if e.location.is_some() => "event/location",
         _ => "calendar",
     };
     let place = e
