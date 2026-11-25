@@ -68,6 +68,7 @@ pub enum VoiceControl {
     SetCamera(bool),
     SetCameraDevice(Option<String>),
     StartStream { source: StreamSource, resolution: u32, fps: u32, sound: bool },
+    UpdateStreamQuality { resolution: u32, fps: u32, sound: bool },
     StopStream,
     WatchStream(String),
     WatchAfterJoin(String),

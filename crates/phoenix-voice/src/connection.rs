@@ -66,6 +66,7 @@ pub struct VoiceConfig {
 #[derive(Debug)]
 pub enum VideoOut {
     Start { width: u32, height: u32, fps: u32, bitrate: u32 },
+    Update { width: u32, height: u32, fps: u32, bitrate: u32, source_resolution: bool },
     Frame(crate::media::EncodedVideo),
     Stop,
 }
@@ -115,9 +116,8 @@ struct Media {
     transmitting: bool,
     silence_left: u8,
     video_ssrc: u32,
-    rtx_ssrc: u32,
     video: Option<VideoTx>,
-    bitrate: u32,
+    video_state: VideoSendState,
 }
 
 struct VideoTx {
@@ -127,6 +127,115 @@ struct VideoTx {
 }
 
 pub const CAMERA_MAX_BITRATE: u32 = 2_500_000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VideoSendState {
+    kind: &'static str,
+    audio_ssrc: u32,
+    video_ssrc: u32,
+    rtx_ssrc: u32,
+    active: bool,
+    width: u32,
+    height: u32,
+    fps: u32,
+    bitrate: u32,
+    source_resolution: bool,
+}
+
+impl VideoSendState {
+    pub fn new(stream: bool, audio_ssrc: u32, video_ssrc: u32, rtx_ssrc: u32) -> Self {
+        Self {
+            kind: if stream { "screen" } else { "video" },
+            audio_ssrc,
+            video_ssrc,
+            rtx_ssrc,
+            active: false,
+            width: 1280,
+            height: 720,
+            fps: 20,
+            bitrate: CAMERA_MAX_BITRATE,
+            source_resolution: false,
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    pub fn start(&mut self, width: u32, height: u32, fps: u32, bitrate: u32) -> Option<gateway::protocol::VideoPayload> {
+        if self.video_ssrc == 0 {
+            return None;
+        }
+        self.active = true;
+        self.width = width;
+        self.height = height;
+        self.fps = fps;
+        self.bitrate = bitrate;
+        self.source_resolution = false;
+        Some(self.payload())
+    }
+
+    pub fn update(
+        &mut self,
+        width: u32,
+        height: u32,
+        fps: u32,
+        bitrate: u32,
+        source_resolution: bool,
+    ) -> Option<gateway::protocol::VideoPayload> {
+        if !self.active || self.video_ssrc == 0 {
+            return None;
+        }
+        if (self.width, self.height, self.fps, self.bitrate, self.source_resolution)
+            == (width, height, fps, bitrate, source_resolution)
+        {
+            return None;
+        }
+        self.width = width;
+        self.height = height;
+        self.fps = fps;
+        self.bitrate = bitrate;
+        self.source_resolution = source_resolution;
+        Some(self.payload())
+    }
+
+    pub fn stop(&mut self) -> Option<gateway::protocol::VideoPayload> {
+        if !self.active {
+            return None;
+        }
+        self.active = false;
+        Some(self.payload())
+    }
+
+    pub fn payload(&self) -> gateway::protocol::VideoPayload {
+        use gateway::protocol::{Resolution, StreamDescriptor, VideoPayload};
+        let max_resolution = if self.active && self.source_resolution {
+            Resolution { kind: "source".into(), width: 0, height: 0 }
+        } else if self.active {
+            Resolution { kind: "fixed".into(), width: self.width, height: self.height }
+        } else {
+            Resolution { kind: "fixed".into(), width: 1280, height: 720 }
+        };
+        let stream = StreamDescriptor {
+            kind: self.kind.into(),
+            rid: "100".into(),
+            ssrc: self.video_ssrc,
+            rtx_ssrc: self.rtx_ssrc,
+            active: self.active,
+            quality: 100,
+            max_bitrate: Some(self.bitrate),
+            max_framerate: Some(if self.active { self.fps } else { 20 }),
+            max_resolution: Some(max_resolution),
+        };
+        VideoPayload {
+            user_id: None,
+            audio_ssrc: self.audio_ssrc,
+            video_ssrc: if self.active { self.video_ssrc } else { 0 },
+            rtx_ssrc: if self.active { self.rtx_ssrc } else { 0 },
+            streams: vec![stream],
+        }
+    }
+}
 
 pub fn video_payload(audio_ssrc: u32, video_ssrc: u32, rtx_ssrc: u32, active: Option<(u32, u32, u32)>) -> gateway::protocol::VideoPayload {
     stream_payload("video", audio_ssrc, video_ssrc, rtx_ssrc, active, CAMERA_MAX_BITRATE)
@@ -238,9 +347,8 @@ async fn run(
                                 transmitting: false,
                                 silence_left: 0,
                                 video_ssrc: vs.0,
-                                rtx_ssrc: vs.1,
                                 video: None,
-                                bitrate: CAMERA_MAX_BITRATE,
+                                video_state: VideoSendState::new(cfg.info.stream, r.ssrc, vs.0, vs.1),
                             });
                         }
                         ServerMessage::SessionDescription(sd) => {
@@ -450,24 +558,30 @@ async fn run(
                     let Some(m) = media.as_mut() else { continue };
                     match v {
                         VideoOut::Start { width, height, fps, bitrate } => {
-                            if m.video_ssrc == 0 {
+                            let Some(p) = m.video_state.start(width, height, fps, bitrate) else {
                                 tracing::warn!("voice: no video ssrc from ready");
                                 if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
                                     eprintln!("voice-trace: no video ssrc from ready, video not started");
                                 }
                                 continue;
-                            }
-                            m.bitrate = bitrate;
-                            gw.video(&stream_payload(if cfg.info.stream { "screen" } else { "video" }, m.ssrc, m.video_ssrc, m.rtx_ssrc, Some((width, height, fps)), bitrate))?;
+                            };
+                            gw.video(&p)?;
                             m.video = Some(VideoTx {
                                 sender: RtpSender::new(m.video_ssrc, Codec::H264.payload_type()),
                                 packetizer: crate::rtp::h264::H264Packetizer::new(),
                                 base: rand::random(),
                             });
                         }
+                        VideoOut::Update { width, height, fps, bitrate, source_resolution } => {
+                            if let Some(p) = m.video_state.update(width, height, fps, bitrate, source_resolution) {
+                                gw.video(&p)?;
+                            }
+                        }
                         VideoOut::Stop => {
-                            if m.video.take().is_some() {
-                                gw.video(&stream_payload(if cfg.info.stream { "screen" } else { "video" }, m.ssrc, m.video_ssrc, m.rtx_ssrc, None, m.bitrate))?;
+                            if m.video.take().is_some()
+                                && let Some(p) = m.video_state.stop()
+                            {
+                                gw.video(&p)?;
                             }
                         }
                         VideoOut::Frame(e) => {
@@ -506,5 +620,47 @@ mod video_tests {
         assert_eq!(off.video_ssrc, 0);
         assert!(!off.streams[0].active);
         assert_eq!(off.streams[0].ssrc, 2);
+    }
+
+    #[test]
+    fn stream_renegotiation_updates_op12_without_stopping() {
+        let mut st = VideoSendState::new(true, 10, 20, 21);
+        assert!(!st.is_active());
+        assert!(st.update(1920, 1080, 60, 6_000_000, false).is_none());
+
+        let started = st.start(1280, 720, 30, 2_500_000).unwrap();
+        assert!(st.is_active());
+        assert_eq!((started.audio_ssrc, started.video_ssrc, started.rtx_ssrc), (10, 20, 21));
+        assert_eq!(started.streams[0].kind, "screen");
+        assert_eq!(started.streams[0].max_framerate, Some(30));
+        assert_eq!(started.streams[0].max_bitrate, Some(2_500_000));
+
+        assert!(st.update(1280, 720, 30, 2_500_000, false).is_none());
+
+        let updated = st.update(1920, 1080, 60, 6_000_000, false).unwrap();
+        assert!(st.is_active());
+        let json: serde_json::Value = serde_json::from_str(&gateway::protocol::video(&updated).unwrap()).unwrap();
+        assert_eq!(json["op"], 12);
+        assert_eq!(json["d"]["audio_ssrc"], 10);
+        assert_eq!(json["d"]["video_ssrc"], 20);
+        assert_eq!(json["d"]["rtx_ssrc"], 21);
+        assert_eq!(json["d"]["streams"][0]["active"], true);
+        assert_eq!(json["d"]["streams"][0]["max_framerate"], 60);
+        assert_eq!(json["d"]["streams"][0]["max_bitrate"], 6_000_000);
+        assert_eq!(json["d"]["streams"][0]["max_resolution"]["type"], "fixed");
+        assert_eq!(json["d"]["streams"][0]["max_resolution"]["width"], 1920);
+        assert_eq!(json["d"]["streams"][0]["max_resolution"]["height"], 1080);
+
+        let src = st.update(2560, 1440, 30, 8_000_000, true).unwrap();
+        let src_json: serde_json::Value = serde_json::from_str(&gateway::protocol::video(&src).unwrap()).unwrap();
+        assert_eq!(src_json["d"]["streams"][0]["max_resolution"]["type"], "source");
+        assert_eq!(src_json["d"]["streams"][0]["max_resolution"]["width"], 0);
+        assert_eq!(src_json["d"]["streams"][0]["max_resolution"]["height"], 0);
+
+        let stopped = st.stop().unwrap();
+        assert!(!st.is_active());
+        assert_eq!(stopped.video_ssrc, 0);
+        assert!(!stopped.streams[0].active);
+        assert!(st.update(1280, 720, 30, 2_500_000, false).is_none());
     }
 }

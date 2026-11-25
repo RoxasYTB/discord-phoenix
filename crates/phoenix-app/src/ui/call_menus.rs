@@ -330,7 +330,7 @@ fn report_item(e: gpui::Entity<PhoenixApp>) -> MenuItem {
 }
 
 fn set_quality(e: &gpui::Entity<PhoenixApp>, cx: &mut App, q: Quality) {
-    crate::ui::go_live::set_quality(q);
+    e.update(cx, |a, _| crate::ui::go_live::update_quality(a, q));
     refresh(e, cx);
 }
 

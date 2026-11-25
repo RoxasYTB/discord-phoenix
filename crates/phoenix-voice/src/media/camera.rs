@@ -45,8 +45,17 @@ impl Input {
 
 pub type Preview = Arc<Mutex<Option<VideoFrame>>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CaptureParams {
+    width: u32,
+    height: u32,
+    fps: u32,
+    bitrate: u32,
+}
+
 pub struct Camera {
     stop: Arc<AtomicBool>,
+    reconfig: Arc<Mutex<Option<CaptureParams>>>,
     thread: Option<JoinHandle<()>>,
     pub preview: Preview,
 }
@@ -72,12 +81,13 @@ impl DeviceReader {
     }
 
     #[cfg(unix)]
-    fn pipewire(fd: std::os::fd::OwnedFd, node: u32, width: u32, height: u32, fps: u32) -> Result<Self> {
+    fn pipewire(fd: &std::os::fd::OwnedFd, node: u32, width: u32, height: u32, fps: u32) -> Result<Self> {
+        let dup = fd.try_clone().map_err(Error::Io)?;
         let caps = format!("video/x-raw,format=RGBA,width={width},height={height},framerate={fps}/1,pixel-aspect-ratio=1/1");
         let mut child = Command::new("gst-launch-1.0")
             .args(["-q", "pipewiresrc", "fd=0", &format!("path={node}"), "do-timestamp=true", "keepalive-time=1000", "always-copy=true"])
             .args(["!", "videoconvert", "!", "videoscale", "add-borders=true", "!", "videorate", "drop-only=true", "!", &caps, "!", "fdsink", "fd=1", "sync=false"])
-            .stdin(Stdio::from(fd))
+            .stdin(Stdio::from(dup))
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -118,32 +128,73 @@ impl Camera {
         fps: u32,
         bitrate: u32,
         screen: bool,
-        mut on_frame: impl FnMut(EncodedVideo) + Send + 'static,
+        on_frame: impl FnMut(EncodedVideo) + Send + 'static,
     ) -> Result<Self> {
+        Self::start_with_factory(input, width, height, fps, bitrate, screen, |cfg| Ok(Box::new(FfmpegH264::spawn(cfg)?)), on_frame)
+    }
+
+    pub fn start_with_factory<F>(
+        input: Input,
+        width: u32,
+        height: u32,
+        fps: u32,
+        bitrate: u32,
+        screen: bool,
+        factory: F,
+        mut on_frame: impl FnMut(EncodedVideo) + Send + 'static,
+    ) -> Result<Self>
+    where
+        F: Fn(&VideoEncoderConfig) -> Result<Box<dyn VideoEncoder>> + Send + 'static,
+    {
         let stop = Arc::new(AtomicBool::new(false));
+        let reconfig: Arc<Mutex<Option<CaptureParams>>> = Arc::new(Mutex::new(None));
         let preview: Preview = Arc::new(Mutex::new(None));
         let cfg = VideoEncoderConfig::new(Codec::H264, width, height, fps, bitrate, screen);
-        let mut enc = FfmpegH264::spawn(&cfg)?;
-        let (s2, p2) = (stop.clone(), preview.clone());
+        let mut enc = factory(&cfg)?;
+        let (s2, r2, p2) = (stop.clone(), reconfig.clone(), preview.clone());
         let thread = std::thread::Builder::new()
             .name("phoenix-camera".into())
             .spawn(move || {
+                let mut current = CaptureParams { width, height, fps, bitrate };
                 let mut pattern = TestPattern::new(width, height, fps);
                 let live = !matches!(input, Input::TestPattern);
-                let mut device = match input {
-                    Input::Device(d) => DeviceReader::open(&d, width, height, fps).ok(),
+                let mut device = match &input {
+                    Input::Device(d) => DeviceReader::open(d, width, height, fps).ok(),
                     #[cfg(unix)]
-                    Input::PipeWire { fd, node } => DeviceReader::pipewire(fd, node, width, height, fps).ok(),
+                    Input::PipeWire { fd, node } => DeviceReader::pipewire(fd, *node, width, height, fps).ok(),
                     Input::TestPattern => None,
                 };
                 let started = Instant::now();
-                let period = Duration::from_micros(1_000_000 / u64::from(fps.max(1)));
+                let mut period = Duration::from_micros(1_000_000 / u64::from(fps.max(1)));
                 let mut next = Instant::now();
                 let mut first = true;
                 while !s2.load(Ordering::Relaxed) {
+                    if let Some(target) = r2.lock().ok().and_then(|mut slot| slot.take())
+                        && target != current
+                    {
+                        let new_cfg = VideoEncoderConfig::new(Codec::H264, target.width, target.height, target.fps, target.bitrate, screen);
+                        match factory(&new_cfg) {
+                            Ok(new_enc) => {
+                                enc = new_enc;
+                                if (target.width, target.height, target.fps) != (current.width, current.height, current.fps) {
+                                    pattern = TestPattern::new(target.width, target.height, target.fps);
+                                    device = match &input {
+                                        Input::Device(d) => DeviceReader::open(d, target.width, target.height, target.fps).ok(),
+                                        #[cfg(unix)]
+                                        Input::PipeWire { fd, node } => DeviceReader::pipewire(fd, *node, target.width, target.height, target.fps).ok(),
+                                        Input::TestPattern => None,
+                                    };
+                                    period = Duration::from_micros(1_000_000 / u64::from(target.fps.max(1)));
+                                }
+                                current = target;
+                                first = true;
+                            }
+                            Err(e) => tracing::warn!(error = %e, "camera: reconfigure failed"),
+                        }
+                    }
                     let frame = match (live, device.as_mut()) {
-                        (true, Some(d)) => match d.frame((width * height * 4) as usize) {
-                            Some(data) => VideoFrame { width, height, pts_us: started.elapsed().as_micros() as u64, data: Arc::from(data) },
+                        (true, Some(d)) => match d.frame((current.width * current.height * 4) as usize) {
+                            Some(data) => VideoFrame { width: current.width, height: current.height, pts_us: started.elapsed().as_micros() as u64, data: Arc::from(data) },
                             None => break,
                         },
                         (true, None) => break,
@@ -173,7 +224,13 @@ impl Camera {
                 }
             })
             .map_err(Error::Io)?;
-        Ok(Self { stop, thread: Some(thread), preview })
+        Ok(Self { stop, reconfig, thread: Some(thread), preview })
+    }
+
+    pub fn reconfigure(&self, width: u32, height: u32, fps: u32, bitrate: u32) {
+        if let Ok(mut slot) = self.reconfig.lock() {
+            *slot = Some(CaptureParams { width, height, fps, bitrate });
+        }
     }
 
     pub fn stop(mut self) {
@@ -203,5 +260,64 @@ mod tests {
         assert_eq!(Input::from_name(Some(TEST_PATTERN)), Input::TestPattern);
         assert_eq!(Input::from_name(Some("/dev/video2")), Input::Device("/dev/video2".into()));
         assert_eq!(Input::from_name(None), Input::Device("/dev/video0".into()));
+    }
+
+    #[test]
+    fn hot_reconfigure_recreates_encoder_and_forces_keyframe() {
+        struct FakeEncoder {
+            log: Arc<Mutex<Vec<(u32, u32, bool)>>>,
+        }
+        impl VideoEncoder for FakeEncoder {
+            fn codec(&self) -> Codec {
+                Codec::H264
+            }
+            fn encode(&mut self, frame: &VideoFrame, force_keyframe: bool) -> Result<Option<EncodedVideo>> {
+                self.log.lock().unwrap().push((frame.width, frame.height, force_keyframe));
+                Ok(Some(EncodedVideo { codec: Codec::H264, keyframe: force_keyframe, data: vec![0, 0, 0, 1, 0x65], pts_us: frame.pts_us }))
+            }
+            fn set_bitrate(&mut self, _bps: u32) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let configs: Arc<Mutex<Vec<(u32, u32, u32, u32)>>> = Arc::new(Mutex::new(Vec::new()));
+        let frames: Arc<Mutex<Vec<(u32, u32, bool)>>> = Arc::new(Mutex::new(Vec::new()));
+        let (c2, f2) = (configs.clone(), frames.clone());
+        let cam = Camera::start_with_factory(
+            Input::TestPattern,
+            640,
+            360,
+            60,
+            1_500_000,
+            true,
+            move |cfg| {
+                c2.lock().unwrap().push((cfg.width, cfg.height, cfg.framerate, cfg.bitrate_bps));
+                Ok(Box::new(FakeEncoder { log: f2.clone() }))
+            },
+            |_| {},
+        )
+        .unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while frames.lock().unwrap().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!frames.lock().unwrap().is_empty());
+
+        cam.reconfigure(1280, 720, 60, 4_500_000);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !frames.lock().unwrap().iter().any(|&(w, h, _)| (w, h) == (1280, 720)) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        cam.reconfigure(1280, 720, 60, 4_500_000);
+        std::thread::sleep(Duration::from_millis(40));
+        cam.stop();
+
+        let cfgs = configs.lock().unwrap().clone();
+        assert_eq!(cfgs, vec![(640, 360, 60, 1_500_000), (1280, 720, 60, 4_500_000)]);
+        let fl = frames.lock().unwrap();
+        let first_new = fl.iter().find(|&&(w, h, _)| (w, h) == (1280, 720)).copied();
+        assert_eq!(first_new, Some((1280, 720, true)));
     }
 }

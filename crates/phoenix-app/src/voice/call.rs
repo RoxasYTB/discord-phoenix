@@ -36,6 +36,7 @@ struct OwnStream {
     portal: Option<phoenix_voice::screencast::PortalSession>,
     preview_failed: Option<std::time::Instant>,
     stats: connection::ConnStats,
+    sound_source: phoenix_voice::media::soundshare::Source,
     sound: Option<phoenix_voice::media::soundshare::Source>,
     audio_tx: Option<mpsc::UnboundedSender<AudioOut>>,
     soundshare: Option<phoenix_voice::media::soundshare::Soundshare>,
@@ -512,6 +513,7 @@ impl VoiceManager {
                 resend = true;
             }
             VoiceControl::StartStream { source, resolution, fps, sound } => start_own_stream(&mut st, source, resolution, fps, sound),
+            VoiceControl::UpdateStreamQuality { resolution, fps, sound } => update_own_stream(&mut st, resolution, fps, sound),
             VoiceControl::StopStream => stop_own_stream(&mut st, None),
             VoiceControl::WatchStream(key) => start_watch(&mut st, key),
             VoiceControl::WatchAfterJoin(key) => st.pending_watch = Some(key),
@@ -599,6 +601,11 @@ fn start_own_stream(st: &mut State, source: super::StreamSource, resolution: u32
         portal: None,
         preview_failed: None,
         stats: Default::default(),
+        sound_source: if source == super::StreamSource::TestPattern {
+            phoenix_voice::media::soundshare::Source::Tone
+        } else {
+            phoenix_voice::media::soundshare::Source::Monitor
+        },
         sound: sound.then_some(if source == super::StreamSource::TestPattern {
             phoenix_voice::media::soundshare::Source::Tone
         } else {
@@ -658,6 +665,47 @@ fn send_stream_create(st: &State) {
     let Some(g) = t.guild else { return };
     if let Err(e) = gw.stream_create(Snowflake(g), Snowflake(t.channel), st.region.as_deref()) {
         stream_ui(st, super::StreamUiEvent::Failed(e.to_string()));
+    }
+}
+
+fn update_own_stream(st: &mut State, resolution: u32, fps: u32, sound: bool) {
+    let Some(o) = st.own.as_mut() else { return };
+    let video_changed = o.resolution != resolution || o.fps != fps;
+    o.resolution = resolution;
+    o.fps = fps;
+    if video_changed
+        && let (Some(capture), Some(conn)) = (o.capture.as_ref(), o.conn.as_ref())
+    {
+        let (w, h) = super::stream::frame_size(resolution, o.size);
+        let fps = fps.max(5);
+        let bitrate = super::stream::bitrate(resolution, fps);
+        capture.reconfigure(w, h, fps, bitrate);
+        conn.video(phoenix_voice::connection::VideoOut::Update {
+            width: w,
+            height: h,
+            fps,
+            bitrate,
+            source_resolution: resolution == 0,
+        });
+    }
+    if sound && o.sound.is_none() {
+        o.sound = Some(o.sound_source.clone());
+        if o.capture.is_some()
+            && let (Some(src), Some(tx)) = (o.sound.clone(), o.audio_tx.clone())
+        {
+            match phoenix_voice::media::soundshare::Soundshare::start(src, tx) {
+                Ok(s) => o.soundshare = Some(s),
+                Err(e) => tracing::warn!("stream audio unavailable: {e}"),
+            }
+        }
+    } else if !sound && o.sound.is_some() {
+        o.sound = None;
+        if let Some(s) = o.soundshare.take() {
+            std::thread::spawn(move || drop(s));
+        }
+        if let Some(tx) = o.audio_tx.as_ref() {
+            let _ = tx.send(AudioOut::End);
+        }
     }
 }
 

@@ -33,6 +33,14 @@ pub fn set_quality(q: Quality) {
     QUALITY.with(|c| c.set(q));
 }
 
+pub fn update_quality(app: &PhoenixApp, q: Quality) {
+    set_quality(q);
+    if live(app) {
+        let (resolution, fps) = crate::voice::stream::resolve(q, perks(app));
+        drop(app.backend.voice_control(VoiceControl::UpdateStreamQuality { resolution, fps, sound: q.sound }));
+    }
+}
+
 pub fn perks(app: &PhoenixApp) -> Perks {
     let guild_tier = app
         .voice_channel
