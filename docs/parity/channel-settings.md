@@ -85,3 +85,15 @@ Save: `PATCH /channels/{id}` with the client's body, measured live on #phoenix (
 - #phoenix slowmode 0 → 5 s → 0 from the official client (`PATCH /channels/1574797385463496724`), to capture the body.
 - Webhook "Phoenix test" created on #phoenix via the API helper, measured in the client, then deleted.
 - No other write. Only `POST /science` (telemetry) and one read ack on #général (the user's channel) were seen during the passes.
+
+## Real-account renders (int-bin `real_shots`, 2026-11-25, 1280×720 @1.5)
+
+Overview of #phoenix and 〢🔊・phoenix-vocal, Permissions, Webhooks (with the temporary test webhook), the add
+members modal and the delete modal were rendered and compared by eye with the dumps above: same structure,
+positions within a few px. `real_shots` lets the read-only admin GETs through (`ReadOnly::action`), everything
+else stays denied. `PHX_CS_ADD=1`, `PHX_CS_DELETE=1`, `PHX_CS_HOOK=<id>` open the sub-views.
+
+Still open: the < 780 px 30/70 split, the name emoji button, the topic emoji button, the forum tag editor and
+default reaction picker, the forum layout preview image, the text-channel illustration, the expanded webhook
+avatar (client: 100px square r12, Phoenix: round) and its upload, Pause Invites modal, the bold channel name in
+the delete body. The followed-channels page was not seen live (no followed channel on the test channels).
