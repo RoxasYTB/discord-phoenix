@@ -33,6 +33,9 @@ pub fn sync(app: &PhoenixApp, os_reduced_motion: bool) {
     GIF_AUTOPLAY.store(p.synced.flag("gifs"), Relaxed);
     REDUCED_MOTION.store(effective_reduced_motion(&p.local, os_reduced_motion), Relaxed);
     SWITCH_ICONS.store(p.local.flag("indicators", false), Relaxed);
+    if crate::fonts::set_name_styles(p.local.flag("name-styles", true)) {
+        crate::theme::bump_style_generation();
+    }
     STICKER_MODE.store(p.synced.pick("stickers") as u8, Relaxed);
     INLINE_ATTACHMENTS.store(p.synced.flag("media-uploads"), Relaxed);
     ALT_TEXT.store(p.synced.flag("alt-text"), Relaxed);

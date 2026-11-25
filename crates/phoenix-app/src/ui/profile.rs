@@ -394,7 +394,7 @@ pub(crate) fn name_block(i: &Info, big: bool, trailing: Option<AnyElement>) -> D
                         .text_size(z(if big { 24. } else { 20. }))
                         .line_height(z(if big { 32. } else { 24. }))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .when(i.user.as_deref().is_none_or(|u| u.name_style.as_ref().is_none_or(|s| s.2.is_empty())), |d| d.text_color(c(tok(idx::TEXT_STRONG))))
+                        .when(crate::fonts::name_style(i.user.as_deref()).is_none_or(|s| s.2.is_empty()), |d| d.text_color(c(tok(idx::TEXT_STRONG))))
                         .text_ellipsis()
                         .child(crate::fonts::name_text(i.display.clone(), i.user.as_deref(), if big { 24. } else { 20. })),
                 )

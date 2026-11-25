@@ -246,8 +246,21 @@ pub fn register(cx: &mut gpui::App) {
     .detach();
 }
 
+static NAME_STYLES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn set_name_styles(on: bool) -> bool {
+    NAME_STYLES.swap(on, std::sync::atomic::Ordering::Relaxed) != on
+}
+
+pub fn name_style(user: Option<&crate::model::User>) -> Option<&(u32, u32, Vec<u32>)> {
+    if !NAME_STYLES.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    user.and_then(|u| u.name_style.as_ref())
+}
+
 pub fn styled_name<E: gpui::Styled>(el: E, user: Option<&crate::model::User>, in_profile: bool) -> E {
-    let Some((font, _effect, colors)) = user.and_then(|u| u.name_style.as_ref()) else { return el };
+    let Some((font, _effect, colors)) = name_style(user) else { return el };
     let el = match family_for_id(*font) {
         Some(f) => el.font_family(f),
         None => el,
@@ -259,7 +272,7 @@ pub fn styled_name<E: gpui::Styled>(el: E, user: Option<&crate::model::User>, in
 }
 
 pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, size: f32) -> gpui::AnyElement {
-    let stops = user.and_then(|u| u.name_style.as_ref()).and_then(|(_, _, c)| match c.as_slice() {
+    let stops = name_style(user).and_then(|(_, _, c)| match c.as_slice() {
         [a, b, ..] => Some([*a, *b, *a]),
         _ => None,
     });
@@ -273,8 +286,7 @@ pub fn name_text_with(
     stops: Option<[u32; 3]>,
 ) -> gpui::AnyElement {
     use gpui::IntoElement;
-    let ls = user
-        .and_then(|u| u.name_style.as_ref())
+    let ls = name_style(user)
         .filter(|s| family_for_id(s.0).is_some())
         .and_then(|s| font_for_id(s.0))
         .map_or(0., |(_, ls)| ls);
