@@ -10,7 +10,7 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 NAME="discord-phoenix-$VERSION-linux-$ARCH"
 
 FHS="$WORK/fhs/usr"
-install -Dm755 "$BIN" "$FHS/bin/phoenix-app"
+install -Dm755 "$BIN" "$FHS/bin/discord-phoenix"
 install -Dm644 "$HERE/discord-phoenix.desktop" "$FHS/share/applications/discord-phoenix.desktop"
 if [ -f "$ICON" ]; then
   install -Dm644 "$ICON" "$FHS/share/icons/hicolor/512x512/apps/discord-phoenix.png"
@@ -53,13 +53,13 @@ if [ "${SKIP_APPIMAGE:-0}" != 1 ]; then
   cat > "$APPDIR/AppRun" <<'RUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/usr/bin/phoenix-app" "$@"
+exec "$HERE/usr/bin/discord-phoenix" "$@"
 RUN
   chmod +x "$APPDIR/AppRun"
   TOOL="$WORK/appimagetool"
   curl -fsSL -o "$TOOL" \
     "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
   chmod +x "$TOOL"
-  ARCH=$ARCH VERSION="$VERSION" "$TOOL" --appimage-extract-and-run "$APPDIR" "$OUT/$NAME.AppImage"
+  ARCH=$ARCH VERSION="$VERSION" "$TOOL" --appimage-extract-and-run "$APPDIR" "$OUT/discord-phoenix-$VERSION-$ARCH.AppImage"
 fi
 ls -l "$OUT"

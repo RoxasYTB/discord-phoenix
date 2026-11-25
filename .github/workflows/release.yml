@@ -2,34 +2,90 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0-beta.1). Leave empty to use v<workspace.package.version> from Cargo.toml."
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: "Mark GitHub Release as prerelease"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - "true"
+          - "false"
 
 permissions:
   contents: read
 
 env:
   CARGO_TERM_COLOR: always
-  BIN: phoenix-app
+  BIN: discord-phoenix
   APP_NAME: Discord Phoenix
 
 jobs:
+  prepare:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Determine tag, version and prerelease flag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            PKG_VER="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+            TAG="v${PKG_VER}"
+          fi
+          VERSION="${TAG#v}"
+          PRERELEASE_INPUT="${{ inputs.prerelease }}"
+          if [ "$PRERELEASE_INPUT" = "true" ]; then
+            PRERELEASE="true"
+          elif [ "$PRERELEASE_INPUT" = "false" ]; then
+            PRERELEASE="false"
+          else
+            case "$TAG" in
+              *-*) PRERELEASE="true" ;;
+              *) PRERELEASE="false" ;;
+            esac
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Resolved release: tag=$TAG version=$VERSION prerelease=$PRERELEASE"
+
   linux:
     name: Linux x86_64
-    runs-on: ubuntu-22.04 # older glibc for wider compatibility
+    needs: [prepare]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
-            libxcb1-dev libfontconfig-dev libssl-dev libasound2-dev pkg-config \
-            libfuse2 file
+            libxcb1-dev libfontconfig-dev libssl-dev libasound2-dev libopus-dev \
+            cmake pkg-config libfuse2 file
       - uses: Swatinem/rust-cache@v2.7.8
-      - run: cargo build --release --locked -p phoenix-app
+      - name: Build release binary
+        run: cargo build --release --locked -p phoenix-app --bin "${BIN}"
       - name: Package tar.gz, .deb and AppImage
-        run: packaging/linux/package.sh "${GITHUB_REF_NAME#v}" target/release/phoenix-app dist
+        run: packaging/linux/package.sh "${{ needs.prepare.outputs.version }}" "target/release/${BIN}" dist
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: dist-linux
@@ -37,63 +93,70 @@ jobs:
 
   windows:
     name: Windows x86_64
+    needs: [prepare]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2.7.8
-      - run: cargo build --release --locked -p phoenix-app
-      - name: Package
+      - name: Build release binary
+        run: cargo build --release --locked -p phoenix-app --bin "${{ env.BIN }}" --target x86_64-pc-windows-msvc
+      - name: Package .zip and standalone .exe
         shell: pwsh
         run: |
-          $v = "$env:GITHUB_REF_NAME".TrimStart('v')
+          $v = "${{ needs.prepare.outputs.version }}"
+          $bin = "target/x86_64-pc-windows-msvc/release/$env:BIN.exe"
           New-Item -ItemType Directory -Force dist | Out-Null
           $stage = "discord-phoenix-$v-windows-x86_64"
           New-Item -ItemType Directory -Force $stage | Out-Null
-          Copy-Item target/release/phoenix-app.exe $stage/
+          Copy-Item $bin "$stage/discord-phoenix.exe"
           Copy-Item LICENSE-MIT, LICENSE-APACHE, README.md $stage/
           Compress-Archive -Path $stage -DestinationPath "dist/$stage.zip"
-          Copy-Item target/release/phoenix-app.exe "dist/discord-phoenix-$v-windows-x86_64.exe"
+          Copy-Item $bin "dist/discord-phoenix-$v-windows-x86_64.exe"
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: dist-windows
           path: dist/*
 
   macos:
-    name: macOS ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: aarch64
-            target: aarch64-apple-darwin
-            runner: macos-14
-          - arch: x86_64
-            target: x86_64-apple-darwin
-            runner: macos-13
-    runs-on: ${{ matrix.runner }}
+    name: macOS universal (aarch64 + x86_64)
+    needs: [prepare]
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2.7.8
         with:
-          key: ${{ matrix.target }}
-      - run: cargo build --release --locked -p phoenix-app --target ${{ matrix.target }}
-      - name: Build unsigned .app, zip and dmg
+          key: macos-universal
+      - name: Build aarch64-apple-darwin
+        run: cargo build --release --locked -p phoenix-app --bin "${BIN}" --target aarch64-apple-darwin
+      - name: Build x86_64-apple-darwin
+        run: cargo build --release --locked -p phoenix-app --bin "${BIN}" --target x86_64-apple-darwin
+      - name: Combine universal binary with lipo
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          packaging/macos/bundle.sh "$v" "target/${{ matrix.target }}/release/phoenix-app" \
-            dist "macos-${{ matrix.arch }}"
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create \
+            "target/aarch64-apple-darwin/release/${BIN}" \
+            "target/x86_64-apple-darwin/release/${BIN}" \
+            -output "target/universal-apple-darwin/release/${BIN}"
+          lipo -info "target/universal-apple-darwin/release/${BIN}"
+      - name: Package Discord Phoenix.app, .app.zip and .dmg
+        run: |
+          packaging/macos/bundle.sh "${{ needs.prepare.outputs.version }}" \
+            "target/universal-apple-darwin/release/${BIN}" \
+            dist "macos-universal"
       - uses: actions/upload-artifact@v4.6.2
         with:
-          name: dist-macos-${{ matrix.arch }}
+          name: dist-macos
           path: dist/*
 
   publish:
-    name: GitHub release
-    needs: [linux, windows, macos]
+    name: Publish GitHub Release
+    needs: [prepare, linux, windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,17 +166,25 @@ jobs:
           pattern: dist-*
           path: dist
           merge-multiple: true
-      - name: Checksums
+      - name: Generate SHA256SUMS.txt
         working-directory: dist
-        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
-      - name: Create release
-        uses: softprops/action-gh-release@v2.2.2
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Discord Phoenix ${{ needs.prepare.outputs.tag }}
           files: dist/*
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, '-rc') }}
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           body: |
             Unofficial third-party client, not affiliated with or endorsed by Discord Inc.
-            macOS builds are unsigned: right-click > Open, or run `xattr -dr com.apple.quarantine "Discord Phoenix.app"`.
-            Verify downloads with `sha256sum -c SHA256SUMS`.
+
+            - **Windows (x86_64)**: extract `discord-phoenix-${{ needs.prepare.outputs.version }}-windows-x86_64.zip` or run the standalone `.exe`.
+            - **Linux (x86_64)**: use the `.AppImage`, `.deb` package, or `.tar.gz` archive.
+            - **macOS (Universal — Apple Silicon & Intel)**: open the `.dmg` (or `.app.zip`). Builds are unsigned: right-click → Open, or run `xattr -dr com.apple.quarantine "Discord Phoenix.app"`.
+
+            Verify downloads with `sha256sum -c SHA256SUMS.txt`.

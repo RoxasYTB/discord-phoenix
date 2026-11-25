@@ -5,7 +5,7 @@
   <key>CFBundleName</key><string>Discord Phoenix</string>
   <key>CFBundleDisplayName</key><string>Discord Phoenix</string>
   <key>CFBundleIdentifier</key><string>io.github.roxasytb.discord-phoenix</string>
-  <key>CFBundleExecutable</key><string>phoenix-app</string>
+  <key>CFBundleExecutable</key><string>discord-phoenix</string>
   <key>CFBundleIconFile</key><string>discord-phoenix</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>@VERSION@</string>
