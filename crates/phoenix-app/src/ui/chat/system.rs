@@ -611,11 +611,26 @@ fn automod_line(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r:
 fn nitro_notification(msg: &Message, r: &RenderedMessage) -> AnyElement {
     use crate::theme::{generated::idx, tok};
     let pink = c(tok(idx::PREMIUM_NITRO_PINK_LIGHT));
-    let button = crate::ui::controls::button(("nitro-notif", msg.id.0), SharedString::default(), crate::ui::controls::BtnKind::Expressive)
+    let grad = gpui::linear_gradient(
+        90.,
+        gpui::linear_color_stop(c(tok(idx::PREMIUM_TIER_2_PURPLE_FOR_GRADIENTS)), 0.),
+        gpui::linear_color_stop(c(tok(idx::PREMIUM_TIER_2_PINK_FOR_GRADIENTS)), 1.),
+    );
+    let button = div()
+        .id(("nitro-notif", msg.id.0))
+        .flex()
+        .items_center()
         .h(z(32.))
         .px(z(16.))
         .gap(z(4.))
+        .rounded(z(8.))
+        .bg(grad)
+        .cursor_pointer()
+        .whitespace_nowrap()
         .text_size(z(14.))
+        .line_height(z(16.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(gpui::white())
         .child(gpui::svg().path(crate::icons::path("nitro")).flex_none().size(z(16.)).text_color(gpui::white()))
         .child(crate::t!("sys.get_nitro"));
     div()

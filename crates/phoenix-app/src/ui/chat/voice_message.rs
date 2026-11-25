@@ -2394,6 +2394,7 @@ pub fn attachment_controls(url: &SharedString, cx: &App) -> AnyElement {
     });
     let time = div()
         .flex_none()
+        .whitespace_nowrap()
         .m(z(4.))
         .h(z(12.))
         .flex()
