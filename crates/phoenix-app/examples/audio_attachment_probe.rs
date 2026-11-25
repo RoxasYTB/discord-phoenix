@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
         let rest = RestClient::new(token.expose(), ClientProperties::linux_desktop());
         let list = rest.request_json(reqwest::Method::GET, &format!("/channels/{SANDBOX}/messages?around={TEST_MESSAGE}&limit=1"), None).await?;
         let msg = list.as_array().and_then(|a| a.iter().find(|m| m["id"].as_str() == Some(&TEST_MESSAGE.to_string()))).cloned().ok_or_else(|| anyhow::anyhow!("test message not found"))?;
-        let att = msg["attachments"].as_array().and_then(|a| a.first()).cloned().ok_or_else(|| anyhow::anyhow!("no attachment"))?;
+        let att = msg["attachments"].as_array().and_then(|a| a.iter().find(|x| x["content_type"].as_str().is_some_and(|t| t.starts_with("audio/")) || x["filename"].as_str().is_some_and(|n| n.ends_with(".wav")))).cloned().ok_or_else(|| anyhow::anyhow!("no attachment"))?;
         anyhow::Ok((att["url"].as_str().unwrap_or_default().to_string(), att["filename"].as_str().unwrap_or_default().to_string()))
     })?;
     println!("attachment: {name}");
