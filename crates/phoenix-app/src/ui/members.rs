@@ -611,7 +611,7 @@ pub fn member_row_in(
     let acts = app.people.activities.get(&uid).map(Vec::as_slice).unwrap_or(&[]);
     let sub = SubText::of(acts);
     let streaming = !offline && acts.iter().any(|a| a.kind == crate::presence::ActivityKind::Streaming);
-    let in_voice = !streaming && match g {
+    let in_voice = match g {
         Some(g) => app
             .guild_channels
             .get(&g)
