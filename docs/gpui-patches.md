@@ -353,6 +353,15 @@ nothing fits. An emoji sequence is one grapheme. Unit tests
 `shaped_end_cut_keeps_the_last_glyph_that_fits_like_chromium`,
 `shaped_end_truncation_counts_an_emoji_as_one_glyph`; app tests in `ui::emoji_text`.
 
+**Check, 2026-11-26.** `honeypot_placeholder_cuts_after_honey_like_the_client` replays the
+whole composer placeholder of Aperture #honeypot (« Envoyer un message dans #〢🍯・honeypot »,
+gg sans 400 16px, box 290.667px at DPR 1.5) with its harfbuzz ends. « honey » ends at
+279.314px and the ellipsis is 11.232px, rounded up to 1079/96, so the cut keeps « honey » with 0.11px
+to spare. The test is `end ≤ box − SnappedWidth(…)`, like Chromium's `LineTruncator`: an end
+exactly on the budget is kept, and 0.001px less cuts it. Phoenix renders « honey… » with
+patch 14 and the composer's `mr(12)`, so the cut itself needed no change. The « hone… » seen
+before came from the box, not from the cut.
+
 Rev: `776d5b2c` on `gpui-rewrap` (patches 4 to 15). Before: `fc9bf4e7` on `gpui-ellipsis2` (patches 4 to 14), `5e340a80` on `gpui-richtext` (patches 4 to 13), `0c04d8e7` on `gpui-baseline2` (patches 4 to 11), `4c7d4f5a` on `gpui-baseline` (patch 9 with the descent sign bug), `0ce4a85b` on `gpui-underline`, `265d2211` on `gpui-marks`.
 
 ## 15. Rewrap slack (`src/elements/text.rs` `needs_rewrap`)
