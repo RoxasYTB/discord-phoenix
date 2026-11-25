@@ -1301,10 +1301,10 @@ mod tests {
         let text = "a\u{1f469}\u{200d}\u{1f680}bc";
         let advance = 10.;
         let mut x = 0.;
-        let glyphs: Vec<ShapedGlyph> = text
+        let glyphs: Vec<crate::ShapedGlyph> = text
             .char_indices()
             .map(|(ix, c)| {
-                let glyph = ShapedGlyph {
+                let glyph = crate::ShapedGlyph {
                     id: crate::GlyphId(0),
                     position: crate::point(px(x), px(0.)),
                     index: ix,
