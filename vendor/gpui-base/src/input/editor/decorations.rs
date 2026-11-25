@@ -881,6 +881,7 @@ impl TextareaExtras {
             decoration.range = adjust_range_for_edit(&decoration.range, edited_range, inserted_len);
             !decoration.range.is_empty()
         });
+        self.rich.adjust_for_edit(edited_range, inserted_len);
     }
 }
 
@@ -898,6 +899,34 @@ impl InputBaseState<TextareaMode> {
     /// The textarea's text decorations, as last set and moved by edits since.
     pub fn decorations(&self) -> &[TextDecoration] {
         &self.extras.decorations
+    }
+
+    pub fn set_rich_decorations(
+        &mut self,
+        spans: Vec<crate::input::RichSpan>,
+        lines: Vec<crate::input::LineStyle>,
+        cx: &mut Context<Self>,
+    ) {
+        let faces = if spans.is_empty() && lines.is_empty() {
+            Vec::new()
+        } else {
+            self.extras
+                .decorations
+                .iter()
+                .map(|d| (d.range.clone(), d.style.font_weight, d.style.font_style))
+                .collect()
+        };
+        let rich = crate::input::RichDecorations::new(&self.text, spans, lines, faces);
+        if self.extras.rich == rich {
+            return;
+        }
+        self.extras.rich = rich;
+        self.display_map.set_rich(self.extras.rich.clone(), cx);
+        cx.notify();
+    }
+
+    pub fn rich_decorations(&self) -> &crate::input::RichDecorations {
+        &self.extras.rich
     }
 }
 

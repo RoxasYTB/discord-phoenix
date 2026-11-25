@@ -235,6 +235,15 @@ impl DisplayMap {
         self.rebuild_fold_projection();
     }
 
+    pub(crate) fn set_rich(&mut self, rich: crate::input::RichDecorations, cx: &mut App) {
+        self.wrap_map.set_rich(rich, cx);
+        self.rebuild_fold_projection();
+    }
+
+    pub(crate) fn clear_rich(&mut self) {
+        self.wrap_map.clear_rich();
+    }
+
     pub fn on_layout_changed(&mut self, wrap_width: Option<Pixels>, cx: &mut App) {
         self.wrap_map.on_layout_changed(wrap_width, cx);
         self.rebuild_fold_projection();

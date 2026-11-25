@@ -355,6 +355,7 @@ pub(crate) struct TextWrapper {
     pub(crate) lines: SumTree<LineItem>,
 
     inline_metrics: Rc<[(Range<usize>, Pixels)]>,
+    rich: Rc<crate::input::RichDecorations>,
     /// Exact native widths avoid reshaping the same prefix when a drag crosses wrap thresholds.
     width_measurements: Rc<std::cell::RefCell<WidthMeasurements>>,
     _initialized: bool,
@@ -372,6 +373,7 @@ impl TextWrapper {
             tab_size: TabSize::default().tab_size,
             lines: SumTree::new(&()),
             inline_metrics: Rc::from([]),
+            rich: Rc::default(),
             width_measurements: Rc::default(),
             _initialized: false,
         }
@@ -544,6 +546,7 @@ impl TextWrapper {
             .text_system()
             .line_wrapper(self.font.clone(), self.font_size);
         let metrics = self.inline_metrics.clone();
+        let rich = self.rich.clone();
         let measurements = self.width_measurements.clone();
         if !reuse_widths {
             measurements.borrow_mut().clear();
@@ -581,6 +584,37 @@ impl TextWrapper {
                     fragments.push(LineFragment::element(*width, range.len()));
                     offset = range.end;
                 }
+                if fragments.is_empty() && !rich.is_empty() {
+                    let view = rich.line_view(line_start..line_start + line_str.len());
+                    if !view.is_plain() {
+                        let width = (wrap_width - view.indent() - view.end_inset()).max(px(1.));
+                        let size = view.font_size(font_size);
+                        let measured = measured_wrap(line_str, width, wrapping_indent, |text| {
+                            let start = text.as_ptr() as usize - line_str.as_ptr() as usize;
+                            let range = start..start + text.len();
+                            let runs = view.runs(
+                                &[gpui::TextRun {
+                                    len: text.len(),
+                                    font: font.clone(),
+                                    color: gpui::black(),
+                                    background_color: None,
+                                    underline: None,
+                                    strikethrough: None,
+                                }],
+                                &range,
+                                true,
+                            );
+                            let layout = text_system.layout_line_rich(
+                                text,
+                                size,
+                                &runs,
+                                &view.rich.slice(range),
+                            );
+                            expanded_width(&layout, text, tab_stop)
+                        });
+                        return MeasuredWrap::uncached(measured.boundaries);
+                    }
+                }
                 if fragments.is_empty() {
                     return measured_wrap(line_str, wrap_width, wrapping_indent, |text| {
                         measurements.borrow_mut().measure(text, || {
@@ -612,6 +646,51 @@ impl TextWrapper {
                 )
             },
         );
+    }
+
+    pub(crate) fn adjust_rich(&mut self, range: &Range<usize>, new_len: usize) {
+        if self.rich.is_empty() {
+            return;
+        }
+        Rc::make_mut(&mut self.rich).adjust_for_edit(range, new_len);
+    }
+
+    pub(crate) fn clear_rich(&mut self) {
+        self.rich = Rc::default();
+    }
+
+    pub(crate) fn set_rich(&mut self, rich: crate::input::RichDecorations, cx: &mut App) {
+        if *self.rich == rich {
+            return;
+        }
+        if !self.is_prepared() {
+            self.rich = Rc::new(rich);
+            return;
+        }
+        let text = self.text.clone();
+        let mut rows = self.rich.touched_rows(&text);
+        rows.extend(rich.touched_rows(&text));
+        rows.sort_unstable();
+        rows.dedup();
+        let lines = self.lines_count();
+        rows.retain(|&row| {
+            if row >= lines {
+                return false;
+            }
+            let range = text.line_start_offset(row)..text.line_end_offset(row);
+            self.rich.line_view(range.clone()) != rich.line_view(range)
+        });
+        self.rich = Rc::new(rich);
+        for row in rows {
+            let start = text.line_start_offset(row);
+            let end = text.line_end_offset(row);
+            self.update(
+                &text,
+                &(start..end),
+                &Rope::from(text.slice(start..end).to_string()),
+                cx,
+            );
+        }
     }
 
     pub(crate) fn adjust_inline_metrics(&mut self, range: &Range<usize>, new_len: usize) {
@@ -964,6 +1043,8 @@ pub(crate) struct LineLayout {
     /// Whether any run of this line carries a background color, so [`Self::paint_background`]
     /// can skip the glyph walk for the common case of a line without highlights.
     has_background: bool,
+    pub(crate) lead: Pixels,
+    pub(crate) bar: Option<(crate::input::LineBar, bool, bool)>,
 }
 
 impl LineLayout {
@@ -976,7 +1057,19 @@ impl LineLayout {
             whitespace_chars: Vec::new(),
             whitespace_indicators: None,
             has_background: false,
+            lead: px(0.),
+            bar: None,
         }
+    }
+
+    pub(crate) fn with_lead(mut self, lead: Pixels) -> Self {
+        self.lead = lead;
+        self
+    }
+
+    pub(crate) fn with_bar(mut self, bar: Option<(crate::input::LineBar, bool, bool)>) -> Self {
+        self.bar = bar;
+        self
     }
 
     /// Record whether any run of this line carries a background color.
@@ -994,11 +1087,11 @@ impl LineLayout {
     /// The pixel indent applied to the given visual line, relative to the line's
     /// leading text. Only continuation lines (index > 0) are indented.
     #[inline]
-    fn line_indent(&self, line_index: usize) -> Pixels {
+    pub(crate) fn line_indent(&self, line_index: usize) -> Pixels {
         if line_index == 0 {
-            px(0.)
+            self.lead
         } else {
-            self.wrap_indent
+            self.lead + self.wrap_indent
         }
     }
 
@@ -1248,6 +1341,26 @@ impl LineLayout {
         window: &mut Window,
         cx: &mut App,
     ) {
+        if let Some((bar, join_prev, join_next)) = self.bar {
+            let top = if join_prev { px(0.) } else { bar.radius };
+            let bottom = if join_next { px(0.) } else { bar.radius };
+            window.paint_quad(gpui::quad(
+                Bounds::new(
+                    pos,
+                    size(bar.width, line_height * self.wrapped_lines.len().max(1) as f32),
+                ),
+                gpui::Corners {
+                    top_left: top,
+                    top_right: top,
+                    bottom_left: bottom,
+                    bottom_right: bottom,
+                },
+                bar.color,
+                gpui::Edges::default(),
+                gpui::transparent_black(),
+                gpui::BorderStyle::Solid,
+            ));
+        }
         // Painting a background walks every glyph and pushes a scene layer, so skip the
         // whole pass for lines that have no background color to paint.
         if !self.has_background {

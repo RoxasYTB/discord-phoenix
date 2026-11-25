@@ -713,6 +713,24 @@ pub(super) fn reveal_row(
 }
 
 /// `height` rounded up to a whole device pixel.
+fn line_bar(
+    rich: &crate::input::RichDecorations,
+    text: &Rope,
+    row: usize,
+) -> Option<(crate::input::LineBar, bool, bool)> {
+    let bar_at = |row: usize| {
+        let start = text.line_start_offset(row);
+        rich.line_view(start..text.line_end_offset(row))
+            .style
+            .and_then(|s| s.bar)
+    };
+    let bar = bar_at(row)?;
+    let lines = text.lines_len();
+    let prev = row > 0 && bar_at(row - 1).is_some();
+    let next = row + 1 < lines && bar_at(row + 1).is_some();
+    Some((bar, prev, next))
+}
+
 fn ceil_to_device_pixel(height: Pixels, scale_factor: f32) -> Pixels {
     px((f32::from(height) * scale_factor).ceil() / scale_factor)
 }
@@ -1165,7 +1183,7 @@ impl<M: InputModeKind> TextElement<M> {
                 // A wrap boundary is not a newline and must not get such a cell.
                 let newline = is_last && range.start <= end && range.end > end;
                 if start_ix < end_ix || newline {
-                    let indent = if row == 0 { px(0.) } else { line.wrap_indent };
+                    let indent = line.line_indent(row);
                     let left = alignment + indent + shaped.x_for_index(start_ix.min(end) - offset);
                     let right = alignment
                         + indent
@@ -2408,12 +2426,39 @@ impl<M: InputModeKind> TextElement<M> {
             .as_ref()
             .expect("tokens measured before shaping");
         let mut run_offset = 0;
+        let rich = state.extras.rich().filter(|_| !state.masked);
         last_layout
             .visible_buffer_lines
             .iter()
             .map(|&row| {
                 let line_start = state.text.line_start_offset(row);
                 let text: String = state.text.slice_line(row).into();
+                let view = rich
+                    .map(|r| r.line_view(line_start..line_start + text.len()))
+                    .filter(|v| !v.is_plain());
+                let mut has_box = false;
+                let mut shape = |part: &Range<usize>, window: &mut Window| {
+                    let part_runs = runs_for_range(runs, run_offset, part);
+                    match &view {
+                        Some(view) => {
+                            let rich = view.rich.slice(part.clone());
+                            has_box |= !rich.boxes.is_empty();
+                            window.text_system().shape_line_rich(
+                                text[part.clone()].to_owned().into(),
+                                view.font_size(font_size),
+                                &view.runs(&part_runs, part, false),
+                                &rich,
+                                None,
+                            )
+                        }
+                        None => window.text_system().shape_line(
+                            text[part.clone()].to_owned().into(),
+                            font_size,
+                            &part_runs,
+                            None,
+                        ),
+                    }
+                };
                 let ranges = if state.is_single_line() {
                     smallvec::smallvec![0..text.len()]
                 } else {
@@ -2438,12 +2483,7 @@ impl<M: InputModeKind> TextElement<M> {
                         let local = span.range().start - line_start..span.range().end - line_start;
                         if offset < local.start {
                             let part = offset..local.start;
-                            let shaped = window.text_system().shape_line(
-                                text[part.clone()].to_owned().into(),
-                                font_size,
-                                &runs_for_range(runs, run_offset, &part),
-                                None,
-                            );
+                            let shaped = shape(&part, window);
                             let width = shaped.width;
                             fragments.push(InlineFragment {
                                 range: part.start - range.start..part.end - range.start,
@@ -2465,12 +2505,7 @@ impl<M: InputModeKind> TextElement<M> {
                     }
                     if offset < range.end {
                         let part = offset..range.end;
-                        let shaped = window.text_system().shape_line(
-                            text[part.clone()].to_owned().into(),
-                            font_size,
-                            &runs_for_range(runs, run_offset, &part),
-                            None,
-                        );
+                        let shaped = shape(&part, window);
                         let width = shaped.width;
                         fragments.push(InlineFragment {
                             range: part.start - range.start..part.end - range.start,
@@ -2491,10 +2526,14 @@ impl<M: InputModeKind> TextElement<M> {
                 } else {
                     px(0.)
                 };
+                let lead = view.as_ref().map_or(px(0.), |v| v.indent());
                 run_offset += text.len() + 1;
                 LineLayout::new()
                     .inline_lines(lines)
                     .wrap_indent(wrap_indent)
+                    .with_background(has_box || has_background(runs))
+                    .with_lead(lead)
+                    .with_bar(rich.and_then(|r| line_bar(r, &state.text, row)))
             })
             .collect()
     }
@@ -2705,6 +2744,10 @@ impl<M: InputModeKind> TextElement<M> {
         // only cover visible (non-folded) lines.
         let mut run_offset = 0;
 
+        let rich = state
+            .extras
+            .rich()
+            .filter(|_| !state.masked && display_text.len() == state.text.len());
         for (vi, &buffer_line) in last_layout.visible_buffer_lines.iter().enumerate() {
             let line_text: String = display_text.slice_line(buffer_line).into();
             let line_item = state
@@ -2714,6 +2757,11 @@ impl<M: InputModeKind> TextElement<M> {
 
             debug_assert_eq!(line_item.len(), line_text.len());
 
+            let line_start = state.text.line_start_offset(buffer_line);
+            let view = rich
+                .map(|r| r.line_view(line_start..line_start + line_text.len()))
+                .filter(|v| !v.is_plain());
+            let line_font_size = view.as_ref().map_or(font_size, |v| v.font_size(font_size));
             let mut wrapped_lines: SmallVec<[ShapedLine; 1]> = SmallVec::with_capacity(1);
             let mut line_has_background = false;
 
@@ -2732,9 +2780,23 @@ impl<M: InputModeKind> TextElement<M> {
                 let sub_line: SharedString = line_text[range.clone()].to_string().into();
                 let line_runs =
                     align_runs_to_char_boundaries(&sub_line, &line_runs).unwrap_or(line_runs);
-                let mut shaped_line = window
-                    .text_system()
-                    .shape_line(sub_line, font_size, &line_runs, None);
+                let mut shaped_line = match &view {
+                    Some(view) => {
+                        let rich = view.rich.slice(range.clone());
+                        line_has_background |= !rich.boxes.is_empty();
+                        let line_runs = view.runs(&line_runs, range, false);
+                        window.text_system().shape_line_rich(
+                            sub_line,
+                            line_font_size,
+                            &line_runs,
+                            &rich,
+                            None,
+                        )
+                    }
+                    None => window
+                        .text_system()
+                        .shape_line(sub_line, font_size, &line_runs, None),
+                };
                 expand_tabs(&mut shaped_line, tab_stop);
 
                 line_has_background |= has_background(&line_runs);
@@ -2757,6 +2819,8 @@ impl<M: InputModeKind> TextElement<M> {
                 .lines(wrapped_lines)
                 .wrap_indent(wrap_indent)
                 .with_background(line_has_background)
+                .with_lead(view.as_ref().map_or(px(0.), |v| v.indent()))
+                .with_bar(rich.and_then(|r| line_bar(r, &state.text, buffer_line)))
                 .with_whitespaces(whitespace_indicators.clone());
             lines.push(line_layout);
 

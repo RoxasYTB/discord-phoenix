@@ -63,6 +63,8 @@ mod mode;
 mod movement;
 #[path = "base/native.rs"]
 mod native;
+#[path = "base/rich_text.rs"]
+mod rich_text;
 #[path = "base/rope_ext.rs"]
 mod rope_ext;
 mod scrollbar_presentation;
@@ -128,6 +130,7 @@ pub use mask_pattern::MaskPattern;
 #[doc(hidden)]
 pub use native::set_text_content_type;
 pub use native::{NativeMenu, NativeMenuItem};
+pub use rich_text::{LineBar, LineStyle, RichDecorations, RichSpan};
 pub use rope_ext::{InputEdit, Point, RopeExt, RopeLines};
 pub use ropey::Rope;
 pub use search::{SearchMatcher, SearchSession};

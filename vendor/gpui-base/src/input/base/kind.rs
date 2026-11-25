@@ -78,6 +78,10 @@ impl MultiLineMode for EditorMode {}
 /// during an edit. Adding a field an editor renders belongs here and leaves
 /// the engine's callbacks alone.
 pub trait InputExtras: Default + 'static {
+    fn rich(&self) -> Option<&super::rich_text::RichDecorations> {
+        None
+    }
+
     /// Decoration ranges to paint, innermost collection first.
     fn decoration_layers(&self) -> Vec<&[TextDecoration]> {
         Vec::new()
@@ -371,6 +375,8 @@ impl InputModeKind for TextareaMode {
 
     fn reset_annotations(state: &mut InputBaseState<Self>) {
         state.extras.decorations.clear();
+        state.extras.rich = Default::default();
+        state.display_map.clear_rich();
     }
 
     fn adjust_annotations(
@@ -387,9 +393,14 @@ impl InputModeKind for TextareaMode {
 #[derive(Default)]
 pub struct TextareaExtras {
     pub(crate) decorations: Vec<TextDecoration>,
+    pub(crate) rich: super::rich_text::RichDecorations,
 }
 
 impl InputExtras for TextareaExtras {
+    fn rich(&self) -> Option<&super::rich_text::RichDecorations> {
+        (!self.rich.is_empty()).then_some(&self.rich)
+    }
+
     fn decoration_layers(&self) -> Vec<&[TextDecoration]> {
         if self.decorations.is_empty() {
             Vec::new()
