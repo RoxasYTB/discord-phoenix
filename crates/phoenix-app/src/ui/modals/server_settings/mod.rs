@@ -1,4 +1,5 @@
 pub(crate) mod audit;
+mod access;
 mod engagement;
 mod expression;
 pub mod kit;
@@ -260,6 +261,7 @@ pub fn needs(key: &str) -> &'static [&'static str] {
         "menu.gs.members" => &["guild", "roles"],
         "menu.gs.roles" => &["guild", "roles", "counts"],
         "menu.gs.invites" => &["invites"],
+        "menu.gs.access" => &["guild", "verification"],
         "menu.gs.bans" => &["bans"],
         "menu.gs.audit_log" => &["audit"],
         _ => &["guild"],
@@ -286,6 +288,7 @@ pub fn call_for(key: &str, guild: Id, s: &State) -> Option<AdminCall> {
         "roles" => AdminCall::Roles { guild: g },
         "counts" => AdminCall::RoleMemberCounts { guild: g },
         "invites" => AdminCall::GuildInvites { guild: g },
+        "verification" => AdminCall::MemberVerification { guild: g },
         "bans" => AdminCall::Bans { guild: g },
         "audit" => AdminCall::AuditLogFiltered {
             guild: g,
@@ -506,6 +509,7 @@ fn page(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> (AnyElemen
         "menu.gs.roles" => (roles::list(app, s, cx), false),
         "menu.gs.members" => (people::members(app, s, cx), false),
         "menu.gs.invites" => (people::invites(app, s, cx), false),
+        "menu.gs.access" => (access::render(app, s, cx), false),
         "menu.gs.bans" => (people::bans(app, s, cx), false),
         "menu.gs.audit_log" => (audit::render(app, s, cx), false),
         k => (kit::page_head(section_label(k), None).into_any_element(), false),
