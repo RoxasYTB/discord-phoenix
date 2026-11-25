@@ -1024,7 +1024,14 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
         .filter_map(|r| app.nav.activities.get(&r.user).map(|a| (r.user, a.clone())))
         .filter(|(u, _)| app.presence_of(*u) != Presence::Offline)
         .collect();
-    active.sort_by_key(|(u, _)| u.0);
+    let in_voice = |u: Id| app.channels.iter().any(|c| c.voice_users.contains(&u));
+    let start_of = |u: Id| {
+        app.people
+            .activities
+            .get(&u)
+            .and_then(|v| v.iter().filter(|a| a.kind != crate::presence::ActivityKind::Custom).filter_map(|a| a.start).max())
+    };
+    active.sort_by_key(|(u, _)| (!in_voice(*u), std::cmp::Reverse(start_of(*u)), u.0));
     let mut col = div()
         .id("active-now")
         .w(z(360.))

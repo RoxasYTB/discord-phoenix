@@ -891,7 +891,10 @@ fn cozy_message_with(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<Pho
                     .child(crate::fonts::name_text_with(name, u, 16., role_gradient))
                     .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col)))),
                 )
-                .when_some(u.and_then(|u| u.tag.clone()), |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(2.)).mr(z(4.))))
+                .when_some(
+                    if m.author == app.me.id { app.me.tag.clone() } else { u.and_then(|u| u.tag.clone()) },
+                    |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(2.)).mr(z(4.))),
+                )
                 .when_some(app.author_role_icon_in(guild, m.author), |d, icon| d.child(crate::ui::chat::role_icon(icon)))
                 .when(bot, |d| d.child(crate::ui::chat::bot_tag(u.is_some_and(|u| u.verified_bot))))
                 .child(div().ml(z(4.)).text_size(z(12.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::CHAT_TEXT_MUTED)).child(crate::app::format_time_full(m.timestamp))),

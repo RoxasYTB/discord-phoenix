@@ -111,7 +111,7 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
     let vp = window.viewport_size();
     if let Some(p) = &app.people.popout {
         let x = (p.at.x - px(POPOUT_W + 16.)).max(z(8.));
-        let y = (p.at.y - z(60.)).min(vp.height - px(POPOUT_H + 8.)).max(z(8.));
+        let y = (p.at.y - z(50.)).min(vp.height - px(POPOUT_H + 8.)).max(z(8.));
         out.push(
             div()
                 .id("profile-popout")
@@ -484,8 +484,13 @@ fn roles_block(app: &PhoenixApp, guild: Option<Id>, uid: Id, roles: Vec<crate::m
         .collect();
     let expanded = ROLES_EXPANDED.with(|e| e.borrow().contains(&uid));
     let total = roles.len();
+    let can_add = guild.is_some_and(|g| {
+        use crate::actions::{ADMINISTRATOR, MANAGE_ROLES};
+        app.backend.guild_permissions(g) & (ADMINISTRATOR | MANAGE_ROLES) != 0
+    });
+    let add_w = if can_add { 28. } else { 0. };
     let expand_w = 2. + 6. + 8. + role_text_w(cx, &format!("+{total}")) + 4.;
-    let second_row = ROLE_ROW_W - expand_w;
+    let second_row = (ROLE_ROW_W - expand_w - add_w).max(60.);
     let (shown, row2) = if expanded { (total, total) } else { roles_fit(&widths, second_row) };
     let toggle = (shown < total || expanded).then(|| {
         let label = if expanded { crate::t!("profile.roles_collapse") } else { crate::t!("profile.roles_view_all") };
@@ -531,6 +536,27 @@ fn roles_block(app: &PhoenixApp, guild: Option<Id>, uid: Id, roles: Vec<crate::m
                     d.child(SharedString::from(format!("+{}", total - shown)))
                 }
             })
+    });
+    let add_btn = can_add.then(|| {
+        let e = entity.clone();
+        div()
+            .id(("profile-roles-add", uid.0))
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .size(z(24.))
+            .rounded(z(8.))
+            .border_1()
+            .border_color(c(tok(idx::USER_PROFILE_BORDER)))
+            .cursor_pointer()
+            .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
+            .tooltip(crate::ui::tooltip::tip(crate::t!("profile.add_role")))
+            .on_click(move |_, _, cx| {
+                cx.stop_propagation();
+                e.update(cx, |a, cx| a.stub(&crate::t!("profile.add_role"), cx));
+            })
+            .child(gpui::svg().path(crate::icons::path("plus")).size(z(12.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
     });
     div().mt(z(2.)).flex().flex_wrap().gap(z(4.)).children(roles.into_iter().take(shown).enumerate().map(|(i, r)| {
         let cap = if !expanded && shown < total && i >= row2 { second_row } else { ROLE_ROW_W };
@@ -582,7 +608,7 @@ fn roles_block(app: &PhoenixApp, guild: Option<Id>, uid: Id, roles: Vec<crate::m
                 d.child(div().flex_none().ml(z(4.)).child(img(u).size(z(12.)).object_fit(gpui::ObjectFit::Contain)))
             })
             .children(remove)
-    })).children(toggle)
+    })).children(toggle).children(add_btn)
 }
 
 pub(crate) fn member_role_ids(app: &PhoenixApp, guild: Id, user: Id) -> Vec<Id> {

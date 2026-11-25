@@ -415,8 +415,10 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
         )
 }
 
-fn subnav(rows: Vec<SharedString>, active: usize) -> Div {
-    let n = rows.len() as f32;
+fn subnav(rows: Vec<SharedString>, active: usize, cx: &mut Cx) -> Div {
+    let total = rows.len();
+    let n = total as f32;
+    let active = active.min(total.saturating_sub(1));
     div()
         .pt(z(6.))
         .pb(z(10.))
@@ -434,9 +436,26 @@ fn subnav(rows: Vec<SharedString>, active: usize) -> Div {
         )
         .child(div().flex_1().min_w_0().flex().flex_col().gap(z(20.)).children(rows.into_iter().enumerate().map(|(i, t)| {
             div()
+                .id(("settings-subnav", i))
+                .cursor_pointer()
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .text_color(c(tok(if i == active { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::TEXT_MUTED })))
+                .when(i != active, |d| d.hover(|s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))))
+                .on_click(cx.listener(move |a, _, _, cx| {
+                    if let Some(s) = st(a) {
+                        s.active_section = i;
+                        s.nested = None;
+                        let y = if i == 0 || total <= 1 {
+                            gpui::px(0.)
+                        } else {
+                            let frac = i as f32 / (total - 1) as f32;
+                            -(s.scroll.max_offset().y * frac)
+                        };
+                        s.scroll.set_offset(gpui::point(gpui::px(0.), y));
+                    }
+                    cx.notify();
+                }))
                 .child(t)
         })))
 }
@@ -610,6 +629,8 @@ fn select_page(p: Page, cx: &mut Cx) -> impl Fn(&gpui::ClickEvent, &mut Window, 
             s.error = None;
             s.open_select = None;
             s.nested = None;
+            s.active_section = 0;
+            s.scroll.set_offset(gpui::Point::default());
         }
         cx.notify();
     })
@@ -751,8 +772,8 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
             if p == cur && !searching {
                 let rows = subnav_rows(p);
                 if rows.len() > 1 {
-                    let active = app.settings.as_ref().and_then(|s| s.nested).map_or(0, super::nested::Nested::sub_index);
-                    sec = sec.child(subnav(rows, active));
+                    let active = app.settings.as_ref().map_or(0, |s| s.nested.map_or(s.active_section, super::nested::Nested::sub_index));
+                    sec = sec.child(subnav(rows, active, cx));
                 }
             }
         }

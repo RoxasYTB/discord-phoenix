@@ -370,6 +370,7 @@ pub struct SettingsState {
     pub profile: Option<profile_editor::EditorState>,
     pub scroll: gpui::ScrollHandle,
     pub nested: Option<nested::Nested>,
+    pub active_section: usize,
 }
 
 pub fn open(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {

@@ -134,7 +134,6 @@ impl Grid {
 }
 
 const TOP_ROW: usize = 9;
-const NEWLY_GREEN: u32 = 0x2d7d46;
 
 thread_local! {
     static HOVER_SINCE: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
@@ -353,63 +352,6 @@ fn render_row(ix: usize, cx: &mut App) -> AnyElement {
                     .child(div().when(locked, |d| d.opacity(0.3)).child(item_element_hover(&item, tone, EMOJI_PX)))
                     .when(locked, |d| d.child(lock_badge()))
             };
-            let fresh = op.grid.newly_unseen.clone();
-            if !fresh.is_empty() && start <= fresh.start && fresh.end <= end {
-                let seen_n = fresh.start - start;
-                let one = fresh.len() == 1;
-                let right = seen_n > 0;
-                let mut seen_row = div().flex().pl(px(8.));
-                for i in start..fresh.start {
-                    seen_row = seen_row.child(cell(i));
-                }
-                let mut fresh_row = div().flex().border_1().border_color(gpui::rgb(NEWLY_GREEN)).rounded_tl(px(4.)).rounded_tr(px(4.));
-                fresh_row = match (one, right) {
-                    (true, _) => fresh_row,
-                    (false, true) => fresh_row.rounded_bl(px(4.)),
-                    (false, false) => fresh_row.rounded_br(px(4.)),
-                };
-                for i in fresh.clone() {
-                    fresh_row = fresh_row.child(cell(i));
-                }
-                let badge = div()
-                    .absolute()
-                    .bottom(px(-16.))
-                    .when(right, |d| d.right_0())
-                    .when(!right, |d| d.left_0())
-                    .w(px(EMOJI_PX + 4. * 2. + 2.))
-                    .h(px(16.))
-                    .rounded_bl(px(4.))
-                    .rounded_br(px(4.))
-                    .bg(gpui::rgb(NEWLY_GREEN))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(gpui::svg().path(crate::icons::path("picker/sparkle")).size(px(12.)).mr(px(2.)).flex_none().text_color(gpui::white()))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(tk(idx::TEXT_OVERLAY_LIGHT))
-                            .child(crate::t!("picker.newly_badge").to_uppercase()),
-                    );
-                return div()
-                    .id("emoji-top-newly")
-                    .flex()
-                    .pb(px(20.))
-                    .when(seen_n > 0, |d| d.child(seen_row))
-                    .child(
-                        div()
-                            .id("emoji-newly-block")
-                            .group("newly")
-                            .relative()
-                            .flex()
-                            .flex_col()
-                            .child(fresh_row.group_hover("newly", |s| s.border_color(gpui::rgba(NEWLY_GREEN << 8 | 0x80))))
-                            .child(badge.group_hover("newly", |s| s.bg(gpui::rgba(NEWLY_GREEN << 8 | 0x80)))),
-                    )
-                    .into_any_element();
-            }
             let mut row = div().flex().pl(px(8.)).when(last_of_section, |d| d.pb(px(12.)));
             for i in start..end {
                 row = row.child(cell(i));

@@ -462,9 +462,15 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                         d.child(crate::ui::states::composer_button("gif", Icon::Gif).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Gif, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
                                             .child(crate::ui::states::composer_button("sticker", Icon::Sticker).on_click(cx.listener(|a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Sticker, crate::ui::pickers::EmojiTarget::Composer, w, cx))))
                                     })
-                                    .child(crate::ui::states::composer_button_ext("emoji", Icon::Emoji, 18., true).on_click(cx.listener(
-                                        |a, _, _, cx| a.open_emoji_picker(EmojiTarget::Composer, cx),
-                                    )))
+                                    .child({
+                                        let emoji_open = matches!(
+                                            crate::ui::pickers::open_tab(cx),
+                                            Some((crate::ui::pickers::Tab::Emoji, EmojiTarget::Composer))
+                                        );
+                                        crate::ui::states::composer_button_ext("emoji", Icon::Emoji, 18., true)
+                                            .when(emoji_open, |d| d.bg(c(crate::theme::tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                                            .on_click(cx.listener(|a, _, _, cx| a.open_emoji_picker(EmojiTarget::Composer, cx)))
+                                    })
                                     .child(crate::ui::focus_ring::ring_inset(
                                         div()
                                             .id("apps")
