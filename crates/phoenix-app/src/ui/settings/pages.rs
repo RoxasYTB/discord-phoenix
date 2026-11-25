@@ -1218,8 +1218,8 @@ static NOTIF: &[B] = &[
     ),
 ];
 
-fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
-    let theme = app.prefs.synced.theme;
+fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
+    let theme = crate::theme::active();
     div()
         .flex()
         .flex_col()
@@ -1230,7 +1230,7 @@ fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
                 .flex()
                 .gap(z(8.))
                 .children(AppTheme::ALL.map(|t| {
-                    super::view::theme_card(t, t == theme).on_click(cx.listener(move |a, _, _, cx| save(a, SettingsPatch::Theme(t), cx)))
+                    super::view::theme_card(t, t == theme).on_click(cx.listener(move |a, _, _, cx| pick_theme(a, t, cx)))
                 }))
                 .child(
                     div()
@@ -1245,10 +1245,31 @@ fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
                         .items_center()
                         .justify_center()
                         .cursor_pointer()
+                        .on_click(cx.listener(|a, _, _, cx| {
+                            update_local(a, |p| {
+                                p.ui.insert("theme-sync".into(), 1);
+                            }, cx)
+                        }))
                         .child(gpui::svg().path(crate::icons::path("refresh")).size(z(24.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
                 ),
         )
         .into_any_element()
+}
+
+fn pick_theme(app: &mut PhoenixApp, t: AppTheme, cx: &mut Cx) {
+    if app.prefs.local.flag("theme-sync", false) {
+        update_local(app, |p| {
+            p.ui.insert("theme-sync".into(), 0);
+        }, cx);
+    }
+    if app.prefs.local.flag("theme-devices", true) {
+        save(app, SettingsPatch::Theme(t), cx);
+    } else {
+        let ix = AppTheme::ALL.iter().position(|x| *x == t).unwrap_or(0) as u64;
+        update_local(app, |p| {
+            p.ui.insert(super::LOCAL_THEME.into(), ix);
+        }, cx);
+    }
 }
 
 fn theme_banner(_: &PhoenixApp, _: &mut Cx) -> AnyElement {

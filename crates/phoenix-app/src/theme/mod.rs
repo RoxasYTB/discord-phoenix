@@ -109,6 +109,25 @@ static ZOOM: AtomicU32 = AtomicU32::new(100);
 static FONT_PX: AtomicU32 = AtomicU32::new(16);
 static DENSITY: AtomicU8 = AtomicU8::new(Density::Cozy as u8);
 static SATURATION: AtomicU32 = AtomicU32::new(100);
+static USER_COLORS: AtomicBool = AtomicBool::new(false);
+
+pub fn desaturate_rgb(v: u32, percent: u32) -> u32 {
+    if percent >= 100 {
+        return v;
+    }
+    let mut h: Hsla = rgb(v).into();
+    h.s *= percent as f32 / 100.;
+    let r: Rgba = h.into();
+    let ch = |x: f32| (x.clamp(0., 1.) * 255.).round() as u32;
+    (ch(r.r) << 16) | (ch(r.g) << 8) | ch(r.b)
+}
+
+pub fn user_color(v: u32) -> u32 {
+    if !USER_COLORS.load(Ordering::Relaxed) {
+        return v;
+    }
+    desaturate_rgb(v, SATURATION.load(Ordering::Relaxed))
+}
 
 pub fn saturate(v: u32) -> u32 {
     let f = SATURATION.load(Ordering::Relaxed);
@@ -229,12 +248,17 @@ pub fn is_light() -> bool {
 }
 
 pub fn sync(prefs: &crate::ui::settings::Prefs, window: &mut Window, cx: &mut App) {
-    let t = theme_index(prefs.synced.theme);
+    let os_dark = matches!(window.appearance(), gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark);
+    let t = theme_index(crate::ui::settings::effective_theme(prefs, os_dark));
     let prev = THEME.swap(t, Ordering::Relaxed);
     let pz = ZOOM.swap(prefs.local.zoom.clamp(50, 200), Ordering::Relaxed);
     let pf = FONT_PX.swap(prefs.local.font_size.round().clamp(12., 24.) as u32, Ordering::Relaxed);
     let pd = DENSITY.swap(prefs.synced.density as u8, Ordering::Relaxed);
     let ps = SATURATION.swap(prefs.local.saturation.min(100), Ordering::Relaxed);
+    let uc = prefs.local.flag("sat-custom", false);
+    if USER_COLORS.swap(uc, Ordering::Relaxed) != uc {
+        STYLE_GEN.fetch_add(1, Ordering::Relaxed);
+    }
     let hc = prefs.local.flag("contrast", false);
     if HIGH_CONTRAST.swap(hc, Ordering::Relaxed) != hc {
         STYLE_GEN.fetch_add(1, Ordering::Relaxed);
@@ -355,6 +379,17 @@ mod tests {
         assert_eq!(shadow::SHADOW_HIGH[0][0].blur, 24.0);
         assert_eq!(resolve_for(Palette::BG_TERTIARY, AppTheme::Dark), 0x121214FF);
         assert_eq!(resolve_for(Palette::BLURPLE, AppTheme::Light), 0x5865F2FF);
+    }
+}
+
+#[cfg(test)]
+mod user_color_tests {
+    #[test]
+    fn user_colors_lose_saturation_like_the_client() {
+        assert_eq!(super::desaturate_rgb(0xFF0000, 100), 0xFF0000);
+        assert_eq!(super::desaturate_rgb(0xFF0000, 0), 0x808080);
+        let half = super::desaturate_rgb(0xFF0000, 50);
+        assert_eq!(half, 0xBF4040);
     }
 }
 

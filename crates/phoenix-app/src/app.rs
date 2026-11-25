@@ -1233,6 +1233,7 @@ impl PhoenixApp {
             .filter(|r| m.roles.contains(&r.id) && r.color.is_some())
             .max_by_key(|r| r.position)
             .and_then(|r| r.color)
+            .map(crate::theme::user_color)
     }
 
     pub fn channel_guild(&self, channel: Id) -> Option<Id> {

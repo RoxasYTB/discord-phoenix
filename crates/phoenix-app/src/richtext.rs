@@ -279,7 +279,7 @@ fn color_role_mentions(parsed: &[Block], blocks: &mut [RBlock], r: &dyn MentionR
             if let Some(Mention::Role(id)) = s.mention
                 && let Some(rgb) = r.role_color(id).filter(|&v| v != 0)
             {
-                let col: Hsla = gpui::rgb(rgb).into();
+                let col: Hsla = gpui::rgb(crate::theme::user_color(rgb)).into();
                 run.color = col;
                 run.background_color = Some(Hsla { a: 0.1, ..col });
             }

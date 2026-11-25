@@ -259,6 +259,24 @@ fn write_prefs(p: &std::path::Path, data: &[u8]) {
     }
 }
 
+pub const LOCAL_THEME: &str = "theme-local";
+
+pub fn effective_theme(prefs: &Prefs, os_dark: bool) -> AppTheme {
+    let local = prefs.local.ui.get(LOCAL_THEME).and_then(|i| AppTheme::ALL.get(*i as usize)).copied();
+    let base = match local {
+        Some(t) if !prefs.local.flag("theme-devices", true) => t,
+        _ => prefs.synced.theme,
+    };
+    if !prefs.local.flag("theme-sync", false) {
+        return base;
+    }
+    match (os_dark, base) {
+        (false, _) => AppTheme::Light,
+        (true, AppTheme::Light) => AppTheme::Dark,
+        (true, t) => t,
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Prefs {
     pub synced: SyncedSettings,
@@ -466,5 +484,22 @@ mod tests {
         s.apply(&SettingsPatch::DeveloperMode(true));
         assert_eq!(s.theme, AppTheme::Onyx);
         assert!(s.developer_mode);
+    }
+
+    #[test]
+    fn device_theme_and_local_theme() {
+        let mut p = Prefs::default();
+        p.synced.theme = AppTheme::Onyx;
+        assert_eq!(effective_theme(&p, false), AppTheme::Onyx);
+        p.local.ui.insert("theme-sync".into(), 1);
+        assert_eq!(effective_theme(&p, false), AppTheme::Light);
+        assert_eq!(effective_theme(&p, true), AppTheme::Onyx);
+        p.synced.theme = AppTheme::Light;
+        assert_eq!(effective_theme(&p, true), AppTheme::Dark);
+        p.local.ui.insert("theme-sync".into(), 0);
+        p.local.ui.insert(LOCAL_THEME.into(), 1);
+        assert_eq!(effective_theme(&p, true), AppTheme::Light);
+        p.local.ui.insert("theme-devices".into(), 0);
+        assert_eq!(effective_theme(&p, true), AppTheme::Ash);
     }
 }
