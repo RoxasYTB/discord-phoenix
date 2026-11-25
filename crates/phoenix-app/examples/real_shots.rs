@@ -1205,7 +1205,13 @@ fn main() -> anyhow::Result<()> {
                         phoenix_app::ui::user_menu::open(u, app.selected_guild, gpui::point(px(900.), px(250.)), window);
                     }
                 }
-                "switcher" => phoenix_app::ui::switcher::open(app, window, cx),
+                "switcher" => {
+                    phoenix_app::ui::switcher::open(app, window, cx);
+                    if let Some(input) = app.switcher.as_ref().map(|s| s.input.clone()).filter(|_| !arg.is_empty()) {
+                        input.update(cx, |s, cx| s.set_value(arg.clone(), window, cx));
+                        phoenix_app::ui::switcher::update(app, cx);
+                    }
+                }
                 "thread" => {
                     if let Ok(id) = arg.parse::<u64>() {
                         let id = phoenix_app::model::Id(id);
