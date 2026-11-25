@@ -46,11 +46,11 @@ impl Input {
 pub type Preview = Arc<Mutex<Option<VideoFrame>>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CaptureParams {
-    width: u32,
-    height: u32,
-    fps: u32,
-    bitrate: u32,
+pub struct CaptureParams {
+    pub width: u32,
+    pub height: u32,
+    pub fps: u32,
+    pub bitrate: u32,
 }
 
 pub struct Camera {
@@ -130,15 +130,18 @@ impl Camera {
         screen: bool,
         on_frame: impl FnMut(EncodedVideo) + Send + 'static,
     ) -> Result<Self> {
-        Self::start_with_factory(input, width, height, fps, bitrate, screen, |cfg| Ok(Box::new(FfmpegH264::spawn(cfg)?)), on_frame)
+        Self::start_with_factory(
+            input,
+            CaptureParams { width, height, fps, bitrate },
+            screen,
+            |cfg| Ok(Box::new(FfmpegH264::spawn(cfg)?)),
+            on_frame,
+        )
     }
 
     pub fn start_with_factory<F>(
         input: Input,
-        width: u32,
-        height: u32,
-        fps: u32,
-        bitrate: u32,
+        params: CaptureParams,
         screen: bool,
         factory: F,
         mut on_frame: impl FnMut(EncodedVideo) + Send + 'static,
@@ -146,6 +149,7 @@ impl Camera {
     where
         F: Fn(&VideoEncoderConfig) -> Result<Box<dyn VideoEncoder>> + Send + 'static,
     {
+        let CaptureParams { width, height, fps, bitrate } = params;
         let stop = Arc::new(AtomicBool::new(false));
         let reconfig: Arc<Mutex<Option<CaptureParams>>> = Arc::new(Mutex::new(None));
         let preview: Preview = Arc::new(Mutex::new(None));
@@ -155,7 +159,7 @@ impl Camera {
         let thread = std::thread::Builder::new()
             .name("phoenix-camera".into())
             .spawn(move || {
-                let mut current = CaptureParams { width, height, fps, bitrate };
+                let mut current = params;
                 let mut pattern = TestPattern::new(width, height, fps);
                 let live = !matches!(input, Input::TestPattern);
                 let mut device = match &input {
@@ -285,10 +289,7 @@ mod tests {
         let (c2, f2) = (configs.clone(), frames.clone());
         let cam = Camera::start_with_factory(
             Input::TestPattern,
-            640,
-            360,
-            60,
-            1_500_000,
+            CaptureParams { width: 640, height: 360, fps: 60, bitrate: 1_500_000 },
             true,
             move |cfg| {
                 c2.lock().unwrap().push((cfg.width, cfg.height, cfg.framerate, cfg.bitrate_bps));
