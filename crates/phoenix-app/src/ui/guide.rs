@@ -375,7 +375,7 @@ fn card(g: &Guild, p: &GuildProfile) -> gpui::Div {
         )
         .child(
             div().mt(z(-34.)).px(z(16.)).child(
-                div().size(z(70.)).rounded(z(22.)).bg(t(idx::BACKGROUND_SURFACE_HIGHEST)).flex().items_center().justify_center().child(icon(g, 64., 19.)),
+                div().size(z(70.)).rounded(z(70. * 0.3)).bg(t(idx::BACKGROUND_SURFACE_HIGHEST)).flex().items_center().justify_center().child(icon(g, 64., 64. * 0.3)),
             ),
         )
         .child(
