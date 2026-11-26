@@ -523,3 +523,26 @@ fn quit_shortcut_leaves_voice_and_quits(cx: &mut TestAppContext) {
     assert_eq!(h.acks(), base);
     crate::shortcuts::escape::reset_quitting();
 }
+
+#[gpui::test]
+fn ctrl_shift_a_collapses_then_expands_every_category(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    let cats = h.read(|a| {
+        let g = a.selected_guild.unwrap();
+        a.guild_channels[&g].iter().copied().filter(|id| a.channels[id].kind == ChannelKind::Category).collect::<Vec<_>>()
+    });
+    assert!(!cats.is_empty());
+    h.keys("ctrl-shift-a");
+    assert!(h.read(|a| cats.iter().all(|c| a.collapsed.contains(c))), "Ctrl+Shift+A did not collapse every category");
+    h.keys("ctrl-shift-a");
+    assert!(h.read(|a| cats.iter().all(|c| !a.collapsed.contains(c))), "Ctrl+Shift+A did not expand them back");
+}
+
+#[gpui::test]
+fn ctrl_t_opens_the_quick_switcher_from_the_composer(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    h.keys("ctrl-t");
+    assert!(h.read(|a| a.switcher.is_some()), "Ctrl+T did not open the quick switcher");
+    h.keys("escape");
+    assert!(h.read(|a| a.switcher.is_none()));
+}

@@ -38,7 +38,6 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 |---|---|---|
 <<<<<<< HEAD
 | Shift+Esc | Mark server read | ✅ |
-| Esc, Shift+Page Down | Mark channel read and jump to present (the client binds `["esc","shift+pagedown"]`) | ✅ Shift+Page Down added 2026-11-26. The read ack is the normal client ack (`select_channel`), which agents' real_shots refuse |
 =======
 | Shift+Esc | Mark server read | ✅ like `MARK_SERVER_READ` (web bundle module 795737): nothing is acked unless the server has an unread, unmuted channel or a mention, then the chat jumps to the present |
 | Esc (also Shift+Page Down) | Mark channel read (and jump to present) | ✅ the full `MARK_CHANNEL_READ` stack, see “Escape” below |
@@ -78,7 +77,9 @@ Source: `MARK_CHANNEL_READ` in the 2026 web bundle (`web.b63d846b329d6470.js`, m
 | 11 | `b(channel)`, `b(sidebar)` | leave a detached history page, and ack the channel (and the open thread panel) only when it is unread. The ack is a write, so tests check it through the backend probe | ✅ |
 | 12 | `closeChannelSidebar` | nothing to ack and a thread panel open: close it | ✅ |
 | 13 | `SCROLLTO_PRESENT` | scroll to the bottom | ✅ |
-Not reproduced: `CONVERSATIONS_FOCUS_MODE_CLOSE`, guild room notes and video overlay, scheduled-message and sticker previews (Phoenix has no such states).
+Bundle binds left out on purpose: the tab bar (`mod+t`/`mod+w`/`mod+shift+p` while the tabs experiment is on), `mod+ctrl+a` (app directory, macOS), `mod+alt+i` (blocks devtools on the web).
+
+Not reproduced in the Escape stack: `CONVERSATIONS_FOCUS_MODE_CLOSE`, guild room notes and video overlay, scheduled-message and sticker previews (Phoenix has no such states).
 
 Focus: when the focused element is dropped or no longer drawn (a closed modal, picker or settings field), GPUI sends keys to the window root, outside the `PhoenixApp` key context, so every shortcut went dead until a click. The interceptor now puts the focus back on the app root and replays the shortcut.
 
