@@ -373,6 +373,13 @@ pub fn on_gateway(cache: &Cache, ev: &GatewayEvent) -> Vec<AppEvent> {
         GatewayEvent::RelationshipRemove(r) => {
             out.push(AppEvent::Nav(NavEvent::RelationshipRemove(id(r.user_id.unwrap_or(r.id)))));
         }
+        GatewayEvent::Unknown { name, data } if name == "RELATIONSHIP_UPDATE" => {
+            if let Some(r) = data.get("id").and_then(Value::as_str).and_then(|x| x.parse().ok()).and_then(|u| cache.relationship(api::Snowflake(u)))
+                && let Some(r) = relationship(&r)
+            {
+                out.push(AppEvent::Nav(NavEvent::RelationshipUpsert(r)));
+            }
+        }
         GatewayEvent::ThreadCreate(c) | GatewayEvent::ThreadUpdate(c) => {
             out.push(AppEvent::Nav(NavEvent::Extras(vec![(id(c.id), extra(cache, c))])));
             out.push(AppEvent::Nav(match thread(c) {

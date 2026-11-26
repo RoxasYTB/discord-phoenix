@@ -512,6 +512,26 @@ impl Cache {
             GatewayEvent::RelationshipRemove(r) => {
                 s.relationships.remove(&r.id);
             }
+            GatewayEvent::Unknown { name, data } if name == "RELATIONSHIP_UPDATE" => {
+                let Some(id) = data.get("id").and_then(Value::as_str).and_then(|x| x.parse().ok()).map(Snowflake) else { return false };
+                let Some(r) = s.relationships.get_mut(&id) else { return false };
+                let r = Arc::make_mut(r);
+                if let Some(k) = data.get("type").and_then(Value::as_u64).and_then(|k| u8::try_from(k).ok()) {
+                    r.kind = RelationshipType::from(k);
+                }
+                if let Some(n) = data.get("nickname") {
+                    r.nickname = n.as_str().map(str::to_owned);
+                }
+                if let Some(b) = data.get("user_ignored").and_then(Value::as_bool) {
+                    r.user_ignored = b;
+                }
+                if let Some(b) = data.get("is_spam_request").and_then(Value::as_bool) {
+                    r.is_spam_request = b;
+                }
+                if let Some(t) = data.get("since").and_then(Value::as_str) {
+                    r.since = Some(t.to_owned());
+                }
+            }
             _ => return false,
         }
         true

@@ -91,6 +91,16 @@ fn group_dm_recipients_follow_gateway() {
 }
 
 #[test]
+fn relationship_update_merges_into_existing() {
+    let cache = Cache::default();
+    cache.apply(&parse_dispatch("RELATIONSHIP_ADD", r#"{"id":"9","type":3,"user":{"id":"9","username":"c"},"nickname":null}"#));
+    assert!(cache.apply(&parse_dispatch("RELATIONSHIP_UPDATE", r#"{"id":"9","type":1,"nickname":"Cee"}"#)));
+    let r = cache.relationship(Snowflake(9)).unwrap();
+    assert_eq!((r.kind, r.nickname.as_deref(), r.user.as_ref().map(|u| u.username.as_str())), (RelationshipType::Friend, Some("Cee"), Some("c")));
+    assert!(!cache.apply(&parse_dispatch("RELATIONSHIP_UPDATE", r#"{"id":"10","type":1}"#)));
+}
+
+#[test]
 fn nonce_replaces_local_echo() {
     let cache = Cache::default();
     let mut local = msg(10, 1, "hi");
