@@ -330,6 +330,7 @@ fn hdr(id: &'static str, path: SharedString, color: gpui::Hsla) -> gpui::Statefu
         "gdm-members" => crate::t!("header.members_show"),
         "dm-profile" if selected => crate::t!("header.profile_hide"),
         "dm-profile" => crate::t!("header.profile_show"),
+        "call-chat-close" => crate::t!("common.close"),
         _ => crate::t!("header.more"),
     };
     crate::ui::states::header_button(id, path, selected, label).debug_selector(move || format!("hdr-{id}"))
@@ -358,7 +359,65 @@ fn header_search_w(pad_start: f32) -> f32 {
     if w <= 0. { 244. } else { (w - pad_start - 8. - 320.).clamp(64., 244.) }
 }
 
+fn call_chat_header(app: &PhoenixApp, ch: Id, cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    let name = app.channels.get(&ch).map(|c| crate::ui::dm_profile_panel::channel_name(app, c)).unwrap_or_default();
+    div()
+        .relative()
+        .h(z(m::HEADER_H + 1.))
+        .flex_none()
+        .pl(z(space::md()))
+        .pr(z(8.))
+        .py(z(8.))
+        .flex()
+        .items_center()
+        .bg(c(Palette::BG_PRIMARY))
+        .border_t_1()
+        .border_b_1()
+        .border_color(tk(idx::BORDER_SUBTLE))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .flex()
+                .items_center()
+                .child(
+                    div()
+                        .ml(z(-1.))
+                        .mr(z(11.))
+                        .w(z(20.))
+                        .h(z(32.))
+                        .flex()
+                        .items_center()
+                        .child(gpui::svg().path(crate::icons::path("chat")).size(z(20.)).flex_none().text_color(tk(idx::CHANNEL_ICON))),
+                )
+                .child(
+                    div()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(tk(idx::TEXT_STRONG))
+                        .child(name),
+                ),
+        )
+        .child(
+            div().flex_none().pl(z(space::xs())).flex().items_center().child(hdr_named("call-chat-close", "close-small", tk(idx::ICON_MUTED)).on_click(cx.listener(
+                move |_, _, _, cx| {
+                    crate::ui::call_view::set_chat_open(ch, false);
+                    cx.notify();
+                },
+            ))),
+        )
+}
+
 fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    if let Some(id) = app.selected_channel.filter(|_| crate::ui::call_view::active(app) && !crate::ui::call_view::private_split(app)) {
+        return call_chat_header(app, id, cx);
+    }
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
     let is_dm = ch.is_some_and(|c| c.guild.is_none());
     let name = ch.map(|c| crate::ui::dm_profile_panel::channel_name(app, c)).unwrap_or_default();
