@@ -119,7 +119,7 @@ pub fn body_height(viewport_h: f32) -> f32 {
 fn burst_header(r: &Reactions, x: &Reaction) -> AnyElement {
     let key = crate::ui::burst::Key::new(r.channel, r.msg, &x.emoji, x.emoji_id);
     let playing = crate::ui::burst::playing(&key);
-    let hide = playing.is_some() || crate::ui::burst::pending(&key);
+    let hide = playing.is_some() || crate::ui::burst::pending(&key) || HEADER_WAIT.with(|w| w.borrow().contains(&key));
     div()
         .relative()
         .py(z(32.))
@@ -138,6 +138,10 @@ fn burst_header(r: &Reactions, x: &Reaction) -> AnyElement {
         .into_any_element()
 }
 
+thread_local! {
+    static HEADER_WAIT: std::cell::RefCell<std::collections::HashSet<crate::ui::burst::Key>> = std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
 pub fn play_header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let want = with_modal(|m| match m {
         Some(Modal::Reactions(r)) => Some((r.channel, r.msg, r.selected)),
@@ -146,12 +150,24 @@ pub fn play_header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let Some((ch, msg, sel)) = want else { return };
     let list = reactions(app, ch, msg);
     let Some(e) = entries(&list).get(sel).copied().filter(|e| e.burst) else { return };
-    let Some(x) = list.get(e.index) else { return };
-    let Some(seed) = x.burst_colors.first().and_then(|h| crate::ui::burst::parse_hex(h)) else { return };
-    crate::ui::burst::play(
-        crate::ui::burst::Play { channel: ch, msg, token: &x.emoji, emoji_id: x.emoji_id, accent: seed, kind: crate::ui::burst::Kind::External },
-        cx,
-    );
+    let Some(x) = list.get(e.index).cloned() else { return };
+    let key = crate::ui::burst::Key::new(ch, msg, &x.emoji, x.emoji_id);
+    HEADER_WAIT.with(|w| w.borrow_mut().insert(key.clone()));
+    cx.spawn(async move |this, cx| {
+        let (token, id) = (x.emoji.to_string(), x.emoji_id);
+        let color = cx.background_executor().spawn(async move { crate::ui::burst::emoji_color(&token, id) }).await;
+        HEADER_WAIT.with(|w| w.borrow_mut().remove(&key));
+        let _ = this.update(cx, |_, cx| {
+            if let Some(accent) = color {
+                crate::ui::burst::play(
+                    crate::ui::burst::Play { channel: ch, msg, token: &x.emoji, emoji_id: x.emoji_id, accent, kind: crate::ui::burst::Kind::External },
+                    cx,
+                );
+            }
+            cx.notify();
+        });
+    })
+    .detach();
 }
 
 pub fn render(app: &PhoenixApp, r: &Reactions, cx: &mut Context<PhoenixApp>) -> AnyElement {

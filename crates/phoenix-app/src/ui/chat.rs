@@ -37,6 +37,7 @@ pub mod state;
 pub mod thread_banner;
 pub mod voice_message;
 pub mod blocked;
+pub mod burst_tip;
 pub mod command_msg;
 pub mod slash;
 pub mod spoiler;

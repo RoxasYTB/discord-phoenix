@@ -1,5 +1,6 @@
 pub mod account_edit;
 pub mod accounts;
+pub mod burst_upsell;
 pub mod active_threads;
 pub mod channel_overview;
 pub mod channel_perms;
@@ -141,6 +142,7 @@ pub enum Modal {
     ShopPurchase(Box<crate::ui::shop_buy::State>),
     QuestVideo(Box<crate::ui::quests_page::Quest>),
     QuestDisclosure(Box<crate::ui::quests_page::Quest>),
+    BurstUpsell,
 }
 
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -289,6 +291,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::ShopPurchase(s) => crate::ui::shop_buy::render(app, s, cx),
             Modal::QuestVideo(q) => crate::ui::quest_modals::render_video(q, cx),
             Modal::QuestDisclosure(q) => crate::ui::quest_modals::render_disclosure(q, cx),
+            Modal::BurstUpsell => burst_upsell::render(cx),
         })
     })
 }

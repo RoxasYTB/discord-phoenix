@@ -1554,6 +1554,24 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
+                "bursttip" | "burstupsell" => {
+                    let pick = app.selected_channel.and_then(|c| {
+                        let msgs = &app.messages.get(&c)?.msgs;
+                        let m = msgs.iter().rev().find(|m| m.reactions.iter().any(|r| r.burst_count > 0))?;
+                        let ix = m.reactions.iter().position(|r| r.burst_count > 0)?;
+                        Some((c, m.id, ix, m.reactions[ix].clone()))
+                    });
+                    if kind == "burstupsell" {
+                        phoenix_app::ui::modals::burst_upsell::open(cx);
+                    } else if let Some((c, m, ix, r)) = pick {
+                        println!("burst tooltip on {m:?} {}", r.emoji);
+                        let key = phoenix_app::ui::states::key(("reaction-burst", m.0, ix));
+                        phoenix_app::ui::states::set_hover(key, true);
+                        phoenix_app::ui::chat::burst_tip::load_names(app, c, m, &r, cx);
+                        phoenix_app::ui::chat::burst_tip::refresh_after(cx, phoenix_app::ui::chat::burst_tip::SHOW_AFTER);
+                        cx.notify();
+                    }
+                }
                 "burstplay" => {
                     let pick = app.selected_channel.and_then(|c| {
                         let msgs = &app.messages.get(&c)?.msgs;
@@ -1561,6 +1579,9 @@ fn main() -> anyhow::Result<()> {
                         let r = m.reactions.iter().find(|r| r.burst_count > 0)?.clone();
                         Some((c, m.id, r))
                     });
+                    if let Some(ms) = std::env::var("PHX_BURST_AT").ok().and_then(|v| v.parse::<u64>().ok()) {
+                        phoenix_app::ui::burst::freeze(Some(std::time::Duration::from_millis(ms)));
+                    }
                     if let Some((c, m, r)) = pick
                         && let Some(p) = phoenix_app::ui::burst::palette(&r.burst_colors, !phoenix_app::theme::is_light())
                     {

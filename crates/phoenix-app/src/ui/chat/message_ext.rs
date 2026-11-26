@@ -295,13 +295,12 @@ pub fn on_right_click(entity: &Entity<PhoenixApp>, msg: &Message) -> impl Fn(&Mo
 }
 
 pub fn reactions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, after_accessory: bool) -> AnyElement {
-    let _ = app;
     let (ch, id) = (msg.channel, msg.id);
     let hc = crate::theme::high_contrast();
     let mut row = div().pt(z(if after_accessory { 8. } else { 4. })).pb(z(10.)).mb(z(-8.)).flex().flex_wrap().gap(z(4.)).items_center();
     for (ix, r) in msg.reactions.iter().enumerate() {
         if r.burst_count > 0 {
-            row = row.child(burst_pill(entity, msg, ix, r));
+            row = row.child(burst_pill(app, entity, msg, ix, r));
         }
         if r.count > 0 {
             row = row.child(normal_pill(entity, msg, ix, r));
@@ -392,12 +391,16 @@ fn normal_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate:
         .into_any_element()
 }
 
-fn burst_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::model::Reaction) -> AnyElement {
+fn burst_pill(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::model::Reaction) -> AnyElement {
     use crate::ui::burst;
+    use crate::ui::chat::burst_tip;
     let (ch, id) = (msg.channel, msg.id);
     let hc = crate::theme::high_contrast();
     let pal = burst::palette(&r.burst_colors, !crate::theme::is_light());
     let key = burst::Key::new(ch, id, &r.emoji, r.emoji_id);
+    if let Some(p) = pal {
+        burst::seen(&key, &r.emoji, r.emoji_id, p.accent, r.burst_count);
+    }
     let playing = burst::playing(&key);
     let hide = playing.is_some();
     let emoji_el = div()
@@ -405,11 +408,35 @@ fn burst_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::
         .children(playing.as_ref().map(|(img, _)| burst::overlay(img.clone(), 20.)))
         .child(div().when(hide, |d| d.opacity(0.)).child(crate::media::emoji::emoji_element(&r.emoji, 20.)));
     let fade_key = crate::ui::states::key(("reaction-burst", msg.id.0, ix));
+    let hovered = crate::ui::states::hovered(fade_key);
     let (e_hover, e_click) = (entity.clone(), entity.clone());
     let (rh, rc) = (r.clone(), r.clone());
+    let tip = burst_tip::layer(app, entity, msg, r, fade_key);
     let accent = pal.map(|p| p.accent);
     let me_burst = r.me_burst;
-    let pill = div().id(("reaction-burst", ix))
+    let shake = match playing.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() / 0.5) {
+        Some(t) if t < 1. && !crate::ui::settings::effects::reduced_motion() => Some(burst::shake_at(t)),
+        _ => None,
+    };
+    let (fill, edge): (gpui::Hsla, gpui::Hsla) = match pal {
+        Some(p) => (
+            p.background_rgba(p.opacity).into(),
+            if me_burst {
+                p.background_rgba(1.).into()
+            } else if hovered {
+                tk(if hc { idx::BORDER_STRONG } else { idx::REACTION_BORDER_HOVER })
+            } else if hc {
+                tk(idx::BORDER_SUBTLE)
+            } else {
+                gpui::transparent_black()
+            },
+        ),
+        None if me_burst => (tk(idx::REACTION_BACKGROUND_REACTED_DEFAULT), tk(idx::REACTION_BORDER_REACTED_DEFAULT)),
+        None if hovered => (tk(idx::REACTION_BACKGROUND_HOVER), tk(idx::REACTION_BORDER_HOVER)),
+        None => (tk(idx::REACTION_BACKGROUND_DEFAULT), gpui::transparent_black()),
+    };
+    let pill = div()
+        .id(("reaction-burst", ix))
         .relative()
         .py(z(2.))
         .px(z(6.))
@@ -419,31 +446,11 @@ fn burst_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::
         .gap(z(6.))
         .border_1()
         .cursor_pointer()
-        .map(|d| match pal {
-            Some(p) => d
-                .bg(p.background_rgba(p.opacity))
-                .border_color(if me_burst {
-                    gpui::Hsla::from(p.background_rgba(1.))
-                } else if hc {
-                    tk(idx::BORDER_SUBTLE)
-                } else {
-                    gpui::transparent_black()
-                })
-                .when(!me_burst, |d| d.hover(move |s| s.border_color(tk(if hc { idx::BORDER_STRONG } else { idx::REACTION_BORDER_HOVER }))))
-                .child(div().absolute().inset_0().rounded(z(8.)).opacity(0.35).shadow(vec![gpui::BoxShadow {
-                    color: p.accent_rgba(1.).into(),
-                    offset: gpui::point(z(0.), z(0.)),
-                    blur_radius: z(16.),
-                    spread_radius: z(0.),
-                    inset: false,
-                }])),
-            None => d
-                .when(me_burst, |d| d.bg(tk(idx::REACTION_BACKGROUND_REACTED_DEFAULT)).border_color(tk(idx::REACTION_BORDER_REACTED_DEFAULT)))
-                .when(!me_burst, |d| {
-                    d.bg(tk(idx::REACTION_BACKGROUND_DEFAULT))
-                        .border_color(gpui::transparent_black())
-                        .hover(|s| s.bg(tk(idx::REACTION_BACKGROUND_HOVER)).border_color(tk(idx::REACTION_BORDER_HOVER)))
-                }),
+        .child(burst_tip::probe(fade_key))
+        .children(pal.map(|p| burst::glow(p.accent_rgba(0.35))))
+        .map(|d| match shake {
+            Some((_, _, deg)) => d.border_color(gpui::transparent_black()).child(burst::tilted(fill, edge, deg)),
+            None => d.bg(fill).border_color(edge),
         })
         .child(emoji_el)
         .child(
@@ -454,23 +461,21 @@ fn burst_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::
                 })
                 .child(SharedString::from(r.burst_count.to_string())),
         )
+        .children(tip)
         .on_hover(move |on, window, cx| {
             if crate::ui::states::set_hover(fade_key, *on) {
                 window.refresh();
             }
+            burst_tip::on_pill_hover(&e_hover, ch, id, &rh, *on, cx);
             if *on && let Some(accent) = accent {
                 let rh = rh.clone();
                 e_hover.update(cx, |_, cx| burst::play(burst::Play { channel: ch, msg: id, token: &rh.emoji, emoji_id: rh.emoji_id, accent, kind: burst::Kind::Hover }, cx));
             }
         })
         .on_click(move |_, _, cx| e_click.update(cx, |a, cx| a.toggle_burst_reaction(ch, id, &rc, cx)));
-    match playing.map(|(_, at)| at) {
-        Some(at) if !crate::ui::settings::effects::reduced_motion() => {
-            let t = (at.elapsed().as_secs_f32() / 0.5).min(1.);
-            let (dx, dy) = burst::shake_offset(t);
-            if t < 1. { pill.left(z(dx)).top(z(dy)).into_any_element() } else { pill.into_any_element() }
-        }
-        _ => pill.into_any_element(),
+    match shake {
+        Some((dx, dy, _)) => pill.left(z(dx)).top(z(dy)).into_any_element(),
+        None => pill.into_any_element(),
     }
 }
 

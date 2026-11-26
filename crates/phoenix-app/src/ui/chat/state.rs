@@ -405,11 +405,7 @@ impl PhoenixApp {
 
     pub fn toggle_burst_reaction(&mut self, channel: Id, msg: Id, r: &Reaction, cx: &mut Context<Self>) {
         if !self.backend.has_premium() {
-            crate::ui::settings::open(self, cx);
-            if let Some(s) = self.settings.as_mut() {
-                s.page = crate::ui::settings::Page::Nitro;
-            }
-            cx.notify();
+            crate::ui::modals::burst_upsell::open(cx);
             return;
         }
         let e = crate::actions::exec::emoji(r);

@@ -433,7 +433,7 @@ struct Active {
 thread_local! {
     static ACTIVE: RefCell<HashMap<Key, Active>> = RefCell::new(HashMap::new());
     static SERIAL: RefCell<u64> = const { RefCell::new(0) };
-    static RANDOM_DONE: RefCell<std::collections::HashSet<Key>> = RefCell::new(std::collections::HashSet::new());
+    static FREEZE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
 }
 
 pub fn admit(map: &HashMap<Key, Kind>, key: &Key, kind: Kind) -> bool {
@@ -546,6 +546,9 @@ pub fn play(p: Play<'_>, cx: &mut Context<PhoenixApp>) {
             let _ = tx.send(());
         });
         let _ = rx.await;
+        if FREEZE.with(|f| f.get()).is_some() {
+            return;
+        }
         ACTIVE.with(|a| {
             let mut a = a.borrow_mut();
             if a.get(&key).is_some_and(|x| x.serial == serial) {
@@ -557,8 +560,15 @@ pub fn play(p: Play<'_>, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
+pub fn freeze(at: Option<Duration>) {
+    FREEZE.with(|f| f.set(at));
+}
+
 pub fn playing(key: &Key) -> Option<(Arc<RenderImage>, Instant)> {
     let now = Instant::now();
+    if let Some(d) = FREEZE.with(|f| f.get()) {
+        return ACTIVE.with(|a| a.borrow().get(key).and_then(|x| Some((x.img.clone()?, now.checked_sub(d).unwrap_or(now)))));
+    }
     ACTIVE.with(|a| {
         a.borrow()
             .get(key)
@@ -581,18 +591,234 @@ pub fn random_roll(now_ms: u128, channel: Id, msg: Id, name: &str, count: u32) -
     e > 7
 }
 
-pub fn ambient(key: &Key, p: Play<'_>, count: u32, cx: &mut Context<PhoenixApp>) {
-    if RANDOM_DONE.with(|d| d.borrow().contains(key)) {
-        return;
-    }
-    let now = std::time::SystemTime::now()
+struct Seen {
+    stamp: u64,
+    next: Instant,
+    done: bool,
+    token: String,
+    emoji_id: Option<Id>,
+    accent: (u8, u8, u8),
+    count: u32,
+}
+
+thread_local! {
+    static SEEN: RefCell<HashMap<Key, Seen>> = RefCell::new(HashMap::new());
+    static GEN: std::cell::Cell<u64> = const { std::cell::Cell::new(1) };
+}
+
+pub const RANDOM_EVERY: Duration = Duration::from_secs(5);
+
+pub fn seen(key: &Key, token: &str, emoji_id: Option<Id>, accent: (u8, u8, u8), count: u32) {
+    let stamp = GEN.with(|g| g.get());
+    SEEN.with(|s| {
+        let mut s = s.borrow_mut();
+        let e = s.entry(key.clone()).or_insert_with(|| Seen {
+            stamp,
+            next: Instant::now(),
+            done: false,
+            token: token.to_owned(),
+            emoji_id,
+            accent,
+            count,
+        });
+        e.stamp = stamp;
+        e.accent = accent;
+        e.count = count;
+    });
+}
+
+pub fn tick(cx: &mut Context<PhoenixApp>) {
+    crate::ui::modals::burst_upsell::release_art();
+    let probed = GEN.with(|g| g.get());
+    let now = Instant::now();
+    let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis());
-    let name = crate::ui::chat::state::reaction_name(p.token);
-    if random_roll(now, p.channel, p.msg, &name, count) {
-        RANDOM_DONE.with(|d| d.borrow_mut().insert(key.clone()));
-        play(p, cx);
+    let on = crate::media::emoji::animate_emoji();
+    let mut fire = Vec::new();
+    let mut wake = false;
+    SEEN.with(|s| {
+        let mut s = s.borrow_mut();
+        s.retain(|_, e| e.stamp >= probed);
+        for (k, e) in s.iter_mut().filter(|(_, e)| !e.done && on) {
+            if e.next <= now {
+                e.next = now + RANDOM_EVERY;
+                let name = crate::ui::chat::state::reaction_name(&e.token);
+                if random_roll(ms, k.channel, k.msg, &name, e.count) {
+                    e.done = true;
+                    fire.push((k.clone(), e.token.clone(), e.emoji_id, e.accent));
+                    continue;
+                }
+            }
+            wake |= e.next <= now + Duration::from_millis(1100);
+        }
+    });
+    for (k, token, emoji_id, accent) in fire {
+        play(
+            Play {
+                channel: k.channel,
+                msg: k.msg,
+                token: &token,
+                emoji_id,
+                accent,
+                kind: Kind::Random,
+            },
+            cx,
+        );
     }
+    if wake {
+        GEN.with(|g| g.set(probed + 1));
+        cx.notify();
+    }
+}
+
+pub fn dominant(bytes: &[u8]) -> Option<(u8, u8, u8)> {
+    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+    let px: Vec<[u8; 3]> = img
+        .pixels()
+        .step_by(10)
+        .filter(|p| p[3] >= 125 && !(p[0] > 250 && p[1] > 250 && p[2] > 250))
+        .map(|p| [p[0], p[1], p[2]])
+        .collect();
+    if px.is_empty() {
+        return None;
+    }
+    let [r, g, b] = *crate::ui::avatar_color::palette(&px, 5).first()?;
+    Some((r, g, b))
+}
+
+type Rgb = (u8, u8, u8);
+
+pub fn emoji_color(token: &str, emoji_id: Option<Id>) -> Option<Rgb> {
+    static COLORS: OnceLock<Mutex<HashMap<String, Option<Rgb>>>> = OnceLock::new();
+    let url = match emoji_id {
+        Some(id) => format!("https://cdn.discordapp.com/emojis/{}.png?size=32", id.0),
+        None => crate::media::emoji::twemoji_url(token)?.to_string(),
+    };
+    let store = COLORS.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(c) = store.lock().ok()?.get(&url) {
+        return *c;
+    }
+    let c = http_get(&url).and_then(|b| dominant(&b));
+    if let Ok(mut s) = store.lock() {
+        s.insert(url, c);
+    }
+    c
+}
+
+pub fn glow(color: Rgba) -> AnyElement {
+    gpui::canvas(
+        |_, _, _| {},
+        move |b, _, window, _| paint_glow(b, color, window),
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+    .into_any_element()
+}
+
+pub fn outside_strips(b: gpui::Bounds<gpui::Pixels>, r: f32, m: f32, steps: usize) -> Vec<gpui::Bounds<gpui::Pixels>> {
+    use gpui::{Bounds, point, px, size};
+    let (x, y) = (f32::from(b.origin.x), f32::from(b.origin.y));
+    let (w, h) = (f32::from(b.size.width), f32::from(b.size.height));
+    let rect = |x: f32, y: f32, w: f32, h: f32| Bounds::new(point(px(x), px(y)), size(px(w.max(0.)), px(h.max(0.))));
+    let mut out = vec![
+        rect(x - m, y - m, w + 2. * m, m),
+        rect(x - m, y + h, w + 2. * m, m),
+        rect(x - m, y, m, h),
+        rect(x + w, y, m, h),
+    ];
+    let r = r.min(w / 2.).min(h / 2.);
+    if r <= 0. || steps == 0 {
+        return out;
+    }
+    let band = r / steps as f32;
+    for i in 0..steps {
+        let dy = r - (i as f32 + 1.) * band;
+        let cut = r - (r * r - dy * dy).max(0.).sqrt();
+        if cut <= 0. {
+            continue;
+        }
+        let top = y + i as f32 * band;
+        let bottom = y + h - (i as f32 + 1.) * band;
+        out.push(rect(x, top, cut, band));
+        out.push(rect(x + w - cut, top, cut, band));
+        out.push(rect(x, bottom, cut, band));
+        out.push(rect(x + w - cut, bottom, cut, band));
+    }
+    out
+}
+
+fn paint_glow(b: gpui::Bounds<gpui::Pixels>, color: Rgba, window: &mut gpui::Window) {
+    let blur = f32::from(z(8.));
+    let radius = f32::from(z(8.));
+    let shadow = gpui::BoxShadow {
+        color: color.into(),
+        offset: gpui::point(gpui::px(0.), gpui::px(0.)),
+        blur_radius: gpui::px(blur),
+        spread_radius: gpui::px(0.),
+        inset: false,
+    };
+    let corners = gpui::Corners::all(gpui::px(radius));
+    for strip in outside_strips(b, radius, 3. * blur + 2., 4) {
+        window.with_content_mask(Some(gpui::ContentMask { bounds: strip }), |w| {
+            w.paint_drop_shadows(b, corners, std::slice::from_ref(&shadow));
+        });
+    }
+}
+
+pub fn rounded_svg(w: f32, h: f32, r: f32, ring: bool) -> String {
+    let rr = |x: f32, y: f32, w: f32, h: f32, r: f32| {
+        format!(
+            "M{a} {y}H{b}A{r} {r} 0 0 1 {xr} {c}V{d}A{r} {r} 0 0 1 {b} {yb}H{a}A{r} {r} 0 0 1 {x} {d}V{c}A{r} {r} 0 0 1 {a} {y}Z",
+            a = x + r,
+            b = x + w - r,
+            c = y + r,
+            d = y + h - r,
+            xr = x + w,
+            yb = y + h,
+        )
+    };
+    let mut d = rr(0., 0., w, h, r);
+    if ring {
+        d.push_str(&rr(1., 1., w - 2., h - 2., (r - 1.).max(0.)));
+    }
+    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}"><path fill="white" fill-rule="evenodd" d="{d}"/></svg>"#)
+}
+
+pub fn tilted(fill: gpui::Hsla, border: gpui::Hsla, deg: f32) -> AnyElement {
+    gpui::canvas(
+        |_, _, _| {},
+        move |b, _, window, cx| {
+            let (w, h) = (f32::from(b.size.width), f32::from(b.size.height));
+            if w <= 0. || h <= 0. {
+                return;
+            }
+            let r = f32::from(z(8.));
+            let s = window.scale_factor();
+            let center = b.center();
+            let (cx0, cy0) = (f32::from(center.x) * s, f32::from(center.y) * s);
+            let m = gpui::TransformationMatrix::unit()
+                .translate(gpui::point(gpui::ScaledPixels(cx0), gpui::ScaledPixels(cy0)))
+                .rotate(gpui::radians(deg.to_radians()))
+                .translate(gpui::point(gpui::ScaledPixels(-cx0), gpui::ScaledPixels(-cy0)));
+            for (ring, color) in [(false, fill), (true, border)] {
+                if color.a <= 0. {
+                    continue;
+                }
+                let svg = rounded_svg(w, h, r, ring);
+                let key = gpui::SharedString::from(format!("burst-pill/{w:.2}x{h:.2}/{r:.2}/{ring}"));
+                let _ = window.paint_svg(b, key, Some(svg.as_bytes()), m, color, cx);
+            }
+        },
+    )
+    .absolute()
+    .top(gpui::px(-1.))
+    .left(gpui::px(-1.))
+    .right(gpui::px(-1.))
+    .bottom(gpui::px(-1.))
+    .into_any_element()
 }
 
 pub fn overlay(img: Arc<RenderImage>, emoji: f32) -> AnyElement {
@@ -619,30 +845,32 @@ fn img_el(img_: Arc<RenderImage>, g: f32) -> impl IntoElement {
     img(img_).w(z(g)).h(z(g))
 }
 
-pub const SHAKE: [(f32, f32); 11] = [
-    (1., 1.),
-    (-1., -1.),
-    (-2., 0.),
-    (2., 1.),
-    (1., -1.),
-    (-1., 1.),
-    (-2., 1.),
-    (2., 1.),
-    (-1., -1.),
-    (1., 1.),
-    (1., -1.),
+pub const SHAKE: [(f32, f32, f32); 11] = [
+    (1., 1., 0.),
+    (-1., -1., -1.),
+    (-2., 0., 1.),
+    (2., 1., 0.),
+    (1., -1., 1.),
+    (-1., 1., -1.),
+    (-2., 1., 0.),
+    (2., 1., -1.),
+    (-1., -1., 1.),
+    (1., 1., 0.),
+    (1., -1., -1.),
 ];
 
-pub fn shake_offset(t: f32) -> (f32, f32) {
+pub fn shake_at(t: f32) -> (f32, f32, f32) {
     let t = t.clamp(0., 1.) * 10.;
     let i = (t.floor() as usize).min(9);
-    let f = t - i as f32;
+    let f = crate::ui::states::cubic_bezier(0.25, 0.1, 0.25, 1.)(t - i as f32);
     let (a, b) = (SHAKE[i], SHAKE[i + 1]);
-    (a.0 + (b.0 - a.0) * f, a.1 + (b.1 - a.1) * f)
+    let l = |x: f32, y: f32| x + (y - x) * f;
+    (l(a.0, b.0), l(a.1, b.1), l(a.2, b.2))
 }
 
 pub fn clear() {
     ACTIVE.with(|a| a.borrow_mut().clear());
+    SEEN.with(|s| s.borrow_mut().clear());
 }
 
 #[cfg(test)]
@@ -725,8 +953,61 @@ mod tests {
 
     #[test]
     fn shake_follows_the_keyframes() {
-        assert_eq!(shake_offset(0.), (1., 1.));
-        assert_eq!(shake_offset(1.), (1., -1.));
-        assert_eq!(shake_offset(0.1), (-1., -1.));
+        let near = |a: (f32, f32, f32), b: (f32, f32, f32)| (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3 && (a.2 - b.2).abs() < 1e-3;
+        assert!(near(shake_at(0.), (1., 1., 0.)));
+        assert!(near(shake_at(1.), (1., -1., -1.)));
+        assert!(near(shake_at(0.2), (-2., 0., 1.)));
+        let mid = shake_at(0.05);
+        assert!(mid.2 < -0.5 && mid.2 > -1.);
+    }
+
+    #[test]
+    fn glow_strips_stay_outside_the_pill() {
+        let b = gpui::Bounds::new(gpui::point(gpui::px(10.), gpui::px(20.)), gpui::size(gpui::px(52.), gpui::px(30.)));
+        let r = 8.;
+        let inside = |x: f32, y: f32| {
+            let (l, t, rr, bb) = (10., 20., 62., 50.);
+            if x < l || x > rr || y < t || y > bb {
+                return false;
+            }
+            let cx = x.clamp(l + r, rr - r);
+            let cy = y.clamp(t + r, bb - r);
+            (x - cx).powi(2) + (y - cy).powi(2) < r * r
+        };
+        for s in outside_strips(b, r, 26., 4) {
+            let (x0, y0) = (f32::from(s.origin.x), f32::from(s.origin.y));
+            let (x1, y1) = (x0 + f32::from(s.size.width), y0 + f32::from(s.size.height));
+            for (x, y) in [(x0 + 0.01, y0 + 0.01), (x1 - 0.01, y0 + 0.01), (x0 + 0.01, y1 - 0.01), (x1 - 0.01, y1 - 0.01)] {
+                assert!(!inside(x, y), "strip corner {x},{y} is inside the pill");
+            }
+        }
+    }
+
+    #[test]
+    fn ambient_rolls_once_per_mounted_pill() {
+        let k = Key { channel: Id(1), msg: Id(2), emoji: "x".into() };
+        clear();
+        seen(&k, "x", None, (1, 2, 3), 5);
+        assert!(SEEN.with(|s| s.borrow().get(&k).is_some_and(|e| !e.done && e.next <= Instant::now())));
+        clear();
+    }
+
+    #[test]
+    fn dominant_colour_skips_white_and_transparent_pixels() {
+        let mut img = image::RgbaImage::new(32, 32);
+        for (x, _, p) in img.enumerate_pixels_mut() {
+            *p = if x < 4 { image::Rgba([255, 255, 255, 255]) } else if x < 8 { image::Rgba([0, 0, 255, 10]) } else { image::Rgba([200, 30, 40, 255]) };
+        }
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let (r, g, b) = dominant(&png).unwrap();
+        assert!(r > 150 && g < 80 && b < 80);
+    }
+
+    #[test]
+    fn pill_ring_is_an_even_odd_outline() {
+        let s = rounded_svg(52., 30., 8., true);
+        assert!(s.contains("evenodd") && s.matches('Z').count() == 2);
+        assert_eq!(rounded_svg(52., 30., 8., false).matches('Z').count(), 1);
     }
 }
