@@ -144,7 +144,7 @@ impl RestClient {
     }
 
     pub async fn set_user_note(&self, user: UserId, note: &str) -> Result<()> {
-        self.call_empty(Method::PUT, &format!("/users/@me/notes/{user}"), Body::Json(json!({ "note": note }))).await
+        self.guarded_write(&super::guard::GuardedWrite::set_note(user.0, note)).await.map(|_| ())
     }
 
     pub async fn update_status_settings(

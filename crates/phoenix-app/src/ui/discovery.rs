@@ -112,7 +112,7 @@ pub fn directory_path_allowed(path: &str) -> bool {
         ["application-directory-static", "collections"] | ["application-directory-static", "categories"] => true,
         ["application-directory-static", "applications", a] | ["application-directory-static", "applications", a, "similar"] => id(a),
         ["applications", a, "public"] | ["applications", a, "application-command-index"] => id(a),
-        ["quests", "@me", "claimed"] => true,
+        ["quests", "@me", "claimed"] | ["oauth2", "authorize"] => true,
         _ => false,
     }
 }

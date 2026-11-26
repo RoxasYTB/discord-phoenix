@@ -63,6 +63,7 @@ pub mod squircle;
 pub mod fade_image;
 pub mod profile_bg;
 pub mod profile_note;
+pub mod profile_voice;
 pub mod profile_toolbar;
 pub mod shop_look;
 pub mod shop_pdp;

@@ -62,6 +62,7 @@ pub struct EditorState {
     pub scope: Option<Id>,
     pub modal: bool,
     pub collapsed: bool,
+    pub slide: Option<std::time::Instant>,
     pub switcher_open: bool,
     pub notice_hidden: bool,
     pub tab: usize,
@@ -93,6 +94,7 @@ impl EditorState {
             scope,
             modal: false,
             collapsed: false,
+            slide: None,
             switcher_open: false,
             notice_hidden: false,
             tab: 0,
@@ -467,6 +469,7 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, modal: Option<crate::ui::prof
                     .on_click(cx.listener(|a, _, _, cx| {
                         if let Some(e) = ed(a) {
                             e.collapsed = true;
+                            e.slide = Some(std::time::Instant::now());
                             e.switcher_open = false;
                         }
                         cx.notify();
@@ -1213,12 +1216,21 @@ fn tabs(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 super::widget_add::open();
                 cx.notify();
             }))),
-        1 if !e.recent.is_empty() => super::profile_activity::render(
-            &e.recent,
-            true,
-            &super::profile_activity::Colors { strong, muted: dim, card: wcol.card, link: c(tok(idx::TEXT_LINK)) },
-        ),
-        1 => div().text_size(z(14.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("pe.no_activity")),
+        1 => {
+            let current = current_activity(app, e, crate::ui::profile_voice::Colors { header: strong, strong, subtle: dim, card: wcol.card, themed }, cx);
+            let recent = (!e.recent.is_empty()).then(|| {
+                super::profile_activity::render(
+                    &e.recent,
+                    true,
+                    &super::profile_activity::Colors { strong, muted: dim, card: wcol.card, link: c(tok(idx::TEXT_LINK)) },
+                )
+            });
+            if current.is_none() && recent.is_none() {
+                div().text_size(z(14.)).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("pe.no_activity"))
+            } else {
+                div().flex().flex_col().gap(z(24.)).children(current).children(recent)
+            }
+        }
         _ => {
             let board = crate::ui::profile_board::get(app, app.me.id, cx);
             crate::ui::profile::wishlist_panel(app, app.me.id, &board.wishlist, cx)
@@ -1232,6 +1244,42 @@ fn tabs(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
         .pt(z(20.))
         .child(div().pl(z(32.)).pr(z(16.)).child(bar))
         .child(div().pt(z(17.)).pl(z(32.)).pr(z(16.)).flex().flex_col().gap(z(12.)).child(panel).children(board))
+}
+
+pub const SLIDE_MS: u64 = 300;
+
+pub fn panel_open(collapsed: bool, since: Option<std::time::Duration>) -> (f32, bool) {
+    let target = if collapsed { 0. } else { 1. };
+    let Some(d) = since else { return (target, false) };
+    let t = d.as_secs_f32() * 1000. / SLIDE_MS as f32;
+    if t >= 1. {
+        return (target, false);
+    }
+    let eased = crate::ui::states::cubic_bezier(0., 0., 0.58, 1.)(t);
+    (if collapsed { 1. - eased } else { eased }, true)
+}
+
+fn current_activity(app: &PhoenixApp, e: &EditorState, col: crate::ui::profile_voice::Colors, cx: &mut Cx) -> Option<Div> {
+    let me = app.me.id;
+    let i = crate::ui::profile::info(app, me, e.scope);
+    let offline = matches!(i.presence, crate::model::Presence::Offline);
+    if offline {
+        return None;
+    }
+    let mut cards: Vec<AnyElement> = i.acts.iter().filter_map(|a| crate::ui::profile::activity_block(a, true, false)).collect();
+    let entity = cx.entity();
+    match crate::ui::voice_row::stream_activity_card(app, me, entity.clone(), cx) {
+        Some(card) => cards.push(card),
+        None => cards.extend(crate::ui::profile_voice::card(app, me, col, entity)),
+    }
+    (!cards.is_empty()).then(|| {
+        div()
+            .flex()
+            .flex_col()
+            .gap(z(8.))
+            .child(div().text_size(z(12.)).line_height(z(16.)).font_weight(FontWeight::MEDIUM).text_color(col.subtle).child(crate::t!("profile.current_activity")))
+            .children(cards)
+    })
 }
 
 fn unsaved_bar(e: &EditorState, cx: &mut Cx) -> Div {
@@ -1356,7 +1404,15 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
         let vp = window.viewport_size();
         let (vw, vh) = (f32::from(vp.width), f32::from(vp.height));
         let editing = !e.collapsed && vw > 928.;
-        let mb = crate::ui::profile::modal_box(vw, vh, editing);
+        let open_box = crate::ui::profile::modal_box(vw, vh, true);
+        let closed_box = crate::ui::profile::modal_box(vw, vh, false);
+        let (frac, animating) = if vw > 928. { panel_open(e.collapsed, e.slide.map(|t| t.elapsed())) } else { (0., false) };
+        if animating {
+            window.request_animation_frame();
+        }
+        let panel_shown = frac > 0.;
+        let mut mb = crate::ui::profile::modal_box(vw, vh, editing);
+        mb.w = closed_box.w + (open_box.w - closed_box.w) * frac;
         let pad = if vw >= 1025. { 48. } else { 32. };
         let r = (mb.radius - 1.).max(0.);
         let close = div()
@@ -1386,7 +1442,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
             .h_full()
             .overflow_hidden()
             .rounded_r(z(r))
-            .when(!editing, |d| d.rounded_l(z(r)).when(mb.border_inline, |d| d.border_l_1()))
+            .when(!panel_shown, |d| d.rounded_l(z(r)).when(mb.border_inline, |d| d.border_l_1()))
             .when(mb.border_block, |d| d.border_t_1().border_b_1())
             .when(mb.border_inline, |d| d.border_r_1())
             .border_color(c(tok(idx::BORDER_NORMAL)))
@@ -1404,7 +1460,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
             )
             .when(dirty || e.error.is_some(), |d| d.child(unsaved_bar(e, cx)))
             .child(close);
-        let show_styles = (!editing && vw > 928.).then(|| {
+        let show_styles = (!editing && !panel_shown && vw > 928.).then(|| {
             div()
                 .id("pe-show-styles")
                 .absolute()
@@ -1426,6 +1482,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
                 .on_click(cx.listener(|a, _, _, cx| {
                     if let Some(e) = ed(a) {
                         e.collapsed = false;
+                        e.slide = Some(std::time::Instant::now());
                     }
                     cx.notify();
                 }))
@@ -1457,7 +1514,17 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .shadow_lg()
                     .children(show_styles)
-                    .when(editing, |d| d.child(styles_panel(app, e, Some(mb), cx)))
+                    .when(panel_shown, |d| {
+                        d.child(
+                            div()
+                                .relative()
+                                .flex_none()
+                                .h_full()
+                                .w(px(open_box.panel * frac))
+                                .overflow_hidden()
+                                .child(div().absolute().top_0().bottom_0().right_0().w(px(open_box.panel)).child(styles_panel(app, e, Some(open_box), cx))),
+                        )
+                    })
                     .child(right)
                     .when(e.switcher_open, |d| d.child(switcher(app, e, cx))),
             )
@@ -1511,6 +1578,20 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn styles_panel_slides_for_300ms_with_css_ease_out() {
+        use std::time::Duration;
+        assert_eq!(panel_open(false, None), (1., false));
+        assert_eq!(panel_open(true, None), (0., false));
+        assert_eq!(panel_open(true, Some(Duration::from_millis(SLIDE_MS))), (0., false));
+        let (open, anim) = panel_open(false, Some(Duration::from_millis(150)));
+        assert!(anim && open > 0.5 && open < 0.9, "{open}");
+        let (closing, _) = panel_open(true, Some(Duration::from_millis(150)));
+        assert!((closing - (1. - open)).abs() < 1e-5);
+        let (early, _) = panel_open(false, Some(Duration::from_millis(1)));
+        assert!(early < 0.05);
+    }
 
     #[test]
     fn button_color_matches_client() {

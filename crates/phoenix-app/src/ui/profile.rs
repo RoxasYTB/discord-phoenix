@@ -77,13 +77,7 @@ impl PhoenixApp {
         let sub = cx.subscribe_in(&note, window, move |this, input, ev: &InputEvent, _, cx| {
             if matches!(ev, InputEvent::Blur | InputEvent::PressEnter { .. }) {
                 let text = input.read(cx).value().to_string();
-                let changed = this.people.profiles.get(&user).is_some_and(|p| p.note.as_ref() != text);
-                if changed {
-                    if let Some(p) = this.people.profiles.get_mut(&user) {
-                        p.note = text.clone().into();
-                    }
-                    cx.background_spawn(this.backend.set_note(user, text)).detach();
-                }
+                this.save_note(user, text, cx);
             }
         });
         self.people.status_picker = false;
@@ -389,23 +383,13 @@ fn connections_section(list: &[crate::presence::Connection]) -> Option<Div> {
     })
 }
 
-fn note_section(p: &Profile) -> Div {
-    let note = (!p.note.is_empty()).then(|| p.note.clone());
-    div().flex().flex_col().gap(z(4.)).child(section_heading(crate::t!("profile.note_title"))).child(
-        div()
-            .ml(z(-7.))
-            .px(z(7.))
-            .py(z(1.))
-            .rounded(z(8.))
-            .cursor_text()
-            .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
-            .text_size(z(14.))
-            .line_height(z(18.))
-            .map(|d| match note {
-                Some(n) => d.text_color(c(tok(idx::TEXT_DEFAULT))).child(n),
-                None => d.text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("profile.note_placeholder")),
-            }),
-    )
+fn note_section(p: &Profile, uid: Id, cx: &mut Context<PhoenixApp>) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(z(8.))
+        .child(section_heading(crate::t!("profile.note_title")))
+        .child(crate::ui::profile_note::modal_note(p.note.clone(), uid, crate::ui::profile_note::NoteLook::Modal, cx))
 }
 
 pub(crate) fn roles_section(app: &PhoenixApp, guild: Option<Id>, uid: Id, cx: &mut Context<PhoenixApp>) -> Option<Div> {
@@ -1583,7 +1567,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
     if let Some(p) = i.prof {
         pbody = pbody.children(connections_section(&p.connections));
         if crate::ui::profile_note::shown(crate::ui::profile_note::Surface::FullProfile, me, false, app.prefs.local.streamer_hides_info()) {
-            pbody = pbody.child(note_section(p));
+            pbody = pbody.child(note_section(p, uid, cx));
         }
     }
 
@@ -1740,7 +1724,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
             if !offline {
                 match crate::ui::voice_row::stream_activity_card(app, uid, e.clone(), cx) {
                     Some(card) => cards.push(card),
-                    None => cards.extend(crate::ui::voice_row::voice_activity_card(app, uid, e.clone())),
+                    None => cards.extend(crate::ui::profile_voice::card(app, uid, crate::ui::profile_voice::Colors::modal(theme.is_some()), e.clone())),
                 }
             }
             let recent = recent_games(app, uid, cx);

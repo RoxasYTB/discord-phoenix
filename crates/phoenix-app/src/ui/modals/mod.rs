@@ -1,5 +1,6 @@
 pub mod account_edit;
 pub mod accounts;
+pub mod app_install;
 pub mod burst_upsell;
 pub mod active_threads;
 pub mod channel_overview;
@@ -145,6 +146,7 @@ pub enum Modal {
     QuestDisclosure(Box<crate::ui::quests_page::Quest>),
     BurstUpsell,
     VoiceStatus(voice_status::State),
+    AppInstall(Box<app_install::State>),
 }
 
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -268,6 +270,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::CreatePoll(s) => poll_create::render(app, s, cx),
             Modal::GoLive(s) => go_live::render(app, s, cx),
             Modal::LeaveLink(s) => leave_link::render(s, cx),
+            Modal::AppInstall(s) => app_install::render(app, s, cx),
             Modal::ReportRaid(s) => report_raid::render(s, cx),
             Modal::GuildTagAdopt(g) => guild_tag::render(app, *g, cx),
             Modal::StreamFeedback(s) => stream_feedback::render(s, cx),

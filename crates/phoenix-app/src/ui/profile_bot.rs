@@ -106,7 +106,7 @@ pub fn card(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size<Pixels>
         .px(z(11.))
         .child(gpui::svg().path(crate::icons::path("plus")).size(z(16.)).text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
         .child(crate::t!("profile.add_app"))
-        .on_click(move |_, _, cx| cx.open_url(&format!("https://discord.com/oauth2/authorize?client_id={}", uid.0)));
+        .on_click(cx.listener(move |a, _, window, cx| crate::ui::modals::app_install::start(a, uid.0, window, cx)));
 
     let header = div()
         .relative()
@@ -233,21 +233,10 @@ pub fn card(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size<Pixels>
             if let Some(p) = i.prof {
                 panel = panel.child(section(crate::t!("profile.created_on"), crate::ui::profile::member_since_row(app, p, guild)));
             }
-            let note = i.prof.map(|p| p.note.clone()).filter(|n| !n.is_empty());
+            let note = i.prof.map(|p| p.note.clone()).unwrap_or_default();
             panel = panel.child(section(
                 crate::t!("profile.note_title"),
-                div()
-                    .mx(z(-4.))
-                    .p(z(4.))
-                    .min_h(z(46.))
-                    .rounded(z(3.))
-                    .cursor_text()
-                    .text_size(z(14.))
-                    .line_height(z(18.))
-                    .map(|d| match note {
-                        Some(n) => d.text_color(c(tok(idx::TEXT_DEFAULT))).child(n),
-                        None => d.text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("profile.note_placeholder")),
-                    }),
+                crate::ui::profile_note::modal_note(note, uid, crate::ui::profile_note::NoteLook::Bot, cx),
             ));
         }
     }
