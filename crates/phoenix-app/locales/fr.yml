@@ -5361,3 +5361,4 @@ forum.slowmode_tip: "Mode lent activé. Les membres peuvent créer un post toute
 forum.slowmode_sep: " et "
 forum.more_tags: "Voir plus de tags"
 forum.find_tag: "Entrer un tag..."
+tb.configure: "Configurer"

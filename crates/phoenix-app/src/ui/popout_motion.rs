@@ -71,7 +71,6 @@ pub fn side_of(anchor: f32, popout_start: f32) -> Side {
 pub const MODAL_ENTER: gpui::SpringConfig = gpui::SpringConfig::new(1000., 48., 1.);
 pub const MODAL_EXIT: gpui::SpringConfig = gpui::SpringConfig::new(1200., 80., 1.);
 pub const MODAL_DELAY: Duration = Duration::from_millis(64);
-pub const BACKDROP_MS: u64 = 150;
 
 pub fn modal_enter(reduced: bool) -> Transition {
     let t = Transition::spring(MODAL_ENTER).delay(MODAL_DELAY).opacity(0., 1.);
@@ -83,6 +82,14 @@ pub fn modal_exit(reduced: bool) -> Transition {
     if reduced { t } else { t.scale(1., 0.9) }
 }
 
+pub fn backdrop_enter() -> Transition {
+    Transition::spring(MODAL_ENTER).opacity(0., 1.)
+}
+
+pub fn backdrop_exit() -> Transition {
+    Transition::spring(MODAL_ENTER).opacity(1., 0.)
+}
+
 pub fn modal_card(id: &'static str, el: impl IntoElement + 'static) -> AnyElement {
     let reduced = crate::ui::settings::effects::reduced_motion();
     el.present_transition(ElementId::NamedInteger("modal-card-pt".into(), crate::ui::states::key((id, "card"))), Some(modal_enter(reduced)))
@@ -91,9 +98,8 @@ pub fn modal_card(id: &'static str, el: impl IntoElement + 'static) -> AnyElemen
 }
 
 pub fn modal_backdrop(id: &'static str, el: impl IntoElement + 'static) -> AnyElement {
-    let d = Duration::from_millis(BACKDROP_MS);
-    el.present_transition(ElementId::NamedInteger("modal-backdrop-pt".into(), crate::ui::states::key((id, "backdrop"))), Some(Transition::ease(d, CubicBezier::LINEAR).opacity(0., 1.)))
-        .on_exit(crate::ui::states::key((id, "backdrop")), Transition::ease(d, CubicBezier::LINEAR).opacity(1., 0.))
+    el.present_transition(ElementId::NamedInteger("modal-backdrop-pt".into(), crate::ui::states::key((id, "backdrop"))), Some(backdrop_enter()))
+        .on_exit(crate::ui::states::key((id, "backdrop")), backdrop_exit())
         .into_any_element()
 }
 

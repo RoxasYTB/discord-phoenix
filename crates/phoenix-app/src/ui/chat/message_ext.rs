@@ -63,6 +63,7 @@ fn tool_button(id: &'static str, msg: u64, i: SharedString, _size: f32) -> gpui:
 pub enum ToolbarButton {
     CopyId,
     CopyLink,
+    Configure,
     MarkUnread,
     Bookmark,
     Pin,
@@ -89,6 +90,7 @@ pub struct ToolbarCaps {
     pub can_view_thread: bool,
     pub can_delete: bool,
     pub can_publish: bool,
+    pub can_configure_join: bool,
 }
 
 pub fn toolbar_layout(k: ToolbarCaps) -> Vec<ToolbarButton> {
@@ -98,7 +100,11 @@ pub fn toolbar_layout(k: ToolbarCaps) -> Vec<ToolbarButton> {
         if k.dev {
             v.push(CopyId);
         }
-        v.extend([CopyLink, MarkUnread, Bookmark]);
+        v.push(CopyLink);
+        if k.can_configure_join {
+            v.push(Configure);
+        }
+        v.extend([MarkUnread, Bookmark]);
         if k.can_pin {
             v.push(Pin);
         }
@@ -186,6 +192,7 @@ pub fn toolbar(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, shi
         can_view_thread: msg.thread.is_some(),
         can_delete: own || manage,
         can_publish: announcement && (own || manage) && guild.is_some_and(|g| app.backend.guild_features(g).iter().any(|f| f == "NEWS")),
+        can_configure_join: guild.is_some() && msg.kind == crate::model::MessageKind::Join && crate::actions::has(app, guild, crate::actions::MANAGE_GUILD),
     };
     let bookmarked = app.parity.inbox.saved.iter().any(|m| m.id == id);
     for b in toolbar_layout(caps) {
@@ -210,6 +217,14 @@ pub fn toolbar(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, shi
             B::CopyLink => tool_button("tb-copy-link", id.0, ChatIcon::Link.path(), 20.)
                 .tip(crate::t!("tb.copy_link"))
                 .on_click(move |_, _, cx| ee.update(cx, |a, cx| a.copy_message_link(ch, id, cx)))
+                .into_any_element(),
+            B::Configure => tool_button("tb-configure", id.0, crate::icons::path("help"), 20.)
+                .tip(crate::t!("tb.configure"))
+                .on_click(move |_, _, cx| {
+                    if let Some(g) = guild {
+                        ee.update(cx, |a, cx| a.open_server_settings(g, crate::ui::modals::server_settings::section_index("menu.gs.engagement"), cx));
+                    }
+                })
                 .into_any_element(),
             B::MarkUnread => tool_button("tb-unread", id.0, ChatIcon::Unread.path(), 20.)
                 .tip(crate::t!("tb.mark_unread"))
@@ -1108,5 +1123,8 @@ mod tests {
         let threaded = ToolbarCaps { can_start_thread: false, can_view_thread: true, can_publish: true, ..other };
         assert_eq!(toolbar_layout(threaded), [Quick, AddReaction, Reply, Forward, ViewThread, Publish, More]);
         assert_eq!(toolbar_layout(ToolbarCaps { expanded: true, ..other }).last(), Some(&More));
+        let join = ToolbarCaps { expanded: true, can_configure_join: true, ..other };
+        assert_eq!(&toolbar_layout(join)[..3], [CopyLink, Configure, MarkUnread]);
+        assert!(!toolbar_layout(ToolbarCaps { can_configure_join: true, ..other }).contains(&Configure));
     }
 }
