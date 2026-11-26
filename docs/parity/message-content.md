@@ -198,3 +198,25 @@ two guild invites. Cards match in size, banner gradient, icon, counts, date and 
 cards only appeared once `invite_embed` remeasured the message list after resolving (GPUI list
 rows are not redrawn by `refresh_windows`) and retried requests that fail before the session is
 ready.
+
+## Emoji by context (wt/emoji-everywhere, 2026-11-26)
+
+Sources: the parser table of the 2026 client (`current-client/js/8b652774957c7cc0.js`: `parseEmbedTitle` = `EMBED_TITLE_RULES`, `parseEmbedTitleWithoutLinks` = the same rules minus the link rules, `parseTopic`, `parseVoiceChannelStatus`, `parseGuildEventDescription`, `parsePoll`), the rule sets in `web.b63d846b329d6470.js` (`ed` = message rules; `e_` embed title = `ed` minus codeBlock, br, mention, channel, roleMention, attachmentLink, subtext, soundboard, gameMention; `ep` poll = only escape, emoticon, text, strong, em, u, s, inlineCode, timestamp, so `<:n:id>` stays raw while the `text` rule still turns Unicode emoji into Twemoji images), the embed component of the same bundle (`renderAuthor`, `renderTitle`, `renderFields`, `renderFooter`, `renderProvider`), the message component renderer `e940c8e032f54075.js` (`V` button, `nt` / `nl` select options) and the CSS: `.emoji` = `--custom-emoji-size-emoji` 1.375em, `.emoji.jumboable` 3rem, `.embed_XyW1ZT .emoji` 18px, `.embed_XyW1ZT :is(h1…h6) .emoji` 1.375em.
+
+| place | client parser | emoji | Phoenix | status |
+|---|---|---|---|---|
+| Embed title | `renderEmbedTitle`: `parseEmbedTitle`, or `parseEmbedTitleWithoutLinks` when the embed has a `url` (rich embeds only) | Twemoji + custom images, 18px; bold / italic / code kept | `embed_title_rich` (`inline_rich`, links only without `url`, plain runs semibold) + `embed_text` at 18px | ✅ unit tests (was plain text: `<:n:id>` raw, Unicode as a font glyph) |
+| Embed field name | `renderFields` → `renderTitle(embed, name)`: same rule as the title (links depend on the embed `url`) | 18px images | same path as the title | ✅ (was plain text) |
+| Embed description, field value | `parseRichEmbedText` (`allowLinks`, `allowEmojiLinks`, lists and headings) | 18px; inside an embed heading 1.375em | `embed_text` with `embed_emoji_px` | ✅ (was 1.375 × 14 = 19.25px) |
+| Embed author, footer, provider | plain `t.name` / `t.text` / `t.name` | no image: the system colour font, `<:n:id>` raw | `emoji_text::label` (Noto Color Emoji fallback) | ✅ |
+| Message headings and subtext | message rules | 1.375em of the heading (h1 33px, h2 27.5px) or subtext (19.25px) | `rich_k` scales `rich_with_emoji_scaled` by the block size | ✅ (a heading with an emoji fell back to 16px text and 22px emoji) |
+| Components v2 text display (in or out of a container): headings, quotes, subtext, list items | message rules (`.sizeReduced_` in containers) | 1.375em of each block | `components::text_el` for every block type; h1 24/33, h2 20/27.5, h3 16/22 as in containers; subtext 12/16.5 reduced, 14/19.25 | ✅ unit test (only plain paragraphs had emoji: `# 🎉 Title` in a container showed the raw text) |
+| Button and select labels, option descriptions | plain text (`V` label, `nt` `strong` / `span`) with a separate `emoji` field | label: font glyph; `emoji` field: 19.25px (button) / 20px (option) image | unchanged | ✅ |
+| Separator | no text | none | none | ✅ |
+| Poll question and answers | `parsePoll` (`ep` rules) | Twemoji images 1.375em (question 22px, answer 19.25px); custom tokens stay raw | `emoji_text::inline_markdown(…, custom = false)` | ✅ unit test (was plain text) |
+| Answer emoji field | `emoji` of the answer | 24px | unchanged | ✅ |
+| Event description | `parseGuildEventDescription` (`GUILD_EVENT_RULES`) | images 1.375em | events modal card: `inline_markdown(…, custom = true)` | ✅ events modal; ➖ invite event card (`invite_cards::event_header` has no app context, still plain) |
+| Channel topic modal, forum previews | `parseTopic` / message rules | images | `components::markdown*` without a message context now go through `emoji_text::rich_static` | ✅ (were plain runs) |
+| Channel names (sidebar, header, thread parent in the header), categories, roles, server and folder names | plain text | system colour font | `emoji_text::label` (thread parent added) | ✅ |
+| Notifications, search, inbox titles, thread titles | plain text (see f8bcd4e8) | font glyph | unchanged | ✅ |
+| Voice channel status | `parseVoiceChannelStatus` | images | not drawn by Phoenix yet | ❌ the status line itself is missing (separate task) |

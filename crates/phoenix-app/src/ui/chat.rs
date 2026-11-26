@@ -470,7 +470,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(tk(idx::TEXT_DEFAULT))
                             .on_click(cx.listener(move |a, _, _, cx| a.select_channel(pid, cx)))
-                            .child(pname),
+                            .child(crate::ui::emoji_text::label(pname, 16.)),
                     )
                     .child(
                         div().flex_none().mr(z(8.)).w(z(10.)).h(z(24.)).flex().items_center().justify_center().child(
@@ -1586,8 +1586,12 @@ fn with_edited(t: &RichText) -> (SharedString, Vec<gpui::TextRun>) {
 }
 
 fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: Option<i64>) -> AnyElement {
+    rich_k(entity, msg, bi, t, edited, 1.)
+}
+
+fn rich_k(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: Option<i64>, k: f32) -> AnyElement {
     if !t.emoji.is_empty() || t.has_mention() || message_ext::has_code(t) {
-        let el = message_ext::rich_with_emoji(entity, msg, bi, t);
+        let el = message_ext::rich_with_emoji_scaled(entity, msg, bi, t, k);
         if let Some(at) = edited {
             return div()
                 .flex()
@@ -1697,14 +1701,14 @@ fn block(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, b: &RBlock, edited: Op
                 .mt(z(if bi == 0 { first } else { 16. }))
                 .mb(z(8.))
                 .text_size(fz(size))
-                .child(rich(entity, msg, bi, t, edited))
+                .child(rich_k(entity, msg, bi, t, edited, size / 16.))
                 .into_any_element()
         }
         RBlock::Subtext(t) => div()
             .text_size(fz(14.))
             .line_height(fz(19.25))
             .text_color(tk(idx::TEXT_SUBTLE))
-            .child(rich(entity, msg, bi, t, edited))
+            .child(rich_k(entity, msg, bi, t, edited, 14. / 16.))
             .into_any_element(),
         RBlock::ListItem { ordered, depth, text } => {
             let marker: SharedString = match ordered {
@@ -1995,7 +1999,7 @@ fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size
             RBlock::Quote(t) => div()
                 .flex()
                 .child(div().w(z(4.)).rounded(z(4.)).bg(c(Palette::INTERACTIVE_MUTED)).flex_none())
-                .child(div().pl(z(12.)).child(embed_text(entity, key, bi, t, size)))
+                .child(div().pl(z(12.)).child(embed_text(entity, key, bi, t, EMBED_EMOJI)))
                 .into_any_element(),
             b => {
                 let empty = RichText {
@@ -2006,7 +2010,8 @@ fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size
                     emoji: vec![],
                 };
                 let t = b.text().unwrap_or(&empty);
-                let el = embed_text(entity, key, bi, t, size);
+                let emoji_px = embed_emoji_px(matches!(b, RBlock::Heading(..)), size);
+                let el = embed_text(entity, key, bi, t, emoji_px);
                 match b {
                     RBlock::Heading(..) => el.font_weight(FontWeight::BOLD).text_size(z(size + 2.)),
                     RBlock::Subtext(_) => el.text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)),
@@ -2062,7 +2067,32 @@ fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText
         .into_any_element()
 }
 
-fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, size: f32) -> gpui::Div {
+const EMBED_EMOJI: f32 = 18.;
+
+fn embed_emoji_px(heading: bool, size: f32) -> f32 {
+    if heading { (size + 2.) * 1.375 } else { EMBED_EMOJI }
+}
+
+fn embed_key(src: &str, salt: u64) -> Id {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    src.hash(&mut h);
+    salt.hash(&mut h);
+    Id(h.finish() | (1 << 63))
+}
+
+pub(crate) fn embed_title_rich(app: &PhoenixApp, src: &str, links: bool, base: gpui::Hsla) -> RichText {
+    crate::ui::emoji_text::inline_rich(app, src, base, links, FontWeight::SEMIBOLD)
+}
+
+fn embed_title_el(entity: &Entity<PhoenixApp>, t: RichText, salt: u64) -> AnyElement {
+    if t.emoji.is_empty() && t.runs.len() <= 1 && t.click_ranges.is_empty() {
+        return div().child(t.text).into_any_element();
+    }
+    embed_text(entity, embed_key(&t.text, salt), 0, &t, EMBED_EMOJI).into_any_element()
+}
+
+fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, emoji_px: f32) -> gpui::Div {
     if t.emoji.is_empty() {
         return div().child(embed_link_text(entity, key, bi, t, 0..t.text.len()));
     }
@@ -2087,7 +2117,7 @@ fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, siz
             continue;
         }
         row = push(row, last..r.start);
-        row = row.child(div().mx(z(1.)).child(crate::media::emoji::emoji_element(token, size * 1.375)));
+        row = row.child(div().mx(z(1.)).child(crate::media::emoji::emoji_element(token, emoji_px)));
         last = r.end;
     }
     push(row, last..t.text.len())
@@ -2167,7 +2197,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                                 .line_height(z(18.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(tk(idx::TEXT_STRONG))
-                                .child(f.name.clone()),
+                                .child(embed_title_el(entity, embed_title_rich(app, &f.name, e.url.is_none(), tk(idx::TEXT_STRONG)), 1)),
                         )
                         .child(embed_markdown(app, entity, &f.value, 14.)),
                 );
@@ -2206,7 +2236,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                     .text_color(tk(idx::TEXT_DEFAULT))
                     .children(parts.into_iter().enumerate().flat_map(|(i, p)| {
                         let sep = (i > 0).then(|| div().mx(z(4.)).child("\u{2022}").into_any_element());
-                        sep.into_iter().chain(std::iter::once(div().child(SharedString::from(p)).into_any_element()))
+                        sep.into_iter().chain(std::iter::once(div().child(crate::ui::emoji_text::label(SharedString::from(p), 12.)).into_any_element()))
                     })),
             )
     });
@@ -2228,13 +2258,14 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tk(idx::TEXT_STRONG))
                     .when(url.is_some(), |d| d.hover(|s| s.underline()))
-                    .child(a.name.clone()),
+                    .child(crate::ui::emoji_text::label(a.name.clone(), 14.)),
             )
             .when_some(url, |d, u| d.cursor_pointer().on_click(move |_, _, cx| cx.open_url(&u)))
     });
 
     let title = e.title.clone().map(|t| {
         let url = e.url.clone();
+        let rich = embed_title_rich(app, &t, url.is_none(), if url.is_some() { tk(idx::TEXT_LINK) } else { tk(idx::TEXT_STRONG) });
         div()
             .id(gpui::ElementId::Name(format!("embed-title-{t}").into()))
             .text_size(z(16.))
@@ -2242,7 +2273,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(if url.is_some() { tk(idx::TEXT_LINK) } else { tk(idx::TEXT_STRONG) })
             .when(url.is_some(), |d| d.hover(|s| s.underline()))
-            .child(t)
+            .child(embed_title_el(entity, rich, 0))
             .when_some(url, |d, u| d.cursor_pointer().on_click(move |_, _, cx| cx.open_url(&u)))
     });
 
@@ -2277,7 +2308,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                         .gap(z(8.))
                         .pt(z(8.))
                         .when_some(e.provider.clone(), |d, p| {
-                            d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)).child(p))
+                            d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)).child(crate::ui::emoji_text::label(p, 12.)))
                         })
                         .children(author)
                         .children(title)
@@ -2356,6 +2387,15 @@ fn flash_overlay(id: Id) -> AnyElement {
             },
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod embed_emoji_tests {
+    #[test]
+    fn embed_emoji_are_18px_except_in_headings() {
+        assert_eq!(super::embed_emoji_px(false, 14.), 18.);
+        assert_eq!(super::embed_emoji_px(true, 14.), 16. * 1.375);
+    }
 }
 
 #[cfg(test)]

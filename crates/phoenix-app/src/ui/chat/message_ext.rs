@@ -619,15 +619,6 @@ pub(crate) fn slice_runs(runs: &[gpui::TextRun], range: std::ops::Range<usize>) 
     out
 }
 
-pub fn rich_with_emoji(
-    entity: &Entity<PhoenixApp>,
-    msg: crate::model::Id,
-    bi: usize,
-    t: &crate::richtext::RichText,
-) -> AnyElement {
-    rich_with_emoji_scaled(entity, msg, bi, t, 1.)
-}
-
 pub fn rich_with_emoji_scaled(
     entity: &Entity<PhoenixApp>,
     msg: crate::model::Id,

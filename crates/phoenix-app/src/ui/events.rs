@@ -126,7 +126,7 @@ pub fn card(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> gpui::Div {
                 .child(e.name.clone()),
         )
         .when(!e.description.is_empty(), |d| {
-            d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(e.description.clone()))
+            d.child(div().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(crate::ui::emoji_text::inline_markdown(app, &e.description, t(idx::TEXT_DEFAULT), gpui::FontWeight::NORMAL, 14., true)))
         })
         .child(
             div()

@@ -48,6 +48,75 @@ pub fn status_wrapped(text: SharedString, _font_px: f32) -> AnyElement {
     words(row, at..text.len()).into_any_element()
 }
 
+pub fn rich_static(t: &crate::richtext::RichText, font_px: f32, emoji_px: f32) -> AnyElement {
+    use gpui::StyledText;
+    let zoom = crate::theme::zoom();
+    let words = |mut row: gpui::Div, range: std::ops::Range<usize>| -> gpui::Div {
+        let mut start = range.start;
+        for (i, piece) in t.text[range.clone()].split('\n').enumerate() {
+            let r = start..start + piece.len();
+            if i > 0 {
+                row = row.child(div().w_full().h_0());
+            }
+            for w in crate::ui::chat::message_ext::words(&t.text, r.clone()) {
+                let runs = crate::ui::chat::message_ext::slice_runs(&t.runs, w.clone());
+                let text: SharedString = t.text[w].to_owned().into();
+                row = row.child(div().flex_none().max_w_full().child(StyledText::new(text).with_runs(runs)));
+            }
+            start = r.end + 1;
+        }
+        row
+    };
+    let mut row = div().flex().flex_wrap().items_center().min_w_0().text_size(crate::theme::fz(font_px));
+    let mut last = 0;
+    for (r, token) in &t.emoji {
+        if r.start < last || token.as_ref() == crate::richtext::CHANNEL_ICON_TOKEN {
+            continue;
+        }
+        row = words(row, last..r.start);
+        row = row.child(div().flex_none().mx(gpui::px(zoom)).child(crate::media::emoji::emoji_element(token, emoji_px * zoom * crate::theme::font_scale())));
+        last = r.end;
+    }
+    words(row, last..t.text.len()).into_any_element()
+}
+
+pub fn inline_markdown(app: &crate::app::PhoenixApp, src: &str, base: gpui::Hsla, weight: gpui::FontWeight, font_px: f32, custom: bool) -> AnyElement {
+    let mut t = inline_rich(app, src, base, false, weight);
+    if !custom {
+        drop_custom(&mut t);
+    }
+    if t.emoji.is_empty() && t.runs.len() <= 1 {
+        return div().child(t.text).into_any_element();
+    }
+    rich_static(&t, font_px, font_px * 1.375)
+}
+
+pub fn drop_custom(t: &mut crate::richtext::RichText) {
+    t.emoji.retain(|(_, tok)| !tok.starts_with('<'));
+}
+
+pub fn inline_rich(app: &crate::app::PhoenixApp, src: &str, base: gpui::Hsla, links: bool, weight: gpui::FontWeight) -> crate::richtext::RichText {
+    inline_rich_with(src, &app.resolver(), base, links, weight)
+}
+
+pub fn inline_rich_with(
+    src: &str,
+    r: &dyn crate::markdown::MentionResolver,
+    base: gpui::Hsla,
+    links: bool,
+    weight: gpui::FontWeight,
+) -> crate::richtext::RichText {
+    let mut sp = 0;
+    let inline = if links { crate::markdown::parse_inline(src, r, &mut sp) } else { crate::markdown::parse_inline_without_links(src, r, &mut sp) };
+    let mut t = crate::richtext::rich_inline(&inline, &|_| true, base);
+    for run in &mut t.runs {
+        if run.font.weight == gpui::FontWeight::NORMAL {
+            run.font.weight = weight;
+        }
+    }
+    t
+}
+
 fn label_impl(text: SharedString, font_px: f32, custom: bool, images: bool) -> AnyElement {
     label_inner(text, font_px, custom, images, 1.)
 }
@@ -106,6 +175,49 @@ fn emoji_presentation(seq: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    struct NoNames;
+
+    impl crate::markdown::MentionResolver for NoNames {
+        fn user(&self, _id: u64) -> Option<String> {
+            None
+        }
+        fn channel(&self, _id: u64) -> Option<String> {
+            None
+        }
+    }
+
+    fn rich(src: &str, links: bool) -> crate::richtext::RichText {
+        super::inline_rich_with(src, &NoNames, gpui::black(), links, gpui::FontWeight::SEMIBOLD)
+    }
+
+    #[test]
+    fn embed_titles_parse_markdown_and_both_emoji_kinds() {
+        let t = rich("**Hi** \u{1f389} <:pepe:123> <a:wave:456>", true);
+        assert_eq!(t.text.as_ref(), "Hi \u{1f389} <:pepe:123> <a:wave:456>");
+        let tokens: Vec<&str> = t.emoji.iter().map(|(_, k)| k.as_ref()).collect();
+        assert_eq!(tokens, ["\u{1f389}", "<:pepe:123>", "<a:wave:456>"]);
+        assert_eq!(t.runs[0].font.weight, gpui::FontWeight::BOLD);
+        assert!(t.runs[1..].iter().all(|r| r.font.weight == gpui::FontWeight::SEMIBOLD));
+    }
+
+    #[test]
+    fn embed_titles_with_a_url_drop_inner_links() {
+        let linked = rich("\u{1f4e2} [notes](https://example.com)", true);
+        assert!(linked.click_targets.iter().any(|t| matches!(t, crate::richtext::ClickTarget::Link(_))));
+        let plain = rich("\u{1f4e2} [notes](https://example.com)", false);
+        assert!(!plain.click_targets.iter().any(|t| matches!(t, crate::richtext::ClickTarget::Link(_))));
+        assert_eq!(plain.emoji.len(), 1);
+    }
+
+    #[test]
+    fn poll_text_keeps_custom_emoji_raw() {
+        let mut t = rich("Best? \u{1f355} <:pizza:42>", false);
+        super::drop_custom(&mut t);
+        assert_eq!(t.emoji.len(), 1);
+        assert_eq!(t.emoji[0].1.as_ref(), "\u{1f355}");
+        assert!(t.text.contains("<:pizza:42>"));
+    }
+
     #[test]
     fn finds_emoji_in_channel_names() {
         let t = "〢❓・aide-membres";

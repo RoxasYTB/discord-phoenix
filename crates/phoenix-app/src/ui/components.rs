@@ -109,25 +109,27 @@ fn markdown_lines(
                 .flex()
                 .gap(z(8.))
                 .child(div().w(z(4.)).rounded(z(4.)).bg(c(Palette::INTERACTIVE_MUTED)))
-                .child(StyledText::new(t.text).with_runs(t.runs))
+                .child(div().flex_1().min_w_0().child(text_el(ctx, bi, t, k)))
                 .into_any_element(),
-            RBlock::Heading(l, t) => div()
-                .when(bi > 0, |d| d.mt(z(16.)))
-                .when(bi + 1 < n, |d| d.mb(z(8.)))
-                .text_size(fz(match l {
-                    1 => 24.,
-                    2 => 20.,
-                    _ => 16.,
-                }))
-                .line_height(gpui::relative(1.375))
-                .child(StyledText::new(t.text).with_runs(t.runs))
-                .into_any_element(),
-            RBlock::Subtext(t) => div()
-                .text_size(fz(if reduced { 12. } else { 14. }))
-                .line_height(fz(if reduced { 16.5 } else { 19.25 }))
-                .text_color(crate::theme::c(crate::theme::tok(crate::theme::generated::idx::TEXT_SUBTLE)))
-                .child(StyledText::new(t.text).with_runs(t.runs))
-                .into_any_element(),
+            RBlock::Heading(l, t) => {
+                let size = heading_px(l);
+                div()
+                    .when(bi > 0, |d| d.mt(z(16.)))
+                    .when(bi + 1 < n, |d| d.mb(z(8.)))
+                    .text_size(fz(size))
+                    .line_height(gpui::relative(1.375))
+                    .child(text_el(ctx, bi, t, size / 16.))
+                    .into_any_element()
+            }
+            RBlock::Subtext(t) => {
+                let size = if reduced { 12. } else { 14. };
+                div()
+                    .text_size(fz(size))
+                    .line_height(fz(size * 1.375))
+                    .text_color(crate::theme::c(crate::theme::tok(crate::theme::generated::idx::TEXT_SUBTLE)))
+                    .child(text_el(ctx, bi, t, size / 16.))
+                    .into_any_element()
+            }
             RBlock::ListItem { ordered, depth, text } => div()
                 .flex()
                 .pl(z(16. * (depth as f32 + 1.)))
@@ -136,16 +138,28 @@ fn markdown_lines(
                     Some(n) => format!("{n}."),
                     None => "•".into(),
                 })
-                .child(StyledText::new(text.text).with_runs(text.runs))
+                .child(div().flex_1().min_w_0().child(text_el(ctx, bi, text, k)))
                 .into_any_element(),
-            RBlock::Text(t) if (!t.emoji.is_empty() || t.has_mention()) && ctx.is_some() => {
-                let (e, msg) = ctx.unwrap();
-                crate::ui::chat::message_ext::rich_with_emoji_scaled(e, msg, 0, &t, k)
-            }
-            RBlock::Text(t) => div().child(StyledText::new(t.text).with_runs(t.runs)).into_any_element(),
+            RBlock::Text(t) => text_el(ctx, bi, t, k),
         });
     }
     col.into_any_element()
+}
+
+fn heading_px(level: u8) -> f32 {
+    match level {
+        1 => 24.,
+        2 => 20.,
+        _ => 16.,
+    }
+}
+
+fn text_el(ctx: Option<(&Entity<PhoenixApp>, Id)>, bi: usize, t: richtext::RichText, k: f32) -> AnyElement {
+    match ctx {
+        Some((e, msg)) if !t.emoji.is_empty() || t.has_mention() => crate::ui::chat::message_ext::rich_with_emoji_scaled(e, msg, bi, &t, k),
+        None if !t.emoji.is_empty() => crate::ui::emoji_text::rich_static(&t, 16. * k, 22. * k),
+        _ => div().child(StyledText::new(t.text).with_runs(t.runs)).into_any_element(),
+    }
 }
 
 fn emoji_el(e: &Emoji, size: f32) -> AnyElement {
@@ -910,7 +924,7 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
                     .text_size(px(14.))
                     .line_height(px(18.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(SharedString::from(a.text.clone())),
+                    .child(crate::ui::emoji_text::inline_markdown(app, &a.text, c(tok(idx::TEXT_DEFAULT)), FontWeight::SEMIBOLD, 14., false)),
             )
             .when(results, |d| {
                 d.child(
@@ -1035,7 +1049,7 @@ pub fn render_poll(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message)
                             .line_height(px(20.))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(c(tok(idx::TEXT_STRONG)))
-                            .child(SharedString::from(poll.question.clone())),
+                            .child(crate::ui::emoji_text::inline_markdown(app, &poll.question, c(tok(idx::TEXT_STRONG)), FontWeight::MEDIUM, 16., false)),
                     )
                     .when_some(prompt, |d, p| d.child(div().mt(px(4.)).text_size(px(14.)).line_height(px(18.)).text_color(muted).child(p))),
             )
@@ -1433,6 +1447,13 @@ pub fn overlays(app: &mut PhoenixApp, window: &mut Window, cx: &mut gpui::Contex
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn text_display_headings_keep_their_size_and_emoji_follow_it() {
+        assert_eq!([1, 2, 3].map(super::heading_px), [24., 20., 16.]);
+        assert_eq!(super::heading_px(1) / 16. * 22., 33.);
+        assert_eq!(super::heading_px(2) / 16. * 22., 27.5);
+    }
+
 
     #[test]
     fn spoiler_veil_matches_the_client_blur() {
