@@ -1746,6 +1746,7 @@ mod tests {
 
     #[test]
     fn tiles_sort_like_the_rtc_store() {
+        use super::{Id, name_key, sort_key};
         let a = Id(2);
         let b = Id(1);
         let mut keys = [
