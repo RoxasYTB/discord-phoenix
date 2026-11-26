@@ -36,12 +36,8 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 ## Chat
 | Shortcut | Action | Status |
 |---|---|---|
-<<<<<<< HEAD
-| Shift+Esc | Mark server read | ✅ |
-=======
 | Shift+Esc | Mark server read | ✅ like `MARK_SERVER_READ` (web bundle module 795737): nothing is acked unless the server has an unread, unmuted channel or a mention, then the chat jumps to the present |
 | Esc (also Shift+Page Down) | Mark channel read (and jump to present) | ✅ the full `MARK_CHANNEL_READ` stack, see “Escape” below |
->>>>>>> 9eedf4e5 (Make Escape follow the client's stack everywhere and add Ctrl+Q to quit)
 | Ctrl+Shift+T | Create a group DM | ✅ |
 | Ctrl+Shift+Alt+N | Create a thread | ✅ Focused message: opens the thread form. Otherwise: opens the “Nouveau fil” sidebar (rebuilt from ref-cache create-thread-sidebar-*.json), which sends `POST /channels/{id}/threads` and then the starter message |
 | Ctrl+P | Toggle pins popout | ✅ |
@@ -56,10 +52,9 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 | Ctrl+Shift+U | Upload a file | ✅ |
 | Ctrl+Shift+L | Copy channel link | ✅ |
 
-<<<<<<< HEAD
 ## Keyboard drag and drop
 The bundle's modal list has a DND group (Ctrl+D start, Up/Down move, Space/Enter drop, Esc cancel: strings `Lns0Fc`, `dmMqay`, `cs/HVH`, `1ioMJQ`), but the live modal (`shortcuts-modal-default.json`) does not show it on this account. ➖ not built: mouse drag and drop is (navigation.md).
-=======
+
 ## Escape
 Source: `MARK_CHANNEL_READ` in the 2026 web bundle (`web.b63d846b329d6470.js`, module 92960, `binds:["esc","shift+pagedown"]`, `comboKeysBindGlobal:!0`, so it also fires from the textarea), plus the layer `POP_LAYER` bind for full-screen layers such as User Settings. Each press does only the first step that applies. Implementation: `shortcuts/escape.rs::escape_stack`.
 | Step | Client | Phoenix | Status |
@@ -89,7 +84,6 @@ Source: desktop core `core.asar` (app-1.0.171, `discord_desktop_core-1`), menus 
 |---|---|---|
 | Ctrl+Q (Linux), Alt+F4 (Windows), Cmd+Q (macOS) | File > Exit / Quit: `app.quit()` | ✅ bound globally, so it works from any text field and with no focus. Phoenix leaves the voice channel (waits up to 1.5 s for it), then quits; the tray icon goes with the process. Settings and the gateway snapshot are already written on every change. The tray's “Quit” uses the same path |
 | Ctrl+, | File > Options | ✅ opens User Settings |
->>>>>>> 9eedf4e5 (Make Escape follow the client's stack everywhere and add Ctrl+Q to quit)
 
 ## Focused-message shortcuts
 Shift+Tab from an empty composer focuses the newest message. Up and Down then move the focus (clamped, no wrap), and the focused row gets the hover/selected background. The focus clears when another element takes focus.
