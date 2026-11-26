@@ -38,7 +38,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7.0.1
       - name: Determine tag, version and prerelease flag
         id: meta
         run: |
@@ -72,7 +72,7 @@ jobs:
     needs: [prepare]
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
       - name: Install system dependencies
         run: |
@@ -81,12 +81,12 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
             libxcb1-dev libfontconfig-dev libssl-dev libasound2-dev libopus-dev \
             cmake pkg-config libfuse2 file
-      - uses: Swatinem/rust-cache@v2.7.8
+      - uses: Swatinem/rust-cache@v2.9.3
       - name: Build release binary
         run: cargo build --release --locked -p phoenix-app --bin "${BIN}"
       - name: Package tar.gz, .deb and AppImage
         run: packaging/linux/package.sh "${{ needs.prepare.outputs.version }}" "target/release/${BIN}" dist
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: dist-linux
           path: dist/*
@@ -96,11 +96,11 @@ jobs:
     needs: [prepare]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@v2.7.8
+      - uses: Swatinem/rust-cache@v2.9.3
       - name: Build release binary
         run: cargo build --release --locked -p phoenix-app --bin "${{ env.BIN }}" --target x86_64-pc-windows-msvc
       - name: Package .zip and standalone .exe
@@ -115,7 +115,7 @@ jobs:
           Copy-Item LICENSE-MIT, LICENSE-APACHE, README.md $stage/
           Compress-Archive -Path $stage -DestinationPath "dist/$stage.zip"
           Copy-Item $bin "dist/discord-phoenix-$v-windows-x86_64.exe"
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: dist-windows
           path: dist/*
@@ -127,13 +127,13 @@ jobs:
     env:
       OPUS_NO_PKG_CONFIG: "1"
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7.0.1
       - name: Install build tools for static Opus
         run: brew install autoconf automake libtool
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2.7.8
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           key: macos-universal
       - name: Build aarch64-apple-darwin
@@ -157,7 +157,7 @@ jobs:
           packaging/macos/bundle.sh "${{ needs.prepare.outputs.version }}" \
             "target/universal-apple-darwin/release/${BIN}" \
             dist "macos-universal"
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: dist-macos
           path: dist/*
@@ -169,7 +169,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4.3.0
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: dist-*
           path: dist
@@ -180,7 +180,7 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: Discord Phoenix ${{ needs.prepare.outputs.tag }}
