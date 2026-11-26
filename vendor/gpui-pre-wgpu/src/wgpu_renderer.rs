@@ -2950,7 +2950,8 @@ mod tests {
     fn headless_renderer_moves_and_tints_animated_glyphs_at_the_scene_time() -> anyhow::Result<()> {
         let mut renderer = WgpuHeadlessRenderer::new()?;
         let mut scene = Scene::default();
-        let glyph = full_coverage_sprite(&renderer, "animated", (0.0, 0.0), 64, 8, gpui::red())?;
+        let mut glyph = full_coverage_sprite(&renderer, "animated", (0.0, 0.0), 64, 8, gpui::red())?;
+        glyph.content_mask.bounds.size.height = (16.0).into();
         let gradient = gpui::GlyphGradient {
             stop_count: 1,
             opacity: 1.0,
