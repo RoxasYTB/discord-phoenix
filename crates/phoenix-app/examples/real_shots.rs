@@ -1306,6 +1306,10 @@ fn main() -> anyhow::Result<()> {
                         } else {
                             app.open_server_settings(g, index, cx);
                             phoenix_app::ui::server_pages::open_sub(g, sub);
+                            if section == "access" && !sub.is_empty() {
+                                phoenix_app::ui::modals::server_settings::preselect_access(sub);
+                                phoenix_app::ui::modals::server_settings::load(app, cx);
+                            }
                         }
                     }
                 }

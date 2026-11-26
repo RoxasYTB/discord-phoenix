@@ -95,6 +95,10 @@ pub fn mock_reply(c: &AdminCall) -> Value {
         C::RoleMemberIds { .. } => json!(["2"]),
         C::Soundboard { .. } => json!({ "items": [{ "name": "ding", "sound_id": "30", "volume": 1.0, "emoji_name": "🔔", "user": user(2, "ferris") }] }),
         C::Widget { .. } => json!({ "enabled": false, "channel_id": null }),
+        C::MemberVerification { .. } => json!({ "version": "2026-01-01T00:00:00.000000+00:00", "description": null, "form_fields": [
+            { "field_type": "TERMS", "label": "Read and agree to the server rules", "values": ["Be kind and respectful.", "Keep it on topic: Rust, GPUI and native clients."], "required": true }
+        ]}),
+        C::DiscoveryRequirements { guild } => json!({ "guild_id": guild, "sufficient": true, "safe_environment": true, "healthy": true, "size": true, "protected": true }),
         C::Applications { .. } => json!([]),
         C::AuditLogFiltered { .. } => mock_reply(&C::AuditLog { guild: Snowflake(0), before: None, limit: 50 }),
         _ => Value::Null,

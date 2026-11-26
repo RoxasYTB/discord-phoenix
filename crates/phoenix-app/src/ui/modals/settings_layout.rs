@@ -292,6 +292,22 @@ pub fn is_narrow(viewport_css: f32) -> bool {
 pub type Act = Rc<dyn Fn(&mut PhoenixApp, &mut Window, &mut Context<PhoenixApp>)>;
 
 pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    unsaved_bar_with(BarText::default(), reset, Some(save), cx)
+}
+
+#[derive(Default)]
+pub struct BarText {
+    pub message: Option<SharedString>,
+    pub error: Option<SharedString>,
+    pub save: Option<SharedString>,
+    pub save_disabled: bool,
+}
+
+pub fn unsaved_bar_with(text: BarText, reset: Act, save: Option<Act>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let critical = text.error.is_some();
+    let message = text.error.or(text.message).unwrap_or_else(|| crate::t!("admin.unsaved"));
+    let save_label = text.save.unwrap_or_else(|| crate::t!("admin.save_changes"));
+    let save_disabled = text.save_disabled;
     div()
         .pt(z(10.))
         .pb(z(10.))
@@ -314,8 +330,8 @@ pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyEl
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(c(tok(idx::WHITE)))
-                .child(crate::t!("admin.unsaved")),
+                .text_color(c(tok(if critical { idx::TEXT_FEEDBACK_CRITICAL } else { idx::WHITE })))
+                .child(message),
         )
         .child(
             div()
@@ -341,7 +357,7 @@ pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyEl
                         }))
                         .child(crate::t!("admin.reset")),
                 )
-                .child(
+                .children(save.map(|save| {
                     div()
                         .id("unsaved-save")
                         .h(z(32.))
@@ -359,12 +375,15 @@ pub fn unsaved_bar(reset: Act, save: Act, cx: &mut Context<PhoenixApp>) -> AnyEl
                         .line_height(z(18.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(c(tok(idx::WHITE)))
-                        .on_click(cx.listener(move |a, _, w, cx| {
-                            save(a, w, cx);
-                            cx.notify();
-                        }))
-                        .child(crate::t!("admin.save_changes")),
-                ),
+                        .when(save_disabled, |d| d.opacity(0.5).cursor_not_allowed())
+                        .when(!save_disabled, |d| {
+                            d.on_click(cx.listener(move |a, _, w, cx| {
+                                save(a, w, cx);
+                                cx.notify();
+                            }))
+                        })
+                        .child(save_label)
+                })),
         )
         .into_any_element()
 }

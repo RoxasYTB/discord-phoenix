@@ -134,6 +134,22 @@ impl GuardedWrite {
         write(Method::POST, format!("/guilds/{guild}/auto-moderation/clear-mention-raid"), None)
     }
 
+    pub fn edit_guild(guild: u64, body: Value) -> Self {
+        write(Method::PATCH, format!("/guilds/{guild}"), Some(body))
+    }
+
+    pub fn member_verification(guild: u64, form_fields: Value, enabled: bool) -> Self {
+        write(Method::PATCH, format!("/guilds/{guild}/member-verification"), Some(json!({ "form_fields": form_fields, "enabled": enabled })))
+    }
+
+    pub fn guild_profile_visibility(guild: u64, visibility: u8) -> Self {
+        write(Method::PATCH, format!("/guilds/{guild}/profile"), Some(json!({ "visibility": visibility })))
+    }
+
+    pub fn discovery_metadata(guild: u64, body: Value) -> Self {
+        write(Method::PATCH, format!("/guilds/{guild}/discovery-metadata"), Some(body))
+    }
+
     pub fn join_guild(guild: u64) -> Self {
         write(Method::PUT, format!("/guilds/{guild}/members/@me"), None)
     }
@@ -178,6 +194,10 @@ mod tests {
             GuardedWrite::change_call_region(5, "rotterdam"),
             GuardedWrite::automod_alert_action(5, 6, 7, 3),
             GuardedWrite::automod_clear_mention_raid(5),
+            GuardedWrite::edit_guild(5, json!({ "owner_configured_content_level": 3 })),
+            GuardedWrite::member_verification(5, json!([]), false),
+            GuardedWrite::guild_profile_visibility(5, 3),
+            GuardedWrite::discovery_metadata(5, json!({ "keywords": [] })),
         ]
     }
 
@@ -216,6 +236,13 @@ mod tests {
             (Method::POST, "/guilds/5/auto-moderation/alert-action", Some(json!({ "message_id": "7", "channel_id": "6", "alert_action_type": 3 })))
         );
         assert_eq!(GuardedWrite::automod_clear_mention_raid(5).path, "/guilds/5/auto-moderation/clear-mention-raid");
+        let mv = GuardedWrite::member_verification(5, json!([{ "field_type": "TERMS" }]), true);
+        assert_eq!(
+            (mv.method, mv.path.as_str(), mv.body),
+            (Method::PATCH, "/guilds/5/member-verification", Some(json!({ "form_fields": [{ "field_type": "TERMS" }], "enabled": true })))
+        );
+        assert_eq!(GuardedWrite::guild_profile_visibility(5, 1).body, Some(json!({ "visibility": 1 })));
+        assert_eq!(GuardedWrite::edit_guild(5, json!({})).path, "/guilds/5");
     }
 
     #[tokio::test]

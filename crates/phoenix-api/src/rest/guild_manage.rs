@@ -101,6 +101,7 @@ pub enum AdminCall {
     FollowChannel { channel: Snowflake, webhook_channel: Snowflake },
     GuildInvites { guild: Snowflake },
     MemberVerification { guild: Snowflake },
+    DiscoveryRequirements { guild: Snowflake },
     DeleteInvite { code: String },
     Integrations { guild: Snowflake },
     EditGuild { guild: Snowflake, edit: GuildEdit },
@@ -291,6 +292,7 @@ pub fn build(call: &AdminCall) -> ApiReq {
         C::FollowChannel { channel, webhook_channel } => req(Method::POST, format!("/channels/{channel}/followers"), Some(json!({ "webhook_channel_id": webhook_channel }))),
         C::GuildInvites { guild } => req(Method::GET, format!("/guilds/{guild}/invites"), None),
         C::MemberVerification { guild } => req(Method::GET, format!("/guilds/{guild}/member-verification?with_guild=false"), None),
+        C::DiscoveryRequirements { guild } => req(Method::GET, format!("/guilds/{guild}/discovery-requirements"), None),
         C::DeleteInvite { code } => req(Method::DELETE, format!("/invites/{code}"), None),
         C::Integrations { guild } => req(Method::GET, format!("/guilds/{guild}/integrations"), None),
         C::EditGuild { guild, edit } => {
@@ -653,12 +655,14 @@ mod tests {
             AdminCall::Soundboard { guild: G },
             AdminCall::Widget { guild: G },
             AdminCall::MemberVerification { guild: G },
+            AdminCall::DiscoveryRequirements { guild: G },
             AdminCall::AuditLogFiltered { guild: G, user: None, action: None, before: None, limit: 50 },
         ] {
             assert_eq!(build(&c).method, Method::GET);
         }
         assert_eq!(build(&AdminCall::Guild { guild: G }).path, "/guilds/1?with_counts=true");
         assert_eq!(build(&AdminCall::MemberVerification { guild: G }).path, "/guilds/1/member-verification?with_guild=false");
+        assert_eq!(build(&AdminCall::DiscoveryRequirements { guild: G }).path, "/guilds/1/discovery-requirements");
         assert_eq!(build(&AdminCall::Applications { ids: vec![Snowflake(3), Snowflake(4)] }).path, "/applications/public?application_ids=3&application_ids=4");
         let r = build(&AdminCall::AuditLogFiltered { guild: G, user: Some(Snowflake(3)), action: Some(22), before: Some(Snowflake(9)), limit: 500 });
         assert_eq!(r.path, "/guilds/1/audit-logs?limit=100&before=9&user_id=3&action_type=22");

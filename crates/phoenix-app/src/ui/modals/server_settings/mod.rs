@@ -1,5 +1,5 @@
+pub mod access;
 pub(crate) mod audit;
-mod access;
 mod engagement;
 mod expression;
 pub mod kit;
@@ -194,6 +194,7 @@ pub struct State {
     pub menu: Option<String>,
     pub uploads: HashMap<&'static str, std::path::PathBuf>,
     pub ban_page: usize,
+    pub access: access::Pending,
     pub subs: Vec<gpui::Subscription>,
 }
 
@@ -218,6 +219,7 @@ impl State {
             menu: None,
             uploads: HashMap::new(),
             ban_page: 0,
+            access: access::Pending::default(),
             subs: Vec::new(),
         }
     }
@@ -240,7 +242,7 @@ impl State {
     }
 
     pub fn dirty(&self, cx: &gpui::App) -> bool {
-        self.edits.banner_preset.is_some() || self.uploads.contains_key("icon") || self.uploads.contains_key("banner") || !pending_writes(self, cx).is_empty()
+        self.edits.banner_preset.is_some() || self.uploads.contains_key("icon") || self.uploads.contains_key("banner") || !pending_writes(self, cx).is_empty() || access::is_dirty(self)
     }
 }
 
@@ -261,7 +263,7 @@ pub fn needs(key: &str) -> &'static [&'static str] {
         "menu.gs.members" => &["guild", "roles"],
         "menu.gs.roles" => &["guild", "roles", "counts"],
         "menu.gs.invites" => &["invites"],
-        "menu.gs.access" => &["guild", "verification"],
+        "menu.gs.access" => &["guild", "verification", "profile"],
         "menu.gs.bans" => &["bans"],
         "menu.gs.audit_log" => &["audit"],
         _ => &["guild"],
@@ -289,6 +291,8 @@ pub fn call_for(key: &str, guild: Id, s: &State) -> Option<AdminCall> {
         "counts" => AdminCall::RoleMemberCounts { guild: g },
         "invites" => AdminCall::GuildInvites { guild: g },
         "verification" => AdminCall::MemberVerification { guild: g },
+        "requirements" => AdminCall::DiscoveryRequirements { guild: g },
+        "disc_meta" => AdminCall::Server(phoenix_api::rest::guild_server::ServerCall::DiscoveryMetadata { guild: g }),
         "bans" => AdminCall::Bans { guild: g },
         "audit" => AdminCall::AuditLogFiltered {
             guild: g,
@@ -303,7 +307,8 @@ pub fn call_for(key: &str, guild: Id, s: &State) -> Option<AdminCall> {
 
 pub fn load(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let Some(todo) = with_state(|s| {
-        let keys: Vec<&'static str> = needs(s.key()).iter().copied().filter(|k| !s.data.contains_key(k) && !s.pending.contains(k)).collect();
+        let extra: &[&'static str] = if s.key() == "menu.gs.access" { access::extra_needs(s) } else { &[] };
+        let keys: Vec<&'static str> = needs(s.key()).iter().chain(extra).copied().filter(|k| !s.data.contains_key(k) && !s.pending.contains(k)).collect();
         let mut out = Vec::new();
         for k in keys {
             if let Some(c) = call_for(k, s.guild, s) {
@@ -344,6 +349,10 @@ pub fn open_app_directory(cx: &mut Context<PhoenixApp>) {
     cx.notify();
 }
 
+pub fn preselect_access(sub: &str) {
+    with_state(|s| access::preselect(s, sub));
+}
+
 pub fn pick(i: usize, a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     if opens_app_directory(i) {
         open_app_directory(cx);
@@ -354,6 +363,7 @@ pub fn pick(i: usize, a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         s.open_select = None;
         s.role = None;
         s.menu = None;
+        s.access = access::Pending::default();
     });
     load(a, cx);
 }
@@ -389,6 +399,7 @@ pub fn prepare(s: &mut State, window: &mut Window, cx: &mut Context<PhoenixApp>)
         "menu.gs.roles" => mk(s, "role_search", crate::t!("gs.roles.search"), String::new(), window, cx),
         "menu.gs.members" => mk(s, "member_search", crate::t!("gs.members.search"), String::new(), window, cx),
         "menu.gs.bans" => mk(s, "ban_search", crate::t!("gs.bans.search"), String::new(), window, cx),
+        "menu.gs.access" => access::prepare(s, window, cx),
         _ => {}
     }
     if let Some(r) = s.role.as_mut()
@@ -446,12 +457,23 @@ fn reset(a: &mut PhoenixApp, w: &mut Window, cx: &mut Context<PhoenixApp>) {
         }
         s.areas.clear();
         s.inputs.remove("name");
+        if s.key() == "menu.gs.access" {
+            access::reset(s);
+        }
     });
     let _ = (a, w);
     cx.notify();
 }
 
 fn save(a: &mut PhoenixApp, _w: &mut Window, cx: &mut Context<PhoenixApp>) {
+    if with_state(|s| s.key() == "menu.gs.access").unwrap_or(false) {
+        let writes = with_state(access::submit).flatten();
+        for w in writes.into_iter().flatten() {
+            a.blocked_write(w, cx);
+        }
+        cx.notify();
+        return;
+    }
     let calls = with_state(|s| pending_writes(s, cx)).unwrap_or_default();
     for call in calls {
         a.admin_toast(call, None, cx);
@@ -523,7 +545,13 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         Some(e) => (e, false),
         None => page(app, s, cx),
     };
-    let notice = if s.dirty(cx) { Some(settings_layout::unsaved_bar(Rc::new(reset), Rc::new(save), cx)) } else { crate::ui::server_pages::notice(app, s.guild, s.key(), cx) };
+    let notice = if s.key() == "menu.gs.access" && s.role.is_none() {
+        access::bar(s).map(|(text, can_save)| settings_layout::unsaved_bar_with(text, Rc::new(reset), can_save.then(|| Rc::new(save) as settings_layout::Act), cx))
+    } else if s.dirty(cx) {
+        Some(settings_layout::unsaved_bar(Rc::new(reset), Rc::new(save), cx))
+    } else {
+        crate::ui::server_pages::notice(app, s.guild, s.key(), cx)
+    };
     let shell = if s.role.is_some() {
         settings_layout::overlay_fixed("server-settings", side, s.section, pick_fn, content, notice, cx)
     } else if wide {
@@ -538,6 +566,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         .size_full()
         .child(shell)
         .children(crate::ui::server_pages::modal(app, cx).map(|m| gpui::deferred(m).with_priority(25)))
+        .children((s.key() == "menu.gs.access").then(|| access::modal(s, cx)).flatten().map(|m| gpui::deferred(m).with_priority(25)))
         .into_any_element()
 }
 

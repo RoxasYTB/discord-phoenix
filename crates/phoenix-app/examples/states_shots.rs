@@ -68,6 +68,17 @@ fn main() -> anyhow::Result<()> {
                             app.open_privacy_settings(g, cx)
                         }
                     }
+                    "server_settings" => {
+                        if let Some(g) = app.guilds.first().map(|g| g.id) {
+                            let arg = what.split_once(':').map_or("", |w| w.1);
+                            let (section, sub) = arg.split_once('/').unwrap_or((arg, ""));
+                            app.open_server_settings(g, phoenix_app::ui::modals::server_settings::section_index(&format!("menu.gs.{section}")), cx);
+                            if section == "access" && !sub.is_empty() {
+                                phoenix_app::ui::modals::server_settings::preselect_access(sub);
+                                phoenix_app::ui::modals::server_settings::load(app, cx);
+                            }
+                        }
+                    }
                     "server_profile" => {
                         if let Some(g) = app.guilds.first().map(|g| g.id) {
                             app.open_server_profile(g, cx)
