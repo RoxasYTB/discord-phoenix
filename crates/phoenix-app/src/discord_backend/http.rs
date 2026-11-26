@@ -10,6 +10,7 @@ const ALLOWED_HOSTS: &[&str] = &[
     "static.klipy.com",
     "media.tenor.com",
     "media.giphy.com",
+    "i.scdn.co",
 ];
 
 pub fn host_allowed(url: &str) -> bool {
@@ -103,5 +104,6 @@ mod tests {
         assert!(!host_allowed("https://evil.example/x.png"));
         assert!(host_allowed("https://static.klipy.com/ii/abc/80/03/X.gif"));
         assert!(!host_allowed("https://cdn.discordapp.com.evil.example/x.png"));
+        assert!(host_allowed("https://i.scdn.co/image/ab67616d0000b2739e1cfc756886ac782e363d79"));
     }
 }
