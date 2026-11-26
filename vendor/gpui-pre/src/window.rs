@@ -1233,6 +1233,7 @@ pub struct Window {
     text_glow: Option<(Pixels, f32)>,
     text_stroke: Option<Pixels>,
     text_animation: Option<Arc<crate::GlyphAnimation>>,
+    cutouts: u32,
     rem_size: Pixels,
     /// The stack of override values for the window's rem size.
     ///
@@ -2375,6 +2376,7 @@ impl Window {
             text_glow: None,
             text_stroke: None,
             text_animation: None,
+            cutouts: 0,
             rem_size: px(16.),
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
@@ -5035,7 +5037,11 @@ impl Window {
             order: 0,
             bounds: snapped_bounds,
             content_mask: self.snapped_content_mask(),
-            background: quad.background.opacity(opacity),
+            background: {
+                let mut background = quad.background.opacity(opacity);
+                background.pad = self.cutouts;
+                background
+            },
             border_color: quad.border_color.opacity(opacity),
             corner_radii: quad.corner_radii.scale(self.scale_factor()),
             border_widths: snapped_border_widths,
@@ -5152,6 +5158,36 @@ impl Window {
             color: style.color.unwrap_or_default().opacity(opacity),
             wavy: false.into(),
         });
+    }
+
+    /// PHOENIX PATCH (cut-outs): punches up to two rounded-rectangle holes, in window
+    /// coordinates with their corner radius, through the quads and images painted by `f`
+    /// (glyphs, SVG icons, paths and shadows are not cut). The edge gets the same half-pixel
+    /// antialiasing ramp as a rounded quad. An inner call replaces the holes of an outer one.
+    pub fn with_cutouts<R>(
+        &mut self,
+        holes: &[(Bounds<Pixels>, Pixels)],
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let scale = self.scale_factor();
+        let mut set = crate::CutoutSet::default();
+        for (slot, (bounds, radius)) in set.holes.iter_mut().zip(holes) {
+            *slot = crate::CutoutHole {
+                origin: [bounds.origin.x.0 * scale, bounds.origin.y.0 * scale],
+                size: [bounds.size.width.0 * scale, bounds.size.height.0 * scale],
+                radius: radius.0 * scale,
+                pad: [0.; 3],
+            };
+        }
+        let next = if holes.is_empty() {
+            0
+        } else {
+            self.next_frame.scene.push_cutouts(set)
+        };
+        let previous = std::mem::replace(&mut self.cutouts, next);
+        let result = f(self);
+        self.cutouts = previous;
+        result
     }
 
     /// PHOENIX PATCH (text gradient): paints the monochrome glyphs drawn by `f` with `gradient`
@@ -5440,7 +5476,7 @@ impl Window {
 
             self.next_frame.scene.insert_primitive(PolychromeSprite {
                 order: 0,
-                pad: 0,
+                pad: crate::poly_with_cutout(0, self.cutouts),
                 grayscale: false.into(),
                 bounds,
                 corner_radii: Default::default(),
@@ -5633,7 +5669,7 @@ impl Window {
 
         self.next_frame.scene.insert_primitive(PolychromeSprite {
             order: 0,
-            pad: 0,
+            pad: crate::poly_with_cutout(0, self.cutouts),
             grayscale: grayscale.into(),
             bounds: visible_bounds_snapped,
             content_mask,
@@ -5700,7 +5736,7 @@ impl Window {
         let opacity = self.element_opacity();
         let sprite = PolychromeSprite {
             order: 0,
-            pad: 0,
+            pad: crate::poly_with_cutout(0, self.cutouts),
             grayscale: false.into(),
             bounds: self.snap_bounds(bounds),
             content_mask,

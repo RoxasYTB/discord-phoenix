@@ -72,6 +72,30 @@ fn least_common_multiple(left: u64, right: u64) -> u64 {
     left / first * right
 }
 
+// PHOENIX PATCH (cut-outs): the `cutouts` uniform, `MAX_CUTOUT_SETS` sets of two holes
+// (origin, size, radius and padding: 8 floats each), see `gpui::Window::with_cutouts`.
+const CUTOUT_HOLE_FLOATS: usize = 8;
+const CUTOUTS_SIZE: u64 = (gpui::MAX_CUTOUT_SETS * 2 * CUTOUT_HOLE_FLOATS * 4) as u64;
+
+fn cutout_bytes(sets: &[gpui::CutoutSet]) -> Vec<u8> {
+    let mut floats = Vec::with_capacity(sets.len().min(gpui::MAX_CUTOUT_SETS) * 2 * CUTOUT_HOLE_FLOATS);
+    for set in sets.iter().take(gpui::MAX_CUTOUT_SETS) {
+        for hole in &set.holes {
+            floats.extend_from_slice(&[
+                hole.origin[0],
+                hole.origin[1],
+                hole.size[0],
+                hole.size[1],
+                hole.radius,
+                0.,
+                0.,
+                0.,
+            ]);
+        }
+    }
+    bytemuck::cast_slice(&floats).to_vec()
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GlobalParams {
@@ -234,6 +258,7 @@ struct WgpuRendererCore {
     atlas: Arc<WgpuAtlas>,
     path_globals_offset: u64,
     gamma_offset: u64,
+    cutouts_offset: u64,
     instance_data_capacity: u64,
     max_instance_data_size: u64,
     instance_data_alignment: u64,
@@ -568,6 +593,16 @@ impl WgpuRendererCore {
                             min_binding_size: NonZeroU64::new(
                                 std::mem::size_of::<GammaParams>() as u64
                             ),
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: NonZeroU64::new(CUTOUTS_SIZE),
                         },
                         count: None,
                     },
@@ -1309,9 +1344,10 @@ impl WgpuRendererCore {
         let gamma_size = std::mem::size_of::<GammaParams>() as u64;
         let path_globals_offset = globals_size.next_multiple_of(uniform_alignment);
         let gamma_offset = (path_globals_offset + globals_size).next_multiple_of(uniform_alignment);
+        let cutouts_offset = (gamma_offset + gamma_size).next_multiple_of(uniform_alignment);
         let globals_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("globals_buffer"),
-            size: gamma_offset + gamma_size,
+            size: cutouts_offset + CUTOUTS_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1374,6 +1410,14 @@ impl WgpuRendererCore {
                         size: NonZeroU64::new(gamma_size),
                     }),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &globals_buffer,
+                        offset: cutouts_offset,
+                        size: NonZeroU64::new(CUTOUTS_SIZE),
+                    }),
+                },
             ],
         });
         let path_globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1394,6 +1438,14 @@ impl WgpuRendererCore {
                         buffer: &globals_buffer,
                         offset: gamma_offset,
                         size: NonZeroU64::new(gamma_size),
+                    }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &globals_buffer,
+                        offset: cutouts_offset,
+                        size: NonZeroU64::new(CUTOUTS_SIZE),
                     }),
                 },
             ],
@@ -1420,6 +1472,7 @@ impl WgpuRendererCore {
             atlas,
             path_globals_offset,
             gamma_offset,
+            cutouts_offset,
             instance_data_capacity,
             max_instance_data_size,
             instance_data_alignment,
@@ -1530,6 +1583,14 @@ impl WgpuRendererCore {
             self.gamma_offset,
             bytemuck::bytes_of(&gamma_params),
         );
+        if !scene.cutouts.is_empty() {
+            let bytes = cutout_bytes(&scene.cutouts);
+            self.resources.queue.write_buffer(
+                &self.resources.globals_buffer,
+                self.cutouts_offset,
+                &bytes,
+            );
+        }
 
         self.record_frame(scene, target_view, clear_color)
             .inspect_err(|_| {
@@ -2892,6 +2953,37 @@ mod tests {
             color,
             transformation: gpui::TransformationMatrix::unit(),
         })
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn headless_renderer_cuts_round_holes_through_quads() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let mut scene = Scene::default();
+        let hole = |x: f32, y: f32, w: f32, h: f32, r: f32| gpui::CutoutHole {
+            origin: [x, y],
+            size: [w, h],
+            radius: r,
+            pad: [0.; 3],
+        };
+        let index = scene.push_cutouts(gpui::CutoutSet {
+            holes: [hole(20.0, -4.0, 16.0, 16.0, 8.0), hole(8.0, 20.0, 24.0, 16.0, 8.0)],
+        });
+        assert_eq!(index, 1);
+        let mut quad = solid_quad(0.0, 0.0, 32.0, 32.0, gpui::red());
+        quad.background = quad.background.with_cutout(index);
+        scene.insert_primitive(quad);
+        scene.insert_primitive(solid_quad(32.0, 0.0, 32.0, 32.0, gpui::blue()));
+        scene.finish();
+
+        let image = renderer.render_scene_to_image(&scene, device_size(64, 32))?;
+        assert_pixel(&image, 4, 4, RED);
+        assert_pixel(&image, 27, 3, BLACK);
+        assert_pixel(&image, 17, 3, RED);
+        assert_pixel(&image, 20, 27, BLACK);
+        assert_pixel(&image, 4, 27, RED);
+        assert_pixel(&image, 40, 27, BLUE);
+        Ok(())
     }
 
     #[cfg(target_os = "linux")]
