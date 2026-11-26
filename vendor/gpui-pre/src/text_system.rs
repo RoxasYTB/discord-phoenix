@@ -1,5 +1,6 @@
 mod font_fallbacks;
 mod font_features;
+mod gradient;
 mod line;
 mod line_layout;
 mod line_wrapper;
@@ -7,6 +8,7 @@ mod rich;
 
 pub use font_fallbacks::*;
 pub use font_features::*;
+pub use gradient::*;
 pub use line::*;
 pub use line_layout::*;
 pub use line_wrapper::*;

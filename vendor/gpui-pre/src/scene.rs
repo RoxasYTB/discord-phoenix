@@ -50,6 +50,7 @@ pub struct Scene {
     pub subpixel_sprites: Vec<SubpixelSprite>,
     pub polychrome_sprites: Vec<PolychromeSprite>,
     pub surfaces: Vec<PaintSurface>,
+    pub glyph_gradients: Vec<GlyphGradient>,
 }
 
 #[expect(missing_docs)]
@@ -66,6 +67,7 @@ impl Scene {
         self.subpixel_sprites.clear();
         self.polychrome_sprites.clear();
         self.surfaces.clear();
+        self.glyph_gradients.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -138,9 +140,28 @@ impl Scene {
             .push(PaintOperation::Primitive(primitive));
     }
 
+    pub fn insert_gradient_sprite(&mut self, mut sprite: MonochromeSprite, gradient: GlyphGradient) {
+        self.glyph_gradients.push(gradient);
+        sprite.pad = self.glyph_gradients.len() as u32;
+        self.insert_primitive(sprite);
+    }
+
+    pub fn glyph_gradient(&self, sprite: &MonochromeSprite) -> Option<&GlyphGradient> {
+        sprite
+            .pad
+            .checked_sub(1)
+            .and_then(|index| self.glyph_gradients.get(index as usize))
+    }
+
     pub fn replay(&mut self, range: Range<usize>, prev_scene: &Scene) {
         for operation in &prev_scene.paint_operations[range] {
             match operation {
+                PaintOperation::Primitive(Primitive::MonochromeSprite(sprite)) if sprite.pad != 0 => {
+                    match prev_scene.glyph_gradient(sprite) {
+                        Some(gradient) => self.insert_gradient_sprite(*sprite, *gradient),
+                        None => self.insert_primitive(MonochromeSprite { pad: 0, ..*sprite }),
+                    }
+                }
                 PaintOperation::Primitive(primitive) => self.insert_primitive(primitive.clone()),
                 PaintOperation::StartLayer(bounds) => self.push_layer(*bounds),
                 PaintOperation::EndLayer => self.pop_layer(),
@@ -716,6 +737,67 @@ pub struct MonochromeSprite {
     pub content_mask: ContentMask<ScaledPixels>,
     pub color: Hsla,
     pub transformation: TransformationMatrix,
+}
+
+// PHOENIX PATCH (text gradient): per-pixel gradient fill of monochrome glyphs, see
+// docs/gpui-patches.md. A sprite with `pad != 0` reads `Scene::glyph_gradients[pad - 1]`.
+/// Maximum number of colour stops of a glyph gradient.
+pub const MAX_GLYPH_GRADIENT_STOPS: usize = 8;
+
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[repr(C)]
+#[expect(missing_docs)]
+pub struct GlyphGradientStop {
+    pub color: [f32; 4],
+    pub position: f32,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[repr(C)]
+#[expect(missing_docs)]
+pub struct GlyphGradient {
+    pub origin: [f32; 2],
+    pub step: [f32; 2],
+    pub offset: f32,
+    pub period: f32,
+    pub stop_count: u32,
+    pub opacity: f32,
+    pub stops: [GlyphGradientStop; MAX_GLYPH_GRADIENT_STOPS],
+}
+
+impl GlyphGradient {
+    /// Gradient position at a device pixel, as the glyph shader computes it.
+    pub fn position_at(&self, x: f32, y: f32) -> f32 {
+        let mut local_x = x - self.origin[0];
+        let local_y = y - self.origin[1];
+        if self.period > 0.0 {
+            local_x -= self.period * (local_x / self.period).floor();
+        }
+        local_x * self.step[0] + local_y * self.step[1] + self.offset
+    }
+
+    /// Colour at a gradient position, as the glyph shader computes it.
+    pub fn color_at_position(&self, t: f32) -> [f32; 4] {
+        let count = (self.stop_count as usize).clamp(1, MAX_GLYPH_GRADIENT_STOPS);
+        let stops = &self.stops[..count];
+        let mut color = stops[0].color;
+        for pair in stops.windows(2) {
+            let (a, b) = (pair[0], pair[1]);
+            if t >= b.position {
+                color = b.color;
+            } else if t > a.position {
+                let f = (t - a.position) / (b.position - a.position).max(f32::EPSILON);
+                for ((c, x), y) in color.iter_mut().zip(a.color).zip(b.color) {
+                    *c = x + (y - x) * f;
+                }
+                break;
+            } else {
+                break;
+            }
+        }
+        color[3] *= self.opacity;
+        color
+    }
 }
 
 impl From<MonochromeSprite> for Primitive {

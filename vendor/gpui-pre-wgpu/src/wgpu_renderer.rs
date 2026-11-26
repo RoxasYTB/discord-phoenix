@@ -4,8 +4,8 @@ use anyhow::{Context as _, Result};
 use bytemuck::{Pod, Zeroable};
 use collections::FxHashMap;
 use gpui::{
-    AtlasTextureId, Background, Bounds, DevicePixels, GpuSpecs, Path, Point, PrimitiveBatch,
-    ScaledPixels, Scene, Size, get_gamma_correction_ratios,
+    AtlasTextureId, Background, Bounds, DevicePixels, GlyphGradient, GpuSpecs, MonochromeSprite,
+    Path, Point, PrimitiveBatch, ScaledPixels, Scene, Size, get_gamma_correction_ratios,
 };
 use log::warn;
 #[cfg(not(target_family = "wasm"))]
@@ -27,6 +27,22 @@ const STORAGE_BUFFER_SHADERS: &str = concat!(
     include_str!("shaders.wgsl"),
     include_str!("shaders_storage.wgsl"),
 );
+
+/// PHOENIX PATCH (text gradient): glyphs filled with a per-pixel linear gradient. Storage
+/// buffers only; without them gradient glyphs fall back to the solid mono pipeline.
+const GRADIENT_SHADERS: &str = concat!(
+    include_str!("shaders.wgsl"),
+    include_str!("shaders_storage.wgsl"),
+    include_str!("shaders_gradient.wgsl"),
+);
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+struct GradientSpriteInstance {
+    sprite: MonochromeSprite,
+    gradient: GlyphGradient,
+}
 
 /// Shader variant for WebGL2, which has no storage buffers: the shared shader
 /// logic plus the texture-based instance transport.
@@ -131,6 +147,7 @@ struct WgpuPipelines {
     paths: wgpu::RenderPipeline,
     underlines: wgpu::RenderPipeline,
     mono_sprites: wgpu::RenderPipeline,
+    gradient_sprites: Option<wgpu::RenderPipeline>,
     subpixel_sprites: Option<wgpu::RenderPipeline>,
     poly_sprites: wgpu::RenderPipeline,
     #[allow(dead_code)]
@@ -153,6 +170,7 @@ struct InstanceBindings {
     shadows: InstanceBinding,
     underlines: InstanceBinding,
     monochrome_sprites: InstanceBinding,
+    gradient_sprites: Option<(InstanceBinding, Vec<u32>)>,
     subpixel_sprites: InstanceBinding,
     polychrome_sprites: InstanceBinding,
 }
@@ -895,6 +913,25 @@ impl WgpuRendererCore {
             &shader_module,
         );
 
+        let gradient_sprites = (!uses_webgl_instance_data).then(|| {
+            let gradient_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("gpui_gradient_shaders"),
+                source: wgpu::ShaderSource::Wgsl(GRADIENT_SHADERS.into()),
+            });
+            create_pipeline(
+                "gradient_sprites",
+                "vs_gradient_sprite",
+                "fs_gradient_sprite",
+                &layouts.globals,
+                &layouts.instances,
+                Some(&layouts.texture),
+                wgpu::PrimitiveTopology::TriangleStrip,
+                &[Some(color_target.clone())],
+                1,
+                &gradient_module,
+            )
+        });
+
         let subpixel_sprites = if let Some(subpixel_module) = &subpixel_shader_module {
             let subpixel_blend = wgpu::BlendState {
                 color: wgpu::BlendComponent {
@@ -962,6 +999,7 @@ impl WgpuRendererCore {
             paths,
             underlines,
             mono_sprites,
+            gradient_sprites,
             subpixel_sprites,
             poly_sprites,
             surfaces,
@@ -1603,11 +1641,11 @@ impl WgpuRendererCore {
                         &mut pass,
                     ),
                     PrimitiveBatch::MonochromeSprites { texture_id, range } => {
-                        self.draw_sprites(
-                            &instance_bindings.monochrome_sprites,
+                        self.draw_mono_sprites(
+                            scene,
+                            &instance_bindings,
                             texture_id,
-                            &self.resources().pipelines.mono_sprites,
-                            instance_range(range),
+                            range,
                             &mut pass,
                         )?;
                     }
@@ -1674,6 +1712,7 @@ impl WgpuRendererCore {
                 instance_offset,
                 &scene.monochrome_sprites,
             )?,
+            gradient_sprites: self.write_gradient_sprites(scene, instance_offset)?,
             subpixel_sprites: self.write_instance_binding(
                 "subpixel_sprites_bind_group",
                 instance_offset,
@@ -1774,6 +1813,82 @@ impl WgpuRendererCore {
             0..4,
             instances.first_instance + range.start..instances.first_instance + range.end,
         );
+    }
+
+    fn write_gradient_sprites(
+        &mut self,
+        scene: &Scene,
+        instance_offset: &mut u64,
+    ) -> Result<Option<(InstanceBinding, Vec<u32>)>> {
+        if scene.glyph_gradients.is_empty() || self.resources().pipelines.gradient_sprites.is_none() {
+            return Ok(None);
+        }
+        let mut ranks = Vec::with_capacity(scene.monochrome_sprites.len());
+        let mut instances = Vec::with_capacity(scene.glyph_gradients.len());
+        for sprite in &scene.monochrome_sprites {
+            ranks.push(instances.len() as u32);
+            if let Some(gradient) = scene.glyph_gradient(sprite) {
+                instances.push(GradientSpriteInstance {
+                    sprite: *sprite,
+                    gradient: *gradient,
+                });
+            }
+        }
+        let binding =
+            self.write_instance_binding("gradient_sprites_bind_group", instance_offset, &instances)?;
+        Ok(Some((binding, ranks)))
+    }
+
+    fn draw_mono_sprites(
+        &self,
+        scene: &Scene,
+        bindings: &InstanceBindings,
+        texture_id: AtlasTextureId,
+        range: Range<usize>,
+        pass: &mut wgpu::RenderPass<'_>,
+    ) -> Result<()> {
+        let resources = self.resources();
+        let (Some((gradient_binding, ranks)), Some(gradient_pipeline)) = (
+            bindings.gradient_sprites.as_ref(),
+            resources.pipelines.gradient_sprites.as_ref(),
+        ) else {
+            return self.draw_sprites(
+                &bindings.monochrome_sprites,
+                texture_id,
+                &resources.pipelines.mono_sprites,
+                instance_range(range),
+                pass,
+            );
+        };
+        let sprites = &scene.monochrome_sprites;
+        let mut start = range.start;
+        while start < range.end {
+            let gradient = scene.glyph_gradient(&sprites[start]).is_some();
+            let mut end = start + 1;
+            while end < range.end && scene.glyph_gradient(&sprites[end]).is_some() == gradient {
+                end += 1;
+            }
+            if gradient {
+                let first = ranks[start];
+                self.draw_sprites(
+                    gradient_binding,
+                    texture_id,
+                    gradient_pipeline,
+                    first..first + (end - start) as u32,
+                    pass,
+                )?;
+            } else {
+                self.draw_sprites(
+                    &bindings.monochrome_sprites,
+                    texture_id,
+                    &resources.pipelines.mono_sprites,
+                    instance_range(start..end),
+                    pass,
+                )?;
+            }
+            start = end;
+        }
+        Ok(())
     }
 
     fn draw_sprites(
@@ -2724,6 +2839,83 @@ mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    fn full_coverage_sprite(
+        renderer: &WgpuHeadlessRenderer,
+        name: &'static str,
+        origin: (f32, f32),
+        width: i32,
+        height: i32,
+        color: Hsla,
+    ) -> anyhow::Result<MonochromeSprite> {
+        let size = device_size(width, height);
+        let tile = renderer
+            .sprite_atlas()
+            .get_or_insert_with(
+                gpui::AtlasKey::Svg(gpui::RenderSvgParams {
+                    path: name.into(),
+                    size,
+                }),
+                &mut || {
+                    Ok(Some((
+                        size,
+                        std::borrow::Cow::Owned(vec![255u8; (width * height) as usize]),
+                    )))
+                },
+            )?
+            .expect("tile");
+        let bounds = Bounds {
+            origin: Point {
+                x: origin.0.into(),
+                y: origin.1.into(),
+            },
+            size: Size {
+                width: (width as f32).into(),
+                height: (height as f32).into(),
+            },
+        };
+        Ok(MonochromeSprite {
+            order: 0,
+            pad: 0,
+            tile,
+            bounds,
+            content_mask: ContentMask { bounds },
+            color,
+            transformation: gpui::TransformationMatrix::unit(),
+        })
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn headless_renderer_fills_gradient_glyphs_per_pixel() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let mut scene = Scene::default();
+        let plain = full_coverage_sprite(&renderer, "plain", (0.0, 0.0), 64, 8, gpui::red())?;
+        scene.insert_primitive(plain);
+        let glyph = full_coverage_sprite(&renderer, "gradient", (0.0, 8.0), 64, 8, gpui::red())?;
+        let tile = Bounds {
+            origin: Point { x: gpui::px(0.0), y: gpui::px(8.0) },
+            size: Size { width: gpui::px(64.0), height: gpui::px(8.0) },
+        };
+        let gradient = gpui::TextGradient::new(90.0, tile)
+            .stop(gpui::rgb(0x000000), 0.0)
+            .stop(gpui::rgb(0xffffff), 1.0);
+        scene.insert_gradient_sprite(glyph, gradient.to_glyph_gradient(1.0, 1.0));
+        scene.finish();
+
+        let image = renderer.render_scene_to_image(&scene, device_size(64, 16))?;
+        assert_pixel(&image, 2, 4, RED);
+        assert_pixel(&image, 61, 4, RED);
+        let expect = |x: u32| {
+            let v = ((x as f32 + 0.5) / 64.0 * 255.0).round() as u8;
+            [v, v, v, 255]
+        };
+        for x in [0, 16, 31, 32, 48, 63] {
+            assert_pixel(&image, x, 12, expect(x));
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
     #[test]
     fn headless_renderer_captures_each_requested_size() -> anyhow::Result<()> {
         let mut renderer = WgpuHeadlessRenderer::new()?;
@@ -2811,6 +3003,19 @@ mod tests {
     #[test]
     fn storage_buffer_shader_is_valid_wgsl() {
         validate_wgsl(STORAGE_BUFFER_SHADERS, naga::valid::Capabilities::empty());
+    }
+
+    #[test]
+    fn gradient_shader_is_valid_wgsl() {
+        validate_wgsl(GRADIENT_SHADERS, naga::valid::Capabilities::empty());
+    }
+
+    #[test]
+    fn gradient_sprite_record_matches_the_shader_layout() {
+        assert_eq!(std::mem::size_of::<GlyphGradient>(), 48 * 4);
+        assert_eq!(std::mem::size_of::<GradientSpriteInstance>(), (28 + 48) * 4);
+        assert_eq!(std::mem::offset_of!(GradientSpriteInstance, gradient), 28 * 4);
+        assert_eq!(std::mem::offset_of!(GlyphGradient, stops), 8 * 4);
     }
 
     #[test]

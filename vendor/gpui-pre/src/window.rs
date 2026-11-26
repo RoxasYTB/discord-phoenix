@@ -1229,6 +1229,7 @@ pub struct Window {
     sprite_atlas: Arc<dyn PlatformAtlas>,
     text_system: Rc<WindowTextSystem>,
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
+    text_gradient: Option<(crate::GlyphGradient, Hsla)>,
     rem_size: Pixels,
     /// The stack of override values for the window's rem size.
     ///
@@ -2365,6 +2366,7 @@ impl Window {
             sprite_atlas,
             text_system,
             text_rendering_mode: cx.text_rendering_mode.clone(),
+            text_gradient: None,
             rem_size: px(16.),
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
@@ -5107,6 +5109,23 @@ impl Window {
         });
     }
 
+    /// PHOENIX PATCH (text gradient): paints the monochrome glyphs drawn by `f` with `gradient`
+    /// (CSS `background-clip: text`) instead of their run colour. Emoji keep their colours.
+    pub fn with_text_gradient<R>(
+        &mut self,
+        gradient: Option<&crate::TextGradient>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let next = gradient.map(|g| {
+            let first = g.first_color().map(Hsla::from).unwrap_or_default();
+            (g.to_glyph_gradient(self.scale_factor(), 1.0), first)
+        });
+        let previous = std::mem::replace(&mut self.text_gradient, next);
+        let result = f(self);
+        self.text_gradient = previous;
+        result
+    }
+
     /// Paints a monochrome (non-emoji) glyph into the scene for the next frame at the current z-index.
     ///
     /// The y component of the origin is the baseline of the glyph.
@@ -5140,7 +5159,10 @@ impl Window {
             (quantized_origin.y.fract() * SUBPIXEL_VARIANTS_Y as f32) as u8,
         );
         let integer_origin = quantized_origin.map(|c| ScaledPixels(c.trunc()));
-        let subpixel_rendering = self.should_use_subpixel_rendering(font_id, font_size);
+        let gradient = self.text_gradient;
+        let color = gradient.map_or(color, |(_, first)| first);
+        let subpixel_rendering =
+            gradient.is_none() && self.should_use_subpixel_rendering(font_id, font_size);
         let dilation = self.text_system().glyph_dilation_for_color(color);
         let params = RenderGlyphParams {
             font_id,
@@ -5178,6 +5200,20 @@ impl Window {
                     tile,
                     transformation: TransformationMatrix::unit(),
                 });
+            } else if let Some((mut glyph_gradient, _)) = gradient {
+                glyph_gradient.opacity = element_opacity;
+                self.next_frame.scene.insert_gradient_sprite(
+                    MonochromeSprite {
+                        order: 0,
+                        pad: 0,
+                        bounds,
+                        content_mask,
+                        color: color.opacity(element_opacity),
+                        tile,
+                        transformation: TransformationMatrix::unit(),
+                    },
+                    glyph_gradient,
+                );
             } else {
                 self.next_frame.scene.insert_primitive(MonochromeSprite {
                     order: 0,
