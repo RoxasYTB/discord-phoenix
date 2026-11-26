@@ -47,3 +47,12 @@ Legend: ✅ implemented and traced to the source, ⚠ partial, ❌ missing.
 | attachment | opacity .03, 6px radius | same | ✅ |
 | animation | none: the placeholders are static in the client CSS | static | ✅ |
 | other views | the profile mutual friends/servers lists use 40/60 and 135 px blobs at .08; the member list has its own placeholders; inbox, search and forum lists use spinners | member list already done; profile lists not checked | ⚠ |
+
+## Live check (26/11, #phoenix with a slow network emulated over CDP)
+
+Client DOM: 27 `wrapper_oITdBA cozy_oITdBA` rows inside a 1 478px holder, `animation: none` on every blob,
+avatar 40px at +16/+4, blobs at +72, 16px tall, 8px radius, name blob 4.5px below its 22px row top,
+opacities .08 / .10–.19 / .06, 16px top margin on each group. The Phoenix render of the same channel at
+1280×700, dpr 1.5 lands the avatar and blobs on the same columns (682 vs 681 device px). The blobs
+are random on both sides, so only the geometry is compared. When the channel is empty, the
+placeholder now keeps the 20px gap above the composer like the last message does.
