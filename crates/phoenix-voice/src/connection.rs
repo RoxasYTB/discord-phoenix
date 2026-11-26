@@ -752,7 +752,10 @@ mod receive_tests {
         RxPacket { ssrc: h.ssrc, sequence: h.sequence, timestamp: h.timestamp, payload: payload.to_vec() }
     }
 
-    fn collect() -> (Box<dyn FnMut(AudioIn) + Send>, std::sync::Arc<std::sync::Mutex<Vec<AudioIn>>>) {
+    type Sink = Box<dyn FnMut(AudioIn) + Send>;
+    type Got = std::sync::Arc<std::sync::Mutex<Vec<AudioIn>>>;
+
+    fn collect() -> (Sink, Got) {
         let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let g = got.clone();
         (Box::new(move |a| g.lock().unwrap().push(a)), got)

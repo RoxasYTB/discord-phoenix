@@ -118,6 +118,10 @@ impl Track {
                 self.conceal_left = n - 1;
                 if self.conceal_left == 0 { self.recover() } else { self.conceal() }
             }
+            None if self.jitter.skip_to_available() => {
+                self.plc_run = 0;
+                self.recover()
+            }
             None => {
                 self.plc_run += 1;
                 if self.plc_run > MAX_PLC {
@@ -299,15 +303,12 @@ mod tests {
             if s != 5 && !(10..13).contains(&s) {
                 m.push(p);
             }
-        }
-        for _ in 0..20 {
             m.mix_frame(&c);
         }
+        m.mix_frame(&c);
         let s = m.stats()[0].1;
         assert_eq!(s.received, 16);
-        assert!(s.recovered >= 2, "{s:?}");
-        assert!(s.concealed >= 2, "{s:?}");
-        assert_eq!(s.decoded, 16);
+        assert_eq!((s.recovered, s.concealed, s.decoded, s.dropped), (2, 2, 16, 0), "{s:?}");
     }
 
     #[test]

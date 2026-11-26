@@ -80,6 +80,17 @@ impl JitterBuffer {
         true
     }
 
+    pub fn skip_to_available(&mut self) -> bool {
+        let Some(next) = self.next else { return false };
+        match self.packets.keys().next() {
+            Some(&k) if k > next => {
+                self.next = Some(k);
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn peek(&self) -> Option<&JitterPacket> {
         self.packets.get(&self.next?)
     }
@@ -172,5 +183,11 @@ mod tests {
         j.push(pk(4));
         assert!(matches!(j.pop(), Some(JitterOutput::Lost { first: 2, count: 1 })));
         assert_eq!(j.peek().map(|p| p.sequence), Some(3));
+        assert_eq!(drain(&mut j), ["3", "4"]);
+        j.push(pk(7));
+        assert!(j.pop().is_none());
+        assert!(j.skip_to_available());
+        assert_eq!(j.peek().map(|p| p.sequence), Some(7));
+        assert!(!j.skip_to_available());
     }
 }

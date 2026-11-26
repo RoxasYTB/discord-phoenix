@@ -284,7 +284,8 @@ mod tests {
             }
         }
 
-        let configs: Arc<Mutex<Vec<(u32, u32, u32, u32)>>> = Arc::new(Mutex::new(Vec::new()));
+        type Log<T> = Arc<Mutex<Vec<T>>>;
+        let configs: Log<(u32, u32, u32, u32)> = Arc::new(Mutex::new(Vec::new()));
         let frames: Arc<Mutex<Vec<(u32, u32, bool)>>> = Arc::new(Mutex::new(Vec::new()));
         let (c2, f2) = (configs.clone(), frames.clone());
         let cam = Camera::start_with_factory(
@@ -292,7 +293,7 @@ mod tests {
             CaptureParams { width: 640, height: 360, fps: 60, bitrate: 1_500_000 },
             true,
             move |cfg| {
-                c2.lock().unwrap().push((cfg.width, cfg.height, cfg.framerate, cfg.bitrate_bps));
+                c2.lock().unwrap().push((cfg.width, cfg.height, cfg.fps, cfg.bitrate_bps));
                 Ok(Box::new(FakeEncoder { log: f2.clone() }))
             },
             |_| {},
