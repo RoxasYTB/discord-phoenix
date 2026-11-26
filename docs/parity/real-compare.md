@@ -786,6 +786,10 @@ bottom left, member list top right); the fluid chat column is covered by `respon
 Scores at the client size (`compare.py`, mismatch %): title bar 3.4, rail 34.2, channel list 5.6, header 2.6, messages 19.7 (the
 two sides were not on the same messages: the user scrolled), composer 2.2, member list 8.1.
 
+After (int-bin 88079e2d, same route, 16:00): title bar 2.2, rail 4.8, channel list 3.9, header 1.1, messages 13.7 (new messages since the
+client shot), composer 1.3, member list 2.9. The voice panel lines up row for row; Phoenix shows « Déconnecté » offscreen because
+`real_shots` does not join voice.
+
 ### Fixed
 
 | Zone | Gap | Client reference | Fix |
