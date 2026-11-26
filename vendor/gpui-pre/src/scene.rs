@@ -56,6 +56,41 @@ pub struct Scene {
     pub sprite_sequences: Vec<ImageSequence>,
     pub gradient_time: f64,
     pub cutouts: Vec<CutoutSet>,
+    pub transitions: Vec<crate::SceneTransition>,
+    pub current_transition: u32,
+    paint_transitions: Vec<u32>,
+    pub shadow_transitions: Vec<u32>,
+    pub quad_transitions: Vec<u32>,
+    pub path_transitions: Vec<u32>,
+    pub underline_transitions: Vec<u32>,
+    pub monochrome_transitions: Vec<u32>,
+    pub subpixel_transitions: Vec<u32>,
+    pub polychrome_transitions: Vec<u32>,
+    pub exit_groups: Vec<ExitGroup>,
+}
+
+/// PHOENIX PATCH (present transitions): the paint operations of an element that keeps being
+/// drawn with `exit` for a while after it stops being painted (a closing modal).
+#[derive(Clone, Debug)]
+#[allow(missing_docs)]
+pub struct ExitGroup {
+    pub key: u64,
+    pub range: Range<usize>,
+    pub exit: crate::SceneTransition,
+    pub ghost: bool,
+}
+
+fn sort_tagged<T, K: Ord>(items: &mut Vec<T>, tags: &mut Vec<u32>, key: impl Fn(&T) -> K) {
+    if tags.iter().all(|&tag| tag == 0) {
+        items.sort_by_key(key);
+        return;
+    }
+    let mut pairs: Vec<(T, u32)> = items.drain(..).zip(tags.drain(..)).collect();
+    pairs.sort_by_key(|(item, _)| key(item));
+    for (item, tag) in pairs {
+        items.push(item);
+        tags.push(tag);
+    }
 }
 
 /// PHOENIX PATCH (cut-outs): the largest number of cut-out sets a frame can use. Primitives
@@ -197,6 +232,130 @@ impl Scene {
         self.glyph_animations.clear();
         self.sprite_sequences.clear();
         self.cutouts.clear();
+        self.transitions.clear();
+        self.current_transition = 0;
+        self.paint_transitions.clear();
+        self.shadow_transitions.clear();
+        self.quad_transitions.clear();
+        self.path_transitions.clear();
+        self.underline_transitions.clear();
+        self.monochrome_transitions.clear();
+        self.subpixel_transitions.clear();
+        self.polychrome_transitions.clear();
+        self.exit_groups.clear();
+    }
+
+    /// PHOENIX PATCH (present transitions): stores `transition` inside the current one and
+    /// returns its index (`1 + position`).
+    pub fn push_transition(&mut self, mut transition: crate::SceneTransition) -> u32 {
+        transition.parent = self.current_transition;
+        self.transitions.push(transition);
+        self.transitions.len() as u32
+    }
+
+    /// PHOENIX PATCH (present transitions): the combined state of every transition of the
+    /// chain `tag` belongs to at `now`, from the innermost to the outermost one.
+    pub fn transition_state(&self, tag: u32, now: f64) -> Option<crate::TransitionState> {
+        let mut index = tag;
+        let mut state: Option<crate::TransitionState> = None;
+        let mut guard = 0;
+        while let Some(t) = index.checked_sub(1).and_then(|i| self.transitions.get(i as usize)) {
+            let own = t.state(now);
+            state = Some(match state {
+                Some(inner) => inner.then(&own),
+                None => own,
+            });
+            index = t.parent;
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+        }
+        state
+    }
+
+    /// PHOENIX PATCH (present transitions): the state of every tag at `gradient_time`, or
+    /// `None` when no transition changes anything.
+    pub fn transition_states(&self) -> Option<Vec<Option<crate::TransitionState>>> {
+        if self.transitions.is_empty() {
+            return None;
+        }
+        let now = self.gradient_time;
+        let states: Vec<_> = (1..=self.transitions.len() as u32)
+            .map(|tag| self.transition_state(tag, now).filter(|s| !s.is_identity()))
+            .collect();
+        states.iter().any(Option::is_some).then_some(states)
+    }
+
+    pub fn running_transitions(&self, now: f64) -> bool {
+        self.transitions.iter().any(|t| t.running(now))
+    }
+
+    fn import_transition(
+        &mut self,
+        prev: &Scene,
+        tag: u32,
+        root: u32,
+        memo: &mut collections::FxHashMap<u32, u32>,
+    ) -> u32 {
+        if tag == 0 {
+            return root;
+        }
+        if let Some(&mapped) = memo.get(&tag) {
+            return mapped;
+        }
+        let Some(mut t) = prev.transitions.get(tag as usize - 1).copied() else {
+            return root;
+        };
+        t.parent = self.import_transition(prev, t.parent, root, memo);
+        self.transitions.push(t);
+        let mapped = self.transitions.len() as u32;
+        memo.insert(tag, mapped);
+        mapped
+    }
+
+    /// PHOENIX PATCH (present transitions): keeps drawing the exit groups of `prev` that were
+    /// not painted again in this frame, with their exit transition started at `now`, until it
+    /// ends. A group inside another vanished group goes with the outer one.
+    pub fn adopt_exits(&mut self, prev: &Scene, now: f64) {
+        if prev.exit_groups.is_empty() {
+            return;
+        }
+        let painted: collections::FxHashSet<u64> = self.exit_groups.iter().map(|g| g.key).collect();
+        let vanished: Vec<&ExitGroup> = prev
+            .exit_groups
+            .iter()
+            .filter(|g| !painted.contains(&g.key))
+            .filter(|g| !g.ghost || g.exit.running(now))
+            .collect();
+        for group in &vanished {
+            let nested = vanished.iter().any(|outer| {
+                !std::ptr::eq(*outer, *group)
+                    && outer.range.start <= group.range.start
+                    && group.range.end <= outer.range.end
+                    && outer.range != group.range
+            });
+            if nested || group.range.end > prev.paint_operations.len() {
+                continue;
+            }
+            let mut exit = group.exit;
+            if !group.ghost {
+                exit.start += now;
+            }
+            exit.parent = 0;
+            self.transitions.push(exit);
+            let root = self.transitions.len() as u32;
+            let start = self.paint_operations.len();
+            let previous = self.current_transition;
+            self.replay_tagged(group.range.clone(), prev, root, false);
+            self.current_transition = previous;
+            self.exit_groups.push(ExitGroup {
+                key: group.key,
+                range: start..self.paint_operations.len(),
+                exit,
+                ghost: true,
+            });
+        }
     }
 
     /// PHOENIX PATCH (cut-outs): stores `set` and returns the index the primitives carry
@@ -226,11 +385,13 @@ impl Scene {
         self.layer_stack.push(order);
         self.paint_operations
             .push(PaintOperation::StartLayer(bounds));
+        self.paint_transitions.push(0);
     }
 
     pub fn pop_layer(&mut self) {
         self.layer_stack.pop();
         self.paint_operations.push(PaintOperation::EndLayer);
+        self.paint_transitions.push(0);
     }
 
     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
@@ -242,6 +403,7 @@ impl Scene {
         if clipped_bounds.is_empty() {
             return;
         }
+        let tag = self.current_transition;
 
         let order = self
             .layer_stack
@@ -252,31 +414,38 @@ impl Scene {
             Primitive::Shadow(shadow) => {
                 shadow.order = order;
                 self.shadows.push(*shadow);
+                self.shadow_transitions.push(tag);
             }
             Primitive::Quad(quad) => {
                 quad.order = order;
                 self.quads.push(*quad);
+                self.quad_transitions.push(tag);
             }
             Primitive::Path(path) => {
                 path.order = order;
                 path.id = PathId(self.paths.len());
                 self.paths.push(path.clone());
+                self.path_transitions.push(tag);
             }
             Primitive::Underline(underline) => {
                 underline.order = order;
                 self.underlines.push(*underline);
+                self.underline_transitions.push(tag);
             }
             Primitive::MonochromeSprite(sprite) => {
                 sprite.order = order;
                 self.monochrome_sprites.push(*sprite);
+                self.monochrome_transitions.push(tag);
             }
             Primitive::SubpixelSprite(sprite) => {
                 sprite.order = order;
                 self.subpixel_sprites.push(*sprite);
+                self.subpixel_transitions.push(tag);
             }
             Primitive::PolychromeSprite(sprite) => {
                 sprite.order = order;
                 self.polychrome_sprites.push(*sprite);
+                self.polychrome_transitions.push(tag);
             }
             Primitive::Surface(surface) => {
                 surface.order = order;
@@ -285,6 +454,7 @@ impl Scene {
         }
         self.paint_operations
             .push(PaintOperation::Primitive(primitive));
+        self.paint_transitions.push(tag);
     }
 
     pub fn insert_gradient_sprite(&mut self, sprite: MonochromeSprite, gradient: GlyphGradient) {
@@ -385,6 +555,7 @@ impl Scene {
         self.glyph_gradient_scrolls.iter().any(|s| s.running(now))
             || self.animates_glyphs(now)
             || self.plays_sequences(now)
+            || self.running_transitions(now)
     }
 
     pub fn glyph_gradient(&self, sprite: &MonochromeSprite) -> Option<&GlyphGradient> {
@@ -395,7 +566,33 @@ impl Scene {
     }
 
     pub fn replay(&mut self, range: Range<usize>, prev_scene: &Scene) {
-        for operation in &prev_scene.paint_operations[range] {
+        let previous = self.current_transition;
+        let root = self.current_transition;
+        self.replay_tagged(range, prev_scene, root, true);
+        self.current_transition = previous;
+    }
+
+    fn replay_tagged(&mut self, range: Range<usize>, prev_scene: &Scene, root: u32, groups: bool) {
+        let offset = self.paint_operations.len() as isize - range.start as isize;
+        if groups {
+            for group in &prev_scene.exit_groups {
+                if range.start <= group.range.start && group.range.end <= range.end {
+                    let shift = |i: usize| (i as isize + offset) as usize;
+                    self.exit_groups.push(ExitGroup {
+                        range: shift(group.range.start)..shift(group.range.end),
+                        ..group.clone()
+                    });
+                }
+            }
+        }
+        let mut memo = collections::FxHashMap::default();
+        for (index, operation) in prev_scene.paint_operations[range.clone()].iter().enumerate() {
+            let tag = prev_scene
+                .paint_transitions
+                .get(range.start + index)
+                .copied()
+                .unwrap_or(0);
+            self.current_transition = self.import_transition(prev_scene, tag, root, &mut memo);
             match operation {
                 PaintOperation::Primitive(Primitive::MonochromeSprite(sprite)) if sprite.pad != 0 => {
                     match prev_scene.glyph_gradient(sprite) {
@@ -433,17 +630,63 @@ impl Scene {
     }
 
     pub fn finish(&mut self) {
-        self.shadows.sort_by_key(|shadow| shadow.order);
-        self.quads.sort_by_key(|quad| quad.order);
-        self.paths.sort_by_key(|path| path.order);
-        self.underlines.sort_by_key(|underline| underline.order);
-        self.monochrome_sprites
-            .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
-        self.subpixel_sprites
-            .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
-        self.polychrome_sprites
-            .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
+        sort_tagged(&mut self.shadows, &mut self.shadow_transitions, |shadow| shadow.order);
+        sort_tagged(&mut self.quads, &mut self.quad_transitions, |quad| quad.order);
+        sort_tagged(&mut self.paths, &mut self.path_transitions, |path| path.order);
+        sort_tagged(&mut self.underlines, &mut self.underline_transitions, |underline| underline.order);
+        sort_tagged(&mut self.monochrome_sprites, &mut self.monochrome_transitions, |sprite| {
+            (sprite.order, sprite.tile.texture_id.index)
+        });
+        sort_tagged(&mut self.subpixel_sprites, &mut self.subpixel_transitions, |sprite| {
+            (sprite.order, sprite.tile.texture_id.index)
+        });
+        sort_tagged(&mut self.polychrome_sprites, &mut self.polychrome_transitions, |sprite| {
+            (sprite.order, sprite.tile.texture_id.index)
+        });
         self.surfaces.sort_by_key(|surface| surface.order);
+    }
+
+    /// PHOENIX PATCH (present transitions): the primitives of one kind as drawn at
+    /// `gradient_time`, or `None` when no transition changes them.
+    pub fn transitioned<T: Copy>(
+        items: &[T],
+        tags: &[u32],
+        states: Option<&[Option<crate::TransitionState>]>,
+        apply: impl Fn(&crate::TransitionState, T) -> T,
+    ) -> Option<Vec<T>> {
+        let states = states?;
+        if tags.iter().all(|&t| t == 0) {
+            return None;
+        }
+        Some(
+            items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| {
+                    match tags
+                        .get(i)
+                        .and_then(|t| t.checked_sub(1))
+                        .and_then(|t| states.get(t as usize))
+                        .and_then(Option::as_ref)
+                    {
+                        Some(state) => apply(state, *item),
+                        None => *item,
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    pub fn tag_state<'a>(
+        tags: &[u32],
+        index: usize,
+        states: Option<&'a [Option<crate::TransitionState>]>,
+    ) -> Option<&'a crate::TransitionState> {
+        let states = states?;
+        tags.get(index)
+            .and_then(|t| t.checked_sub(1))
+            .and_then(|t| states.get(t as usize))
+            .and_then(Option::as_ref)
     }
 
     #[cfg_attr(

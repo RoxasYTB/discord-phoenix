@@ -3140,6 +3140,7 @@ impl Window {
             .map(|s| s.start)
             .chain(scene.glyph_animations.iter().flatten().map(|a| a.start))
             .chain(scene.sprite_sequences.iter().map(|s| s.start))
+            .chain(scene.transitions.iter().map(|t| t.start))
             .fold(f64::INFINITY, f64::min);
         scene.gradient_time = if start.is_finite() {
             start + elapsed.as_secs_f64()
@@ -3831,6 +3832,12 @@ impl Window {
 
         self.layout_engine.as_mut().unwrap().clear();
         self.text_system().finish_frame();
+        if !cx.mode.skip_drawing() {
+            let now = crate::gradient_clock(Instant::now());
+            self.next_frame
+                .scene
+                .adopt_exits(&self.rendered_frame.scene, now);
+        }
         self.next_frame.finish(&mut self.rendered_frame);
 
         self.invalidator.set_phase(DrawPhase::Focus);
@@ -5187,6 +5194,58 @@ impl Window {
         let previous = std::mem::replace(&mut self.cutouts, next);
         let result = f(self);
         self.cutouts = previous;
+        result
+    }
+
+    /// PHOENIX PATCH (present transitions): draws everything painted by `f` through
+    /// `transition` (translate, scale around a point of `bounds`, opacity, solid quad
+    /// background), applied by the renderer at present time. `start` is used when the
+    /// transition has none. A transition that is over and leaves everything as painted is
+    /// not stored.
+    pub fn with_present_transition<R>(
+        &mut self,
+        transition: Option<&crate::Transition>,
+        bounds: Bounds<Pixels>,
+        start: Instant,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let Some(transition) = transition else {
+            return f(self);
+        };
+        let scene_transition = transition.to_scene(bounds, start, self.scale_factor());
+        let now = crate::gradient_clock(Instant::now());
+        if !scene_transition.running(now) && scene_transition.state(now).is_identity() {
+            return f(self);
+        }
+        let index = self.next_frame.scene.push_transition(scene_transition);
+        let previous = std::mem::replace(&mut self.next_frame.scene.current_transition, index);
+        let result = f(self);
+        self.next_frame.scene.current_transition = previous;
+        result
+    }
+
+    /// PHOENIX PATCH (present transitions): records what `f` paints as the exit group `key`.
+    /// When a later frame does not paint `key` any more, those primitives keep being drawn,
+    /// without hitboxes, through `exit` started at that frame, until it ends.
+    pub fn with_exit_transition<R>(
+        &mut self,
+        key: u64,
+        exit: &crate::Transition,
+        bounds: Bounds<Pixels>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let begin = self.next_frame.scene.len();
+        let result = f(self);
+        let end = self.next_frame.scene.len();
+        let now = Instant::now();
+        let mut exit = exit.to_scene(bounds, now, self.scale_factor());
+        exit.start -= crate::gradient_clock(now);
+        self.next_frame.scene.exit_groups.push(crate::ExitGroup {
+            key,
+            range: begin..end,
+            exit,
+            ghost: false,
+        });
         result
     }
 

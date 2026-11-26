@@ -675,6 +675,49 @@ wgpu `headless_renderer_cuts_round_holes_through_quads` (round and pill holes, a
 untouched), and the existing WGSL validation tests for the storage, gradient, subpixel and WebGL
 shaders. App: `ui::blob_mask::tests`.
 
+## 22. Present-time transitions and exit ghosts (`src/present_transition.rs`, `src/scene.rs` `transitions` / `*_transitions` / `ExitGroup` / `adopt_exits` / `replay`, `src/window.rs` `with_present_transition` / `with_exit_transition` / `draw`, wgpu `write_instances` / `write_gradient_sprites` / path batches)
+
+**Problem.** Popouts, modals and the settings layer opened without the client's animation, and
+every hover fade, tooltip zoom, rail pill and the composer emoji spring went through
+`with_animation` or `request_animation_frame`. Phoenix is one view, so each frame of a 100 to
+600 ms transition laid out and painted the whole window (the defect patch 20 removed for Lottie).
+A closing modal could not animate at all: once the app drops it, nothing is painted.
+
+**Patch.**
+- `Transition` (CSS-like, logical px): `start` (or the first paint of the element), `delay`,
+  timing `Ease { duration, CubicBezier }` or `Spring(SpringConfig)` (analytic damped spring from
+  rest, under, critically or over damped; it ends when it is within 0.001 of its target), and
+  from → to tracks: `translate`, `scale` around `origin` (a fraction of the element bounds),
+  `opacity`, `background` (solid quad colours, mixed in premultiplied sRGB like CSS) and `height`
+  (quads resized around their middle, corner radii kept). `keep_masks()` leaves the content masks
+  in place (a text roll inside a clipping box); by default masks move with the content, so a
+  scrolled popout slides with its clip.
+- `Window::with_present_transition(Some(&t), bounds, start, f)` stores a `SceneTransition`
+  (device px, `gradient_clock` time, parent index for nesting) and tags every primitive inserted
+  by `f`. `Scene::insert_primitive` pushes the tag into one `Vec<u32>` per primitive kind and one
+  per paint operation; `Scene::finish` sorts each kind with its tags (`sort_tagged`, the old
+  `sort_by_key` when no tag is set). A transition that is over and leaves everything as painted
+  is not stored, so a settled UI keeps the old fast path.
+- At present time the wgpu renderer resolves every chain once (`Scene::transition_states`, inner
+  then outer, `TransitionState::then`) and writes moved, scaled, faded or recoloured copies of
+  quads, shadows, underlines, mono, gradient, subpixel and polychrome sprites and paths. Sprites
+  with their own transformation get the transition composed into it. `Scene::scrolls_gradients`
+  is also true while a transition runs, so the present-only branch of patch 17 draws the frames:
+  nothing is notified, laid out or painted.
+- `Window::with_exit_transition(key, &exit, bounds, f)` records what `f` paints as an
+  `ExitGroup`. At the end of `draw`, `Scene::adopt_exits` replays every group of the previous
+  scene whose key was not painted again (and every ghost still running) with `exit` as the root
+  of its chains, started at that frame. Ghosts have no hitboxes. A group inside another vanished
+  group goes with the outer one. `Scene::replay` (view caching) copies tags and groups.
+- `PresentTransitionExt::present_transition(id, Option<Transition>)` wraps an element (the start
+  is kept in its element state), `.on_exit(key, exit)` adds the exit group.
+- `Window::set_gradient_elapsed` also counts transition starts, so `real_shots`
+  `PHX_GRADIENT_AT` records an opening frame by frame.
+
+Tests: `present_transition::tests` (ease-out slide with its delay and end, springs at rest /
+overshoot / settle, scale around the origin and faded colours, premultiplied mix, nested chains
+and fixed masks, quad height). App: `ui::popout_motion::tests`.
+
 ## Running the vendored tests
 
 The lib tests of both crates run from a small test-only workspace, `vendor/Cargo.toml`

@@ -1606,8 +1606,9 @@ impl WgpuRendererCore {
         clear_color: wgpu::Color,
     ) -> Result<wgpu::SubmissionIndex> {
         let mut instance_offset = 0;
+        let states = scene.transition_states();
         let instance_bindings = self
-            .write_instances(scene, &mut instance_offset)
+            .write_instances(scene, &mut instance_offset, states.as_deref())
             .with_context(|| {
                 format!(
                     "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} monochrome sprites, {} subpixel sprites, {} polychrome sprites",
@@ -1660,7 +1661,22 @@ impl WgpuRendererCore {
                         &mut pass,
                     ),
                     PrimitiveBatch::Paths(range) => {
-                        let paths = &scene.paths[range];
+                        let moved: Option<Vec<Path<ScaledPixels>>> = states.as_deref().and_then(|st| {
+                            let tags = scene.path_transitions.get(range.clone())?;
+                            tags.iter().any(|&t| t != 0).then(|| {
+                                range
+                                    .clone()
+                                    .map(|i| match Scene::tag_state(&scene.path_transitions, i, Some(st)) {
+                                        Some(state) => state.path(&scene.paths[i]),
+                                        None => scene.paths[i].clone(),
+                                    })
+                                    .collect()
+                            })
+                        });
+                        let paths: &[Path<ScaledPixels>] = match &moved {
+                            Some(moved) => moved,
+                            None => &scene.paths[range],
+                        };
                         if paths.is_empty() {
                             continue;
                         }
@@ -1751,35 +1767,48 @@ impl WgpuRendererCore {
         &mut self,
         scene: &Scene,
         instance_offset: &mut u64,
+        states: Option<&[Option<gpui::TransitionState>]>,
     ) -> Result<InstanceBindings> {
+        let quads = Scene::transitioned(&scene.quads, &scene.quad_transitions, states, |s, q| s.quad(q));
+        let shadows = Scene::transitioned(&scene.shadows, &scene.shadow_transitions, states, |s, q| s.shadow(q));
+        let underlines =
+            Scene::transitioned(&scene.underlines, &scene.underline_transitions, states, |s, q| s.underline(q));
+        let monochrome = Scene::transitioned(
+            &scene.monochrome_sprites,
+            &scene.monochrome_transitions,
+            states,
+            |s, q| s.monochrome(q),
+        );
+        let subpixel =
+            Scene::transitioned(&scene.subpixel_sprites, &scene.subpixel_transitions, states, |s, q| s.subpixel(q));
         Ok(InstanceBindings {
             quads: self.write_instance_binding(
                 "quads_bind_group",
                 instance_offset,
-                &scene.quads,
+                quads.as_deref().unwrap_or(&scene.quads),
             )?,
             shadows: self.write_instance_binding(
                 "shadows_bind_group",
                 instance_offset,
-                &scene.shadows,
+                shadows.as_deref().unwrap_or(&scene.shadows),
             )?,
             underlines: self.write_instance_binding(
                 "underlines_bind_group",
                 instance_offset,
-                &scene.underlines,
+                underlines.as_deref().unwrap_or(&scene.underlines),
             )?,
             monochrome_sprites: self.write_instance_binding(
                 "monochrome_sprites_bind_group",
                 instance_offset,
-                &scene.monochrome_sprites,
+                monochrome.as_deref().unwrap_or(&scene.monochrome_sprites),
             )?,
-            gradient_sprites: self.write_gradient_sprites(scene, instance_offset)?,
+            gradient_sprites: self.write_gradient_sprites(scene, instance_offset, states)?,
             subpixel_sprites: self.write_instance_binding(
                 "subpixel_sprites_bind_group",
                 instance_offset,
-                &scene.subpixel_sprites,
+                subpixel.as_deref().unwrap_or(&scene.subpixel_sprites),
             )?,
-            polychrome_sprites: if scene.sprite_sequences.is_empty() {
+            polychrome_sprites: if scene.sprite_sequences.is_empty() && states.is_none() {
                 self.write_instance_binding(
                     "polychrome_sprites_bind_group",
                     instance_offset,
@@ -1789,7 +1818,14 @@ impl WgpuRendererCore {
                 let sprites: Vec<_> = scene
                     .polychrome_sprites
                     .iter()
-                    .map(|sprite| scene.polychrome_sprite_now(sprite))
+                    .enumerate()
+                    .map(|(i, sprite)| {
+                        let sprite = scene.polychrome_sprite_now(sprite);
+                        match Scene::tag_state(&scene.polychrome_transitions, i, states) {
+                            Some(state) => state.polychrome(sprite),
+                            None => sprite,
+                        }
+                    })
                     .collect();
                 self.write_instance_binding(
                     "polychrome_sprites_bind_group",
@@ -1893,15 +1929,20 @@ impl WgpuRendererCore {
         &mut self,
         scene: &Scene,
         instance_offset: &mut u64,
+        states: Option<&[Option<gpui::TransitionState>]>,
     ) -> Result<Option<(InstanceBinding, Vec<u32>)>> {
         if scene.glyph_gradients.is_empty() || self.resources().pipelines.gradient_sprites.is_none() {
             return Ok(None);
         }
         let mut ranks = Vec::with_capacity(scene.monochrome_sprites.len());
         let mut instances = Vec::with_capacity(scene.glyph_gradients.len());
-        for sprite in &scene.monochrome_sprites {
+        for (i, sprite) in scene.monochrome_sprites.iter().enumerate() {
             ranks.push(instances.len() as u32);
-            if let Some((sprite, gradient)) = scene.glyph_sprite_now(sprite) {
+            if let Some((mut sprite, mut gradient)) = scene.glyph_sprite_now(sprite) {
+                if let Some(state) = Scene::tag_state(&scene.monochrome_transitions, i, states) {
+                    sprite = state.monochrome(sprite);
+                    state.gradient(&mut gradient);
+                }
                 instances.push(GradientSpriteInstance { sprite, gradient });
             }
         }
