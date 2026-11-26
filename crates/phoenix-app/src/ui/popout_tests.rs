@@ -565,6 +565,8 @@ fn own_status_sent_before_ready_reaches_the_user_panel(cx: &mut TestAppContext) 
     assert_eq!(status, crate::model::Presence::Dnd);
 }
 
+type OpenFull = fn(&mut PhoenixApp, Id, Option<Id>, Point<Pixels>, &mut gpui::Window, &mut gpui::Context<PhoenixApp>);
+
 #[gpui::test]
 fn own_full_profile_is_the_editor_from_every_entry_point(cx: &mut TestAppContext) {
     let mut h = setup(cx);
@@ -574,7 +576,7 @@ fn own_full_profile_is_the_editor_from_every_entry_point(cx: &mut TestAppContext
         (me, other, a.selected_guild)
     });
     let at = point(px(900.), px(200.));
-    let entries: [(&str, fn(&mut PhoenixApp, Id, Option<Id>, Point<Pixels>, &mut gpui::Window, &mut gpui::Context<PhoenixApp>)); 5] = [
+    let entries: [(&str, OpenFull); 5] = [
         ("popout", |a, u, _, at, w, cx| {
             a.open_profile(u, None, at, w, cx);
             a.open_profile_modal(u, cx);
