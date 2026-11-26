@@ -226,11 +226,15 @@ fn glyph(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
     gpui::svg().path(crate::icons::path(name)).size(z(size)).flex_none().text_color(color)
 }
 
+pub const SEARCH_PLACEHOLDER: &str = "shop.search";
+
 fn search_input(window: &mut Window, cx: &mut Context<PhoenixApp>) -> gpui::Entity<gpui_component::input::InputState> {
     if let Some(i) = SEARCH.with(|s| s.borrow().clone()) {
+        crate::ui::locale_inputs::keep_placeholder(&i, SEARCH_PLACEHOLDER, window, cx);
         return i;
     }
-    let i = cx.new(|cx| gpui_component::input::InputState::new(window, cx).placeholder(crate::t!("shop.search")));
+    let i = cx.new(|cx| gpui_component::input::InputState::new(window, cx).placeholder(crate::t!(SEARCH_PLACEHOLDER)));
+    crate::ui::locale_inputs::keep_placeholder(&i, SEARCH_PLACEHOLDER, window, cx);
     cx.subscribe_in(&i, window, |_: &mut PhoenixApp, _, ev: &gpui_component::input::InputEvent, _, cx| {
         if let gpui_component::input::InputEvent::Change = ev {
             cx.notify();
@@ -619,7 +623,7 @@ fn carousel(app: &PhoenixApp, home: &Home, block: usize, skus: &[u64], inner: f3
     let n = fit(inner);
     let len = skus.len();
     let first = CAROUSEL.with(|c| c.borrow().get(&block).copied().unwrap_or(0)).min(len.saturating_sub(n));
-    let mut row = div().flex().gap(z(CARD_GAP));
+    let mut row = div().absolute().top_0().left_0().flex().gap(z(CARD_GAP));
     for sku in skus.iter().skip(first).take(n + 1) {
         if let Some(k) = home.cards.get(sku) {
             row = row.child(card(app, k, CARD_SIZE, block + 1, cx));
@@ -817,7 +821,7 @@ fn picks(app: &PhoenixApp, home: &Home, block: usize, skus: &[u64], top: f32, f:
 
 fn feed(app: &PhoenixApp, home: &Home, f: Frame, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let Frame { inner, offset, view_h } = f;
-    let mut col = div().w_full().pr(z(FEED_GUTTER)).flex().flex_col();
+    let mut col = div().w_full().min_w_0().overflow_hidden().pr(z(FEED_GUTTER)).flex().flex_col();
     let mut top = 0.;
     for (i, b) in home.blocks.iter().enumerate() {
         let h = block_height(b, inner);
@@ -875,6 +879,8 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
     };
     div()
         .size_full()
+        .min_w_0()
+        .overflow_hidden()
         .flex()
         .flex_col()
         .bg(tk(idx::BACKGROUND_BASE_LOWEST))
@@ -883,7 +889,7 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
             crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Thin)
                 .flex_1()
                 .min_h_0()
-                .child(div().id("shop-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("shop-scroll")).child(body))
+                .child(div().id("shop-scroll").flex_1().min_h_0().min_w_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("shop-scroll")).child(body))
                 .children(crate::ui::chat::scrollbar::bar_for("shop-scroll", crate::ui::chat::scrollbar::Bar::Thin)),
         )
         .into_any_element()
@@ -975,6 +981,14 @@ mod tests {
         assert_eq!(carousel_start(2, 11, 3, -1), 0);
         assert_eq!(super::rows_in_view(20, 900., 0., 700.), (0, 1));
         assert_eq!(super::rows_in_view(20, 900., 900., 700.), (0, 4));
+    }
+
+    #[test]
+    fn search_placeholder_follows_the_locale() {
+        use crate::i18n::t_in;
+        assert_eq!(t_in("fr", super::SEARCH_PLACEHOLDER, &[]).as_ref(), "Rechercher dans la Boutique");
+        assert_eq!(t_in("en-US", super::SEARCH_PLACEHOLDER, &[]).as_ref(), "Search the Shop");
+        assert_eq!(crate::i18n::messages::mappings()[super::SEARCH_PLACEHOLDER].hash, "arz34K");
     }
 
     #[test]
