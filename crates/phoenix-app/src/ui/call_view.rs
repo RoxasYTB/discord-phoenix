@@ -1154,8 +1154,10 @@ type FrameCache = std::collections::HashMap<u64, (u64, std::sync::Arc<gpui::Rend
 
 thread_local! {
     static REMOTE_FRAMES: std::cell::RefCell<FrameCache> = std::cell::RefCell::new(FrameCache::new());
-    static RETIRED: std::cell::RefCell<(Vec<std::sync::Arc<gpui::RenderImage>>, Vec<std::sync::Arc<gpui::RenderImage>>)> = Default::default();
+    static RETIRED: std::cell::RefCell<(Vec<VideoImage>, Vec<VideoImage>)> = Default::default();
 }
+
+type VideoImage = std::sync::Arc<gpui::RenderImage>;
 
 fn retire(old: Option<(u64, std::sync::Arc<gpui::RenderImage>)>) {
     if let Some((_, img)) = old {
