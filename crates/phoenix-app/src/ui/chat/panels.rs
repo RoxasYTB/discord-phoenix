@@ -443,13 +443,10 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
     let followed = app.backend.is_thread_joined(thread);
     let starter = app.messages.get(&thread).and_then(|e| e.msgs.first());
 
-    let mut reacts = div().flex().items_center().flex_wrap().gap(z(4.)).mr(z(20.));
+    let mut reacts = div().flex_1().min_w_0().flex().items_center().flex_wrap().gap(z(4.)).mr(z(20.));
     if let Some(m) = starter {
         for (i, r) in m.reactions.iter().enumerate() {
-            let token = match r.emoji_id {
-                Some(id) => format!("<:{}:{}>", r.emoji, id.0),
-                None => r.emoji.to_string(),
-            };
+            let token = reaction_token(r);
             let bg = if r.me { c(tok(idx::BACKGROUND_BRAND)).opacity(0.15) } else { c(tok(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT)) };
             let border = if r.me { c(tok(idx::BORDER_FOCUS)) } else { c(tok(idx::CONTROL_SECONDARY_BORDER_DEFAULT)) };
             let count_color = if r.me { c(tok(idx::TEXT_BRAND)) } else { c(tok(idx::TEXT_DEFAULT)) };
@@ -571,6 +568,13 @@ fn forum_post_bar(app: &PhoenixApp, thread: crate::model::Id, scroll: &gpui::Scr
             )
             .into_any_element(),
     )
+}
+
+fn reaction_token(r: &crate::model::Reaction) -> String {
+    match r.emoji_id {
+        Some(id) if crate::media::emoji::parse_custom(&r.emoji).is_none() => format!("<:{}:{}>", r.emoji, id.0),
+        _ => r.emoji.to_string(),
+    }
 }
 
 fn forum_post_bar_absent(app: &PhoenixApp, id: crate::model::Id) -> bool {
@@ -1045,6 +1049,16 @@ pub fn drop_overlay(app: &PhoenixApp) -> impl IntoElement {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn forum_post_reaction_keeps_custom_token() {
+        let r = |emoji: &str, id: Option<u64>| crate::model::Reaction { emoji: emoji.to_string().into(), count: 1, me: false, emoji_id: id.map(crate::model::Id) };
+        assert_eq!(super::reaction_token(&r("<:icon_vote_fleche_up:673309754604388380>", Some(673309754604388380))), "<:icon_vote_fleche_up:673309754604388380>");
+        assert_eq!(super::reaction_token(&r("<a:Content:1548639781192208474>", Some(1548639781192208474))), "<a:Content:1548639781192208474>");
+        assert_eq!(super::reaction_token(&r("hihihi", Some(7))), "<:hihihi:7>");
+        assert_eq!(super::reaction_token(&r("👍", None)), "👍");
+        assert!(crate::media::emoji::parse_custom(&super::reaction_token(&r("<a:Content:9>", Some(9)))).unwrap().animated);
+    }
+
     #[test]
     fn upload_icon_pose_matches_live_samples() {
         for (ms, x, y, deg) in [
