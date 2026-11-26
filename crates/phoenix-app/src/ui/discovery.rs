@@ -610,7 +610,7 @@ pub fn static_card(card: &StaticCard, w: f32, h: f32) -> gpui::Div {
         .overflow_hidden()
         .bg(tk(idx::BACKGROUND_SURFACE_HIGH))
         .shadow(crate::ui::inbox::popout_shadow())
-        .child(div().relative().flex_none().h(z(112.)).mb(z(28.)).child(splash.size_full().object_fit(gpui::ObjectFit::Cover)).child(icon))
+        .child(div().relative().flex_none().h(z(112.)).mb(z(28.)).child(div().absolute().top_0().left_0().size_full().overflow_hidden().child(splash.size_full().object_fit(gpui::ObjectFit::Cover))).child(icon))
         .child(
             div()
                 .flex_1()

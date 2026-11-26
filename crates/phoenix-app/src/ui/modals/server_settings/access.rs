@@ -2314,10 +2314,12 @@ fn preview_modal(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .justify_between()
         .gap(z(16.))
         .py(z(8.))
-        .child(div().ml(z(12.)).child(crate::ui::controls::button("gs-access-pv-submit", crate::t!("gs.access.pv_submit"), crate::ui::controls::BtnKind::Primary).opacity(0.5).cursor_not_allowed()))
+        .child(div().flex_none().ml(z(12.)).child(crate::ui::controls::button("gs-access-pv-submit", crate::t!("gs.access.pv_submit"), crate::ui::controls::BtnKind::Primary).opacity(0.5).cursor_not_allowed()))
         .when(manual, |d| {
             d.child(
                 div()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
                     .flex_col()
                     .gap(z(4.))
