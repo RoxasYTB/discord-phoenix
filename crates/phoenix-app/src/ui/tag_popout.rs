@@ -11,7 +11,7 @@ use crate::{
     theme::{c, generated::idx, tok, z},
 };
 
-const POPOUT_W: f32 = 300.;
+pub const POPOUT_W: f32 = 300.;
 const POPOUT_H: f32 = 360.;
 
 fn tk(i: usize) -> gpui::Hsla {

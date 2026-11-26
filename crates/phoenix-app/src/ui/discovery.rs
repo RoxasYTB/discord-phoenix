@@ -511,6 +511,18 @@ fn card(g: &DiscoverableGuild, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .justify_center()
         .opacity(0.)
         .group_hover(group.clone(), |s| s.opacity(1.))
+        .id(("discovery-card-max", g.id))
+        .cursor_pointer()
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click({
+            let gid = crate::model::Id(g.id);
+            cx.listener(move |a, ev: &gpui::ClickEvent, w, cx| {
+                cx.stop_propagation();
+                let at = ev.position();
+                let at = gpui::point(at.x - z(crate::ui::tag_popout::POPOUT_W + 32.), at.y + z(8.));
+                a.open_tag_popout(gid, SharedString::default(), None, at, w, cx);
+            })
+        })
         .child(gpui::svg().path(crate::icons::path("maximize")).size(z(16.)).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT)));
     let icon = div()
         .absolute()
