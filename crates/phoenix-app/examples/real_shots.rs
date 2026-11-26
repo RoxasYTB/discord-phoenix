@@ -1268,6 +1268,10 @@ fn main() -> anyhow::Result<()> {
                         phoenix_app::ui::search::run(app, req, cx);
                     }
                 }
+                "searchtype" => {
+                    phoenix_app::ui::search::open(app, window, cx);
+                    phoenix_app::ui::search::set_query(&arg, window, cx);
+                }
                 "filters" => {
                     phoenix_app::ui::search::open(app, window, cx);
                     phoenix_app::ui::search_filters::open(app, window, cx);
