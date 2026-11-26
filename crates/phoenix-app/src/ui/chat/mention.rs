@@ -15,7 +15,7 @@ thread_local! {
     static HOVER: Cell<Option<(u64, usize, u64, usize)>> = const { Cell::new(None) };
     static HOVER_LINK: std::cell::RefCell<Option<(u64, usize, u64, gpui::SharedString)>> = const { std::cell::RefCell::new(None) };
     static HOVER_PILL: Cell<Option<(u64, usize, usize, u64)>> = const { Cell::new(None) };
-    static ANCHOR: std::cell::RefCell<Option<(u64, usize, Range<usize>)>> = const { std::cell::RefCell::new(None) };
+    static ANCHOR: std::cell::RefCell<Option<(u64, usize, Range<usize>, usize)>> = const { std::cell::RefCell::new(None) };
 }
 
 pub fn anchor_at(ranges: &[Range<usize>], targets: &[ClickTarget], ix: usize) -> Option<(Range<usize>, gpui::SharedString)> {
@@ -33,24 +33,38 @@ pub fn anchor_at(ranges: &[Range<usize>], targets: &[ClickTarget], ix: usize) ->
 }
 
 pub fn set_anchor(msg: Id, bi: usize, scope: Range<usize>, r: Option<Range<usize>>, window: &mut Window) {
-    let changed = ANCHOR.with(|a| {
-        let mut a = a.borrow_mut();
-        let mine = a.as_ref().is_some_and(|(m, b, cur)| *m == msg.0 && *b == bi && cur.start < scope.end && scope.start < cur.end);
-        let new = r.map(|r| (msg.0, bi, r));
-        if *a != new && (new.is_some() || mine) {
-            *a = new;
-            true
-        } else {
-            false
-        }
-    });
-    if changed {
+    if apply_anchor(msg, bi, scope, r) {
         window.refresh();
     }
 }
 
+fn apply_anchor(msg: Id, bi: usize, scope: Range<usize>, r: Option<Range<usize>>) -> bool {
+    ANCHOR.with(|a| {
+        let mut a = a.borrow_mut();
+        let mine = a.as_ref().is_some_and(|(m, b, cur, _)| *m == msg.0 && *b == bi && cur.start < scope.end && scope.start < cur.end);
+        let new = r.map(|r| (msg.0, bi, r, scope.start));
+        let moved = a.as_ref().map(|x| (x.0, x.1, &x.2)) != new.as_ref().map(|x| (x.0, x.1, &x.2));
+        let apply = new.is_some() || mine;
+        if apply {
+            *a = new;
+        }
+        moved && apply
+    })
+}
+
+fn drop_anchor(msg: Id, bi: usize, scope: &Range<usize>) -> bool {
+    ANCHOR.with(|a| {
+        let mut a = a.borrow_mut();
+        let owned = a.as_ref().is_some_and(|(m, b, _, owner)| *m == msg.0 && *b == bi && *owner == scope.start);
+        if owned {
+            *a = None;
+        }
+        owned
+    })
+}
+
 pub fn anchor_runs(msg: Id, bi: usize, offset: usize, runs: &[TextRun]) -> Option<Vec<TextRun>> {
-    let r = ANCHOR.with(|a| a.borrow().as_ref().filter(|(m, b, _)| *m == msg.0 && *b == bi).map(|(_, _, r)| r.clone()))?;
+    let r = ANCHOR.with(|a| a.borrow().as_ref().filter(|(m, b, _, _)| *m == msg.0 && *b == bi).map(|(_, _, r, _)| r.clone()))?;
     let mut out = runs.to_vec();
     let mut at = offset;
     for run in &mut out {
@@ -151,6 +165,34 @@ pub fn on_hover(
     }
 }
 
+pub fn leave(msg: Id, bi: usize, seed: Option<u64>, scope: Range<usize>, window: &mut Window) {
+    if let Some(seed) = seed {
+        on_hover(msg, bi, seed, &[], &[], None, window);
+    }
+    if drop_anchor(msg, bi, &scope) {
+        window.refresh();
+    }
+}
+
+pub fn leave_guard(
+    id: impl Into<gpui::ElementId>,
+    msg: Id,
+    bi: usize,
+    seed: Option<u64>,
+    scope: Range<usize>,
+    child: impl gpui::IntoElement,
+) -> gpui::Stateful<gpui::Div> {
+    use gpui::{InteractiveElement, ParentElement, StatefulInteractiveElement};
+    gpui::div()
+        .id(id)
+        .on_hover(move |over, w, _| {
+            if !*over {
+                leave(msg, bi, seed, scope.clone(), w);
+            }
+        })
+        .child(child)
+}
+
 pub fn hovered_runs(
     msg: Id,
     bi: usize,
@@ -193,6 +235,22 @@ pub fn click(entity: &Entity<PhoenixApp>, m: &Mention, window: &mut Window, cx: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn link_underline_drops_when_the_pointer_leaves() {
+        let (msg, run) = (Id(77), |len| TextRun { len, ..Default::default() });
+        let underlined = || anchor_runs(msg, 0, 0, &[run(4), run(6)]).map(|r| r.iter().map(|r| r.underline.is_some()).collect::<Vec<_>>());
+        assert!(apply_anchor(msg, 0, 0..10, Some(4..10)));
+        assert_eq!(underlined(), Some(vec![false, true]));
+        assert!(!drop_anchor(msg, 0, &(4..10)));
+        assert!(drop_anchor(msg, 0, &(0..10)));
+        assert_eq!(underlined(), None);
+        assert!(apply_anchor(msg, 1, 0..5, Some(2..9)));
+        assert!(!apply_anchor(msg, 1, 5..9, Some(2..9)));
+        assert!(!drop_anchor(msg, 1, &(0..5)));
+        assert!(drop_anchor(msg, 1, &(5..9)));
+        assert!(!apply_anchor(msg, 1, 0..5, None));
+    }
 
     #[test]
     fn anchor_spans_the_whole_masked_link() {

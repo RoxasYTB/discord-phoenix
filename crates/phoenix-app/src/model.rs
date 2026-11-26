@@ -132,7 +132,7 @@ pub fn hides_simple_embed_content(content: &str, embeds: &[Embed]) -> bool {
     let [e] = embeds else { return false };
     let kind = e.kind.as_deref();
     matches!(kind, Some("image" | "gifv"))
-        && (e.image.is_some() || e.video.is_some())
+        && (e.image.is_some() || e.video.is_some() || (kind == Some("image") && e.thumbnail.is_some()))
         && (kind == Some("gifv") || (e.author.is_none() && e.title.is_none()))
         && crate::markdown::is_single_link(content)
 }
@@ -434,6 +434,13 @@ mod tests {
         let rich = Embed { kind: Some("rich".into()), image: media(), ..Default::default() };
         assert!(!hides_simple_embed_content(tenor, &[rich]));
         assert!(!hides_simple_embed_content(tenor, &[]));
+        let attachment_gif = Embed { kind: Some("image".into()), thumbnail: media(), ..Default::default() };
+        let cdn = "https://cdn.discordapp.com/attachments/1571655566340915312/1571672456920432791/togif.gif";
+        assert!(hides_simple_embed_content(cdn, std::slice::from_ref(&attachment_gif)));
+        let klipy = Embed { kind: Some("gifv".into()), title: Some("Scuba Cat".into()), thumbnail: media(), video: media(), ..Default::default() };
+        assert!(hides_simple_embed_content("https://klipy.com/gifs/scuba-scuba-cat", &[klipy]));
+        let video_thumb = Embed { kind: Some("video".into()), thumbnail: media(), ..Default::default() };
+        assert!(!hides_simple_embed_content(cdn, &[video_thumb]));
     }
 
     #[test]

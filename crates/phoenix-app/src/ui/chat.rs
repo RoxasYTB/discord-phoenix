@@ -1641,7 +1641,14 @@ fn rich_k(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited:
         move |ix: usize, cx: &gpui::App| mention::anchor_at(&hr, &ht, ix).map(|(r, url)| mention::link_tip(&le, text.get(r).unwrap_or_default(), &url, cx))
     };
     let e = entity.clone();
+    let n = t.text.len();
     div()
+        .id(("rt-leave", (msg.0 << 8) | bi as u64))
+        .on_hover(move |over, w, _| {
+            if !*over {
+                mention::leave(msg, bi, Some(0), 0..n, w);
+            }
+        })
         .line_height(lh)
         .on_mouse_down(gpui::MouseButton::Right, move |_, _, _| {
             if let Some(url) = mention::hovered_link(msg, bi, 0) {
@@ -2050,7 +2057,9 @@ fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText
     let tip_full = full.clone();
     let te = entity.clone();
     let e = entity.clone();
-    InteractiveText::new(("embed-rt", key.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | off as u64)), StyledText::new(text).with_runs(runs))
+    let id = key.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | off as u64);
+    let scope = range.clone();
+    let text_el = InteractiveText::new(("embed-rt", id), StyledText::new(text).with_runs(runs))
         .on_hover(move |ix, _ev, w, _cx| mention::set_anchor(key, bi, range.clone(), ix.and_then(&hover).map(|a| a.0), w))
         .tooltip(move |ix, w, cx| {
             let (r, url) = anchor(ix)?;
@@ -2059,8 +2068,8 @@ fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText
         .on_click(ranges, move |ix, w, cx| {
             let url = urls[ix].clone();
             e.update(cx, |a, cx| crate::ui::modals::leave_link::click(a, &shown[ix], &url, w, cx));
-        })
-        .into_any_element()
+        });
+    mention::leave_guard(("embed-rt-leave", id), key, bi, None, scope, text_el).into_any_element()
 }
 
 const EMBED_EMOJI: f32 = 18.;

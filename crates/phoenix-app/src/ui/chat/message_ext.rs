@@ -949,8 +949,8 @@ pub fn rich_with_emoji_scaled(
         let te = entity.clone();
         let (hr, ht) = (ranges.clone(), targets.clone());
         let hover_anchor = anchor.clone();
-        let el = cell(
-            gpui::InteractiveText::new(("rte", msg.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | *seg as u64)), styled)
+        let rte = msg.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | *seg as u64);
+        let inner = gpui::InteractiveText::new(("rte", rte), styled)
                 .on_hover(move |ix, _ev, w, _cx| {
                     super::mention::on_hover(msg, bi, sd, &hr, &ht, ix, w);
                     super::mention::set_anchor(msg, bi, scope.clone(), ix.and_then(&hover_anchor).map(|a| a.0), w);
@@ -969,10 +969,8 @@ pub fn rich_with_emoji_scaled(
                     }
                     crate::richtext::ClickTarget::Mention(m) => super::mention::click(&e, m, w, cx),
                 },
-            )
-            .into_any_element(),
-        )
-        .into_any_element();
+            );
+        let el = cell(super::mention::leave_guard(("rte-leave", rte), msg, bi, Some(sd), range.clone(), inner).into_any_element()).into_any_element();
         row.child(pill(el, &range, part))
     };
     let bounds: Vec<usize> = mentions.iter().flat_map(|(r, _)| [r.start, r.end]).collect();
