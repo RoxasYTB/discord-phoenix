@@ -46,6 +46,22 @@ Catégories :
 | window-chrome : icône du rail, événement et scène | ordre de la fabrique `N` (événement, scène, partage, vidéo, voix), données du gateway ; sourdine déjà conforme | 191b3cfb |
 | composer : marges de 1 px, `> ` caché, liens | marges du CSS par boîtes transparentes ; le curseur saute le `> ` caché ; découpage `[` / `](url)` vérifié dans le décorateur du client (déjà conforme) | 9f1d903c |
 
+## Fermées par wt/small-warn (26/11)
+
+| ligne | correction | source |
+|---|---|---|
+| real_shots : défilement des paramètres du serveur | `PHX_SERVER_SETTINGS_SCROLL=<px>` (poignée `server-settings` 1) ; sous-route Accès à plusieurs extras (`discoverable+primary=<id>+cat`, `+subcat`) pour ouvrir les menus de catégories | — |
+| settings : aperçu de la vérification, réponses | champs éditables (texte 150, paragraphe 1000 avec le reste, RadioGroup), premier champ focalisé, remis à zéro à la fermeture | `8192e61e17dc8592.js` `em`, `02017b99037ec61c.js` (453016, 601047, 414626) |
+| settings : aperçu, dégradé de gauche | palette de l'icône 40 px (MMCQ 5, 1 pixel sur 10) + teintes `Q7`, `-45deg` de `palette[0]` à `palette[2]` | modules 654107, 515718, 998304 |
+| settings : textes de la checklist | mots colorés des hooks (`checkBackHook` avertissement gras, `channelHook` / `nameHook` / `descriptionHook` critique), liens Conditions / Charte / Sécurité, liste des salons à mots interdits | `916d0bef82cfb632.js` `u_`, CSS `5cbb82e2bdb90a4d.css`, ASTs intl fr/en |
+| settings : mentions dans les règles | pastilles de salon et de rôle dans l'éditeur (jetons) et dans l'aperçu (Markdown des messages) | `241499` (`RULES_INPUT`), `GUILD_VERIFICATION_FORM_RULES` |
+| settings / discovery : masques squircle | vrai contour `svg-mask-squircle` (forme SVG pour les fonds, image cuite avec le masque pour les icônes) sur la carte statique (48/40) et les cartes Découvrir (56/48) ; le rail garde le rayon 12 (écart ≤ 0,17 px à 40 px) | mask defs du bundle web |
+| settings : autocollant Lottie | aperçu animé à 160 via `media::lottie` | module 445002 `ef` |
+| settings : son, tête de lecture | avance pendant la lecture et revient au début à la fin | module 122998 `el` (intervalle de 16 ms) |
+| settings : son, encodage | canaux conservés (stéréo), Ogg comme le client (pre-skip 0, tags vides, un paquet par page) | module 903259 |
+
+Restent : la fenêtre de détails de l'activité (chunk 247920), le masque de fondu du défilement de l'aperçu, la transition de 500 ms de la tête de lecture hors lecture, l'autocomplétion de mentions dans l'éditeur de règles (seulement avec `PREVIEW_ENABLED`).
+
 ## Faisable (pas encore fait)
 
 | fichier | ligne | ce qu'il faut |

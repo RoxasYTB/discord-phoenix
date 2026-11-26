@@ -98,7 +98,7 @@ Source: `~/discord-phoenix-ref/current-client/css/`, using the default density (
 | guild list | 703298 `scroller_5dqHTG>[hidden]` | item spacing | `--space-xs` 8 | server_bar.rs `GAP` | ✅ |
 | guild item | 607986 `listItem_rwEpIL` | width / justify | list width, centred | server_bar.rs `row` | ✅ |
 | guild icon | 343178 `wrapper_JJ-hgR`, `icon_JJ-hgR` | size | `--guildbar-avatar-size` 40 | server_bar.rs `ICON` | ✅ |
-| guild icon | `--radius-md` (squircle mask) | radius | 12px | server_bar.rs `ICON_RADIUS` | ✅ |
+| guild icon | `--radius-md` (squircle mask) | radius | 12px | server_bar.rs `ICON_RADIUS` | ✅ (the client mask is `svg-mask-squircle`, path `P` in the web bundle's mask defs; measured against it, a rounded rectangle of radius 0.3 × size stays within 0.0041 × size of the outline, 0.17 px at 40, so the rail keeps the radius; the exact shape is available as `ui/squircle.rs` and used where Phoenix had radii further off) |
 | guild icon (acronym) | 343178 `childWrapper_JJ-hgR` | bg / color | `--background-mod-subtle` / `--text-default` | server_bar.rs `guild` | ✅ |
 | guild icon hover/selected | 343178 `wrapper:hover .childWrapper` | bg / color | `--background-brand` / `--white` | server_bar.rs `guild` | ✅ |
 | acronym | 343178 `acronym_JJ-hgR` | font-weight | `--font-weight-medium` | server_bar.rs `guild_inner` | ✅ |
