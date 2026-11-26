@@ -1402,6 +1402,14 @@ impl Adapter {
                 out.push(AppEvent::VoiceStateUpdate { channel: v.channel_id.map(id), user: id(v.user_id), own });
                 out.push(AppEvent::VoiceFlags { user: id(v.user_id), flags: voice_flags(v) });
             }
+            GatewayEvent::Unknown { name, data } if name == "CHANNEL_RECIPIENT_ADD" || name == "CHANNEL_RECIPIENT_REMOVE" => {
+                if let Some(c) = data.get("channel_id").and_then(snowflake_value).and_then(|c| cache.channel(api::Snowflake(c))) {
+                    out.push(AppEvent::Users(c.recipients.iter().map(user).collect()));
+                    if let Some(dm) = dm_channel(&c, &self.prefs.ctx()) {
+                        out.push(AppEvent::DmUpsert(dm));
+                    }
+                }
+            }
             GatewayEvent::Unknown { name, data } if name == "SESSIONS_REPLACE" => {
                 let all = data.as_array().into_iter().flatten().find(|s| s.get("session_id").and_then(Value::as_str) == Some("all"));
                 if let Some(st) = all.and_then(|s| s.get("status")).and_then(Value::as_str) {

@@ -79,6 +79,18 @@ fn message_ring_buffer_and_updates() {
 }
 
 #[test]
+fn group_dm_recipients_follow_gateway() {
+    let cache = Cache::default();
+    cache.apply(&parse_dispatch("CHANNEL_CREATE", r#"{"id":"50","type":3,"recipients":[{"id":"6","username":"a"}]}"#));
+    let ids = |c: &Cache| c.channel(Snowflake(50)).unwrap().recipients.iter().map(|u| u.id.0).collect::<Vec<_>>();
+    assert!(cache.apply(&parse_dispatch("CHANNEL_RECIPIENT_ADD", r#"{"channel_id":"50","user":{"id":"7","username":"b"}}"#)));
+    assert_eq!(ids(&cache), vec![6, 7]);
+    assert!(cache.apply(&parse_dispatch("CHANNEL_RECIPIENT_REMOVE", r#"{"channel_id":"50","user":{"id":"6","username":"a"}}"#)));
+    assert_eq!(ids(&cache), vec![7]);
+    assert_eq!(cache.user(Snowflake(7)).unwrap().username, "b");
+}
+
+#[test]
 fn nonce_replaces_local_echo() {
     let cache = Cache::default();
     let mut local = msg(10, 1, "hi");

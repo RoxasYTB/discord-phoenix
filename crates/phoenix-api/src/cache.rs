@@ -349,6 +349,22 @@ impl Cache {
                 }
                 insert_channel(&mut s, c);
             }
+            GatewayEvent::Unknown { name, data } if name == "CHANNEL_RECIPIENT_ADD" || name == "CHANNEL_RECIPIENT_REMOVE" => {
+                let Some(id) = data.get("channel_id").and_then(Value::as_str).and_then(|x| x.parse().ok()).map(Snowflake) else { return false };
+                let Some(u) = data.get("user").and_then(|u| serde_json::from_value::<User>(u.clone()).ok()) else { return false };
+                let add = name == "CHANNEL_RECIPIENT_ADD";
+                if add {
+                    s.users.entry(u.id).or_insert_with(|| Arc::new(u.clone()));
+                }
+                let Some(ch) = s.channels.get_mut(&id) else { return false };
+                let ch = Arc::make_mut(ch);
+                ch.recipients.retain(|r| r.id != u.id);
+                ch.recipient_ids.retain(|r| *r != u.id);
+                if add {
+                    ch.recipient_ids.push(u.id);
+                    ch.recipients.push(u);
+                }
+            }
             GatewayEvent::Unknown { name, data } if name == "THREAD_MEMBER_UPDATE" => {
                 let Some(id) = data.get("id").and_then(Value::as_str).and_then(|x| x.parse().ok()).map(Snowflake) else { return false };
                 let Some(ch) = s.channels.get_mut(&id) else { return false };
