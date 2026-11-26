@@ -53,7 +53,56 @@ pub struct Scene {
     pub glyph_gradients: Vec<GlyphGradient>,
     pub glyph_gradient_scrolls: Vec<GlyphGradientScroll>,
     pub glyph_animations: Vec<Option<std::sync::Arc<crate::GlyphAnimation>>>,
+    pub sprite_sequences: Vec<ImageSequence>,
     pub gradient_time: f64,
+}
+
+// PHOENIX PATCH (image sequences): a polychrome sprite whose tile is one cell of a sheet of
+// frames, picked at present time like the gradient scrolls, so an animated icon is played
+// without notifying, laying out or painting its view.
+/// The frames of an animated image laid out in a grid on one atlas tile, played at `fps`
+/// from `start` (on `gradient_clock`) and held on the last frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ImageSequence {
+    /// `gradient_clock` time of frame 0.
+    pub start: f64,
+    /// Frames per second.
+    pub fps: f32,
+    /// Added to the elapsed frame count before flooring it.
+    pub phase: f32,
+    /// Number of frames in the sheet.
+    pub count: u32,
+    /// Frames per row of the sheet.
+    pub columns: u32,
+    /// Size of one frame in the sheet.
+    pub cell: crate::Size<crate::DevicePixels>,
+}
+
+impl ImageSequence {
+    /// The frame shown at `now`.
+    pub fn index(&self, now: f64) -> u32 {
+        let last = self.count.saturating_sub(1);
+        let at = ((now - self.start) * self.fps as f64 + self.phase as f64).floor();
+        if at.is_nan() || at <= 0.0 {
+            0
+        } else {
+            (at as u64).min(last as u64) as u32
+        }
+    }
+
+    /// Whether a later frame than the one at `now` is still to come.
+    pub fn running(&self, now: f64) -> bool {
+        self.index(now) + 1 < self.count
+    }
+
+    /// Moves `sprite`'s tile from the first cell to the cell shown at `now`.
+    pub fn apply(&self, sprite: &mut PolychromeSprite, now: f64) {
+        let index = self.index(now);
+        let columns = self.columns.max(1);
+        let (column, row) = ((index % columns) as i32, (index / columns) as i32);
+        sprite.tile.bounds.origin.x.0 += self.cell.width.0 * column;
+        sprite.tile.bounds.origin.y.0 += self.cell.height.0 * row;
+    }
 }
 
 #[expect(missing_docs)]
@@ -73,6 +122,7 @@ impl Scene {
         self.glyph_gradients.clear();
         self.glyph_gradient_scrolls.clear();
         self.glyph_animations.clear();
+        self.sprite_sequences.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -174,6 +224,31 @@ impl Scene {
         self.insert_primitive(sprite);
     }
 
+    pub fn insert_sequence_sprite(&mut self, mut sprite: PolychromeSprite, sequence: ImageSequence) {
+        self.sprite_sequences.push(sequence);
+        sprite.pad = self.sprite_sequences.len() as u32;
+        self.insert_primitive(sprite);
+    }
+
+    pub fn sprite_sequence(&self, sprite: &PolychromeSprite) -> Option<&ImageSequence> {
+        sprite
+            .pad
+            .checked_sub(1)
+            .and_then(|index| self.sprite_sequences.get(index as usize))
+    }
+
+    pub fn polychrome_sprite_now(&self, sprite: &PolychromeSprite) -> PolychromeSprite {
+        let mut sprite = *sprite;
+        if let Some(sequence) = self.sprite_sequence(&sprite) {
+            sequence.apply(&mut sprite, self.gradient_time);
+        }
+        sprite
+    }
+
+    pub fn plays_sequences(&self, now: f64) -> bool {
+        self.sprite_sequences.iter().any(|s| s.running(now))
+    }
+
     pub fn glyph_animation(&self, sprite: &MonochromeSprite) -> Option<&std::sync::Arc<crate::GlyphAnimation>> {
         sprite
             .pad
@@ -216,7 +291,9 @@ impl Scene {
     }
 
     pub fn scrolls_gradients(&self, now: f64) -> bool {
-        self.glyph_gradient_scrolls.iter().any(|s| s.running(now)) || self.animates_glyphs(now)
+        self.glyph_gradient_scrolls.iter().any(|s| s.running(now))
+            || self.animates_glyphs(now)
+            || self.plays_sequences(now)
     }
 
     pub fn glyph_gradient(&self, sprite: &MonochromeSprite) -> Option<&GlyphGradient> {
@@ -238,6 +315,12 @@ impl Scene {
                             prev_scene.glyph_animation(sprite).cloned(),
                         ),
                         None => self.insert_primitive(MonochromeSprite { pad: 0, ..*sprite }),
+                    }
+                }
+                PaintOperation::Primitive(Primitive::PolychromeSprite(sprite)) if sprite.pad != 0 => {
+                    match prev_scene.sprite_sequence(sprite) {
+                        Some(sequence) => self.insert_sequence_sprite(*sprite, *sequence),
+                        None => self.insert_primitive(PolychromeSprite { pad: 0, ..*sprite }),
                     }
                 }
                 PaintOperation::Primitive(primitive) => self.insert_primitive(primitive.clone()),
@@ -1142,5 +1225,74 @@ impl PathVertex<Pixels> {
             st_position: self.st_position,
             content_mask: self.content_mask.scale(factor),
         }
+    }
+}
+
+#[cfg(test)]
+mod image_sequence_tests {
+    use super::*;
+    use crate::{DevicePixels, size};
+
+    fn sequence() -> ImageSequence {
+        ImageSequence {
+            start: 10.0,
+            fps: 60.0,
+            phase: 0.5,
+            count: 40,
+            columns: 8,
+            cell: size(DevicePixels(36), DevicePixels(36)),
+        }
+    }
+
+    #[test]
+    fn index_rounds_the_elapsed_frames_and_holds_the_last_one() {
+        let s = sequence();
+        assert_eq!(s.index(9.0), 0);
+        assert_eq!(s.index(10.0), 0);
+        assert_eq!(s.index(10.0 + 0.6 / 60.0), 1);
+        assert_eq!(s.index(10.5), 30);
+        assert_eq!(s.index(11.0), 39);
+        assert_eq!(s.index(100.0), 39);
+        assert!(s.running(10.5));
+        assert!(!s.running(11.0));
+    }
+
+    #[test]
+    fn apply_moves_the_tile_to_the_cell_of_the_frame() {
+        let s = sequence();
+        let mut scene = Scene::default();
+        let mut sprite = PolychromeSprite {
+            order: 0,
+            pad: 0,
+            tile: AtlasTile {
+                texture_id: AtlasTextureId {
+                    index: 0,
+                    kind: crate::AtlasTextureKind::Polychrome,
+                },
+                tile_id: crate::TileId(1),
+                padding: 0,
+                bounds: Bounds {
+                    origin: point(DevicePixels(100), DevicePixels(200)),
+                    size: size(DevicePixels(36), DevicePixels(36)),
+                },
+            },
+            grayscale: false.into(),
+            opacity: 1.0,
+            bounds: Default::default(),
+            content_mask: Default::default(),
+            corner_radii: Default::default(),
+        };
+        sprite.bounds.size = size(ScaledPixels(36.0), ScaledPixels(36.0));
+        sprite.content_mask.bounds.size = size(ScaledPixels(100.0), ScaledPixels(100.0));
+        scene.insert_sequence_sprite(sprite, s);
+        scene.gradient_time = 10.0 + 10.0 / 60.0;
+        let now = scene.polychrome_sprite_now(&scene.polychrome_sprites[0]);
+        assert_eq!(now.tile.bounds.origin, point(DevicePixels(100 + 36 * 2), DevicePixels(200 + 36)));
+        assert_eq!(now.tile.bounds.size, size(DevicePixels(36), DevicePixels(36)));
+        assert!(scene.scrolls_gradients(10.2));
+        assert!(!scene.scrolls_gradients(12.0));
+        let mut replayed = Scene::default();
+        replayed.replay(0..scene.paint_operations.len(), &scene);
+        assert_eq!(replayed.sprite_sequences, vec![s]);
     }
 }

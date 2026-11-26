@@ -1286,6 +1286,8 @@ pub struct Window {
         SingleSubscriberSet<Box<dyn FnMut(WindowVisibility, &mut Window, &mut App) -> bool>>,
     hovered: Rc<Cell<bool>>,
     pub(crate) needs_present: Rc<Cell<bool>>,
+    pub(crate) smooth_scrolls: RefCell<Vec<crate::smooth_scroll::SmoothScroll>>,
+    pub(crate) smooth_scroll_ticking: Cell<bool>,
     /// Tracks recent input event timestamps to determine if input is arriving at a high rate.
     /// Used to selectively enable VRR optimization only when input rate exceeds 60fps.
     pub(crate) input_rate_tracker: Rc<RefCell<InputRateTracker>>,
@@ -2415,6 +2417,8 @@ impl Window {
             visibility_observers: SingleSubscriberSet::new(),
             hovered,
             needs_present,
+            smooth_scrolls: RefCell::new(Vec::new()),
+            smooth_scroll_ticking: Cell::new(false),
             input_rate_tracker,
             #[cfg(feature = "profiler")]
             window_profiler: profiler::WindowProfiler::new(handle.window_id())?,
@@ -5636,6 +5640,82 @@ impl Window {
             tile: sub_tile,
             opacity,
         });
+        Ok(())
+    }
+
+    /// PHOENIX PATCH (image sequences): paints `sheet`, a grid of `count` frames with
+    /// `columns` frames per row, as one frame of `bounds` size, played at `fps` from
+    /// `start` (plus `phase` frames) and held on the last frame. The frame is picked when
+    /// the scene is presented, so the view is not notified, laid out or painted again while
+    /// it plays.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint_image_sequence(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        corner_radii: Corners<Pixels>,
+        sheet: Arc<RenderImage>,
+        columns: u32,
+        count: u32,
+        start: Instant,
+        fps: f32,
+        phase: f32,
+    ) -> Result<()> {
+        self.invalidator.debug_assert_paint();
+        if bounds.size.width <= Pixels::ZERO || bounds.size.height <= Pixels::ZERO || count == 0 {
+            return Ok(());
+        }
+        let columns = columns.clamp(1, count);
+        let rows = count.div_ceil(columns);
+        let params = RenderImageParams {
+            image_id: sheet.id,
+            frame_index: 0,
+        };
+        let tile = self
+            .sprite_atlas
+            .get_or_insert_with(params.into(), &mut || {
+                Ok(Some((
+                    sheet.size(0),
+                    Cow::Borrowed(sheet.as_bytes(0).expect("a sheet has one frame")),
+                )))
+            })?
+            .expect("Callback above only returns Some");
+        let cell = size(
+            DevicePixels(tile.bounds.size.width.0 / columns as i32),
+            DevicePixels(tile.bounds.size.height.0 / rows as i32),
+        );
+        let first = AtlasTile {
+            bounds: Bounds {
+                origin: tile.bounds.origin,
+                size: cell,
+            },
+            ..tile
+        };
+        let content_mask = self.snapped_content_mask();
+        let corner_radii = corner_radii
+            .clamp_radii_for_quad_size(bounds.size)
+            .scale(self.scale_factor());
+        let opacity = self.element_opacity();
+        let sprite = PolychromeSprite {
+            order: 0,
+            pad: 0,
+            grayscale: false.into(),
+            bounds: self.snap_bounds(bounds),
+            content_mask,
+            corner_radii,
+            tile: first,
+            opacity,
+        };
+        let sequence = crate::ImageSequence {
+            start: crate::gradient_clock(start),
+            fps,
+            phase,
+            count,
+            columns,
+            cell,
+        };
+        self.next_frame.scene.insert_sequence_sprite(sprite, sequence);
         Ok(())
     }
 

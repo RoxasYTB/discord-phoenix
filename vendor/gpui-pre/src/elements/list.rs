@@ -924,6 +924,31 @@ impl StateInner {
         cx.notify(current_view);
     }
 
+    // PHOENIX PATCH (smooth wheel): one frame of a wheel scroll animation, from the
+    // current scroll position so items spliced in meanwhile keep their anchor.
+    fn scroll_by(
+        &mut self,
+        delta: Point<Pixels>,
+        current_view: EntityId,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(bounds) = self.last_layout_bounds else {
+            return;
+        };
+        let height = bounds.size.height;
+        let top = self.logical_scroll_top();
+        let current = self.scroll_top(&top);
+        let padding = self.last_padding.unwrap_or_default();
+        let scroll_max =
+            (self.items.summary().height + padding.top + padding.bottom - height).max(px(0.));
+        let mut delta = delta;
+        if (current - delta.y - scroll_max).abs() < px(0.05) {
+            delta.y = current - scroll_max;
+        }
+        self.scroll(&top, height, delta, current_view, window, cx);
+    }
+
     fn logical_scroll_top(&self) -> ListOffset {
         self.scroll_anchor
             .map(|anchor| anchor.position)
@@ -1630,6 +1655,21 @@ impl Element for List {
         let mut accumulated_scroll_delta = ScrollDelta::default();
         window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble && hitbox_id.should_handle_scroll(window) {
+                // PHOENIX PATCH (smooth wheel): wheel notches are animated, see `smooth_scroll`.
+                if crate::smooth_wheel_scroll_enabled()
+                    && !event.delta.precise()
+                    && event.source == crate::ScrollSource::Pointer
+                {
+                    let delta = event.delta.pixel_delta(px(20.));
+                    if delta.y != px(0.) {
+                        let state = list_state.clone();
+                        let key = Rc::as_ptr(&state.0) as *const () as usize;
+                        window.smooth_wheel_scroll(key, delta, move |step, window, cx| {
+                            state.0.borrow_mut().scroll_by(step, current_view, window, cx)
+                        });
+                    }
+                    return;
+                }
                 accumulated_scroll_delta = accumulated_scroll_delta.coalesce(event.delta);
                 let pixel_delta = accumulated_scroll_delta.pixel_delta(px(20.));
                 list_state.0.borrow_mut().scroll(

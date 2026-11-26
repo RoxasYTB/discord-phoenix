@@ -3416,6 +3416,7 @@ impl Interactivity {
             let line_height = window.line_height();
             let hitbox = hitbox.clone();
             let current_view = window.current_view();
+            let smooth_offset = scroll_offset.clone();
             window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble && hitbox.should_handle_scroll(window) {
                     let mut scroll_offset = scroll_offset.borrow_mut();
@@ -3455,6 +3456,28 @@ impl Interactivity {
                         } else {
                             delta_x = Pixels::ZERO;
                         }
+                    }
+                    // PHOENIX PATCH (smooth wheel): wheel notches are animated, see `smooth_scroll`.
+                    if (!delta_x.is_zero() || !delta_y.is_zero())
+                        && crate::smooth_wheel_scroll_enabled()
+                        && !event.delta.precise()
+                        && event.source == crate::ScrollSource::Pointer
+                    {
+                        drop(scroll_offset);
+                        let target = smooth_offset.clone();
+                        let key = Rc::as_ptr(&target) as *const () as usize;
+                        window.smooth_wheel_scroll(
+                            key,
+                            point(delta_x, delta_y),
+                            move |step, _, cx| {
+                                let mut offset = target.borrow_mut();
+                                offset.x += step.x;
+                                offset.y += step.y;
+                                drop(offset);
+                                cx.notify(current_view);
+                            },
+                        );
+                        return;
                     }
                     scroll_offset.y += delta_y;
                     scroll_offset.x += delta_x;

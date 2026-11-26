@@ -1718,11 +1718,24 @@ impl WgpuRendererCore {
                 instance_offset,
                 &scene.subpixel_sprites,
             )?,
-            polychrome_sprites: self.write_instance_binding(
-                "polychrome_sprites_bind_group",
-                instance_offset,
-                &scene.polychrome_sprites,
-            )?,
+            polychrome_sprites: if scene.sprite_sequences.is_empty() {
+                self.write_instance_binding(
+                    "polychrome_sprites_bind_group",
+                    instance_offset,
+                    &scene.polychrome_sprites,
+                )?
+            } else {
+                let sprites: Vec<_> = scene
+                    .polychrome_sprites
+                    .iter()
+                    .map(|sprite| scene.polychrome_sprite_now(sprite))
+                    .collect();
+                self.write_instance_binding(
+                    "polychrome_sprites_bind_group",
+                    instance_offset,
+                    &sprites,
+                )?
+            },
         })
     }
 
