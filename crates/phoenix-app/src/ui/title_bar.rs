@@ -174,8 +174,8 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .flex()
                 .justify_center()
                 .gap(z(2.))
-                .child(nav_arrow("title-back", "nav/back", true, true))
-                .child(nav_arrow("title-forward", "nav/forward", false, false)),
+                .child(nav_arrow("title-back", "title/back", true, true))
+                .child(nav_arrow("title-forward", "title/forward", false, false)),
         )
         .child(
             div()

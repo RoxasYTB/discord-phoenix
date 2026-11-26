@@ -111,7 +111,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
     col = col
         .child(separator())
         .child(
-            action(&entity, "add-server", Icon::Plus, crate::t!("rail.add_server"))
+            action(&entity, "add-server", Icon::PlusCircle, crate::t!("rail.add_server"))
                 .on_click(move |_, w, cx| e.update(cx, |a, cx| a.open_join_server(w, cx))),
         )
         .child({

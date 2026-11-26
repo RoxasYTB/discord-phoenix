@@ -252,7 +252,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .items_center()
         .border_b_1()
         .border_color(c(Palette::HEADER_SHADOW))
-        .child(div().size(z(32.)).flex().items_center().justify_center().child(icon(Icon::Friends, 20., c(Palette::CHANNEL_ICON))))
+        .child(div().size(z(32.)).flex().items_center().justify_center().child(icon(Icon::Friends, 20. * crate::theme::zoom(), c(Palette::CHANNEL_ICON))))
         .child(
             div()
                 .mr(z(8.))
@@ -387,7 +387,7 @@ fn list(app: &PhoenixApp, tab: FriendsTab, cx: &mut Context<PhoenixApp>) -> impl
         .bg(c(gpui_input_bg()))
         .flex()
         .items_center()
-        .child(div().size(z(30.)).flex().items_center().justify_center().child(icon(Icon::Search, 16., c(Palette::TEXT_MUTED))))
+        .child(div().size(z(30.)).flex().items_center().justify_center().child(icon(Icon::Search, 16. * crate::theme::zoom(), c(Palette::TEXT_MUTED))))
         .when_some(app.nav.friends_search.clone(), |d, i| {
             d.child(div().flex_1().child(Input::new(&i).appearance(false).bordered(false).pl(z(0.)).text_size(z(16.)).line_height(z(20.))))
         });
@@ -955,7 +955,7 @@ fn add_friend(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
         )
         .child(
             gpui::svg()
-                .path(crate::icons::path("chevron-right"))
+                .path(crate::icons::path("friends/discovery-arrow"))
                 .flex_none()
                 .ml_auto()
                 .mr(z(16.))
