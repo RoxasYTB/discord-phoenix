@@ -13,8 +13,11 @@ use crate::{
     app::PhoenixApp,
     assets::Icon,
     model::{Guild, Id, ImageRef},
-    theme::{Palette, c, m, z},
-    ui::{badge, icon},
+    theme::{Palette, c, generated::idx, m, tok, z},
+    ui::{
+        badge, icon,
+        rail_dnd::{self, RailDrop, RailNode},
+    },
 };
 
 const FOLDER_DEFAULT: u32 = 0x5865F2;
@@ -62,6 +65,9 @@ pub fn flat_guild_order(app: &PhoenixApp) -> Vec<Id> {
 }
 
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+    if !cx.has_active_drag() {
+        rail_dnd::set_over(None);
+    }
     let entity = cx.entity();
     let scroll = RAIL_SCROLL.with(|h| h.clone());
     let mut col = div()
@@ -101,7 +107,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
             _ => {}
         }
         col = match item {
-            RailItem::Guild(g, nested) => col.child(guild(app, &entity, g, nested)),
+            RailItem::Guild(g, _) => col.child(guild(app, &entity, g, None, false)),
             RailItem::Folder { id, name, color, guilds, open } => {
                 col.child(folder(app, &entity, id, name, color, &guilds, open))
             }
@@ -702,13 +708,17 @@ fn guild_inner(g: &Guild, size: f32) -> AnyElement {
 
 #[derive(Clone)]
 pub struct DraggedGuild {
-    pub id: Id,
+    pub node: RailNode,
     icon: ImageRef,
     acronym: SharedString,
+    folder: Option<u32>,
 }
 
 impl Render for DraggedGuild {
     fn render(&mut self, _w: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(color) = self.folder {
+            return div().size(px(m::GUILD_ICON)).rounded(z(FOLDER_RADIUS)).bg(c(color).opacity(0.4)).opacity(0.8);
+        }
         let inner: AnyElement = match &self.icon {
             ImageRef::Url(u) => img(u.clone()).size_full().into_any_element(),
             _ => div().text_size(z(16.)).child(self.acronym.clone()).into_any_element(),
@@ -728,37 +738,86 @@ impl Render for DraggedGuild {
 }
 
 impl PhoenixApp {
-    pub fn move_guild(&mut self, dragged: Id, target: Id, cx: &mut Context<Self>) {
-        if dragged == target {
+    pub fn drop_on_rail(&mut self, src: RailNode, at: Option<RailDrop>, cx: &mut Context<Self>) {
+        cx.notify();
+        let Some(at) = at else { return };
+        let all: Vec<Id> = self.guilds.iter().map(|g| g.id).collect();
+        let mut entries = rail_dnd::normalize(&self.nav.folders, &all);
+        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
+        let id = rail_dnd::fresh_folder_id(&entries, seed);
+        if !rail_dnd::apply_drop(&mut entries, src, at, id) {
             return;
         }
-        if let Some(from) = self.guilds.iter().position(|g| g.id == dragged) {
-            let g = self.guilds.remove(from);
-            let to = self.guilds.iter().position(|g| g.id == target).unwrap_or(self.guilds.len());
-            self.guilds.insert(to, g);
-        }
-        for f in &mut self.nav.folders {
-            f.guilds.retain(|g| *g != dragged);
-        }
-        if let Some(f) = self.nav.folders.iter_mut().find(|f| f.guilds.contains(&target)) {
-            let at = f.guilds.iter().position(|g| *g == target).unwrap_or(0);
-            f.guilds.insert(at, dragged);
-        }
-        self.nav.folders.retain(|f| !f.guilds.is_empty());
-        self.sync_guild_folders(cx);
-        cx.notify();
+        let prev = std::mem::replace(&mut self.nav.folders, entries);
+        let folders = crate::ui::inbox::folder_tree(self);
+        self.action(crate::actions::ActionRequest::SaveFolders(folders), cx, move |a, r, cx| {
+            if let Err(e) = r {
+                a.nav.folders = prev;
+                a.parity_toast(crate::t!("inbox.order_failed", e = e.0).to_string(), cx);
+                cx.notify();
+            }
+        });
     }
 }
 
-fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, _nested: bool) -> AnyElement {
+fn drop_line(top: f32) -> gpui::Div {
+    div()
+        .absolute()
+        .top(z(top))
+        .left(z(4.))
+        .right(z(4.))
+        .h(z(4.))
+        .rounded(z(2.))
+        .bg(c(tok(idx::STATUS_POSITIVE)))
+        .shadow(vec![drop_shadow()])
+}
+
+fn drop_shadow() -> gpui::BoxShadow {
+    gpui::BoxShadow { color: c(tok(idx::OPACITY_BLACK_28)), offset: point(px(0.), px(0.)), blur_radius: z(3.), spread_radius: px(0.), inset: false }
+}
+
+fn drop_marks(node: RailNode, folder: Option<u64>, last: bool, h: f32) -> Option<gpui::Div> {
+    match rail_dnd::over()? {
+        RailDrop::Before(n) if n == node => Some(drop_line(-6.)),
+        RailDrop::Combine(n) if n == node => {
+            Some(div().absolute().top(z(12.)).left(z(4.)).size(z(16.)).rounded_full().bg(c(tok(idx::STATUS_POSITIVE))).shadow(vec![drop_shadow()]))
+        }
+        RailDrop::FolderEnd(f) if last && folder == Some(f) => Some(drop_line(h + 2.)),
+        _ => None,
+    }
+}
+
+fn drop_target(el: gpui::Stateful<gpui::Div>, node: RailNode, folder: Option<u64>, last: bool, entity: &Entity<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    let drop_e = entity.clone();
+    el.on_drag_move::<DraggedGuild>(move |ev, window, cx| {
+        let inside = ev.bounds.contains(&ev.event.position);
+        let next = if inside {
+            let y = f32::from(ev.event.position.y - ev.bounds.origin.y);
+            rail_dnd::zone(ev.drag(cx).node, node, folder, last, y, f32::from(ev.bounds.size.height))
+        } else if rail_dnd::over().is_some_and(|d| d.target() == node || (last && matches!(d, RailDrop::FolderEnd(f) if Some(f) == folder))) {
+            None
+        } else {
+            return;
+        };
+        if rail_dnd::set_over(next) {
+            window.refresh();
+        }
+    })
+    .on_drop(move |d: &DraggedGuild, _, cx| {
+        let at = rail_dnd::take_over();
+        drop_e.update(cx, |a, cx| a.drop_on_rail(d.node, at, cx))
+    })
+    .children(drop_marks(node, folder, last, ICON))
+}
+
+fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, folder: Option<u64>, last: bool) -> AnyElement {
     let id = g.id;
     let selected = app.selected_guild == Some(id) && !app.favorites_view;
     let hover = hovered(id.0);
     let has_icon = matches!(g.icon, ImageRef::Url(_));
     let active = selected || hover;
     let e = entity.clone();
-    let drop_e = entity.clone();
-    let drag = DraggedGuild { id, icon: g.icon.clone(), acronym: g.acronym.clone() };
+    let drag = DraggedGuild { node: RailNode::Guild(id), icon: g.icon.clone(), acronym: g.acronym.clone(), folder: None };
     let icon_box = div()
         .size(z(ICON))
         .flex()
@@ -769,14 +828,12 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, _nested: bool
         .when(!has_icon, |d| d.bg(c(if active { Palette::BLURPLE } else { Palette::GUILD_ICON_BG })))
         .text_color(if active && !has_icon { gpui::white() } else { c(Palette::TEXT_NORMAL) })
         .child(guild_inner(g, ICON));
-    row(("guild", id.0), id.0, entity)
+    drop_target(row(("guild", id.0), id.0, entity), RailNode::Guild(id), folder, last, entity)
         .on_click(move |_, _, cx| e.update(cx, |app, cx| app.select_guild(Some(id), cx)))
         .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
             crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Guild(id), ev.position, w)
         })
         .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| cx.new(|_| d.clone()))
-        .drag_over::<DraggedGuild>(|s, _, _, _| s.border_t_2().border_color(c(Palette::GREEN)))
-        .on_drop(move |d: &DraggedGuild, _, cx| drop_e.update(cx, |a, cx| a.move_guild(d.id, id, cx)))
         .child(pill(id.0, selected, hover, g.unread))
         .child(
             div()
@@ -858,7 +915,9 @@ fn folder(
             .child(grid)
             .into_any_element()
     };
-    let header = row(("folder", id), key, entity)
+    let drag = DraggedGuild { node: RailNode::Folder(id), icon: ImageRef::Default(0), acronym: SharedString::default(), folder: Some(color) };
+    let header = drop_target(row(("folder", id), key, entity), RailNode::Folder(id), None, false, entity)
+        .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| cx.new(|_| d.clone()))
         .h(z(FOLDER))
         .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_folder(id, cx)))
         .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
@@ -879,8 +938,9 @@ fn folder(
     }
     let mut body =
         div().w_full().mt(z(gap() - FOLDER_PAD)).flex().flex_col().gap(z(gap())).pb(z(FOLDER_PAD));
-    for g in guilds {
-        body = body.child(guild(app, entity, g, true));
+    let n = guilds.len();
+    for (i, g) in guilds.iter().enumerate() {
+        body = body.child(guild(app, entity, g, Some(id), i + 1 == n));
     }
     div()
         .w_full()

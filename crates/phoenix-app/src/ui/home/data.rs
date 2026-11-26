@@ -24,7 +24,7 @@ pub struct Relationship {
     pub note: Option<SharedString>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct GuildFolder {
     pub id: Option<u64>,
     pub name: Option<SharedString>,

@@ -64,6 +64,7 @@ pub mod shop_collection;
 pub mod shop_buy;
 pub mod quest_modals;
 pub mod profile_bio;
+pub mod rail_dnd;
 pub mod search;
 pub mod search_filters;
 pub mod search_query;
