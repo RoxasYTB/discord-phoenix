@@ -189,14 +189,14 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::co
             r.remove(&user);
         }
     }
-    if !r.contains_key(&user) {
+    if let std::collections::hash_map::Entry::Vacant(v) = r.entry(user) {
         if !keyframe {
             return true;
         }
         let hwaccel = if SOFTWARE_ONLY.load(std::sync::atomic::Ordering::Relaxed) { None } else { phoenix_voice::media::ffmpeg::hwaccel() };
         match FfmpegDecoder::spawn_with(codec, max, hwaccel.as_deref()) {
             Ok(d) => {
-                r.insert(user, d);
+                v.insert(d);
             }
             Err(e) => {
                 tracing::warn!("video decoder unavailable: {e}");
