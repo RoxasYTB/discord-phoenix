@@ -282,6 +282,9 @@ Some third-party names are blurred. Captured on 2026-11-25 and 26 from main at `
 </tr>
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-integrations.png" alt="Integrations"><br><sub>Integrations</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-access.png" alt="Access"><br><sub>Access</sub></td>
+</tr>
+<tr>
 <td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/channel-settings.png" alt="Channel settings"><br><sub>Channel settings</sub></td>
 </tr>
 </table>
