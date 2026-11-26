@@ -38,13 +38,13 @@ Catégories :
 
 | ligne | correction | commit |
 |---|---|---|
-| settings : modale d'ajout d'autocollant | module 445002 (chunk 429143 du CDN) : aperçu sombre / clair, fichier, émoji associé, nom, description, contrôles de type et de taille, redimensionnement 320×320 ; envoi multipart identique au FormData de Chromium (`phoenix_api::rest::form`, en-tête `X-Discord-Original-MD5`), refusé par la garde | de9f527a |
-| settings : modale d'ajout de son | module 122998 (chunk 68027) : découpe avec la forme d'onde du worker 658777, poignées, tête de lecture, limite de 5 s, volume plafonné par le multiplicateur de sonie ; décodage symphonia, clip encodé en Ogg Opus, POST refusé par la garde | de9f527a |
+| settings : modale d'ajout d'autocollant | module 445002 (chunk 429143 du CDN) : aperçu sombre / clair, fichier, émoji associé, nom, description, contrôles de type et de taille, redimensionnement 320×320 ; envoi multipart identique au FormData de Chromium (`phoenix_api::rest::form`, en-tête `X-Discord-Original-MD5`), refusé par la garde | f4b36dcd |
+| settings : modale d'ajout de son | module 122998 (chunk 68027) : découpe avec la forme d'onde du worker 658777, poignées, tête de lecture, limite de 5 s, volume plafonné par le multiplicateur de sonie ; décodage symphonia, clip encodé en Ogg Opus, POST refusé par la garde | f4b36dcd |
 | navigation : Favoris, « Paramètres du fil » | déjà construite (modale 167846, b81fdd3d), doc corrigé | — |
-| navigation : Favoris, lignes de la modale d'ajout | ligne de partage 61916 → 359378 (48 px, libellé semibold, sous-libellé, case indicateur), icône serveur + type de salon 255266 ; partagée avec Transférer comme dans le client | e0d9ce3a |
-| notifications : autres types de messages système | tous les cas de `stringify` (appel, renommage, icône, appli ajoutée, paliers de boost, rappel d'invitation, fil, achat, AutoMod, cybersécurité, contenu par défaut), liste d'arrivées corrigée | 57680358 |
-| window-chrome : icône du rail, événement et scène | ordre de la fabrique `N` (événement, scène, partage, vidéo, voix), données du gateway ; sourdine déjà conforme | c756eb79 |
-| composer : marges de 1 px, `> ` caché, liens | marges du CSS par boîtes transparentes ; le curseur saute le `> ` caché ; découpage `[` / `](url)` vérifié dans le décorateur du client (déjà conforme) | f9dfb182 |
+| navigation : Favoris, lignes de la modale d'ajout | ligne de partage 61916 → 359378 (48 px, libellé semibold, sous-libellé, case indicateur), icône serveur + type de salon 255266 ; partagée avec Transférer comme dans le client | ac47dac9 |
+| notifications : autres types de messages système | tous les cas de `stringify` (appel, renommage, icône, appli ajoutée, paliers de boost, rappel d'invitation, fil, achat, AutoMod, cybersécurité, contenu par défaut), liste d'arrivées corrigée | d2efb24e |
+| window-chrome : icône du rail, événement et scène | ordre de la fabrique `N` (événement, scène, partage, vidéo, voix), données du gateway ; sourdine déjà conforme | 191b3cfb |
+| composer : marges de 1 px, `> ` caché, liens | marges du CSS par boîtes transparentes ; le curseur saute le `> ` caché ; découpage `[` / `](url)` vérifié dans le décorateur du client (déjà conforme) | 9f1d903c |
 
 ## Faisable (pas encore fait)
 

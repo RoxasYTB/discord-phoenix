@@ -578,6 +578,9 @@ fn sticker_modal(u: &Upload, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let ok = sticker_ready(false, blocking, &name, u.tag.is_some(), u.file.is_some(), &desc);
     let desc_empty = desc.is_empty();
     let body = div()
+        .id("eu-body")
+        .min_h_0()
+        .overflow_y_scroll()
         .flex()
         .flex_col()
         .gap(z(16.))
@@ -847,6 +850,9 @@ fn sound_modal(u: &Upload, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let name = clipped(g, "eu-name", SOUND_NAME_MAX, cx);
     let ok = sound_ready(&name, u.file.is_some(), u.file.as_ref().map(|_| u.trim));
     let body = div()
+        .id("eu-body")
+        .min_h_0()
+        .overflow_y_scroll()
         .flex()
         .flex_col()
         .gap(z(16.))
