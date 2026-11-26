@@ -149,6 +149,9 @@ pub enum AdminCall {
     Member { guild: Snowflake, user: Snowflake },
     MemberSupplemental { guild: Snowflake, users: Vec<Snowflake> },
     AuditLogTarget { guild: Snowflake, target: Snowflake, limit: u32 },
+    EventUsers { guild: Snowflake, event: Snowflake },
+    MyEventRsvps { guild: Snowflake },
+    EventRsvp { guild: Snowflake, event: Snowflake, interested: bool },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -409,6 +412,12 @@ pub fn build(call: &AdminCall) -> ApiReq {
             req(Method::POST, format!("/guilds/{guild}/members/supplemental"), Some(json!({ "user_ids": ids })))
         }
         C::AuditLogTarget { guild, target, limit } => req(Method::GET, format!("/guilds/{guild}/audit-logs?limit={}&target_id={target}", (*limit).clamp(1, 100)), None),
+        C::EventUsers { guild, event } => req(Method::GET, format!("/guilds/{guild}/scheduled-events/{event}/users?limit=100&with_member=true"), None),
+        C::MyEventRsvps { guild } => req(Method::GET, format!("/users/@me/scheduled-events?guild_ids={guild}"), None),
+        C::EventRsvp { guild, event, interested } => {
+            let path = format!("/guilds/{guild}/scheduled-events/{event}/users/@me");
+            if *interested { req(Method::PUT, path, Some(json!({ "response": 1 }))) } else { req(Method::DELETE, path, None) }
+        }
     }
 }
 
@@ -495,6 +504,19 @@ mod tests {
 
     const G: Snowflake = Snowflake(1);
     const C: Snowflake = Snowflake(2);
+
+    #[test]
+    fn event_rsvp_calls_match_the_client() {
+        let e = Snowflake(5);
+        let r = build(&AdminCall::EventUsers { guild: G, event: e });
+        assert_eq!((r.method, r.path.as_str()), (Method::GET, "/guilds/1/scheduled-events/5/users?limit=100&with_member=true"));
+        let r = build(&AdminCall::MyEventRsvps { guild: G });
+        assert_eq!((r.method, r.path.as_str()), (Method::GET, "/users/@me/scheduled-events?guild_ids=1"));
+        let r = build(&AdminCall::EventRsvp { guild: G, event: e, interested: true });
+        assert_eq!((r.method, r.path.as_str(), r.body), (Method::PUT, "/guilds/1/scheduled-events/5/users/@me", Some(json!({ "response": 1 }))));
+        let r = build(&AdminCall::EventRsvp { guild: G, event: e, interested: false });
+        assert_eq!((r.method, r.path.as_str(), r.body), (Method::DELETE, "/guilds/1/scheduled-events/5/users/@me", None));
+    }
 
     #[test]
     fn scheduled_message_calls_match_the_client() {
