@@ -667,7 +667,7 @@ flat varying) and `fs_poly_sprite` multiply their alpha by `saturate(distance + 
 the signed distance of a rounded rectangle, the same half-pixel ramp as a rounded quad. Glyphs,
 SVG icons, paths, shadows and underlines are not cut. A scene without cut-outs takes the old path.
 Search `PHOENIX PATCH (cut-outs)`.
-The pinned commit (0eefadb0) is kept on the `gpui-cutouts` branch of origin.
+The pinned commit (41dbe35d) is kept on the `gpui-cutouts` branch of origin.
 
 Tests: `scene::cutout_tests` (circle and pill distances, empty hole, set reuse, full table, clear),
 `scene::image_sequence_tests::sequence_and_cutout_share_the_pad_word`,
