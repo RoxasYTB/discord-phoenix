@@ -214,6 +214,52 @@ pub fn modal_inner(theme: (u32, u32), p: f32) -> gpui::Hsla {
     gpui::Rgba { r: mix(m.r), g: mix(m.g), b: mix(m.b), a: al }.into()
 }
 
+fn oklab(rgb: u32) -> [f64; 3] {
+    let lin = |c: f64| {
+        let c = c / 255.;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    };
+    let [r, g, b] = split(rgb).map(lin);
+    let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b).cbrt();
+    let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b).cbrt();
+    let s = (0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b).cbrt();
+    [
+        0.210_454_255_3 * l + 0.793_617_785 * m - 0.004_072_046_8 * s,
+        1.977_998_495_1 * l - 2.428_592_205 * m + 0.450_593_709_9 * s,
+        0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766 * s,
+    ]
+}
+
+fn from_oklab([l, a, b]: [f64; 3]) -> u32 {
+    let l_ = (l + 0.396_337_777_4 * a + 0.215_803_757_3 * b).powi(3);
+    let m_ = (l - 0.105_561_345_8 * a - 0.063_854_172_8 * b).powi(3);
+    let s_ = (l - 0.089_484_177_5 * a - 1.291_485_548 * b).powi(3);
+    let enc = |c: f64| {
+        let c = c.clamp(0., 1.);
+        255. * if c <= 0.003_130_8 { 12.92 * c } else { 1.055 * c.powf(1. / 2.4) - 0.055 }
+    };
+    join([
+        enc(4.076_741_662_1 * l_ - 3.307_711_591_3 * m_ + 0.230_969_929_2 * s_),
+        enc(-1.268_438_004_6 * l_ + 2.609_757_401_1 * m_ - 0.341_319_396_5 * s_),
+        enc(-0.004_196_086_3 * l_ - 0.703_418_614_7 * m_ + 1.707_614_701 * s_),
+    ])
+}
+
+pub fn mix_oklab(a: u32, b: u32, p: f64) -> u32 {
+    let (x, y) = (oklab(a), oklab(b));
+    from_oklab([0, 1, 2].map(|i| x[i] * p + y[i] * (1. - p)))
+}
+
+fn hsla_rgb(c: gpui::Hsla) -> u32 {
+    let c: gpui::Rgba = c.into();
+    join([c.r, c.g, c.b].map(|v| f64::from(v) * 255.))
+}
+
+pub fn video_tile_stops(theme: (u32, u32)) -> (u32, u32) {
+    let modal = hsla_rgb(modal_background(theme));
+    (mix_oklab(theme.0, modal, 0.2), mix_oklab(theme.1, modal, 0.6))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,6 +287,23 @@ mod tests {
         assert!(near(rgb((0, 0xFF_00_00)), [46, 10, 5]));
         assert!(near(rgb((0, 0xFF_FF_FF)), [25, 26, 25]));
         assert_eq!(rgb((0, 0)), [0, 0, 0]);
+    }
+
+    #[test]
+    fn oklab_mix_matches_css_color_mix() {
+        assert_eq!(mix_oklab(0xFF_00_00, 0x00_00_FF, 0.5), 0x8C_53_A2);
+        assert_eq!(mix_oklab(0xFF_FF_FF, 0, 0.5), 0x63_63_63);
+        assert_eq!(mix_oklab(0x0B_3D_4F, 0x10_10_10, 0.2), 0x12_19_1C);
+        assert_eq!(mix_oklab(0x12_34_56, 0, 1.), 0x12_34_56);
+    }
+
+    #[test]
+    fn video_tile_stops_mix_into_the_modal_background() {
+        let theme = (0x0B_3D_4F, 0x22_C7_D8);
+        let m: gpui::Rgba = modal_background(theme).into();
+        let modal = join([m.r, m.g, m.b].map(|v| f64::from(v) * 255.));
+        assert_eq!(video_tile_stops(theme), (mix_oklab(theme.0, modal, 0.2), mix_oklab(theme.1, modal, 0.6)));
+        assert_eq!(video_tile_stops((0, 0)), (0, 0));
     }
 
     #[test]

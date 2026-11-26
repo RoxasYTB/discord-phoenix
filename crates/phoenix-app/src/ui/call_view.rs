@@ -846,11 +846,39 @@ fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) 
         )
 }
 
-fn tile_color(app: &PhoenixApp, user: Id) -> Hsla {
-    match app.users.get(&user).map(|u| &u.avatar) {
-        Some(crate::model::ImageRef::Url(url)) => crate::ui::avatar_color::get(url).map(c).unwrap_or(t(idx::BACKGROUND_BASE_LOWER)),
-        Some(crate::model::ImageRef::Default(ix)) => c(DEFAULT_AVATAR[*ix as usize % DEFAULT_AVATAR.len()]),
-        None => t(idx::BACKGROUND_BASE_LOWER),
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum TileFill {
+    Theme(u32, u32),
+    Avatar(Hsla),
+    Loading,
+}
+
+fn tile_fill(theme: Option<(u32, u32)>, dominant: Option<Hsla>) -> TileFill {
+    match (theme, dominant) {
+        (Some((a, b)), _) => TileFill::Theme(a, b),
+        (None, Some(d)) => TileFill::Avatar(d),
+        (None, None) => TileFill::Loading,
+    }
+}
+
+fn tile_background(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) -> gpui::Background {
+    crate::ui::dm_profile_panel::ensure_profile(app, user, cx);
+    let theme = app.people.profiles.get(&user).and_then(|p| p.theme);
+    let dominant = match app.users.get(&user).map(|u| &u.avatar) {
+        Some(crate::model::ImageRef::Url(url)) => {
+            crate::ui::avatar_color::ensure(url, cx);
+            crate::ui::avatar_color::get(url).map(c)
+        }
+        Some(crate::model::ImageRef::Default(ix)) => Some(c(DEFAULT_AVATAR[*ix as usize % DEFAULT_AVATAR.len()])),
+        None => None,
+    };
+    match tile_fill(theme, dominant) {
+        TileFill::Theme(a, b) => {
+            let (top, bottom) = crate::ui::profile_theme::video_tile_stops((a, b));
+            gpui::linear_gradient(180., gpui::linear_color_stop(c(top), 0.), gpui::linear_color_stop(c(bottom), 1.))
+        }
+        TileFill::Avatar(d) => d.into(),
+        TileFill::Loading => t(idx::PRIMARY_800).into(),
     }
 }
 
@@ -1229,7 +1257,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, fade: f32, cx: &mu
             named(name, 16., color).into_any_element()
         });
         let (ring_alpha, _) = crate::ui::voice_panel::speaking_fade(tile.user, speaking || sb);
-        base.bg(tile_color(app, tile.user))
+        base.bg(tile_background(app, tile.user, cx))
             .flex()
             .items_center()
             .justify_center()
@@ -1553,6 +1581,16 @@ fn stream_empty_preview(light: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tile_background_prefers_the_profile_theme() {
+        use super::{TileFill, tile_fill};
+        let d = gpui::hsla(0.5, 0.5, 0.5, 1.);
+        assert_eq!(tile_fill(Some((0x0B_3D_4F, 0x22_C7_D8)), Some(d)), TileFill::Theme(0x0B_3D_4F, 0x22_C7_D8));
+        assert_eq!(tile_fill(Some((1, 2)), None), TileFill::Theme(1, 2));
+        assert_eq!(tile_fill(None, Some(d)), TileFill::Avatar(d));
+        assert_eq!(tile_fill(None, None), TileFill::Loading);
+    }
+
     #[test]
     fn private_call_height_follows_the_client_wrapper() {
         use super::{split_height, voice_avatar_size};

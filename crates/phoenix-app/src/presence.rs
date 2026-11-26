@@ -296,7 +296,11 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
                 Some((desc.to_owned().into(), format!("https://cdn.discordapp.com/badge-icons/{icon}.png").into()))
             })
             .collect(),
-        theme: p.user_profile.as_ref().and_then(|x| x.theme_colors.as_ref()).and_then(|t| Some((*t.first()?, *t.get(1)?))),
+        theme: [p.guild_member_profile.as_ref(), p.user_profile.as_ref()]
+            .into_iter()
+            .flatten()
+            .find_map(|x| x.theme_colors.as_ref())
+            .and_then(|t| Some((*t.first()?, *t.get(1)?))),
         effect_sku: fx.0,
         frame_sku: fx.1,
         look_skus: look_skus(p, fx),
