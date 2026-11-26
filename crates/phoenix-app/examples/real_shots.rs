@@ -335,6 +335,12 @@ impl Backend for ReadOnly {
     fn guild_boosts(&self, g: Id) -> Option<(u32, bool)> {
         self.0.guild_boosts(g)
     }
+    fn guild_tag(&self, g: Id) -> Option<(String, Option<String>)> {
+        self.0.guild_tag(g)
+    }
+    fn guild_incidents(&self, g: Id) -> Option<phoenix_api::models::IncidentsData> {
+        self.0.guild_incidents(g)
+    }
     fn guild_home_header(&self, g: Id) -> Option<String> {
         let h = self.0.guild_home_header(g);
         if std::env::var_os("PHX_DEBUG_GUIDE").is_some() {
