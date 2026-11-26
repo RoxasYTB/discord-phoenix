@@ -50,6 +50,7 @@ pub fn ntp_time(t: std::time::SystemTime) -> u64 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Feedback {
     Pli { media_ssrc: u32 },
+    Fir { media_ssrc: u32 },
     Nack { media_ssrc: u32, lost: Vec<u16> },
     SenderReport(SenderReport),
     Other(u8),
@@ -59,6 +60,41 @@ pub fn build_pli(sender_ssrc: u32, media_ssrc: u32) -> Vec<u8> {
     let mut v = vec![0x81, PT_PSFB, 0, 2];
     v.extend_from_slice(&sender_ssrc.to_be_bytes());
     v.extend_from_slice(&media_ssrc.to_be_bytes());
+    v
+}
+
+pub fn build_nack(sender_ssrc: u32, media_ssrc: u32, lost: &[u16]) -> Vec<u8> {
+    let mut seqs = lost.to_vec();
+    seqs.sort_unstable_by_key(|s| s.wrapping_sub(lost.first().copied().unwrap_or(0)));
+    seqs.dedup();
+    let mut fci: Vec<(u16, u16)> = Vec::new();
+    for s in seqs {
+        if let Some((pid, blp)) = fci.last_mut() {
+            let d = s.wrapping_sub(*pid);
+            if (1..=16).contains(&d) {
+                *blp |= 1 << (d - 1);
+                continue;
+            }
+        }
+        fci.push((s, 0));
+    }
+    let mut v = vec![0x81, PT_RTPFB];
+    v.extend_from_slice(&(2 + fci.len() as u16).to_be_bytes());
+    v.extend_from_slice(&sender_ssrc.to_be_bytes());
+    v.extend_from_slice(&media_ssrc.to_be_bytes());
+    for (pid, blp) in fci {
+        v.extend_from_slice(&pid.to_be_bytes());
+        v.extend_from_slice(&blp.to_be_bytes());
+    }
+    v
+}
+
+pub fn build_fir(sender_ssrc: u32, media_ssrc: u32, seq: u8) -> Vec<u8> {
+    let mut v = vec![0x84, PT_PSFB, 0, 4];
+    v.extend_from_slice(&sender_ssrc.to_be_bytes());
+    v.extend_from_slice(&0u32.to_be_bytes());
+    v.extend_from_slice(&media_ssrc.to_be_bytes());
+    v.extend_from_slice(&[seq, 0, 0, 0]);
     v
 }
 
@@ -76,6 +112,7 @@ pub fn parse(mut p: &[u8]) -> Result<Vec<Feedback>> {
         };
         match (pt, fmt) {
             (PT_PSFB, 1) => out.push(Feedback::Pli { media_ssrc: u32at(8)? }),
+            (PT_PSFB, 4) => out.push(Feedback::Fir { media_ssrc: u32at(12)? }),
             (PT_RTPFB, 1) => {
                 let mut lost = Vec::new();
                 let mut o = 12;
@@ -150,6 +187,24 @@ mod tests {
         buf.extend_from_slice(&build_pli(1, 77));
         let fb = parse(&buf).unwrap();
         assert_eq!(fb, vec![Feedback::SenderReport(sr), Feedback::Pli { media_ssrc: 77 }]);
+    }
+
+    #[test]
+    fn nack_build_packs_bitmasks_across_wrap() {
+        let pk = build_nack(7, 9, &[65534, 65535, 0, 3, 40]);
+        assert_eq!(pk.len(), 12 + 8);
+        let fb = parse(&pk).unwrap();
+        assert_eq!(fb, vec![Feedback::Nack { media_ssrc: 9, lost: vec![65534, 65535, 0, 3, 40] }]);
+        let pk = build_nack(7, 9, &[10, 26, 27]);
+        assert_eq!(parse(&pk).unwrap(), vec![Feedback::Nack { media_ssrc: 9, lost: vec![10, 26, 27] }]);
+        assert_eq!(&pk[12..16], &[0, 10, 0x80, 0x00]);
+    }
+
+    #[test]
+    fn fir_roundtrip() {
+        let pk = build_fir(1, 55, 3);
+        assert_eq!(pk.len(), 20);
+        assert_eq!(parse(&pk).unwrap(), vec![Feedback::Fir { media_ssrc: 55 }]);
     }
 
     #[test]

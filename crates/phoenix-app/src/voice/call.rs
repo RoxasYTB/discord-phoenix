@@ -48,6 +48,7 @@ struct Watch {
     rtc_server_id: Option<String>,
     conn: Option<VoiceConnection>,
     stats: connection::ConnStats,
+    view: Option<(u32, u32)>,
 }
 
 struct Running {
@@ -79,6 +80,7 @@ struct State {
     watches: std::collections::HashMap<String, Watch>,
     pending_watch: Option<String>,
     stream_generation: u64,
+    call_view: Option<phoenix_voice::sink_wants::CallView>,
     #[cfg(target_os = "linux")]
     ptt_portal: Option<phoenix_voice::hotkey::GlobalPtt>,
 }
@@ -173,22 +175,32 @@ pub fn watching(key: &str) -> bool {
     manager().state.lock().watches.contains_key(key)
 }
 
-fn on_remote_video(user: u64, frame: &[u8]) {
-    push_video(remote(), user, frame, (phoenix_voice::media::ffmpeg::DECODE_W, phoenix_voice::media::ffmpeg::DECODE_H));
-}
-
-pub const STREAM_DECODE: (u32, u32) = (1280, 720);
-
-fn push_video(map: &'static Mutex<Decoders>, user: u64, frame: &[u8], size: (u32, u32)) {
+fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::codec::Codec, keyframe: bool, frame: &[u8], max: (u32, u32)) -> bool {
+    use phoenix_voice::media::ffmpeg::FfmpegDecoder;
     let mut r = map.lock();
-    if let std::collections::hash_map::Entry::Vacant(v) = r.entry(user) {
-        match phoenix_voice::media::ffmpeg::FfmpegDecoder::spawn_sized(size.0, size.1) {
+    static SOFTWARE_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if let Some(d) = r.get_mut(&user) {
+        let dead = !d.alive();
+        if dead && d.hwaccel() {
+            tracing::warn!("hardware video decoder stopped, using the software decoder");
+            SOFTWARE_ONLY.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if d.codec() != codec || dead {
+            r.remove(&user);
+        }
+    }
+    if !r.contains_key(&user) {
+        if !keyframe {
+            return true;
+        }
+        let hwaccel = if SOFTWARE_ONLY.load(std::sync::atomic::Ordering::Relaxed) { None } else { phoenix_voice::media::ffmpeg::hwaccel() };
+        match FfmpegDecoder::spawn_with(codec, max, hwaccel.as_deref()) {
             Ok(d) => {
-                v.insert(d);
+                r.insert(user, d);
             }
             Err(e) => {
                 tracing::warn!("video decoder unavailable: {e}");
-                return;
+                return false;
             }
         }
     }
@@ -196,7 +208,36 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, frame: &[u8], size: (u32
         && d.push(frame).is_err()
     {
         r.remove(&user);
+        return true;
     }
+    false
+}
+
+pub fn set_call_view(view: phoenix_voice::sink_wants::CallView) {
+    let mut st = manager().state.lock();
+    if st.call_view.as_ref() == Some(&view) {
+        return;
+    }
+    if let Some(r) = st.running.as_ref() {
+        r.conn.set_view(connection::VideoView::Call(view.clone()));
+    }
+    st.call_view = Some(view);
+}
+
+pub fn set_stream_view(key: &str, width: u32, height: u32) {
+    let mut st = manager().state.lock();
+    let Some(w) = st.watches.get_mut(key) else { return };
+    if w.view == Some((width, height)) {
+        return;
+    }
+    w.view = Some((width, height));
+    if let Some(c) = w.conn.as_ref() {
+        c.set_view(connection::VideoView::Stream { width, height, zoom: 1.0 });
+    }
+}
+
+pub fn in_call() -> bool {
+    manager().state.lock().running.is_some()
 }
 
 pub fn camera_preview() -> Option<phoenix_voice::media::VideoFrame> {
@@ -260,6 +301,9 @@ fn start_engine(control: &Arc<AudioControl>, st: &State, out_tx: mpsc::Unbounded
         Ok(e) => Some(e),
         Err(e) => {
             tracing::warn!("audio devices unavailable: {e}");
+            if std::env::var_os("PHOENIX_SOUND_LOG").is_some() {
+                eprintln!("voice-audio: audio engine failed: {e}");
+            }
             None
         }
     }
@@ -405,6 +449,9 @@ impl VoiceManager {
                 }
             }),
         );
+        if let Some(v) = st.call_view.clone() {
+            conn.set_view(connection::VideoView::Call(v));
+        }
         st.running = Some(Running { conn, engine, out_tx, sink });
         ui(emit, VoiceUiEvent::Status(VoiceStatus::Connecting));
         let generation = st.generation;
@@ -437,8 +484,12 @@ impl VoiceManager {
                         ping_on_reconnect(None);
                         VoiceUiEvent::Status(VoiceStatus::Reconnecting)
                     }
-                    VoiceEvent::Video { user_id, frame } => {
-                        on_remote_video(user_id, &frame);
+                    VoiceEvent::Video { user_id, codec, keyframe, frame } => {
+                        if push_video(remote(), user_id, codec, keyframe, &frame, phoenix_voice::media::ffmpeg::CAMERA_MAX)
+                            && let Some(r) = manager().state.lock().running.as_ref()
+                        {
+                            r.conn.request_keyframe(user_id);
+                        }
                         continue;
                     }
                     VoiceEvent::VideoState { user_id, active } => {
@@ -794,6 +845,9 @@ fn on_stream_server(st: &mut State, me: u64, su: &phoenix_api::gateway::events::
         }),
     );
     if let Some(w) = st.watches.get_mut(&su.stream_key) {
+        if let Some((width, height)) = w.view {
+            conn.set_view(connection::VideoView::Stream { width, height, zoom: 1.0 });
+        }
         w.conn = Some(conn);
     }
     tokio::spawn(watch_events(generation, su.stream_key.clone(), owner, events));
@@ -959,7 +1013,7 @@ fn start_watch(st: &mut State, key: String) {
         eprintln!("voice-trace: op 20 STREAM_WATCH {key}");
     }
     st.stream_generation += 1;
-    st.watches.insert(key.clone(), Watch { generation: st.stream_generation, owner: k.owner, rtc_server_id: None, conn: None, stats: Default::default() });
+    st.watches.insert(key.clone(), Watch { generation: st.stream_generation, owner: k.owner, rtc_server_id: None, conn: None, stats: Default::default(), view: None });
     if let Err(e) = gw.stream_watch(&key) {
         st.watches.remove(&key);
         stream_ui(st, super::StreamUiEvent::Failed(e.to_string()));
@@ -996,7 +1050,13 @@ async fn watch_events(generation: u64, key: String, owner: u64, mut events: mpsc
             eprintln!("voice-trace: stream(watch) {ev:?}");
         }
         match ev {
-            VoiceEvent::Video { frame, .. } => push_video(streams(), owner, &frame, STREAM_DECODE),
+            VoiceEvent::Video { codec, keyframe, frame, .. } => {
+                if push_video(streams(), owner, codec, keyframe, &frame, phoenix_voice::media::ffmpeg::STREAM_MAX)
+                    && let Some(c) = manager().state.lock().watches.get(&key).and_then(|w| w.conn.clone())
+                {
+                    c.request_keyframe(owner);
+                }
+            }
             VoiceEvent::Stats(s) => {
                 if let Some(w) = manager().state.lock().watches.get_mut(&key) {
                     w.stats = s;

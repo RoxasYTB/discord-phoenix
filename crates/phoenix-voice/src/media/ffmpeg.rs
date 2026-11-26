@@ -143,58 +143,233 @@ impl VideoEncoder for FfmpegH264 {
     }
 }
 
-pub const DECODE_W: u32 = 640;
-pub const DECODE_H: u32 = 360;
+pub const CAMERA_MAX: (u32, u32) = (1280, 720);
+pub const STREAM_MAX: (u32, u32) = (1920, 1080);
+
+#[cfg(target_os = "macos")]
+const PLATFORM_HWACCEL: Option<&str> = Some("videotoolbox");
+#[cfg(target_os = "windows")]
+const PLATFORM_HWACCEL: Option<&str> = Some("d3d11va");
+#[cfg(target_os = "linux")]
+const PLATFORM_HWACCEL: Option<&str> = Some("auto");
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+const PLATFORM_HWACCEL: Option<&str> = None;
+
+pub fn hwaccel() -> Option<String> {
+    match std::env::var("PHOENIX_VIDEO_HWACCEL") {
+        Ok(v) if v.is_empty() || v == "none" || v == "0" => None,
+        Ok(v) => Some(v),
+        Err(_) => PLATFORM_HWACCEL.map(str::to_string),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DecoderSupport {
+    pub codecs: Vec<Codec>,
+    pub dav1d: bool,
+}
+
+pub fn parse_decoder_list(out: &str) -> DecoderSupport {
+    let mut d = DecoderSupport::default();
+    for line in out.lines() {
+        let mut parts = line.split_whitespace();
+        let (Some(flags), Some(name)) = (parts.next(), parts.next()) else { continue };
+        if !flags.starts_with('V') {
+            continue;
+        }
+        let codec = match name {
+            "h264" => Some(Codec::H264),
+            "vp8" | "libvpx" => Some(Codec::Vp8),
+            "av1" | "libdav1d" | "libaom-av1" => Some(Codec::Av1),
+            _ => None,
+        };
+        if name == "libdav1d" {
+            d.dav1d = true;
+        }
+        if let Some(c) = codec
+            && !d.codecs.contains(&c)
+        {
+            d.codecs.push(c);
+        }
+    }
+    d.codecs.sort_by_key(|c| match c {
+        Codec::Av1 => 0,
+        Codec::H264 => 1,
+        _ => 2,
+    });
+    d
+}
+
+pub fn decoder_support() -> &'static DecoderSupport {
+    static S: std::sync::OnceLock<DecoderSupport> = std::sync::OnceLock::new();
+    S.get_or_init(|| {
+        ffmpeg_command()
+            .args(["-hide_banner", "-decoders"])
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| parse_decoder_list(&String::from_utf8_lossy(&o.stdout)))
+            .unwrap_or_default()
+    })
+}
+
+pub fn ivf_fourcc(codec: Codec) -> Option<&'static [u8; 4]> {
+    match codec {
+        Codec::H264 => Some(b"H264"),
+        Codec::Vp8 => Some(b"VP80"),
+        Codec::Av1 => Some(b"AV01"),
+        _ => None,
+    }
+}
+
+pub fn ivf_header(codec: Codec, width: u16, height: u16) -> Option<[u8; 32]> {
+    let mut h = [0u8; 32];
+    h[0..4].copy_from_slice(b"DKIF");
+    h[6..8].copy_from_slice(&32u16.to_le_bytes());
+    h[8..12].copy_from_slice(ivf_fourcc(codec)?);
+    h[12..14].copy_from_slice(&width.to_le_bytes());
+    h[14..16].copy_from_slice(&height.to_le_bytes());
+    h[16..20].copy_from_slice(&90_000u32.to_le_bytes());
+    h[20..24].copy_from_slice(&1u32.to_le_bytes());
+    Some(h)
+}
+
+pub fn ivf_frame(codec: Codec, frame: &[u8], pts: u64) -> Result<Vec<u8>> {
+    let body = match codec {
+        Codec::Av1 => {
+            let mut v = vec![(crate::rtp::av1::OBU_TEMPORAL_DELIMITER << 3) | 0x02, 0];
+            v.extend_from_slice(&crate::rtp::av1::with_obu_sizes(frame)?);
+            std::borrow::Cow::Owned(v)
+        }
+        _ => std::borrow::Cow::Borrowed(frame),
+    };
+    let mut out = Vec::with_capacity(body.len() + 12);
+    out.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    out.extend_from_slice(&pts.to_le_bytes());
+    out.extend_from_slice(&body);
+    Ok(out)
+}
+
+pub fn decode_args(codec: Codec, max: (u32, u32), hwaccel: Option<&str>, dav1d: bool) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error"].map(String::from).to_vec();
+    if let Some(h) = hwaccel {
+        a.extend(["-hwaccel".into(), h.into()]);
+    }
+    a.extend(["-probesize", "32", "-analyzeduration", "0", "-flags", "low_delay"].map(String::from));
+    if codec == Codec::Av1 && dav1d {
+        a.extend(["-c:v", "libdav1d", "-max_frame_delay", "1"].map(String::from));
+    }
+    a.extend(["-f", "ivf", "-i", "-", "-vf"].map(String::from));
+    a.push(format!(
+        "scale=w='min(iw,{})':h='min(ih,{})':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        max.0, max.1
+    ));
+    a.extend(["-fps_mode", "passthrough", "-flush_packets", "1", "-f", "image2pipe", "-c:v", "pam", "-pix_fmt", "rgba", "-"].map(String::from));
+    a
+}
+
+pub fn read_pam(r: &mut impl std::io::BufRead) -> Option<(u32, u32, Vec<u8>)> {
+    let (mut w, mut h, mut depth) = (0u32, 0u32, 0u32);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if r.read_line(&mut line).ok()? == 0 {
+            return None;
+        }
+        let mut it = line.split_whitespace();
+        match (it.next(), it.next()) {
+            (Some("WIDTH"), Some(v)) => w = v.parse().ok()?,
+            (Some("HEIGHT"), Some(v)) => h = v.parse().ok()?,
+            (Some("DEPTH"), Some(v)) => depth = v.parse().ok()?,
+            (Some("ENDHDR"), _) => break,
+            _ => {}
+        }
+    }
+    if depth != 4 || w == 0 || h == 0 || w > 8192 || h > 8192 {
+        return None;
+    }
+    let mut buf = vec![0u8; (w * h * 4) as usize];
+    r.read_exact(&mut buf).ok()?;
+    for px in buf.chunks_exact_mut(4) {
+        px.swap(0, 2);
+    }
+    Some((w, h, buf))
+}
 
 pub struct FfmpegDecoder {
     child: Child,
     stdin: Option<ChildStdin>,
+    codec: Codec,
+    pts: u64,
+    hwaccel: bool,
     pub latest: std::sync::Arc<std::sync::Mutex<Option<VideoFrame>>>,
+    decoded: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl FfmpegDecoder {
-    pub fn spawn() -> Result<Self> {
-        Self::spawn_sized(DECODE_W, DECODE_H)
+    pub fn spawn(codec: Codec, max: (u32, u32)) -> Result<Self> {
+        Self::spawn_with(codec, max, hwaccel().as_deref())
     }
 
-    pub fn spawn_sized(w: u32, h: u32) -> Result<Self> {
+    pub fn spawn_with(codec: Codec, max: (u32, u32), hwaccel: Option<&str>) -> Result<Self> {
+        let header = ivf_header(codec, max.0 as u16, max.1 as u16).ok_or_else(|| Error::Unsupported(format!("no {} decoder", codec.name())))?;
         let mut child = ffmpeg_command()
-            .args(["-hide_banner", "-loglevel", "error", "-probesize", "32", "-analyzeduration", "0", "-fflags", "nobuffer", "-flags", "low_delay"])
-            .args(["-f", "h264", "-i", "-", "-vf"])
-            .arg(format!("scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"))
-            .args(["-f", "rawvideo", "-pix_fmt", "bgra", "-"])
+            .args(decode_args(codec, max, hwaccel, decoder_support().dav1d))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .map_err(|e| Error::Encoder(format!("ffmpeg decoder: {e}")))?;
-        let stdin = child.stdin.take();
-        let mut stdout = child.stdout.take().ok_or(Error::Encoder("ffmpeg decoder stdout".into()))?;
+        let mut stdin = child.stdin.take();
+        let stdout = child.stdout.take().ok_or(Error::Encoder("ffmpeg decoder stdout".into()))?;
         let latest: std::sync::Arc<std::sync::Mutex<Option<VideoFrame>>> = Default::default();
-        let slot = latest.clone();
+        let decoded: std::sync::Arc<std::sync::atomic::AtomicU64> = Default::default();
+        let (slot, count) = (latest.clone(), decoded.clone());
         std::thread::Builder::new()
-            .name("phoenix-h264-in".into())
+            .name("phoenix-video-in".into())
             .spawn(move || {
-                let len = (w * h * 4) as usize;
-                let mut n = 0u64;
-                loop {
-                    let mut buf = vec![0u8; len];
-                    if stdout.read_exact(&mut buf).is_err() {
-                        break;
-                    }
-                    n += 1;
+                let mut r = std::io::BufReader::with_capacity(1 << 20, stdout);
+                while let Some((w, h, buf)) = read_pam(&mut r) {
+                    let n = count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                     if let Ok(mut s) = slot.lock() {
                         *s = Some(VideoFrame { width: w, height: h, pts_us: n, data: std::sync::Arc::from(buf) });
                     }
                 }
             })
             .map_err(Error::Io)?;
-        Ok(Self { child, stdin, latest })
+        if let Some(i) = stdin.as_mut() {
+            i.write_all(&header).map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))?;
+        }
+        Ok(Self { child, stdin, codec, pts: 0, hwaccel: hwaccel.is_some(), latest, decoded })
     }
 
-    pub fn push(&mut self, au: &[u8]) -> Result<()> {
+    pub fn codec(&self) -> Codec {
+        self.codec
+    }
+
+    pub fn hwaccel(&self) -> bool {
+        self.hwaccel
+    }
+
+    pub fn decoded(&self) -> u64 {
+        self.decoded.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn pushed(&self) -> u64 {
+        self.pts
+    }
+
+    pub fn alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
+    }
+
+    pub fn push(&mut self, frame: &[u8]) -> Result<()> {
+        let packet = ivf_frame(self.codec, frame, self.pts)?;
+        self.pts += 1;
         let stdin = self.stdin.as_mut().ok_or(Error::Encoder("ffmpeg decoder closed".into()))?;
-        stdin.write_all(au).map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))
+        stdin.write_all(&packet).map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))?;
+        stdin.flush().map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))
     }
 }
 
@@ -218,6 +393,152 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert!(h264::is_keyframe(&out[0]));
         assert_eq!(buf[..5], [0, 0, 0, 1, 9]);
+    }
+
+    #[test]
+    fn decoder_list_and_arguments() {
+        let list = " V....D libdav1d             dav1d AV1 decoder\n VFS..D h264                 H.264\n A....D opus  Opus\n VFS..D vp8                  On2 VP8\n V....D av1                  AV1\n";
+        let d = parse_decoder_list(list);
+        assert_eq!(d.codecs, vec![Codec::Av1, Codec::H264, Codec::Vp8]);
+        assert!(d.dav1d);
+        assert!(parse_decoder_list(" A....D opus x\n").codecs.is_empty());
+        let a = decode_args(Codec::Av1, (1280, 720), Some("auto"), true);
+        let pos = |k: &str| a.iter().position(|x| x == k).unwrap();
+        assert!(pos("-hwaccel") < pos("-i"));
+        assert!(pos("libdav1d") < pos("-i"));
+        assert_eq!(a[pos("-f") + 1], "ivf");
+        assert!(a.iter().any(|x| x.contains("min(iw,1280)") && x.contains("force_original_aspect_ratio=decrease")));
+        assert!(!decode_args(Codec::Vp8, (640, 360), None, true).iter().any(|x| x == "-hwaccel" || x == "libdav1d"));
+    }
+
+    #[test]
+    fn ivf_framing() {
+        let h = ivf_header(Codec::Vp8, 640, 360).unwrap();
+        assert_eq!(&h[0..4], b"DKIF");
+        assert_eq!(&h[8..12], b"VP80");
+        assert_eq!(u16::from_le_bytes([h[12], h[13]]), 640);
+        assert!(ivf_header(Codec::Vp9, 1, 1).is_none());
+        let f = ivf_frame(Codec::Vp8, &[1, 2, 3], 7).unwrap();
+        assert_eq!(f, [3, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3]);
+        let bare_last_obu = [(6 << 3), 9, 9];
+        let a = ivf_frame(Codec::Av1, &bare_last_obu, 0).unwrap();
+        assert_eq!(&a[12..], &[0x12, 0, (6 << 3) | 2, 2, 9, 9]);
+    }
+
+    #[test]
+    fn pam_frames_become_bgra() {
+        let mut data = b"P7\nWIDTH 2\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n".to_vec();
+        data.extend_from_slice(&[10, 20, 30, 255, 40, 50, 60, 255]);
+        let mut r = std::io::Cursor::new(data);
+        assert_eq!(read_pam(&mut r), Some((2, 1, vec![30, 20, 10, 255, 60, 50, 40, 255])));
+        assert_eq!(read_pam(&mut r), None);
+    }
+
+    fn encode(args: &[&str]) -> Option<Vec<u8>> {
+        let o = ffmpeg_command()
+            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+            .args(args)
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        (o.status.success() && !o.stdout.is_empty()).then_some(o.stdout)
+    }
+
+    fn ivf_frames(data: &[u8]) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        let mut o = 32;
+        while o + 12 <= data.len() {
+            let n = u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]) as usize;
+            out.push(data[o + 12..o + 12 + n].to_vec());
+            o += 12 + n;
+        }
+        out
+    }
+
+    fn generated(codec: Codec, size: &str) -> Option<Vec<Vec<u8>>> {
+        let src = format!("color=c=red:s={size}:r=10");
+        let src = src.as_str();
+        match codec {
+            Codec::H264 => {
+                let mut buf = encode(&[src, "-frames:v", "3", "-c:v", "libx264", "-bf", "0", "-x264-params", "aud=1", "-f", "h264", "-"])?;
+                buf.extend_from_slice(&[0, 0, 0, 1, 9, 0xf0]);
+                let mut out = Vec::new();
+                split_access_units(&mut buf, &mut out);
+                Some(out)
+            }
+            Codec::Vp8 => encode(&[src, "-frames:v", "3", "-c:v", "libvpx", "-deadline", "realtime", "-f", "ivf", "-"]).map(|d| ivf_frames(&d)),
+            Codec::Av1 => encode(&[src, "-frames:v", "3", "-c:v", "libaom-av1", "-cpu-used", "8", "-usage", "realtime", "-f", "ivf", "-"])
+                .or_else(|| encode(&[src, "-frames:v", "3", "-c:v", "libsvtav1", "-preset", "12", "-f", "ivf", "-"]))
+                .map(|d| ivf_frames(&d)),
+            _ => None,
+        }
+    }
+
+    fn decode_through_rtp(codec: Codec, frames: &[Vec<u8>], max: (u32, u32)) -> Option<VideoFrame> {
+        use crate::rtp::{Packetizer, RtpHeader};
+        use crate::video_rx::{Layer, VideoReceiver};
+        let mut rx = VideoReceiver::default();
+        rx.set_layers(1, vec![Layer { ssrc: 9, rtx_ssrc: 0, quality: 100 }]);
+        let now = std::time::Instant::now();
+        let mut seq = 0u16;
+        let mut out = Vec::new();
+        rx.push(&RtpHeader::new(codec.payload_type(), seq, 0, 9, true), &[0x10, 0, 0, 0, 0x65], now);
+        for (i, f) in frames.iter().enumerate() {
+            let pl = match codec {
+                Codec::H264 => crate::rtp::h264::H264Packetizer::new().packetize(f, 1100),
+                Codec::Vp8 => crate::rtp::vp8::Vp8Packetizer::default().packetize(f, 1100),
+                _ => crate::rtp::av1::Av1Packetizer.packetize(f, 1100),
+            }
+            .ok()?;
+            let n = pl.len();
+            for (k, p) in pl.into_iter().enumerate() {
+                seq = seq.wrapping_add(1);
+                let h = RtpHeader::new(codec.payload_type(), seq, (i as u32 + 1) * 9000, 9, k + 1 == n);
+                out.extend(rx.push(&h, &p, now));
+            }
+        }
+        assert_eq!(out.len(), frames.len());
+        assert!(crate::video_rx::is_keyframe(codec, &out[0].data));
+        let mut dec = FfmpegDecoder::spawn_with(codec, max, None).ok()?;
+        for f in &out {
+            assert!(rx.accept(f, crate::video_rx::is_keyframe(codec, &f.data)));
+            dec.push(&f.data).ok()?;
+        }
+        let t = std::time::Instant::now();
+        while dec.decoded() < out.len() as u64 && t.elapsed() < std::time::Duration::from_secs(20) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(dec.pushed(), out.len() as u64);
+        dec.latest.lock().ok()?.clone()
+    }
+
+    #[test]
+    fn decodes_generated_h264_vp8_and_av1_after_rtp() {
+        if !available() {
+            return;
+        }
+        for codec in [Codec::H264, Codec::Vp8, Codec::Av1] {
+            if !decoder_support().codecs.contains(&codec) {
+                continue;
+            }
+            let Some(frames) = generated(codec, "160x90") else { continue };
+            let f = decode_through_rtp(codec, &frames, CAMERA_MAX).unwrap_or_else(|| panic!("{} did not decode", codec.name()));
+            assert_eq!((f.width, f.height), (160, 90), "{}", codec.name());
+            let px = &f.data[(45 * 160 + 80) * 4..][..4];
+            assert!(px[2] > 200 && px[1] < 60 && px[0] < 60, "{} centre pixel {px:?} is not red in BGRA", codec.name());
+        }
+    }
+
+    #[test]
+    fn portrait_video_keeps_its_ratio() {
+        if !available() || !decoder_support().codecs.contains(&Codec::Vp8) {
+            return;
+        }
+        let Some(frames) = generated(Codec::Vp8, "360x640") else { return };
+        let f = decode_through_rtp(Codec::Vp8, &frames, (320, 180)).expect("vp8 decode");
+        assert_eq!(f.height, 180);
+        assert!((100..=102).contains(&f.width), "{}x{}", f.width, f.height);
     }
 
     #[test]

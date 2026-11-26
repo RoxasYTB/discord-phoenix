@@ -64,6 +64,38 @@ pub fn strip_last_obu_size(frame: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+pub fn with_obu_sizes(frame: &[u8]) -> Result<Vec<u8>> {
+    let mut out = Vec::with_capacity(frame.len() + 8);
+    for o in parse_obus(frame)? {
+        out.push(o.header[0] | 0x02);
+        out.extend_from_slice(&o.header[1..]);
+        leb128::write(o.payload.len() as u64, &mut out);
+        out.extend_from_slice(o.payload);
+    }
+    Ok(out)
+}
+
+pub fn without_last_obu_size(frame: &[u8]) -> Option<Vec<u8>> {
+    let obus = parse_obus(frame).ok()?;
+    let last = obus.len().checked_sub(1)?;
+    let mut out = Vec::with_capacity(frame.len());
+    for (i, o) in obus.iter().enumerate() {
+        if i == last {
+            out.extend_from_slice(&o.header);
+        } else {
+            out.push(o.header[0] | 0x02);
+            out.extend_from_slice(&o.header[1..]);
+            leb128::write(o.payload.len() as u64, &mut out);
+        }
+        out.extend_from_slice(o.payload);
+    }
+    Some(out)
+}
+
+pub fn is_keyframe(frame: &[u8]) -> bool {
+    parse_obus(frame).is_ok_and(|obus| obus.iter().any(|o| o.obu_type() == OBU_SEQUENCE_HEADER))
+}
+
 #[derive(Default)]
 pub struct Av1Packetizer;
 
@@ -229,6 +261,21 @@ mod tests {
             assert!(pl[0][0] & 0x08 != 0, "N bit on new sequence");
             assert_eq!(pl.last().unwrap()[0] & 0x40, 0, "last Y clear");
         }
+    }
+
+    #[test]
+    fn obu_size_fields_for_dave_and_the_decoder() {
+        let seq = obu(OBU_SEQUENCE_HEADER, &[0, 0, 0, 0x42]);
+        let fr = obu(6, &[9, 8, 7, 6, 5]);
+        let mut sized = seq.clone();
+        sized.extend_from_slice(&fr);
+        assert!(is_keyframe(&sized));
+        assert!(!is_keyframe(&fr));
+        let bare = without_last_obu_size(&sized).unwrap();
+        assert_eq!(bare.len(), sized.len() - 1);
+        assert_eq!(bare[seq.len()], 6 << 3);
+        assert_eq!(with_obu_sizes(&bare).unwrap(), sized);
+        assert_eq!(without_last_obu_size(&[]), None);
     }
 
     #[test]

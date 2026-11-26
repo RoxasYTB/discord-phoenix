@@ -13,7 +13,9 @@ pub mod rtp;
 #[cfg(target_os = "linux")]
 pub mod screencast;
 pub mod session;
+pub mod sink_wants;
 pub mod udp;
+pub mod video_rx;
 
 pub use error::{Error, Result};
 

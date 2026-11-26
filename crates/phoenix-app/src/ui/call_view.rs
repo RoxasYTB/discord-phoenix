@@ -24,6 +24,45 @@ thread_local! {
     static SPLIT_LOADED: Cell<bool> = const { Cell::new(false) };
     static SPLIT_DRAG: Cell<bool> = const { Cell::new(false) };
     static SPLIT_TOP: Cell<f32> = const { Cell::new(0.) };
+    static IN_STRIP: Cell<bool> = const { Cell::new(false) };
+    static DRAWN: std::cell::RefCell<Vec<(Id, bool, f32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub fn video_fit(in_strip: bool, aspect: Option<f32>) -> gpui::ObjectFit {
+    match aspect {
+        Some(a) if in_strip && a >= 1. => gpui::ObjectFit::Cover,
+        _ => gpui::ObjectFit::Contain,
+    }
+}
+
+pub fn device_pixels(w: f32, h: f32, scale: f32) -> (u32, u32) {
+    ((w * scale).round().max(0.) as u32, (h * scale).round().max(0.) as u32)
+}
+
+fn report_video_view(app: &PhoenixApp, voice_users: &[Id], focus: Option<&Tile>, scale: f32) {
+    let drawn = DRAWN.with(|d| std::mem::take(&mut *d.borrow_mut()));
+    let mut view = phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() };
+    view.others = voice_users.iter().filter(|u| **u != app.me.id).count();
+    view.selected = focus.filter(|t| !t.stream && t.user != app.me.id).map(|t| t.user.0);
+    {
+        let prefs = crate::voice::prefs::prefs().lock();
+        view.local_mutes = voice_users.iter().filter(|u| **u != app.me.id && prefs.user(**u).muted).map(|u| u.0).collect();
+    }
+    for (user, stream, w, h) in drawn {
+        let (pw, ph) = device_pixels(w, h, scale);
+        if stream {
+            if user != app.me.id
+                && let Some(key) = stream_key(app, user)
+            {
+                crate::voice::call::set_stream_view(&key, pw, ph);
+            }
+        } else if user != app.me.id {
+            let px = pw as u64 * ph as u64;
+            let e = view.pixels.entry(user.0).or_insert(0);
+            *e = (*e).max(px);
+        }
+    }
+    crate::voice::call::set_call_view(view);
 }
 
 pub const SPLIT_MIN_H: f32 = 230.;
@@ -269,11 +308,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         window.request_animation_frame();
     }
 
-    let tiles_el = if let Some(fi) = focus.filter(|_| tiles.len() > 1) {
+    DRAWN.with(|d| d.borrow_mut().clear());
+    let focused = focus.filter(|_| tiles.len() > 1);
+    let tiles_el = if let Some(fi) = focused {
         focused_layer(app, &tiles, fi, gw, gh, fade, cx)
     } else {
         grid_layer(app, &tiles, gw, gh, fade, cx)
     };
+    report_video_view(app, &ch.voice_users, focused.and_then(|i| tiles.get(i)), zoom * window.scale_factor());
 
     let toasts = crate::ui::call_toasts::render(app, ch_id, window, cx);
     let call = div()
@@ -767,7 +809,14 @@ fn focused_layer(app: &PhoenixApp, tiles: &[Tile], fi: usize, gw: f32, gh: f32, 
     use crate::ui::call_layout as cl;
     let open = strip_open();
     let rest: Vec<&Tile> = tiles.iter().enumerate().filter(|(i, _)| *i != fi).map(|(_, t)| t).collect();
-    let f = cl::focus(gw, gh, 16. / 9., open, rest.len());
+    let ft = &tiles[fi];
+    let aspect = if ft.stream {
+        let frame = if ft.user == app.me.id { crate::voice::call::own_stream_frame() } else { crate::voice::call::stream_frame(ft.user.0) };
+        frame.filter(|f| f.width > 0 && f.height > 0).map_or(16. / 9., |f| f.width as f32 / f.height as f32)
+    } else {
+        16. / 9.
+    };
+    let f = cl::focus(gw, gh, aspect, open, rest.len());
     let strip_shown = f.strip.is_some();
     div()
         .absolute()
@@ -775,9 +824,10 @@ fn focused_layer(app: &PhoenixApp, tiles: &[Tile], fi: usize, gw: f32, gh: f32, 
         .left_0()
         .w(z(gw))
         .h(z(gh))
-        .child(div().absolute().left(z(f.x)).top(z(f.y)).child(render_tile(app, &tiles[fi], f.w, f.h, gw, fade, cx)))
+        .child(div().absolute().left(z(f.x)).top(z(f.y)).child(render_tile(app, ft, f.w, f.h, gw, fade, cx)))
         .children(f.strip.map(|s| {
-            div()
+            IN_STRIP.with(|c| c.set(true));
+            let strip = div()
                 .absolute()
                 .left(z(cl::STRIP_GAP))
                 .right(z(cl::STRIP_GAP))
@@ -790,7 +840,9 @@ fn focused_layer(app: &PhoenixApp, tiles: &[Tile], fi: usize, gw: f32, gh: f32, 
                         .flex_none()
                         .when(i > 0, |d| d.ml(z(cl::STRIP_GAP)))
                         .child(render_tile(app, tile, s.tile_w, cl::STRIP_TILE_H, s.rule_w, fade, cx))
-                }))
+                }));
+            IN_STRIP.with(|c| c.set(false));
+            strip
         }))
         .child(strip_button(open && strip_shown, f.action_top, fade, cx))
         .into_any_element()
@@ -1078,6 +1130,30 @@ thread_local! {
     static REMOTE_FRAMES: std::cell::RefCell<FrameCache> = std::cell::RefCell::new(FrameCache::new());
 }
 
+pub fn remote_aspect(user: Id) -> Option<f32> {
+    crate::voice::call::remote_frame(user.0).filter(|f| f.height > 0).map(|f| f.width as f32 / f.height as f32)
+}
+
+fn video_loading() -> AnyElement {
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .child(
+            div()
+                .w_full()
+                .aspect_ratio(16. / 9.)
+                .opacity(0.6)
+                .bg(gpui::linear_gradient(
+                    120.,
+                    gpui::linear_color_stop(t(idx::PRIMARY_730), 0.),
+                    gpui::linear_color_stop(t(idx::PRIMARY_660), 1.),
+                )),
+        )
+        .into_any_element()
+}
+
 pub fn remote_image(user: Id) -> Option<std::sync::Arc<gpui::RenderImage>> {
     let f = crate::voice::call::remote_frame(user.0)?;
     if let Some((pts, img)) = REMOTE_FRAMES.with(|c| c.borrow().get(&user.0).cloned())
@@ -1163,6 +1239,8 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
     }
     let u = app.users.get(&tile.user);
     let me = tile.user == app.me.id;
+    let in_strip = IN_STRIP.with(|c| c.get());
+    DRAWN.with(|d| d.borrow_mut().push((tile.user, tile.stream, w, h)));
     let mut f = crate::ui::voice_panel::flags(tile.user);
     if me {
         f.self_mute = app.mic_muted;
@@ -1238,7 +1316,12 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
             .flex()
             .items_center()
             .justify_center()
-            .children(still.map(|src| gpui::img(src).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Contain)))
+            .children(still.map(|src| {
+                let aspect = if me { crate::voice::call::own_stream_frame() } else { crate::voice::call::stream_frame(tile.user.0) }
+                    .filter(|f| f.height > 0)
+                    .map(|f| f.width as f32 / f.height as f32);
+                gpui::img(src).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect))
+            }))
             .map(|d| {
                 if !me && !watching {
                     d.child(
@@ -1333,7 +1416,11 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
             .items_center()
             .justify_center()
             .map(|d| match f.video.then(|| if me { camera_image().filter(|_| !crate::ui::call_menus::self_video_hidden()) } else { remote_image(tile.user) }).flatten() {
-                Some(img) => d.bg(t(idx::BACKGROUND_BASE_LOWER)).child(gpui::img(img).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Contain)),
+                Some(img) => {
+                    let aspect = if me { None } else { remote_aspect(tile.user) };
+                    d.bg(t(idx::BACKGROUND_BASE_LOWER)).child(gpui::img(img).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect)))
+                }
+                None if f.video && !me && crate::voice::call::in_call() => d.bg(t(idx::BLACK)).child(video_loading()),
                 None => d.child(avatar(u, look.avatar * crate::theme::zoom())),
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))

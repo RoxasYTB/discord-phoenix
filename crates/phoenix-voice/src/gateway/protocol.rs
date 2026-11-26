@@ -17,6 +17,7 @@ pub mod op {
     pub const RESUMED: u8 = 9;
     pub const CLIENTS_CONNECT: u8 = 11;
     pub const VIDEO: u8 = 12;
+    pub const MEDIA_SINK_WANTS: u8 = 15;
     pub const CLIENT_DISCONNECT: u8 = 13;
     pub const FLAGS: u8 = 18;
     pub const PLATFORM: u8 = 20;
@@ -289,6 +290,10 @@ pub fn video(p: &VideoPayload) -> Result<String> {
     Ok(text(op::VIDEO, serde_json::to_value(p)?))
 }
 
+pub fn media_sink_wants(wants: &Value) -> String {
+    text(op::MEDIA_SINK_WANTS, wants.clone())
+}
+
 pub fn dave_transition_ready(transition_id: u16) -> String {
     text(op::DAVE_TRANSITION_READY, json!({ "transition_id": transition_id }))
 }
@@ -315,6 +320,14 @@ mod tests {
         assert_eq!(b.seq, Some(9));
         assert_eq!(b.msg, ServerMessage::Dave(DaveServerMessage::AnnounceCommit { transition_id: 7, commit: vec![0xaa] }));
         assert!(decode_binary(&[0, 1]).is_err());
+    }
+
+    #[test]
+    fn media_sink_wants_is_op15() {
+        let v: Value = serde_json::from_str(&media_sink_wants(&json!({"any": 90, "123": 0}))).unwrap();
+        assert_eq!(v["op"], 15);
+        assert_eq!(v["d"]["any"], 90);
+        assert_eq!(v["d"]["123"], 0);
     }
 
     #[test]

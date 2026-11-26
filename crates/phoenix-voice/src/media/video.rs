@@ -8,7 +8,7 @@ pub fn probe_capabilities() -> crate::codec::LocalCapabilities {
         hw_av1_encoder: false,
         h264_encoder: ffmpeg,
         vp8_encoder: false,
-        decoders: vec![Codec::H264],
+        decoders: if ffmpeg { super::ffmpeg::decoder_support().codecs.clone() } else { Vec::new() },
     }
 }
 

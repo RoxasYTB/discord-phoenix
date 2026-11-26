@@ -162,6 +162,10 @@ impl GatewayHandle {
         self.send_text(protocol::video(p)?)
     }
 
+    pub fn media_sink_wants(&self, wants: &serde_json::Value) -> Result<()> {
+        self.send_text(protocol::media_sink_wants(wants))
+    }
+
     pub fn dave_transition_ready(&self, transition_id: u16) -> Result<()> {
         self.send_text(protocol::dave_transition_ready(transition_id))
     }

@@ -12,7 +12,9 @@ use crate::dave::session::{DaveAction, DaveSession};
 use crate::gateway::protocol::speaking;
 use crate::gateway::{self, GatewayEvent, GatewayHandle, ReconnectPolicy, ServerMessage, VoiceConnectInfo};
 use crate::rtp::{self, RtpSender};
+use crate::sink_wants::{CallView, GoLiveWants, SinkWants};
 use crate::udp::{Incoming, MediaSocket};
+use crate::video_rx::{self, EncodedFrame, Request, VideoReceiver};
 use crate::{Error, Result};
 
 const SPEAKING_TIMEOUT: Duration = Duration::from_millis(300);
@@ -43,7 +45,7 @@ pub enum VoiceEvent {
     Reconnecting,
     Disconnected { reason: String },
     VideoState { user_id: u64, active: bool },
-    Video { user_id: u64, frame: Vec<u8> },
+    Video { user_id: u64, codec: Codec, keyframe: bool, frame: Vec<u8> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -55,6 +57,9 @@ pub struct ConnStats {
     pub video_packets_sent: u64,
     pub video_rtcp_received: u64,
     pub video_frames_received: u64,
+    pub video_nacks_sent: u64,
+    pub video_keyframe_requests: u64,
+    pub video_decrypt_errors: u64,
 }
 
 pub struct VoiceConfig {
@@ -71,9 +76,20 @@ pub enum VideoOut {
     Stop,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum VideoView {
+    Call(CallView),
+    Stream { width: u32, height: u32, zoom: f32 },
+}
+
+pub const VIEW_DEBOUNCE: Duration = Duration::from_millis(100);
+pub const STREAM_VIEW_DEBOUNCE: Duration = Duration::from_millis(500);
+
 enum Cmd {
     Close,
     Video(VideoOut),
+    View(VideoView),
+    KeyFrame(u64),
 }
 
 #[derive(Clone)]
@@ -88,6 +104,14 @@ impl VoiceConnection {
 
     pub fn video(&self, v: VideoOut) {
         let _ = self.tx.send(Cmd::Video(v));
+    }
+
+    pub fn set_view(&self, v: VideoView) {
+        let _ = self.tx.send(Cmd::View(v));
+    }
+
+    pub fn request_keyframe(&self, user_id: u64) {
+        let _ = self.tx.send(Cmd::KeyFrame(user_id));
     }
 }
 
@@ -348,6 +372,14 @@ impl Receiver {
         audio_in(AudioIn { user_id: uid, ssrc: p.ssrc, sequence: p.sequence, timestamp: p.timestamp, opus });
     }
 
+    pub fn summary(&self) -> String {
+        let mut mapped: Vec<_> = self.ssrc_users.iter().map(|(s, u)| format!("{s}:{u}")).collect();
+        mapped.sort();
+        let mut held: Vec<_> = self.unmapped.iter().map(|(s, q)| format!("{s}:{}", q.len())).collect();
+        held.sort();
+        format!("mapped=[{}] unmapped=[{}] decrypt_errors={}", mapped.join(","), held.join(","), self.decrypt_errors)
+    }
+
     pub fn expire(&mut self, now: Instant, events: &mpsc::UnboundedSender<VoiceEvent>) {
         self.last_heard.retain(|uid, t| {
             let alive = now.duration_since(*t) < SPEAKING_TIMEOUT;
@@ -356,6 +388,50 @@ impl Receiver {
             }
             alive
         });
+    }
+}
+
+pub fn open_video_frame(f: &EncodedFrame, dave: &mut DaveSession) -> Option<Vec<u8>> {
+    if let Ok(p) = dave.decrypt(f.user_id, &f.data) {
+        return Some(p);
+    }
+    if f.codec != Codec::Av1 {
+        return None;
+    }
+    dave.decrypt(f.user_id, &rtp::av1::without_last_obu_size(&f.data)?).ok()
+}
+
+fn deliver_video(frames: Vec<EncodedFrame>, vrx: &mut VideoReceiver, dave: &mut DaveSession, stats: &mut ConnStats, events: &mpsc::UnboundedSender<VoiceEvent>) {
+    for f in frames {
+        let Some(plain) = open_video_frame(&f, dave) else {
+            stats.video_decrypt_errors += 1;
+            vrx.request_keyframe(f.user_id);
+            continue;
+        };
+        let keyframe = video_rx::is_keyframe(f.codec, &plain);
+        if vrx.accept(&f, keyframe) {
+            stats.video_frames_received += 1;
+            let _ = events.send(VoiceEvent::Video { user_id: f.user_id, codec: f.codec, keyframe, frame: plain });
+        }
+    }
+}
+
+fn feedback_packet(sender_ssrc: u32, r: &Request) -> Vec<u8> {
+    match r {
+        Request::Nack { media_ssrc, lost } => rtp::rtcp::build_nack(sender_ssrc, *media_ssrc, lost),
+        Request::KeyFrame { media_ssrc } => rtp::rtcp::build_pli(sender_ssrc, *media_ssrc),
+    }
+}
+
+async fn send_feedback(m: &mut Media, requests: Vec<Request>, stats: &mut ConnStats) {
+    for r in requests {
+        match r {
+            Request::Nack { .. } => stats.video_nacks_sent += 1,
+            Request::KeyFrame { .. } => stats.video_keyframe_requests += 1,
+        }
+        if let Err(e) = m.socket.send_rtcp(&feedback_packet(m.ssrc, &r)).await {
+            tracing::debug!(error = %e, "voice: rtcp feedback send failed");
+        }
     }
 }
 
@@ -393,8 +469,12 @@ async fn run(
     let mut last_seq: HashMap<u32, u16> = HashMap::new();
     let mut last_code: Option<String> = None;
     let mut ticks = 0u32;
-    let mut video_users: HashMap<u32, u64> = HashMap::new();
-    let mut depack: HashMap<u32, crate::rtp::h264::H264Depacketizer> = HashMap::new();
+    let mut vrx = VideoReceiver::default();
+    let mut wants = SinkWants::new(cfg.user_id);
+    let mut golive = GoLiveWants::new();
+    let mut wants_due: Option<Instant> = None;
+    let mut connected = false;
+    let sound_log = std::env::var_os("PHOENIX_SOUND_LOG").is_some();
 
     loop {
         tokio::select! {
@@ -440,6 +520,8 @@ async fn run(
                             let mode = EncryptionMode::from_name(&sd.mode).ok_or(Error::Unsupported(sd.mode.clone()))?;
                             m.socket.set_cipher(TransportCipher::new(mode, &sd.secret_key)?);
                             send_dave_actions(&gw, dave.on_session_description(sd.dave_protocol_version));
+                            connected = true;
+                            wants_due = Some(Instant::now());
                             let _ = events.send(VoiceEvent::Connected { ssrc: m.ssrc, mode: sd.mode.clone() });
                         }
                         ServerMessage::HeartbeatAck { nonce } => {
@@ -451,6 +533,8 @@ async fn run(
                         ServerMessage::Speaking { user_id, ssrc, .. } => {
                             if let Some(uid) = user_id.and_then(|u| u.parse::<u64>().ok()) {
                                 dave.add_users([uid]);
+                                wants.set_audio(uid, ssrc);
+                                wants_due = Some(Instant::now());
                                 for p in rx.map_ssrc(ssrc, uid) {
                                     rx.deliver(uid, p, &mut dave, &mut *audio_in, events);
                                 }
@@ -464,11 +548,20 @@ async fn run(
                                         rx.deliver(uid, p, &mut dave, &mut *audio_in, events);
                                     }
                                 }
-                                video_users.retain(|_, u| *u != uid);
-                                if v.video_ssrc != 0 {
-                                    video_users.insert(v.video_ssrc, uid);
+                                let layers = video_rx::layers(&v);
+                                if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
+                                    eprintln!("voice-trace: op 12 user={uid} audio={} layers={layers:?}", v.audio_ssrc);
                                 }
-                                let _ = events.send(VoiceEvent::VideoState { user_id: uid, active: v.video_ssrc != 0 });
+                                vrx.set_layers(uid, layers.clone());
+                                wants.set_video(uid, &layers);
+                                if v.audio_ssrc != 0 {
+                                    wants.set_audio(uid, v.audio_ssrc);
+                                }
+                                if cfg.info.stream && uid != cfg.user_id {
+                                    golive.set_stream(&layers);
+                                }
+                                wants_due = Some(Instant::now());
+                                let _ = events.send(VoiceEvent::VideoState { user_id: uid, active: !layers.is_empty() });
                             }
                         }
                         ServerMessage::ClientsConnect { user_ids } => {
@@ -478,6 +571,9 @@ async fn run(
                             if let Ok(uid) = user_id.parse::<u64>() {
                                 dave.remove_user(uid);
                                 rx.remove_user(uid, events);
+                                vrx.remove_user(uid);
+                                wants.remove_user(uid);
+                                wants_due = Some(Instant::now());
                             }
                         }
                         ServerMessage::Dave(d) => {
@@ -536,20 +632,14 @@ async fn run(
                     }
                 };
                 let Ok((h, payload)) = rtp::parse_packet(&pkt) else { continue };
-                if h.payload_type == Codec::H264.payload_type() {
-                    let Some(&uid) = video_users.get(&h.ssrc) else { continue };
-                    let d = depack.entry(h.ssrc).or_default();
-                    let au = match rtp::Depacketizer::push(d, payload, h.marker) {
-                        Ok(Some(au)) => au,
-                        Ok(None) => continue,
-                        Err(_) => {
-                            *d = Default::default();
-                            continue;
-                        }
-                    };
-                    stats.video_frames_received += 1;
-                    if let Ok(frame) = dave.decrypt(uid, &au) {
-                        let _ = events.send(VoiceEvent::Video { user_id: uid, frame });
+                if Codec::from_payload_type(h.payload_type).is_some_and(|(c, _)| c.is_video()) {
+                    let now = Instant::now();
+                    let frames = vrx.push(&h, payload, now);
+                    deliver_video(frames, &mut vrx, &mut dave, &mut stats, events);
+                    let (requests, frames) = vrx.poll(now);
+                    deliver_video(frames, &mut vrx, &mut dave, &mut stats, events);
+                    if let Some(m) = media.as_mut() {
+                        send_feedback(m, requests, &mut stats).await;
                     }
                     continue;
                 }
@@ -611,10 +701,46 @@ async fn run(
                 }
             }
             _ = tick.tick() => {
-                rx.expire(Instant::now(), events);
+                let now = Instant::now();
+                rx.expire(now, events);
+                let (requests, frames) = vrx.poll(now);
+                deliver_video(frames, &mut vrx, &mut dave, &mut stats, events);
+                if let Some(m) = media.as_mut() {
+                    send_feedback(m, requests, &mut stats).await;
+                }
+                if connected && wants_due.is_some_and(|d| d <= now) {
+                    wants_due = None;
+                    let w = if cfg.info.stream { golive.update() } else { wants.update().map(|w| crate::sink_wants::wants_json(&w)) };
+                    if let Some(w) = w {
+                        if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
+                            eprintln!("voice-trace: op 15 media sink wants {w}");
+                        }
+                        gw.media_sink_wants(&w)?;
+                    }
+                }
                 ticks += 1;
                 if ticks.is_multiple_of(10) && media.is_some() {
                     let _ = events.send(VoiceEvent::Stats(stats));
+                    if sound_log {
+                        let v = vrx.stats();
+                        eprintln!(
+                            "voice-net: stream={} connected={connected} dave={} v{} rtp_audio={} lost={} {} video_packets={} rtx={} frames={} shown={} dropped={} nacks={} plis={} video_decrypt_errors={}",
+                            cfg.info.stream,
+                            dave.is_active(),
+                            dave.protocol_version(),
+                            stats.packets_received,
+                            stats.packets_lost,
+                            rx.summary(),
+                            v.packets,
+                            v.rtx,
+                            v.frames,
+                            stats.video_frames_received,
+                            v.dropped_frames,
+                            stats.video_nacks_sent,
+                            stats.video_keyframe_requests,
+                            stats.video_decrypt_errors
+                        );
+                    }
                 }
             }
             cmd = cmds.recv() => match cmd {
@@ -622,6 +748,15 @@ async fn run(
                     let _ = gw.close();
                     return Ok(());
                 }
+                Some(Cmd::View(VideoView::Call(v))) => {
+                    wants.set_view(v);
+                    wants_due = Some(Instant::now() + VIEW_DEBOUNCE);
+                }
+                Some(Cmd::View(VideoView::Stream { width, height, zoom })) => {
+                    golive.set_size(width, height, zoom);
+                    wants_due = Some(Instant::now() + STREAM_VIEW_DEBOUNCE);
+                }
+                Some(Cmd::KeyFrame(user)) => vrx.request_keyframe(user),
                 Some(Cmd::Video(v)) => {
                     let Some(m) = media.as_mut() else { continue };
                     match v {

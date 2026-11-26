@@ -129,6 +129,7 @@ impl AudioEngine {
 
         let mut threads = Vec::new();
         let oq = out_queue.clone();
+        let output_name = output.clone();
         threads.push(
             std::thread::Builder::new()
                 .name("phoenix-audio-io".into())
@@ -151,6 +152,9 @@ impl AudioEngine {
                 .map_err(Error::Io)?,
         );
         let (ifmt, ofmt) = ready_rx.recv_timeout(Duration::from_secs(5)).map_err(|_| Error::Timeout("audio devices"))?;
+        if std::env::var_os("PHOENIX_SOUND_LOG").is_some() {
+            eprintln!("voice-audio: engine input={ifmt:?} output={ofmt:?} output_device={output_name:?}");
+        }
 
         if let Some((rate, ch)) = ifmt {
             let control = control.clone();

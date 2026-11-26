@@ -62,6 +62,18 @@ impl Codec {
     pub fn rtx_payload_type(self) -> Option<u8> {
         self.is_video().then(|| self.payload_type() + 1)
     }
+
+    pub fn from_payload_type(pt: u8) -> Option<(Codec, bool)> {
+        [Codec::Opus, Codec::Av1, Codec::H265, Codec::H264, Codec::Vp8, Codec::Vp9].into_iter().find_map(|c| {
+            if c.payload_type() == pt {
+                Some((c, false))
+            } else if c.rtx_payload_type() == Some(pt) {
+                Some((c, true))
+            } else {
+                None
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -274,6 +286,17 @@ mod tests {
         assert!(!H264Profile::apple_safe(100, 0x1f));
         assert!(!H264Profile::apple_safe(110, 0x1f));
         assert_eq!(sps_profile_level(&[0x67, 0x42, 0xe0, 0x1f]), Some((0x42, 0x1f)));
+    }
+
+    #[test]
+    fn payload_types_map_back_to_codecs() {
+        assert_eq!(Codec::from_payload_type(105), Some((Codec::H264, false)));
+        assert_eq!(Codec::from_payload_type(106), Some((Codec::H264, true)));
+        assert_eq!(Codec::from_payload_type(107), Some((Codec::Vp8, false)));
+        assert_eq!(Codec::from_payload_type(102), Some((Codec::Av1, true)));
+        assert_eq!(Codec::from_payload_type(120), Some((Codec::Opus, false)));
+        assert_eq!(Codec::from_payload_type(121), None);
+        assert_eq!(Codec::from_payload_type(96), None);
     }
 
     #[test]
