@@ -204,6 +204,18 @@ pub fn run() -> anyhow::Result<()> {
             println!("trace t_ms={} y={:.2}", t_trace.elapsed().as_millis(), f32::from(y));
         }
     });
+    p.cx.update(|cx| v.read(cx).message_list.scroll_to_end());
+    p.frame();
+    let t_burst = Instant::now();
+    p.live("scroll_chat_burst_from_end", 60, |p, i| {
+        if i < 20 && i % 2 == 0 {
+            p.input(notch(700., 400., 3.));
+        }
+        if trace {
+            let y = p.cx.update(|cx| v.read(cx).message_list.scroll_px_offset_for_scrollbar().y);
+            println!("burst t_ms={} y={:.2}", t_burst.elapsed().as_millis(), f32::from(y));
+        }
+    });
     let mic = phoenix_app::ui::states::key(("audio-btn", "Mic"));
     let hover = |p: &mut Probe, over: bool| {
         phoenix_app::ui::states::set_hover(mic, over);

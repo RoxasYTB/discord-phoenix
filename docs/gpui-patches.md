@@ -613,6 +613,26 @@ the constants above come from the Chromium source.
   loading) is called on every step. A step that lands within 0.05 px of the end snaps to it,
   so float rounding cannot leave the chat one hair above the bottom.
 
+**Fixes, 2026-11-26 evening (branch `gpui-scroll-fix`).**
+- The chat did not move with the wheel. A `ListAlignment::Bottom` list resting at its end has
+  no anchor, so its logical top is past the last item; `StateInner::scroll_by` started from that
+  height and every step was clamped back to the end. It now starts from the offset the list is
+  drawn at (`min(scroll_top, scroll_max)`). Test `test_smooth_step_scrolls_a_bottom_list_resting_at_its_end`.
+- Notch distance: `wheel_line_delta` gives 40 DIPs per line divided by the page zoom (120 DIPs a
+  notch). Measured on Chrome 158 under Xvfb with real X11 wheel clicks (`xdotool click 4`),
+  device scale 1.5, page zoom 1: 120 CSS px a notch. In the client (Wayland scale 1, dpr 1.5)
+  a CDP wheel of 100 DIPs scrolls 66.7 CSS px, so its deltas are divided by the 1.5 zoom:
+  one notch is 80 CSS px, 120 physical px. Before, a notch was 60 px in a list and
+  `3 × line_height` in a div.
+- Inactive windows: GPUI throttles an unfocused window to 30 fps (`inactive_frame_interval`),
+  so a wheel over Phoenix while another window had the focus animated every other frame. The
+  frame handler no longer throttles while `Window::smooth_scrolling()`.
+- `ListState::smooth_scroll_by` and `ScrollHandle::smooth_scroll_by` run a scroll on the same
+  animation (same key) as the wheel; Phoenix's scrollbar track clicks use them.
+- Measured curve (Chrome 158, rAF `scrollTop`): one notch of 120 px eases in and out over
+  175–200 ms; 10 notches sent 25 ms apart reach their 1200 px target 300–370 ms after the
+  first, without a pause between notches, which is the retarget already implemented.
+
 Tests: `smooth_scroll::tests` (segment ramp, ease-in-out of one notch over 200 ms, second notch
 keeps the velocity, reversing restarts from the current offset, a notch after the end starts a
 fresh segment).

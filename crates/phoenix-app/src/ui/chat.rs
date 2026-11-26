@@ -109,7 +109,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                                 .min_h_0()
                                 .relative()
                                 .pr(z(16.))
-                                .group(scrollbar::AUTO_HOVER_GROUP)
                                 .child(
                                     list(app.message_list.clone(), move |ix, _w, cx| row(&entity, ix, cx))
                                         .size_full(),

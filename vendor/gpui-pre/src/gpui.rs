@@ -142,7 +142,10 @@ pub use profiler::*;
 pub use refineable::*;
 pub use scene::*;
 pub use shared_uri::*;
-pub use smooth_scroll::{WheelCurve, set_smooth_wheel_scroll, smooth_wheel_scroll_enabled, wheel_segment_duration};
+pub use smooth_scroll::{
+    WheelCurve, set_smooth_wheel_scroll, smooth_wheel_scroll_enabled, wheel_line_delta,
+    wheel_segment_duration,
+};
 pub use spring::*;
 pub use style::*;
 pub use styled::*;

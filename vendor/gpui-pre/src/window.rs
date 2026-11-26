@@ -1942,7 +1942,9 @@ impl Window {
                     mem::take(&mut deferred_force_render) || request_frame_options.force_render;
 
                 let power_state = handle
-                    .update(&mut cx, |_, _, cx| (cx.thermal_state(), cx.power_mode()))
+                    .update(&mut cx, |_, window, cx| {
+                        (cx.thermal_state(), cx.power_mode(), window.smooth_scrolling())
+                    })
                     .with_context(|| {
                         format!(
                             "reading power state for frame request for window {:?}",
@@ -1962,11 +1964,16 @@ impl Window {
                     || needs_present.get()
                     || high_rate_input;
 
+                let (thermal_state, power_mode, smooth_scrolling) = power_state.unwrap_or((
+                    ThermalState::Nominal,
+                    crate::PowerMode::Unknown,
+                    false,
+                ));
                 let should_throttle = !request_frame_options.require_presentation;
+                // PHOENIX PATCH (smooth wheel): a wheel animation runs at the display rate
+                // in an inactive window too, like Chromium.
                 let inactive_without_high_rate_input =
-                    should_throttle && !active.get() && !high_rate_input;
-                let (thermal_state, power_mode) =
-                    power_state.unwrap_or((ThermalState::Nominal, crate::PowerMode::Unknown));
+                    should_throttle && !active.get() && !high_rate_input && !smooth_scrolling;
                 let min_frame_interval = minimum_frame_interval(
                     should_throttle,
                     inactive_without_high_rate_input,

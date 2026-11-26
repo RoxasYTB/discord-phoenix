@@ -231,3 +231,14 @@ Sources: `web.b63d846b329d6470.js` module 889558 (link click handler `Y`, `Maske
 | trust checkbox | "Toujours faire confiance aux liens de **host**" (`ZgXDsI`, protocol `haA+Xw`); saved to `MaskedLinkStore` in localStorage, not the account | `checkbox_option_el`; saved to the local prefs (`trusted_domains`, `trusted_protocols`) | ✅ |
 | actions | full-width "Retour" (secondary) / "Visiter le site" ("Ouvrir le lien" for a protocol, primary) | same | ✅ |
 
+## Scrolling and scrollbar (2026-11-26 evening)
+
+| item | client reference | Phoenix | status |
+|---|---|---|---|
+| wheel at the bottom of the chat | scrolls | did nothing (bottom-anchored `scroll_by`), fixed in GPUI | ✅ |
+| notch distance | 120 DIPs (80 CSS px at zoom 1.5), Chrome 158 measured | `wheel_line_delta` | ✅ |
+| fast notches | one accelerating animation (10 notches → 1200 px in 300–370 ms) | same retarget curve, no 30 fps throttle when unfocused | ✅ (to confirm on screen) |
+| chat scrollbar thumb | `.auto_tqapBM` without `fade_`: thumb always visible (`scroller_8AE1Qq … auto_tqapBM`, dumps) | was shown only on hover, now always | ✅ |
+| thumb drag | linear, immediate: Δscroll = Δpointer × (content − view) / (track − thumb), measured | `scrollbar::interact` | ✅ |
+| track click | page of 0.875 × view height (490 px for 560), animated ~95 ms; held: repeats after 250 ms every 50 ms until the thumb reaches the pointer (measured, Chrome 158) | same, for every `scrollbar` bar (chat, channels, members, settings, pickers) | ✅ |
+| wheel bursts into an edge | Chromium clamps the target, eases into the edge | stops at the edge on the next frame | ❌ |

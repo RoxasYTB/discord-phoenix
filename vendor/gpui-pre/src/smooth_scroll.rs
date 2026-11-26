@@ -13,6 +13,7 @@ const RAMP_END_PX: f64 = 480.0;
 const MIN_FRAMES: f64 = 6.0;
 const MAX_FRAMES: f64 = 12.0;
 const EPSILON: f64 = 0.01;
+const WHEEL_PIXELS_PER_LINE: f32 = 40.0;
 
 /// Turns animated wheel scrolling on or off for every scroll container of the app.
 /// Off by default. Only wheel notches (`ScrollDelta::Lines`) are animated; precise
@@ -24,6 +25,17 @@ pub fn set_smooth_wheel_scroll(enabled: bool) {
 /// Whether animated wheel scrolling is on, see [`set_smooth_wheel_scroll`].
 pub fn smooth_wheel_scroll_enabled() -> bool {
     ENABLED.load(Ordering::Relaxed)
+}
+
+/// The distance of `lines` wheel lines in logical pixels, like Chromium: 40 DIPs per line
+/// (120 for one notch of 3 lines, measured on Chrome 158), so a page zoom shortens it in
+/// logical pixels and the content moves by the same number of physical pixels at any zoom.
+pub fn wheel_line_delta(lines: Point<f32>, page_zoom: f32) -> Point<Pixels> {
+    let zoom = if page_zoom > 0.0 { page_zoom } else { 1.0 };
+    point(
+        px(lines.x * WHEEL_PIXELS_PER_LINE / zoom),
+        px(lines.y * WHEEL_PIXELS_PER_LINE / zoom),
+    )
 }
 
 fn max_dimension(v: (f64, f64)) -> f64 {
@@ -311,6 +323,13 @@ mod tests {
 
     fn at(t0: Instant, ms: u64) -> Instant {
         t0 + Duration::from_millis(ms)
+    }
+
+    #[test]
+    fn a_notch_is_one_hundred_twenty_dips_at_any_zoom() {
+        assert_eq!(wheel_line_delta(point(0., 3.), 1.0), point(px(0.), px(120.)));
+        assert_eq!(wheel_line_delta(point(0., -3.), 1.5), point(px(0.), px(-80.)));
+        assert_eq!(wheel_line_delta(point(3., 0.), 0.0), point(px(120.), px(0.)));
     }
 
     #[test]
