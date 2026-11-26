@@ -736,3 +736,39 @@ The pill `Y` renders, in this order: role dot (`roleCircle_7RsUnm` 12 px, margin
 - Mod View role pills have no role icon; the Mod View chunk is not in the cache, so not changed.
 - Server tag popout without a splash shows a flat grey banner; the client fallback was not found.
 - Bot bio `:rocket:` stays as text; whether the client bio parser turns shortcodes into emoji was not checked.
+
+## Glitch hunt 9 (2026-11-26, wt/glitch9): main views
+
+Offscreen renders only, no CDP pass: `real_shots` with a `node` stub first in `PATH`, int-bin 0e128aa4 for the before shots and
+ca3d2849 for the after shots. Views: Aperture `#général` (dark, light, Onyx, each with and without High Contrast; compact at 1920×1080),
+`#phoenix` Onyx 1920, `#honeypot` light 940×700, `annonces` compact, the `suggestions` forum (dark 1280, light 940), the thread
+« [Test Phoenix] fil autonome », a DM (dark cozy, light compact), Friends (dark, Onyx HC 1920, light « Tous » at 150 %). Zoom 125 % and 150 %
+are rendered as the same CSS viewport (1024×640 at dpr 1.875, 853×533 at dpr 2.25). Renders stay in
+`/mnt/windata/project-phoenix/compare/glitch9`. References: CSS and JS of the local client cache, `fr.js` strings, gg sans font files.
+
+### Fixed
+
+| Zone | Glitch | Client reference | Fix |
+|---|---|---|---|
+| Reactions, High Contrast | every High Contrast render panicked (`hover style already set`): the HC branch called `.hover` a second time on reactions and the add reaction button (debug builds abort, release builds dropped the normal hover) | `.high-contrast-mode .reaction_MmKct8` border `--border-subtle`, hover `--border-strong` (themes.md) | `message_ext.rs` `reactions`: one `.hover` whose border depends on HC |
+| Compact mode | the first line started at an estimated header width: too far right on most rows (up to ~70 px), and over the server tag for a CJK name (« Coucouu » drawn on « LJDC ») | compact header is inline text, content follows after the name's 4 px | `chat.rs`: the header width is measured by a canvas probe (`compact_header_probe`, per message, refresh on change); the indent uses U+00A0, which gg sans has (3.52 px regular, 3.84 px italic at 16 px, mixed to land within 0.16 px). gg sans has no U+2009 glyph: the old thin spaces were measured at 1 px and drawn by a fallback font about 3 px wide. Test `compact_indent_mixes_regular_and_italic_spaces_to_hit_the_width` |
+| Discovery notice | at 940 px the text was clipped (« …de ce salon p ») and « En savoir plus » dropped to its own line | `bar_8PBDGr` text is inline: one paragraph, the link wraps with it | `chat.rs` `discovery_notice_text`: one `StyledText`, underline highlight on the link |
+| Video attachment | in a column narrower than the video, the card kept its height and cropped the poster (annonces video 1280×720 shown 505×310) | media items keep `aspect-ratio` under `max-width:100%` | `attach.rs` `video_card`: `aspect_ratio(w / h)` instead of a fixed height, like `media_image_with` |
+| Forum cards | a two-line title was cut mid-glyph at the card edge | chunk `6651e9581db5d17c.js` `heading-lg/semibold lineClamp:2` (ellipsis on the last line) | `forum.rs`: `line_clamp(2)` + `text_ellipsis()` (GPUI only ellipsizes a clamp with `text_overflow`) |
+| Role gradient names, light theme | gradient names kept full brightness | `.theme-light .usernameGradient_HG2xvK{filter:brightness(.85)}` (`447505.1c681faad626d654.css`) | `fonts::name_text_with` scales the stops by 0.85 in the light theme (display name styles keep theirs, `name_text`). Test `light_theme_role_gradient_stops_are_dimmed_like_the_client_filter` |
+
+Verified on new renders (int-bin ca3d2849): the three High Contrast renders draw, compact rows start 4 px after the header (guild and DM),
+the notice wraps on three lines, the video shows the whole frame, the pinned forum title ends with « je… ».
+
+### Checked, not bugs
+
+- `#général` header shows the topic dot with no text: the topic is U+E0078 (an invisible tag character), not empty, so the client shows the divider too.
+- « Tous les amis - 199 » with a hyphen while « En ligne — 23 » has an em dash: `fr.js` `rHRrhC` is « Tous les amis - », `BagU2U` « En ligne — ».
+- Forum search at 940 px with the member list: the field is about 20 px wide between the search icon and the fixed buttons, so the placeholder has no room (same flex layout in the client).
+- Channel title cut without an ellipsis at 940 px: `titleWrapper_` is flex-shrink 0 and clipped (responsive.md).
+- Header wrapping at 125 %: the timestamp starts the next line 4 px in, the client's inline `.timestamp` margin.
+
+### Open
+
+- The client member list shows an « Activité — n » card section on busy guilds (dump `vanilla-guild-chat-busy`); Aperture had no card in these renders, not checked.
+- A DM name with a dark to light display name gradient (Clem) starts almost black on the dark theme in the message header; whether the client lightens display name gradients per theme was not checked.
