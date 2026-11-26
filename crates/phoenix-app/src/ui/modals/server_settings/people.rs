@@ -418,9 +418,14 @@ pub fn bans(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let mut list = div().flex().flex_col();
     for (i, b) in shown.iter().enumerate().skip(page * BANS_PER_PAGE).take(BANS_PER_PAGE) {
         let u = b.get("user").cloned().unwrap_or(Value::Null);
+        let uid = kit::n(&u, "id");
         list = list.child(
             div()
                 .id(("ss-ban", i))
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    with_state(|s| s.ban_open = Some(uid));
+                    cx.notify();
+                }))
                 .h(z(56.))
                 .mb(z(4.))
                 .p(z(8.))
@@ -473,15 +478,23 @@ pub fn bans(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
             cx.notify();
         })));
     }
-    let desc = div()
-        .mb(z(20.))
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(gpui::StyledText::new(format!("{}{}.", crate::t!("gs.bans.desc_lead"), crate::t!("gs.bans.desc_link"))).with_highlights([(
-            crate::t!("gs.bans.desc_lead").len()..crate::t!("gs.bans.desc_lead").len() + crate::t!("gs.bans.desc_link").len(),
-            gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() },
-        )]));
+    let lead = crate::t!("gs.bans.desc_lead");
+    let link = lead.len()..lead.len() + crate::t!("gs.bans.desc_link").len();
+    let styled = gpui::StyledText::new(format!("{lead}{}.", crate::t!("gs.bans.desc_link"))).with_highlights([(link.clone(), gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() })]);
+    let ent = cx.entity();
+    let desc = div().mb(z(20.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(gpui::InteractiveText::new("ss-bans-desc", styled).on_click(vec![link], move |_, _, cx| {
+        let guild = with_state(|s| {
+            s.section = super::section_index(crate::ui::server_pages::safety::SECTION);
+            s.guild
+        });
+        if let Some(g) = guild {
+            crate::ui::server_pages::set_sub(g, crate::ui::server_pages::safety::SECTION, crate::ui::server_pages::Sub::DmSpam);
+        }
+        ent.update(cx, |a, cx| {
+            super::load(a, cx);
+            cx.notify();
+        });
+    }));
     div()
         .pt(z(56.))
         .px(z(24.))
@@ -504,6 +517,37 @@ pub fn bans(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .child(body)
         .child(pager)
         .into_any_element()
+}
+
+pub fn ban_modal(s: &State, user: u64, cx: &mut Cx) -> Option<AnyElement> {
+    let ban = s.list("bans").iter().find(|b| b.get("user").map(|u| kit::n(u, "id")) == Some(user))?.clone();
+    let u = ban.get("user").cloned().unwrap_or(Value::Null);
+    let reason = ban.get("reason").and_then(Value::as_str).filter(|r| !r.is_empty()).map(str::to_owned);
+    let guild = s.guild;
+    let ent = cx.entity();
+    let close: crate::ui::modal::Action = std::rc::Rc::new(move |_, cx| {
+        with_state(|s| s.ban_open = None);
+        ent.update(cx, |_, cx| cx.notify());
+    });
+    let body = div()
+        .flex()
+        .flex_col()
+        .gap(z(4.))
+        .child(text(crate::t!("gs.bans.reason"), 16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT))
+        .child(text(reason.map(SharedString::from).unwrap_or_else(|| crate::t!("gs.bans.no_reason")), 12., 16., FontWeight::MEDIUM, idx::TEXT_SUBTLE));
+    let c2 = close.clone();
+    let c3 = close.clone();
+    let footer = div()
+        .w_full()
+        .flex()
+        .justify_end()
+        .gap(z(8.))
+        .child(kit::critical_secondary("ss-ban-revoke", crate::t!("gs.bans.revoke")).h(z(40.)).px(z(16.)).on_click(cx.listener(move |a, _, w, cx| {
+            c2(w, cx);
+            a.blocked_write(crate::actions::guard::GuardedWrite::unban(guild.0, user), cx);
+        })))
+        .child(crate::ui::controls::button("ss-ban-done", crate::t!("gs.bans.done"), BtnKind::Primary).on_click(move |_, w, cx| c3(w, cx)));
+    Some(crate::ui::modals::card_with(440., kit::s(&u, "username").into(), None, body.into_any_element(), Some(footer.into_any_element()), close))
 }
 
 pub const PRUNE_DAYS: [u32; 2] = [7, 30];

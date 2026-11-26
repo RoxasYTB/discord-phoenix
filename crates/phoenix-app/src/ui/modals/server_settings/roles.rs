@@ -998,11 +998,22 @@ fn links() -> AnyElement {
         .into_any_element()
 }
 
-fn members(app: &PhoenixApp, e: &Editor, cx: &mut Cx) -> AnyElement {
+pub fn member_matches(q: &str, name: &str, tag: &str) -> bool {
+    let q = q.trim().to_lowercase();
+    q.is_empty() || name.to_lowercase().contains(&q) || tag.to_lowercase().contains(&q)
+}
+
+fn members(app: &PhoenixApp, s: &State, e: &Editor, cx: &mut Cx) -> AnyElement {
+    let search = s.inputs.get("role_member_search");
+    let q = kit::input_value(search, cx);
     let rows: Vec<AnyElement> = e
         .members
         .iter()
         .flatten()
+        .filter(|id| {
+            let u = app.users.get(&crate::model::Id(**id));
+            member_matches(&q, u.map(|u| u.display_name.as_ref()).unwrap_or_default(), u.map(|u| u.name.as_ref()).unwrap_or_default())
+        })
         .enumerate()
         .map(|(i, id)| {
             let user = *id;
@@ -1047,7 +1058,7 @@ fn members(app: &PhoenixApp, e: &Editor, cx: &mut Cx) -> AnyElement {
         .mt(z(16.))
         .flex()
         .flex_col()
-        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(None).flex_1()).child(kit::btn_sm("ss-role-add-members", crate::t!("gs.role.add_members"), BtnKind::Primary).when(locked, |b| b.opacity(0.5)).on_click(cx.listener(move |_, _, _, cx| {
+        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(search).flex_1()).child(kit::btn_sm("ss-role-add-members", crate::t!("gs.role.add_members"), BtnKind::Primary).when(locked, |b| b.opacity(0.5)).on_click(cx.listener(move |_, _, _, cx| {
             if !locked {
                 with_state(|s| s.role_add = Some(super::super::channel_perms::AddMembers { search: None, picked: Vec::new() }));
             }
@@ -1161,7 +1172,7 @@ pub fn editor(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         Tab::Display => display(app, s, e, cx),
         Tab::Permissions => permissions(e, cx),
         Tab::Links => links(),
-        Tab::Members => members(app, e, cx),
+        Tab::Members => members(app, s, e, cx),
     };
     let header = div()
         .pt(z(60.))
@@ -1202,6 +1213,16 @@ pub fn editor(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn role_member_tools_follow_the_client() {
+        assert!(super::member_matches(" Fer ", "Ferris", "ferris_rs"));
+        assert!(super::member_matches("", "a", "b"));
+        assert!(!super::member_matches("zz", "Ferris", "ferris_rs"));
+        let w = crate::actions::guard::GuardedWrite::add_role_members(1, 2, &[3]);
+        assert!(w.refusal().is_write_blocked());
+        assert_eq!(super::MAX_ADD_MEMBERS, 30);
+    }
+
     use super::*;
 
     #[test]

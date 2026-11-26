@@ -117,6 +117,10 @@ impl GuardedWrite {
         write(Method::PATCH, format!("/guilds/{guild}/members/{user}"), Some(json!({ "roles": ids })))
     }
 
+    pub fn unban(guild: u64, user: u64) -> Self {
+        write(Method::DELETE, format!("/guilds/{guild}/bans/{user}"), None)
+    }
+
     pub fn create_role(guild: u64, name: &str) -> Self {
         write(
             Method::POST,
@@ -284,6 +288,7 @@ mod tests {
             GuardedWrite::ring_call(9),
             GuardedWrite::add_recipient(9, 2),
             GuardedWrite::disable_account("pw"),
+            GuardedWrite::unban(5, 7),
             GuardedWrite::add_role_members(5, 6, &[7]),
             GuardedWrite::set_member_roles(5, 7, &[]),
             GuardedWrite::rename_webauthn("9", "Clé"),
@@ -351,6 +356,8 @@ mod tests {
         assert_eq!((ring.method, ring.path.as_str(), ring.body), (Method::POST, "/channels/9/call/ring", Some(json!({ "recipients": null }))));
         let add = GuardedWrite::add_recipient(9, 2);
         assert_eq!((add.method, add.path.as_str(), add.body), (Method::PUT, "/channels/9/recipients/2", None));
+        let ub = GuardedWrite::unban(5, 7);
+        assert_eq!((ub.method, ub.path.as_str()), (Method::DELETE, "/guilds/5/bans/7"));
         let dis = GuardedWrite::disable_account("pw");
         assert_eq!((dis.method, dis.path.as_str(), dis.body), (Method::POST, "/users/@me/disable", Some(json!({ "password": "pw" }))));
         assert_eq!(GuardedWrite::delete_account("pw").path, "/users/@me/delete");

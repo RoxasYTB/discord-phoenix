@@ -1923,6 +1923,25 @@ fn main() -> anyhow::Result<()> {
         cx.update_window(win.into(), |_, _, cx| v.update(cx, |_, cx| cx.notify()))?;
         pump(&mut cx, 1200);
     }
+    if let Ok(which) = std::env::var("PHX_SS_MODAL") {
+        pump(&mut cx, 1500);
+        cx.update_window(win.into(), |_, _, cx| {
+            v.update(cx, |app, cx| {
+                let sec = app.selected_guild.map(|g| app.security_state(g));
+                phoenix_app::ui::modals::server_settings::with_state(|s| match which.as_str() {
+                    "prune" => s.prune = Some(phoenix_app::ui::modals::server_settings::people::Prune::default()),
+                    "prune-open" => {
+                        s.prune = Some(phoenix_app::ui::modals::server_settings::people::Prune { roles_open: true, ..Default::default() })
+                    }
+                    "security" => s.security = sec,
+                    "ban" => s.ban_open = s.list("bans").first().and_then(|b| b.get("user")).and_then(|u| u.get("id")).and_then(|i| i.as_str()).and_then(|i| i.parse().ok()),
+                    _ => {}
+                });
+                cx.notify();
+            })
+        })?;
+        pump(&mut cx, 1500);
+    }
     if let Some(y) = std::env::var("PHX_SERVER_SETTINGS_SCROLL").ok().and_then(|v| v.parse::<f32>().ok()) {
         pump(&mut cx, 600);
         cx.update(|_| phoenix_app::ui::chat::scrollbar::handle_n("server-settings", 1).set_offset(gpui::point(px(0.), px(-y))));
