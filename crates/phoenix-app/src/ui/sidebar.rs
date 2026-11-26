@@ -1356,11 +1356,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                     .when(can_set_status, |d| {
                                         d.hover(|s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))).on_click(move |_, _, cx| {
                                             cx.stop_propagation();
-                                            let current = crate::voice::start_time::status(id.0).unwrap_or_default();
-                                            let fut = status_entity.read(cx).backend.guarded_write(
-                                                crate::actions::guard::GuardedWrite::voice_channel_status(id.0, &current),
-                                            );
-                                            cx.background_executor().spawn(async move { drop(fut.await) }).detach();
+                                            status_entity.update(cx, |a, cx| a.open_voice_status(id, cx));
                                         })
                                     })
                                     .map(|d| match text {

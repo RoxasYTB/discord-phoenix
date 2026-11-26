@@ -125,3 +125,9 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 | heart | wishlist button (`wishlistButton_M2FQyv` sm, 32×32, heart 16): adds the Nitro SKU 521847234246082599 to the wishlist through the guard, tooltip "Ça te plaît ?" below | dump `vanilla-nitro-home` #1084–#1094 | ✅ ⚠ the rich tooltip second line ("Ajoute ça à ta liste de souhaits d'un seul clic") is not drawn |
 | What's New cards | the client list order: quest Orbs multiplier (`Csf5Ol` / `NpUfej`, multiplier from the loaded quests), 1 GB uploads, display name styles (`OLtTrt`), color themes (`acc6h6` / `WQazjs`), lasting quest rewards (`L14NZN`), custom app icons (`GU+wqh`), cut at 6; `card_ualTdV` 330×380 r 16 padding 20, art max 180 tall (multiplier 280 wide), title heading-lg/semibold, description clamped to one line that opens on hover, overlay-primary "Take me there" sliding in from below on hover and opening Quests, Profiles or Appearance | `21ef51f34d56d42d.js` (`sj`, What's New list), `d269be1f73d4af7d.js` (card `D`), CSS `card_ualTdV` | ✅ ⚠ the tenure badge card and the Vice City campaign card need the subscription tenure and an experiment, so they are not drawn |
 | group DM intro "Invite Friends" | same picker on this group | — | ✅ |
+
+## Quests row badge (wt/polish-mix, 26/11)
+
+| item | client | Phoenix | status |
+|---|---|---|---|
+| hero badge seen state | `AdContentSeenStore` (web 113597), a PersistedStore (localStorage `AdContentSeenStore` = `{seenContentIds: {creativeType: [ids]}}`); the Quests row click dispatches `AD_CONTENT_MARK_SEEN` for type 2 (QUEST_HOME_HERO); `QUESTS_FETCH_QUEST_HOME_HERO_SUCCESS` drops type 2 ids other than the fetched hero | `quests_page::SeenStore` saved as `ad-content-seen.json` in the config dir, pruned after each successful hero fetch | ✅ test `seen_store_round_trips_like_the_client` |

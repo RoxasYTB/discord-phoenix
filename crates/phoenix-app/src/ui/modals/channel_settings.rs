@@ -307,6 +307,10 @@ pub fn insert_at(text: &str, range: std::ops::Range<usize>, ins: &str) -> (Strin
 
 pub fn pick_field_emoji(f: crate::ui::pickers::Field, text: String, custom: Option<(Id, String, bool)>, window: &mut Window, cx: &mut gpui::App) {
     use crate::ui::pickers::Field;
+    if f == Field::VoiceStatus {
+        crate::ui::modals::voice_status::insert(&text, window, cx);
+        return;
+    }
     let emoji = match &custom {
         Some((id, _, _)) => json!({ "emoji_id": id.0.to_string(), "emoji_name": Value::Null }),
         None => json!({ "emoji_id": Value::Null, "emoji_name": text.clone() }),
@@ -322,6 +326,7 @@ pub fn pick_field_emoji(f: crate::ui::pickers::Field, text: String, custom: Opti
                 t.emoji = Some(emoji.clone());
             }
         }
+        Field::VoiceStatus => {}
     });
     if let Some(i) = name_input {
         i.update(cx, |st, cx| {

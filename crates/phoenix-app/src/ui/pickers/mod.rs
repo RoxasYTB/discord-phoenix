@@ -51,6 +51,7 @@ pub enum Field {
     ChannelTopic,
     ForumReaction,
     TagEmoji,
+    VoiceStatus,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -230,3 +230,4 @@ Sources: `web.b63d846b329d6470.js` module 889558 (link click handler `Y`, `Maske
 | URL callout | 1px `--border-subtle`, radius 8, padding 16, margin-bottom 12, max-height 144, width 408–498, `overflow-wrap: anywhere`; `protocol//` body-md normal `--text-muted`, host body-md semibold `--text-default`, rest normal muted (protocol links swap the two weights) | same | ✅ |
 | trust checkbox | "Toujours faire confiance aux liens de **host**" (`ZgXDsI`, protocol `haA+Xw`); saved to `MaskedLinkStore` in localStorage, not the account | `checkbox_option_el`; saved to the local prefs (`trusted_domains`, `trusted_protocols`) | ✅ |
 | actions | full-width "Retour" (secondary) / "Visiter le site" ("Ouvrir le lien" for a protocol, primary) | same | ✅ |
+

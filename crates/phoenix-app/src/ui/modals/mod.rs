@@ -33,6 +33,7 @@ pub mod settings_form;
 pub mod settings_layout;
 pub mod stream_feedback;
 pub mod update;
+pub mod voice_status;
 pub mod webhooks;
 
 use std::rc::Rc;
@@ -143,6 +144,7 @@ pub enum Modal {
     QuestVideo(Box<crate::ui::quests_page::Quest>),
     QuestDisclosure(Box<crate::ui::quests_page::Quest>),
     BurstUpsell,
+    VoiceStatus(voice_status::State),
 }
 
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -156,6 +158,8 @@ pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
             nickname::prepare(s, window, cx);
         } else if let Some(Modal::CreateEvent(s)) = m {
             create_event::prepare(s, window, cx);
+        } else if let Some(Modal::VoiceStatus(s)) = m {
+            voice_status::prepare(s, window, cx);
         }
     });
     with_modal(|m| {
@@ -292,6 +296,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::QuestVideo(q) => crate::ui::quest_modals::render_video(q, cx),
             Modal::QuestDisclosure(q) => crate::ui::quest_modals::render_disclosure(q, cx),
             Modal::BurstUpsell => burst_upsell::render(cx),
+            Modal::VoiceStatus(s) => voice_status::render(s, cx),
         })
     })
 }
