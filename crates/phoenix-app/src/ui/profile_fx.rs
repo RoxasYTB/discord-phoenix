@@ -65,7 +65,7 @@ fn decode(bytes: &[u8], still: bool) -> anyhow::Result<RenderImage> {
                 let h = (buf.height() as u64 * MAX_W as u64 / buf.width() as u64) as u32;
                 buf = image::imageops::resize(&buf, MAX_W, h.max(1), image::imageops::FilterType::Triangle);
             }
-            for p in buf.chunks_exact_mut(4) {
+            for p in buf.as_chunks_mut::<4>().0 {
                 p.swap(0, 2);
             }
             image::Frame::from_parts(buf, 0, 0, delay)

@@ -12,10 +12,9 @@ pub fn murmur3(key: &str) -> u32 {
     let data = key.as_bytes();
     let (c1, c2) = (0xcc9e_2d51u32, 0x1b87_3593u32);
     let mut h = 0u32;
-    let chunks = data.chunks_exact(4);
-    let tail = chunks.remainder();
+    let (chunks, tail) = data.as_chunks::<4>();
     for c in chunks {
-        let k = u32::from_le_bytes([c[0], c[1], c[2], c[3]]).wrapping_mul(c1).rotate_left(15).wrapping_mul(c2);
+        let k = u32::from_le_bytes(*c).wrapping_mul(c1).rotate_left(15).wrapping_mul(c2);
         h = (h ^ k).rotate_left(13).wrapping_mul(5).wrapping_add(0xe654_6b64);
     }
     let mut k = 0u32;

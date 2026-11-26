@@ -74,7 +74,7 @@ impl Soundshare {
                             if r.read_exact(&mut buf).is_err() {
                                 break;
                             }
-                            buf.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+                            buf.as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
                         }
                         None => {
                             next += Duration::from_millis(20);

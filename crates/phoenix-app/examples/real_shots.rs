@@ -2573,7 +2573,7 @@ fn main() -> anyhow::Result<()> {
             if let Some(f) = f.filter(|f| f.pts_us > 30)
                 && !saved
             {
-                let rgba: Vec<u8> = f.data.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], 255]).collect();
+                let rgba: Vec<u8> = f.data.as_chunks::<4>().0.iter().flat_map(|p| [p[2], p[1], p[0], 255]).collect();
                 if let Some(img) = image::RgbaImage::from_raw(f.width, f.height, rgba) {
                     let path = format!("{}-stream-frame.png", out.trim_end_matches(".png"));
                     img.save(&path)?;

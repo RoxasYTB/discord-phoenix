@@ -573,7 +573,7 @@ impl<'a> Pb<'a> {
 fn fixed64s(wt: u8, payload: &[u8], scalar: u64, out: &mut Vec<u64>) {
     match wt {
         1 => out.push(scalar),
-        2 => out.extend(payload.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap()))),
+        2 => out.extend(payload.as_chunks::<8>().0.iter().map(|c| u64::from_le_bytes(*c))),
         _ => {}
     }
 }

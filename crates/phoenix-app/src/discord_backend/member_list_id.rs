@@ -34,12 +34,11 @@ fn murmur3_32(data: &[u8], seed: u32) -> u32 {
     const C2: u32 = 0x1b87_3593;
     let mix = |k: u32| k.wrapping_mul(C1).rotate_left(15).wrapping_mul(C2);
     let mut h = seed;
-    let mut chunks = data.chunks_exact(4);
-    for c in &mut chunks {
-        h ^= mix(u32::from_le_bytes([c[0], c[1], c[2], c[3]]));
+    let (chunks, tail) = data.as_chunks::<4>();
+    for c in chunks {
+        h ^= mix(u32::from_le_bytes(*c));
         h = h.rotate_left(13).wrapping_mul(5).wrapping_add(0xe654_6b64);
     }
-    let tail = chunks.remainder();
     if !tail.is_empty() {
         let k = tail.iter().rev().fold(0u32, |k, b| (k << 8) | u32::from(*b));
         h ^= mix(k);

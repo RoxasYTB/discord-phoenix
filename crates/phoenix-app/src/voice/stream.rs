@@ -163,7 +163,7 @@ pub fn notify_option_shown(guild: bool, members: Option<u32>) -> bool {
 pub const PREVIEW_RETRY_MS: u64 = 60_000;
 
 pub fn is_black(rgba: &[u8]) -> bool {
-    rgba.chunks_exact(4).all(|p| p[0] == 0 && p[1] == 0 && p[2] == 0)
+    rgba.as_chunks::<4>().0.iter().all(|p| p[0] == 0 && p[1] == 0 && p[2] == 0)
 }
 
 pub fn preview_jpeg(width: u32, height: u32, rgba: &[u8]) -> Option<String> {

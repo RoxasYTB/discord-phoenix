@@ -30,7 +30,7 @@ pub fn outline(steps: usize) -> Vec<(f64, f64)> {
         let n = numbers(buf);
         match cmd {
             'M' | 'L' => {
-                for p in n.chunks_exact(2) {
+                for p in n.as_chunks::<2>().0 {
                     *cur = (p[0], p[1]);
                     pts.push(*cur);
                 }
@@ -48,7 +48,7 @@ pub fn outline(steps: usize) -> Vec<(f64, f64)> {
                 }
             }
             'C' => {
-                for c in n.chunks_exact(6) {
+                for c in n.as_chunks::<6>().0 {
                     let (p0, p1, p2, p3) = (*cur, (c[0], c[1]), (c[2], c[3]), (c[4], c[5]));
                     for k in 1..=steps {
                         let t = k as f64 / steps as f64;
