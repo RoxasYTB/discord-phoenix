@@ -5,6 +5,7 @@ use gpui::{
     ParentElement, Pixels, SharedString, Stateful, Styled, actions, div, prelude::*, px,
 };
 
+pub mod escape;
 pub mod message;
 
 use crate::{
@@ -60,6 +61,7 @@ actions!(
         JumpToPresent,
         ToggleAllCategories,
         JumpToVoiceGuild,
+        Quit,
     ]
 );
 
@@ -140,9 +142,19 @@ pub const SHORTCUTS: &[Shortcut] = &[
     sc!(Misc, "shortcuts.modal", ["ctrl-/"]),
 ];
 
+pub const QUIT_KEY: &str = if cfg!(target_os = "macos") {
+    "cmd-q"
+} else if cfg!(target_os = "windows") {
+    "alt-f4"
+} else {
+    "ctrl-q"
+};
+
 pub fn bind_keys(cx: &mut App) {
     let ctx = Some(CONTEXT);
+    cx.on_action(|_: &Quit, cx| escape::quit_app(cx));
     cx.bind_keys([
+        KeyBinding::new(QUIT_KEY, Quit, None),
         KeyBinding::new("ctrl-/", ToggleHelp, ctx),
         KeyBinding::new("ctrl-shift-/", ToggleHelp, ctx),
         KeyBinding::new("alt-up", PrevChannel, ctx),
@@ -285,6 +297,8 @@ impl History {
 struct State {
     help_open: bool,
     keys: Option<gpui::Subscription>,
+    app: Option<gpui::WeakEntity<PhoenixApp>>,
+    window: Option<gpui::AnyWindowHandle>,
     history: History,
     last_guild: Option<Id>,
 }
@@ -295,6 +309,14 @@ thread_local! {
 
 fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
     STATE.with(|s| f(&mut s.borrow_mut()))
+}
+
+pub fn main_app() -> Option<gpui::Entity<PhoenixApp>> {
+    with(|s| s.app.clone())?.upgrade()
+}
+
+pub fn is_main_window(window: &gpui::Window) -> bool {
+    with(|s| s.window) == Some(window.window_handle())
 }
 
 pub const HELP_CENTER_URL: &str = "https://support.discord.com";
@@ -448,7 +470,13 @@ impl PhoenixApp {
     }
 }
 
-pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<PhoenixApp>) -> Stateful<gpui::Div> {
+pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> Stateful<gpui::Div> {
+    let handle = window.window_handle();
+    let me = cx.entity().downgrade();
+    with(|s| {
+        s.window = Some(handle);
+        s.app = Some(me);
+    });
     if let Some(ch) = app.selected_channel {
         with(|s| s.history.visit(ch));
     }
@@ -458,6 +486,10 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
     if with(|s| s.keys.is_none()) {
         let weak = cx.entity().downgrade();
         let sub = cx.intercept_keystrokes(move |ev, window, cx| {
+            if is_main_window(window) && ui::context_menu::on_key(&ev.keystroke, window, cx) {
+                cx.stop_propagation();
+                return;
+            }
             let Some(app) = weak.upgrade() else { return };
             app.update(cx, |app, cx| {
                 if app.shortcut_keystroke(&ev.keystroke, window, cx) {
@@ -517,11 +549,7 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
             a.jump_to_message(ch, msg, cx);
         }
     }))
-    .on_action(cx.listener(|a, _: &MarkServerRead, _, cx| {
-        if let Some(g) = a.selected_guild {
-            a.mark_nav_read(ui::nav_menus::Target::Guild(g), cx);
-        }
-    }))
+    .on_action(cx.listener(|a, _: &MarkServerRead, _, cx| a.mark_server_read_shortcut(cx)))
     .on_action(cx.listener(|a, _: &CreateGuild, w, cx| a.open_join_server(w, cx)))
     .on_action(cx.listener(|a, _: &CreateGroupDm, _, cx| a.open_group_dm_picker(cx)))
     .on_action(cx.listener(|a, _: &CopyChannelLink, _, cx| a.copy_channel_link(cx)))
@@ -541,9 +569,9 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
     }))
     .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url(HELP_CENTER_URL)))
     .on_action(cx.listener(|a, _: &QuickSwitcherAlt, w, cx| a.open_switcher(w, cx)))
-    .on_action(cx.listener(|a, _: &JumpToPresent, _, cx| {
-        a.message_list.scroll_to_end();
-        a.mark_channel_read(cx);
+    .on_action(cx.listener(|a, _: &JumpToPresent, w, cx| {
+        a.escape_stack(w, cx);
+        cx.notify();
     }))
     .on_action(cx.listener(|a, _: &ToggleAllCategories, _, cx| a.toggle_all_categories(cx)))
     .on_action(cx.listener(|a, _: &JumpToVoiceGuild, _, cx| a.jump_to_voice_guild(cx)))

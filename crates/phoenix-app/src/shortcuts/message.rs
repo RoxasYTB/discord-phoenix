@@ -81,6 +81,10 @@ fn composer_focused(app: &PhoenixApp, window: &Window, cx: &App) -> bool {
     gpui::Focusable::focus_handle(app.composer.read(cx), cx).is_focused(window)
 }
 
+fn text_field_focused(window: &Window) -> bool {
+    window.context_stack().iter().any(|c| c.contains("Input"))
+}
+
 fn focus_composer(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     app.composer.update(cx, |s, cx| s.focus(window, cx));
 }
@@ -174,6 +178,15 @@ impl PhoenixApp {
     }
 
     pub fn shortcut_keystroke(&mut self, ks: &Keystroke, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !super::is_main_window(window) {
+            return false;
+        }
+        if !self.focus.contains_focused(window, cx) {
+            window.focus(&self.focus, cx);
+            if dispatch_global(ks, window, cx) {
+                return true;
+            }
+        }
         if self.screen != Screen::Main || self.settings.is_some() || self.switcher.is_some() {
             return false;
         }
@@ -185,6 +198,7 @@ impl PhoenixApp {
         }
         let m = ks.modifiers;
         let in_composer = composer_focused(self, window, cx);
+        let in_text = in_composer || text_field_focused(window);
         let on_ring = crate::ui::focus_ring::owns_focus(window);
         let at_root = self.focus.is_focused(window) || on_ring;
         if let Some((ch, id)) = focused() {
@@ -200,8 +214,8 @@ impl PhoenixApp {
             self.select_guild(g, cx);
             return true;
         }
-        if in_composer {
-            if ks.key == "tab" && m.shift && !m.control && self.composer.read(cx).value().is_empty() {
+        if in_text {
+            if in_composer && ks.key == "tab" && m.shift && !m.control && self.composer.read(cx).value().is_empty() {
                 return self.focus_last_message(window, cx);
             }
             if passes_through_composer(ks) {

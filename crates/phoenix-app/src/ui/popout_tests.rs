@@ -19,6 +19,7 @@ use crate::{
 struct Probe {
     mock: MockBackend,
     acks: AtomicUsize,
+    leaves: AtomicUsize,
     unreads: Mutex<Vec<Entry>>,
 }
 
@@ -58,6 +59,9 @@ impl Backend for Probe {
         self.mock.trigger_typing(channel)
     }
     fn join_voice(&self, channel: Option<Id>) -> BoxFuture<()> {
+        if channel.is_none() {
+            self.leaves.fetch_add(1, Ordering::SeqCst);
+        }
         self.mock.join_voice(channel)
     }
     fn delete_message(&self, channel: Id, id: Id) -> BoxFuture<()> {
@@ -92,7 +96,7 @@ struct Harness {
 }
 
 fn setup(cx: &mut TestAppContext) -> Harness {
-    let probe = Arc::new(Probe { mock: MockBackend::synchronous(), acks: AtomicUsize::new(0), unreads: Mutex::new(Vec::new()) });
+    let probe = Arc::new(Probe { mock: MockBackend::synchronous(), acks: AtomicUsize::new(0), leaves: AtomicUsize::new(0), unreads: Mutex::new(Vec::new()) });
     let ready = futures::executor::block_on(probe.mock.login(Credentials::Token("x".into()))).unwrap();
     cx.update(gpui_component::init);
     let backend: Arc<dyn Backend> = probe.clone();
@@ -368,4 +372,154 @@ fn unreads_mark_all_asks_first_and_cards_collapse(cx: &mut TestAppContext) {
     h.act(|a, _, cx| a.mark_all_unread_cards_read(cx));
     assert_eq!(h.acks(), entries.len());
     assert!(h.read(|a| a.parity.inbox.unreads.is_empty()));
+}
+
+fn keyed(cx: &mut TestAppContext) -> Harness {
+    let mut h = setup(cx);
+    h.vcx.update(|_, cx| crate::app::bind_keys(cx));
+    h.act(|a, w, cx| a.composer.update(cx, |s, cx| s.focus(w, cx)));
+    h
+}
+
+impl Harness {
+    fn ask<T>(&mut self, f: impl FnOnce(&mut PhoenixApp, &mut gpui::Window, &mut gpui::Context<PhoenixApp>) -> T) -> T {
+        let out = self.window.update(&mut self.vcx, f).unwrap();
+        self.vcx.run_until_parked();
+        out
+    }
+
+    fn keys(&mut self, keys: &str) {
+        self.vcx.simulate_keystrokes(keys);
+        self.vcx.run_until_parked();
+    }
+
+    fn make_unread(&mut self) {
+        self.act(|a, _, _| {
+            let ch = a.selected_channel.unwrap();
+            let c = a.channels.get_mut(&ch).unwrap();
+            c.unread = true;
+            c.muted = false;
+        });
+    }
+}
+
+#[gpui::test]
+fn escape_from_the_composer_walks_the_client_stack(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    let here = h.channels[0];
+    let id = Id(9_300_001);
+    h.act(|a, w, cx| {
+        let me = a.me.id;
+        a.append_message(Message { id, channel: here, author: me, content: "mine".into(), ..Default::default() }, cx);
+        a.start_edit(id, w, cx);
+    });
+    h.make_unread();
+    h.act(|a, w, cx| a.composer.update(cx, |s, cx| s.focus(w, cx)));
+    h.act(|a, _, cx| {
+        a.replying_to = Some(id);
+        a.parity.inbox.tab = crate::commands::state::InboxTab::Mentions;
+        a.parity.inbox.open = false;
+        a.toggle_inbox(cx);
+    });
+    assert!(h.read(|a| a.parity.inbox.open));
+    let base = h.acks();
+
+    h.keys("escape");
+    assert!(!h.read(|a| a.parity.inbox.open), "Esc did not close the inbox first");
+    assert!(h.read(|a| a.chat.edit.is_some() && a.replying_to.is_some()));
+
+    h.keys("escape");
+    assert!(h.read(|a| a.chat.edit.is_none()), "Esc did not cancel the edit");
+    assert!(h.read(|a| a.replying_to.is_some()), "Esc cancelled the reply together with the edit");
+
+    h.act(|a, w, cx| a.composer.update(cx, |s, cx| s.focus(w, cx)));
+    h.keys("escape");
+    assert!(h.read(|a| a.replying_to.is_none()), "Esc did not cancel the reply");
+    assert_eq!(h.acks(), base, "Esc acked before the layers above the chat were closed");
+
+    h.keys("escape");
+    assert_eq!(h.acks(), base + 1, "Esc in the chat did not mark the channel read");
+    assert!(h.read(|a| !a.channels[&here].unread));
+
+    h.keys("escape");
+    assert_eq!(h.acks(), base + 1, "Esc acked a channel that was already read");
+}
+
+#[gpui::test]
+fn escape_closes_search_and_modals_without_acking(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    let here = h.channels[0];
+    h.make_unread();
+    let base = h.acks();
+    h.act(|a, w, cx| crate::ui::search::open(a, w, cx));
+    assert!(h.ask(|_, _, cx| crate::ui::search::is_open(cx)));
+    h.act(|a, w, cx| a.composer.update(cx, |s, cx| s.focus(w, cx)));
+    h.keys("escape");
+    assert!(!h.ask(|_, _, cx| crate::ui::search::is_open(cx)), "Esc did not close the search");
+
+    h.act(|_, _, _| crate::actions::open_modal(crate::actions::Modal::Call { channel: here, user: Id(2) }, None));
+    h.keys("escape");
+    assert!(crate::actions::with_modal(|m| m.is_none()), "Esc did not close the modal");
+
+    h.act(|_, _, _| crate::shortcuts::open_help());
+    h.keys("escape");
+    assert!(!crate::shortcuts::help_open(), "Esc did not close the shortcuts modal");
+    assert_eq!(h.acks(), base);
+}
+
+#[gpui::test]
+fn escape_works_after_the_focused_field_goes_away(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    let base = h.acks();
+    h.act(|_, w, cx| {
+        let gone = cx.focus_handle();
+        w.focus(&gone, cx);
+    });
+    h.act(|a, _, cx| {
+        a.parity.inbox.tab = crate::commands::state::InboxTab::Mentions;
+        a.parity.inbox.open = false;
+        a.toggle_inbox(cx);
+    });
+    h.keys("escape");
+    assert!(!h.read(|a| a.parity.inbox.open), "Esc was lost once the focused element was dropped");
+    h.keys("ctrl-/");
+    assert!(crate::shortcuts::help_open(), "Ctrl+/ was lost once the focused element was dropped");
+    h.keys("escape");
+    assert!(!crate::shortcuts::help_open());
+    assert_eq!(h.acks(), base);
+}
+
+#[gpui::test]
+fn shift_escape_only_acks_an_unread_server(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    h.act(|a, _, _| {
+        let g = a.selected_guild.unwrap();
+        for id in a.guild_channels[&g].clone() {
+            if let Some(c) = a.channels.get_mut(&id) {
+                c.unread = false;
+                c.mentions = 0;
+            }
+        }
+    });
+    let base = h.acks();
+    h.keys("shift-escape");
+    assert_eq!(h.acks(), base, "Shift+Esc acked a server with nothing unread");
+    h.make_unread();
+    h.keys("shift-escape");
+    assert_eq!(h.acks(), base + 1, "Shift+Esc did not mark the server read");
+}
+
+#[gpui::test]
+fn quit_shortcut_leaves_voice_and_quits(cx: &mut TestAppContext) {
+    let mut h = keyed(cx);
+    let base = h.acks();
+    crate::shortcuts::escape::reset_quitting();
+    h.act(|a, w, cx| crate::ui::search::open(a, w, cx));
+    h.act(|a, _, _| a.voice_channel = Some(Id(424_242)));
+    h.keys(crate::shortcuts::QUIT_KEY);
+    assert!(crate::shortcuts::escape::quitting(), "{} was eaten by the search field", crate::shortcuts::QUIT_KEY);
+    assert_eq!(h.probe.leaves.load(Ordering::SeqCst), 1, "quitting did not leave the voice channel");
+    assert!(h.read(|a| a.voice_channel.is_none()));
+    assert_eq!(h.acks(), base);
+    crate::shortcuts::escape::reset_quitting();
 }

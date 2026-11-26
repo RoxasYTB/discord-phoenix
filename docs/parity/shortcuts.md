@@ -36,8 +36,13 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 ## Chat
 | Shortcut | Action | Status |
 |---|---|---|
+<<<<<<< HEAD
 | Shift+Esc | Mark server read | ✅ |
 | Esc, Shift+Page Down | Mark channel read and jump to present (the client binds `["esc","shift+pagedown"]`) | ✅ Shift+Page Down added 2026-11-26. The read ack is the normal client ack (`select_channel`), which agents' real_shots refuse |
+=======
+| Shift+Esc | Mark server read | ✅ like `MARK_SERVER_READ` (web bundle module 795737): nothing is acked unless the server has an unread, unmuted channel or a mention, then the chat jumps to the present |
+| Esc (also Shift+Page Down) | Mark channel read (and jump to present) | ✅ the full `MARK_CHANNEL_READ` stack, see “Escape” below |
+>>>>>>> 9eedf4e5 (Make Escape follow the client's stack everywhere and add Ctrl+Q to quit)
 | Ctrl+Shift+T | Create a group DM | ✅ |
 | Ctrl+Shift+Alt+N | Create a thread | ✅ Focused message: opens the thread form. Otherwise: opens the “Nouveau fil” sidebar (rebuilt from ref-cache create-thread-sidebar-*.json), which sends `POST /channels/{id}/threads` and then the starter message |
 | Ctrl+P | Toggle pins popout | ✅ |
@@ -52,8 +57,38 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 | Ctrl+Shift+U | Upload a file | ✅ |
 | Ctrl+Shift+L | Copy channel link | ✅ |
 
+<<<<<<< HEAD
 ## Keyboard drag and drop
 The bundle's modal list has a DND group (Ctrl+D start, Up/Down move, Space/Enter drop, Esc cancel: strings `Lns0Fc`, `dmMqay`, `cs/HVH`, `1ioMJQ`), but the live modal (`shortcuts-modal-default.json`) does not show it on this account. ➖ not built: mouse drag and drop is (navigation.md).
+=======
+## Escape
+Source: `MARK_CHANNEL_READ` in the 2026 web bundle (`web.b63d846b329d6470.js`, module 92960, `binds:["esc","shift+pagedown"]`, `comboKeysBindGlobal:!0`, so it also fires from the textarea), plus the layer `POP_LAYER` bind for full-screen layers such as User Settings. Each press does only the first step that applies. Implementation: `shortcuts/escape.rs::escape_stack`.
+| Step | Client | Phoenix | Status |
+|---|---|---|---|
+| 1 | `CALL_DECLINE` | incoming call popup declines (`ui::incoming_call`) | ✅ |
+| 2 | context menu `close()` | any `context_menu` menu (message, channel, user, server, voice, stream menus). Its keys now go through the app keystroke interceptor, because its `on_key_event` listener sat off the focus path and never fired | ✅ |
+| 3 | `MEDIA_MODAL_CLOSE` | image / video viewer | ✅ |
+| 4 | `POPOUT_CLOSE`, `CLOSE_GIF_PICKER` | profile and tag popouts, status picker, message menu, attach menu, emoji/GIF/sticker picker, voice panel popout, inbox / pins / threads / bell popouts, app launcher | ✅ |
+| 5 | `MODAL_CLOSE` | voice-message modal, delete confirm, every `ui::modals` modal, server-page modals and menus, components modal, moderation and group DM dialogs, events modal, forum guidelines, invite / topic overlay, Ctrl+/ modal, boost layer, quick switcher, mod view | ✅ |
+| 6 | layer `POP_LAYER` | User Settings: its own dialogs first, then it closes (modals and the viewer above it close first) | ✅ |
+| 7 | `SEARCH_RESULTS_CLOSE` | search bar and results | ✅ |
+| 8 | `endEditMessage` | cancel the edit | ✅ |
+| 9 | pending reply | cancel the reply | ✅ |
+| 10 | sidebar `CREATE_THREAD` | close the “Nouveau fil” sidebar | ✅ |
+| 11 | `b(channel)`, `b(sidebar)` | leave a detached history page, and ack the channel (and the open thread panel) only when it is unread. The ack is a write, so tests check it through the backend probe | ✅ |
+| 12 | `closeChannelSidebar` | nothing to ack and a thread panel open: close it | ✅ |
+| 13 | `SCROLLTO_PRESENT` | scroll to the bottom | ✅ |
+Not reproduced: `CONVERSATIONS_FOCUS_MODE_CLOSE`, guild room notes and video overlay, scheduled-message and sticker previews (Phoenix has no such states).
+
+Focus: when the focused element is dropped or no longer drawn (a closed modal, picker or settings field), GPUI sends keys to the window root, outside the `PhoenixApp` key context, so every shortcut went dead until a click. The interceptor now puts the focus back on the app root and replays the shortcut.
+
+## Application menu
+Source: desktop core `core.asar` (app-1.0.171, `discord_desktop_core-1`), menus `./linux` (module 54520), `./win32` (54537) and `./darwin` (41595).
+| Shortcut | Action | Status |
+|---|---|---|
+| Ctrl+Q (Linux), Alt+F4 (Windows), Cmd+Q (macOS) | File > Exit / Quit: `app.quit()` | ✅ bound globally, so it works from any text field and with no focus. Phoenix leaves the voice channel (waits up to 1.5 s for it), then quits; the tray icon goes with the process. Settings and the gateway snapshot are already written on every change. The tray's “Quit” uses the same path |
+| Ctrl+, | File > Options | ✅ opens User Settings |
+>>>>>>> 9eedf4e5 (Make Escape follow the client's stack everywhere and add Ctrl+Q to quit)
 
 ## Focused-message shortcuts
 Shift+Tab from an empty composer focuses the newest message. Up and Down then move the focus (clamped, no wrap), and the focused row gets the hover/selected background. The focus clears when another element takes focus.
@@ -83,4 +118,4 @@ We have not checked how the client itself enters message focus (CDP can't send r
 | H H Right N K | Easter egg | ✅ (wt/sounds, `ui/easter.rs`) "Puissance démoniaque": in the Ctrl+/ modal the last five keydowns H H Right N K (bundle module 453244, not with reduced motion) replace the list with the client's Raging Demon: 1 s 50 % backdrop, layer + app shake (`Shakeable` 2400 ms, intensity 5) at 1.8 s, eight explosions every 240 ms with the client's nine images (`/assets/3e4d5e…png` … `a53fe6…svg`, loaded at runtime from the local cache or discord.com/assets) and the CSS keyframes (`explCircle*`, `explLines*`, duration .15 s), the symbol 750 ms after the last one for 3 s, then the modal closes 500 ms after the backdrop fades. Same modal: the DDR arrows (`ddrArrows_jCEr5v`, sprites + `ddr-*` sounds, 100 ms throttle). The symbol background is the client's ray fan (`703942.f0dddb56b335a1ca.css` `.symbolBackground_CA3Z_c:before/:after`: fourteen hard-stop `linear-gradient(θ, transparent 50%, #fff/#ddd 0)` layers, 90° to −90°, on each half, the `:before` half turned 180°): `easter::rays` paints the same thirteen wedges per half and their point reflection, with the same opacity curve. ➖ side-by-side compare: triggering it in the client plays the explosion audio on the user's machine while they use it |
 | Ctrl+Alt+Shift+W | Lo-fi Wumpus | ⚠ (wt/sounds) the music part: `vibing_wumpus` (`/assets/f4b4eb5a3dd2dbff.mp3`, runtime) looped and faded to .5 in 100 ms steps of .2 × (target − start), like `VIBING_WUMPUS_PLAY_MUSIC`; the same keys fade it out and stop it. ❌ the modal: it is a Rive animation (`VibingWumpusRive`, .riv) that GPUI cannot draw, and its chunk is not in the local cache |
 
-The composer lets the app-wide combos through, as the client's textarea does: Page Up/Down, Alt+arrows, Ctrl+Alt+…, Ctrl+Shift+… (except the editing ones), and Ctrl+I/P/U/K/S//. Text-editing keys stay with the input. See `shortcuts/message.rs::passes_through_composer`.
+Every text field (composer, search, picker search, thread and settings inputs) lets the app-wide combos through, as the client's `comboKeysBindGlobal` binds do: Page Up/Down, Alt+arrows, Ctrl+Alt+…, Ctrl+Shift+… (except the editing ones), and Ctrl+I/P/U/K/S//. Text-editing keys stay with the input. See `shortcuts/message.rs::passes_through_composer`.

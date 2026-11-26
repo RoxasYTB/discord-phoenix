@@ -25,6 +25,23 @@ thread_local! {
     static OPEN_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     static HL_ROOT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     static HL_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+    static ACTIVE: std::cell::RefCell<Option<(Rc<Vec<Nav>>, Point<Pixels>, Dismiss)>> = const { std::cell::RefCell::new(None) };
+}
+
+pub fn begin_frame() {
+    ACTIVE.with(|a| a.borrow_mut().take());
+}
+
+pub fn is_open() -> bool {
+    ACTIVE.with(|a| a.borrow().is_some())
+}
+
+pub fn on_key(ks: &gpui::Keystroke, w: &mut Window, cx: &mut App) -> bool {
+    if ks.modifiers.modified() {
+        return false;
+    }
+    let Some((nav, pos, dismiss)) = ACTIVE.with(|a| a.borrow().clone()) else { return false };
+    handle_key(&ks.key, &nav, pos, &dismiss, w, cx)
 }
 
 fn set_hl(depth: u8, v: Option<usize>, w: &mut Window) {
@@ -591,6 +608,7 @@ pub fn render_anchored_at(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<M
     let inner = dismiss;
     let dismiss: Dismiss = Rc::new(move |w, cx| {
         reset_state();
+        ACTIVE.with(|a| a.borrow_mut().take());
         inner(w, cx)
     });
     let nav = Rc::new(nav_of(&items));
@@ -599,14 +617,7 @@ pub fn render_anchored_at(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<M
         |_, _, _| (),
         move |_, _, w, _| {
             VIEW_H.with(|v| v.set(f32::from(w.viewport_size().height) / f32::from(z(1.))));
-            w.on_key_event(move |ev: &gpui::KeyDownEvent, phase, w, cx| {
-                if phase == gpui::DispatchPhase::Capture
-                    && !ev.keystroke.modifiers.modified()
-                    && handle_key(&ev.keystroke.key, &nav, pos, &kd, w, cx)
-                {
-                    cx.stop_propagation();
-                }
-            });
+            ACTIVE.with(|a| *a.borrow_mut() = Some((nav, pos, kd)));
         },
     )
     .absolute()

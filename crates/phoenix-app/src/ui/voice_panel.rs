@@ -1261,6 +1261,10 @@ pub fn overlays(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<Phoenix
     out
 }
 
+pub fn close_popout() -> bool {
+    POPOUT.with(|p| p.take().is_some()) || USER_MENU.with(|m| m.take().is_some())
+}
+
 pub fn open_user_menu(user: Id, pos: Point<Pixels>, cx: &mut App) {
     USER_MENU.with(|m| m.set(Some((user, pos))));
     cx.refresh_windows();

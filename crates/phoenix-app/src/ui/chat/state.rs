@@ -317,21 +317,6 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    pub fn chat_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let closed = self.chat.menu.take().is_some()
-            || self.chat.confirm_delete.take().is_some()
-            || self.chat.emoji_target.take().is_some();
-        if !closed {
-            if self.chat.edit.is_some() {
-                self.cancel_edit(window, cx);
-            } else if self.chat.pins.take().is_none() && self.replying_to.take().is_none() {
-                return false;
-            }
-        }
-        cx.notify();
-        true
-    }
-
     pub fn start_edit(&mut self, id: Id, window: &mut Window, cx: &mut Context<Self>) {
         let Some(channel) = self.selected_channel else { return };
         let Some(m) = self.find_msg(channel, id) else { return };

@@ -1408,34 +1408,7 @@ impl PhoenixApp {
     }
 
     pub(crate) fn on_escape(&mut self, _: &Escape, window: &mut Window, cx: &mut Context<Self>) {
-        if ui::chat::voice_message::close_modal(cx) {
-            cx.notify();
-            return;
-        }
-        if ui::settings::on_escape(self, cx) {
-            return;
-        }
-        if crate::shortcuts::on_escape() {
-            cx.notify();
-            return;
-        }
-        if ui::chat::app_launcher::close(self, window, cx) {
-            return;
-        }
-        if crate::media::close_viewer(cx) {
-        } else if self.people.any_overlay() {
-            self.people.close_overlays();
-            cx.notify();
-        } else if self.escape_header_popouts(cx) {
-        } else if self.switcher.is_some() {
-            self.close_switcher(window, cx);
-        } else if crate::ui::mod_view::escape() || self.chat_escape(window, cx) {
-        } else if self.editing.take().is_some() {
-            self.composer.update(cx, |s, cx| s.set_value("", window, cx));
-        } else if self.replying_to.take().is_none() {
-            self.message_list.scroll_to_end();
-            self.mark_channel_read(cx);
-        }
+        self.escape_stack(window, cx);
         cx.notify();
     }
 }
@@ -1460,6 +1433,7 @@ impl Focusable for PhoenixApp {
 impl Render for PhoenixApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         crate::perf::on_render(self.selected_channel.map(|c| c.0), true);
+        ui::context_menu::begin_frame();
         crate::auth::ensure_qr(self, cx);
         crate::theme::sync(&self.prefs, window, cx);
         crate::sounds::set_focused(window.is_window_active());
@@ -1549,7 +1523,7 @@ impl Render for PhoenixApp {
                     cx.stop_propagation();
                 }
             }))
-            .map(|d| crate::shortcuts::handlers(self, d, cx))
+            .map(|d| crate::shortcuts::handlers(self, d, window, cx))
             .on_action(cx.listener(|this, _: &ToggleMembers, _, cx| {
                 this.show_members = !this.show_members;
                 cx.notify();

@@ -234,7 +234,7 @@ pub fn activate(cx: &mut App) {
 fn handle(cmd: Cmd, cx: &mut App) {
     let target = cx.try_global::<Target>().and_then(|t| t.0.upgrade());
     match cmd {
-        Cmd::Quit => cx.quit(),
+        Cmd::Quit => crate::shortcuts::escape::quit_app(cx),
         Cmd::Open => activate(cx),
         Cmd::Acknowledgements => cx.open_url("https://discord.com/acknowledgements"),
         Cmd::ToggleMute | Cmd::ToggleDeafen => {

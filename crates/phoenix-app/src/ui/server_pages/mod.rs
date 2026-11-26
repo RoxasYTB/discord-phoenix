@@ -387,6 +387,10 @@ pub fn close_modal() {
     with(|s| s.modal = None);
 }
 
+pub fn escape() -> bool {
+    with(|s| s.menu.take().is_some() || s.modal.take().is_some())
+}
+
 pub fn t(i: usize) -> Hsla {
     c(tok(i))
 }
