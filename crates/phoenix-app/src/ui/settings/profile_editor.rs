@@ -1122,10 +1122,6 @@ fn tabs(e: &EditorState, cx: &mut Cx) -> Div {
         strong,
         muted: dim,
         card: if themed { gpui::hsla(240. / 360., 0.04, 0.61, 0.16) } else { c(tok(idx::BACKGROUND_MOD_SUBTLE)) },
-        fade: match e.theme {
-            Some(t) => hex(mix(modal_bg(t), 0, 0.3)),
-            None => c(tok(idx::BACKGROUND_BASE_LOW)),
-        },
         more: false,
     };
     let board: Vec<Div> = if e.tab == 0 { e.widgets.iter().map(|w| super::profile_widgets::render(w, &wcol)).collect() } else { Vec::new() };

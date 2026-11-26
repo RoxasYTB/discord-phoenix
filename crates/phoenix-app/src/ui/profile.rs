@@ -176,7 +176,7 @@ fn activity_header(a: &Activity) -> Option<SharedString> {
     })
 }
 
-fn activity_block(a: &Activity, big: bool, bot: bool) -> Option<AnyElement> {
+pub(crate) fn activity_block(a: &Activity, big: bool, bot: bool) -> Option<AnyElement> {
     let title = activity_header(a)?;
     let spotify = a.is_spotify();
     let line1 = if spotify { a.details.clone() } else if a.kind == ActivityKind::Streaming { a.details.clone().or_else(|| Some(a.name.clone())) } else { Some(a.name.clone()) };
@@ -683,7 +683,7 @@ pub(crate) fn role_removable(app: &PhoenixApp, guild: Id, target: Id, role: &cra
     top.is_some_and(|t| sorts_before(guild, t, role))
 }
 
-fn bio_block(bio: SharedString, clamp: bool) -> Div {
+pub(crate) fn bio_block(bio: SharedString, clamp: bool) -> Div {
     let long = clamp && crate::ui::profile_bio::bio_is_long(&bio);
     div()
         .flex()
@@ -996,13 +996,6 @@ fn popout_card_inner(
             strong: c(tok(idx::TEXT_STRONG)),
             muted: c(tok(idx::TEXT_MUTED)),
             card: c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)),
-            fade: match theme {
-                Some(t) => {
-                    let mix = |sh: u32| ((((t.0 >> sh) & 0xFF) as f32 * 0.3 + ((t.1 >> sh) & 0xFF) as f32 * 0.7) as u32) << sh;
-                    c(crate::ui::profile_theme::composite(t, mix(16) | mix(8) | mix(0)))
-                }
-                None => c(bg),
-            },
             more: false,
         };
         body = body.child(crate::ui::settings::profile_widgets::render_compact(w, &col));
@@ -1472,7 +1465,6 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
                 strong: c(tok(idx::TEXT_STRONG)),
                 muted: c(tok(idx::TEXT_MUTED)),
                 card: c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)),
-                fade: c(tok(idx::BACKGROUND_BASE_LOWER)),
                 more: true,
             };
             let gcol = crate::ui::profile_board::Colors {

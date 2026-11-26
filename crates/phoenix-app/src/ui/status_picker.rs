@@ -64,6 +64,8 @@ impl PhoenixApp {
     }
 }
 
+const CARD_GROUP: &str = "acct-popout";
+
 const ITEMS: [(Presence, Option<&str>); 4] = [
     (Presence::Online, None),
     (Presence::Idle, None),
@@ -291,66 +293,8 @@ fn render_inner(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         .h(z(151.))
         .child(banner(&i, 105., 6.))
         .child(div().absolute().left(z(8.)).top(z(53.)).child(avatar_block(&i, 80., 6., ring.unwrap_or(surface))));
-    let bubble = app.people.custom_input.as_ref().map(|_| {
-        let has = app.people.custom_status.is_some();
-        div()
-            .absolute()
-            .left(z(105.))
-            .top(z(98.))
-            .right(z(14.))
-            .px(z(12.))
-            .py(z(4.))
-            .rounded(z(16.))
-            .border_1()
-            .border_color(c(tok(idx::BORDER_MUTED)))
-            .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHEST)))
-            .shadow_sm()
-            .flex()
-            .items_center()
-            .gap(z(4.))
-            .text_size(z(14.))
-            .line_height(z(18.))
-            .text_color(c(tok(idx::TEXT_STRONG)))
-            .child(
-                div()
-                    .id("custom-open")
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .gap(z(4.))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|a, _, _, cx| a.open_custom_status(cx)))
-                    .when(!has, |d| d.child(svg().path(crate::icons::path("plus-circle")).size(z(12.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .whitespace_nowrap()
-                            .when(!has, |d| d.text_color(c(tok(idx::TEXT_MUTED))))
-                            .child(app.people.custom_status.clone().unwrap_or_else(|| crate::t!("cstatus.add"))),
-                    ),
-            )
-            .when(has, |d| {
-                d.child(
-                    div()
-                        .id("custom-clear")
-                        .size(z(24.))
-                        .rounded_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
-                        .on_click(cx.listener(|a, _, _, cx| {
-                            a.set_custom_status(None, cx);
-                            a.people.close_overlays();
-                        }))
-                        .child(svg().path(crate::icons::path("chat/trash")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
-                )
-            })
-    });
+    let bubble = crate::ui::profile_toolbar::status(app, me, None, crate::ui::profile_toolbar::Layout::Popout, theme.is_some(), i.custom.clone(), cx)
+        .map(|s| div().absolute().left(z(105.)).top(z(98.)).child(s));
 
     let username = app.me.name.to_string();
     let copy_name = div()
@@ -362,7 +306,8 @@ fn render_inner(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
+        .opacity(0.)
+        .group_hover(CARD_GROUP, |s| s.opacity(1.))
         .on_click(cx.listener(move |_, _, _, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(username.clone()))))
         .child(icon("chat/copy"))
         .into_any_element();
@@ -404,6 +349,13 @@ fn render_inner(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
     }));
     let badges = hover_off("acct-badges", "ribbon", crate::t!("status.badges"))
         .on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("status.badges"), cx)));
+    let orbs = crate::ui::shop_page::orbs_balance(app, cx).map(|n| {
+        pop_row("acct-orbs", icon("orbs"), text(crate::t!("quests.orbs", n = n)), None, true).on_hover(|h, w, _| {
+            if *h {
+                set_sub(false, w)
+            }
+        })
+    });
     let accounts_open = ACCOUNTS_SUB.with(|c| c.get());
     let switch = pop_row("acct-switch", icon("user-circle"), text(crate::t!("status.switch_accounts")), None, true)
         .relative()
@@ -431,7 +383,7 @@ fn render_inner(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         .flex()
         .flex_col()
         .gap(z(12.))
-        .child(pop_group(vec![edit.into_any_element(), status_row.into_any_element(), badges.into_any_element()]))
+        .child(pop_group([edit.into_any_element(), status_row.into_any_element(), badges.into_any_element()].into_iter().chain(orbs.map(IntoElement::into_any_element)).collect()))
         .child(pop_group(vec![switch.into_any_element(), copy.into_any_element()]));
 
     let mut body = div()
@@ -449,29 +401,34 @@ fn render_inner(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
         .gap(z(12.))
         .child(div().mb(z(-4.)).child(name_block(&i, false, Some(copy_name))));
     if let Some(bio) = i.prof.map(|p| p.bio.clone()).filter(|b| !b.is_empty()) {
-        body = body.child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_STRONG))).line_clamp(3).child(bio));
+        body = body.child(crate::ui::profile::bio_block(bio, true));
     }
     if let Some(w) = crate::ui::profile_board::get(app, me, cx).widgets.first() {
         let col = crate::ui::settings::profile_widgets::WidgetColors {
             strong: c(tok(idx::TEXT_STRONG)),
             muted: c(tok(idx::TEXT_MUTED)),
             card: c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)),
-            fade: match theme {
-                Some(t) => {
-                    let mix = |sh: u32| ((((t.0 >> sh) & 0xFF) as f32 * 0.3 + ((t.1 >> sh) & 0xFF) as f32 * 0.7) as u32) << sh;
-                    c(crate::ui::profile_theme::composite(t, mix(16) | mix(8) | mix(0)))
-                }
-                None => c(surface),
-            },
             more: false,
         };
         body = body.child(crate::ui::settings::profile_widgets::render_compact(w, &col));
+    }
+    if app.presence != Presence::Offline {
+        for a in i.acts {
+            if let Some(b) = crate::ui::profile::activity_block(a, false, false) {
+                body = body.child(div().pb(z(8.)).child(b));
+            }
+        }
+        body = match crate::ui::voice_row::stream_activity_card(app, me, cx.entity(), cx) {
+            Some(card) => body.child(card),
+            None => body.children(crate::ui::voice_row::voice_activity_card(app, me, cx.entity())),
+        };
     }
     let body = body.child(menus);
 
     let max_h = window.viewport_size().height - px(116.);
     let card = div()
         .id("status-picker")
+        .group(CARD_GROUP)
         .relative()
         .w(z(304.))
         .max_h(max_h)

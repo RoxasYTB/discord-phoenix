@@ -54,6 +54,7 @@ thread_local! {
     static REQUESTED: Cell<bool> = const { Cell::new(false) };
     static TAB: Cell<usize> = const { Cell::new(0) };
     static ORBS: Cell<Option<u64>> = const { Cell::new(None) };
+    static BALANCE_ASKED: Cell<bool> = const { Cell::new(false) };
     static SEARCH: RefCell<Option<gpui::Entity<gpui_component::input::InputState>>> = const { RefCell::new(None) };
 }
 
@@ -191,6 +192,20 @@ pub fn format_price(amount: i64, exponent: u32, currency: &str) -> String {
 
 pub fn discount(base: i64, mine: i64) -> Option<u32> {
     (base > 0 && mine < base).then(|| ((base - mine) * 100 + base / 2) as u32 / base as u32).filter(|p| *p > 0)
+}
+
+pub fn orbs_balance(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<u64> {
+    if !BALANCE_ASKED.with(|r| r.replace(true)) {
+        let orbs = app.backend.orbs_balance();
+        cx.spawn(async move |this, cx| {
+            if let Ok(Some(b)) = orbs.await {
+                ORBS.with(|o| o.set(Some(b)));
+                let _ = this.update(cx, |_, cx| cx.notify());
+            }
+        })
+        .detach();
+    }
+    ORBS.with(Cell::get)
 }
 
 fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
