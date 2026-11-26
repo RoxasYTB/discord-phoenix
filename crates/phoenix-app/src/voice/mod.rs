@@ -91,6 +91,7 @@ pub enum VoiceControl {
     SetAgc(bool),
     SetPushToTalk(bool),
     SetPttKey(Option<String>),
+    SetGlobalKeybinds(Vec<(String, String, String)>),
     SetPttPressed(bool),
     SetPttDelay(u32),
     SetCamera(bool),

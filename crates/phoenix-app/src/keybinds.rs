@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::sync::{Mutex, OnceLock};
 
 use gpui::{Context, KeyDownEvent, KeyUpEvent, SharedString};
 use serde_json::{Value, json};
@@ -164,6 +165,115 @@ pub fn set_recording(id: Option<u64>) {
     RECORDING.with(|r| r.set(id));
 }
 
+pub fn portal_id(id: u64) -> String {
+    format!("kb-{id}")
+}
+
+fn portal() -> &'static Mutex<Option<Vec<(String, String)>>> {
+    static P: OnceLock<Mutex<Option<Vec<(String, String)>>>> = OnceLock::new();
+    P.get_or_init(|| Mutex::new(None))
+}
+
+pub fn set_portal(bound: Option<Vec<(String, String)>>) {
+    if let Ok(mut p) = portal().lock() {
+        *p = bound;
+    }
+}
+
+pub fn portal_active() -> bool {
+    portal().lock().is_ok_and(|p| p.is_some())
+}
+
+pub fn portal_trigger(id: u64) -> Option<Option<String>> {
+    let p = portal().lock().ok()?;
+    let list = p.as_ref()?;
+    let key = portal_id(id);
+    Some(list.iter().find(|(i, _)| *i == key).map(|(_, d)| d.clone()))
+}
+
+fn portal_bound(id: u64) -> bool {
+    matches!(portal_trigger(id), Some(Some(_)))
+}
+
+type GlobalTx = futures::channel::mpsc::UnboundedSender<(u64, bool)>;
+
+fn global_tx() -> &'static Mutex<Option<GlobalTx>> {
+    static T: OnceLock<Mutex<Option<GlobalTx>>> = OnceLock::new();
+    T.get_or_init(|| Mutex::new(None))
+}
+
+pub fn global_event(id: &str, down: bool) {
+    let Some(n) = id.strip_prefix("kb-").and_then(|n| n.parse::<u64>().ok()) else { return };
+    if let Ok(tx) = global_tx().lock()
+        && let Some(tx) = tx.as_ref()
+    {
+        let _ = tx.unbounded_send((n, down));
+    }
+}
+
+pub fn listen(cx: &mut Context<PhoenixApp>) {
+    let Ok(mut slot) = global_tx().lock() else { return };
+    if slot.is_some() {
+        return;
+    }
+    let (tx, mut rx) = futures::channel::mpsc::unbounded::<(u64, bool)>();
+    *slot = Some(tx);
+    drop(slot);
+    cx.spawn(async move |this, cx| {
+        use futures::StreamExt;
+        while let Some((id, down)) = rx.next().await {
+            if this.update(cx, |app, cx| on_global(app, id, down, cx)).is_err() {
+                break;
+            }
+        }
+    })
+    .detach();
+}
+
+pub fn global_list(list: &[Keybind]) -> Vec<(String, String, String)> {
+    let mut out: Vec<(String, String, String)> = list
+        .iter()
+        .filter(|b| b.enabled && b.action != Action::Unassigned && !b.shortcut.is_empty())
+        .map(|b| (portal_id(b.id), b.action.label().to_string(), b.shortcut.clone()))
+        .collect();
+    out.sort();
+    out
+}
+
+pub fn sync_global(app: &PhoenixApp) {
+    thread_local! {
+        static LAST: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
+    }
+    if phoenix_api::rest::guard::agent_session() {
+        return;
+    }
+    let list = global_list(&app.prefs.local.keybinds);
+    let keys: Vec<(String, String)> = list.iter().map(|(i, _, k)| (i.clone(), k.clone())).collect();
+    let changed = LAST.with(|l| {
+        let mut l = l.borrow_mut();
+        if l.as_ref() == Some(&keys) {
+            return false;
+        }
+        *l = Some(keys);
+        true
+    });
+    if changed {
+        crate::voice::call::manager().apply_control(None, VoiceControl::SetGlobalKeybinds(list));
+    }
+}
+
+fn on_global(app: &mut PhoenixApp, id: u64, down: bool, cx: &mut Context<PhoenixApp>) {
+    if suspended(app) {
+        return;
+    }
+    let Some(b) = app.prefs.local.keybinds.iter().find(|b| b.id == id && b.enabled).cloned() else { return };
+    if b.action.hold() {
+        hold(app, b.action, down);
+    } else if !down {
+        trigger(app, &b, cx);
+    }
+}
+
 pub fn suspended(app: &PhoenixApp) -> bool {
     app.settings.as_ref().is_some_and(|s| matches!(s.page, Page::System | Page::Keybinds))
 }
@@ -183,7 +293,7 @@ pub fn on_key_down(app: &mut PhoenixApp, ev: &KeyDownEvent, cx: &mut Context<Pho
         return false;
     }
     let stroke = crate::voice::ptt::stroke_string(&ev.keystroke);
-    let hits: Vec<Keybind> = app.prefs.local.keybinds.iter().filter(|b| b.fires_on(&stroke)).cloned().collect();
+    let hits: Vec<Keybind> = app.prefs.local.keybinds.iter().filter(|b| b.fires_on(&stroke) && !portal_bound(b.id)).cloned().collect();
     for b in hits {
         if b.action.hold() {
             hold(app, b.action, true);
@@ -282,6 +392,20 @@ mod tests {
             assert_eq!(Action::from_code(a.code()), *a);
         }
         assert_eq!(Action::from_code("TOGGLE_OVERLAY"), Action::Unassigned);
+    }
+
+    #[test]
+    fn global_list_keeps_live_bindings_and_routes_portal_ids() {
+        let k = |id, action, shortcut: &str, enabled| Keybind { id, action, shortcut: shortcut.into(), enabled, channel: None };
+        let list = vec![k(3, Action::ToggleMute, "ctrl-m", true), k(1, Action::Unassigned, "f9", true), k(2, Action::ToggleDeafen, "", true), k(4, Action::PushToMute, "f10", false), k(0, Action::PushToTalk, "f8", true)];
+        let ids: Vec<String> = global_list(&list).into_iter().map(|(i, _, _)| i).collect();
+        assert_eq!(ids, ["kb-0", "kb-3"]);
+        set_portal(Some(vec![("kb-3".into(), "Ctrl+M".into())]));
+        assert_eq!(portal_trigger(3), Some(Some("Ctrl+M".into())));
+        assert_eq!(portal_trigger(0), Some(None));
+        assert!(portal_bound(3) && !portal_bound(0));
+        set_portal(None);
+        assert_eq!(portal_trigger(3), None);
     }
 
     #[test]

@@ -11,12 +11,26 @@ pub const APP_ID: &str = "io.github.roxasytb.DiscordPhoenix";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PortalStatus {
-    Bound(String),
+    Bound(Vec<(String, String)>),
     Unavailable(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    pub id: String,
+    pub description: String,
+    pub keystroke: String,
 }
 
 pub struct GlobalPtt {
     stop: Option<oneshot::Sender<()>>,
+    configure: tokio::sync::mpsc::UnboundedSender<()>,
+}
+
+impl GlobalPtt {
+    pub fn configure(&self) {
+        let _ = self.configure.send(());
+    }
 }
 
 impl Drop for GlobalPtt {
@@ -43,32 +57,46 @@ pub fn xdg_trigger(keystroke: &str) -> String {
         .join("+")
 }
 
+pub fn eligible(keystroke: &str) -> bool {
+    let mut keys = keystroke.split('-').filter(|p| !p.is_empty() && !matches!(*p, "ctrl" | "alt" | "shift" | "cmd" | "super" | "platform"));
+    keys.next().is_some() && keys.next().is_none()
+}
+
 pub fn start(
     control: Arc<AudioControl>,
-    keystroke: &str,
+    bindings: Vec<Binding>,
+    on_event: impl Fn(&str, bool) + Send + 'static,
     status: impl Fn(PortalStatus) + Send + 'static,
 ) -> GlobalPtt {
     let (tx, rx) = oneshot::channel();
-    let trigger = xdg_trigger(keystroke);
-    let spawned = std::thread::Builder::new().name("phoenix-ptt-portal".into()).spawn(move || {
+    let (ctx, crx) = tokio::sync::mpsc::unbounded_channel();
+    let spawned = std::thread::Builder::new().name("phoenix-shortcuts-portal".into()).spawn(move || {
         futures_executor::block_on(async move {
-            if let Err(e) = run(control.clone(), &trigger, &status, rx).await {
+            let handler = |id: &str, down: bool| {
+                if id == SHORTCUT_ID {
+                    control.set_ptt_pressed(down);
+                } else {
+                    on_event(id, down);
+                }
+            };
+            if let Err(e) = run(&bindings, &handler, &status, rx, crx).await {
                 status(PortalStatus::Unavailable(e.to_string()));
             }
             control.set_ptt_pressed(false);
         })
     });
     if let Err(e) = spawned {
-        tracing::warn!(error = %e, "push-to-talk portal thread");
+        tracing::warn!(error = %e, "global shortcuts portal thread");
     }
-    GlobalPtt { stop: Some(tx) }
+    GlobalPtt { stop: Some(tx), configure: ctx }
 }
 
 async fn run(
-    control: Arc<AudioControl>,
-    trigger: &str,
+    bindings: &[Binding],
+    on_event: &impl Fn(&str, bool),
     status: &(impl Fn(PortalStatus) + Send),
     mut stop: oneshot::Receiver<()>,
+    mut configure: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) -> ashpd::Result<()> {
     let conn = ashpd::zbus::Connection::session().await?;
     if let Ok(id) = APP_ID.parse()
@@ -78,28 +106,29 @@ async fn run(
     }
     let gs = GlobalShortcuts::with_connection(conn).await?;
     let session = gs.create_session(Default::default()).await?;
-    let shortcut = NewShortcut::new(SHORTCUT_ID, "Push to Talk").preferred_trigger(Some(trigger));
-    let bound = gs.bind_shortcuts(&session, &[shortcut], None, Default::default()).await?.response()?;
-    let desc = bound
-        .shortcuts()
+    let wanted: Vec<NewShortcut> = bindings
         .iter()
-        .find(|s| s.id() == SHORTCUT_ID)
-        .map(|s| s.trigger_description().to_string())
-        .unwrap_or_default();
-    status(PortalStatus::Bound(desc));
+        .filter(|b| eligible(&b.keystroke))
+        .map(|b| NewShortcut::new(b.id.as_str(), b.description.as_str()).preferred_trigger(Some(xdg_trigger(&b.keystroke).as_str())))
+        .collect();
+    let bound = gs.bind_shortcuts(&session, &wanted, None, Default::default()).await?.response()?;
+    status(PortalStatus::Bound(bound.shortcuts().iter().map(|s| (s.id().to_string(), s.trigger_description().to_string())).collect()));
     let mut down = gs.receive_activated().await?;
     let mut up = gs.receive_deactivated().await?;
     loop {
         tokio::select! {
             _ = &mut stop => break,
+            Some(()) = configure.recv() => {
+                if let Err(e) = gs.configure_shortcuts(&session, None, Default::default()).await {
+                    tracing::warn!(error = %e, "configure global shortcuts");
+                }
+            }
             a = down.next() => match a {
-                Some(a) if a.shortcut_id() == SHORTCUT_ID => control.set_ptt_pressed(true),
-                Some(_) => {}
+                Some(a) => on_event(a.shortcut_id(), true),
                 None => break,
             },
             d = up.next() => match d {
-                Some(d) if d.shortcut_id() == SHORTCUT_ID => control.set_ptt_pressed(false),
-                Some(_) => {}
+                Some(d) => on_event(d.shortcut_id(), false),
                 None => break,
             },
         }
@@ -115,5 +144,9 @@ mod tests {
         assert_eq!(super::xdg_trigger("ctrl-shift-a"), "CTRL+SHIFT+a");
         assert_eq!(super::xdg_trigger("f13"), "f13");
         assert_eq!(super::xdg_trigger("super-space"), "LOGO+space");
+        assert!(super::eligible("ctrl-f9"));
+        assert!(super::eligible("grave"));
+        assert!(!super::eligible("ctrl"));
+        assert!(!super::eligible(""));
     }
 }

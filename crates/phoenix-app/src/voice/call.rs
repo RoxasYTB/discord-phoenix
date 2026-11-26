@@ -70,6 +70,7 @@ struct State {
     muted: bool,
     deafened: bool,
     ptt_key: Option<String>,
+    global_binds: Vec<(String, String, String)>,
     camera_on: bool,
     camera_device: Option<String>,
     camera: Option<phoenix_voice::media::camera::Camera>,
@@ -110,6 +111,19 @@ pub enum PortalState {
     Pending,
     Bound(String),
     Unavailable(String),
+}
+
+#[cfg(target_os = "linux")]
+pub fn configure_portal() -> bool {
+    let st = manager().state.lock();
+    let Some(p) = st.ptt_portal.as_ref() else { return false };
+    p.configure();
+    true
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn configure_portal() -> bool {
+    false
 }
 
 pub fn portal_state() -> &'static Mutex<PortalState> {
@@ -579,8 +593,14 @@ impl VoiceManager {
             VoiceControl::SetStreamVolume(u, v) => self.control.set_user_volume(u.0 | STREAM_AUDIO_BIT, v),
             VoiceControl::SetPttKey(k) => {
                 if st.ptt_key != k {
-                    st.ptt_key = k.clone();
-                    self.bind_portal(&mut st, k);
+                    st.ptt_key = k;
+                    self.bind_portal(&mut st);
+                }
+            }
+            VoiceControl::SetGlobalKeybinds(b) => {
+                if st.global_binds != b {
+                    st.global_binds = b;
+                    self.bind_portal(&mut st);
                 }
             }
         }
@@ -608,23 +628,36 @@ impl VoiceManager {
 
 impl VoiceManager {
     #[cfg(target_os = "linux")]
-    fn bind_portal(&self, st: &mut State, key: Option<String>) {
+    fn bind_portal(&self, st: &mut State) {
+        use phoenix_voice::hotkey::{Binding, PortalStatus, SHORTCUT_ID};
         st.ptt_portal = None;
-        let Some(key) = key else {
-            *portal_state().lock() = PortalState::Off;
+        let mut binds: Vec<Binding> = st.global_binds.iter().map(|(id, description, keystroke)| Binding { id: id.clone(), description: description.clone(), keystroke: keystroke.clone() }).collect();
+        if let Some(k) = st.ptt_key.clone() {
+            binds.insert(0, Binding { id: SHORTCUT_ID.into(), description: "Push to Talk".into(), keystroke: k });
+        }
+        let has_ptt = st.ptt_key.is_some();
+        *portal_state().lock() = if has_ptt { PortalState::Pending } else { PortalState::Off };
+        crate::keybinds::set_portal(None);
+        if binds.is_empty() {
             return;
-        };
-        *portal_state().lock() = PortalState::Pending;
-        st.ptt_portal = Some(phoenix_voice::hotkey::start(self.control.clone(), &key, |s| {
-            *portal_state().lock() = match s {
-                phoenix_voice::hotkey::PortalStatus::Bound(d) => PortalState::Bound(d),
-                phoenix_voice::hotkey::PortalStatus::Unavailable(e) => PortalState::Unavailable(e),
+        }
+        st.ptt_portal = Some(phoenix_voice::hotkey::start(self.control.clone(), binds, crate::keybinds::global_event, move |s| {
+            let ptt = match &s {
+                PortalStatus::Bound(list) => PortalState::Bound(list.iter().find(|(id, _)| id == SHORTCUT_ID).map(|(_, d)| d.clone()).unwrap_or_default()),
+                PortalStatus::Unavailable(e) => PortalState::Unavailable(e.clone()),
             };
+            if has_ptt {
+                *portal_state().lock() = ptt;
+            }
+            crate::keybinds::set_portal(match s {
+                PortalStatus::Bound(list) => Some(list),
+                PortalStatus::Unavailable(_) => None,
+            });
         }));
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn bind_portal(&self, _st: &mut State, _key: Option<String>) {}
+    fn bind_portal(&self, _st: &mut State) {}
 }
 
 fn stream_ui(st: &State, e: super::StreamUiEvent) {

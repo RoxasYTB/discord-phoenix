@@ -628,7 +628,7 @@ impl PhoenixApp {
         self.open_channel_chat(id, cx);
     }
 
-    fn enter_voice_channel(&mut self, id: Id, cx: &mut Context<Self>) {
+    pub(crate) fn enter_voice_channel(&mut self, id: Id, cx: &mut Context<Self>) {
         self.join_voice(Some(id), cx);
         self.open_channel_chat(id, cx);
         crate::ui::call_view::show(id);
@@ -645,30 +645,7 @@ impl PhoenixApp {
     }
 
     fn confirm_voice_switch(&mut self, id: Id, cx: &mut Context<Self>) {
-        let name = self.channels.get(&id).map(|c| c.name.to_string()).unwrap_or_default();
-        crate::actions::open_modal(
-            ui::modals::Modal::Form(ui::modals::Form {
-                title: crate::t!("vc.switch_title"),
-                subtitle: Some(crate::t!("vc.switch_body", channel = name)),
-                fields: Vec::new(),
-                choices: Vec::new(),
-                choice: None,
-                check: Some((crate::t!("vc.switch_dont_ask"), false)),
-                submit: crate::t!("vc.switch_confirm"),
-                danger: false,
-                on_submit: std::rc::Rc::new(move |a: &mut PhoenixApp, v: Vec<String>, _: Option<usize>, cx: &mut Context<PhoenixApp>| {
-                    if v.last().is_some_and(|x| x == "1") {
-                        ui::settings::update_local(a, |p| {
-                            p.ui.insert("vo-switch-warn".into(), 0);
-                        }, cx);
-                    }
-                    a.enter_voice_channel(id, cx);
-                }),
-                preview: None,
-                width: 480.,
-            }),
-            None,
-        );
+        crate::actions::open_modal(ui::modals::Modal::VoiceSwitch(ui::modals::voice_pick::VoiceSwitch { channel: id, dont_ask: false }), None);
         cx.notify();
     }
 

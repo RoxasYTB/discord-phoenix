@@ -34,6 +34,7 @@ pub mod settings_form;
 pub mod settings_layout;
 pub mod stream_feedback;
 pub mod update;
+pub mod voice_pick;
 pub mod voice_status;
 pub mod webhooks;
 
@@ -146,6 +147,8 @@ pub enum Modal {
     QuestDisclosure(Box<crate::ui::quests_page::Quest>),
     BurstUpsell,
     VoiceStatus(voice_status::State),
+    VoicePick(voice_pick::VoicePick),
+    VoiceSwitch(voice_pick::VoiceSwitch),
     AppInstall(Box<app_install::State>),
 }
 
@@ -244,6 +247,11 @@ pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
         Some(Modal::GoLive(g)) => g.viewport = Some(vp),
         Some(Modal::PlaintextFull { viewport, .. }) => *viewport = Some(vp),
         Some(Modal::CustomStatus(s)) => custom_status::prepare(s, &mut mk),
+        Some(Modal::VoicePick(p)) => {
+            if p.search.is_none() {
+                p.search = Some(mk(crate::t!("kb.search_channel"), "", true));
+            }
+        }
         _ => {}
     });
 }
@@ -300,6 +308,8 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::QuestDisclosure(q) => crate::ui::quest_modals::render_disclosure(q, cx),
             Modal::BurstUpsell => burst_upsell::render(cx),
             Modal::VoiceStatus(s) => voice_status::render(s, cx),
+            Modal::VoicePick(p) => voice_pick::render_pick(app, p, cx),
+            Modal::VoiceSwitch(s) => voice_pick::render_switch(app, s, cx),
         })
     })
 }

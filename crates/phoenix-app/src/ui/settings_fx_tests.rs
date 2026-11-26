@@ -214,7 +214,7 @@ fn voice_switch_warning_follows_the_setting(cx: &mut TestAppContext) {
     assert!(h.act(|a, _, _| a.voice_switch_needs_confirm(there)));
     assert!(!h.act(|a, _, _| a.voice_switch_needs_confirm(here)));
     h.act(|a, _, cx| a.select_channel(there, cx));
-    assert!(crate::actions::with_modal(|m| matches!(m, Some(crate::ui::modals::Modal::Form(_)))));
+    assert!(crate::actions::with_modal(|m| matches!(m, Some(crate::ui::modals::Modal::VoiceSwitch(_)))));
     assert_eq!(h.act(|a, _, _| a.voice_channel), Some(here));
     crate::actions::close_modal();
     h.act(|a, _, _| {

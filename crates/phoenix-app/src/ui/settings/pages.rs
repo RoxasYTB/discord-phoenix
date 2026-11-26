@@ -1942,7 +1942,7 @@ fn kb_recorder(k: &crate::keybinds::Keybind, cx: &mut Cx) -> Div {
     } else if has {
         crate::voice::ptt::label(&k.shortcut).into()
     } else {
-        crate::t!("sp.sy.kb_none")
+        crate::t!("kb.none")
     };
     div()
         .h(z(40.))
@@ -1962,33 +1962,22 @@ fn kb_recorder(k: &crate::keybinds::Keybind, cx: &mut Cx) -> Div {
                 .truncate()
                 .text_size(z(14.))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(tok(if has || recording { idx::TEXT_STRONG } else { idx::TEXT_MUTED })))
+                .text_color(c(tok(if recording { idx::TEXT_FEEDBACK_CRITICAL } else if has { idx::TEXT_STRONG } else { idx::TEXT_MUTED })))
                 .child(label),
         )
         .child(
             controls::button_sm(
                 eid(format!("kb-rec-{id}")),
                 if recording { crate::t!("voice.stop_recording") } else if has { crate::t!("voice.edit_keybind") } else { crate::t!("voice.record_keybind") },
-                if recording { BtnKind::Critical } else { BtnKind::Secondary },
+                if recording { BtnKind::CriticalSecondary } else { BtnKind::Secondary },
             )
+            .max_w(z(120.))
             .on_click(cx.listener(move |_, _, _, cx| {
                 crate::voice::ptt::set_recording(false);
                 crate::keybinds::set_recording(if recording { None } else { Some(id) });
                 cx.notify();
             })),
         )
-}
-
-fn voice_channel_options(app: &PhoenixApp) -> Vec<(u64, SharedString)> {
-    let mut out = Vec::new();
-    for g in &app.guilds {
-        for ch in app.guild_channels.get(&g.id).into_iter().flatten() {
-            if let Some(c) = app.channels.get(ch).filter(|c| matches!(c.kind, crate::model::ChannelKind::Voice | crate::model::ChannelKind::Stage)) {
-                out.push((ch.0, SharedString::from(format!("{} ({})", c.name, g.name))));
-            }
-        }
-    }
-    out
 }
 
 fn kb_entry(app: &PhoenixApp, k: &crate::keybinds::Keybind, cx: &mut Cx) -> Div {
@@ -2044,30 +2033,53 @@ fn kb_entry(app: &PhoenixApp, k: &crate::keybinds::Keybind, cx: &mut Cx) -> Div 
                 .child(controls::switch(eid(format!("kb-on-{id}")), enabled).on_click(cx.listener(move |a, _, _, cx| crate::keybinds::edit(a, id, |b| b.enabled = !enabled, cx)))),
         );
     let channel = (k.action == Action::SwitchToVoiceChannel).then(|| {
-        let opts = voice_channel_options(app);
-        let sel = k.channel.and_then(|c| opts.iter().position(|o| o.0 == c));
-        let text = sel.map(|i| opts[i].1.clone()).unwrap_or_else(|| crate::t!("kb.pick_channel"));
-        let ids: Vec<u64> = opts.iter().map(|o| o.0).collect();
-        div().mt(z(12.)).flex().flex_col().child(kb_label(crate::t!("kb.channel"))).child(dropdown_with(
-            app,
-            static_id(format!("kb-ch-{id}")),
-            kb_field(static_id(format!("kb-ch-field-{id}")), text, sel.is_some()),
-            opts.into_iter().map(|o| o.1).collect(),
-            sel.unwrap_or(usize::MAX),
-            576.,
-            move |a, i, cx| {
-                if let Some(s) = a.settings.as_mut() {
-                    s.open_select = None;
-                }
-                let ch = ids.get(i).copied();
-                crate::keybinds::edit(a, id, |b| b.channel = ch, cx)
-            },
-            cx,
-        ))
+        let sel = k.channel.map(crate::model::Id).and_then(|cid| app.channels.get(&cid).map(|ch| (cid, ch)));
+        let shown: AnyElement = match sel {
+            Some((cid, ch)) => {
+                let guild = ch.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).map(|g| g.name.clone()).unwrap_or_default();
+                crate::ui::modals::voice_pick::channel_row(app, cid, ch.name.clone(), guild).into_any_element()
+            }
+            None => div().px(z(16.)).text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("kb.no_voice_selected")).into_any_element(),
+        };
+        div().mt(z(12.)).flex().flex_col().child(kb_label(crate::t!("kb.channel"))).child(
+            div()
+                .flex()
+                .items_stretch()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .mr(z(8.))
+                        .min_h(z(40.))
+                        .flex()
+                        .flex_col()
+                        .justify_center()
+                        .rounded(z(4.))
+                        .border_1()
+                        .border_color(c(tok(idx::BORDER_SUBTLE)))
+                        .child(shown),
+                )
+                .child(controls::button(eid(format!("kb-pick-{id}")), crate::t!("kb.pick_channel"), BtnKind::Primary).on_click(cx.listener(move |_, _, _, cx| {
+                    crate::actions::open_modal(crate::ui::modals::Modal::VoicePick(crate::ui::modals::voice_pick::VoicePick { keybind: id, search: None }), None);
+                    cx.notify();
+                }))),
+        )
+    });
+    let portal = (!k.shortcut.is_empty() && k.enabled).then(|| crate::keybinds::portal_trigger(id)).flatten().map(|t| {
+        if !shortcut_eligible(&k.shortcut) {
+            row_notice(crate::t!("kb.portal_ineligible"), true)
+        } else {
+            match t {
+                Some(d) if !d.is_empty() => row_notice(crate::t!("kb.portal_bound", trigger = d), false),
+                Some(_) => div(),
+                None => row_notice(crate::t!("kb.portal_pending"), true),
+            }
+        }
     });
     div()
         .flex()
         .flex_col()
+        .children(portal)
         .child(
             div()
                 .flex()
@@ -2078,6 +2090,33 @@ fn kb_entry(app: &PhoenixApp, k: &crate::keybinds::Keybind, cx: &mut Cx) -> Div 
         )
         .children(k.action.description().map(|d| div().w(z(280.)).mt(z(2.)).text_size(z(12.)).line_height(z(16.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(d)))
         .children(channel)
+}
+
+fn shortcut_eligible(keystroke: &str) -> bool {
+    let mut keys = keystroke.split('-').filter(|p| !p.is_empty() && !matches!(*p, "ctrl" | "alt" | "shift" | "cmd" | "super" | "platform"));
+    keys.next().is_some() && keys.next().is_none()
+}
+
+fn row_notice(text: SharedString, warning: bool) -> Div {
+    let (border, bg, icon, glyph) = if warning {
+        (idx::INLINENOTICE_BORDER_WARNING, idx::BACKGROUND_FEEDBACK_MOD_WARNING, idx::ICON_FEEDBACK_WARNING, "warning")
+    } else {
+        (idx::INLINENOTICE_BORDER_INFO, idx::BACKGROUND_FEEDBACK_MOD_INFO, idx::ICON_FEEDBACK_INFO, "info")
+    };
+    div()
+        .mb(z(12.))
+        .flex()
+        .gap(z(8.))
+        .p(z(12.))
+        .rounded(z(8.))
+        .border_1()
+        .border_color(c(tok(border)))
+        .bg(c(tok(bg)))
+        .child(gpui::svg().path(crate::icons::path(glyph)).flex_none().size(z(16.)).mt(z(1.)).text_color(c(tok(icon))))
+        .child(div().flex_1().min_w_0().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_STRONG))).child({
+            let (t, ranges) = crate::ui::modals::strong_ranges(&text);
+            gpui::StyledText::new(t).with_highlights(ranges.into_iter().map(|r| (r, gpui::HighlightStyle { font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() })))
+        }))
 }
 
 fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
@@ -2098,10 +2137,14 @@ fn custom_keybinds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                 .child(add),
         )
         .child(info_notice(tr("sp.sy.kb_disabled"), None))
-        .child(info_notice(
-            tr("sp.sy.kb_saved"),
-            Some(controls::button_sm(eid("kb-os"), tr("sp.sy.kb_os"), BtnKind::Secondary)),
-        ));
+        .when(crate::keybinds::portal_active(), |d| {
+            d.child(info_notice(
+                tr("sp.sy.kb_saved"),
+                Some(controls::button_sm(eid("kb-os"), tr("sp.sy.kb_os"), BtnKind::Secondary).on_click(|_, _, _| {
+                    crate::voice::call::configure_portal();
+                })),
+            ))
+        });
     let mut list: Vec<&crate::keybinds::Keybind> = app.prefs.local.keybinds.iter().collect();
     list.sort_by_key(|k| k.id);
     if list.is_empty() {

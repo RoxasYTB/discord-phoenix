@@ -477,6 +477,8 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, window: &gpui::Wind
         s.window = Some(handle);
         s.app = Some(me);
     });
+    crate::keybinds::listen(cx);
+    crate::keybinds::sync_global(app);
     if let Some(ch) = app.selected_channel {
         with(|s| s.history.visit(ch));
     }
