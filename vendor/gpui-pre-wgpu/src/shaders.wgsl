@@ -128,8 +128,8 @@ fn cutout_coverage(index: u32, point: vec2<f32>) -> f32 {
     if (index == 0u || index > MAX_CUTOUT_SETS) {
         return 1.0;
     }
-    let set = cutouts[index - 1u];
-    return cutout_hole_coverage(set.holes[0], point) * cutout_hole_coverage(set.holes[1], point);
+    let entry = cutouts[index - 1u];
+    return cutout_hole_coverage(entry.holes[0], point) * cutout_hole_coverage(entry.holes[1], point);
 }
 
 fn apply_cutout(color: vec4<f32>, coverage: f32) -> vec4<f32> {
