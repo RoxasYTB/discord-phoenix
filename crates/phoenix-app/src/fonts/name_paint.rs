@@ -1,33 +1,53 @@
 use gpui::{
     App, Bounds, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, Pixels,
-    SharedString, Style, TextAlign, Window, point, px, relative,
+    SharedString, Style, TextAlign, TextGradient, Window, point, px, relative, size,
 };
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum NameFill {
+    Solid(u32),
+    Role { stops: Vec<(u32, f32)>, period: Pixels },
+    Diagonal(Vec<(u32, f32)>),
+    Prism { stops: Vec<(u32, f32)>, chars: usize, min: Pixels },
+}
+
+impl NameFill {
+    pub fn first(&self) -> u32 {
+        match self {
+            NameFill::Solid(c) => *c,
+            NameFill::Role { stops, .. } | NameFill::Diagonal(stops) | NameFill::Prism { stops, .. } => {
+                stops.first().map_or(0, |s| s.0)
+            }
+        }
+    }
+
+    pub fn gradient(&self, origin: gpui::Point<Pixels>, width: Pixels, line_height: Pixels, ch: Pixels) -> Option<TextGradient> {
+        let tile = |w: Pixels| Bounds::new(origin, size(w, line_height));
+        let (base, stops) = match self {
+            NameFill::Solid(_) => return None,
+            NameFill::Role { stops, period } => (TextGradient::new(90., tile(*period)).repeat_x(true), stops),
+            NameFill::Diagonal(stops) => (TextGradient::to_corner(true, true, tile(width)), stops),
+            NameFill::Prism { stops, chars, min } => {
+                let cycle = (ch * *chars as f32).max(*min);
+                (TextGradient::new(90., tile(cycle)).repeat_x(true), stops)
+            }
+        };
+        if stops.len() < 2 {
+            return None;
+        }
+        Some(stops.iter().fold(base, |g, &(c, p)| g.stop(gpui::rgb(c), p)))
+    }
+}
 
 pub struct NameText {
     text: SharedString,
     spacing: Pixels,
-    colors: Vec<Hsla>,
-    period: Option<Pixels>,
+    fill: Option<NameFill>,
 }
 
 impl NameText {
-    pub fn new(text: SharedString, spacing: Pixels, colors: Vec<Hsla>, period: Option<Pixels>) -> Self {
-        Self { text, spacing, colors, period }
-    }
-}
-
-pub fn gradient_at(colors: &[Hsla], t: f32) -> Option<Hsla> {
-    match colors {
-        [] => None,
-        [c] => Some(*c),
-        _ => {
-            let t = t.clamp(0., 1.) * (colors.len() - 1) as f32;
-            let i = (t.floor() as usize).min(colors.len() - 2);
-            let f = t - i as f32;
-            let (a, b) = (gpui::Rgba::from(colors[i]), gpui::Rgba::from(colors[i + 1]));
-            let l = |x: f32, y: f32| x + (y - x) * f;
-            Some(gpui::Rgba { r: l(a.r, b.r), g: l(a.g, b.g), b: l(a.b, b.b), a: l(a.a, b.a) }.into())
-        }
+    pub fn new(text: SharedString, spacing: Pixels, fill: Option<NameFill>) -> Self {
+        Self { text, spacing, fill }
     }
 }
 
@@ -35,6 +55,7 @@ pub struct Layout {
     chars: Vec<(String, Pixels)>,
     ellipsis: Pixels,
     line_height: Pixels,
+    ch: Pixels,
     underline: Option<(Pixels, Pixels, Pixels, gpui::UnderlineStyle)>,
 }
 
@@ -86,6 +107,7 @@ impl Element for NameText {
         let per = per.into_iter().map(|(g, a)| if is_pictograph(&g) { (g, if a > em { em } else { a }) } else { (g, a) }).collect();
         let chars = merge_ligatures(per);
         let ellipsis = self.shape("\u{2026}", window, color).width;
+        let ch = if matches!(self.fill, Some(NameFill::Prism { .. })) { self.shape("0", window, color).width } else { px(0.) };
         let underline = window.text_style().underline.map(|u| {
             let style = window.text_style();
             let size = style.font_size.to_pixels(window.rem_size());
@@ -101,7 +123,7 @@ impl Element for NameText {
         style.max_size.width = relative(1.).into();
         style.flex_shrink = 1.;
         let id = window.request_layout(style, [], cx);
-        (id, Layout { chars, ellipsis, line_height, underline })
+        (id, Layout { chars, ellipsis, line_height, ch, underline })
     }
 
     fn prepaint(
@@ -130,29 +152,29 @@ impl Element for NameText {
         let fits = natural <= bounds.size.width + px(0.5);
         let limit = if fits { natural } else { bounds.size.width - layout.ellipsis };
         let total = if fits { natural } else { bounds.size.width };
-        let period = self.period.unwrap_or(total);
-        let color_at = |x: Pixels| {
-            let t = if period > px(0.) { (x / period).fract() } else { 0. };
-            gradient_at(&self.colors, t).unwrap_or(base)
-        };
+        let first: Option<Hsla> = self.fill.as_ref().map(|f| gpui::rgb(f.first()).into());
+        let color = first.unwrap_or(base);
+        let gradient = self.fill.as_ref().and_then(|f| f.gradient(bounds.origin, total, layout.line_height, layout.ch));
         let mut x = px(0.);
-        for (s, adv) in &layout.chars {
-            if !fits && x + *adv > limit {
-                break;
+        window.with_text_gradient(gradient.as_ref(), |window| {
+            for (s, adv) in &layout.chars {
+                if !fits && x + *adv > limit {
+                    break;
+                }
+                let line = self.shape(s, window, color);
+                let _ = line.paint(point(bounds.origin.x + x, bounds.origin.y), layout.line_height, TextAlign::Left, None, window, cx);
+                x += *adv + self.spacing;
             }
-            let line = self.shape(s, window, color_at(x + *adv / 2.));
-            let _ = line.paint(point(bounds.origin.x + x, bounds.origin.y), layout.line_height, TextAlign::Left, None, window, cx);
-            x += *adv + self.spacing;
-        }
-        if !fits {
-            let line = self.shape("\u{2026}", window, color_at(x + layout.ellipsis / 2.));
-            let _ = line.paint(point(bounds.origin.x + x, bounds.origin.y), layout.line_height, TextAlign::Left, None, window, cx);
-            x += layout.ellipsis + self.spacing;
-        }
+            if !fits {
+                let line = self.shape("\u{2026}", window, color);
+                let _ = line.paint(point(bounds.origin.x + x, bounds.origin.y), layout.line_height, TextAlign::Left, None, window, cx);
+                x += layout.ellipsis + self.spacing;
+            }
+        });
         if let Some((size, ascent, descent, mut u)) = layout.underline {
             let (y, thickness) =
                 gpui::underline_geometry(bounds.origin.y, layout.line_height, size, ascent, descent, window.scale_factor());
-            u.color = u.color.or_else(|| self.colors.first().copied()).or(Some(base));
+            u.color = u.color.or(first).or(Some(base));
             if !u.wavy {
                 u.thickness = thickness;
             }
@@ -208,13 +230,51 @@ mod tests {
         assert!(!is_pictograph("☲"));
     }
 
+    fn close(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-3
+    }
+
     #[test]
-    fn gradient_stops() {
-        let a: Hsla = gpui::rgb(0x000000).into();
-        let b: Hsla = gpui::rgb(0xffffff).into();
-        let mid = gpui::Rgba::from(gradient_at(&[a, b], 0.5).unwrap());
-        assert!((mid.r - 0.5).abs() < 0.01);
-        assert_eq!(gradient_at(&[a], 0.7), Some(a));
-        assert_eq!(gradient_at(&[], 0.7), None);
+    fn role_gradient_is_horizontal_and_repeats_every_period() {
+        let fill = NameFill::Role { stops: vec![(0x9e6bff, 0.), (0x9fc1ff, 0.5), (0x9e6bff, 1.)], period: px(100.) };
+        let g = fill.gradient(point(px(10.), px(4.)), px(250.), px(20.), px(0.)).unwrap();
+        assert_eq!(g.angle, 90.);
+        assert!(g.repeat_x);
+        assert_eq!(g.tile, Bounds::new(point(px(10.), px(4.)), size(px(100.), px(20.))));
+        assert!(close(g.position_at(point(px(60.), px(10.))), 0.5));
+        assert!(close(g.position_at(point(px(160.), px(10.))), 0.5));
+        let mid = g.color_at(point(px(60.), px(10.)));
+        assert!(close(mid.r, 0x9f as f32 / 255.) && close(mid.g, 0xc1 as f32 / 255.));
+    }
+
+    #[test]
+    fn display_name_gradient_runs_to_the_bottom_right_corner_of_the_box() {
+        let fill = NameFill::Diagonal(vec![(0x666666, 0.1), (0xfffffe, 0.9)]);
+        let g = fill.gradient(point(px(0.), px(0.)), px(35.), px(20.), px(0.)).unwrap();
+        assert!(!g.repeat_x);
+        assert!(close(g.angle, 150.2551));
+        assert!(close(g.position_at(point(px(35.), px(0.))), 0.5));
+        assert!(close(g.position_at(point(px(0.), px(20.))), 0.5));
+        assert!(close(g.color_at(point(px(0.), px(0.))).r, 0x66 as f32 / 255.));
+        assert!(close(g.color_at(point(px(35.), px(20.))).r, 1.));
+    }
+
+    #[test]
+    fn prism_cycle_is_the_name_length_in_ch_with_a_38px_floor() {
+        let fill = NameFill::Prism { stops: vec![(0xff0000, 0.), (0x0000ff, 0.5), (0xff0000, 1.)], chars: 4, min: px(38.) };
+        let short = fill.gradient(point(px(0.), px(0.)), px(30.), px(20.), px(8.)).unwrap();
+        assert_eq!(short.tile.size.width, px(38.));
+        let long = NameFill::Prism { stops: vec![(0xff0000, 0.), (0x0000ff, 0.5), (0xff0000, 1.)], chars: 12, min: px(38.) };
+        let g = long.gradient(point(px(0.), px(0.)), px(90.), px(20.), px(8.)).unwrap();
+        assert_eq!(g.tile.size.width, px(96.));
+        assert_eq!(g.angle, 90.);
+        assert!(g.repeat_x);
+    }
+
+    #[test]
+    fn solid_and_single_stop_fills_paint_without_a_gradient() {
+        assert!(NameFill::Solid(0x123456).gradient(point(px(0.), px(0.)), px(30.), px(20.), px(8.)).is_none());
+        assert!(NameFill::Diagonal(vec![(0x123456, 0.1)]).gradient(point(px(0.), px(0.)), px(30.), px(20.), px(8.)).is_none());
+        assert_eq!(NameFill::Diagonal(vec![(0x123456, 0.1), (0, 0.9)]).first(), 0x123456);
     }
 }

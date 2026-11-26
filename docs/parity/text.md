@@ -15,7 +15,7 @@ Values come from the live vanilla client (CDP computed styles, cached in
 | Container width | `container_rc97-L` in a flex row | width | content width | ui/components.rs `Comp::Container` | ✅ |
 | Emoji in container text | `markup_ .emoji` | size | 1.375em (19.25 at 14px) | ui/chat/message_ext.rs `rich_with_emoji_scaled` | ✅ |
 | Activity card name | `userName_g7esM5` | color / font / max-width | --channels-default / 14px, 1.2857, 500 / 85% | ui/members.rs activity_section | ✅ |
-| Styled / gradient-role name | `name_Wo4EpK` + font class + `twoColorGradient_ usernameGradient_` | font, letter-spacing, gradient | style font, .01-.04em, (c1, c2, c1) tiled every 100px | fonts::name_paint `NameText` (per-glyph colour, gradient from role.colors) | ✅ |
+| Styled / gradient-role name | `name_Wo4EpK` + font class + `twoColorGradient_ usernameGradient_` | font, letter-spacing, gradient | style font, .01-.04em, (c1, c2, c1) or (c1, c2, c3, c1) tiled every 100px | fonts::name_paint `NameText` (per-pixel gradient through the glyphs, GPUI patch 16) | ✅ |
 | Member row height | `member_Iy0c7A` | height | 42 (one line) / 44 (with sub line) | ui/members.rs `member_row_in` | ✅ |
 | Member list content width | `content_tqapBM` inside `members_86es0b` | width | 260 of 268 (thin scroller gutter) | ui/members.rs list `.pr(8)` | ✅ |
 | Member group header | `membersGroup_86es0b` | padding / height | 24 4 4 20 / 46 | ui/members.rs `group_header` | ✅ |

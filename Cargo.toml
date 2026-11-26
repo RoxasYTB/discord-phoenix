@@ -22,6 +22,6 @@ opt-level = 2
 debug = false
 
 [patch.crates-io]
-gpui-pre = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "776d5b2ca7eb3c967112acb9302d45b75b61bd1f" }
-gpui-pre-wgpu = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "776d5b2ca7eb3c967112acb9302d45b75b61bd1f" }
-gpui-base = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "776d5b2ca7eb3c967112acb9302d45b75b61bd1f" }
+gpui-pre = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "d00bee73a0f381892f6b697c8e377848a497b982" }
+gpui-pre-wgpu = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "d00bee73a0f381892f6b697c8e377848a497b982" }
+gpui-base = { git = "https://github.com/RoxasYTB/project-phoenix", rev = "d00bee73a0f381892f6b697c8e377848a497b982" }

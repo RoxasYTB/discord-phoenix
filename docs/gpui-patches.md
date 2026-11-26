@@ -362,7 +362,7 @@ exactly on the budget is kept, and 0.001px less cuts it. Phoenix renders « hone
 patch 14 and the composer's `mr(12)`, so the cut itself needed no change. The « hone… » seen
 before came from the box, not from the cut.
 
-Rev: `776d5b2c` on `gpui-rewrap` (patches 4 to 15). Before: `fc9bf4e7` on `gpui-ellipsis2` (patches 4 to 14), `5e340a80` on `gpui-richtext` (patches 4 to 13), `0c04d8e7` on `gpui-baseline2` (patches 4 to 11), `4c7d4f5a` on `gpui-baseline` (patch 9 with the descent sign bug), `0ce4a85b` on `gpui-underline`, `265d2211` on `gpui-marks`.
+Rev: `d00bee73` on `gpui-gradient` (patches 4 to 16). Before: `776d5b2c` on `gpui-rewrap` (patches 4 to 15), `fc9bf4e7` on `gpui-ellipsis2` (patches 4 to 14), `5e340a80` on `gpui-richtext` (patches 4 to 13), `0c04d8e7` on `gpui-baseline2` (patches 4 to 11), `4c7d4f5a` on `gpui-baseline` (patch 9 with the descent sign bug), `0ce4a85b` on `gpui-underline`, `265d2211` on `gpui-marks`.
 
 ## 15. Rewrap slack (`src/elements/text.rs` `needs_rewrap`)
 
@@ -380,6 +380,46 @@ snapping never re-wraps a line.
 **Patch.** The rewrap needs a change of more than `max(0.5px, 1 device px)`, and wraps at the
 painted width plus one device pixel. Unit test `snapping_to_device_pixels_does_not_rewrap`.
 Search `PHOENIX PATCH (rewrap slack)`.
+
+## 16. Text gradient (`src/text_system/gradient.rs`, `src/scene.rs`, `src/window.rs` `paint_glyph`, `vendor/gpui-pre-wgpu/src/shaders_gradient.wgsl`, `wgpu_renderer.rs`)
+
+**Problem.** Role gradients and display name styles were drawn one solid colour per
+letter (`NameText` sampled the gradient at each grapheme's centre). The client paints a
+real `background-clip: text` gradient, so a wide letter goes from one colour to the next
+inside the glyph, and the vertical part of the diagonal name gradient was lost.
+
+**Reference.** Client CSS (local cache, 2026-11-26):
+- roles, `447505.1c681faad626d654.css`: `.twoColorGradient_HG2xvK{linear-gradient(to right, c1, c2, c1)}`,
+  `.threeColorGradient_HG2xvK{linear-gradient(to right, c1, c2, c3, c1)}`,
+  `.usernameGradient_HG2xvK{background-clip:text; background-size:100px auto}` (repeats every 100px);
+- display name styles, `163466.71f5984e9faac7fc.css`: `.gradient_or4Hj-{linear-gradient(to bottom right, stops); background-size:100% auto}`,
+  `.prism_or4Hj-{linear-gradient(90deg, prism stops); background-repeat:repeat; background-size:var(--…-prism-cycle) auto}`;
+  stops from `abd83513bd56377e.js` `UserNameWithEffects`: GRADIENT/GLOW `c_i (10 + 80 i/(n-1))%`,
+  PRISM `c_(i mod n) (100 i/n)%` for i = 0..n, cycle `max(<name length>ch, 38px)`.
+
+**Patch.** `TextGradient { angle, stops, tile, repeat_x }` is a CSS linear gradient in
+logical pixels (`TextGradient::to_corner` gives the angle of `to bottom right` for a tile).
+`Window::with_text_gradient(Some(&g), |window| …)` paints every monochrome glyph drawn inside
+it with the gradient: the glyph stays a `MonochromeSprite`, its `pad` holds `1 + index` into
+`Scene::glyph_gradients` (`GlyphGradient`: device-pixel origin, gradient step and offset,
+repeat period, up to 8 stops, opacity), and `Scene::replay` copies the gradient of a reused
+sprite. Subpixel AA is off for those glyphs, like Chromium's grayscale text with a clipped
+background. The scene enums are unchanged, so the macOS / Windows renderers still build (they
+draw the first stop). The wgpu renderer writes the gradient sprites (sprite + gradient) to
+their own instance range only when the scene has gradients, and splits a mono batch into runs:
+plain runs keep the mono pipeline, gradient runs use `vs_gradient_sprite` / `fs_gradient_sprite`
+(`shaders_gradient.wgsl`), which compute `t = dot(p − origin, step) + offset` per pixel (x
+wrapped by the period), interpolate the stops in sRGB like CSS and apply the same contrast
+and gamma correction as the mono shader. A scene without gradients takes exactly the old path.
+WebGL has no gradient pipeline and falls back to the solid mono pipeline. Search
+`PHOENIX PATCH (text gradient)`.
+
+Tests: `text_system::gradient::tests` (horizontal, repeated, `to bottom right` corners,
+device pixels, stop clamping, out-of-order stops), wgpu `gradient_shader_is_valid_wgsl`,
+`gradient_sprite_record_matches_the_shader_layout`, `headless_renderer_fills_gradient_glyphs_per_pixel`
+(plain sprite stays solid, gradient sprite ramps per pixel). App: `fonts::name_paint::tests`,
+`fonts::tests::role_gradients_go_back_to_the_first_colour_like_the_client_classes`,
+`prism_stops_cycle_back_to_the_first_colour_over_the_name_length`.
 
 ## Running the vendored tests
 

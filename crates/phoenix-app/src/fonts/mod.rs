@@ -381,8 +381,8 @@ pub fn styled_name<E: gpui::Styled>(el: E, user: Option<&crate::model::User>, in
 }
 
 pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, size: f32) -> gpui::AnyElement {
-    let stops = name_style(user).map(|(_, effect, colors)| dns_stops(*effect, colors)).unwrap_or_default();
-    paint_name(text, user, size, stops, None)
+    let fill = name_style(user).and_then(|(_, effect, colors)| dns_fill(*effect, colors, &text));
+    paint_name(text, user, size, fill)
 }
 
 pub fn role_name_text(
@@ -398,7 +398,7 @@ pub fn role_name_text(
     } else if show_effect {
         name_text(text, user, size)
     } else {
-        paint_name(text, user, size, Vec::new(), None)
+        paint_name(text, user, size, None)
     }
 }
 
@@ -409,8 +409,14 @@ pub fn name_text_with(
     stops: Option<[u32; 3]>,
 ) -> gpui::AnyElement {
     let dim = crate::theme::is_light();
-    let stops = stops.map(|s| s.map(|c| if dim { dim_gradient_stop(c) } else { c }).to_vec()).unwrap_or_default();
-    paint_name(text, user, size, stops, Some(100.))
+    let fill = stops.map(|s| role_fill(s.map(|c| if dim { dim_gradient_stop(c) } else { c }), crate::theme::z(100.)));
+    paint_name(text, user, size, fill)
+}
+
+pub fn role_fill(colors: [u32; 3], period: gpui::Pixels) -> name_paint::NameFill {
+    let [a, b, c] = colors;
+    let stops = if c == a { vec![(a, 0.), (b, 0.5), (a, 1.)] } else { vec![(a, 0.), (b, 1. / 3.), (c, 2. / 3.), (a, 1.)] };
+    name_paint::NameFill::Role { stops, period }
 }
 
 fn dim_gradient_stop(c: u32) -> u32 {
@@ -528,32 +534,21 @@ fn contrast_adjust(fg: u32, bg: u32, ratio: f64, saturation: f64) -> u32 {
     (ch(t[0]) << 16) | (ch(t[1]) << 8) | ch(t[2])
 }
 
-fn lerp_rgb(a: u32, b: u32, f: f64) -> u32 {
-    let (a, b) = (split_rgb(a), split_rgb(b));
-    let ch = |i: usize| ((a[i] + (b[i] - a[i]) * f).round() as u32).min(255);
-    (ch(0) << 16) | (ch(1) << 8) | ch(2)
-}
-
-fn gradient_stop_at(stops: &[u32], t: f64) -> u32 {
-    let n = stops.len();
-    if n == 1 {
-        return stops[0];
-    }
-    let p = |i: usize| 0.1 + 0.8 * i as f64 / (n - 1) as f64;
-    if t <= p(0) {
-        return stops[0];
-    }
-    (1..n)
-        .find(|&i| t <= p(i))
-        .map_or(stops[n - 1], |i| lerp_rgb(stops[i - 1], stops[i], (t - p(i - 1)) / (p(i) - p(i - 1))))
-}
-
-pub fn dns_stops(effect: u32, colors: &[u32]) -> Vec<u32> {
+pub fn dns_fill(effect: u32, colors: &[u32], name: &str) -> Option<name_paint::NameFill> {
+    use name_paint::NameFill;
     let adjusted: Vec<u32> = colors.iter().filter(|&&c| c <= 0xffffff).map(|&c| dns_color(c, effect)).collect();
+    let n = adjusted.len();
     match (effect, adjusted.as_slice()) {
-        (_, []) => Vec::new(),
-        (2 | 6 | 7, [_, _, ..]) => (0..=8).map(|k| gradient_stop_at(&adjusted, 0.25 + k as f64 / 16.)).collect(),
-        (_, [c, ..]) => vec![*c],
+        (_, []) => None,
+        (2 | 6, [_, _, ..]) => {
+            Some(NameFill::Diagonal(adjusted.iter().enumerate().map(|(i, &c)| (c, 0.1 + 0.8 * i as f32 / (n - 1) as f32)).collect()))
+        }
+        (7, [_, _, ..]) => Some(NameFill::Prism {
+            stops: (0..=n).map(|i| (adjusted[i % n], i as f32 / n as f32)).collect(),
+            chars: name.encode_utf16().count(),
+            min: crate::theme::z(38.),
+        }),
+        (_, [c, ..]) => Some(NameFill::Solid(*c)),
     }
 }
 
@@ -561,19 +556,17 @@ fn paint_name(
     text: gpui::SharedString,
     user: Option<&crate::model::User>,
     size: f32,
-    stops: Vec<u32>,
-    period: Option<f32>,
+    fill: Option<name_paint::NameFill>,
 ) -> gpui::AnyElement {
     use gpui::IntoElement;
     let ls = name_style(user)
         .filter(|s| family_for_id(s.0).is_some())
         .and_then(|s| font_for_id(s.0))
         .map_or(0., |(_, ls)| ls);
-    let stops: Vec<gpui::Hsla> = stops.iter().map(|&c| gpui::rgb(c).into()).collect();
-    if ls <= 0. && stops.is_empty() {
+    if ls <= 0. && fill.is_none() {
         return crate::ui::emoji_text::label(text, size);
     }
-    name_paint::NameText::new(text, crate::theme::z(ls * size), stops, period.map(crate::theme::z)).into_any_element()
+    name_paint::NameText::new(text, crate::theme::z(ls * size), fill).into_any_element()
 }
 
 pub mod fallback;
@@ -613,32 +606,47 @@ mod tests {
 
     #[test]
     fn black_to_white_display_name_gradient_in_the_dark_theme() {
+        use name_paint::NameFill;
         if crate::theme::active() != crate::ui::settings::AppTheme::Dark || crate::theme::high_contrast() {
             return;
         }
-        let s = dns_stops(2, &[0x000000, 0xfffffe]);
-        assert_eq!(s.len(), 9);
-        assert_eq!(s[0], 0x838383);
-        assert_eq!(s[4], 0xb3b3b2);
-        assert_eq!(s[8], 0xe2e2e2);
-        assert_eq!(dns_stops(1, &[0x000000]), vec![0x737373]);
-        assert_eq!(dns_stops(2, &[0x000000]), vec![0x666666]);
-        assert!(dns_stops(2, &[]).is_empty());
-        assert!(dns_stops(2, &[0x1000000]).is_empty());
+        assert_eq!(dns_fill(2, &[0x000000, 0xfffffe], "Clem"), Some(NameFill::Diagonal(vec![(0x666666, 0.1), (0xfffffe, 0.9)])));
+        assert_eq!(dns_fill(6, &[0x000000, 0xfffffe], "Clem"), Some(NameFill::Diagonal(vec![(0x666666, 0.1), (0xfffffe, 0.9)])));
+        let three = dns_fill(2, &[0x3498db, 0x9b59b6, 0xe91e63], "x");
+        assert_eq!(three, Some(NameFill::Diagonal(vec![(0x3498db, 0.1), (0x9b59b6, 0.5), (0xe91e63, 0.9)])));
+        assert_eq!(dns_fill(1, &[0x000000], "Clem"), Some(NameFill::Solid(0x737373)));
+        assert_eq!(dns_fill(2, &[0x000000], "Clem"), Some(NameFill::Solid(0x666666)));
+        assert!(dns_fill(2, &[], "Clem").is_none());
+        assert!(dns_fill(2, &[0x1000000], "Clem").is_none());
     }
 
     #[test]
-    fn dark_gradient_spans_the_middle_of_the_diagonal_stops() {
-        let stops = [0x666666, 0xfffffe];
-        assert_eq!(gradient_stop_at(&stops, 0.05), 0x666666);
-        assert_eq!(gradient_stop_at(&stops, 0.25), 0x838383);
-        assert_eq!(gradient_stop_at(&stops, 0.5), 0xb3b3b2);
-        assert_eq!(gradient_stop_at(&stops, 0.75), 0xe2e2e2);
-        assert_eq!(gradient_stop_at(&stops, 0.95), 0xfffffe);
-        assert_eq!(gradient_stop_at(&[0x112233], 0.5), 0x112233);
-        let three = [0xff0000, 0x00ff00, 0x0000ff];
-        assert_eq!(gradient_stop_at(&three, 0.5), 0x00ff00);
-        assert_eq!(gradient_stop_at(&three, 0.9), 0x0000ff);
+    fn prism_stops_cycle_back_to_the_first_colour_over_the_name_length() {
+        use name_paint::NameFill;
+        if crate::theme::active() != crate::ui::settings::AppTheme::Dark || crate::theme::high_contrast() {
+            return;
+        }
+        let Some(NameFill::Prism { stops, chars, min }) = dns_fill(7, &[0x3498db, 0xfffffe], "\u{1d538}\u{1d56b}_TV") else {
+            panic!("prism fill");
+        };
+        assert_eq!(stops, vec![(0x3498db, 0.), (0xfffffe, 0.5), (0x3498db, 1.)]);
+        assert_eq!(chars, 7);
+        assert_eq!(min, crate::theme::z(38.));
+    }
+
+    #[test]
+    fn role_gradients_go_back_to_the_first_colour_like_the_client_classes() {
+        use name_paint::NameFill;
+        let two = role_fill([0x9e6bff, 0x9fc1ff, 0x9e6bff], gpui::px(100.));
+        assert_eq!(two, NameFill::Role { stops: vec![(0x9e6bff, 0.), (0x9fc1ff, 0.5), (0x9e6bff, 1.)], period: gpui::px(100.) });
+        let holo = role_fill([0xa9c9ff, 0xffbbec, 0xffc3a0], gpui::px(100.));
+        assert_eq!(
+            holo,
+            NameFill::Role {
+                stops: vec![(0xa9c9ff, 0.), (0xffbbec, 1. / 3.), (0xffc3a0, 2. / 3.), (0xa9c9ff, 1.)],
+                period: gpui::px(100.)
+            }
+        );
     }
 
     #[test]
