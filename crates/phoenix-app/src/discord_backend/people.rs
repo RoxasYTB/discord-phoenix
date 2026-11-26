@@ -1,9 +1,12 @@
 use phoenix_api::{
     gateway::GuildSubscription,
-    rest::{profile::CustomStatus, settings::CustomStatusProto},
+    rest::settings::{CustomStatusProto, with_custom_status, with_status},
 };
 
-use super::{DiscordBackend, api_err, convert, self_presence::Custom};
+use super::{
+    DiscordBackend, api_err, convert,
+    self_presence::{Custom, now_ms},
+};
 use crate::{
     backend::{AppEvent, BoxFuture},
     model::{Id, Presence},
@@ -41,16 +44,28 @@ impl DiscordBackend {
     pub(super) fn people_status(&self, status: Presence, custom: Option<String>) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
             let custom = custom.filter(|t| !t.trim().is_empty());
-            {
+            let new_custom = {
                 let mut l = s.presence.lock();
                 l.set_status(status_str(status));
-                if l.custom.as_ref().map(|c| c.proto.text.as_str()) != custom.as_deref() {
-                    l.custom = custom.clone().map(|t| Custom { proto: CustomStatusProto { text: t, ..Default::default() }, ..Default::default() });
+                let changed = l.custom.as_ref().map(|c| c.proto.text.as_str()).filter(|t| !t.is_empty()) != custom.as_deref();
+                if changed {
+                    l.custom = custom.map(|t| Custom { proto: CustomStatusProto { text: t, ..Default::default() }, ..Default::default() });
                 }
-            }
+                changed.then(|| l.custom.as_ref().map(|c| c.proto.clone()))
+            };
             super::self_presence::send(&s);
-            let cs = custom.map(|t| CustomStatus { text: Some(t), ..Default::default() });
-            s.rest.update_status_settings(Some(status_str(status)), Some(cs.as_ref())).await.map_err(api_err)
+            let st = status_str(status);
+            s.rest
+                .edit_settings_proto(move |raw| {
+                    let raw = with_status(&raw, st, now_ms());
+                    match &new_custom {
+                        Some(c) => with_custom_status(&raw, c.as_ref()),
+                        None => raw,
+                    }
+                })
+                .await
+                .map(|_| ())
+                .map_err(api_err)
         })
     }
 
@@ -104,7 +119,7 @@ mod tests {
     use serde_json::{Value, json};
 
     fn activity(d: &StatusDraft, now: u64) -> Value {
-        let l = Local { status: Some("online".into()), custom: Some(custom_local(d)) };
+        let l = Local { status: Some("online".into()), custom: Some(custom_local(d)), ..Default::default() };
         l.payload(now, |_| false).activities.remove(0)
     }
 

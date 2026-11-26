@@ -4,6 +4,10 @@ use phoenix_api::{
     rest::settings::CustomStatusProto,
 };
 use serde_json::{Value, json};
+use std::sync::{
+    Arc, Once,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
 
 use super::nav::fields;
 
@@ -18,7 +22,17 @@ pub(crate) struct Custom {
 pub(crate) struct Local {
     pub status: Option<String>,
     pub custom: Option<Custom>,
+    pub afk_timeout: Option<u32>,
+    pub idle_since: u64,
+    pub afk: bool,
 }
+
+pub(crate) const IDLE_MS: u32 = 600_000;
+const AFK_DEFAULT_S: u32 = 60;
+
+static IDLE_SINCE: AtomicU64 = AtomicU64::new(0);
+static AFK: AtomicBool = AtomicBool::new(false);
+static WATCH: Once = Once::new();
 
 fn sub(b: &[u8], n: u64) -> Option<&[u8]> {
     fields(b).into_iter().rev().find(|f| f.0 == n && f.1 == 2).map(|f| f.2)
@@ -59,6 +73,11 @@ impl Local {
     }
 
     pub fn apply(&mut self, raw: &[u8], partial: bool) {
+        if let Some(v) = sub(raw, 5).and_then(|vv| sub(vv, 6)) {
+            self.afk_timeout = fields(v).into_iter().rev().find(|f| f.0 == 1 && f.1 == 0).map(|f| f.3 as u32).or(Some(0));
+        } else if !partial {
+            self.afk_timeout = None;
+        }
         let st = sub(raw, 11);
         if partial && st.is_none() {
             return;
@@ -91,14 +110,18 @@ impl Local {
     }
 
     pub fn payload(&self, now_ms: u64, animated: impl Fn(u64) -> bool) -> UpdatePresence {
-        let status = self.status().to_owned();
+        let status = match self.status() {
+            "online" if self.idle_since > 0 => "idle",
+            s => s,
+        }
+        .to_owned();
         let activities = match &self.custom {
             Some(c) if status != "invisible" && (c.proto.expires_at_ms == 0 || c.proto.expires_at_ms > now_ms) => {
                 vec![activity(c, &animated)]
             }
             _ => Vec::new(),
         };
-        UpdatePresence { since: 0, activities, status, afk: false }
+        UpdatePresence { since: self.idle_since, activities, status, afk: self.afk }
     }
 }
 
@@ -128,13 +151,56 @@ fn emoji_animated(cache: &Cache, emoji: u64) -> bool {
     cache.guilds().iter().flat_map(|g| g.emojis.iter()).find(|e| e.id.map(|i| i.0) == Some(emoji)).is_some_and(|e| e.animated)
 }
 
-fn now_ms() -> u64 {
+pub(super) fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 pub(super) fn send(s: &super::Session) {
-    let p = s.presence.lock().payload(now_ms(), |e| emoji_animated(&s.cache, e));
+    let p = {
+        let mut l = s.presence.lock();
+        l.idle_since = IDLE_SINCE.load(Ordering::Relaxed);
+        l.afk = AFK.load(Ordering::Relaxed);
+        l.payload(now_ms(), |e| emoji_animated(&s.cache, e))
+    };
     let _ = s.gateway.send(GatewayCommand::UpdatePresence(p));
+}
+
+pub(crate) fn afk_ms(afk_timeout: Option<u32>) -> Option<u32> {
+    match afk_timeout.unwrap_or(AFK_DEFAULT_S) {
+        0 => None,
+        t => Some(t.saturating_mul(1000).min(IDLE_MS)),
+    }
+}
+
+pub(crate) fn on_idle(which: usize, idle: bool, now: u64) -> bool {
+    match which {
+        0 => {
+            let since = if idle { now.saturating_sub(u64::from(IDLE_MS)) } else { 0 };
+            IDLE_SINCE.swap(since, Ordering::Relaxed) != since
+        }
+        _ => AFK.swap(idle, Ordering::Relaxed) != idle,
+    }
+}
+
+pub(super) fn watch_idle(inner: &Arc<super::Inner>, afk_timeout: Option<u32>) {
+    WATCH.call_once(|| {
+        let mut timeouts = vec![IDLE_MS];
+        match afk_ms(afk_timeout) {
+            Some(t) => timeouts.push(t),
+            None => AFK.store(true, Ordering::Relaxed),
+        }
+        let inner = inner.clone();
+        crate::idle::spawn(
+            timeouts,
+            Box::new(move |which: usize, idle: bool| {
+                if on_idle(which, idle, now_ms())
+                    && let Some(s) = inner.session.lock().clone()
+                {
+                    send(&s);
+                }
+            }),
+        );
+    });
 }
 
 pub(super) fn on_settings_update(s: &super::Session, data: &Value) {
@@ -237,6 +303,40 @@ mod tests {
         assert_eq!(l.status(), "idle");
         l.apply(&settings(Some("online"), None), false);
         assert_eq!((l.status(), l.custom.is_none()), ("online", true));
+    }
+
+    #[test]
+    fn idle_turns_online_into_idle_with_since_and_afk() {
+        let mut l = Local::from_proto(&settings(Some("online"), None));
+        l.idle_since = 1_000;
+        l.afk = true;
+        assert_eq!(serde_json::to_value(l.payload(0, |_| false)).unwrap(), json!({"since": 1_000, "activities": [], "status": "idle", "afk": true}));
+        l.set_status("dnd");
+        assert_eq!((l.payload(0, |_| false).status.as_str(), l.payload(0, |_| false).since), ("dnd", 1_000));
+    }
+
+    #[test]
+    fn afk_timeout_follows_the_voice_setting() {
+        assert_eq!(afk_ms(None), Some(60_000));
+        assert_eq!(afk_ms(Some(300)), Some(300_000));
+        assert_eq!(afk_ms(Some(3_600)), Some(600_000));
+        assert_eq!(afk_ms(Some(0)), None);
+        let mut raw = Vec::new();
+        fb(5, &[0x32, 0x02, 0x08, 0x78], &mut raw);
+        assert_eq!(Local::from_proto(&raw).afk_timeout, Some(120));
+        assert_eq!(Local::from_proto(&[]).afk_timeout, None);
+    }
+
+    #[test]
+    fn idle_events_only_report_changes() {
+        assert!(on_idle(0, true, 700_000));
+        assert_eq!(IDLE_SINCE.load(Ordering::Relaxed), 100_000);
+        assert!(!on_idle(0, true, 700_000));
+        assert!(on_idle(0, false, 800_000));
+        assert_eq!(IDLE_SINCE.load(Ordering::Relaxed), 0);
+        assert!(on_idle(1, true, 0));
+        assert!(!on_idle(1, true, 0));
+        assert!(on_idle(1, false, 0));
     }
 
     #[test]

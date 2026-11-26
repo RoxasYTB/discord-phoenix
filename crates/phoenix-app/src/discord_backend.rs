@@ -306,6 +306,8 @@ fn start_session(
     pins::init(&session.cache);
     phoenix_api::rest::experiments::set_apex(ready.apex_experiments.as_ref());
     *inner.session.lock() = Some(session.clone());
+    let afk_timeout = session.presence.lock().afk_timeout;
+    self_presence::watch_idle(inner, afk_timeout);
     for page in std::mem::take(&mut *inner.pre_session_pages.lock()) {
         ensure_message_authors(inner, &session, &page);
     }

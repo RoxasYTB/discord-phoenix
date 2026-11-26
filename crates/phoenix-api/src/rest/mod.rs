@@ -194,6 +194,7 @@ struct Inner {
     locale: parking_lot::RwLock<String>,
     timezone: Option<String>,
     notes: parking_lot::Mutex<std::collections::HashMap<u64, Arc<tokio::sync::OnceCell<String>>>>,
+    proto_writer: settings::ProtoWriter,
 }
 
 #[derive(Clone)]
@@ -232,6 +233,7 @@ impl RestClient {
                 locale: parking_lot::RwLock::new(crate::props::os_discord_locale()),
                 timezone: crate::props::os_timezone(),
                 notes: Default::default(),
+                proto_writer: Default::default(),
             }),
         }
     }

@@ -16,6 +16,7 @@ pub mod keybinds;
 pub mod i18n;
 pub mod fonts;
 pub mod icons;
+pub mod idle;
 pub mod logging;
 pub mod markdown;
 pub mod member_index;

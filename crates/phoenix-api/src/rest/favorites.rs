@@ -1,14 +1,8 @@
 use std::collections::BTreeMap;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-use reqwest::Method;
-use serde::Deserialize;
-use serde_json::json;
-
+use super::RestClient;
 use super::settings::{BoolValue, field_bytes, fields};
-use super::{Body, RestClient};
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 pub const SETTINGS_TAG: u32 = 15;
 pub const REFERENCE_ORIGINAL: i32 = 1;
@@ -327,16 +321,10 @@ impl Favorites {
     }
 }
 
-#[derive(Deserialize)]
-struct ProtoBody {
-    settings: String,
-}
-
 impl RestClient {
     pub async fn patch_favorites(&self, favorites: &Favorites) -> Result<Vec<u8>> {
-        let body = json!({ "settings": STANDARD.encode(favorites.settings_patch()) });
-        let b: ProtoBody = self.call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(body)).await?;
-        STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
+        let body = prost::Message::encode_to_vec(favorites);
+        self.edit_settings_proto(move |raw| super::settings::replace_field(&raw, SETTINGS_TAG, &body)).await
     }
 }
 

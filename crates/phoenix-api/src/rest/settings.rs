@@ -434,14 +434,109 @@ pub fn with_custom_status(raw: &[u8], custom: Option<&CustomStatusProto>) -> Vec
     out
 }
 
+pub fn replace_field(raw: &[u8], tag: u32, payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (t, w, v, d) in fields(raw) {
+        if t != tag {
+            reencode(t, w, v, d, &mut out);
+        }
+    }
+    field_bytes(tag, payload, &mut out);
+    out
+}
+
+pub fn with_status(raw: &[u8], status: &str, now_ms: u64) -> Vec<u8> {
+    let cat: Vec<(u32, u8, u64, &[u8])> = fields(raw).into_iter().filter(|f| f.0 == 11 && f.1 == 2).flat_map(|f| fields(f.3)).collect();
+    let prev = cat.iter().rev().find(|f| f.0 == 1 && f.1 == 2).and_then(|f| fields(f.3).into_iter().rev().find(|x| x.0 == 1 && x.1 == 2)).map(|x| x.3);
+    let created = cat.iter().rev().find(|f| f.0 == 5 && f.1 == 2).map(|f| f.3);
+    let mut st = Vec::new();
+    let mut sv = Vec::new();
+    field_bytes(1, status.as_bytes(), &mut sv);
+    field_bytes(1, &sv, &mut st);
+    for (t, w, v, d) in &cat {
+        if !matches!(*t, 1 | 4 | 5) {
+            reencode(*t, *w, *v, d, &mut st);
+        }
+    }
+    match created {
+        Some(c) if prev == Some(status.as_bytes()) => field_bytes(5, c, &mut st),
+        _ => {
+            let mut ts = Vec::new();
+            field_varint(1, now_ms, &mut ts);
+            field_bytes(5, &ts, &mut st);
+        }
+    }
+    replace_field(raw, 11, &st)
+}
+
+fn by_tag(raw: &[u8]) -> std::collections::BTreeMap<u32, Vec<u8>> {
+    let mut m: std::collections::BTreeMap<u32, Vec<u8>> = std::collections::BTreeMap::new();
+    for (t, w, v, d) in fields(raw) {
+        reencode(t, w, v, d, m.entry(t).or_default());
+    }
+    m
+}
+
+pub fn proto_delta(before: &[u8], after: &[u8]) -> Vec<u8> {
+    let (b, a) = (by_tag(before), by_tag(after));
+    let mut out = Vec::new();
+    for (t, bytes) in &a {
+        if b.get(t) != Some(bytes) {
+            out.extend_from_slice(bytes);
+        }
+    }
+    for t in b.keys().filter(|t| !a.contains_key(t)) {
+        field_bytes(*t, &[], &mut out);
+    }
+    out
+}
+
+type ProtoEdit = Box<dyn FnOnce(Vec<u8>) -> Vec<u8> + Send>;
+type ProtoReply = tokio::sync::oneshot::Sender<std::result::Result<Vec<u8>, String>>;
+
+#[derive(Default)]
+pub(crate) struct ProtoWriter {
+    queue: parking_lot::Mutex<Vec<(ProtoEdit, ProtoReply)>>,
+    lock: tokio::sync::Mutex<()>,
+}
+
 impl RestClient {
-    pub async fn save_guild_folders(&self, folders: &[FolderProto]) -> Result<Vec<u8>> {
-        let raw = self.get_settings_proto_raw().await?;
-        let next = with_guild_folders(&raw, folders);
+    pub async fn edit_settings_proto(&self, edit: impl FnOnce(Vec<u8>) -> Vec<u8> + Send + 'static) -> Result<Vec<u8>> {
+        let w = &self.inner.proto_writer;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        w.queue.lock().push((Box::new(edit), tx));
+        {
+            let _held = w.lock.lock().await;
+            let batch = std::mem::take(&mut *w.queue.lock());
+            if !batch.is_empty() {
+                let (edits, replies): (Vec<ProtoEdit>, Vec<ProtoReply>) = batch.into_iter().unzip();
+                let r = self.flush_settings_proto(edits).await.map_err(|e| e.to_string());
+                for tx in replies {
+                    let _ = tx.send(r.clone());
+                }
+            }
+        }
+        rx.await.map_err(|_| Error::Protocol("settings write dropped".into()))?.map_err(Error::Protocol)
+    }
+
+    async fn flush_settings_proto(&self, edits: Vec<ProtoEdit>) -> Result<Vec<u8>> {
+        let before = self.get_settings_proto_raw().await?;
+        let n = edits.len();
+        let after = edits.into_iter().fold(before.clone(), |raw, e| e(raw));
+        let delta = proto_delta(&before, &after);
+        if delta.is_empty() {
+            return Ok(before);
+        }
+        tracing::debug!(edits = n, bytes = delta.len(), "settings-proto write");
         let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(next) })))
+            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(delta) })))
             .await?;
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
+    }
+
+    pub async fn save_guild_folders(&self, folders: &[FolderProto]) -> Result<Vec<u8>> {
+        let folders = folders.to_vec();
+        self.edit_settings_proto(move |raw| with_guild_folders(&raw, &folders)).await
     }
 }
 
@@ -537,12 +632,8 @@ impl RestClient {
     }
 
     pub async fn save_custom_status(&self, custom: Option<&CustomStatusProto>) -> Result<Vec<u8>> {
-        let raw = self.get_settings_proto_raw().await?;
-        let next = with_custom_status(&raw, custom);
-        let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(next) })))
-            .await?;
-        STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
+        let custom = custom.cloned();
+        self.edit_settings_proto(move |raw| with_custom_status(&raw, custom.as_ref())).await
     }
 
     pub async fn get_settings_proto_raw(&self) -> Result<Vec<u8>> {
@@ -551,12 +642,12 @@ impl RestClient {
     }
 
     pub async fn patch_setting_raw(&self, change: &SettingChange) -> Result<Vec<u8>> {
-        let mut raw = self.get_settings_proto_raw().await?;
-        raw.extend(change.encode());
-        let b: ProtoBody = self
-            .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(raw) })))
-            .await?;
-        STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
+        let change = change.encode();
+        self.edit_settings_proto(move |mut raw| {
+            raw.extend(change);
+            raw
+        })
+        .await
     }
 
     pub async fn get_consent(&self) -> Result<Value> {
@@ -778,5 +869,60 @@ mod tests {
         raw.extend(7u64.to_le_bytes());
         let d = PreloadedUserSettings::decode_raw(&raw).unwrap();
         assert_eq!(d.privacy.unwrap().restricted_guild_ids, vec![1369382919948210248, 7]);
+    }
+
+    fn status_cat(status: &str, custom: &CustomStatusProto, created: Option<u64>) -> Vec<u8> {
+        let mut st = Vec::new();
+        let mut sv = Vec::new();
+        field_bytes(1, status.as_bytes(), &mut sv);
+        field_bytes(1, &sv, &mut st);
+        field_bytes(2, &encode_custom_status(custom), &mut st);
+        field_varint(3, 1, &mut st);
+        if let Some(c) = created {
+            let mut ts = Vec::new();
+            field_varint(1, c, &mut ts);
+            field_bytes(5, &ts, &mut st);
+        }
+        st
+    }
+
+    #[test]
+    fn status_change_only_writes_the_status_category_and_keeps_the_custom_status() {
+        let custom = CustomStatusProto { text: "Lunch".into(), emoji_id: 42, emoji_name: "dance".into(), expires_at_ms: 9_000, created_at_ms: 1_000 };
+        let mut raw = Vec::new();
+        field_bytes(5, &[0x32, 0x02, 0x08, 0x3c], &mut raw);
+        field_bytes(11, &status_cat("online", &custom, Some(500)), &mut raw);
+        field_bytes(14, &[0x0a, 0x00], &mut raw);
+        let next = with_status(&raw, "dnd", 7_000);
+        let delta = proto_delta(&raw, &next);
+        let mut want = Vec::new();
+        field_bytes(11, &status_cat("dnd", &custom, Some(7_000)), &mut want);
+        assert_eq!(delta, want);
+        let d = PreloadedUserSettings::decode_raw(&next).unwrap();
+        assert_eq!(d.status(), Some("dnd"));
+        let st = fields(&delta)[0].3;
+        let cs = fields(st).into_iter().find(|f| f.0 == 2).unwrap().3;
+        assert_eq!(cs, encode_custom_status(&custom).as_slice());
+    }
+
+    #[test]
+    fn same_status_keeps_its_created_at() {
+        let custom = CustomStatusProto::default();
+        let mut raw = Vec::new();
+        field_bytes(11, &status_cat("idle", &custom, Some(500)), &mut raw);
+        assert!(proto_delta(&raw, &with_status(&raw, "idle", 7_000)).is_empty());
+    }
+
+    #[test]
+    fn delta_sends_changed_categories_only() {
+        let mut a = Vec::new();
+        field_bytes(5, &[0x08, 0x01], &mut a);
+        field_bytes(14, &[0x0a, 0x00], &mut a);
+        let mut b = Vec::new();
+        field_bytes(5, &[0x08, 0x01], &mut b);
+        field_bytes(14, &[0x0a, 0x02, 0x08, 0x01], &mut b);
+        assert_eq!(proto_delta(&a, &b), vec![0x72, 0x04, 0x0a, 0x02, 0x08, 0x01]);
+        assert_eq!(proto_delta(&a, &a), Vec::<u8>::new());
+        assert_eq!(proto_delta(&a, &replace_field(&a, 14, &[0x0a, 0x00])), Vec::<u8>::new());
     }
 }
