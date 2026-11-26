@@ -590,7 +590,7 @@ impl<E: crate::IntoElement + 'static> crate::Element for PresentTransitionElemen
     ) {
         let start = self.start.unwrap_or_else(Instant::now);
         let enter = self.enter;
-        let paint = move |window: &mut crate::Window| {
+        let mut paint = move |window: &mut crate::Window| {
             window.with_present_transition(enter.as_ref(), bounds, start, |window| element.paint(window, cx))
         };
         match self.exit {
