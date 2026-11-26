@@ -306,6 +306,9 @@ pub trait Backend: Send + Sync + 'static {
     fn user_profile(&self, _user: Id, _guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
         Box::pin(async { Err(BackendError(crate::t!("backend.profiles_unavailable").to_string())) })
     }
+    fn user_profile_without_note(&self, user: Id, guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
+        self.user_profile(user, guild)
+    }
     fn guild_profile(&self, _guild: Id) -> BoxFuture<crate::commands::guide::GuildProfile> {
         Box::pin(async { Err(BackendError(crate::t!("backend.profiles_unavailable").to_string())) })
     }

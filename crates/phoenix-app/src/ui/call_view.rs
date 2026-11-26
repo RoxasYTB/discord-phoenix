@@ -986,7 +986,7 @@ fn guild_theme(app: &PhoenixApp, guild: Id, user: Id, cx: &mut Context<PhoenixAp
         return Some(t);
     }
     if GUILD_THEME_REQUESTS.with(|r| r.borrow_mut().insert((guild, user))) {
-        let fut = app.backend.user_profile(user, Some(guild));
+        let fut = app.backend.user_profile_without_note(user, Some(guild));
         cx.spawn(async move |this, cx| {
             let Ok(p) = fut.await else { return };
             GUILD_THEMES.with(|m| m.borrow_mut().insert((guild, user), p.theme));

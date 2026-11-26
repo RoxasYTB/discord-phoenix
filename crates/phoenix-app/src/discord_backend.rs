@@ -1141,7 +1141,10 @@ impl Backend for DiscordBackend {
         self.thread_members_impl(thread)
     }
     fn user_profile(&self, user: Id, guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
-        self.people_profile(user, guild)
+        self.people_profile(user, guild, true)
+    }
+    fn user_profile_without_note(&self, user: Id, guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
+        self.people_profile(user, guild, false)
     }
     fn guild_profile(&self, guild: Id) -> BoxFuture<crate::commands::guide::GuildProfile> {
         self.with_session(move |_, s| async move {

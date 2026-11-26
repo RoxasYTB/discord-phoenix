@@ -23,9 +23,12 @@ impl DiscordBackend {
         })
     }
 
-    pub(super) fn people_profile(&self, user: Id, guild: Option<Id>) -> BoxFuture<Profile> {
+    pub(super) fn people_profile(&self, user: Id, guild: Option<Id>, with_note: bool) -> BoxFuture<Profile> {
         self.with_session(move |inner, s| async move {
-            let (p, note) = tokio::join!(s.rest.get_user_profile(sf(user), guild.map(sf)), s.rest.get_user_note(sf(user)));
+            let note = async {
+                if with_note { s.rest.get_user_note(sf(user)).await } else { Ok(String::new()) }
+            };
+            let (p, note) = tokio::join!(s.rest.get_user_profile(sf(user), guild.map(sf)), note);
             let p = p.map_err(api_err)?;
             inner.emit(AppEvent::Users(vec![convert::user(&p.user)]));
             Ok(profile_from_api(&p, note.unwrap_or_default()))
