@@ -609,7 +609,7 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, modal: Option<crate::ui::prof
         .child(group(
             group_label("sp.pf.name_style", true),
             tile("name-style", 208., 42., locked)
-                .child(crate::fonts::styled_name(div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))), Some(me), true).child(crate::fonts::name_text(me.display_name.clone(), Some(me), 24.)))
+                .child(crate::fonts::styled_name(div().text_size(z(24.)).line_height(z(32.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))), Some(me), true).child(crate::fonts::name_text(if e.original.name.is_empty() { me.display_name.clone() } else { SharedString::from(e.original.name.clone()) }, Some(me), 24.)))
                 .into_any_element(),
         ))
         .child(group(
@@ -668,6 +668,8 @@ fn styles_panel(app: &PhoenixApp, e: &EditorState, modal: Option<crate::ui::prof
                 .child(
                     div()
                         .flex_1()
+                        .min_w_0()
+                        .whitespace_normal()
                         .text_size(z(14.))
                         .line_height(z(18.))
                         .text_color(c(tok(idx::TEXT_DEFAULT)))
@@ -887,7 +889,15 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                         .text_color(strong)
                         .child(me.name.clone())
                         .child(div().size(z(4.)).mx(z(1.)).rounded_full().bg(strong))
-                        .child(div().flex_none().rounded(z(8.)).hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))).italic().child(pronouns))
+                        .child(div().flex_none().rounded(z(8.)).hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))).italic().child(pronouns)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(z(6.))
+                        .mt(z(11.))
                         .when_some(me.tag.clone(), |d, t| d.child(tag_select(t, strong)))
                         .when_some(badges_row(e.profile.as_ref()), |d, b| d.child(b)),
                 ),
@@ -995,7 +1005,7 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 ),
         )
         .children(
-            crate::ui::profile_toolbar::status(app, me.id, e.scope, crate::ui::profile_toolbar::Layout::Modal, themed, app.people.custom_status.clone(), cx)
+            crate::ui::profile_toolbar::status(app, me.id, e.scope, crate::ui::profile_toolbar::Layout::Modal, themed, crate::ui::profile::info(app, me.id, e.scope).custom, cx)
                 .map(|s| div().absolute().left(z(172.)).top(z(132.)).child(s)),
         )
         .child(div().id("pe-card-body").flex_1().min_h_0().overflow_y_scroll().child(body))
