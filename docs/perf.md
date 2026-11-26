@@ -358,3 +358,34 @@ counts do not depend on load, so they are the number to follow.
    1` only for `bench`/`frames`) would give numbers that mean something
    without a full LTO build. Cost: one more build of phoenix-app in the
    shared target dir, so check `df -h /home` first.
+
+## Smooth scrolling and Lottie playback (6a203f9c…1bff4114, 2026-11-26)
+
+`int-bin/frames 2000` (mock, headless 1280×800, dev profile, under `phoenix-nice`), same binary
+(`0ad2f8a3`) run twice: "before" with `PHX_INSTANT_WHEEL=1 PHX_LOTTIE_PER_FRAME=1` (old paths),
+"after" with the defaults. The `live` rows drive platform frame requests every 16 ms (draw only
+when something is dirty, present-only otherwise) and report the CPU of the whole process.
+
+| scenario | before | after |
+|---|---|---|
+| `lottie_hover_mic` (mic hovered 50 frames, left 10, eight times): CPU of one core | 34.8 % | **6.6 %** |
+| same, mean time per frame request | 7.26 ms | **1.25 ms** |
+| same, frame requests over 16 ms | 153 / 480 | **16 / 480** |
+| `lottie_idle` CPU | 0.5 % | 2.4 % (sheets of the visible icons built ahead, once) |
+| `scroll_chat_wheel` (precise 120 px deltas, full draw per frame) p50 / p95 | 69.9 / 126.4 ms | 72.3 / 105.1 ms |
+| `scroll_members` p50 / p95 | 33.3 / 51.2 ms | 36.4 / 56.1 ms |
+| `scroll_chat_notches` (one wheel notch every 8 frames) CPU | 23.8 % | 60.9 % |
+| `scroll_members_notches` CPU | 12.3 % | 41.2 % |
+
+- Lottie: a playing icon no longer redraws the window. What is left during a hover is the one
+  full redraw of the hover change itself, and the present-only frames.
+- Scrolling: the cost of one scroll frame does not change (the `scroll_chat_wheel` and
+  `scroll_members` rows are within the run-to-run noise of this machine). A notch now moves the
+  content over 100–200 ms instead of one frame, so it draws ~12 frames instead of 1, hence the
+  higher CPU while the wheel turns. That is the price of the animation, like in Chromium, and it
+  makes allocations per scroll frame (target 2 of "Next targets") more important.
+- `PHX_TRACE_SCROLL=1` prints the chat offset at each frame during notches: it moves by small
+  steps, eased and monotonic (for example −28800.00, −28792.77, −28773.69, −28755.34,
+  −28743.05 px, one notch of 60 px every 8 frames). The headless window is inactive, so GPUI's
+  inactive-window frame limiter only runs every second request there; on screen the compositor
+  frame callback steps it on every frame.
