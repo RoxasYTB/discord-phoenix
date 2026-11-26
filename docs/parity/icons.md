@@ -75,7 +75,7 @@ Le nom d'icône est retrouvé en faisant correspondre les chemins `d` des dumps 
 | Liste de souhaits (en-tête) | `HeartIcon` 16 px | 20 px → 16 px | ✅ corrigé |
 | Flèches du carrousel | `ArrowLargeLeftIcon` / `ArrowLargeRightIcon` 20 px | chevrons → `nav/back`, `nav/forward` | ✅ corrigé |
 | Carte : cadeau | `GiftIcon` 20 px | identique | ✅ |
-| Carte : souhait | `wishlistButton_M2FQyv md variantDefault` (chunk `4d6e4cce03a0a508.js`, CSS `662387.600c33990e4c134f.css`) : 40×40 en haut à droite (marges 12), rayon 8, bord 1 px `--border-muted`, fond `--control-overlay-secondary-background-default` (survol `-hover`, appui `-active`) ; `HeartOutlineIcon` 20 px `--icon-strong`, ou `HeartIcon` `#ec1060` si l'article est dans la liste ; caché (`visuallyHidden`, opacité 0) tant que la carte n'est pas survolée, sauf si l'article est déjà dans la liste ; infobulle « Ajouter à ta liste de souhaits » (8DkMEQ) / « Retirer de ta liste de souhaits » (yr9TTf) | `shop_page::card` + `wishlist_write` : `POST /users/@me/wishlist/items {sku_id}` ou `DELETE /users/@me/wishlists/{id}/items/{sku}` (`USER_WISHLIST_ITEM`), toujours via `blocked_write` ; l'état vient de `GET /users/{moi}/profile` + `/wishlists/{id}` | ✅ ; ⚠ pas de pulsation au survol (`hoverPulse` 1,25 s) ni d'animation de clic ; pas de « Ça te plaît ? » (47Rhc3) au premier ajout |
+| Carte : souhait | `wishlistButton_M2FQyv md variantDefault` (chunk `4d6e4cce03a0a508.js`, CSS `662387.600c33990e4c134f.css`) : 40×40 en haut à droite (marges 12), rayon 8, bord 1 px `--border-muted`, fond `--control-overlay-secondary-background-default` (survol `-hover`, appui `-active`) ; `HeartOutlineIcon` 20 px `--icon-strong`, ou `HeartIcon` `#ec1060` si l'article est dans la liste ; caché (`visuallyHidden`, opacité 0) tant que la carte n'est pas survolée, sauf si l'article est déjà dans la liste ; infobulle « Ajouter à ta liste de souhaits » (8DkMEQ) / « Retirer de ta liste de souhaits » (yr9TTf) | `shop_page::card` + `wishlist_write` : `POST /users/@me/wishlist/items {sku_id}` ou `DELETE /users/@me/wishlists/{id}/items/{sku}` (`USER_WISHLIST_ITEM`), toujours via `blocked_write` ; l'état vient de `GET /users/{moi}/profile` + `/wishlists/{id}` | ✅ ; remaining4 : pulsation au survol (`hoverPulse_M2FQyv` 1,25 s en boucle, 1 → 1,1 → 0,9 → 1 aux clés 0/20/60/80 %, `cubic-bezier(.23,0,.58,1)` par segment) tant que l'article n'est pas dans la liste, et animation de clic à l'ajout (`clickScale` 0 → 1,35 → 1 et `clickColor` blanc → `#ec1060`, 0,4 s, `cubic-bezier(.67,0,.26,1)`), coupées en mouvement réduit (`.full-motion`) ; test `wishlist_heart_follows_the_client_keyframes`. ⚠ pas de `holdScale` pendant l'appui, pas de « Ça te plaît ? » (47Rhc3) au premier ajout |
 | Prix Nitro | `NitroWheelIcon` 18 px | identique | ✅ |
 
 ## Paramètres (superposition)
@@ -113,7 +113,7 @@ Source : composant `I9` de `web.*.js` (`icon:aV.QuestsIcon,listItemRef`), hook `
 |---|---|---|---|
 | Onboarding | si des quêtes existent (`QuestsStore.quests.size > 0`) et que le contenu masquable 632 `QUEST_HOME_ENTRYPOINT_ONBOARDING` n'est pas fermé (bit 632 de `user_content.dismissed_contents`, champ 4 → 1 du settings-proto), et qu'il n'y a pas de contenu « hero » : fond `linear-gradient(90deg,#394aff,#e901d9)` opacité 0,16 (0,2 au survol), inset haut/bas 1 px ; texte `--text-strong`, icône `--icon-strong` ; badge `type:"new"` variante `primary` | `entry_point().onboarding`, `nav::quest_onboarding_dismissed` (READY et USER_SETTINGS_PROTO_UPDATE) | ✅ ; ⚠ reflet (`shine`) et lueur (`glow`) du survol non reproduits ; la bulle d'onboarding n'est pas affichée |
 | Hero | `GET /quests/get-decisions?placement=3&num_decisions_requested=1` (`QUEST_HOME_BANNER_DESKTOP`), créatif `creative_type` 2 ; contenu si `quest_home_entrypoint` a une image, un dégradé linéaire ou radial (`start` et `end`), ou un titre ET un sous-titre d'infobulle | `quests_page::ensure_hero`, `parse_home_hero` | ✅ |
-| Badge hero | « nouveau » (y2b7CA) variante `expressive`, tant que l'id du créatif n'est pas vu (`AdContentSeenStore`, local) ; vu au clic | `entry_point().hero_badge`, `mark_hero_seen` | ✅ ; ⚠ l'état « vu » reste en mémoire (le client le persiste en local) |
+| Badge hero | « nouveau » (y2b7CA) variante `expressive`, tant que l'id du créatif n'est pas vu (`AdContentSeenStore`, local) ; vu au clic | `entry_point().hero_badge`, `mark_hero_seen` | ✅ ; état « vu » persisté dans `ad-content-seen.json` au format `seenContentIds` du client (4e52b039) |
 | Image hero | `questHomeHeroBackgroundImage_hjotnx` : à droite, hauteur 100 %, `object-fit: contain`, opacité 0 → 1 au survol (0,125 s) ; texte et icône forts au survol | image absolue à droite, `group_hover` | ✅ ; ⚠ pas de transition 0,125 s, pas de dégradé de survol par preset (`gradientPreset`) ni d'infobulle riche |
 | Badge | `inline-flex`, padding 0 8, rayon rond, majuscules (pas de `mana-badge-refresh` sur ce compte), `body-xs/semibold` 12/16 ; `primary` : fond et texte `--badge-primary-*` ; `expressive` : `--badge-expressive-*` | `sidebar::text_badge` | ✅ |
 
@@ -127,7 +127,7 @@ Source : module 554783 (`k`), types du module 426983, traits du module 176128, �
 | Découverte | `ExperimentalWebBadgeIcon` 18 px, `--badge-inverted-background` / `--badge-inverted-text` | `discovery-badge` (inchangé) | ✅ |
 | Communauté | étoile fleurie 18 px fond `WHITE` (thème sombre, `PRIMARY_500` en clair) + `HomeIcon` 11 px (`floor(0,75 × 18) − 2`) `PRIMARY_500` ; serveur boosté : dégradé `PREMIUM_TIER_2_PURPLE` → `PREMIUM_TIER_2_PINK` (rotate 45) et maison blanche | `guild_badge::element` (SVG composé, `guild/home`) | ✅ ajouté |
 | Vérifié | étoile `GREEN_360` + `CheckmarkSmallIcon` 13 px blanc | idem | ✅ ajouté |
-| Partenaire, staff | icône partenaire du module 816166, `StaffBadgeIcon` | aucun badge | ❌ (pas de compte de test) |
+| Partenaire, staff | partenaire : étoile `BRAND_500` + poignée de main du module 816166 (viewBox 16, mise à `floor(0,75 × taille)`) ; staff : étoile `GREEN_360` + `StaffBadgeIcon` (table `w` du module 554783) | `guild/partner` (`path:M10.5906 6.39993`), `guild/staff`, échelle selon la viewBox de l'icône (`view_box_width`) | ✅ remaining4, test `community_badge_colors_and_glyph_size` (aucun serveur partenaire ou staff sur le compte pour une capture) |
 
 ## Barre d'outils des messages, en-tête des MP, compositeur
 
@@ -141,7 +141,7 @@ Comparés en direct (lecture du DOM, survol d'un message) sur la route où se tr
 
 ## Menus contextuels
 
-Les 22 dumps `vanilla-menu-*` ont été comparés automatiquement : libellé fr → clé de traduction → icône utilisée dans le code. Toutes les icônes correspondent (y compris les cases à cocher `CheckmarkSmallBoldIcon`). Seul écart : « Détails du message » (`CircleInformationIcon`) n'existe pas dans le menu des messages de Phoenix ❌ (entrée absente, pas une icône à remplacer).
+Les 22 dumps `vanilla-menu-*` ont été comparés automatiquement : libellé fr → clé de traduction → icône utilisée dans le code. Toutes les icônes correspondent (y compris les cases à cocher `CheckmarkSmallBoldIcon`). « Détails du message » (`CircleInformationIcon`, icône `info`) est maintenant dans le menu des messages (4e52b039, `panels.rs`) ✅.
 
 ## Popouts de profil et vue d'appel
 
@@ -161,7 +161,7 @@ Source : composant `ll` / `lo` de `web.*.js`, onglets `ln.iy = ["apps","servers"
 | En-tête de page | icône 24 px | 24 px | ✅ |
 | Recherche | `MagnifyingGlassIcon` 16 px | `search` 16 | ✅ |
 | Carte : agrandir | 16 px | `maximize` 16 | ✅ |
-| Carte : badge vérifié / partenaire | module 714991 : étoile fleurie 16 px (`--green-360` vérifié, `--brand-500` partenaire) + `CheckmarkSmallIcon` 10 px blanc (`redesignIconChildContainer` 10×10) | rond `#3d9e60` + `check` → `guild/flower-star` + `check-small` | ✅ corrigé ; ⚠ le partenaire garde la coche au lieu de l'icône partenaire |
+| Carte : badge vérifié / partenaire | module 714991 : étoile fleurie 16 px (`--green-360` vérifié, `--brand-500` partenaire) + `CheckmarkSmallIcon` 10 px blanc (`redesignIconChildContainer` 10×10) | rond `#3d9e60` + `check` → `guild/flower-star` + `check-small` | ✅ corrigé ; remaining4 : partenaire seul = icône partenaire (type 0 du module 714991), vérifié + partenaire garde la coche (type 3) |
 
 ## Libellés
 

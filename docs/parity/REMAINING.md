@@ -127,7 +127,7 @@ Reste :
 | fichier | ligne | ce qu'il faut |
 |---|---|---|
 | composer | coller texte + image : GPUI lit le texte d'abord | patch du presse-papiers Wayland : `gpui-pre-linux` 0.3.12 n'est pas vendored (crates.io), voir plus bas |
-| report | lignes `share_with_parents` et `settings_upsells` | tracées (a07df836) ; il manque le sous-type du signalement et l'état Centre familial |
+| report | ligne `share_with_parents` | `settings_upsells` construite par wt/remaining4 ; `share_with_parents` ne s'affiche que pour un compte ado relié au Centre familial (2e compte) |
 
 ## Direct (client officiel, utilisateur présent)
 
