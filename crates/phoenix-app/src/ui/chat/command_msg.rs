@@ -112,13 +112,14 @@ pub fn status(app: &PhoenixApp, msg: &Message) -> Option<Status> {
 }
 
 fn dots() -> AnyElement {
+    let (period, steps) = super::composer::dot_timing(crate::ui::settings::effects::reduced_motion());
     let dot = |i: usize| {
         div().size(z(7.)).flex().items_center().justify_center().child(
             div().rounded_full().bg(c(tok(idx::TEXT_DEFAULT))).with_animation(
                 ("cmd-dot", i),
-                Animation::new(Duration::from_millis(1200)).repeat(),
+                Animation::new(Duration::from_millis(period)).repeat(),
                 move |d, t| {
-                    let (o, s) = super::composer::dot_frame(i, t);
+                    let (o, s) = super::composer::dot_frame(i, t, steps);
                     d.size(z(7. * s)).opacity(o)
                 },
             ),

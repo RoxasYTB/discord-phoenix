@@ -1052,26 +1052,116 @@ fn active_now(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .children(crate::ui::chat::scrollbar::thin_scrollbar_div(&scroll))
 }
 
-fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
-    let mut active: Vec<(Id, SharedString)> = app
+#[derive(Clone, Debug, PartialEq)]
+pub struct NowFriend {
+    pub user: Id,
+    pub name: SharedString,
+    pub voice: Option<Id>,
+    pub activity: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NowCard {
+    pub voice: Option<Id>,
+    pub priority: Vec<Id>,
+    pub partied: Vec<Id>,
+    pub activity_users: Vec<Id>,
+    pub streams: Vec<Id>,
+}
+
+pub fn now_cards(friends: &[NowFriend], voice_members: impl Fn(Id) -> Vec<Id>, streaming: impl Fn(Id) -> bool) -> Vec<NowCard> {
+    let mut groups: Vec<(Option<Id>, Vec<&NowFriend>)> = Vec::new();
+    for f in friends {
+        match f.voice.and_then(|v| groups.iter().position(|(g, _)| *g == Some(v))) {
+            Some(i) => groups[i].1.push(f),
+            None => groups.push((f.voice, vec![f])),
+        }
+    }
+    let mut keyed: Vec<(NowCard, String)> = groups
+        .into_iter()
+        .map(|(voice, members)| {
+            let priority: Vec<Id> = members.iter().map(|f| f.user).collect();
+            let mut partied = priority.clone();
+            if let Some(v) = voice {
+                partied.extend(voice_members(v).into_iter().filter(|u| !priority.contains(u)));
+            }
+            let card = NowCard {
+                voice,
+                activity_users: members.iter().filter(|f| f.activity).map(|f| f.user).collect(),
+                streams: priority.iter().copied().filter(|u| streaming(*u)).collect(),
+                priority,
+                partied,
+            };
+            let names = members.iter().map(|f| f.name.to_lowercase()).collect::<Vec<_>>().join(" ");
+            (card, names)
+        })
+        .filter(|(c, _)| c.voice.is_some() || !c.activity_users.is_empty() || !c.streams.is_empty())
+        .collect();
+    keyed.sort_by(|(a, an), (b, bn)| {
+        let k = |c: &NowCard| (c.partied.len() <= 1, c.streams.is_empty(), c.voice.is_none(), c.activity_users.is_empty());
+        k(a).cmp(&k(b)).then_with(|| an.cmp(bn))
+    });
+    keyed.into_iter().map(|(c, _)| c).collect()
+}
+
+pub fn card_title(names: &[SharedString]) -> String {
+    let a = names.first().map(|s| s.to_string()).unwrap_or_default();
+    let b = names.get(1).map(|s| s.to_string()).unwrap_or_default();
+    match names.len() {
+        0 | 1 => a,
+        2 => crate::t!("friends.now_two", user1 = a, user2 = b).to_string(),
+        3 => crate::t!("friends.now_more_one", user1 = a, user2 = b).to_string(),
+        n => crate::t!("friends.now_more", user1 = a, user2 = b, extras = n - 2).to_string(),
+    }
+}
+
+pub fn facepile(total: usize) -> (usize, Option<usize>) {
+    let shown = total.min(2);
+    match total - shown {
+        0 => (shown, None),
+        1 => (shown + 1, None),
+        rest => (shown, Some(rest.min(99))),
+    }
+}
+
+fn now_friends(app: &PhoenixApp) -> Vec<NowFriend> {
+    let voice_of = |u: Id| {
+        app.channels
+            .values()
+            .find(|c| {
+                matches!(c.kind, crate::model::ChannelKind::Voice | crate::model::ChannelKind::Stage)
+                    && c.voice_users.contains(&u)
+                    && c.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)).is_some_and(|g| g.afk_channel != Some(c.id))
+            })
+            .map(|c| c.id)
+    };
+    let mut out: Vec<NowFriend> = app
         .nav
         .relationships
         .iter()
-        .filter(|r| r.kind == RelationshipKind::Friend)
-        .filter(|r| {
-            app.people.activities.get(&r.user).is_some_and(|v| v.iter().any(|a| a.kind != crate::presence::ActivityKind::Custom))
+        .filter(|r| r.kind == RelationshipKind::Friend && !app.nav.is_blocked(r.user))
+        .filter(|r| app.presence_of(r.user) != Presence::Offline)
+        .filter_map(|r| {
+            let u = app.users.get(&r.user)?;
+            if u.bot {
+                return None;
+            }
+            let activity = app.people.activities.get(&r.user).is_some_and(|v| v.iter().any(|a| a.kind != crate::presence::ActivityKind::Custom))
+                && app.nav.activities.contains_key(&r.user);
+            Some(NowFriend { user: r.user, name: u.name.clone(), voice: voice_of(r.user), activity })
         })
-        .filter_map(|r| app.nav.activities.get(&r.user).map(|a| (r.user, a.clone())))
-        .filter(|(u, _)| app.presence_of(*u) != Presence::Offline)
         .collect();
-    let in_voice = |u: Id| app.channels.values().any(|c| c.voice_users.contains(&u));
-    let start_of = |u: Id| {
-        app.people
-            .activities
-            .get(&u)
-            .and_then(|v| v.iter().filter(|a| a.kind != crate::presence::ActivityKind::Custom).filter_map(|a| a.start).max())
-    };
-    active.sort_by_key(|(u, _)| (!in_voice(*u), std::cmp::Reverse(start_of(*u)), u.0));
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
+fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    let friends = now_friends(app);
+    let cards = now_cards(
+        &friends,
+        |v| app.channels.get(&v).map(|c| c.voice_users.clone()).unwrap_or_default(),
+        |u| crate::ui::voice_panel::flags(u).stream,
+    );
     let mut col = div()
         .id("active-now")
         .w(z(active_now_width()))
@@ -1095,7 +1185,7 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
                 .text_color(c(Palette::TEXT_HEADER))
                 .child(crate::t!("friends.active_now_title")),
         );
-    if active.is_empty() {
+    if cards.is_empty() {
         return col.child(
             div()
                 .mt(z(12.))
@@ -1134,16 +1224,30 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
             .overflow_hidden()
             .when_some(img, |d, url| d.child(gpui::img(url).size_full()))
     };
-    for (user, activity) in active {
+    for card_info in cards {
+        let user = card_info.priority[0];
         let u = app.users.get(&user);
-        let game = app.people.activities.get(&user).and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Playing)).cloned();
-        let sub: SharedString = match &game {
-            Some(g) => match g.start {
+        let lead = if card_info.partied.len() == 1 || card_info.activity_users.len() == 1 {
+            card_info.activity_users.first().copied().or(Some(user))
+        } else {
+            None
+        };
+        let game = lead.and_then(|id| {
+            app.people.activities.get(&id).and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Playing)).cloned()
+        });
+        let sub: SharedString = match (lead, &game) {
+            (Some(_), Some(g)) => match g.start {
                 Some(st) => format!("{} - {}", g.name, crate::ui::members::elapsed(st, now)).into(),
                 None => g.name.clone(),
             },
-            None => activity,
+            (Some(l), None) if !card_info.activity_users.is_empty() => app.nav.activities.get(&l).cloned().unwrap_or_default(),
+            _ if card_info.activity_users.is_empty() => crate::t!("friends.now_in_voice"),
+            _ => crate::t!("friends.now_multiple"),
         };
+        let names: Vec<SharedString> =
+            card_info.partied.iter().map(|id| app.users.get(id).map(|u| u.display_name.clone()).unwrap_or_default()).collect();
+        let title: SharedString = card_title(&names).into();
+        let lead_user = lead.and_then(|l| app.users.get(&l)).or(u);
         let mut card = div()
             .id(("active", user.0))
             .flex_none()
@@ -1184,13 +1288,22 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(c(Palette::TEXT_NORMAL))
                                     .text_ellipsis()
-                                    .child(u.map(|u| u.display_name.clone()).unwrap_or_default()),
+                                    .child(title),
                             )
                             .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(Palette::TEXT_MUTED)).text_ellipsis().child(sub)),
                     )
                     .when_some(game.as_ref().and_then(|g| g.image.clone()), |d, i| d.child(thumb(Some(i), 24.))),
             );
-        let stream = app.people.activities.get(&user).and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Streaming)).cloned();
+        if let Some(v) = card_info.voice {
+            card = card.child(voice_section(app, v));
+        }
+        for owner in &card_info.streams {
+            card = card.child(go_live_section(app, *owner, cx));
+        }
+        let stream = lead
+            .and_then(|l| app.people.activities.get(&l))
+            .and_then(|v| v.iter().find(|a| a.kind == crate::presence::ActivityKind::Streaming))
+            .cloned();
         if let Some(s) = stream {
             card = card.child(
                 div()
@@ -1238,7 +1351,7 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
                                     .line_height(z(16.))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(gpui::white())
-                                    .child("LIVE"),
+                                    .child(crate::t!("voice.live")),
                             ),
                     )
                     .child(
@@ -1279,12 +1392,150 @@ fn active_now_column(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::St
                                 d.child(div().text_size(z(12.)).line_height(z(16.)).text_color(c(Palette::TEXT_MUTED)).text_ellipsis().child(t))
                             }),
                     )
-                    .child(crate::ui::avatar(u, 24.)),
+                    .child(crate::ui::avatar(lead_user, 24.)),
             );
         }
         col = col.child(card);
     }
     col
+}
+
+fn section_text(t: SharedString, strong: bool) -> gpui::Div {
+    let d = div().text_ellipsis();
+    if strong {
+        d.text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(t)
+    } else {
+        d.text_size(z(12.)).line_height(z(16.)).text_color(c(Palette::TEXT_MUTED)).child(t)
+    }
+}
+
+fn voice_section(app: &PhoenixApp, voice: Id) -> AnyElement {
+    let ch = app.channels.get(&voice);
+    let guild = ch.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g));
+    let members: Vec<Id> = ch.map(|c| c.voice_users.clone()).unwrap_or_default();
+    let icon_box = match guild.map(|g| &g.icon) {
+        Some(crate::model::ImageRef::Url(url)) => gpui::img(url.clone()).size(z(32.)).rounded_full().into_any_element(),
+        _ => {
+            let acr = guild.map(|g| g.acronym.clone()).unwrap_or_default();
+            let size = [14., 14., 12., 12., 10., 8., 6.].get(acr.chars().count()).copied().unwrap_or(6.);
+            div()
+                .size(z(32.))
+                .rounded_full()
+                .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .overflow_hidden()
+                .text_size(z(size))
+                .text_color(gpui::white())
+                .child(acr)
+                .into_any_element()
+        }
+    };
+    let assets = div().size(z(32.)).flex_none().relative().child(icon_box).child(
+        div()
+            .absolute()
+            .bottom(z(-2.))
+            .right(z(-2.))
+            .size(z(16.))
+            .rounded_full()
+            .bg(c(Palette::BG_TERTIARY))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(gpui::svg().path(crate::icons::path("speaker")).size(z(10.)).text_color(c(tok(idx::TEXT_DEFAULT)))),
+    );
+    let (shown, plus) = facepile(members.len());
+    let mut pile = div().flex().items_center().flex_none();
+    for (i, m) in members.iter().take(shown).enumerate() {
+        pile = pile.child(div().when(i > 0, |d| d.ml(z(-2.))).child(crate::ui::avatar(app.users.get(m), 24.)));
+    }
+    if let Some(n) = plus {
+        pile = pile.child(
+            div()
+                .ml(z(-2.))
+                .h(z(24.))
+                .min_w(z(24.))
+                .px(z(4.))
+                .rounded(z(12.))
+                .bg(c(tok(idx::BACKGROUND_BASE_LOWER)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(format!("+{n}")),
+        );
+    }
+    div()
+        .p(z(16.))
+        .flex()
+        .items_center()
+        .gap(z(12.))
+        .child(assets)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(section_text(guild.map(|g| g.name.clone()).unwrap_or_default(), true))
+                .child(section_text(ch.map(|c| c.name.clone()).unwrap_or_default(), false)),
+        )
+        .child(pile)
+        .into_any_element()
+}
+
+fn go_live_section(app: &PhoenixApp, owner: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let u = app.users.get(&owner);
+    let key = crate::ui::call_view::stream_key_in(app, owner);
+    if let Some(k) = key.clone() {
+        crate::ui::voice_row::fetch_preview(app, k, cx);
+    }
+    let url = key.as_deref().and_then(crate::ui::voice_row::preview_url);
+    div()
+        .p(z(16.))
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(z(12.))
+                .child(crate::ui::avatar(u, 32.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(section_text(u.map(|u| u.display_name.clone()).unwrap_or_default(), true))
+                        .child(section_text(crate::t!("friends.now_sharing_screen"), false)),
+                )
+                .child(
+                    div()
+                        .h(z(16.))
+                        .px(z(8.))
+                        .rounded_full()
+                        .bg(c(tok(idx::BACKGROUND_FEEDBACK_NOTIFICATION)))
+                        .flex()
+                        .items_center()
+                        .text_size(z(12.))
+                        .line_height(z(16.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(gpui::white())
+                        .child(crate::t!("voice.live")),
+                ),
+        )
+        .child(
+            div()
+                .mt(z(12.))
+                .w_full()
+                .h(z(165.))
+                .rounded(z(8.))
+                .overflow_hidden()
+                .bg(c(tok(idx::BACKGROUND_MOD_STRONG)))
+                .when_some(url, |d, url| d.child(gpui::img(url).size_full().rounded(z(8.)).object_fit(gpui::ObjectFit::Cover))),
+        )
+        .into_any_element()
 }
 
 #[cfg(test)]
@@ -1293,6 +1544,58 @@ mod tests {
 
     fn rel(user: u64, kind: RelationshipKind, since: i64) -> Relationship {
         Relationship { user: Id(user), kind, nickname: None, since: Some(since), ignored: false, spam: false, note: None }
+    }
+
+    fn nf(user: u64, name: &str, voice: Option<u64>, activity: bool) -> NowFriend {
+        NowFriend { user: Id(user), name: name.into(), voice: voice.map(Id), activity }
+    }
+
+    #[test]
+    fn friends_in_one_voice_channel_share_a_card_with_the_other_members() {
+        let friends = [nf(1, "alchi", Some(50), false), nf(2, "fox", Some(50), false), nf(3, "solo", None, true)];
+        let cards = now_cards(&friends, |v| if v == Id(50) { vec![Id(9), Id(2), Id(1)] } else { vec![] }, |u| u == Id(1));
+        assert_eq!(cards.len(), 2);
+        assert_eq!(cards[0].voice, Some(Id(50)));
+        assert_eq!(cards[0].priority, vec![Id(1), Id(2)]);
+        assert_eq!(cards[0].partied, vec![Id(1), Id(2), Id(9)]);
+        assert_eq!(cards[0].streams, vec![Id(1)]);
+        assert_eq!(cards[1].priority, vec![Id(3)]);
+    }
+
+    #[test]
+    fn idle_friends_without_voice_or_activity_get_no_card() {
+        let cards = now_cards(&[nf(1, "a", None, false)], |_| vec![], |_| false);
+        assert!(cards.is_empty());
+    }
+
+    #[test]
+    fn cards_follow_the_client_order() {
+        let friends = [
+            nf(1, "zed", None, true),
+            nf(2, "amy", None, true),
+            nf(3, "bob", Some(70), false),
+            nf(4, "cat", Some(80), false),
+            nf(5, "dan", Some(80), false),
+        ];
+        let cards = now_cards(&friends, |_| vec![], |_| false);
+        let first: Vec<u64> = cards.iter().map(|c| c.priority[0].0).collect();
+        assert_eq!(first, vec![4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn facepile_shows_two_then_a_third_or_a_count() {
+        assert_eq!(facepile(1), (1, None));
+        assert_eq!(facepile(2), (2, None));
+        assert_eq!(facepile(3), (3, None));
+        assert_eq!(facepile(4), (2, Some(2)));
+        assert_eq!(facepile(300), (2, Some(99)));
+    }
+
+    #[test]
+    fn single_member_cards_use_the_plain_name() {
+        assert_eq!(card_title(&["Alchi".into()]), "Alchi");
+        let three = card_title(&["Fox".into(), "Alchi".into(), "X".into()]);
+        assert!(three.starts_with("Fox, Alchi, ") && three.contains('1'));
     }
 
     #[test]

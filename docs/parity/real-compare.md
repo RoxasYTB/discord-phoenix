@@ -809,6 +809,13 @@ account: same positions on both sides. They are not switched off when the experi
 
 - Rail: the client showed one DM with an unread mention under Home (badge 1); Phoenix's render 30 s later did not. The user opened that DM
   a few minutes later, so the state is gone and the cause (read state `mention_count` or the DM list) could not be traced.
+  Sweep 5b: the client rule is `PrivateChannelReadStateStore.getUnreadPrivateChannelIds` (web bundle module 131677): the
+  `PrivateChannelSortStore` order (favourites first, then the newest `lastMessageId`; message requests and spam left out), kept when
+  `ReadStateStore.getMentionCount > 0`, cut at 20; the rail (`tq`) drops the DM call and puts it first. There is no mute filter: a muted
+  DM with a real mention still shows. Phoenix hid every muted DM, so a muted DM with a mention never reached the rail; it now follows
+  the client (`server_bar.rs` `rail_dm_ids`, six tests). Live counting follows `ReadStateStore` too: in a muted DM only a real mention
+  counts (`eD` = private and not muted), test `muted_dm_counts_only_real_mentions_like_the_read_state_store`. The DM tile now gets the
+  call badge (`oi`) and the selected pill. ❌ The « Messages favoris » order (`isMessagesFavorite`) is not modelled.
 - The three window sizes were rendered without the client's live state (sidebar width, folders, voice) when the CDP pause was on, so their
   fixed region scores (rail + channels 20–22 %, user panel 12–16 %, member list 12–16 %) mostly measure that, not a layout gap. At the client size
   with the live state the same regions score 11.7 / 9.3 / 8.5 %.

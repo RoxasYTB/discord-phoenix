@@ -725,9 +725,13 @@ fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
     )
 }
 
-pub(crate) fn dot_frame(i: usize, t: f32) -> (f32, f32) {
+pub(crate) fn dot_timing(reduced: bool) -> (u64, f32) {
+    if reduced { (2400, 24.) } else { (1200, 12.) }
+}
+
+pub(crate) fn dot_frame(i: usize, t: f32, steps: f32) -> (f32, f32) {
     let p = (t + 1.0 - i as f32 * 0.125).rem_euclid(1.0);
-    let step = |x: f32| (x * 12.).floor() / 12.;
+    let step = |x: f32| (x * steps).floor() / steps;
     let k = if p < 0.25 {
         step(p / 0.25)
     } else if p < 0.5 {
@@ -785,13 +789,14 @@ pub(super) fn typing(app: &PhoenixApp, window: &Window) -> impl IntoElement + us
         _ => line = line.child(bold(crate::t!("chat.typing_several"))).child(crate::t!("chat.typing_suffix_many")),
     }
     let active = !names.is_empty();
+    let (period, steps) = dot_timing(crate::ui::settings::effects::reduced_motion());
     let dot = |i: usize| {
         div().size(z(7.)).flex().items_center().justify_center().child(
             div().rounded_full().bg(super::tk(idx::TEXT_DEFAULT)).with_animation(
                 ("typing-dot", i),
-                Animation::new(Duration::from_millis(1200)).repeat(),
+                Animation::new(Duration::from_millis(period)).repeat(),
                 move |d, t| {
-                    let (o, s) = dot_frame(i, t);
+                    let (o, s) = dot_frame(i, t, steps);
                     d.size(z(7. * s)).opacity(o)
                 },
             ),
@@ -827,7 +832,7 @@ pub(super) fn text_pad_y() -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{char_count, dot_frame, format_cooldown, should_show_send_button, slowmode_tip};
+    use super::{char_count, dot_frame, dot_timing, format_cooldown, should_show_send_button, slowmode_tip};
 
     #[test]
     fn send_button_requires_enabled_nonempty_sendable_draft() {
@@ -838,10 +843,20 @@ mod tests {
 
     #[test]
     fn typing_dots_follow_the_keyframes() {
-        assert_eq!(dot_frame(0, 0.0), (0.32, 0.8));
-        assert_eq!(dot_frame(0, 0.25), (1.0, 1.0));
-        assert_eq!(dot_frame(0, 0.6), (0.32, 0.8));
-        assert_eq!(dot_frame(1, 0.375), (1.0, 1.0));
+        assert_eq!(dot_frame(0, 0.0, 12.), (0.32, 0.8));
+        assert_eq!(dot_frame(0, 0.25, 12.), (1.0, 1.0));
+        assert_eq!(dot_frame(0, 0.6, 12.), (0.32, 0.8));
+        assert_eq!(dot_frame(1, 0.375, 12.), (1.0, 1.0));
+    }
+
+    #[test]
+    fn reduced_motion_dots_run_slower_with_finer_steps() {
+        assert_eq!(dot_timing(false), (1200, 12.));
+        assert_eq!(dot_timing(true), (2400, 24.));
+        let coarse = dot_frame(0, 0.25 / 24., 12.);
+        let fine = dot_frame(0, 0.25 / 24., 24.);
+        assert_eq!(coarse, (0.32, 0.8));
+        assert!(fine.0 > 0.32);
     }
 
     #[test]

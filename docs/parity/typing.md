@@ -10,6 +10,7 @@ Source: current-client/css (`base_U9Tvvz`, `inTextChannel_U9Tvvz`, `dot_U9Tvvz`,
 | row start | inTextChannel_ / typingDots_ | padding-inline-start | --space-md + 8px | composer.rs `typing()` | ✅ |
 | dots | dots_ / dot_ | gap / size / color | 2px, 7px circle, --text-default | composer.rs `dot` | ✅ |
 | dot animation | typing-dot-pulse | 1.2s steps(12), delays -1.2/-1.05/-0.9s, .32/.8 ↔ 1/1 at 25% | composer.rs `dot_frame` | ✅ |
+| dot animation, reduced motion | `.reduce-motion .dot_U9Tvvz` | 2.4s steps(24), delays -2.4/-2.1/-1.8s (same phases) | composer.rs `dot_timing` (also the slash command « réfléchit » dots) | ✅ sweep5, test `reduced_motion_dots_run_slower_with_finer_steps`. `.stop-animation .dot_U9Tvvz` (no animation, opacity 1) is never set by the 2026 bundle (only `stop-animations` on layers), so it is not reproduced |
 | text | inTextChannel_ .text_ | margin-inline-start | --space-md + --space-8 | composer.rs `line` | ✅ |
 | names | .text_ > strong | color / weight | --text-default / semibold | composer.rs `bold` | ✅ |
 | name choice | JS getName(guild, channel, user) | nick → global name → username | app.rs `typing_name` | ✅ |
