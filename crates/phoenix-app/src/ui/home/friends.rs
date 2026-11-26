@@ -1151,7 +1151,7 @@ fn now_friends(app: &PhoenixApp) -> Vec<NowFriend> {
             Some(NowFriend { user: r.user, name: u.name.clone(), voice: voice_of(r.user), activity })
         })
         .collect();
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 
