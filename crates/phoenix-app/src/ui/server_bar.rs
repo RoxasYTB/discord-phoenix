@@ -529,11 +529,43 @@ fn row(id: impl Into<ElementId>, key: u64, entity: &Entity<PhoenixApp>) -> gpui:
 
 const HOME_KEY: u64 = 1;
 
-fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElement> {
-    app.dms
+pub const RAIL_DM_LIMIT: usize = 20;
+
+pub fn rail_dm_ids(dms: &[Id], mentions: impl Fn(Id) -> Option<u32>, hidden: impl Fn(Id) -> bool, call_dm: Option<Id>) -> Vec<Id> {
+    let mut out: Vec<Id> = dms
         .iter()
-        .filter_map(|d| app.channels.get(d))
-        .filter(|ch| ch.mentions > 0 && !ch.muted && !app.nav.message_requests.contains(&ch.id))
+        .copied()
+        .filter(|d| !hidden(*d) && mentions(*d).is_some_and(|n| n > 0))
+        .take(RAIL_DM_LIMIT)
+        .filter(|d| Some(*d) != call_dm)
+        .collect();
+    if let Some(v) = call_dm.filter(|v| mentions(*v).is_some()) {
+        out.insert(0, v);
+    }
+    out
+}
+
+fn dm_media(app: &PhoenixApp, id: Id) -> MediaState {
+    let flags = crate::ui::voice_panel::flags;
+    let users = app.parity.call_users.get(&id).map(Vec::as_slice).unwrap_or_default();
+    if app.voice_channel == Some(id) {
+        let here = Here {
+            channel_has_video: users.iter().any(|u| flags(*u).video),
+            self_stream: crate::ui::go_live::live(app) || flags(app.me.id).stream,
+        };
+        return media_state(Some(here), false, &[]);
+    }
+    let presences: Vec<Presence> =
+        users.iter().map(|u| Presence { eligible: true, channel_muted: false, hidden_user: false, flags: flags(*u) }).collect();
+    media_state(None, false, &presences)
+}
+
+fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElement> {
+    let call_dm = app.voice_channel.filter(|v| app.channels.get(v).is_some_and(|c| c.guild.is_none()));
+    let requests = |d: Id| app.nav.message_requests.contains(&d) || app.nav.spam_requests.contains(&d);
+    rail_dm_ids(&app.dms, |d| app.channels.get(&d).map(|c| c.mentions), requests, call_dm)
+        .into_iter()
+        .filter_map(|d| app.channels.get(&d))
         .map(|ch| {
             let id = ch.id;
             let key = id.0;
@@ -548,8 +580,8 @@ fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElem
                         a.select_channel(id, cx);
                     })
                 })
-                .child(pill(key, false, hover, true))
-                .child(masked(ICON, false, crate::ui::avatar(u, ICON), None, count(ch.mentions)))
+                .child(pill(key, app.selected_guild.is_none() && app.selected_channel == Some(id), hover, ch.mentions > 0))
+                .child(masked(ICON, false, crate::ui::avatar(u, ICON), voice_badge(dm_media(app, id)), count(ch.mentions)))
                 .when(hover, |d| d.child(right_tooltip(name, ICON)))
                 .into_any_element()
         })
@@ -959,6 +991,58 @@ fn action(entity: &Entity<PhoenixApp>, id: &'static str, i: Icon, label: SharedS
                 .child(icon(i, 20. * crate::theme::zoom(), if hover || selected { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
         )
         .when(hover, |d| d.child(right_tooltip(label, ICON)))
+}
+
+#[cfg(test)]
+mod rail_dm_tests {
+    use super::*;
+
+    fn ids(v: &[u64]) -> Vec<Id> {
+        v.iter().map(|&x| Id(x)).collect()
+    }
+
+    fn run(dms: &[u64], reads: &[(u64, u32)], hidden: &[u64], call: Option<u64>) -> Vec<u64> {
+        let m = |d: Id| reads.iter().find(|(c, _)| *c == d.0).map(|(_, n)| *n);
+        rail_dm_ids(&ids(dms), m, |d| hidden.contains(&d.0), call.map(Id)).into_iter().map(|d| d.0).collect()
+    }
+
+    #[test]
+    fn only_dms_with_mentions_in_the_private_channel_order() {
+        let reads = [(1, 0), (2, 3), (3, 1), (4, 0), (5, 2)];
+        assert_eq!(run(&[5, 1, 3, 2, 4], &reads, &[], None), vec![5, 3, 2]);
+    }
+
+    #[test]
+    fn muted_dms_with_a_mention_count_still_show() {
+        assert_eq!(run(&[7, 8], &[(7, 1), (8, 0)], &[], None), vec![7]);
+    }
+
+    #[test]
+    fn message_requests_and_spam_never_show() {
+        assert_eq!(run(&[1, 2, 3], &[(1, 1), (2, 1), (3, 1)], &[2, 3], None), vec![1]);
+    }
+
+    #[test]
+    fn the_stack_stops_at_twenty() {
+        let dms: Vec<u64> = (1..=30).collect();
+        let reads: Vec<(u64, u32)> = dms.iter().map(|&d| (d, 1)).collect();
+        let out = run(&dms, &reads, &[], None);
+        assert_eq!(out.len(), RAIL_DM_LIMIT);
+        assert_eq!(out.last(), Some(&20));
+    }
+
+    #[test]
+    fn the_dm_call_goes_first_even_without_mentions() {
+        let reads = [(1, 2), (2, 0), (3, 1)];
+        assert_eq!(run(&[1, 2, 3], &reads, &[], Some(2)), vec![2, 1, 3]);
+        assert_eq!(run(&[1, 2, 3], &reads, &[], Some(3)), vec![3, 1]);
+        assert_eq!(run(&[1, 3], &reads, &[], Some(9)), vec![1, 3]);
+    }
+
+    #[test]
+    fn dms_missing_from_the_channel_map_are_skipped() {
+        assert_eq!(run(&[1, 2], &[(2, 1)], &[], None), vec![2]);
+    }
 }
 
 #[cfg(test)]

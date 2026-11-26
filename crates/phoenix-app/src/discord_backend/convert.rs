@@ -1151,7 +1151,10 @@ impl Adapter {
                 message_users(m, &mut users);
                 out.push(AppEvent::Users(users));
                 let mentioned = self.mentions_me(cache, m)
-                    || (m.guild_id.is_none() && m.author.id != self.me && !self.prefs.blocked.contains(&m.author.id.0));
+                    || (m.guild_id.is_none()
+                        && m.author.id != self.me
+                        && !self.prefs.blocked.contains(&m.author.id.0)
+                        && !self.prefs.mutes.channels.contains(&m.channel_id.0));
                 if m.author.id == self.me {
                     self.mark_read(m.channel_id.0, m.id.0);
                 } else if mentioned {

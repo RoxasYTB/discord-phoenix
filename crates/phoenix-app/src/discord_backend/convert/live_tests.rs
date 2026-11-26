@@ -78,6 +78,26 @@ fn every_dm_message_counts_as_a_mention() {
 }
 
 #[test]
+fn muted_dm_counts_only_real_mentions_like_the_read_state_store() {
+    let (cache, mut a) = setup();
+    a.prefs.mutes.channels.insert(DM);
+    let dm_of = |out: &[AppEvent]| out.iter().find_map(|x| match x { AppEvent::DmUpsert(c) => Some((c.unread, c.mentions, c.muted)), _ => None });
+    let out = feed(&cache, &mut a, &msg(900000000000000600, DM, false, 200000000000000002, false));
+    assert_eq!(dm_of(&out), Some((true, 0, true)));
+    let mut m = fixture("message_create.json");
+    m["id"] = Value::String("900000000000000601".into());
+    m["channel_id"] = Value::String(DM.to_string());
+    m.as_object_mut().unwrap().remove("guild_id");
+    m.as_object_mut().unwrap().remove("member");
+    m["author"]["id"] = Value::String("200000000000000002".into());
+    m["mentions"] = serde_json::json!([{"id": ME.to_string(), "username": "me", "discriminator": "0"}]);
+    m["mention_roles"] = Value::Array(vec![]);
+    m["mention_everyone"] = Value::Bool(false);
+    let out = feed(&cache, &mut a, &parse_dispatch("MESSAGE_CREATE", &m.to_string()));
+    assert_eq!(dm_of(&out), Some((true, 1, true)));
+}
+
+#[test]
 fn ack_from_the_official_client_clears_unread() {
     let (cache, mut a) = setup();
     feed(&cache, &mut a, &msg(700000000000000061, CH, true, 200000000000000003, true));
