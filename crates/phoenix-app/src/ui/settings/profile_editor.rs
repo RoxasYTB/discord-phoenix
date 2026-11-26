@@ -1314,6 +1314,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
                 .when(e.switcher_open, |d| d.child(switcher(app, e, cx))),
         )
         .children(super::collectible_picker::render(app, e, cx))
+        .children(super::widget_add::modal(e.widgets.iter().map(|w| w.app_id).collect(), cx))
         .into_any_element()
 }
 

@@ -1230,7 +1230,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
             .when(confirm, |d| d.child(logout_modal(cx)))
             .when(changelog, |d| d.child(changelog_modal(cx)))
             .children(super::authorized_apps::confirm_modal(cx))
-            .children(super::widget_add::modal(app.settings.as_ref().and_then(|s| s.profile.as_ref()).map(|p| p.widgets.iter().map(|w| w.app_id).collect()).unwrap_or_default(), cx))
             .when_some(hwaccel, |d, on| d.child(hwaccel_modal(on, cx)))
             .into_any_element(),
     )
