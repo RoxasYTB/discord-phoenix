@@ -29,32 +29,41 @@ pub struct LookSku {
     pub name: String,
     pub shoppable: bool,
     pub item: Value,
+    pub summary: String,
+    pub background: Option<String>,
+    pub prices: Value,
 }
 
 pub fn look_skus(v: &Value, wanted: &[u64]) -> Vec<LookSku> {
-    let skus: Vec<&Value> = v
-        .get("products")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|p| p.get("skus").and_then(Value::as_array))
-        .flatten()
-        .collect();
+    let products: Vec<&Value> = v.get("products").and_then(Value::as_array).into_iter().flatten().collect();
+    let id_of = |s: &Value| s.get("id").and_then(Value::as_str).and_then(|x| x.parse::<u64>().ok());
     wanted
         .iter()
         .filter_map(|&w| {
-            let s = skus.iter().find(|s| s.get("id").and_then(Value::as_str).and_then(|x| x.parse::<u64>().ok()) == Some(w))?;
+            let (p, s) = products.iter().find_map(|p| {
+                let s = p.get("skus").and_then(Value::as_array)?.iter().find(|s| id_of(s) == Some(w))?;
+                Some((*p, s))
+            })?;
             let meta = s.get("tenant_metadata")?.get("collectibles")?;
             let item = meta.get("item").cloned().unwrap_or(Value::Null);
             let kind = meta.get("type").and_then(Value::as_u64).or_else(|| item.get("type").and_then(Value::as_u64))?;
             let flags = s.get("flags").and_then(Value::as_u64).unwrap_or(0);
             let source = meta.get("source_type").and_then(Value::as_u64);
+            let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or_default().to_owned();
             Some(LookSku {
                 sku: w,
                 kind,
-                name: s.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
+                name: text(s, "name"),
                 shoppable: flags & SKU_FLAG_AVAILABLE != 0 && source == Some(SOURCE_TYPE_SHOP),
                 item,
+                summary: Some(text(p, "summary")).filter(|x| !x.trim().is_empty()).unwrap_or_else(|| text(s, "description")),
+                background: p
+                    .get("tenant_metadata")
+                    .and_then(|t| t.get("collectibles"))
+                    .and_then(|c| c.get("primary_collection_pdp_bg_url"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                prices: s.get("prices").cloned().unwrap_or(Value::Null),
             })
         })
         .collect()
@@ -146,5 +155,23 @@ mod tests {
         assert_eq!(got[1].name, "n1");
         let p = storefront_skus_path(&[1, 2], "fr");
         assert!(p.starts_with("/storefront/products/skus?sku_ids=1&sku_ids=2&locale=fr&with_bundled_skus=true"));
+    }
+
+    #[test]
+    fn shop_this_look_keeps_the_product_details_for_the_pdp() {
+        let v = json!({"products": [{
+            "name": "Bunny", "summary": "Gives your avatar a new look.",
+            "tenant_metadata": {"collectibles": {"primary_collection_pdp_bg_url": "https://cdn/bg"}},
+            "skus": [{"id": "5", "name": "Bunny", "description": "desc", "flags": 4,
+                "prices": {"0": {"country_prices": {"prices": [{"amount": 599, "currency": "eur", "exponent": 2}]}}},
+                "tenant_metadata": {"collectibles": {"type": 0, "source_type": 1, "item": {"type": 0, "asset": "a"}}}}]
+        }]});
+        let got = look_skus(&v, &[5]);
+        assert_eq!(got[0].summary, "Gives your avatar a new look.");
+        assert_eq!(got[0].background.as_deref(), Some("https://cdn/bg"));
+        assert_eq!(got[0].prices["0"]["country_prices"]["prices"][0]["amount"], 599);
+        let blank = json!({"products": [{"summary": " ", "skus": [{"id": "6", "description": "fallback", "flags": 4,
+            "tenant_metadata": {"collectibles": {"type": 1, "source_type": 1}}}]}]});
+        assert_eq!(look_skus(&blank, &[6])[0].summary, "fallback");
     }
 }

@@ -123,7 +123,7 @@ pub fn type_label(k: u64) -> Option<SharedString> {
     })
 }
 
-fn preview(l: &LookSku) -> AnyElement {
+pub fn preview(l: &LookSku) -> AnyElement {
     let url = kind(l.kind).and_then(|k| crate::ui::settings::collectibles::item_preview(k, &l.item));
     let r = z(4.);
     match kind(l.kind) {
@@ -175,6 +175,7 @@ fn skeleton(ix: usize) -> AnyElement {
 pub fn row(e: &gpui::Entity<PhoenixApp>, l: &LookSku, ix: usize) -> AnyElement {
     let shoppable = l.shoppable;
     let e = e.clone();
+    let product = l.clone();
     div()
         .id(("shop-look-row", ix))
         .flex()
@@ -184,7 +185,7 @@ pub fn row(e: &gpui::Entity<PhoenixApp>, l: &LookSku, ix: usize) -> AnyElement {
         .rounded(z(2.))
         .when(shoppable, |d| {
             d.cursor_pointer().hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))).on_click(move |_, _, cx: &mut App| {
-                e.update(cx, |a, cx| a.open_shop_this_look(cx))
+                e.update(cx, |a, cx| a.open_shop_product(product.clone(), cx))
             })
         })
         .when(!shoppable, |d| d.opacity(0.5).cursor_not_allowed())
@@ -243,21 +244,12 @@ pub fn button_items(app: &PhoenixApp, e: &gpui::Entity<PhoenixApp>, user: Id) ->
     contents(e, &look).into_iter().map(MenuItem::Custom).collect()
 }
 
-impl PhoenixApp {
-    pub fn open_shop_this_look(&mut self, cx: &mut Context<Self>) {
-        crate::ui::extra_menus::close();
-        self.people.modal = None;
-        self.people.popout = None;
-        self.open_home_view(crate::ui::home::data::HomeView::Shop, cx);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn sku(id: u64, kind: u64, shoppable: bool) -> LookSku {
-        LookSku { sku: id, kind, name: format!("n{id}"), shoppable, item: serde_json::json!({"asset": "a"}) }
+        LookSku { sku: id, kind, name: format!("n{id}"), shoppable, item: serde_json::json!({"asset": "a"}), summary: String::new(), background: None, prices: serde_json::Value::Null }
     }
 
     #[test]

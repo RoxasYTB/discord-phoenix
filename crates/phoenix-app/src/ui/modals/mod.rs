@@ -135,6 +135,7 @@ pub enum Modal {
     Update,
     Account(account_edit::State),
     StreamFeedback(stream_feedback::State),
+    ShopProduct(Box<phoenix_api::rest::collectibles::LookSku>),
 }
 
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -278,6 +279,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             Modal::GiftNitro(s) => gift_nitro::render(app, s, cx),
             Modal::Update => update::render(app, cx),
             Modal::Account(s) => account_edit::render(app, s, cx),
+            Modal::ShopProduct(l) => crate::ui::shop_pdp::render(app, l, cx),
         })
     })
 }

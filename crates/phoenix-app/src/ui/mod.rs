@@ -59,6 +59,7 @@ pub mod profile_bg;
 pub mod profile_note;
 pub mod profile_toolbar;
 pub mod shop_look;
+pub mod shop_pdp;
 pub mod profile_bio;
 pub mod search;
 pub mod search_filters;
