@@ -196,7 +196,7 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
                             .flex_1()
                             .on_click(move |_, _, cx| {
                                 cx.stop_propagation();
-                                e_unlock.update(cx, |a, cx| crate::ui::modals::burst_upsell::open_nitro(a, cx));
+                                e_unlock.update(cx, crate::ui::modals::burst_upsell::open_nitro);
                             }),
                     ),
                 ),
