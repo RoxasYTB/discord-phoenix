@@ -541,7 +541,7 @@ pub fn dns_fill(effect: u32, colors: &[u32], name: &str) -> Option<name_paint::N
     match (effect, adjusted.as_slice()) {
         (_, []) => None,
         (2 | 6, [_, _, ..]) => {
-            Some(NameFill::Diagonal(adjusted.iter().enumerate().map(|(i, &c)| (c, 0.1 + 0.8 * i as f32 / (n - 1) as f32)).collect()))
+            Some(NameFill::Diagonal(adjusted.iter().enumerate().map(|(i, &c)| (c, (10. + 80. * i as f32 / (n - 1) as f32) / 100.)).collect()))
         }
         (7, [_, _, ..]) => Some(NameFill::Prism {
             stops: (0..=n).map(|i| (adjusted[i % n], i as f32 / n as f32)).collect(),
