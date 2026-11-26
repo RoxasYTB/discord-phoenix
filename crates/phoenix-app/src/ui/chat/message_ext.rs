@@ -405,7 +405,7 @@ fn burst_pill(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ix: 
     let hide = playing.is_some();
     let emoji_el = div()
         .my(z(2.))
-        .children(playing.as_ref().map(|(img, _)| burst::overlay(img.clone(), 20.)))
+        .children(playing.as_ref().map(|(img, at)| burst::overlay(img.clone(), *at, 20.)))
         .child(div().when(hide, |d| d.opacity(0.)).child(crate::media::emoji::emoji_element(&r.emoji, 20.)));
     let fade_key = crate::ui::states::key(("reaction-burst", msg.id.0, ix));
     let hovered = crate::ui::states::hovered(fade_key);

@@ -171,7 +171,7 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
         .flex()
         .items_center()
         .child(div().size(z(32.)).flex_none().child(crate::media::emoji::emoji_element(&r.emoji, 32.)))
-        .child(body_text(line).ml(z(12.)).min_w_0())
+        .child(body_text(format!("\u{200E}{line}")).ml(z(12.)).flex_1().min_w_0())
         .on_click(move |_, _, cx| {
             SHOWN.with(|s| s.borrow_mut().remove(&pill));
             e_open.update(cx, |a, cx| a.open_reactions(ch, id, selected, cx));

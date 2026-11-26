@@ -131,7 +131,7 @@ fn burst_header(r: &Reactions, x: &Reaction) -> AnyElement {
             div()
                 .size(z(32.))
                 .mb(z(8.))
-                .children(playing.map(|(img, _)| crate::ui::burst::overlay(img, 32.)))
+                .children(playing.map(|(img, at)| crate::ui::burst::overlay(img, at, 32.)))
                 .child(div().when(hide, |d| d.opacity(0.)).child(crate::media::emoji::emoji_element(&x.emoji, 32.))),
         )
         .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(tab_label(x)))

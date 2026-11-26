@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use base64::Engine as _;
-use gpui::{AnyElement, Context, RenderImage, Rgba, Styled, div, img, prelude::*};
+use gpui::{AnyElement, Context, RenderImage, Rgba, Styled, div, prelude::*};
 use serde_json::Value;
 
 use crate::app::PhoenixApp;
@@ -821,7 +821,20 @@ pub fn tilted(fill: gpui::Hsla, border: gpui::Hsla, deg: f32) -> AnyElement {
     .into_any_element()
 }
 
-pub fn overlay(img: Arc<RenderImage>, emoji: f32) -> AnyElement {
+pub fn frame_at(delays_ms: impl IntoIterator<Item = u64>, elapsed_ms: u64) -> usize {
+    let mut t = 0u64;
+    let mut last = 0;
+    for (i, d) in delays_ms.into_iter().enumerate() {
+        t += d.max(1);
+        last = i;
+        if elapsed_ms < t {
+            return i;
+        }
+    }
+    last
+}
+
+pub fn overlay(img: Arc<RenderImage>, started: Instant, emoji: f32) -> AnyElement {
     let g = 7.5 * emoji;
     let shift = (g + emoji) / 2.;
     div()
@@ -836,13 +849,26 @@ pub fn overlay(img: Arc<RenderImage>, emoji: f32) -> AnyElement {
                 .w(z(g))
                 .h(z(g))
                 .overflow_hidden()
-                .child(img_el(img, g)),
+                .child(effect_frames(img, started)),
         )
         .into_any_element()
 }
 
-fn img_el(img_: Arc<RenderImage>, g: f32) -> impl IntoElement {
-    img(img_).w(z(g)).h(z(g))
+fn effect_frames(img: Arc<RenderImage>, started: Instant) -> impl IntoElement {
+    gpui::canvas(
+        |_, _, _| {},
+        move |b, _, window, _| {
+            let delays = (0..img.frame_count()).map(|i| {
+                let (n, d) = img.delay(i).numer_denom_ms();
+                u64::from(n) / u64::from(d.max(1))
+            });
+            let elapsed = started.elapsed().as_millis() as u64;
+            let ix = frame_at(delays, elapsed);
+            let _ = window.paint_image(b, b, gpui::Corners::default(), img.clone(), ix, false);
+            window.request_animation_frame();
+        },
+    )
+    .size_full()
 }
 
 pub const SHAKE: [(f32, f32, f32); 11] = [
@@ -949,6 +975,14 @@ mod tests {
                 .count()
         };
         assert!(fired(1) < fired(5));
+    }
+
+    #[test]
+    fn effect_frames_follow_the_elapsed_time() {
+        assert_eq!(frame_at([16, 16, 16], 0), 0);
+        assert_eq!(frame_at([16, 16, 16], 17), 1);
+        assert_eq!(frame_at([16, 16, 16], 999), 2);
+        assert_eq!(frame_at(Vec::<u64>::new(), 5), 0);
     }
 
     #[test]
