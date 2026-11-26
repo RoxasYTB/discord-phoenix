@@ -451,7 +451,7 @@ fn escape_closes_search_and_modals_without_acking(cx: &mut TestAppContext) {
     let here = h.channels[0];
     h.make_unread();
     let base = h.acks();
-    h.act(|a, w, cx| crate::ui::search::open(a, w, cx));
+    h.act(crate::ui::search::open);
     assert!(h.ask(|_, _, cx| crate::ui::search::is_open(cx)));
     h.act(|a, w, cx| a.composer.update(cx, |s, cx| s.focus(w, cx)));
     h.keys("escape");
@@ -514,7 +514,7 @@ fn quit_shortcut_leaves_voice_and_quits(cx: &mut TestAppContext) {
     let mut h = keyed(cx);
     let base = h.acks();
     crate::shortcuts::escape::reset_quitting();
-    h.act(|a, w, cx| crate::ui::search::open(a, w, cx));
+    h.act(crate::ui::search::open);
     h.act(|a, _, _| a.voice_channel = Some(Id(424_242)));
     h.keys(crate::shortcuts::QUIT_KEY);
     assert!(crate::shortcuts::escape::quitting(), "{} was eaten by the search field", crate::shortcuts::QUIT_KEY);

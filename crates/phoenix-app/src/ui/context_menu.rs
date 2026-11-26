@@ -10,6 +10,7 @@ use crate::theme::{c, generated::idx, tok};
 
 pub type Handler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 pub type Dismiss = Rc<dyn Fn(&mut Window, &mut App)>;
+type ActiveMenu = (Rc<Vec<Nav>>, Point<Pixels>, Dismiss);
 
 pub enum MenuItem {
     Action { label: SharedString, icon: Option<SharedString>, subtext: Option<SharedString>, danger: bool, on_click: Handler },
@@ -25,7 +26,7 @@ thread_local! {
     static OPEN_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     static HL_ROOT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     static HL_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
-    static ACTIVE: std::cell::RefCell<Option<(Rc<Vec<Nav>>, Point<Pixels>, Dismiss)>> = const { std::cell::RefCell::new(None) };
+    static ACTIVE: std::cell::RefCell<Option<ActiveMenu>> = const { std::cell::RefCell::new(None) };
 }
 
 pub fn begin_frame() {
