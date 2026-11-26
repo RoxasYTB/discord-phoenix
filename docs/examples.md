@@ -145,7 +145,8 @@ after the first scrolling name gradient (hover a message with `PHX_MOUSE`), see 
 re-presents, with a full redraw every frame, and idle.
 `PHX_SEARCH_SORT=old|rel` and `PHX_SEARCH_PAGE=<n>` with `PHX_OPEN=search:<q>`.
 `PHX_WAIT` = seconds to wait for messages and images (default 15).
-`PHX_RAIL_MENTIONS=<guild id>:<n>,…` shows those mention counts on the rail icons (local display only, for the badge cut-outs).
+`PHX_RAIL_MENTIONS=<guild or DM id>:<n>,…` shows those mention counts on the rail icons (local display only, for the badge cut-outs).
+`PHX_DM_CALL=<DM id>[:voice|video|stream[:here]]` puts the DM's recipient in a call with those flags (and the current user with `here`, which also sets the connected call), local display only, for the rail's DM voice badge.
 `PHX_TABS=n` presses Tab n times before the capture (`-n` = Shift+Tab), for the focus rings.
 `PHX_SEND=<what>` (send-lifecycle test, ONLY in the hard-coded test channel
 `SEND_TEST_CHANNEL` in `real_shots.rs`, refused anywhere else): types

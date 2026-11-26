@@ -26,10 +26,16 @@ impl Hole {
 
     pub fn distance(&self, px: f32, py: f32) -> f32 {
         let (hw, hh) = (self.w / 2., self.h / 2.);
-        let r = self.r.min(hw).min(hh).max(0.);
-        let qx = (px - self.x - hw).abs() - hw + r;
-        let qy = (py - self.y - hh).abs() - hh + r;
-        (qx.max(0.).powi(2) + qy.max(0.).powi(2)).sqrt() + qx.max(qy).min(0.) - r
+        let (rx, ry) = (self.r.min(hw).max(0.), self.r.min(hh).max(0.));
+        let qx = (px - self.x - hw).abs() - hw + rx;
+        let qy = (py - self.y - hh).abs() - hh + ry;
+        if qx > 0. && qy > 0. && rx > 0. && ry > 0. {
+            return (((qx / rx).powi(2) + (qy / ry).powi(2)).sqrt() - 1.) * rx.min(ry);
+        }
+        if qx > 0. && qy > 0. {
+            return ((qx - rx).max(0.).powi(2) + (qy - ry).max(0.).powi(2)).sqrt();
+        }
+        (qx - rx).max(qy - ry)
     }
 
     pub fn contains(&self, px: f32, py: f32) -> bool {
@@ -209,6 +215,18 @@ mod tests {
         assert_eq!(lower_hole(40., count_width(12), 16.), Hole { x: 16., y: 22., w: 26., h: 20., r: 10. });
         assert_eq!(lower_hole(40., count_width(150), 16.), Hole { x: 8., y: 22., w: 34., h: 20., r: 10. });
         assert_eq!(lower_hole(48., count_width(3), 16.), Hole { x: 30., y: 30., w: 20., h: 20., r: 12. });
+    }
+
+    #[test]
+    fn folder_count_hole_has_the_svg_twelve_by_ten_corners() {
+        let h = lower_hole(48., count_width(12), 16.);
+        assert_eq!(h, Hole { x: 24., y: 30., w: 26., h: 20., r: 12. });
+        let (cx, cy) = (h.x + 12. - 12. * std::f32::consts::FRAC_1_SQRT_2, h.y + 10. - 10. * std::f32::consts::FRAC_1_SQRT_2);
+        assert!(h.distance(cx, cy).abs() < 1e-4);
+        assert!(h.distance(h.x, h.y + 10.).abs() < 1e-4);
+        assert!(h.distance(h.x + 13., h.y).abs() < 1e-4);
+        let circle = Hole { r: 10., ..h };
+        assert!(circle.distance(h.x + 1.2, h.y + 1.2) < h.distance(h.x + 1.2, h.y + 1.2));
     }
 
     #[test]

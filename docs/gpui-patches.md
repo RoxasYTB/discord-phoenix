@@ -664,12 +664,15 @@ those words). `Scene::push_cutouts` reuses the last set when it is the same and 
 renderer writes the sets to a 16 KiB uniform (`@group(0) @binding(2) cutouts`) after the gamma
 params when the scene has any. `fs_quad` (now a wrapper of `fs_quad_uncut`, the index comes as a
 flat varying) and `fs_poly_sprite` multiply their alpha by `saturate(distance + 0.5)` per hole,
-the signed distance of a rounded rectangle, the same half-pixel ramp as a rounded quad. Glyphs,
+the signed distance of a rounded rectangle, the same half-pixel ramp as a rounded quad. The
+radius is clamped to half of each side on its own (`radius`, `radius_y`), like SVG `<rect rx>`
+without `ry`: the BlobMask lower hole of a folder with 10+ mentions (26 × 20, rx 12) keeps
+12 × 10 elliptical corners, whose distance is `(|q / r| − 1) · min(r)`, exact for a circle. Glyphs,
 SVG icons, paths, shadows and underlines are not cut. A scene without cut-outs takes the old path.
 Search `PHOENIX PATCH (cut-outs)`.
-The pinned commit (41dbe35d) is kept on the `gpui-cutouts` branch of origin.
+The pinned commit (4a3f89ec, the present transitions commit 4291d676 plus the per-axis radii) is kept on the `gpui-cutout-radii` branch of origin.
 
-Tests: `scene::cutout_tests` (circle and pill distances, empty hole, set reuse, full table, clear),
+Tests: `scene::cutout_tests` (circle and pill distances, per-axis corners, empty hole, set reuse, full table, clear),
 `scene::image_sequence_tests::sequence_and_cutout_share_the_pad_word`,
 wgpu `headless_renderer_cuts_round_holes_through_quads` (round and pill holes, a neighbour quad
 untouched), and the existing WGSL validation tests for the storage, gradient, subpixel and WebGL

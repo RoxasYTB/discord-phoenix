@@ -2280,6 +2280,33 @@ fn main() -> anyhow::Result<()> {
                         g.mentions = *n;
                     }
                 }
+                for (id, n) in &counts {
+                    if let Some(ch) = app.channels.get_mut(id).filter(|c| c.guild.is_none()) {
+                        ch.mentions = *n;
+                    }
+                }
+                cx.notify();
+            })
+        });
+        pump(&mut cx, 300);
+    }
+    if let Ok(spec) = std::env::var("PHX_DM_CALL") {
+        let mut parts = spec.split(':');
+        let dm = parts.next().and_then(parse_id);
+        let mode = parts.next().unwrap_or("voice").to_owned();
+        let here = parts.next() == Some("here");
+        cx.update(|cx| {
+            v.update(cx, |app, cx| {
+                let Some(dm) = dm else { return };
+                let Some(peer) = app.channels.get(&dm).and_then(|c| c.voice_users.first().copied()) else { return };
+                let flags = phoenix_app::model::VoiceFlags { video: mode == "video", stream: mode == "stream", ..Default::default() };
+                phoenix_app::ui::voice_panel::set_flags(peer, flags);
+                let mut users = vec![peer];
+                if here {
+                    users.push(app.me.id);
+                    app.voice_channel = Some(dm);
+                }
+                app.parity.call_users.insert(dm, users);
                 cx.notify();
             })
         });

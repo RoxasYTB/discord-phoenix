@@ -543,19 +543,24 @@ pub fn rail_dm_ids(
     out
 }
 
-fn dm_media(app: &PhoenixApp, id: Id) -> MediaState {
-    let flags = crate::ui::voice_panel::flags;
-    let users = app.parity.call_users.get(&id).map(Vec::as_slice).unwrap_or_default();
-    if app.voice_channel == Some(id) {
-        let here = Here {
-            channel_has_video: users.iter().any(|u| flags(*u).video),
-            self_stream: crate::ui::go_live::live(app) || flags(app.me.id).stream,
-        };
-        return media_state(Some(here), false, &[]);
+pub fn dm_media_state(here: bool, tracked: bool, self_stream: bool, users: &[crate::model::VoiceFlags]) -> MediaState {
+    let in_call = here || !users.is_empty();
+    let video_mode = tracked && (self_stream || users.iter().any(|f| f.video || f.stream));
+    MediaState {
+        audio: in_call && !video_mode,
+        video: in_call && video_mode,
+        screenshare: self_stream || users.iter().any(|f| f.stream),
+        connected: here,
+        ..Default::default()
     }
-    let presences: Vec<Presence> =
-        users.iter().map(|u| Presence { eligible: true, channel_muted: false, hidden_user: false, flags: flags(*u) }).collect();
-    media_state(None, false, &presences)
+}
+
+pub fn dm_media(app: &PhoenixApp, id: Id) -> MediaState {
+    let here = app.voice_channel == Some(id);
+    let tracked = here || app.selected_channel == Some(id);
+    let users: Vec<crate::model::VoiceFlags> =
+        app.parity.call_users.get(&id).into_iter().flatten().map(|u| crate::ui::voice_panel::flags(*u)).collect();
+    dm_media_state(here, tracked, here && crate::ui::go_live::live(app), &users)
 }
 
 fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElement> {
@@ -1060,6 +1065,22 @@ mod media_tests {
 
     fn p(stream: bool, video: bool) -> Presence {
         Presence { eligible: true, channel_muted: false, hidden_user: false, flags: VoiceFlags { stream, video, ..Default::default() } }
+    }
+
+    #[test]
+    fn dm_call_badge_follows_the_client_rtc_mode() {
+        let voice = VoiceFlags::default();
+        let cam = VoiceFlags { video: true, ..Default::default() };
+        let live = VoiceFlags { stream: true, ..Default::default() };
+        assert_eq!(dm_media_state(false, false, false, &[]).icon(), None);
+        assert_eq!(dm_media_state(false, false, false, &[voice]).icon(), Some("speaker"));
+        assert_eq!(dm_media_state(false, false, false, &[cam]).icon(), Some("speaker"));
+        assert_eq!(dm_media_state(false, true, false, &[cam]).icon(), Some("video-call"));
+        assert_eq!(dm_media_state(false, false, false, &[live]).icon(), Some("golive/screen"));
+        let here = dm_media_state(true, true, false, &[]);
+        assert_eq!(here, MediaState { audio: true, connected: true, ..Default::default() });
+        assert_eq!(dm_media_state(true, true, true, &[voice]).icon(), Some("golive/screen"));
+        assert!(!dm_media_state(true, true, true, &[voice]).audio);
     }
 
     #[test]
