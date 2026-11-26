@@ -205,7 +205,7 @@ pub fn render(app: &PhoenixApp, r: &Reactions, cx: &mut Context<PhoenixApp>) -> 
         .flex_col()
         .child(div().pt(z(8.)).border_b_1().border_color(c(tok(idx::BORDER_SUBTLE))))
         .child(div().h(z(h)).pl(z(24.)).flex().child(tabs_el).child(users_el));
-    card(600., crate::t!("msg.reactions_title"), None, body.into_any_element(), None, cx)
+    card(480., crate::t!("msg.reactions_title"), None, body.into_any_element(), None, cx)
 }
 
 #[cfg(test)]
