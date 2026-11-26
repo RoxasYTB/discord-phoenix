@@ -87,12 +87,35 @@ pub fn encode(q: &str) -> String {
     out
 }
 
-pub fn search_path(query: &str, offset: u32, category: Option<i64>) -> String {
-    let mut p = format!("/discoverable-guilds/search?query={}&offset={offset}&limit={SEARCH_LIMIT}&with_counts={}", encode(query), offset == 0);
+pub fn search_path(query: &str, offset: u32, category: Option<i64>, language: Option<&str>, with_counts: bool) -> String {
+    let mut p = format!("/discoverable-guilds/search?query={}", encode(query));
     if let Some(c) = category.filter(|c| *c >= 0) {
-        p.push_str(&format!("&categories={c}"));
+        p.push_str(&format!("&category_id={c}"));
     }
+    p.push_str(&format!("&offset={offset}&limit={SEARCH_LIMIT}"));
+    if let Some(l) = language {
+        p.push_str(&format!("&language_code={}", encode(l)));
+    }
+    p.push_str(&format!("&with_counts={with_counts}"));
     p
+}
+
+pub const EXCLUDED_LANGUAGES: &[&str] = &["en-GB"];
+
+pub fn search_languages() -> Vec<&'static crate::i18n::languages::Language> {
+    crate::i18n::languages::LANGUAGES.iter().filter(|l| !EXCLUDED_LANGUAGES.contains(&l.code)).collect()
+}
+
+pub fn default_search_language(locale: &str) -> &'static str {
+    let list = search_languages();
+    list.iter().find(|l| l.code == locale).or(list.first()).map_or("en-US", |l| l.code)
+}
+
+fn language_name(code: &str) -> SharedString {
+    if code == "en-US" {
+        return crate::t!("discovery.lang_en_us");
+    }
+    crate::i18n::languages::LANGUAGES.iter().find(|l| l.code == code).map_or_else(|| SharedString::from(code.to_owned()), |l| l.native.into())
 }
 
 pub fn lurk_path(guild: u64, session_id: &str) -> String {
@@ -167,6 +190,8 @@ struct State {
     names: Option<std::collections::HashMap<i64, SharedString>>,
     names_requested: bool,
     search: Option<Search>,
+    language: Option<&'static str>,
+    language_open: bool,
 }
 
 thread_local! {
@@ -282,7 +307,7 @@ fn ensure_loaded(app: &PhoenixApp, cat: Category, cx: &mut Context<PhoenixApp>) 
     }
 }
 
-pub fn start_search(app: &PhoenixApp, query: String, category: Option<i64>, cx: &mut Context<PhoenixApp>) {
+pub fn start_search(app: &PhoenixApp, query: String, category: Option<i64>, with_counts: bool, cx: &mut Context<PhoenixApp>) {
     let query = query.trim().to_owned();
     if query.is_empty() {
         STATE.with(|s| s.borrow_mut().search = None);
@@ -298,11 +323,12 @@ pub fn start_search(app: &PhoenixApp, query: String, category: Option<i64>, cx: 
         generation
     });
     SCROLL.with(|h| h.set_offset(gpui::point(gpui::px(0.), gpui::px(0.))));
-    fetch_search_page(app, query, category, 0, generation, cx);
+    fetch_search_page(app, query, category, 0, generation, with_counts, cx);
 }
 
-fn fetch_search_page(app: &PhoenixApp, query: String, category: Option<i64>, offset: u32, generation: u64, cx: &mut Context<PhoenixApp>) {
-    let fut = app.backend.directory_get(search_path(&query, offset, category));
+fn fetch_search_page(app: &PhoenixApp, query: String, category: Option<i64>, offset: u32, generation: u64, with_counts: bool, cx: &mut Context<PhoenixApp>) {
+    let language = STATE.with(|s| s.borrow().language);
+    let fut = app.backend.directory_get(search_path(&query, offset, category, language, with_counts));
     cx.spawn(async move |this, cx| {
         let v = fut.await.unwrap_or(Value::Null);
         let page = parse_search(&v);
@@ -314,7 +340,7 @@ fn fetch_search_page(app: &PhoenixApp, query: String, category: Option<i64>, off
             st.results.guilds.extend(page.guilds);
             if offset == 0 {
                 st.results.total = page.total;
-                if st.category.is_none() || st.results.counts.is_empty() {
+                if with_counts {
                     st.results.counts = page.counts;
                 }
             }
@@ -339,7 +365,7 @@ fn maybe_load_more(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
         Some((st.query.clone(), st.category, st.results.guilds.len() as u32, st.generation))
     });
     if let Some((q, c, off, g)) = next {
-        fetch_search_page(app, q, c, off, g, cx);
+        fetch_search_page(app, q, c, off, g, false, cx);
     }
 }
 
@@ -1096,7 +1122,8 @@ fn ensure_input(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
     cx.subscribe(&input, |a: &mut PhoenixApp, i, ev: &gpui_component::input::InputEvent, cx| match ev {
         gpui_component::input::InputEvent::PressEnter { .. } => {
             let q = i.read(cx).value().to_string();
-            start_search(a, q, None, cx);
+            let cat = STATE.with(|s| s.borrow().search.as_ref().and_then(|x| x.category));
+            start_search(a, q, cat, true, cx);
         }
         gpui_component::input::InputEvent::Change => cx.notify(),
         gpui_component::input::InputEvent::Blur if search_bar(Tab::Servers) == SearchBar::Floating && i.read(cx).value().trim().is_empty() => {
@@ -1167,8 +1194,31 @@ pub fn search_columns(width: f32) -> usize {
 
 pub const SEARCH_SIDEBAR_W: f32 = 178.;
 
-fn language_label() -> SharedString {
-    crate::ui::server_pages::community::locale_name(crate::i18n::locale()).into()
+fn language_select(query: String, category: Option<i64>, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let (chosen, open) = STATE.with(|s| {
+        let s = s.borrow();
+        (s.language, s.language_open)
+    });
+    let current = chosen.unwrap_or_else(|| default_search_language(crate::i18n::locale()));
+    let list = search_languages();
+    let selected = list.iter().position(|l| l.code == current).unwrap_or(0);
+    let options: Vec<SharedString> = list.iter().map(|l| language_name(l.code)).collect();
+    let toggle: std::rc::Rc<dyn Fn(&mut gpui::App)> = std::rc::Rc::new(|_| STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.language_open = !s.language_open;
+    }));
+    let e = cx.entity();
+    let pick: crate::ui::modals::settings_form::OnPick = std::rc::Rc::new(move |k, _, cx| {
+        let Some(code) = search_languages().get(k).map(|l| l.code) else { return };
+        STATE.with(|s| {
+            let mut s = s.borrow_mut();
+            s.language = Some(code);
+            s.language_open = false;
+        });
+        let q = query.clone();
+        e.update(cx, |a, cx| start_search(a, q, category, false, cx));
+    });
+    crate::ui::modals::settings_form::dropdown("discovery-search-lang", options, selected, open, toggle, pick, cx)
 }
 pub const SEARCH_CARD_MIN_W: f32 = 260.;
 
@@ -1198,7 +1248,7 @@ fn search_page(vw: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
                 .cursor_pointer()
                 .when(on, |d| d.bg(tk(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 .when(!on, |d| d.hover(|s| s.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER))))
-                .on_click(cx.listener(move |a, _, _, cx| start_search(a, q.clone(), (id >= 0).then_some(id), cx)))
+                .on_click(cx.listener(move |a, _, _, cx| start_search(a, q.clone(), (id >= 0).then_some(id), false, cx)))
                 .child(text(14., 18., FontWeight::MEDIUM, tk(idx::TEXT_STRONG), label).flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap())
                 .child(text(14., 18., FontWeight::NORMAL, tk(idx::TEXT_MUTED), group_digits(*count)).ml(z(8.))),
         );
@@ -1209,7 +1259,7 @@ fn search_page(vw: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .flex()
         .items_center()
         .justify_end()
-        .child(crate::ui::controls::select_field("discovery-search-lang", language_label()).w_full().h(z(40.)));
+        .child(div().w_full().child(language_select(query.clone(), cat, cx)));
     let sidebar = div().absolute().top_0().right_0().w(z(SEARCH_SIDEBAR_W)).pr(z(8.)).child(lang).child(cats);
     let mut body = div().id("discovery-scroll").size_full().overflow_y_scroll().pt(z(HEADER_H));
     body = SCROLL.with(|s| body.track_scroll(s));
@@ -1475,9 +1525,12 @@ mod tests {
     fn requests_match_the_client() {
         assert_eq!(featured_path(None, 0), "/discoverable-guilds?offset=0&limit=30");
         assert_eq!(featured_path(Some(1), 0), "/discoverable-guilds?categories=1");
-        assert_eq!(search_path("minecraft", 0, None), "/discoverable-guilds/search?query=minecraft&offset=0&limit=12&with_counts=true");
-        assert_eq!(search_path("a b", 12, Some(1)), "/discoverable-guilds/search?query=a%20b&offset=12&limit=12&with_counts=false&categories=1");
-        assert_eq!(search_path("x", 0, Some(-1)), "/discoverable-guilds/search?query=x&offset=0&limit=12&with_counts=true");
+        assert_eq!(search_path("minecraft", 0, None, None, true), "/discoverable-guilds/search?query=minecraft&offset=0&limit=12&with_counts=true");
+        assert_eq!(search_path("a b", 12, Some(1), Some("fr"), false), "/discoverable-guilds/search?query=a%20b&category_id=1&offset=12&limit=12&language_code=fr&with_counts=false");
+        assert_eq!(search_path("x", 0, Some(-1), None, true), "/discoverable-guilds/search?query=x&offset=0&limit=12&with_counts=true");
+        assert_eq!(default_search_language("fr"), "fr");
+        assert_eq!(default_search_language("en-GB"), "da");
+        assert!(!search_languages().iter().any(|l| l.code == "en-GB"));
         assert_eq!(lurk_path(42, "abc"), "/guilds/42/members/@me?lurker=true&session_id=abc");
         assert_eq!(lurk_path(42, ""), "/guilds/42/members/@me?lurker=true");
         assert!(directory_path_allowed("/discoverable-guilds/search?query=x"));
