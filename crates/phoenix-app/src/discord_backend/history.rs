@@ -68,7 +68,7 @@ async fn refresh(inner: Arc<Inner>, s: Arc<Session>, channel: Id) {
     msg_cache::end_fetch(channel.0);
     let Ok(msgs) = res else { return };
     msg_cache::put(channel.0, &msgs);
-    if old.as_ref().is_some_and(|o| *o != msgs) {
+    if old.as_ref().is_none_or(|o| *o != msgs) {
         after_page(&inner, &s, channel, &msgs, true);
         inner.emit(AppEvent::HistoryRefresh { channel, messages: msgs.iter().map(convert::message).collect() });
     }

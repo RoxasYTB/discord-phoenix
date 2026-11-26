@@ -654,6 +654,13 @@ impl PhoenixApp {
         self.message_list.reset(entry.msgs.len() + 1);
         crate::perf::channel_opened(id.0);
         let cached = entry.loaded_once;
+        let now = chrono::Utc::now().timestamp();
+        let exp = |u: &SharedString| crate::media::signed_url_expired(u, now);
+        let stale = cached
+            && entry.msgs.iter().rev().take(50).any(|m| {
+                m.attachments.iter().any(|a| exp(&a.url) || exp(&a.original))
+                    || m.embeds.iter().any(|e| e.thumbnail.iter().chain(&e.image).chain(&e.images).chain(&e.video).any(|x| exp(&x.url)))
+            });
         if cached {
             crate::perf::channel_messages_ready(id.0, "memory");
         }
@@ -663,6 +670,9 @@ impl PhoenixApp {
         }
         if cached {
             crate::commands::state::apply_read_mark(self, id);
+            if stale {
+                self.backend.prefetch_messages(id);
+            }
         }
         cx.notify();
     }

@@ -48,7 +48,7 @@ pub fn get(channel: u64) -> Option<(Vec<api::Message>, bool)> {
         let mut st = STATE.lock();
         if let Some(p) = st.pages.get_mut(&channel) {
             p.tick = TICK.fetch_add(1, Ordering::Relaxed);
-            return Some((p.msgs.clone(), p.fresh));
+            return Some((p.msgs.clone(), p.fresh && !urls_expired(&p.msgs)));
         }
     }
     let raw = fs::read(file(channel)?).ok()?;
@@ -63,7 +63,18 @@ pub fn peek(channel: u64) -> Option<Vec<api::Message>> {
 }
 
 pub fn has_fresh(channel: u64) -> bool {
-    STATE.lock().pages.get(&channel).is_some_and(|p| p.fresh)
+    STATE.lock().pages.get(&channel).is_some_and(|p| p.fresh && !urls_expired(&p.msgs))
+}
+
+fn urls_expired(msgs: &[api::Message]) -> bool {
+    let now = chrono::Utc::now().timestamp();
+    let exp = |u: &str| crate::media::signed_url_expired(u, now);
+    msgs.iter().any(|m| {
+        m.attachments.iter().any(|a| exp(&a.url) || exp(&a.proxy_url))
+            || m.embeds.iter().any(|e| {
+                [&e.image, &e.thumbnail, &e.video].into_iter().flatten().any(|x| x.url.as_deref().is_some_and(exp) || x.proxy_url.as_deref().is_some_and(exp))
+            })
+    })
 }
 
 pub fn begin_fetch(channel: u64) -> bool {

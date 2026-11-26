@@ -83,6 +83,10 @@ fn strip_params(url: &str, names: &[&str]) -> String {
     if kept.is_empty() { base.to_owned() } else { format!("{base}?{}", kept.join("&")) }
 }
 
+pub fn signed_url_expired(url: &str, now: i64) -> bool {
+    url.split(['?', '&']).skip(1).find_map(|p| p.strip_prefix("ex=")).and_then(|h| i64::from_str_radix(h, 16).ok()).is_some_and(|ex| ex <= now + 60)
+}
+
 pub fn static_variant(url: &str) -> SharedString {
     if let Some(i) = url.find(".gif") {
         let mut s = url.to_owned();
@@ -312,6 +316,14 @@ mod tests {
             "https://media.discordapp.net/attachments/1/2/a.png?ex=1&width=100&height=50"
         );
         assert!(video_poster("https://cdn.discordapp.com/attachments/1/2/a.mp4", 10, 10).ends_with("format=webp"));
+    }
+
+    #[test]
+    fn signed_urls_expire_on_their_ex_param() {
+        let u = "https://media.discordapp.net/attachments/1/2/card.png?ex=6b064152&is=6b04efd2&hm=00&width=1100";
+        assert!(super::signed_url_expired(u, 0x6b064152));
+        assert!(!super::signed_url_expired(u, 0x6b064152 - 3600));
+        assert!(!super::signed_url_expired("https://cdn.discordapp.com/avatars/1/a.png?size=128", i64::MAX / 2));
     }
 
     #[test]
