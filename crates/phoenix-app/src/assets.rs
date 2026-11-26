@@ -234,6 +234,8 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/check-small.svg" => s!(r#"<path d="m7.5 12.5 3 3L16.5 9"/>"#),
         "icons/guild/flower-star.svg" => f!(r#"<path d="M12 1.5l2.6 2.2 3.4-.4 1 3.3 3 1.6-1 3.3 1 3.3-3 1.6-1 3.3-3.4-.4-2.6 2.2-2.6-2.2-3.4.4-1-3.3-3-1.6 1-3.3-1-3.3 3-1.6 1-3.3 3.4.4z"/>"#),
         "icons/guild/home.svg" => f!(r#"<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>"#),
+        "icons/guild/partner.svg" => f!(r#"<path d="M15.9 9.6 13.8 11c-.3.1-.5.1-.8 0-.6-.3-1.3-.2-1.8.2l-4.7 3.1c-.9.5-2 .3-2.4-.6-.5-.7-.2-1.8.5-2.4L9 8.3c1.2-.8 2.7-1.1 4-.8 1.2.3 2.1.9 2.9 1.8.2.1.1.2 0 .3zM20.2 11.7c0 .6-.3 1.2-.7 1.5L14.8 16.2c-.9.6-1.8.9-2.8.9-.9 0-2.6-.5-3.6-1.8-.1-.2 0-.5.1-.6l2.1-1.4c.3-.1.6 0 .8.2.6.3 1.3.2 1.8-.2l4.7-3.1c.8-.5 2-.3 2.4.6.1.3.1.6 0 .9z"/>"#),
+        "icons/guild/staff.svg" => f!(r#"<path d="M2 20.6v-1.2l.3-.7 2.4-2.4.7-.3H6l9-9-.9-.9-1.7-4 .7-.6 4 1.7.6.6 1.4 0 1 1v1.4l1.6 1.6v1.4l-1.6 1.6h-1.4L17 9l-9 9v.6l-.3.7-2.4 2.4-.7.3H3.4l-.7-.3-.4-.4z"/>"#),
         "icons/check-small-bold.svg" => concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">"#,
             r#"<path d="m6 12 4 4 8-8"/>"#,
