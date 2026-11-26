@@ -1023,6 +1023,9 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         if *hovered {
                             e.read(cx).backend.prefetch_messages(id);
                         }
+                        if is_dm && crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(4, id.0), *hovered) {
+                            e.update(cx, |_, cx| cx.notify());
+                        }
                     }
                 })
                 .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_channel(id, cx)))
@@ -1084,12 +1087,12 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                         .flex()
                                         .items_center()
                                         .child(
-                                            crate::fonts::styled_name(
-                                                div().min_w_0().text_ellipsis(),
-                                                (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u))).flatten(),
-                                                false,
-                                            )
-                                            .child(crate::ui::emoji_text::label(name, 16.)),
+                                            {
+                                                let dm_user = (is_dm && !is_group).then(|| ch.voice_users.first().and_then(|u| app.users.get(u))).flatten();
+                                                let effect = selected || crate::ui::avatar_deco::hovered(crate::ui::avatar_deco::hover_key(4, id.0));
+                                                crate::fonts::styled_name(div().min_w_0().text_ellipsis(), dm_user, false)
+                                                    .child(crate::fonts::role_name_text(name, dm_user, 16., false, None, effect))
+                                            },
                                         )
                                         .when_some(dm_tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
                                         .when(plated, |d| {

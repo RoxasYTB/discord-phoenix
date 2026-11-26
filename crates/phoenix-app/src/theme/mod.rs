@@ -129,6 +129,15 @@ pub fn user_color(v: u32) -> u32 {
     desaturate_rgb(v, SATURATION.load(Ordering::Relaxed))
 }
 
+pub fn user_color_saturation() -> f32 {
+    if USER_COLORS.load(Ordering::Relaxed) { SATURATION.load(Ordering::Relaxed).min(100) as f32 / 100. } else { 1. }
+}
+
+pub fn base_low_rgb() -> u32 {
+    let tables = if high_contrast() { &generated::THEMES_HC } else { &generated::THEMES };
+    tables[THEME.load(Ordering::Relaxed) as usize][idx::BACKGROUND_BASE_LOW] >> 8
+}
+
 pub fn saturate(v: u32) -> u32 {
     let f = SATURATION.load(Ordering::Relaxed);
     if f >= 100 {

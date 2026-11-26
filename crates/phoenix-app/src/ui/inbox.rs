@@ -892,7 +892,7 @@ fn cozy_message_with(app: &PhoenixApp, m: &Message, pad_y: f32, cx: &Context<Pho
                     .cursor_pointer()
                     .hover(|s| s.underline())
                     .on_click(crate::ui::chat::message_ext::open_user(&cx.entity(), m.author, m.channel))
-                    .child(crate::fonts::role_name_text(name, u, 16., guild.is_some(), role_gradient))
+                    .child(crate::fonts::role_name_text(name, u, 16., guild.is_some(), role_gradient, false))
                     .children(role_dot.map(|col| div().flex_none().ml(z(4.)).size(z(8.)).rounded_full().bg(c(col)))),
                 )
                 .when_some(
@@ -955,7 +955,7 @@ fn reply_line(app: &PhoenixApp, m: &Message, guild: Option<Id>) -> Option<AnyEle
             .when(ru.is_some_and(|u| u.bot), |d| d.child(crate::ui::chat::bot_tag(ru.is_some_and(|u| u.verified_bot)).ml_0()))
             .child(
                 crate::fonts::styled_name(div().flex_none().font_weight(FontWeight::MEDIUM).text_color(color).opacity(0.64), ru, false)
-                    .child(crate::fonts::role_name_text(name.into(), ru, 14., guild.is_some(), gradient)),
+                    .child(crate::fonts::role_name_text(name.into(), ru, 14., guild.is_some(), gradient, false)),
             )
             .child(
                 div()

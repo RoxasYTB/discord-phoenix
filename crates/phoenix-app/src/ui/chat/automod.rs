@@ -428,7 +428,7 @@ fn username(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, uid: I
     crate::fonts::styled_name(div().font_weight(FontWeight::MEDIUM).text_color(name_color).cursor_pointer().hover(|s| s.underline()), user, false)
         .id((key, msg.id.0))
         .on_click(super::message_ext::open_user(entity, uid, msg.channel))
-        .child(crate::fonts::role_name_text(name, user, 16., app.selected_guild.is_some(), gradient))
+        .child(crate::fonts::role_name_text(name, user, 16., app.selected_guild.is_some(), gradient, false))
         .into_any_element()
 }
 

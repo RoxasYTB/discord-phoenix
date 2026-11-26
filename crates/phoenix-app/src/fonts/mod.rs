@@ -369,23 +369,20 @@ pub fn name_style(user: Option<&crate::model::User>) -> Option<&(u32, u32, Vec<u
 }
 
 pub fn styled_name<E: gpui::Styled>(el: E, user: Option<&crate::model::User>, in_profile: bool) -> E {
-    let Some((font, _effect, colors)) = name_style(user) else { return el };
+    let Some((font, effect, colors)) = name_style(user) else { return el };
     let el = match family_for_id(*font) {
         Some(f) => el.font_family(f),
         None => el,
     };
-    match colors.first() {
-        Some(&rgb) if in_profile => el.text_color(gpui::rgb(rgb)),
+    match colors.iter().find(|&&c| c <= 0xffffff) {
+        Some(&rgb) if in_profile => el.text_color(gpui::rgb(dns_color(rgb, *effect))),
         _ => el,
     }
 }
 
 pub fn name_text(text: gpui::SharedString, user: Option<&crate::model::User>, size: f32) -> gpui::AnyElement {
-    let stops = name_style(user).and_then(|(_, _, c)| match c.as_slice() {
-        [a, b, ..] => Some([*a, *b, *a]),
-        _ => None,
-    });
-    paint_name(text, user, size, stops, false)
+    let stops = name_style(user).map(|(_, effect, colors)| dns_stops(*effect, colors)).unwrap_or_default();
+    paint_name(text, user, size, stops, None)
 }
 
 pub fn role_name_text(
@@ -394,11 +391,14 @@ pub fn role_name_text(
     size: f32,
     in_guild: bool,
     gradient: Option<[u32; 3]>,
+    show_effect: bool,
 ) -> gpui::AnyElement {
     if in_guild {
         name_text_with(text, user, size, gradient)
-    } else {
+    } else if show_effect {
         name_text(text, user, size)
+    } else {
+        paint_name(text, user, size, Vec::new(), None)
     }
 }
 
@@ -408,7 +408,9 @@ pub fn name_text_with(
     size: f32,
     stops: Option<[u32; 3]>,
 ) -> gpui::AnyElement {
-    paint_name(text, user, size, stops, crate::theme::is_light())
+    let dim = crate::theme::is_light();
+    let stops = stops.map(|s| s.map(|c| if dim { dim_gradient_stop(c) } else { c }).to_vec()).unwrap_or_default();
+    paint_name(text, user, size, stops, Some(100.))
 }
 
 fn dim_gradient_stop(c: u32) -> u32 {
@@ -416,24 +418,162 @@ fn dim_gradient_stop(c: u32) -> u32 {
     ch(16) | ch(8) | ch(0)
 }
 
+fn dns_min_contrast(effect: u32) -> f64 {
+    match effect {
+        2 | 6 | 7 => 2.5,
+        _ => 3.,
+    }
+}
+
+pub fn dns_color(fg: u32, effect: u32) -> u32 {
+    let bg = if effect == 4 { 0x333333 } else { crate::theme::base_low_rgb() };
+    contrast_adjust(fg, bg, dns_min_contrast(effect), crate::theme::user_color_saturation() as f64)
+}
+
+type Rgb = [f64; 3];
+
+fn split_rgb(c: u32) -> Rgb {
+    [((c >> 16) & 0xff) as f64, ((c >> 8) & 0xff) as f64, (c & 0xff) as f64]
+}
+
+fn rgb_to_hsl([r, g, b]: Rgb) -> [f64; 3] {
+    let (r, g, b) = (r / 255., g / 255., b / 255.);
+    let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+    let l = (max + min) / 2.;
+    if max == min {
+        return [f64::NAN, 0., l];
+    }
+    let d = max - min;
+    let s = if l < 0.5 { d / (max + min) } else { d / (2. - max - min) };
+    let sector = if r == max {
+        (g - b) / d
+    } else if g == max {
+        2. + (b - r) / d
+    } else {
+        4. + (r - g) / d
+    };
+    let h = sector * 60.;
+    [if h < 0. { h + 360. } else { h }, s, l]
+}
+
+fn hsl_to_rgb([h, s, l]: [f64; 3]) -> Rgb {
+    if s == 0. {
+        return [l * 255.; 3];
+    }
+    let t2 = if l < 0.5 { l * (1. + s) } else { l + s - l * s };
+    let t1 = 2. * l - t2;
+    let h = h / 360.;
+    [h + 1. / 3., h, h - 1. / 3.].map(|mut t| {
+        if t < 0. {
+            t += 1.;
+        }
+        if t > 1. {
+            t -= 1.;
+        }
+        let c = if 6. * t < 1. {
+            t1 + (t2 - t1) * 6. * t
+        } else if 2. * t < 1. {
+            t2
+        } else if 3. * t < 2. {
+            t1 + (t2 - t1) * (2. / 3. - t) * 6.
+        } else {
+            t1
+        };
+        (c * 255.).round()
+    })
+}
+
+fn luminance(c: Rgb) -> f64 {
+    let lin = |x: f64| {
+        let x = x.clamp(0., 255.) / 255.;
+        if x <= 0.03928 { x / 12.92 } else { ((x + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+}
+
+fn contrast(a: Rgb, b: Rgb) -> f64 {
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
+}
+
+fn with_hsl(c: Rgb, i: usize, v: f64) -> Rgb {
+    let mut hsl = rgb_to_hsl(c);
+    hsl[i] = v;
+    hsl_to_rgb(hsl)
+}
+
+fn contrast_adjust(fg: u32, bg: u32, ratio: f64, saturation: f64) -> u32 {
+    let (mut t, mut n) = (split_rgb(fg), split_rgb(bg));
+    if saturation < 1. {
+        t = with_hsl(t, 1, rgb_to_hsl(t)[1] * saturation);
+        n = with_hsl(n, 1, rgb_to_hsl(n)[1] * saturation);
+    }
+    let dark = luminance(n) <= 0.5;
+    let mut l = contrast(t, n);
+    for _ in 0..10 {
+        if l >= ratio {
+            break;
+        }
+        let light = rgb_to_hsl(t)[2];
+        if dark && light < 0.95 {
+            t = with_hsl(t, 2, light + 0.05);
+        } else if !dark && light > 0.05 {
+            t = with_hsl(t, 2, light - 0.05);
+        } else {
+            break;
+        }
+        l = contrast(t, n);
+    }
+    let ch = |x: f64| x.clamp(0., 255.).round() as u32;
+    (ch(t[0]) << 16) | (ch(t[1]) << 8) | ch(t[2])
+}
+
+fn lerp_rgb(a: u32, b: u32, f: f64) -> u32 {
+    let (a, b) = (split_rgb(a), split_rgb(b));
+    let ch = |i: usize| ((a[i] + (b[i] - a[i]) * f).round() as u32).min(255);
+    (ch(0) << 16) | (ch(1) << 8) | ch(2)
+}
+
+fn gradient_stop_at(stops: &[u32], t: f64) -> u32 {
+    let n = stops.len();
+    if n == 1 {
+        return stops[0];
+    }
+    let p = |i: usize| 0.1 + 0.8 * i as f64 / (n - 1) as f64;
+    if t <= p(0) {
+        return stops[0];
+    }
+    (1..n)
+        .find(|&i| t <= p(i))
+        .map_or(stops[n - 1], |i| lerp_rgb(stops[i - 1], stops[i], (t - p(i - 1)) / (p(i) - p(i - 1))))
+}
+
+pub fn dns_stops(effect: u32, colors: &[u32]) -> Vec<u32> {
+    let adjusted: Vec<u32> = colors.iter().filter(|&&c| c <= 0xffffff).map(|&c| dns_color(c, effect)).collect();
+    match (effect, adjusted.as_slice()) {
+        (_, []) => Vec::new(),
+        (2 | 6 | 7, [_, _, ..]) => (0..=8).map(|k| gradient_stop_at(&adjusted, 0.25 + k as f64 / 16.)).collect(),
+        (_, [c, ..]) => vec![*c],
+    }
+}
+
 fn paint_name(
     text: gpui::SharedString,
     user: Option<&crate::model::User>,
     size: f32,
-    stops: Option<[u32; 3]>,
-    dim: bool,
+    stops: Vec<u32>,
+    period: Option<f32>,
 ) -> gpui::AnyElement {
     use gpui::IntoElement;
-    let stops = stops.map(|s| if dim { s.map(dim_gradient_stop) } else { s });
     let ls = name_style(user)
         .filter(|s| family_for_id(s.0).is_some())
         .and_then(|s| font_for_id(s.0))
         .map_or(0., |(_, ls)| ls);
-    let stops: Vec<gpui::Hsla> = stops.map(|s| s.iter().map(|&c| gpui::rgb(c).into()).collect()).unwrap_or_default();
+    let stops: Vec<gpui::Hsla> = stops.iter().map(|&c| gpui::rgb(c).into()).collect();
     if ls <= 0. && stops.is_empty() {
         return crate::ui::emoji_text::label(text, size);
     }
-    name_paint::NameText::new(text, crate::theme::z(ls * size), stops, Some(crate::theme::z(100.))).into_any_element()
+    name_paint::NameText::new(text, crate::theme::z(ls * size), stops, period.map(crate::theme::z)).into_any_element()
 }
 
 pub mod fallback;
@@ -449,6 +589,56 @@ mod tests {
         assert_eq!(dim_gradient_stop(0xffffff), 0xd9d9d9);
         assert_eq!(dim_gradient_stop(0x369876), 0x2e8164);
         assert_eq!(dim_gradient_stop(0), 0);
+    }
+
+    #[test]
+    fn dark_theme_lifts_a_black_gradient_stop_like_the_client() {
+        assert_eq!(contrast_adjust(0x000000, 0x202024, 2.5, 1.), 0x666666);
+        assert_eq!(contrast_adjust(0xfffffe, 0x202024, 2.5, 1.), 0xfffffe);
+        assert_eq!(contrast_adjust(0x000000, 0x202024, 3., 1.), 0x737373);
+        assert_eq!(contrast_adjust(0x000000, 0x36373e, 2.5, 1.), 0x7f7f7f);
+        assert_eq!(contrast_adjust(0x3498db, 0x202024, 3., 1.), 0x3498db);
+    }
+
+    #[test]
+    fn light_theme_darkens_a_white_stop_with_the_client_hsl_steps() {
+        assert_eq!(contrast_adjust(0xfffffe, 0xfbfbfb, 2.5, 1.), 0xfefe00);
+        assert_eq!(contrast_adjust(0x000000, 0xfbfbfb, 2.5, 1.), 0x000000);
+    }
+
+    #[test]
+    fn contrast_steps_stop_after_ten_tries() {
+        assert_eq!(contrast_adjust(0x000000, 0x000000, 21., 1.), 0x7f7f7f);
+    }
+
+    #[test]
+    fn black_to_white_display_name_gradient_in_the_dark_theme() {
+        if crate::theme::active() != crate::ui::settings::AppTheme::Dark || crate::theme::high_contrast() {
+            return;
+        }
+        let s = dns_stops(2, &[0x000000, 0xfffffe]);
+        assert_eq!(s.len(), 9);
+        assert_eq!(s[0], 0x838383);
+        assert_eq!(s[4], 0xb3b3b2);
+        assert_eq!(s[8], 0xe2e2e2);
+        assert_eq!(dns_stops(1, &[0x000000]), vec![0x737373]);
+        assert_eq!(dns_stops(2, &[0x000000]), vec![0x666666]);
+        assert!(dns_stops(2, &[]).is_empty());
+        assert!(dns_stops(2, &[0x1000000]).is_empty());
+    }
+
+    #[test]
+    fn dark_gradient_spans_the_middle_of_the_diagonal_stops() {
+        let stops = [0x666666, 0xfffffe];
+        assert_eq!(gradient_stop_at(&stops, 0.05), 0x666666);
+        assert_eq!(gradient_stop_at(&stops, 0.25), 0x838383);
+        assert_eq!(gradient_stop_at(&stops, 0.5), 0xb3b3b2);
+        assert_eq!(gradient_stop_at(&stops, 0.75), 0xe2e2e2);
+        assert_eq!(gradient_stop_at(&stops, 0.95), 0xfffffe);
+        assert_eq!(gradient_stop_at(&[0x112233], 0.5), 0x112233);
+        let three = [0xff0000, 0x00ff00, 0x0000ff];
+        assert_eq!(gradient_stop_at(&three, 0.5), 0x00ff00);
+        assert_eq!(gradient_stop_at(&three, 0.9), 0x0000ff);
     }
 
     #[test]

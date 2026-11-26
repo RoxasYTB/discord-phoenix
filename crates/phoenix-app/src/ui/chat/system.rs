@@ -451,7 +451,7 @@ fn author_el(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message) -> An
     )
     .id(("sys-author", msg.id.0))
     .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
-    .child(crate::fonts::role_name_text(author_name(app, msg), author, 16., app.selected_guild.is_some(), name_gradient))
+    .child(crate::fonts::role_name_text(author_name(app, msg), author, 16., app.selected_guild.is_some(), name_gradient, false))
     .into_any_element()
 }
 
@@ -1077,7 +1077,7 @@ fn poll_result(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: 
                 false,
             )
             .on_click(super::message_ext::open_user(entity, msg.author, msg.channel))
-            .child(crate::fonts::role_name_text(name, author_user, 16., app.selected_guild.is_some(), name_gradient))
+            .child(crate::fonts::role_name_text(name, author_user, 16., app.selected_guild.is_some(), name_gradient, false))
             .into_any_element();
             let t = |k: &str| crate::i18n::t(k, &[]).into_any_element();
             if crate::i18n::locale() == "en" {

@@ -372,7 +372,7 @@ fn message_card(app: &PhoenixApp, m: &Message) -> gpui::Div {
                                 u,
                                 false,
                             )
-                            .child(crate::fonts::role_name_text(author_name, u, 16., app.selected_guild.is_some(), role_gradient))
+                            .child(crate::fonts::role_name_text(author_name, u, 16., app.selected_guild.is_some(), role_gradient, false))
                         })
                         .child(
                             div()

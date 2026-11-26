@@ -231,7 +231,7 @@ fn message_preview(app: &PhoenixApp, channel: Id, message: Id) -> Option<gpui::D
                 .line_height(z(22.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(role_color.map(c).unwrap_or_else(|| c(tok(idx::TEXT_STRONG))))
-                .child(crate::fonts::role_name_text(name, u, 16., app.selected_guild.is_some(), role_gradient))
+                .child(crate::fonts::role_name_text(name, u, 16., app.selected_guild.is_some(), role_gradient, false))
         })
         .children(u.and_then(|u| u.tag.as_ref()).map(crate::ui::members::server_tag))
         .child(div().ml(z(4.)).text_size(z(12.)).line_height(z(22.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_MUTED))).child(when));

@@ -799,7 +799,7 @@ fn post_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, cx: &
                                     author,
                                     false,
                                 )
-                                .child(crate::fonts::role_name_text(author_name, author, 14., guild.is_some(), author_gradient))
+                                .child(crate::fonts::role_name_text(author_name, author, 14., guild.is_some(), author_gradient, false))
                             })
                             .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).text_color(c(Palette::TEXT_NORMAL)).child(":"))
                             .child(
@@ -1023,7 +1023,7 @@ fn grid_card(app: &PhoenixApp, p: &ForumPost, tags: &[ForumTag], now: i64, width
                                     author,
                                     false,
                                 )
-                                .child(crate::fonts::role_name_text(author_name, author, 14., guild.is_some(), author_gradient)),
+                                .child(crate::fonts::role_name_text(author_name, author, 14., guild.is_some(), author_gradient, false)),
                             )
                             .child(
                                 div()

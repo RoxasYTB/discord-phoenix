@@ -771,4 +771,4 @@ the notice wraps on three lines, the video shows the whole frame, the pinned for
 ### Open
 
 - The client member list shows an « Activité — n » card section on busy guilds (dump `vanilla-guild-chat-busy`); Aperture had no card in these renders, not checked.
-- A DM name with a dark to light display name gradient (Clem) starts almost black on the dark theme in the message header; whether the client lightens display name gradients per theme was not checked.
+- A DM name with a dark to light display name gradient (Clem) starts almost black on the dark theme in the message header: fixed, see the display name style row in `chat.md` (the client lifts each colour to a minimum contrast and only shows the effect on hover in message headers).

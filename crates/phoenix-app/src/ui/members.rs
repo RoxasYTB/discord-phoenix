@@ -740,7 +740,7 @@ pub fn member_row_in(
                                         .overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
-                                        .child(crate::fonts::role_name_text(name, user, 16., g.is_some(), role_grad)),
+                                        .child(crate::fonts::role_name_text(name, user, 16., g.is_some(), role_grad, true)),
                                 )
                                 .when_some(tag, |d, t| {
                                     d.child(crate::ui::tag_popout::clickable(

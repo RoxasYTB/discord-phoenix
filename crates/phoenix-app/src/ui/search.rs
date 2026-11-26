@@ -462,7 +462,7 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
                     .cursor_pointer()
                     .hover(|s| s.underline())
                     .on_click(crate::ui::chat::message_ext::open_user(&cx.entity(), m.author, m.channel))
-                    .child(crate::fonts::role_name_text(shown, author, 16., guild.is_some(), role_gradient)),
+                    .child(crate::fonts::role_name_text(shown, author, 16., guild.is_some(), role_gradient, false)),
                 )
                 .when_some(author.and_then(|u| u.tag.clone()), |d, tg| d.child(crate::ui::chat::server_tag_chip(&tg, false)))
                 .when_some(app.author_role_icon_in(guild, m.author), |d, u| d.child(crate::ui::chat::role_icon(u)))
@@ -543,7 +543,7 @@ fn reply_line(app: &PhoenixApp, m: &Message, entity: &gpui::Entity<PhoenixApp>) 
                     .cursor_pointer()
                     .hover(|s| s.underline())
                     .on_click(crate::ui::chat::message_ext::open_user(entity, *a, m.channel))
-                    .child(crate::fonts::role_name_text(name, ru, 14., guild.is_some(), reply_gradient)),
+                    .child(crate::fonts::role_name_text(name, ru, 14., guild.is_some(), reply_gradient, false)),
                 )
                 .map(|r| {
                     if preview.trim().is_empty() && m.reply_voice {

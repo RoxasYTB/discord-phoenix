@@ -186,7 +186,7 @@ pub fn header(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cu: 
                 .cursor_pointer()
                 .hover(|s| s.underline())
                 .on_click(super::message_ext::open_user(entity, cu.user, msg.channel))
-                .child(crate::fonts::role_name_text(nick, user, 14., app.selected_guild.is_some(), role_gradient)),
+                .child(crate::fonts::role_name_text(nick, user, 14., app.selected_guild.is_some(), role_gradient, false)),
         )
         .child(div().flex_none().mr(z(4.)).child(SharedString::from(lead.trim().to_owned())))
         .child(
