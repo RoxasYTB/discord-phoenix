@@ -315,7 +315,7 @@ fn actions(app: &PhoenixApp, guild: Id, e: &GuildEvent, st: Option<(&Events, &En
                 JoinLabel::Listen => crate::t!("events.listen"),
                 JoinLabel::Locked => crate::t!("events.channel_locked"),
             };
-            let mut b = sm_button(("event-join", id.0), None, Some(label.into()), BtnKind::Active);
+            let mut b = sm_button(("event-join", id.0), None, Some(label), BtnKind::Active);
             if can {
                 if let Some((_, ent)) = st {
                     let ent = ent.clone();
@@ -335,7 +335,7 @@ fn actions(app: &PhoenixApp, guild: Id, e: &GuildEvent, st: Option<(&Events, &En
         let mut b = sm_button(
             ("event-interested", id.0),
             Some(if on { "check" } else { "bell" }),
-            Some(crate::t!("events.interested").into()),
+            Some(crate::t!("events.interested")),
             if on { BtnKind::Active } else { BtnKind::Secondary },
         );
         if let Some((_, ent)) = st {
