@@ -541,7 +541,9 @@ mod tests {
         let mut idr = vec![0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80, 0, 0, 0, 1, 0x65];
         idr.extend((0..2000).map(|i| (i % 250) as u8 | 1));
         feed(&mut r, &packets(Codec::H264, &idr, 10, 0, SSRC), t0);
-        let pk = packets(Codec::H264, &idr, 10 + packets(Codec::H264, &idr, 10, 0, SSRC).len() as u16, 3000, SSRC);
+        let n = packets(Codec::H264, &idr, 10, 0, SSRC).len() as u16;
+        let pk = packets(Codec::H264, &idr, 10 + n, 3000, SSRC);
+        let next_seq = 10 + n + pk.len() as u16;
         let got = feed(&mut r, &pk, t0);
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].codec, Codec::H264);
@@ -552,9 +554,7 @@ mod tests {
         let body: Vec<u8> = (0..1500u32).map(|i| (i * 3) as u8).collect();
         crate::leb128::write(body.len() as u64, &mut av1);
         av1.extend_from_slice(&body);
-        let first = packets(Codec::Av1, &av1, 300, 0, SSRC);
-        feed(&mut r, &first, t0);
-        let got = feed(&mut r, &packets(Codec::Av1, &av1, 300 + first.len() as u16, 3000, SSRC), t0);
+        let got = feed(&mut r, &packets(Codec::Av1, &av1, next_seq, 6000, SSRC), t0);
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].codec, Codec::Av1);
         assert_eq!(got[0].data, av1);
