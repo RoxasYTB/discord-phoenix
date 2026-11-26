@@ -92,6 +92,21 @@ Reste :
 - réactions : la hauteur suit le plafond de 720 de `modals::card` (client : `min(800px, 100%)`), réactions Super (section burst) non faites ;
 - coller texte + image : la lecture est dans `gpui-pre-linux` 0.3.12 (`src/linux/wayland/clipboard.rs`, `Clipboard::read` : `read_text().or_else(read_image)`), qui vient de crates.io et n'est pas vendored. Le correctif tient en quelques lignes (renvoyer les deux entrées, le compositeur prend l'image en premier), mais il faut copier tout le crate dans `vendor/` et l'ajouter à `[patch.crates-io]`, ce qui recompile toute la pile GPUI pour tous les agents : pas fait, risque trop élevé pour aujourd'hui.
 
+## Fermées par wt/reactions2 (26/11)
+
+| ligne | correction | source |
+|---|---|---|
+| text : modale des réactions, liste vide sur real_shots | la garde de real_shots refusait `ActionRequest::Reactors` (GET) ; il est maintenant classé en lecture (test `reactor_lists_are_reads`) | log `compare/remaining3/reactions.log` |
+| text : modale des réactions, hauteur | carte `card_max` 800 (`size-md` `min(800px,100%)`), place = viewport − 2 × (32 + 24) (`outerContainer_dvN-MP`) | CSS `size-md_dvN-MP`, `outerContainer_dvN-MP` |
+| text : modale des réactions, Super | onglets Super séparés (burst puis normal, tri par compte), fond `xp(bg, opacité)` + bordure ×1,1 sélectionné, 0,025 / 0,05 sinon, compte en accent ; en-tête Super (padding 32, émoji 32 mb 8, nom body-md/medium, effet lottie joué à l'ouverture) ; réacteurs `?type=1`, retrait par la garde (DELETE `/1/{user}`) | `853bbaf8e88952d2.js` (CDN), CSS `3c89da594347a9b2.css` |
+| chat : pilule Super | pilule burst avant la normale, palette du module 478840 (accent, fond, opacité .2/.5 sombre, .1/.35 clair), bordure quand réagi, halo 16 px à .35, effet lottie (18 BurstReaction, choix par le hash du client, teinte du module 297494) au survol et à l'arrivée d'une Super réaction par la gateway, émoji masqué et secousse 0,5 s ; ajout/retrait par la garde (PUT `?type=1`, DELETE `/1/@me`) ; sans Nitro, ouvre la page Nitro | `00cd33034e754699.js` (30492, 891734, 478840, 900210, 865703), CSS 17256 |
+
+Reste :
+- pilule Super : effet aléatoire toutes les 5 s (`random_roll` / `ambient` prêts, pas branchés), info-bulle Super avec l'upsell Nitro, upsell en modale (Phoenix ouvre la page Nitro), rotation ±1° de la secousse (GPUI ne fait que la translation), le halo teinte aussi l'intérieur de la pilule ;
+- couleurs de l'en-tête Super : le client prend la palette calculée sur l'image de l'émoji (`getEmojiColors`), Phoenix prend `burst_colors[0]` ;
+- rendus de contrôle : aucun message chargé de #général ni #phoenix n'a de réaction Super au moment du rendu, donc la modale et la pilule n'ont pas été comparées visuellement sur le vrai compte ;
+- fiche produit Shop This Look : aperçu de droite, badge et variantes non faits. Le CSS de ces blocs (`tt`, `eS`, `nK`, `e4`) n'est ni dans le cache local, ni dans les 207 CSS de chunks récupérés, ni chargé dans le client ; il faut ouvrir une fiche produit dans le client pour le mesurer. La logique du badge est relevée (module 470085 : override, promo, Orbes, durée limitée `h/uBCR` / `Io7ozn` / `Bc13HF`, NEW, exclusif Orbes / Nitro ; style `badge_4guu7-` + `inverted`, body-xs/semibold, padding 0 8, rond) ainsi que les variantes (module 784054 : pastilles `variantValue`, libellé `EcaRWt`, zone `variantScrollArea_XcVISC` max 30 px).
+
 ## Faisable (pas encore fait)
 
 | fichier | ligne | ce qu'il faut |
