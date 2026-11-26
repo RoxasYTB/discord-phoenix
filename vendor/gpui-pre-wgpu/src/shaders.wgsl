@@ -93,6 +93,49 @@ struct GammaParams {
 
 @group(0) @binding(0) var<uniform> globals: GlobalParams;
 @group(0) @binding(1) var<uniform> gamma_params: GammaParams;
+
+// PHOENIX PATCH (cut-outs): rounded-rectangle holes punched through quads and images, see
+// `gpui::Window::with_cutouts`. A primitive carries `1 + set index`, 0 for none.
+struct CutoutHole {
+    origin: vec2<f32>,
+    size: vec2<f32>,
+    radius: f32,
+    pad0: f32,
+    pad1: f32,
+    pad2: f32,
+}
+
+struct CutoutSet {
+    holes: array<CutoutHole, 2>,
+}
+
+const MAX_CUTOUT_SETS: u32 = 256u;
+
+@group(0) @binding(2) var<uniform> cutouts: array<CutoutSet, 256>;
+
+fn cutout_hole_coverage(hole: CutoutHole, point: vec2<f32>) -> f32 {
+    if (hole.size.x <= 0.0 || hole.size.y <= 0.0) {
+        return 1.0;
+    }
+    let half_size = hole.size * 0.5;
+    let radius = max(min(hole.radius, min(half_size.x, half_size.y)), 0.0);
+    let q = abs(point - (hole.origin + half_size)) - half_size + vec2<f32>(radius);
+    let distance = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+    return saturate(distance + 0.5);
+}
+
+fn cutout_coverage(index: u32, point: vec2<f32>) -> f32 {
+    if (index == 0u || index > MAX_CUTOUT_SETS) {
+        return 1.0;
+    }
+    let set = cutouts[index - 1u];
+    return cutout_hole_coverage(set.holes[0], point) * cutout_hole_coverage(set.holes[1], point);
+}
+
+fn apply_cutout(color: vec4<f32>, coverage: f32) -> vec4<f32> {
+    let multiplier = select(1.0, coverage, globals.premultiplied_alpha != 0u);
+    return vec4<f32>(color.rgb * multiplier, color.a * coverage);
+}
 @group(2) @binding(0) var t_sprite: texture_2d<f32>;
 @group(2) @binding(1) var s_sprite: sampler;
 
@@ -536,6 +579,7 @@ struct QuadVarying {
     @location(3) @interpolate(flat) background_solid: vec4<f32>,
     @location(4) @interpolate(flat) background_color0: vec4<f32>,
     @location(5) @interpolate(flat) background_color1: vec4<f32>,
+    @location(6) @interpolate(flat) cutout: u32,
 }
 
 @vertex
@@ -557,12 +601,21 @@ fn vs_quad(@builtin(vertex_index) vertex_id: u32, @builtin(instance_index) insta
     out.background_color1 = gradient.color1;
     out.border_color = hsla_to_rgba(quad.border_color);
     out.quad_id = instance_id;
+    out.cutout = quad.background.pad;
     out.clip_distances = distance_from_clip_rect(unit_vertex, quad.bounds, quad.content_mask);
     return out;
 }
 
 @fragment
 fn fs_quad(input: QuadVarying) -> @location(0) vec4<f32> {
+    let color = fs_quad_uncut(input);
+    if (input.cutout == 0u) {
+        return color;
+    }
+    return apply_cutout(color, cutout_coverage(input.cutout, input.position.xy));
+}
+
+fn fs_quad_uncut(input: QuadVarying) -> vec4<f32> {
     // Alpha clip first, since we don't have `clip_distance`.
     if (any(input.clip_distances < vec4<f32>(0.0))) {
         return vec4<f32>(0.0);
@@ -1307,7 +1360,8 @@ fn fs_poly_sprite(input: PolySpriteVarying) -> @location(0) vec4<f32> {
         let grayscale = dot(color.rgb, GRAYSCALE_FACTORS);
         color = vec4<f32>(vec3<f32>(grayscale), sample.a);
     }
-    return blend_color(color, sprite.opacity * saturate(0.5 - distance));
+    let cut = cutout_coverage(sprite.pad >> 16u, input.position.xy);
+    return blend_color(color, sprite.opacity * saturate(0.5 - distance) * cut);
 }
 
 // --- surfaces --- //

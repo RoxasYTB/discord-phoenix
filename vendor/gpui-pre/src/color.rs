@@ -783,7 +783,7 @@ pub struct Background {
     pub(crate) gradient_angle_or_pattern_height: f32,
     pub(crate) colors: [LinearColorStop; 2],
     /// Padding for alignment for repr(C) layout.
-    pad: u32,
+    pub(crate) pad: u32,
 }
 
 impl std::fmt::Debug for Background {
@@ -934,6 +934,18 @@ impl Background {
             self.colors[1].opacity(factor),
         ];
         background
+    }
+
+    /// PHOENIX PATCH (cut-outs): the cut-out set this background is painted with, 0 for none.
+    pub fn cutout(&self) -> u32 {
+        self.pad
+    }
+
+    /// PHOENIX PATCH (cut-outs): this background painted with the cut-out set `index`
+    /// (from `Scene::push_cutouts`).
+    pub fn with_cutout(mut self, index: u32) -> Self {
+        self.pad = index;
+        self
     }
 
     /// Returns whether the background color is transparent.

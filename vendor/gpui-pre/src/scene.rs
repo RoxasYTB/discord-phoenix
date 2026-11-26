@@ -55,6 +55,79 @@ pub struct Scene {
     pub glyph_animations: Vec<Option<std::sync::Arc<crate::GlyphAnimation>>>,
     pub sprite_sequences: Vec<ImageSequence>,
     pub gradient_time: f64,
+    pub cutouts: Vec<CutoutSet>,
+}
+
+/// PHOENIX PATCH (cut-outs): the largest number of cut-out sets a frame can use. Primitives
+/// painted after the table is full are drawn without their holes.
+pub const MAX_CUTOUT_SETS: usize = 256;
+
+/// PHOENIX PATCH (cut-outs): `PolychromeSprite::pad` holds the image sequence index (patch 20)
+/// in its low 16 bits and the cut-out set index in its high 16 bits.
+pub fn poly_sequence(pad: u32) -> u32 {
+    pad & 0xFFFF
+}
+
+/// PHOENIX PATCH (cut-outs): the cut-out set index of a polychrome sprite `pad`.
+pub fn poly_cutout(pad: u32) -> u32 {
+    pad >> 16
+}
+
+/// PHOENIX PATCH (cut-outs): `pad` with its cut-out set index replaced by `cutout`.
+pub fn poly_with_cutout(pad: u32, cutout: u32) -> u32 {
+    (pad & 0xFFFF) | (cutout.min(0xFFFF) << 16)
+}
+
+/// PHOENIX PATCH (cut-outs): `pad` with its image sequence index replaced by `sequence`.
+pub fn poly_with_sequence(pad: u32, sequence: u32) -> u32 {
+    (pad & !0xFFFF) | (sequence & 0xFFFF)
+}
+
+/// PHOENIX PATCH (cut-outs): one hole, a rounded rectangle in device pixels. A hole with an
+/// empty size cuts nothing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+pub struct CutoutHole {
+    pub origin: [f32; 2],
+    pub size: [f32; 2],
+    pub radius: f32,
+    pub pad: [f32; 3],
+}
+
+impl CutoutHole {
+    /// Signed distance from `point` to the edge of the hole: negative inside, positive outside.
+    pub fn distance(&self, point: [f32; 2]) -> f32 {
+        let half = [self.size[0] / 2., self.size[1] / 2.];
+        let radius = self.radius.min(half[0]).min(half[1]).max(0.);
+        let center = [self.origin[0] + half[0], self.origin[1] + half[1]];
+        let qx = (point[0] - center[0]).abs() - half[0] + radius;
+        let qy = (point[1] - center[1]).abs() - half[1] + radius;
+        let outside = (qx.max(0.).powi(2) + qy.max(0.).powi(2)).sqrt();
+        outside + qx.max(qy).min(0.) - radius
+    }
+
+    /// Coverage left by the hole at `point`, with the same half-pixel ramp as the shader.
+    pub fn coverage(&self, point: [f32; 2]) -> f32 {
+        if self.size[0] <= 0. || self.size[1] <= 0. {
+            return 1.;
+        }
+        (self.distance(point) + 0.5).clamp(0., 1.)
+    }
+}
+
+/// PHOENIX PATCH (cut-outs): the holes punched into the quads and images painted inside
+/// `Window::with_cutouts` (an SVG `<mask>` with black shapes, like the client's BlobMask).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+pub struct CutoutSet {
+    pub holes: [CutoutHole; 2],
+}
+
+impl CutoutSet {
+    /// Coverage left by every hole at `point`.
+    pub fn coverage(&self, point: [f32; 2]) -> f32 {
+        self.holes.iter().map(|h| h.coverage(point)).product()
+    }
 }
 
 // PHOENIX PATCH (image sequences): a polychrome sprite whose tile is one cell of a sheet of
@@ -123,6 +196,25 @@ impl Scene {
         self.glyph_gradient_scrolls.clear();
         self.glyph_animations.clear();
         self.sprite_sequences.clear();
+        self.cutouts.clear();
+    }
+
+    /// PHOENIX PATCH (cut-outs): stores `set` and returns the index the primitives carry
+    /// (`1 + position`), or 0 when the table is full.
+    pub fn push_cutouts(&mut self, set: CutoutSet) -> u32 {
+        if self.cutouts.last() == Some(&set) {
+            return self.cutouts.len() as u32;
+        }
+        if self.cutouts.len() >= MAX_CUTOUT_SETS {
+            return 0;
+        }
+        self.cutouts.push(set);
+        self.cutouts.len() as u32
+    }
+
+    /// PHOENIX PATCH (cut-outs): the set an index from `push_cutouts` refers to.
+    pub fn cutout_set(&self, index: u32) -> Option<&CutoutSet> {
+        index.checked_sub(1).and_then(|i| self.cutouts.get(i as usize))
     }
 
     pub fn len(&self) -> usize {
@@ -226,13 +318,12 @@ impl Scene {
 
     pub fn insert_sequence_sprite(&mut self, mut sprite: PolychromeSprite, sequence: ImageSequence) {
         self.sprite_sequences.push(sequence);
-        sprite.pad = self.sprite_sequences.len() as u32;
+        sprite.pad = poly_with_sequence(sprite.pad, self.sprite_sequences.len() as u32);
         self.insert_primitive(sprite);
     }
 
     pub fn sprite_sequence(&self, sprite: &PolychromeSprite) -> Option<&ImageSequence> {
-        sprite
-            .pad
+        poly_sequence(sprite.pad)
             .checked_sub(1)
             .and_then(|index| self.sprite_sequences.get(index as usize))
     }
@@ -317,10 +408,21 @@ impl Scene {
                         None => self.insert_primitive(MonochromeSprite { pad: 0, ..*sprite }),
                     }
                 }
+                PaintOperation::Primitive(Primitive::Quad(quad)) if quad.background.pad != 0 => {
+                    let mut quad = *quad;
+                    quad.background.pad = prev_scene
+                        .cutout_set(quad.background.pad)
+                        .map_or(0, |set| self.push_cutouts(*set));
+                    self.insert_primitive(quad);
+                }
                 PaintOperation::Primitive(Primitive::PolychromeSprite(sprite)) if sprite.pad != 0 => {
+                    let cutout = prev_scene
+                        .cutout_set(poly_cutout(sprite.pad))
+                        .map_or(0, |set| self.push_cutouts(*set));
+                    let plain = PolychromeSprite { pad: poly_with_cutout(0, cutout), ..*sprite };
                     match prev_scene.sprite_sequence(sprite) {
-                        Some(sequence) => self.insert_sequence_sprite(*sprite, *sequence),
-                        None => self.insert_primitive(PolychromeSprite { pad: 0, ..*sprite }),
+                        Some(sequence) => self.insert_sequence_sprite(plain, *sequence),
+                        None => self.insert_primitive(plain),
                     }
                 }
                 PaintOperation::Primitive(primitive) => self.insert_primitive(primitive.clone()),
@@ -1294,5 +1396,72 @@ mod image_sequence_tests {
         let mut replayed = Scene::default();
         replayed.replay(0..scene.paint_operations.len(), &scene);
         assert_eq!(replayed.sprite_sequences, vec![s]);
+    }
+
+    #[test]
+    fn sequence_and_cutout_share_the_pad_word() {
+        let pad = poly_with_cutout(poly_with_sequence(0, 3), 7);
+        assert_eq!((poly_sequence(pad), poly_cutout(pad)), (3, 7));
+        let pad = poly_with_sequence(pad, 9);
+        assert_eq!((poly_sequence(pad), poly_cutout(pad)), (9, 7));
+        assert_eq!(poly_cutout(poly_with_cutout(pad, 0)), 0);
+    }
+}
+
+#[cfg(test)]
+mod cutout_tests {
+    use super::*;
+
+    fn hole(x: f32, y: f32, w: f32, h: f32, r: f32) -> CutoutHole {
+        CutoutHole { origin: [x, y], size: [w, h], radius: r, pad: [0.; 3] }
+    }
+
+    #[test]
+    fn round_hole_distance_is_the_circle_distance() {
+        let h = hole(22., -2., 20., 20., 10.);
+        assert!((h.distance([32., 8.]) + 10.).abs() < 1e-4);
+        assert!((h.distance([32., 20.]) - 2.).abs() < 1e-4);
+        assert!((h.distance([22., 8.])).abs() < 1e-4);
+        assert_eq!(h.coverage([32., 8.]), 0.);
+        assert_eq!(h.coverage([0., 0.]), 1.);
+        assert!((h.coverage([22., 8.]) - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn pill_hole_keeps_its_straight_sides() {
+        let h = hole(10., 22., 32., 20., 10.);
+        assert!((h.distance([26., 22.])).abs() < 1e-4);
+        assert!((h.distance([26., 32.]) + 10.).abs() < 1e-4);
+        assert!((h.distance([10., 32.])).abs() < 1e-4);
+    }
+
+    #[test]
+    fn empty_hole_cuts_nothing() {
+        let set = CutoutSet { holes: [hole(0., 0., 10., 10., 5.), CutoutHole::default()] };
+        assert_eq!(set.coverage([5., 5.]), 0.);
+        assert_eq!(set.coverage([20., 20.]), 1.);
+    }
+
+    #[test]
+    fn push_reuses_the_last_set_and_stops_when_full() {
+        let mut scene = Scene::default();
+        let a = CutoutSet { holes: [hole(0., 0., 4., 4., 2.), CutoutHole::default()] };
+        let b = CutoutSet { holes: [hole(8., 0., 4., 4., 2.), CutoutHole::default()] };
+        assert_eq!(scene.push_cutouts(a), 1);
+        assert_eq!(scene.push_cutouts(a), 1);
+        assert_eq!(scene.push_cutouts(b), 2);
+        assert_eq!(scene.cutout_set(2), Some(&b));
+        assert_eq!(scene.cutout_set(0), None);
+        for i in 0..MAX_CUTOUT_SETS * 2 {
+            let mut s = a;
+            s.holes[0].origin[0] = i as f32 + 100.;
+            scene.push_cutouts(s);
+        }
+        assert_eq!(scene.cutouts.len(), MAX_CUTOUT_SETS);
+        let mut s = a;
+        s.holes[0].origin[0] = -1.;
+        assert_eq!(scene.push_cutouts(s), 0);
+        scene.clear();
+        assert!(scene.cutouts.is_empty());
     }
 }
