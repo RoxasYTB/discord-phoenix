@@ -420,15 +420,26 @@ pub fn event_card(app: &PhoenixApp, entity: &Entity<PhoenixApp>, p: &Rc<InvitePr
     } else if time == EventTime::Ended {
         button_sm(("invite-event", e.id.0), crate::t!("invite.card.event_over"), BtnKind::Secondary).opacity(0.5).cursor_default()
     } else {
-        button(("invite-event", e.id.0), crate::t!("invite.card.event_interested"), BtnKind::Secondary)
+        let on = crate::ui::events::rsvped(e.id);
+        let (kind, icon, fg) = if on {
+            (BtnKind::Active, "check", idx::CONTROL_CONNECTED_TEXT_DEFAULT)
+        } else {
+            (BtnKind::Secondary, "bell", idx::CONTROL_SECONDARY_TEXT_DEFAULT)
+        };
+        let (en, ev) = (entity.clone(), e.id);
+        button(("invite-event", e.id.0), crate::t!("invite.card.event_interested"), kind)
             .h(z(32.))
             .min_w(z(60.))
             .px(z(12.))
             .text_size(z(14.))
             .line_height(z(18.))
             .gap(z(4.))
-            .child(gpui::svg().path(crate::icons::path("bell")).size(z(16.)).flex_none().text_color(tk(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
+            .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).flex_none().text_color(tk(fg)))
             .flex_row_reverse()
+            .on_click(move |_, _, cx| {
+                cx.stop_propagation();
+                en.update(cx, |a, cx| crate::ui::events::toggle_rsvp(a, gid, ev, cx));
+            })
     };
     let guild_name = p.guild_name.clone();
     let details = div()

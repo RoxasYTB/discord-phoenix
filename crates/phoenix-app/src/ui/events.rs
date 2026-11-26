@@ -21,7 +21,6 @@ struct Events {
     guild: Id,
     list: Option<Vec<GuildEvent>>,
     error: Option<SharedString>,
-    rsvp: HashSet<Id>,
     copied: Option<Id>,
     detail: Option<Detail>,
 }
@@ -45,6 +44,14 @@ pub struct EventUser {
     pub id: Id,
     pub name: SharedString,
     pub avatar: SharedString,
+}
+
+thread_local! {
+    static RSVP: std::cell::RefCell<HashSet<Id>> = std::cell::RefCell::new(HashSet::new());
+}
+
+pub fn rsvped(event: Id) -> bool {
+    RSVP.with(|r| r.borrow().contains(&event))
 }
 
 const TAB_INFO: u8 = 0;
@@ -117,7 +124,7 @@ pub fn not_shown(shown: usize, count: u32) -> u32 {
 }
 
 pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
-    cx.set_global(Slot(Some(Events { guild, list: None, error: None, rsvp: HashSet::new(), copied: None, detail: None })));
+    cx.set_global(Slot(Some(Events { guild, list: None, error: None, copied: None, detail: None })));
     app.parity_request(ParityRequest::ScheduledEvents { guild }, cx, move |_, r, cx| {
         if guild_of(cx) != Some(guild) {
             return;
@@ -143,8 +150,9 @@ pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
 
 fn load_rsvps(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
     app.admin(AdminCall::MyEventRsvps { guild: sf(guild) }, cx, move |_, r, cx| {
-        if let (Ok(v), true) = (r, guild_of(cx) == Some(guild)) {
-            with(cx, |e| e.rsvp = parse_rsvps(&v));
+        if let Ok(v) = r {
+            let got = parse_rsvps(&v);
+            RSVP.with(|set| set.borrow_mut().extend(got));
             cx.notify();
         }
     });
@@ -159,21 +167,28 @@ fn set_count(e: &mut Events, event: Id, up: bool) {
     }
 }
 
-fn apply_rsvp(e: &mut Events, event: Id, on: bool) {
-    let changed = if on { e.rsvp.insert(event) } else { e.rsvp.remove(&event) };
-    if changed {
+fn apply_rsvp(set: &mut HashSet<Id>, e: Option<&mut Events>, event: Id, on: bool) {
+    let changed = if on { set.insert(event) } else { set.remove(&event) };
+    if let (true, Some(e)) = (changed, e) {
         set_count(e, event, on);
     }
 }
 
-pub fn toggle_rsvp(app: &mut PhoenixApp, event: Id, cx: &mut Context<PhoenixApp>) {
-    let Some(guild) = guild_of(cx) else { return };
-    let on = !cx.try_global::<Slot>().and_then(|s| s.0.as_ref()).is_some_and(|e| e.rsvp.contains(&event));
-    with(cx, |e| apply_rsvp(e, event, on));
+fn apply(cx: &mut App, event: Id, on: bool) {
+    let mut set = RSVP.with(|r| std::mem::take(&mut *r.borrow_mut()));
+    let open = cx.has_global::<Slot>();
+    let e = if open { cx.global_mut::<Slot>().0.as_mut() } else { None };
+    apply_rsvp(&mut set, e, event, on);
+    RSVP.with(|r| *r.borrow_mut() = set);
+}
+
+pub fn toggle_rsvp(app: &mut PhoenixApp, guild: Id, event: Id, cx: &mut Context<PhoenixApp>) {
+    let on = !rsvped(event);
+    apply(cx, event, on);
     cx.notify();
     app.admin(AdminCall::EventRsvp { guild: sf(guild), event: sf(event), interested: on }, cx, move |a, r, cx| {
         if let Err(err) = r {
-            with(cx, |e| apply_rsvp(e, event, !on));
+            apply(cx, event, !on);
             a.parity_toast(err, cx);
         }
         cx.notify();
@@ -316,7 +331,7 @@ fn actions(app: &PhoenixApp, guild: Id, e: &GuildEvent, st: Option<(&Events, &En
             out.push(b.into_any_element());
         }
     } else {
-        let on = st.is_some_and(|(s, _)| s.rsvp.contains(&id));
+        let on = rsvped(id);
         let mut b = sm_button(
             ("event-interested", id.0),
             Some(if on { "check" } else { "bell" }),
@@ -327,7 +342,7 @@ fn actions(app: &PhoenixApp, guild: Id, e: &GuildEvent, st: Option<(&Events, &En
             let ent = ent.clone();
             b = b.on_click(move |_, _, cx| {
                 cx.stop_propagation();
-                ent.update(cx, |a, cx| toggle_rsvp(a, id, cx));
+                ent.update(cx, |a, cx| toggle_rsvp(a, guild, id, cx));
             });
         }
         out.push(b.into_any_element());
@@ -866,19 +881,13 @@ mod tests {
 
     #[test]
     fn rsvp_toggle_moves_the_count_once() {
-        let mut e = Events {
-            guild: Id(1),
-            list: Some(vec![GuildEvent { id: Id(5), user_count: 2, ..Default::default() }]),
-            error: None,
-            rsvp: HashSet::new(),
-            copied: None,
-            detail: None,
-        };
-        apply_rsvp(&mut e, Id(5), true);
-        apply_rsvp(&mut e, Id(5), true);
+        let mut e = Events { guild: Id(1), list: Some(vec![GuildEvent { id: Id(5), user_count: 2, ..Default::default() }]), error: None, copied: None, detail: None };
+        let mut set = HashSet::new();
+        apply_rsvp(&mut set, Some(&mut e), Id(5), true);
+        apply_rsvp(&mut set, Some(&mut e), Id(5), true);
         assert_eq!(e.list.as_ref().unwrap()[0].user_count, 3);
-        apply_rsvp(&mut e, Id(5), false);
+        apply_rsvp(&mut set, Some(&mut e), Id(5), false);
         assert_eq!(e.list.as_ref().unwrap()[0].user_count, 2);
-        assert!(e.rsvp.is_empty());
+        assert!(set.is_empty());
     }
 }
