@@ -639,6 +639,35 @@ pub(crate) fn card_sized(app: &PhoenixApp, k: &ShopCard, width: f32, height: f32
         .into_any_element()
 }
 
+pub fn summary_of(p: &Value) -> String {
+    let raw = p.get("summary").and_then(Value::as_str).unwrap_or_default().trim();
+    if !raw.contains("{joinedItems}") {
+        return raw.to_owned();
+    }
+    let names: Vec<&str> = p.get("bundled_products").and_then(Value::as_array).into_iter().flatten().filter_map(|b| b.get("name")?.as_str()).collect();
+    let items: Vec<String> = p
+        .get("items")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(i, it)| {
+            let name = names.get(i).copied()?;
+            Some(match it.get("type").and_then(Value::as_u64) {
+                Some(0) => crate::t!("shop.item_deco", name = name).to_string(),
+                Some(1) => crate::t!("shop.item_effect", name = name).to_string(),
+                Some(2) => crate::t!("shop.item_nameplate", name = name).to_string(),
+                Some(3) => crate::t!("shop.item_frame", name = name).to_string(),
+                _ => name.to_owned(),
+            })
+        })
+        .collect();
+    if items.is_empty() {
+        return String::new();
+    }
+    crate::t!("shop.bundle_includes", items = items.join(", ")).to_string()
+}
+
 pub fn look_of(k: &ShopCard) -> phoenix_api::rest::collectibles::LookSku {
     let p = &k.product;
     let first = |p: &Value| p.get("items").and_then(Value::as_array).and_then(|i| i.first()).cloned();
@@ -652,7 +681,7 @@ pub fn look_of(k: &ShopCard) -> phoenix_api::rest::collectibles::LookSku {
         name: k.name.to_string(),
         shoppable: k.base.is_some() || k.orbs.is_some(),
         item,
-        summary: p.get("summary").and_then(Value::as_str).unwrap_or_default().trim().to_owned(),
+        summary: summary_of(p),
         background: k.pdp_bg.as_ref().map(|u| u.to_string()),
         prices: p.get("prices").cloned().unwrap_or(Value::Null),
     }
@@ -1217,6 +1246,14 @@ mod tests {
         assert_eq!(t_in("fr", super::SEARCH_PLACEHOLDER, &[]).as_ref(), "Rechercher dans la Boutique");
         assert_eq!(t_in("en-US", super::SEARCH_PLACEHOLDER, &[]).as_ref(), "Search the Shop");
         assert_eq!(crate::i18n::messages::mappings()[super::SEARCH_PLACEHOLDER].hash, "arz34K");
+    }
+
+    #[test]
+    fn bundle_summaries_fill_the_joined_items() {
+        let p = serde_json::json!({"summary": "{joinedItems}", "items": [{"type": 0}, {"type": 2}], "bundled_products": [{"name": "A"}, {"name": "B"}]});
+        let s = super::summary_of(&p);
+        assert!(s.contains('A') && s.contains('B') && !s.contains("joinedItems"));
+        assert_eq!(super::summary_of(&serde_json::json!({"summary": " Lune "})), "Lune");
     }
 
     #[test]
