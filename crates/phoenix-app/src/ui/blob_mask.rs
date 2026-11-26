@@ -74,6 +74,10 @@ pub fn status_hole(size: f32) -> Hole {
     Hole::circle(cx, cx, r)
 }
 
+pub fn channel_type_hole(size: f32) -> Hole {
+    Hole::circle(0.9 * size, 0.9 * size, 0.5 * size)
+}
+
 pub struct Cut {
     child: AnyElement,
     holes: Vec<Hole>,
@@ -249,6 +253,15 @@ mod tests {
         assert!(lower.contains(40. - 22. - 1.9, 32.));
         assert!(!lower.contains(40. - 22. - 2.1, 32.));
         assert!(!lower.contains(10., 10.));
+    }
+
+    #[test]
+    fn channel_type_hole_is_the_client_circle() {
+        let h = channel_type_hole(24.);
+        assert!((h.x - 9.6).abs() < 1e-4 && (h.y - 9.6).abs() < 1e-4);
+        assert_eq!((h.w, h.h, h.r), (24., 24., 12.));
+        assert!(h.contains(22., 19.));
+        assert!(!h.contains(4., 4.));
     }
 
     #[test]

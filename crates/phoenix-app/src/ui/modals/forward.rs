@@ -106,7 +106,7 @@ fn guild_channel_icon(app: &PhoenixApp, ch: &crate::model::Channel) -> AnyElemen
         .relative()
         .w(z(32.))
         .h(z(29.))
-        .child(face)
+        .child(crate::ui::blob_mask::cut(face, [crate::ui::blob_mask::channel_type_hole(24.)]))
         .child(
             div()
                 .absolute()
