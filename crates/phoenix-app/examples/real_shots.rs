@@ -1735,7 +1735,7 @@ fn main() -> anyhow::Result<()> {
                     } else if let Some(c) = arg.strip_prefix("cat:").and_then(|x| x.parse().ok()) {
                         d::set_category(d::Category::Id(c));
                     } else if let Some(q) = arg.strip_prefix("search:") {
-                        d::start_search(app, q.to_owned(), None, cx);
+                        d::start_search(app, q.to_owned(), None, true, cx);
                     }
                     cx.notify();
                 }
