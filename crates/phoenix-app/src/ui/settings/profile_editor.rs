@@ -892,7 +892,11 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .h(z(220.))
                 .flex_none()
                 .child(div().id("pe-banner").group("pe-banner").relative().child(banner).child(
-                    div().absolute().top(z(8.)).right(z(8.)).opacity(0.).group_hover("pe-banner", |s| s.opacity(1.)).child(overlay_button("banner", "pen")),
+                    div().absolute().top(z(8.)).right(z(8.)).opacity(0.).group_hover("pe-banner", |s| s.opacity(1.)).child(overlay_button("banner", "pen").on_click(cx.listener(|a, _, _, cx| {
+                        if a.backend.has_premium() {
+                            pick_image(true, cx)
+                        }
+                    }))),
                 ))
                 .child(
                     div()
@@ -909,7 +913,7 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                         .child(av)
                         .children(decoration_url(e).map(|d| img(d).absolute().size(z(134.4)).left(z(-7.2)).top(z(-7.2))))
                         .child(
-                            div().absolute().top(z(44.)).left(z(44.)).opacity(0.).group_hover("pe-avatar", |s| s.opacity(1.)).child(overlay_button("avatar", "pen")),
+                            div().absolute().top(z(44.)).left(z(44.)).opacity(0.).group_hover("pe-avatar", |s| s.opacity(1.)).child(overlay_button("avatar", "pen").on_click(cx.listener(|_, _, _, cx| pick_image(false, cx)))),
                         ),
                 ),
         )

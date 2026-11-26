@@ -423,7 +423,12 @@ pub fn render(app: &PhoenixApp, e: &super::profile_editor::EditorState, cx: &mut
     };
     let mut grid: Vec<AnyElement> = vec![
         icon_tile("none", size, "deny", crate::t!("pk.none"), p.sel.is_none()).on_click(cx.listener(pick(None))).into_any_element(),
-        icon_tile("shop", size, "shop", crate::t!("pk.shop"), false).into_any_element(),
+        icon_tile("shop", size, "shop", crate::t!("pk.shop"), false)
+            .on_click(cx.listener(|a, _, _, cx| {
+                a.settings = None;
+                a.open_home_view(crate::ui::home::data::HomeView::Shop, cx);
+            }))
+            .into_any_element(),
     ];
     let owned_tiles = item_tiles(&owned, false, cx);
     let rows = if row { owned_tiles } else {
