@@ -170,6 +170,22 @@ impl HeadlessAppContext {
         app.update_window(window, |_, window, _| window.render_to_image())?
     }
 
+    /// PHOENIX PATCH (gradient scroll): delivers one platform frame request to a window, as
+    /// its frame source would, so benchmarks drive the real draw / present-only path.
+    pub fn simulate_frame_request(&mut self, window: AnyWindowHandle) {
+        let test_window = {
+            let mut app = self.app.borrow_mut();
+            app.windows
+                .get_mut(window.window_id())
+                .and_then(|window| window.as_mut())
+                .and_then(|window| window.platform_window.as_test())
+                .cloned()
+        };
+        if let Some(test_window) = test_window {
+            test_window.simulate_frame_request(crate::RequestFrameOptions::default());
+        }
+    }
+
     /// Returns the text system.
     pub fn text_system(&self) -> &Arc<TextSystem> {
         &self.text_system

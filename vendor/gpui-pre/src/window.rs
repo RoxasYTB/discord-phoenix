@@ -3136,6 +3136,14 @@ impl Window {
         };
     }
 
+    /// PHOENIX PATCH (gradient scroll): whether the current frame still has a running
+    /// gradient scroll, so it keeps re-presenting.
+    pub fn scrolls_gradients(&self) -> bool {
+        self.rendered_frame
+            .scene
+            .scrolls_gradients(crate::gradient_clock(Instant::now()))
+    }
+
     /// Borrows the most recently rendered frame's scene, so benchmarks can validate their
     /// output and report batch counts without cloning it.
     #[cfg(feature = "bench-support")]
