@@ -94,6 +94,13 @@ pub fn folders_json(folders: &[FolderSync]) -> Value {
 }
 
 pub async fn request(rest: RestClient, req: ParityRequest, emit: EventSink) -> Result<ParityReply, BackendError> {
+    request_with(crate::actions::guard::writes_enabled(), rest, req, emit).await
+}
+
+pub(crate) async fn request_with(allowed: bool, rest: RestClient, req: ParityRequest, emit: EventSink) -> Result<ParityReply, BackendError> {
+    if let Some(err) = crate::actions::guard::refuse_parity(allowed, &req) {
+        return Err(e(err));
+    }
     let session = session_id();
     Ok(match req {
         ParityRequest::Commands { guild, channel } => {

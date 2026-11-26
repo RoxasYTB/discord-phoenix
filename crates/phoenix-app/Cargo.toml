@@ -23,7 +23,7 @@ memchr = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 phoenix-api = { path = "../phoenix-api" }
 phoenix-voice = { path = "../phoenix-voice", features = ["audio"] }
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "net", "io-util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
 keyring = { version = "3", features = ["async-secret-service", "tokio", "crypto-rust"] }
 base64 = "0.23"

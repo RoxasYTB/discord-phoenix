@@ -40,6 +40,13 @@ pub fn folder_protos(folders: &[crate::ui::home::data::GuildFolder]) -> Vec<phoe
 }
 
 pub async fn request(rest: RestClient, req: ActionRequest, emit: EventSink) -> Result<ActionReply, BackendError> {
+    request_with(super::guard::writes_enabled(), rest, req, emit).await
+}
+
+pub(crate) async fn request_with(allowed: bool, rest: RestClient, req: ActionRequest, emit: EventSink) -> Result<ActionReply, BackendError> {
+    if let Some(err) = super::guard::refuse_action(allowed, &req) {
+        return Err(e(err));
+    }
     use ActionRequest as R;
     Ok(match req {
         R::Admin(c) => ActionReply::Json(rest.admin(&c).await.map_err(e)?),

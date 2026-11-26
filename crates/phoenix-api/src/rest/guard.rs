@@ -16,7 +16,7 @@ pub fn agent_session() -> bool {
     std::env::var_os(AGENT_ENV).is_some()
 }
 
-fn permitted(on: bool, agent: bool) -> bool {
+pub fn permitted(on: bool, agent: bool) -> bool {
     on && !agent
 }
 
