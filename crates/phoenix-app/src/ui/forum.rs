@@ -30,6 +30,22 @@ thread_local! {
 thread_local! {
     static SORT_ANCHOR: std::cell::Cell<gpui::Point<gpui::Pixels>> = const { std::cell::Cell::new(gpui::point(gpui::px(330.), gpui::px(170.))) };
     static TAGS_ANCHOR: std::cell::Cell<gpui::Point<gpui::Pixels>> = const { std::cell::Cell::new(gpui::point(gpui::px(900.), gpui::px(170.))) };
+    static MORE_TAGS_ANCHOR: std::cell::Cell<gpui::Point<gpui::Pixels>> = const { std::cell::Cell::new(gpui::point(gpui::px(500.), gpui::px(300.))) };
+    static TAG_PROBE: std::cell::Cell<(f32, f32, f32, bool)> = const { std::cell::Cell::new((0., 0., 0., false)) };
+    static TAG_ROW: std::cell::Cell<(bool, f32)> = const { std::cell::Cell::new((false, 0.)) };
+}
+
+pub(crate) fn tag_row_step(probe: (f32, f32, f32, bool), top: f32, right: f32, height: f32) -> (f32, f32, f32, bool) {
+    let (left, row_top, max_right, overflow) = probe;
+    if top - row_top > height {
+        (left, row_top, max_right, true)
+    } else {
+        (left, row_top, max_right.max(right - left), overflow)
+    }
+}
+
+fn probe(f: impl Fn(gpui::Bounds<gpui::Pixels>, &mut Window) + 'static) -> gpui::Canvas<()> {
+    gpui::canvas(move |b, w, _| f(b, w), |_, _, _, _| {})
 }
 
 fn menu_group_label(t: SharedString) -> AnyElement {
@@ -384,6 +400,21 @@ impl PhoenixApp {
         .detach();
     }
 
+    fn toggle_compose_tag_menu(&mut self, forum: Id, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(comp) = self.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) else { return };
+        if comp.tag_menu.take().is_none() {
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("forum.find_tag")));
+            input.update(cx, |s, cx| s.focus(window, cx));
+            let sub = cx.subscribe(&input, |_: &mut PhoenixApp, _, ev: &gpui_component::input::InputEvent, cx| {
+                if let gpui_component::input::InputEvent::Change = ev {
+                    cx.notify();
+                }
+            });
+            comp.tag_menu = Some((input, sub));
+        }
+        cx.notify();
+    }
+
     fn submit_post(&mut self, forum: Id, cx: &mut Context<Self>) {
         let Some(comp) = self.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) else { return };
         let title = comp.title.read(cx).value().trim().to_owned();
@@ -407,6 +438,7 @@ impl PhoenixApp {
         self.parity_request(ParityRequest::CreatePost { forum, title: title.clone(), content, tags, files }, cx, move |a, res, cx| {
             match res {
                 Ok(ParityReply::Channel(t)) => {
+                    crate::ui::chat::composer::note_sent(forum);
                     if let Some(v) = a.parity.forums.get_mut(&forum) {
                         v.compose = None;
                     }
@@ -468,7 +500,7 @@ pub fn prepare(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
             s.focus(window, cx)
         });
         let v = app.parity.forums.entry(forum).or_default();
-        v.compose = Some(ForumCompose { title, body, tags: Vec::new(), files: Vec::new(), media_hover: false, sending: false, error: None });
+        v.compose = Some(ForumCompose { title, body, tags: Vec::new(), files: Vec::new(), media_hover: false, sending: false, previewing: false, tag_menu: None, error: None });
         if !v.guidelines_seen {
             v.guidelines_seen = true;
             v.guidelines_open = true;
@@ -478,6 +510,193 @@ pub fn prepare(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
 
 fn guide_button(forum: Id, id: &'static str, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
     use crate::ui::tooltip::Tipped as _;
+    icon_button(id, "forum/book-check")
+        .on_click(cx.listener(move |a, _, _, cx| {
+            let v = a.parity.forums.entry(forum).or_default();
+            v.guidelines_open = !v.guidelines_open;
+            v.guidelines_seen = true;
+            cx.notify();
+        }))
+        .tip(crate::t!("forum.guide"))
+}
+
+fn preview_button(forum: Id, on: bool, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    use crate::ui::tooltip::Tipped as _;
+    icon_button("compose-preview", if on { "chat/eye-slash" } else { "chat/eye" })
+        .on_click(cx.listener(move |a, _, _, cx| {
+            if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
+                cmp.previewing = !cmp.previewing;
+            }
+            cx.notify();
+        }))
+        .tip(if on { crate::t!("forum.preview_exit") } else { crate::t!("forum.preview") })
+}
+
+pub(crate) fn counter_tip(remaining: i64) -> SharedString {
+    match remaining {
+        0 => crate::t!("forum.max_length"),
+        r if r > 0 => crate::t!("forum.chars_left", count = r),
+        _ => crate::t!("forum.too_long"),
+    }
+}
+
+fn compose_counter(app: &PhoenixApp, comp: &ForumCompose, cx: &gpui::App) -> Option<AnyElement> {
+    use crate::ui::tooltip::Tipped as _;
+    let len = comp.body.read(cx).value().chars().count() as i64;
+    let (remaining, show) = crate::ui::chat::composer::char_count(app.backend.has_premium(), len);
+    show.then(|| {
+        div()
+            .id("compose-count")
+            .flex()
+            .items_center()
+            .text_size(z(14.))
+            .line_height(z(18.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(c(tok(if remaining < 0 { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_DEFAULT })))
+            .child(SharedString::from(remaining.to_string()))
+            .tip(counter_tip(remaining))
+            .into_any_element()
+    })
+}
+
+fn compose_slowmode(app: &PhoenixApp, forum: Id) -> Option<AnyElement> {
+    use crate::ui::tooltip::Tipped as _;
+    let text = crate::ui::chat::composer::slowmode_label(app, forum)?;
+    let secs = app.nav.extras.get(&forum)?.slowmode;
+    let muted = c(tok(idx::TEXT_MUTED));
+    Some(
+        div()
+            .id("compose-slowmode")
+            .flex()
+            .items_center()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .child(gpui::svg().path(crate::icons::path("chat/timer")).size(z(12.)).flex_none().mr(z(4.)).text_color(muted))
+            .child(div().text_size(z(14.)).line_height(z(18.)).text_color(muted).child(text))
+            .tip(crate::ui::chat::composer::slowmode_tip_in(secs, true))
+            .into_any_element(),
+    )
+}
+
+fn more_tags_button(id: &'static str) -> gpui::Stateful<gpui::Div> {
+    crate::ui::controls::button_sm(id, crate::t!("forum.more_tags"), crate::ui::controls::BtnKind::Secondary)
+        .flex_none()
+        .px_0()
+        .justify_start()
+        .child(gpui::svg().path(crate::icons::path("chevron")).size(z(16.)).flex_none().ml(z(4.)).text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
+        .child(probe(|b, _| MORE_TAGS_ANCHOR.with(|a| a.set(gpui::point(b.center().x, b.bottom())))).absolute().top_0().left_0().size_full())
+}
+
+fn compose_tag_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    let forum = open_forum(app)?;
+    let v = app.parity.forums.get(&forum)?;
+    let comp = v.compose.as_ref()?;
+    let (input, _) = comp.tag_menu.as_ref()?;
+    let query = input.read(cx).value().to_lowercase();
+    let full = comp.tags.len() >= 5;
+    let moderator = app.selected_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 34));
+    let tags = app.backend.forum_tags(forum);
+    let rows: Vec<AnyElement> = tags
+        .iter()
+        .filter(|t| moderator || !t.moderated)
+        .filter(|t| fuzzy_match(&query, &t.name.to_lowercase()))
+        .map(|t| {
+            let id = t.id;
+            let on = comp.tags.contains(&id);
+            let disabled = full && !on;
+            div()
+                .id(("compose-tag-option", id.0))
+                .h(z(40.))
+                .mb(z(4.))
+                .px(z(8.))
+                .rounded(z(4.))
+                .flex()
+                .items_center()
+                .flex_none()
+                .cursor_pointer()
+                .when(on, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
+                .when(!disabled, |d| d.hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER)))))
+                .when(disabled, |d| d.opacity(0.3).cursor_not_allowed())
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(z(8.))
+                        .child(match t.emoji.clone() {
+                            Some(e) => crate::media::emoji::emoji_element(&e, 24.).into_any_element(),
+                            None => gpui::svg().path(crate::icons::path("forum/tag")).size(z(24.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).into_any_element(),
+                        })
+                        .child(
+                            div()
+                                .text_size(z(16.))
+                                .line_height(z(20.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                                .whitespace_nowrap()
+                                .child(t.name.clone()),
+                        ),
+                )
+                .when(!disabled, |d| {
+                    d.on_click(cx.listener(move |a, _, _, cx| {
+                        if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
+                            cmp.tags = toggle_tag(&cmp.tags, id);
+                            cmp.tag_menu = None;
+                        }
+                        cx.notify();
+                    }))
+                })
+                .into_any_element()
+        })
+        .collect();
+    let at = MORE_TAGS_ANCHOR.with(|a| a.get());
+    let card = div()
+        .id("compose-tag-menu")
+        .occlude()
+        .w(z(250.))
+        .rounded(z(8.))
+        .overflow_hidden()
+        .bg(c(tok(idx::MODAL_BACKGROUND)))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .shadow(crate::ui::inbox::shadow_medium())
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .child(
+            div()
+                .p(z(8.))
+                .child(div().pb(z(8.)).child(crate::ui::modals::server_settings::kit::search_box(Some(input)).h(z(32.))))
+                .child(div().id("compose-tag-list").max_h(z(230.)).overflow_y_scroll().py(z(8.)).flex().flex_col().children(rows)),
+        );
+    Some(
+        gpui::deferred(
+            div()
+                .id("compose-tag-backdrop")
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .occlude()
+                .on_mouse_down(
+                    gpui::MouseButton::Left,
+                    cx.listener(move |a, _, _, cx| {
+                        if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
+                            cmp.tag_menu = None;
+                        }
+                        cx.notify();
+                    }),
+                )
+                .child(gpui::anchored().anchor(gpui::Anchor::TopCenter).position(gpui::point(at.x, at.y + z(8.))).snap_to_window_with_margin(z(8.)).child(card)),
+        )
+        .with_priority(10)
+        .into_any_element(),
+    )
+}
+
+pub(crate) fn fuzzy_match(query: &str, text: &str) -> bool {
+    let mut chars = text.chars();
+    query.chars().all(|q| chars.by_ref().any(|t| t == q))
+}
+
+fn icon_button(id: &'static str, icon: &'static str) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .size(z(32.))
@@ -492,14 +711,7 @@ fn guide_button(forum: Id, id: &'static str, cx: &mut Context<PhoenixApp>) -> gp
         .flex()
         .items_center()
         .justify_center()
-        .on_click(cx.listener(move |a, _, _, cx| {
-            let v = a.parity.forums.entry(forum).or_default();
-            v.guidelines_open = !v.guidelines_open;
-            v.guidelines_seen = true;
-            cx.notify();
-        }))
-        .child(gpui::svg().path(crate::icons::path("forum/book-check")).size(z(16.)).flex_none().text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
-        .tip(crate::t!("forum.guide"))
+        .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).flex_none().text_color(c(tok(idx::CONTROL_SECONDARY_TEXT_DEFAULT))))
 }
 
 fn guidelines(app: &PhoenixApp, forum: Id, text: &str, cx: &mut Context<PhoenixApp>) -> gpui::Div {
@@ -1402,6 +1614,13 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
         cx.notify();
     });
     let (ready, tag_missing) = compose_ready(app, forum, comp, cx);
+    let title_text = comp.title.read(cx).value().to_string();
+    let body_text = comp.body.read(cx).value().to_string();
+    let can_preview = !title_text.trim().is_empty() && !body_text.trim().is_empty();
+    let previewing = comp.previewing && can_preview;
+    let held = crate::ui::chat::composer::cooldown_left(app, forum) > 0;
+    let (more_tags, more_left) = TAG_ROW.with(|r| r.get());
+    let postable = ready && !comp.sending && !held;
     let full = comp.tags.len() >= 5;
     let moderator = app.selected_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 34));
     let usable: Vec<&ForumTag> = tags.iter().filter(|t| moderator || !t.moderated).collect();
@@ -1410,7 +1629,16 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
         let on = comp.tags.contains(&t.id);
         let id = t.id;
         let disabled = full && !on;
-        let pill = tag_pill_sized(t, on, true).id(("compose-tag", id.0));
+        let pill = tag_pill_sized(t, on, true).relative().child(
+            probe(|b, _| {
+                TAG_PROBE.with(|p| p.set(tag_row_step(p.get(), f32::from(b.top()), f32::from(b.right()), f32::from(b.size.height))));
+            })
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full(),
+        );
+        let pill = pill.id(("compose-tag", id.0));
         tag_list = tag_list.child(if disabled {
             pill.opacity(0.5).cursor_not_allowed()
         } else {
@@ -1465,24 +1693,53 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
                         .min_w_0()
                         .flex()
                         .flex_col()
+                        .when(previewing, |d| {
+                            d.relative()
+                                .bg(c(tok(idx::BACKGROUND_BASE_LOW)))
+                                .border_1()
+                                .border_color(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED)))
+                                .rounded(z(8.))
+                                .mr(z(12.))
+                                .mb(z(12.))
+                                .py(z(4.))
+                                .px(z(8.))
+                        })
                         .child(
                             div()
-                                .h(z(32.))
+                                .min_h(z(32.))
                                 .pt(z(4.))
                                 .pr(z(12.))
                                 .text_size(z(20.))
                                 .line_height(z(24.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(c(tok(idx::TEXT_STRONG)))
-                                .child(Input::new(&comp.title).appearance(false).bordered(false).text_size(z(20.)).line_height(z(24.))),
+                                .map(|d| {
+                                    if previewing {
+                                        d.child(SharedString::from(title_text.clone()))
+                                    } else {
+                                        d.h(z(32.)).child(Input::new(&comp.title).appearance(false).bordered(false).text_size(z(20.)).line_height(z(24.)))
+                                    }
+                                }),
                         )
-                        .child(
-                            div()
-                                .min_h(z(80.))
-                                .text_size(z(16.))
-                                .line_height(z(22.))
-                                .child(Textarea::new(&comp.body).appearance(false).bordered(false)),
-                        ),
+                        .child(div().min_h(z(80.)).text_size(z(16.)).line_height(z(22.)).map(|d| {
+                            if previewing {
+                                d.child(crate::ui::components::markdown(app, &body_text))
+                            } else {
+                                d.child(Textarea::new(&comp.body).appearance(false).bordered(false))
+                            }
+                        }))
+                        .when(previewing, |d| {
+                            d.child(
+                                div()
+                                    .pt(z(4.))
+                                    .flex()
+                                    .justify_end()
+                                    .text_size(z(14.))
+                                    .line_height(z(18.))
+                                    .text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))
+                                    .child(crate::t!("forum.preview_mode")),
+                            )
+                        }),
                 )
                 .child(upload_tile(forum, comp, cx)),
         )
@@ -1493,13 +1750,38 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
             div().px(z(8.)).when(!usable.is_empty(), |d| {
                 d.child(
                     div()
+                        .relative()
                         .mt(z(16.))
                         .mb(z(12.))
                         .flex()
                         .items_center()
                         .gap(z(8.))
+                        .child(
+                            probe(|b, _| TAG_PROBE.with(|p| p.set((f32::from(b.left()), f32::from(b.top()), 0., false))))
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .size_full(),
+                        )
                         .child(gpui::svg().path(crate::icons::path("forum/tag")).size(z(16.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
-                        .child(tag_list),
+                        .child(div().flex_shrink(1.).min_w_0().h(z(24.)).overflow_hidden().child(tag_list))
+                        .when(more_tags, |d| {
+                            d.child(more_tags_button("compose-more-tags-ph").ml(z(8.)).invisible()).child(
+                                more_tags_button("compose-more-tags").absolute().left(px(more_left)).ml(z(8.)).on_click(cx.listener(move |a, _, w, cx| {
+                                    a.toggle_compose_tag_menu(forum, w, cx);
+                                })),
+                            )
+                        })
+                        .child(
+                            probe(|_, w| {
+                                let (_, _, right, overflow) = TAG_PROBE.with(|p| p.get());
+                                if TAG_ROW.with(|r| r.replace((overflow, right))) != (overflow, right) {
+                                    w.refresh();
+                                }
+                            })
+                            .absolute()
+                            .size_0(),
+                        ),
                 )
             }),
         )
@@ -1517,11 +1799,23 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
                         .when(emoji_open, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
                         .on_click(cx.listener(move |a, _, w, cx| crate::ui::pickers::toggle(a, crate::ui::pickers::Tab::Emoji, crate::ui::pickers::EmojiTarget::ForumPost(forum), w, cx))),
                 )
-                .child(div().flex_1())
-                .when(has_guide, |d| d.child(guide_button(forum, "compose-guide", cx)))
                 .child(
-                    primary_sm("compose-post", if comp.sending { crate::t!("forum.posting") } else { crate::t!("forum.post") }, ready && !comp.sending)
-                        .when(ready && !comp.sending, |d| d.on_click(cx.listener(move |a, _, _, cx| a.submit_post(forum, cx)))),
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_wrap()
+                        .justify_end()
+                        .items_center()
+                        .gap_x(z(8.))
+                        .children(compose_counter(app, comp, cx))
+                        .children(compose_slowmode(app, forum)),
+                )
+                .when(has_guide, |d| d.child(guide_button(forum, "compose-guide", cx)))
+                .when(can_preview, |d| d.child(preview_button(forum, previewing, cx)))
+                .child(
+                    primary_sm("compose-post", if comp.sending { crate::t!("forum.posting") } else { crate::t!("forum.post") }, postable)
+                        .when(postable, |d| d.on_click(cx.listener(move |a, _, _, cx| a.submit_post(forum, cx)))),
                 ),
         )
         .when(tag_missing, |d| {
@@ -1870,6 +2164,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             .children(crate::ui::chat::scrollbar::auto_scrollbar_div(&LIST_SCROLL.with(|h| h.clone())))
             .children(sort_menu)
             .children(tags_open.then(|| tags_popout(forum, &tags, &v.tags, cx)))
+            .children(compose_tag_menu(app, cx))
             .into_any_element(),
     )
 }
@@ -1983,6 +2278,34 @@ pub fn guidelines_modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tag_row_keeps_the_first_line_and_flags_the_rest() {
+        let p = (100., 50., 0., false);
+        let p = tag_row_step(p, 54., 180., 24.);
+        let p = tag_row_step(p, 54., 260., 24.);
+        assert_eq!(p, (100., 50., 160., false));
+        let p = tag_row_step(p, 82., 150., 24.);
+        assert_eq!(p, (100., 50., 160., true));
+    }
+
+    #[test]
+    fn tag_search_is_a_subsequence_match() {
+        assert!(fuzzy_match("", "annonces"));
+        assert!(fuzzy_match("ane", "annonces"));
+        assert!(!fuzzy_match("zz", "annonces"));
+    }
+
+    #[test]
+    fn post_slowmode_tooltip_uses_the_post_strings() {
+        let tip = crate::ui::chat::composer::slowmode_tip_in(90, true);
+        if crate::i18n::locale() == "fr" {
+            assert!(tip.contains("créer un post"));
+            assert!(tip.ends_with("1\u{a0}minute et 30\u{a0}secondes"));
+        } else {
+            assert_eq!(tip, "Slowmode is enabled. Members can create one post every 1 minute 30 seconds");
+        }
+    }
 
     #[test]
     fn relative_times() {

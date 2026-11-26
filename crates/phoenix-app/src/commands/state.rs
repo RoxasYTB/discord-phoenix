@@ -222,6 +222,8 @@ pub struct ForumCompose {
     pub files: Vec<std::path::PathBuf>,
     pub media_hover: bool,
     pub sending: bool,
+    pub previewing: bool,
+    pub tag_menu: Option<(Entity<InputState>, gpui::Subscription)>,
     pub error: Option<SharedString>,
 }
 

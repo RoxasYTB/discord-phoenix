@@ -668,34 +668,49 @@ fn emphasized() -> bool {
 }
 
 pub fn slowmode_tip(secs: u32) -> String {
+    slowmode_tip_in(secs, false)
+}
+
+pub fn slowmode_tip_in(secs: u32, post: bool) -> String {
     let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
     let one = |n: u32| if crate::i18n::locale() == "fr" { n < 2 } else { n == 1 };
     let part = |n: u32, k: &str| -> String {
         if n == 0 { String::new() } else { crate::i18n::t(&format!("chat.slowmode_{k}{}", if one(n) { "_one" } else { "" }), &[("n", &n.to_string())]).to_string() }
     };
-    let prefix = crate::t!("chat.slowmode_tip");
+    let prefix = if post { crate::t!("forum.slowmode_tip") } else { crate::t!("chat.slowmode_tip") };
+    let sep: SharedString = if post { crate::t!("forum.slowmode_sep") } else { " ".into() };
     if h > 0 {
-        format!("{prefix}{} {} {}", part(h, "h"), part(m, "m"), part(s, "s"))
+        format!("{prefix}{} {}{sep}{}", part(h, "h"), part(m, "m"), part(s, "s"))
     } else if m > 0 {
-        format!("{prefix}{} {}", part(m, "m"), part(s, "s"))
+        format!("{prefix}{}{sep}{}", part(m, "m"), part(s, "s"))
     } else {
-        let k = if one(secs) { "chat.slowmode_s_alone_one" } else { "chat.slowmode_s_alone" };
+        let k = match (post, one(secs)) {
+            (false, true) => "chat.slowmode_s_alone_one",
+            (false, false) => "chat.slowmode_s_alone",
+            (true, true) => "chat.slowmode_s_one",
+            (true, false) => "chat.slowmode_s",
+        };
         format!("{prefix}{}.", crate::i18n::t(k, &[("n", &secs.to_string())]))
     }
 }
 
-fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
-    use crate::ui::tooltip::Tipped as _;
-    let ch = app.selected_channel?;
+pub fn slowmode_label(app: &PhoenixApp, ch: crate::model::Id) -> Option<SharedString> {
     let x = app.nav.extras.get(&ch).filter(|x| x.slowmode > 0)?;
     let left = cooldown_left(app, ch);
-    let text: SharedString = if x.bypass_slowmode {
+    Some(if x.bypass_slowmode {
         crate::t!("chat.slowmode_immune")
     } else if left > 0 {
         format_cooldown(left).into()
     } else {
         crate::t!("chat.slowmode_on")
-    };
+    })
+}
+
+fn cooldown(app: &PhoenixApp) -> Option<gpui::AnyElement> {
+    use crate::ui::tooltip::Tipped as _;
+    let ch = app.selected_channel?;
+    let text = slowmode_label(app, ch)?;
+    let x = app.nav.extras.get(&ch)?;
     let color = super::tk(if emphasized() { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_MUTED });
     Some(
         div()
