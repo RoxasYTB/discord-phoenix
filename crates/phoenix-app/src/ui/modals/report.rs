@@ -584,6 +584,126 @@ fn more_you_can_do(app: &PhoenixApp, r: &Report, n: &ReportNode, cx: &mut Contex
     )
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Upsell {
+    DmSpam,
+    SexualMedia,
+    GraphicMedia,
+}
+
+pub const SEXUAL_FILTERS: [&str; 3] = ["cf-servers", "cf-friends", "cf-others"];
+pub const GRAPHIC_FILTERS: [&str; 3] = ["cfv-servers", "cfv-friends", "cfv-others"];
+const SHOW: usize = 0;
+const BLUR: usize = 1;
+const SPAM_DISABLED: usize = 2;
+const SPAM_NON_FRIENDS: usize = 1;
+
+impl Upsell {
+    pub fn subtypes(self) -> &'static [&'static str] {
+        match self {
+            Self::DmSpam => &["sub_spam"],
+            Self::SexualMedia => &["sub_csam", "sub_loli", "sub_ncp", "sub_sexually_degrading_content", "sub_unsolicited_porn"],
+            Self::GraphicMedia => &["sub_gore", "sub_glorifying_violence"],
+        }
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            Self::DmSpam => "upsell-spam",
+            Self::SexualMedia => "upsell-sexual",
+            Self::GraphicMedia => "upsell-graphic",
+        }
+    }
+
+    fn texts(self) -> (SharedString, SharedString) {
+        match self {
+            Self::DmSpam => (crate::t!("report.upsell_spam"), crate::t!("report.upsell_spam_desc")),
+            Self::SexualMedia => (crate::t!("report.upsell_sexual"), crate::t!("report.upsell_sexual_desc")),
+            Self::GraphicMedia => (crate::t!("report.upsell_graphic"), crate::t!("report.upsell_graphic_desc")),
+        }
+    }
+
+    pub fn patches(self, proto: &std::collections::HashMap<&'static str, u64>) -> Vec<(&'static str, usize)> {
+        use crate::ui::settings::synced_map::get_pick;
+        match self {
+            Self::DmSpam => vec![("spam", SPAM_NON_FRIENDS)],
+            Self::SexualMedia => SEXUAL_FILTERS.iter().filter(|f| get_pick(proto, f) == SHOW).map(|f| (*f, BLUR)).collect(),
+            Self::GraphicMedia => GRAPHIC_FILTERS.iter().filter(|f| get_pick(proto, f) == SHOW).map(|f| (*f, BLUR)).collect(),
+        }
+    }
+}
+
+pub fn settings_upsells(subtype: Option<&str>, dm: bool, proto: &std::collections::HashMap<&'static str, u64>) -> Vec<Upsell> {
+    use crate::ui::settings::synced_map::get_pick;
+    let Some(sub) = subtype else { return Vec::new() };
+    [Upsell::DmSpam, Upsell::SexualMedia, Upsell::GraphicMedia]
+        .into_iter()
+        .filter(|u| u.subtypes().contains(&sub))
+        .filter(|u| match u {
+            Upsell::DmSpam => dm && get_pick(proto, "spam") == SPAM_DISABLED,
+            _ => !u.patches(proto).is_empty(),
+        })
+        .collect()
+}
+
+fn report_subtype(r: &Report) -> Option<String> {
+    let menu = r.menu.as_ref()?;
+    let step = r.history.last()?;
+    menu.node(step.node)?.report_type.clone()
+}
+
+fn recommended_settings(app: &PhoenixApp, r: &Report, n: &ReportNode, cx: &mut Context<PhoenixApp>) -> Option<gpui::Div> {
+    let ReportTarget::Message { channel, .. } = r.target else { return None };
+    if !n.has("settings_upsells") {
+        return None;
+    }
+    let dm = app.channels.get(&Id(channel.0)).is_none_or(|c| c.guild.is_none());
+    let proto = &app.prefs.synced.proto;
+    let upsells = settings_upsells(report_subtype(r).as_deref(), dm, proto);
+    if upsells.is_empty() {
+        return None;
+    }
+    let k = upsells.len();
+    let mut list = div().mb(z(8.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)));
+    for (i, u) in upsells.into_iter().enumerate() {
+        let (title, description) = u.texts();
+        let done = r.done.contains(&u.key());
+        let patches = u.patches(proto);
+        let row = MoreRow { key: u.key(), title: title.to_string(), description, label: crate::t!(if done { "report.upsell_applied" } else { "report.upsell_apply" }), kind: BtnKind::Secondary, disabled: done };
+        list = list.child(action_row(row, i + 1 == k, cx, move |a, cx| {
+            for &(id, pick) in &patches {
+                crate::ui::settings::save(a, crate::ui::settings::SettingsPatch::Proto(id, crate::ui::settings::synced_map::pick_wire(id, pick)), cx);
+            }
+        }));
+    }
+    let link = div()
+        .id("report-upsell-settings")
+        .cursor_pointer()
+        .text_size(z(16.))
+        .line_height(z(20.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(c(tok(idx::TEXT_BRAND)))
+        .hover(|s| s.underline())
+        .child(crate::t!("report.upsell_settings"))
+        .on_click(cx.listener(|a, _, _, cx| {
+            close_modal();
+            crate::ui::settings::open(a, cx);
+            if let Some(s) = a.settings.as_mut() {
+                s.page = crate::ui::settings::Page::PrivacySafety;
+            }
+            cx.notify();
+        }));
+    Some(
+        div()
+            .mb(z(16.))
+            .flex()
+            .flex_col()
+            .child(div().mb(z(8.)).text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_DEFAULT))).child(crate::t!("report.upsell_title")))
+            .child(list)
+            .child(div().flex().child(link)),
+    )
+}
+
 pub fn render(app: &PhoenixApp, r: &Report, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let vp = r.viewport.unwrap_or(Size { width: px(1536.), height: px(840.) });
     let width = z(440.).min(vp.width);
@@ -672,6 +792,7 @@ pub fn render(app: &PhoenixApp, r: &Report, cx: &mut Context<PhoenixApp>) -> Any
                 body = body.child(col);
             }
             body = body.children(more_you_can_do(app, r, n, cx));
+            body = body.children(recommended_settings(app, r, n, cx));
             let has_links = n.links().any(|e| e.link_localized());
             if !n.children.is_empty() || has_links {
                 let k = n.children.len();
@@ -842,6 +963,23 @@ mod tests {
             Some(ActionRequest::SubmitReport { steps, .. }) => steps,
             _ => panic!("no submit"),
         }
+    }
+
+    #[test]
+    fn settings_upsells_follow_subtype_channel_and_filters() {
+        let mut proto = std::collections::HashMap::new();
+        assert!(settings_upsells(None, true, &proto).is_empty());
+        assert!(settings_upsells(Some("sub_spam"), true, &proto).is_empty());
+        proto.insert("spam", 1);
+        assert_eq!(settings_upsells(Some("sub_spam"), true, &proto), vec![Upsell::DmSpam]);
+        assert!(settings_upsells(Some("sub_spam"), false, &proto).is_empty());
+        assert_eq!(settings_upsells(Some("sub_csam"), false, &proto), vec![Upsell::SexualMedia]);
+        assert_eq!(Upsell::SexualMedia.patches(&proto), vec![("cf-servers", 1), ("cf-friends", 1)]);
+        assert_eq!(settings_upsells(Some("sub_gore"), false, &proto), vec![Upsell::GraphicMedia]);
+        for f in GRAPHIC_FILTERS {
+            proto.insert(f, 2);
+        }
+        assert!(settings_upsells(Some("sub_glorifying_violence"), false, &proto).is_empty());
     }
 
     #[test]
