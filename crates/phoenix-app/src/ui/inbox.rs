@@ -1457,12 +1457,18 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 list = list.child(unread_card(app, card, cx));
             }
             if i.unreads_loading {
-                list = list.child(div().pb(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")));
+                list = list.child(loading_spinner(!i.unreads.iter().any(|c| c.loaded)));
             }
         }
     }
     if i.loading {
-        list = list.child(div().p(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")));
+        let empty = match i.tab {
+            InboxTab::Mentions => i.mentions.is_empty(),
+            InboxTab::Saved => i.saved.is_empty(),
+            InboxTab::Scheduled => i.scheduled.is_empty(),
+            _ => true,
+        };
+        list = list.child(loading_spinner(empty));
     }
     let filter = (i.filter_menu && i.tab == InboxTab::Mentions).then(|| filter_menu(i, cx));
     Some(
@@ -1653,6 +1659,10 @@ const fn hdr_right(buttons_after: f32) -> f32 {
 }
 const HDR_RIGHT_THREADS: f32 = hdr_right(3.) + 10.;
 
+pub fn loading_spinner(empty: bool) -> AnyElement {
+    crate::ui::spinner::centered(if empty { 120. } else { 32. })
+}
+
 pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let p = app.chat.pins.as_ref()?;
     let ch = p.channel;
@@ -1669,7 +1679,7 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
         .flex_col();
     let mut footer = None;
     if p.loading {
-        list = list.child(div().p(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("common.loading")));
+        list = list.child(loading_spinner(p.msgs.is_empty()));
     } else if p.msgs.is_empty() {
         list = list.child(
             div()

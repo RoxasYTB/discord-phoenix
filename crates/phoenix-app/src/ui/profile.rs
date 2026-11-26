@@ -1683,7 +1683,9 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         TAB_FRIENDS => {
             panel = panel.gap(z(12.));
             let friends = i.prof.map(|p| p.mutual_friends.as_slice()).unwrap_or_default();
-            if friends.is_empty() {
+            if i.prof.is_none() {
+                panel = panel.child(crate::ui::spinner::centered(20.));
+            } else if friends.is_empty() {
                 panel = panel.child(empty(crate::t!("profile.no_mutual_friends")));
             }
             for u in friends {
@@ -1711,7 +1713,9 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         TAB_SERVERS => {
             panel = panel.gap(z(12.));
             let ids = i.prof.map(|p| p.mutual_guild_ids.as_slice()).unwrap_or_default();
-            if ids.is_empty() {
+            if i.prof.is_none() {
+                panel = panel.child(crate::ui::spinner::centered(20.));
+            } else if ids.is_empty() {
                 panel = panel.child(empty(crate::t!("profile.no_mutual_servers")));
             }
             for gid in ids {

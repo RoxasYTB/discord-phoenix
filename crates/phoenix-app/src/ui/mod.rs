@@ -1,4 +1,5 @@
 pub mod add_server;
+pub mod spinner;
 pub mod boot;
 pub mod guild_badge;
 pub mod join_flow;

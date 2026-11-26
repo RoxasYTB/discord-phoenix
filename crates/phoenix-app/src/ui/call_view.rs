@@ -249,7 +249,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     }
     let zoom = crate::theme::zoom();
 
-    let tiles = call_tiles(ch_id, &ch.voice_users);
+    let tiles = call_tiles(app, ch_id, &ch.voice_users);
 
     let vp = window.viewport_size();
     let side = if chat_open() { CHAT_W } else { 0. };
@@ -337,7 +337,7 @@ pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, 
     let column_h = f32::from(vp.height) / zoom - 32.;
     let w = (f32::from(vp.width) / zoom - 72. - crate::ui::sidebar_resize::width() - 16.).max(100.);
     let popped = crate::ui::call_popout::is_open();
-    let tiles = call_tiles(ch_id, &ch.voice_users);
+    let tiles = call_tiles(app, ch_id, &ch.voice_users);
     let video = tiles.iter().any(|tile| tile.stream || crate::ui::voice_panel::flags(tile.user).video);
     let max = (column_h - SPLIT_CHAT_RESERVE).max(SPLIT_MIN_H);
     let h = if popped { SPLIT_POPPED_H } else { split_height(stored_split_height(), column_h, video) };
@@ -607,18 +607,44 @@ fn popped_out(cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
         )
 }
 
-fn call_tiles(ch_id: Id, users: &[Id]) -> Vec<Tile> {
+pub fn name_key(name: &str, user: Id) -> String {
+    let lower = name.to_lowercase();
+    let pad = 32usize.saturating_sub(lower.encode_utf16().count());
+    format!("{lower}{}{}", "!".repeat(pad), user.0)
+}
+
+pub fn sort_key(stream: bool, video: bool, streaming: bool, name: &str, user: Id) -> String {
+    let n = name_key(name, user);
+    if stream {
+        format!("{}{n}\u{3}", if video { '\u{2}' } else { '\u{3}' })
+    } else {
+        let lead = if video {
+            '\u{3}'
+        } else if streaming {
+            '\u{4}'
+        } else {
+            '\u{5}'
+        };
+        format!("{lead}{n}")
+    }
+}
+
+fn call_tiles(app: &PhoenixApp, ch_id: Id, users: &[Id]) -> Vec<Tile> {
     let mut tiles = Vec::new();
     let hide_no_video = crate::ui::call_menus::no_video_hidden(ch_id);
+    let mut keyed = Vec::new();
     for &u in users {
         let f = crate::ui::voice_panel::flags(u);
+        let name = crate::ui::sidebar::voice_user_name(app, u);
         if f.stream {
-            tiles.push(Tile { user: u, stream: true, invite: false });
+            keyed.push((sort_key(true, f.video, true, &name, u), Tile { user: u, stream: true, invite: false }));
         }
         if !hide_no_video || f.video {
-            tiles.push(Tile { user: u, stream: false, invite: false });
+            keyed.push((sort_key(false, f.video, f.stream, &name, u), Tile { user: u, stream: false, invite: false }));
         }
     }
+    keyed.sort_by(|a, b| a.0.cmp(&b.0));
+    tiles.extend(keyed.into_iter().map(|(_, t)| t));
     let solo = match tiles.as_slice() {
         [only] if !only.stream => Some(only.user),
         _ => None,
@@ -1717,6 +1743,24 @@ mod tests {
     }
 
     use super::grid;
+
+    #[test]
+    fn tiles_sort_like_the_rtc_store() {
+        let a = Id(2);
+        let b = Id(1);
+        let mut keys = [
+            sort_key(false, false, false, "Alice", a),
+            sort_key(false, false, true, "Zed", b),
+            sort_key(true, false, true, "Zed", b),
+            sort_key(false, true, false, "bob", a),
+            sort_key(true, true, true, "Carl", b),
+        ];
+        let expect = [keys[4].clone(), keys[3].clone(), keys[2].clone(), keys[1].clone(), keys[0].clone()];
+        keys.sort();
+        assert_eq!(keys, expect);
+        assert!(sort_key(false, true, false, "Bob", a) < sort_key(true, false, true, "Bob", a));
+        assert_eq!(name_key("Ab", Id(7)), format!("ab{}7", "!".repeat(30)));
+    }
 
     #[test]
     fn grid_prefers_biggest_tiles() {

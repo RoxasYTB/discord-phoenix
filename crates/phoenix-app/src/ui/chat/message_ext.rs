@@ -1020,7 +1020,14 @@ pub fn rich_with_emoji_scaled(
             last = r.end;
             continue;
         }
-        row = row.child(div().mx(z(1.)).when(jumbo, |d| d.py(z(4.))).child(crate::media::emoji::emoji_element(token, size)));
+        let target = crate::media::emoji::parse_custom(token).map(|e| super::panels::MenuItemTarget { sticker: false, id: e.id, image: Some(e.url(44)) });
+        row = row.child(
+            div()
+                .mx(z(1.))
+                .when(jumbo, |d| d.py(z(4.)))
+                .when_some(target, |d, t| d.on_mouse_down(gpui::MouseButton::Right, move |_, _, _| super::panels::set_menu_item(t.clone())))
+                .child(crate::media::emoji::emoji_element(token, size)),
+        );
         last = r.end;
     }
     row = push_lines(row, last..t.text.len(), &mut seg);

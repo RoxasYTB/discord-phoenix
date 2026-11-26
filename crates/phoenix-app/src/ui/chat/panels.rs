@@ -46,6 +46,27 @@ pub fn set_menu_link(url: SharedString) {
     MENU_LINK.with(|m| m.borrow_mut().0 = Some(url));
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct MenuItemTarget {
+    pub sticker: bool,
+    pub id: u64,
+    pub image: Option<SharedString>,
+}
+
+thread_local! {
+    static MENU_ITEM: std::cell::RefCell<(Option<MenuItemTarget>, Option<MenuItemTarget>)> = const { std::cell::RefCell::new((None, None)) };
+}
+
+pub fn set_menu_item(t: MenuItemTarget) {
+    MENU_ITEM.with(|m| m.borrow_mut().0 = Some(t));
+}
+
+pub fn sticker_id(url: &str) -> Option<u64> {
+    let rest = &url[url.find("/stickers/")? + "/stickers/".len()..];
+    let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    rest[..end].parse().ok()
+}
+
 pub fn arm_menu_media() {
     for slot in [&MENU_MEDIA, &MENU_LINK] {
         slot.with(|m| {
@@ -53,6 +74,37 @@ pub fn arm_menu_media() {
             m.1 = m.0.take();
         });
     }
+    MENU_ITEM.with(|m| {
+        let mut m = m.borrow_mut();
+        m.1 = m.0.take();
+    });
+}
+
+pub fn details_items(t: &MenuItemTarget, msg: crate::model::Id) -> Vec<context_menu::MenuItem> {
+    use context_menu::MenuItem;
+    let item = t.id;
+    let mut out = vec![
+        MenuItem::action(crate::t!("msg.copy_id"), Some(crate::icons::path("id")), move |_, _, cx| {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(msg.0.to_string()))
+        }),
+        MenuItem::action(crate::t!(if t.sticker { "msg.copy_sticker_id" } else { "msg.copy_emoji_id" }), Some(crate::icons::path("id")), move |_, _, cx| {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(item.to_string()))
+        }),
+    ];
+    if let Some(url) = t.image.clone() {
+        let u = url.clone();
+        out.push(MenuItem::action(
+            crate::t!(if t.sticker { "msg.copy_sticker_link" } else { "msg.copy_emoji_link" }),
+            Some(crate::icons::path("link")),
+            move |_, _, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(u.to_string())),
+        ));
+        out.push(MenuItem::action(
+            crate::t!(if t.sticker { "msg.open_sticker_link" } else { "msg.open_emoji_link" }),
+            Some(crate::icons::path("golive/window")),
+            move |_, _, cx| cx.open_url(&url),
+        ));
+    }
+    out
 }
 
 fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<PhoenixApp>) -> AnyElement {
@@ -325,17 +377,21 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         }
         items.push(MenuItem::submenu_with_icon(crate::t!("msg.view_interaction_info"), "info", sub));
     }
+    let details = MENU_ITEM.with(|m| m.borrow().1.clone()).filter(|_| app.prefs.synced.developer_mode);
     if app.prefs.synced.developer_mode {
-    items.push(MenuItem::Separator);
-    items.push(MenuItem::action(crate::t!("msg.copy_id"), ic(ChatIcon::IdBadge), move |_, _, cx| {
-        cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.0.to_string()))
-    }));
+        items.push(MenuItem::Separator);
+        match &details {
+            Some(t) => items.push(MenuItem::submenu_with_icon(crate::t!("msg.details"), "info", details_items(t, id))),
+            None => items.push(MenuItem::action(crate::t!("msg.copy_id"), ic(ChatIcon::IdBadge), move |_, _, cx| {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.0.to_string()))
+            })),
+        }
     }
     if let Some(url) = MENU_MEDIA.with(|m| m.borrow().1.clone()) {
         items.push(MenuItem::Separator);
         items.extend(crate::ui::extra_menus::image_items(&e, url));
     }
-    if let Some(url) = MENU_LINK.with(|m| m.borrow().1.clone()) {
+    if details.is_none() && let Some(url) = MENU_LINK.with(|m| m.borrow().1.clone()) {
         items.push(MenuItem::Separator);
         let u = url.clone();
         items.push(MenuItem::action(crate::t!("menu.copy_link"), Some(crate::icons::path("chat/link")), move |_, _, cx| {

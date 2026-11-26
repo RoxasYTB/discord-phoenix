@@ -230,7 +230,69 @@ thread_local! {
     static CLAIMED_FAILED: Cell<bool> = const { Cell::new(false) };
     static HERO: RefCell<Option<HomeHero>> = const { RefCell::new(None) };
     static HERO_REQUESTED: Cell<bool> = const { Cell::new(false) };
-    static HERO_SEEN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static HERO_SEEN: RefCell<Option<SeenStore>> = const { RefCell::new(None) };
+}
+
+pub const AD_SEEN_FILE: &str = "ad-content-seen.json";
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SeenStore(pub std::collections::BTreeMap<u64, Vec<String>>);
+
+impl SeenStore {
+    pub fn parse(v: &Value) -> Self {
+        let mut out = std::collections::BTreeMap::new();
+        if let Some(m) = v["seenContentIds"].as_object() {
+            for (k, ids) in m {
+                let Ok(t) = k.parse::<u64>() else { continue };
+                let ids: Vec<String> = ids.as_array().into_iter().flatten().filter_map(|i| i.as_str().map(str::to_owned)).collect();
+                out.insert(t, ids);
+            }
+        }
+        Self(out)
+    }
+
+    pub fn to_json(&self) -> Value {
+        let m: serde_json::Map<String, Value> = self.0.iter().map(|(k, v)| (k.to_string(), Value::from(v.clone()))).collect();
+        serde_json::json!({ "seenContentIds": m })
+    }
+
+    pub fn has_seen(&self, kind: u64, id: &str) -> bool {
+        self.0.get(&kind).is_some_and(|s| s.iter().any(|x| x == id))
+    }
+
+    pub fn mark_seen(&mut self, kind: u64, id: &str) -> bool {
+        let set = self.0.entry(kind).or_default();
+        if set.iter().any(|x| x == id) {
+            return false;
+        }
+        set.push(id.to_owned());
+        true
+    }
+
+    pub fn keep_only(&mut self, kind: u64, id: Option<&str>) -> bool {
+        let Some(set) = self.0.get_mut(&kind) else { return false };
+        let before = set.len();
+        set.retain(|x| Some(x.as_str()) == id);
+        set.len() != before
+    }
+}
+
+fn with_seen<R>(f: impl FnOnce(&mut SeenStore) -> (R, bool)) -> R {
+    HERO_SEEN.with(|s| {
+        let mut s = s.borrow_mut();
+        let store = s.get_or_insert_with(|| {
+            crate::paths::config_file(AD_SEEN_FILE)
+                .and_then(|p| std::fs::read(p).ok())
+                .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+                .map(|v| SeenStore::parse(&v))
+                .unwrap_or_default()
+        });
+        let (r, changed) = f(store);
+        if changed && let Some(p) = crate::paths::config_file(AD_SEEN_FILE) {
+            let _ = std::fs::write(p, store.to_json().to_string());
+        }
+        r
+    })
 }
 
 pub const QUEST_HOME_BANNER_DESKTOP: u8 = 3;
@@ -294,18 +356,13 @@ pub fn entry_point(has_quests: bool, onboarding_dismissed: bool, hero: Option<Ho
 pub fn sidebar_entry(onboarding_dismissed: bool) -> EntryPoint {
     let has_quests = QUESTS.with(|q| q.borrow().as_ref().is_some_and(|l| !l.is_empty()));
     let hero = HERO.with(|h| h.borrow().clone());
-    let seen = hero.as_ref().is_some_and(|h| HERO_SEEN.with(|s| s.borrow().contains(&h.id)));
+    let seen = hero.as_ref().is_some_and(|h| with_seen(|s| (s.has_seen(CREATIVE_QUEST_HOME_HERO, &h.id), false)));
     entry_point(has_quests, onboarding_dismissed, hero, seen)
 }
 
 pub fn mark_hero_seen() {
     if let Some(id) = HERO.with(|h| h.borrow().as_ref().map(|h| h.id.clone())) {
-        HERO_SEEN.with(|s| {
-            let mut s = s.borrow_mut();
-            if !s.contains(&id) {
-                s.push(id);
-            }
-        });
+        with_seen(|s| ((), s.mark_seen(CREATIVE_QUEST_HOME_HERO, &id)));
     }
 }
 
@@ -315,8 +372,15 @@ pub(crate) fn ensure_hero(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     }
     let fut = app.backend.quest_home_hero();
     cx.spawn(async move |this, cx| {
-        let v = fut.await.unwrap_or(Value::Null);
-        HERO.with(|h| *h.borrow_mut() = parse_home_hero(&v));
+        let got = fut.await;
+        let ok = got.is_ok();
+        let v = got.unwrap_or(Value::Null);
+        let hero = parse_home_hero(&v);
+        if ok {
+            let id = hero.as_ref().map(|h| h.id.clone());
+            with_seen(|s| ((), s.keep_only(CREATIVE_QUEST_HOME_HERO, id.as_deref())));
+        }
+        HERO.with(|h| *h.borrow_mut() = hero);
         let _ = this.update(cx, |_, cx| cx.notify());
     })
     .detach();
@@ -1259,6 +1323,17 @@ mod tests {
         assert_eq!(parse_home_hero(&serde_json::json!({"decisions": [{"creative": {"creative_type": 1}}]})), None);
         assert_eq!(parse_home_hero(&Value::Null), None);
         assert_eq!(home_hero_path(), "/quests/get-decisions?placement=3&num_decisions_requested=1");
+    }
+
+    #[test]
+    fn seen_store_round_trips_like_the_client() {
+        let mut s = SeenStore::parse(&serde_json::json!({"seenContentIds": {"2": ["a"], "1": ["q"]}}));
+        assert!(s.has_seen(2, "a") && !s.has_seen(2, "b"));
+        assert!(s.mark_seen(2, "b") && !s.mark_seen(2, "b"));
+        assert!(s.keep_only(2, Some("b")));
+        assert!(!s.has_seen(2, "a") && s.has_seen(2, "b") && s.has_seen(1, "q"));
+        assert_eq!(SeenStore::parse(&s.to_json()), s);
+        assert!(s.keep_only(2, None) && !s.has_seen(2, "b"));
     }
 
     #[test]

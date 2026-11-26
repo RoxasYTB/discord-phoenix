@@ -1845,6 +1845,17 @@ fn still_sticker(u: SharedString, fmt: media::StickerFormat) -> SharedString {
 }
 
 pub(crate) fn attachment(a: &Attachment, cx: &App) -> AnyElement {
+    let el = attachment_inner(a, cx);
+    match (&a.kind, panels::sticker_id(&a.url)) {
+        (AttachmentKind::Sticker(_), Some(id)) => {
+            let t = panels::MenuItemTarget { sticker: true, id, image: Some(a.url.clone()) };
+            div().on_mouse_down(gpui::MouseButton::Right, move |_, _, _| panels::set_menu_item(t.clone())).child(el).into_any_element()
+        }
+        _ => el,
+    }
+}
+
+fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
     let remote = attach::loadable(&a.url);
     let spoiler = a.is_spoiler();
     let inline = crate::ui::settings::effects::inline_attachments();

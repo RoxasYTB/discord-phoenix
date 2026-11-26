@@ -1540,6 +1540,23 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
         })
 }
 
+pub fn loading_rows(view_h: f32) -> usize {
+    ((view_h - 200.) / 118.).round().max(0.) as usize
+}
+
+pub const LOADING_OPACITY: [f32; 3] = [0.33, 1., 0.66];
+
+fn loading_card(row: usize) -> AnyElement {
+    div()
+        .flex_none()
+        .h(z(102.))
+        .mb(z(8.))
+        .rounded(z(8.))
+        .bg(c(tok(idx::BACKGROUND_BASE_LOW)))
+        .opacity(LOADING_OPACITY[row % 3])
+        .into_any_element()
+}
+
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let forum = open_forum(app)?;
     let tags = app.backend.forum_tags(forum);
@@ -1785,7 +1802,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         }
     }
     if v.loading || v.archived_loading {
-        col = col.child(div().p(z(16.)).text_color(c(Palette::TEXT_MUTED)).child(crate::t!("common.loading")));
+        for row in 0..loading_rows(crate::ui::title_bar::viewport_h_css()) {
+            col = col.child(loading_card(row));
+        }
     } else if v.archived_more {
         col = col.child(
             div()
