@@ -587,6 +587,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
     let home = app.nav.home;
     let requests = app.nav.message_requests.len() as u32;
     let pending = app.nav.count(crate::ui::home::data::RelationshipKind::Incoming) as u32;
+    let nitro_tier2 = app.backend.premium_tier2();
     let nav = |id: &'static str, i: Icon, label: SharedString, view: Option<HomeView>, count: u32| {
         let selected = view.is_some_and(|v| v == home);
         let e = entity.clone();
@@ -606,7 +607,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t(if selected { idx::TEXT_DEFAULT } else { idx::TEXT_MUTED }))
-                .when(selected, |d| d.bg(t(idx::BACKGROUND_MOD_STRONG)))
+                .when(selected, |d| d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED)))
                 .when(!selected, |d| {
                     let hover_fg = if id == "quests" { idx::TEXT_STRONG } else { idx::INTERACTIVE_TEXT_HOVER };
                     d.hover(move |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(hover_fg)))
@@ -618,7 +619,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                         None => a.stub(&stub, cx),
                     })
                 })
-                .child(icon(i, 20. * crate::theme::zoom(), t(if selected { idx::TEXT_STRONG } else { idx::TEXT_MUTED })))
+                .child(icon(i, 20. * crate::theme::zoom(), t(if selected { idx::ICON_STRONG } else { idx::ICON_MUTED })))
                 .child(div().flex_1().min_w_0().text_ellipsis().child(label))
                 .when(count > 0, |d| d.child(badge(count).bg(c(Palette::NOTIFICATION)))),
         )
@@ -631,10 +632,10 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
         .flex_col()
         .child(nav("friends", Icon::Friends, crate::t!("friends.title"), Some(HomeView::Friends), pending))
         .when(requests > 0, |d| {
-            d.child(nav("msg-requests", Icon::Inbox, crate::t!("friends.message_requests"), Some(HomeView::MessageRequests), requests))
+            d.child(nav("msg-requests", Icon::Envelope, crate::t!("friends.message_requests"), Some(HomeView::MessageRequests), requests))
         })
-        .child(nav("nitro", Icon::Nitro, crate::t!("dm.nitro"), Some(HomeView::Nitro), 0))
-        .child(nav("shop", Icon::Gift, crate::t!("dm.shop"), Some(HomeView::Shop), 0))
+        .child(nav("nitro", Icon::Nitro, if nitro_tier2 { crate::t!("dm.nitro") } else { crate::t!("dm.nitro_tab") }, Some(HomeView::Nitro), 0))
+        .child(nav("shop", Icon::Shop, crate::t!("dm.shop"), Some(HomeView::Shop), 0))
         .child(nav("quests", Icon::Quests, crate::t!("dm.quests"), Some(HomeView::Quests), 0))
         .child(div().mx(z(8.)).my(z(12.)).h(z(1.)).bg(t(idx::BORDER_SUBTLE)))
         .child(

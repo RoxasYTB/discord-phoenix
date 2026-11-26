@@ -8,26 +8,21 @@ use crate::{
     ui::{home::data::HomeView, icon},
 };
 
-fn title(app: &PhoenixApp) -> (Icon, SharedString) {
+fn title(app: &PhoenixApp) -> Option<(Icon, SharedString)> {
     if crate::ui::discovery::current().is_some() {
-        return (Icon::Compass, crate::t!("discovery.title"));
+        return Some((Icon::Compass, crate::t!("discovery.title")));
     }
     if let Some(g) = app.selected_guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)) {
-        return (Icon::Hash, g.name.clone());
+        return Some((Icon::Hash, g.name.clone()));
     }
-    if app.nav.home == HomeView::Dm {
-        return (Icon::Members, crate::t!("dm.title"));
-    }
-    if app.nav.home == HomeView::Nitro {
-        return (Icon::Nitro, crate::t!("settings.page.nitro"));
-    }
-    if app.nav.home == HomeView::Shop {
-        return (Icon::Gift, crate::t!("dm.shop"));
-    }
-    if app.nav.home == HomeView::Quests {
-        return (Icon::Quests, crate::t!("dm.quests"));
-    }
-    (Icon::Members, crate::t!("friends.title"))
+    Some(match app.nav.home {
+        HomeView::Dm => (Icon::Clyde, crate::t!("dm.title")),
+        HomeView::Nitro => (Icon::Nitro, crate::t!("settings.page.nitro")),
+        HomeView::Shop => (Icon::Shop, crate::t!("dm.shop")),
+        HomeView::Quests => (Icon::Quests, crate::t!("dm.quests")),
+        HomeView::Friends => (Icon::Friends, crate::t!("friends.title")),
+        HomeView::MessageRequests => return None,
+    })
 }
 
 fn bar_button(id: &'static str, i: Icon, active: bool, tip: SharedString) -> gpui::Stateful<gpui::Div> {
@@ -130,7 +125,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
     let vw = f32::from(window.viewport_size().width) / zoom();
     VIEWPORT_W_CSS.store(vw.to_bits(), std::sync::atomic::Ordering::Relaxed);
     DREW_WIN_BUTTONS.store(client_decorated(window), std::sync::atomic::Ordering::Relaxed);
-    let (glyph, text) = title(app);
+    let heading = title(app);
     let guild = app.selected_guild.filter(|_| crate::ui::discovery::current().is_none()).and_then(|g| app.guilds.iter().find(|x| x.id == g));
     crate::ui::window_chrome::drag_region(div().id("app-title-bar"))
         .h(z(m::TITLE_BAR_H))
@@ -147,7 +142,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(
+                .when_some(heading, |d, (glyph, text)| d.child(
                     div()
                         .max_w(z(title_max_w(vw)))
                         .min_w_0()
@@ -157,7 +152,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                         .text_size(z(14.))
                         .line_height(z(18.))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(c(tok(idx::TEXT_STRONG)))
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
                         .map(|d| match guild {
                             Some(g) => d.child(
                                 div()
@@ -166,10 +161,10 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                                     .overflow_hidden()
                                     .child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 16. * zoom())),
                             ),
-                            None => d.child(div().flex_none().child(icon(glyph, 16. * zoom(), c(tok(idx::INTERACTIVE_ICON_DEFAULT))))),
+                            None => d.child(div().flex_none().child(icon(glyph, 18. * zoom(), c(tok(idx::INTERACTIVE_ICON_DEFAULT))))),
                         })
                         .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(text)),
-                ),
+                )),
         )
         .child(
             div()

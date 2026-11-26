@@ -60,6 +60,9 @@ pub enum Icon {
     Image,
     PhoneHangup,
     Quests,
+    Shop,
+    Envelope,
+    Clyde,
     Send,
 }
 
@@ -101,6 +104,9 @@ impl Icon {
             Icon::Image => "image",
             Icon::PhoneHangup => "phone-hangup",
             Icon::Quests => "quests",
+            Icon::Shop => "shop",
+            Icon::Envelope => "server/envelope",
+            Icon::Clyde => "discord-logo",
             Icon::Send => "send",
         })
     }
@@ -368,7 +374,7 @@ const ALL: &[Icon] = &[
     Icon::Bell, Icon::Pin, Icon::Members, Icon::Search, Icon::Inbox, Icon::Help, Icon::Gift,
     Icon::Gif, Icon::Sticker, Icon::Emoji, Icon::PlusCircle, Icon::Compass, Icon::Download,
     Icon::Close, Icon::Threads, Icon::Friends, Icon::Nitro, Icon::Lock, Icon::Reply, Icon::File,
-    Icon::Image, Icon::PhoneHangup,
+    Icon::Image, Icon::PhoneHangup, Icon::Quests, Icon::Shop, Icon::Envelope, Icon::Clyde,
 ];
 
 #[cfg(test)]
