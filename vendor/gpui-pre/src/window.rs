@@ -3118,6 +3118,24 @@ impl Window {
             .render_to_image(&self.rendered_frame.scene)
     }
 
+    /// PHOENIX PATCH (gradient scroll): sets the gradient clock of the current frame to
+    /// `elapsed` after the earliest scroll in it, for frame-by-frame captures.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_gradient_elapsed(&mut self, elapsed: std::time::Duration) {
+        let scene = &mut self.rendered_frame.scene;
+        let start = scene
+            .glyph_gradient_scrolls
+            .iter()
+            .filter(|s| s.speed != 0.0)
+            .map(|s| s.start)
+            .fold(f64::INFINITY, f64::min);
+        scene.gradient_time = if start.is_finite() {
+            start + elapsed.as_secs_f64()
+        } else {
+            0.0
+        };
+    }
+
     /// Borrows the most recently rendered frame's scene, so benchmarks can validate their
     /// output and report batch counts without cloning it.
     #[cfg(feature = "bench-support")]
