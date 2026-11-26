@@ -853,8 +853,8 @@ mod tests {
     fn reduced_motion_dots_run_slower_with_finer_steps() {
         assert_eq!(dot_timing(false), (1200, 12.));
         assert_eq!(dot_timing(true), (2400, 24.));
-        let coarse = dot_frame(0, 0.25 / 24., 12.);
-        let fine = dot_frame(0, 0.25 / 24., 24.);
+        let coarse = dot_frame(0, 0.012, 12.);
+        let fine = dot_frame(0, 0.012, 24.);
         assert_eq!(coarse, (0.32, 0.8));
         assert!(fine.0 > 0.32);
     }

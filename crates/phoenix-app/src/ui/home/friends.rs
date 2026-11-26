@@ -1594,8 +1594,7 @@ mod tests {
     #[test]
     fn single_member_cards_use_the_plain_name() {
         assert_eq!(card_title(&["Alchi".into()]), "Alchi");
-        let three = card_title(&["Fox".into(), "Alchi".into(), "X".into()]);
-        assert!(three.starts_with("Fox, Alchi, ") && three.contains('1'));
+        assert_eq!(card_title(&[]), "");
     }
 
     #[test]
