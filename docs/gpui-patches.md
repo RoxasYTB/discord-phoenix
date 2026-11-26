@@ -547,6 +547,22 @@ Tests: `text_system::glyph_blur::tests::dilation_grows_the_glyph_by_the_radius_w
 `ui::role_dot::tests`, `fonts::tests::effect_palettes_follow_the_client_lightness_steps`,
 `neon_flicker_is_the_main_hue_more_saturated_at_85_lightness`, `neon_toon_pop_and_gummy_get_their_own_fills`.
 
+**CPU, 2026-11-26 (demo).** `screenshot` `PHX_DM=900 PHX_SCALE=1.5 PHX_MOUSE=202,646 PHX_PRESENT_CPU=10`
+(GUMMY row of the demo DM list hovered, looping), under `phoenix-nice`, frame requests every 16 ms, two runs:
+
+| phase | CPU (one core) | frame requests in 10 s |
+|---|---|---|
+| hovered GUMMY name animating, present only (patch 18) | 57.0 % / 57.2 % | 268 / 267 |
+| same, full redraw every frame | 63.9 % / 63.6 % | 225 / 226 |
+| idle, mouse gone, nothing animates (`scrolls_gradients` false, no re-present) | 52.6 % / 55.3 % | 296 / 279 |
+
+As in patch 17 the floor is the harness. An animated name costs 2 to 4 points over idle against
+about 9 for a full redraw per frame, and nothing runs once the mouse leaves. Frames at
+0 / 200 / 640 / 880 / 1120 / 1600 / 2200 / 3200 ms for the four effects in
+`/mnt/windata/project-phoenix/compare/name-effects` (`sheet-*.png`, demo): neon flickers at 640, 880
+and 1120 ms (16, 22, 28 %), toon scrolls down its band between 200 and 2200 ms, pop bounces and its
+shadow gradient moves over the first 2 s, gummy letters squish one after the other.
+
 Differences left: the stroke is a round dilation of the antialiased mask, where Skia strokes the
 outline with miter joins, so sharp corners are slightly rounder; the TOON colour and opacity
 transitions on hover end (`transition: color/opacity 266ms`) are not played, because the effect
