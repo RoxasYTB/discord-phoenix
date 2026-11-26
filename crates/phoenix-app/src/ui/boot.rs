@@ -39,12 +39,14 @@ pub struct Boot {
     hide_at: Option<Instant>,
     main_since: Option<Instant>,
     done: bool,
+    offline: bool,
+    shown_at: Option<Instant>,
 }
 
 impl Default for Boot {
     fn default() -> Self {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
-        Self { started: Instant::now(), tip: pick_tip(seed, crate::i18n::locale()), hide_at: None, main_since: None, done: !enabled() }
+        Self { started: Instant::now(), tip: pick_tip(seed, crate::i18n::locale()), hide_at: None, main_since: None, done: !enabled(), offline: false, shown_at: None }
     }
 }
 
@@ -88,12 +90,38 @@ impl Boot {
         !self.done
     }
 
+    pub fn offline(&self) -> bool {
+        self.offline
+    }
+
+    pub fn connection(&mut self, up: bool, now: Instant) {
+        self.connection_with(up, now, enabled());
+    }
+
+    fn connection_with(&mut self, up: bool, now: Instant, screen: bool) {
+        if up || self.offline {
+            self.offline = !up && self.offline;
+            return;
+        }
+        self.offline = true;
+        if !screen {
+            return;
+        }
+        if self.done || self.hide_at.is_some() {
+            self.done = false;
+            self.hide_at = None;
+            self.started = now;
+            self.shown_at = Some(now);
+        }
+    }
+
     pub fn frame(&mut self, ready: bool, now: Instant) -> Option<Frame> {
         if self.done {
             return None;
         }
         if ready && self.hide_at.is_none() {
             self.hide_at = Some(now);
+            self.shown_at = None;
             crate::perf::mark("boot_screen_fade");
         }
         let (container, content) = match self.hide_at {
@@ -108,7 +136,18 @@ impl Boot {
                 let j = ease_out(t.as_secs_f32() / CONTENT_FADE.as_secs_f32());
                 (1. - k, 1. - j)
             }
-            None => (1., 1.),
+            None => match self.shown_at {
+                Some(at) => {
+                    let t = now.duration_since(at);
+                    if t >= CONTAINER_FADE {
+                        self.shown_at = None;
+                    }
+                    let k = ease_out(t.as_secs_f32() / CONTAINER_FADE.as_secs_f32());
+                    let j = ease_out(t.as_secs_f32() / CONTENT_FADE.as_secs_f32());
+                    (k, j)
+                }
+                None => (1., 1.),
+            },
         };
         let problems = match now.duration_since(self.started).checked_sub(PROBLEMS_AFTER) {
             Some(t) if self.hide_at.is_none() => ease_out(t.as_secs_f32() / PROBLEMS_SLIDE.as_secs_f32()),
@@ -296,7 +335,7 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, _cx: &mut Context<Phoen
     }
     let capped = app.boot.main_since.is_some_and(|t| t.elapsed() >= MAIN_CAP);
     let held = hold().is_some_and(|h| app.boot.started.elapsed() < h);
-    let ready = (stable(app) || capped) && !held;
+    let ready = (stable(app) || capped) && !held && !app.boot.offline;
     let f = app.boot.frame(ready, Instant::now())?;
     window.request_animation_frame();
     let spinner = match crate::splash::spinner() {
@@ -413,7 +452,7 @@ mod tests {
 
     #[test]
     fn fade_runs_like_the_client_and_then_unmounts() {
-        let mut b = Boot { started: Instant::now(), tip: 0, hide_at: None, main_since: None, done: false };
+        let mut b = Boot { started: Instant::now(), tip: 0, hide_at: None, main_since: None, done: false, offline: false, shown_at: None };
         let t0 = Instant::now();
         let f = b.frame(false, t0).unwrap();
         assert_eq!((f.container, f.content, f.spinner_scale), (1., 1., 1.));
@@ -428,8 +467,50 @@ mod tests {
     #[test]
     fn problems_slide_in_after_ten_seconds() {
         let start = Instant::now();
-        let mut b = Boot { started: start, tip: 0, hide_at: None, main_since: None, done: false };
+        let mut b = Boot { started: start, tip: 0, hide_at: None, main_since: None, done: false, offline: false, shown_at: None };
         assert_eq!(b.frame(false, start + Duration::from_secs(9)).unwrap().problems, 0.);
         assert!((b.frame(false, start + PROBLEMS_AFTER + PROBLEMS_SLIDE).unwrap().problems - 1.).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_reset_session_brings_the_screen_back_until_the_gateway_is_up() {
+        let t0 = Instant::now();
+        let mut b = Boot { started: t0, tip: 0, hide_at: None, main_since: None, done: true, offline: false, shown_at: None };
+        b.connection_with(true, t0, true);
+        assert!(!b.showing());
+        b.connection_with(false, t0, true);
+        assert!(b.showing() && b.offline());
+        let f = b.frame(false, t0).unwrap();
+        assert!(f.container.abs() < 1e-3 && f.content.abs() < 1e-3 && (f.spinner_scale - 0.5).abs() < 1e-3);
+        let f = b.frame(false, t0 + CONTAINER_FADE).unwrap();
+        assert!((f.container - 1.).abs() < 1e-3 && (f.content - 1.).abs() < 1e-3);
+        assert!(b.frame(false, t0 + CONTAINER_FADE * 2).is_some_and(|f| f.container == 1.));
+        assert_eq!(b.frame(false, t0 + Duration::from_secs(9)).unwrap().problems, 0.);
+        assert!(b.frame(false, t0 + PROBLEMS_AFTER + PROBLEMS_SLIDE).unwrap().problems > 0.99);
+        b.connection_with(false, t0 + Duration::from_secs(20), true);
+        assert_eq!(b.started, t0);
+        b.connection_with(true, t0 + Duration::from_secs(30), true);
+        assert!(!b.offline());
+        let t1 = t0 + Duration::from_secs(30);
+        assert!((b.frame(true, t1).unwrap().container - 1.).abs() < 1e-3);
+        assert!(b.frame(true, t1 + CONTAINER_FADE).is_none());
+    }
+
+    #[test]
+    fn no_screen_when_the_boot_screen_is_off() {
+        let t0 = Instant::now();
+        let mut b = Boot { started: t0, tip: 0, hide_at: None, main_since: None, done: true, offline: false, shown_at: None };
+        b.connection_with(false, t0, false);
+        assert!(!b.showing() && b.offline());
+    }
+
+    #[test]
+    fn going_offline_during_start_up_keeps_the_screen() {
+        let t0 = Instant::now();
+        let mut b = Boot { started: t0, tip: 0, hide_at: None, main_since: None, done: false, offline: false, shown_at: None };
+        b.connection_with(false, t0, true);
+        assert_eq!(b.shown_at, None);
+        assert!(b.offline());
+        assert_eq!(b.frame(false, t0).unwrap().container, 1.);
     }
 }

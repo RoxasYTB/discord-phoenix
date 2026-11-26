@@ -212,6 +212,8 @@ async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<Rea
     let mut cfg = GatewayConfig::new(token.expose());
     cfg.properties = inner.props.clone();
     cfg.raw_dispatch = Some(snapshot::hook());
+    let (foregrounded, rtc_connected) = activity();
+    cfg.qos = phoenix_api::gateway::QosPayload::new(foregrounded, rtc_connected);
     let core = if remember { None } else { tokio::task::spawn_blocking(snapshot::take_core).await.ok().flatten() };
     if let Some(c) = &core {
         cfg.resume = c.resume.clone();
@@ -375,6 +377,12 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             crate::voice::call::manager().on_gateway(&emit, s.adapter.lock().me.0, &ev);
         }
         account::on_gateway(&s, &ev);
+        if let GatewayEvent::Unknown { name, data } = &ev
+            && name == "USER_NOTE_UPDATE"
+            && let Some(user) = data.get("id").and_then(serde_json::Value::as_str).and_then(|v| v.parse::<u64>().ok())
+        {
+            s.rest.cache_user_note(api::Snowflake(user), data.get("note").and_then(serde_json::Value::as_str).unwrap_or(""));
+        }
         crate::voice::start_time::on_gateway(&ev);
         thread_members::on_gateway(&ev);
         pins::on_gateway(&ev);
@@ -396,6 +404,7 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
                 authors
             };
             s.subscribed.lock().clear();
+            inner.emit(AppEvent::Connection(true));
             inner.emit(AppEvent::Resync(crate::commands::Resync(data)));
             nav::snapshot(&s.cache, r).into_iter().for_each(|e| inner.emit(e));
             for (g, mut ids) in authors {
@@ -431,6 +440,13 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             return;
         }
     }
+}
+
+static ACTIVITY: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(1);
+
+fn activity() -> (bool, bool) {
+    let v = ACTIVITY.load(std::sync::atomic::Ordering::Relaxed);
+    (v & 1 != 0, v & 2 != 0)
 }
 
 pub static NO_ACKS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -1136,6 +1152,15 @@ impl Backend for DiscordBackend {
 
     fn subscribe_member_ranges(&self, guild: Id, channel: Id, ranges: Vec<[u32; 2]>) -> BoxFuture<()> {
         self.people_ranges(guild, channel, ranges)
+    }
+    fn set_activity(&self, foregrounded: bool, rtc_connected: bool) {
+        let v = u8::from(foregrounded) | (u8::from(rtc_connected) << 1);
+        if ACTIVITY.swap(v, std::sync::atomic::Ordering::Relaxed) == v {
+            return;
+        }
+        if let Some(s) = self.inner.session.lock().as_ref() {
+            let _ = s.gateway.set_activity(foregrounded, rtc_connected);
+        }
     }
     fn thread_members(&self, thread: Id) -> BoxFuture<Vec<crate::model::Member>> {
         self.thread_members_impl(thread)

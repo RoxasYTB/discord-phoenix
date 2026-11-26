@@ -47,7 +47,7 @@ impl Conn {
     async fn recv_non_heartbeat(&mut self, ack: bool) -> Value {
         loop {
             let v = self.recv_any().await.expect("connection closed");
-            if v["op"] == 1 {
+            if v["op"] == 40 {
                 if ack {
                     self.send(json!({"op": 11})).await;
                 }
@@ -96,7 +96,6 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     cfg.url = addr.clone();
     cfg.initial_backoff = Duration::from_millis(10);
     cfg.max_backoff = Duration::from_millis(50);
-    cfg.invalid_session_delay = Duration::from_millis(5);
     let (handle, mut rx) = Gateway::spawn(cfg);
 
     let mut c = Conn::accept(&listener).await;
@@ -121,9 +120,10 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
 
     loop {
         let hb = c.recv_any().await.unwrap();
-        assert_eq!(hb["op"], 1);
+        assert_eq!(hb["op"], 40);
+        assert_eq!(hb["d"]["qos"]["ver"], 31);
         c.send(json!({"op": 11})).await;
-        if hb["d"] == 1 {
+        if hb["d"]["seq"] == 1 {
             break;
         }
     }
@@ -152,7 +152,7 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     assert_eq!(vs["d"], json!({"guild_id": "1", "channel_id": "2", "self_mute": true, "self_deaf": false, "self_video": false}));
 
     c.send(json!({"op": 1, "d": null})).await;
-    assert_eq!(c.recv_any().await.unwrap()["op"], 1);
+    assert_eq!(c.recv_any().await.unwrap()["op"], 40);
 
     let code = c.recv_close().await;
     assert_ne!(code, Some(1000));
@@ -164,12 +164,8 @@ async fn hello_identify_ready_heartbeat_reconnect_resume() {
     assert_eq!(resume["op"], 6);
     assert_eq!(resume["d"]["seq"], 3);
     c.send(json!({"op": 9, "d": false})).await;
-    c.recv_close().await;
-
-    let mut c = Conn::accept(&listener).await;
-    c.hello(1000).await;
     let ident = c.recv_non_heartbeat(true).await;
-    assert_eq!(ident["op"], 2);
+    assert_eq!(ident["op"], 2, "op 9 d=false identifies again on the same socket");
 
     handle.shutdown();
     assert_eq!(c.recv_close().await, Some(1000));
@@ -199,4 +195,164 @@ async fn fatal_close_stops() {
     .unwrap();
     let ev = wait_for(&mut rx, |e| matches!(e, GatewayEvent::Fatal { .. })).await;
     assert!(matches!(ev, GatewayEvent::Fatal { code: 4004, .. }));
+}
+
+fn ready_payload(session: &str, resume_url: &str) -> Value {
+    let ready = std::fs::read_to_string(format!("{}/tests/fixtures/ready_user.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let mut ready: Value = serde_json::from_str(&ready).unwrap();
+    ready["session_id"] = json!(session);
+    ready["resume_gateway_url"] = json!(resume_url);
+    json!({"op": 0, "s": 1, "t": "READY", "d": ready})
+}
+
+fn fast_config(addr: &str) -> GatewayConfig {
+    let mut cfg = GatewayConfig::new("user-token");
+    cfg.url = addr.to_owned();
+    cfg.initial_backoff = Duration::from_millis(5);
+    cfg.max_backoff = Duration::from_millis(20);
+    cfg
+}
+
+async fn bind() -> (TcpListener, String) {
+    let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = format!("ws://{}", l.local_addr().unwrap());
+    (l, addr)
+}
+
+async fn ready_conn(l: &TcpListener, session: &str, resume_url: &str) -> Conn {
+    let mut c = Conn::accept(l).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 2);
+    c.send(ready_payload(session, resume_url)).await;
+    c
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn invalid_session_resumable_resumes_on_the_same_socket() {
+    let (l, addr) = bind().await;
+    let (_h, mut rx) = Gateway::spawn(fast_config(&addr));
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    c.send(json!({"op": 9, "d": true})).await;
+    let resume = c.recv_non_heartbeat(true).await;
+    assert_eq!(resume["op"], 6);
+    assert_eq!(resume["d"]["session_id"], "s1");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn reset_without_close_drops_the_resume_url_and_resumes_on_the_main_gateway() {
+    let (main, main_addr) = bind().await;
+    let (alt, alt_addr) = bind().await;
+    let (_h, mut rx) = Gateway::spawn(fast_config(&main_addr));
+    let mut c = ready_conn(&main, "s1", &alt_addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    c.send(json!({"op": 7, "d": null})).await;
+    c.recv_close().await;
+
+    let mut c = Conn::accept(&alt).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 6, "op 7 resumes on resume_gateway_url");
+    drop(c);
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Disconnected { .. })).await;
+
+    let mut c = Conn::accept(&main).await;
+    c.hello(60_000).await;
+    let resume = c.recv_non_heartbeat(true).await;
+    assert_eq!(resume["op"], 6, "the session survives a reset");
+    c.send(json!({"op": 0, "s": 2, "t": "RESUMED", "d": {}})).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Resumed)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn five_failed_attempts_reset_the_session_and_identify() {
+    let (l, addr) = bind().await;
+    let (_h, mut rx) = Gateway::spawn(fast_config(&addr));
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    c.ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame { code: 4000u16.into(), reason: "".into() })).await.unwrap();
+    drop(c);
+    for i in 0..4 {
+        let mut c = Conn::accept(&l).await;
+        c.hello(60_000).await;
+        assert_eq!(c.recv_non_heartbeat(true).await["op"], 6, "attempt {i} still resumes");
+        c.ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame { code: 4000u16.into(), reason: "".into() })).await.unwrap();
+    }
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::SessionReset)).await;
+    let mut c = Conn::accept(&l).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 2, "a reset session identifies");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn close_4007_starts_a_new_session() {
+    let (l, addr) = bind().await;
+    let (_h, mut rx) = Gateway::spawn(fast_config(&addr));
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    c.ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame { code: 4007u16.into(), reason: "Invalid seq".into() })).await.unwrap();
+    let mut c = Conn::accept(&l).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn non_auth_close_codes_reconnect() {
+    let (l, addr) = bind().await;
+    let (_h, mut rx) = Gateway::spawn(fast_config(&addr));
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    c.ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame { code: 4008u16.into(), reason: "Rate limited.".into() })).await.unwrap();
+    let mut c = Conn::accept(&l).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 6);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn becoming_active_sends_a_qos_heartbeat_at_once() {
+    let (l, addr) = bind().await;
+    let mut cfg = fast_config(&addr);
+    cfg.qos = phoenix_api::gateway::QosPayload::new(false, false);
+    let (h, mut rx) = Gateway::spawn(cfg);
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    h.set_activity(true, true).unwrap();
+    let hb = c.recv_any().await.unwrap();
+    assert_eq!(hb, json!({"op": 40, "d": {"seq": 1, "qos": {"active": true, "ver": 31, "reasons": ["foregrounded", "rtc_connected"]}}}));
+    h.set_activity(false, false).unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    c.send(json!({"op": 1, "d": null})).await;
+    let hb = c.recv_any().await.unwrap();
+    assert_eq!(hb["d"]["qos"]["active"], true, "a beat reports activity seen since the previous one");
+    c.send(json!({"op": 1, "d": null})).await;
+    let hb = c.recv_any().await.unwrap();
+    assert_eq!(hb["d"]["qos"], json!({"active": false, "ver": 31, "reasons": []}));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn expedited_heartbeat_without_ack_reconnects() {
+    let (l, addr) = bind().await;
+    let (h, mut rx) = Gateway::spawn(fast_config(&addr));
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    h.expedited_heartbeat(Duration::from_millis(100)).unwrap();
+    assert_eq!(c.recv_any().await.unwrap()["op"], 40);
+    let code = c.recv_close().await;
+    assert_eq!(code, Some(4000));
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Disconnected { reason, .. } if reason.contains("ACK"))).await;
+    let mut c = Conn::accept(&l).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 6);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hello_timeout_reconnects() {
+    let (l, addr) = bind().await;
+    let mut cfg = fast_config(&addr);
+    cfg.hello_timeout = Duration::from_millis(200);
+    let (_h, mut rx) = Gateway::spawn(cfg);
+    let _silent = Conn::accept(&l).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Disconnected { reason, .. } if reason.contains("HELLO"))).await;
+    let mut c = Conn::accept(&l).await;
+    c.hello(60_000).await;
+    assert_eq!(c.recv_non_heartbeat(true).await["op"], 2);
 }

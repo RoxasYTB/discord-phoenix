@@ -2,10 +2,10 @@ pub mod events;
 pub mod zlib;
 
 use std::collections::VecDeque;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_json::value::RawValue;
 use tokio::sync::mpsc;
@@ -65,6 +65,100 @@ mod op {
     pub const LAZY_REQUEST: u8 = 14;
     pub const REQUEST_SOUNDBOARD_SOUNDS: u8 = 31;
     pub const GUILD_SUBSCRIPTIONS_BULK: u8 = 37;
+    pub const QOS_HEARTBEAT: u8 = 40;
+}
+
+pub const QOS_VERSION: u32 = 31;
+pub const RESUME_WINDOW: Duration = Duration::from_secs(180);
+pub const EXPEDITED_HEARTBEAT: Duration = Duration::from_secs(5);
+pub const HEARTBEAT_GRACE: Duration = Duration::from_secs(5);
+pub const RESET_AFTER_FAILS: u32 = 4;
+const WAKE_CHECK: Duration = Duration::from_secs(5);
+const WAKE_DRIFT: Duration = Duration::from_secs(10);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct QosPayload {
+    pub active: bool,
+    pub ver: u32,
+    pub reasons: Vec<String>,
+}
+
+impl QosPayload {
+    pub fn new(foregrounded: bool, rtc_connected: bool) -> Self {
+        let mut reasons = Vec::new();
+        if foregrounded {
+            reasons.push("foregrounded".to_owned());
+        }
+        if rtc_connected {
+            reasons.push("rtc_connected".to_owned());
+        }
+        Self { active: !reasons.is_empty(), ver: QOS_VERSION, reasons }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct QosState {
+    current: Option<QosPayload>,
+    upcoming: Option<QosPayload>,
+}
+
+impl QosState {
+    fn update(&mut self, e: QosPayload) -> bool {
+        let was_inactive = !self.current.as_ref().is_some_and(|c| c.active);
+        let cur = self.current.get_or_insert_with(|| e.clone());
+        let mut send = false;
+        if e.active {
+            cur.active = true;
+            cur.reasons.extend(e.reasons.iter().cloned());
+            cur.reasons.sort();
+            cur.reasons.dedup();
+            send = was_inactive;
+        }
+        self.upcoming = Some(e);
+        send
+    }
+
+    fn consume(&mut self) -> Option<QosPayload> {
+        let out = self.current.clone();
+        if let Some(u) = self.upcoming.take() {
+            self.current = Some(u);
+        }
+        out
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Backoff {
+    min: Duration,
+    max: Duration,
+    current: Duration,
+    fails: u32,
+}
+
+impl Backoff {
+    pub fn new(min: Duration, max: Duration) -> Self {
+        Self { min, max, current: min, fails: 0 }
+    }
+
+    pub fn fails(&self) -> u32 {
+        self.fails
+    }
+
+    pub fn fail_with(&mut self, r: f64) -> Duration {
+        self.fails += 1;
+        let grow = self.current.mul_f64(2.0 * r.clamp(0.0, 1.0));
+        self.current = (self.current + grow).min(self.max);
+        self.current
+    }
+
+    pub fn fail(&mut self) -> Duration {
+        self.fail_with(jitter())
+    }
+
+    pub fn succeed(&mut self) {
+        self.fails = 0;
+        self.current = self.min;
+    }
 }
 
 #[derive(Clone)]
@@ -77,8 +171,8 @@ pub struct GatewayConfig {
     pub presence: Value,
     pub initial_backoff: Duration,
     pub max_backoff: Duration,
-    pub invalid_session_delay: Duration,
     pub hello_timeout: Duration,
+    pub qos: QosPayload,
     pub raw_dispatch: Option<RawDispatchHook>,
     pub resume: Option<ResumeState>,
 }
@@ -114,8 +208,8 @@ impl GatewayConfig {
             presence: json!({ "status": "unknown", "since": 0, "activities": [], "afk": false }),
             initial_backoff: Duration::from_secs(1),
             max_backoff: Duration::from_secs(60),
-            invalid_session_delay: Duration::from_secs(1),
-            hello_timeout: Duration::from_secs(20),
+            hello_timeout: Duration::from_secs(30),
+            qos: QosPayload::new(true, false),
             raw_dispatch: None,
             resume: None,
         }
@@ -140,6 +234,8 @@ pub enum GatewayCommand {
     LazyRequest(LazyGuildRequest),
     GuildSubscriptionsBulk(std::collections::BTreeMap<GuildId, GuildSubscription>),
     Raw { op: u8, d: Value },
+    Activity { foregrounded: bool, rtc_connected: bool },
+    ExpeditedHeartbeat { timeout: Duration },
     Shutdown,
 }
 
@@ -234,6 +330,14 @@ impl GatewayHandle {
         self.send(GatewayCommand::Raw { op: 22, d: json!({ "stream_key": stream_key, "paused": paused }) })
     }
 
+    pub fn set_activity(&self, foregrounded: bool, rtc_connected: bool) -> crate::Result<()> {
+        self.send(GatewayCommand::Activity { foregrounded, rtc_connected })
+    }
+
+    pub fn expedited_heartbeat(&self, timeout: Duration) -> crate::Result<()> {
+        self.send(GatewayCommand::ExpeditedHeartbeat { timeout })
+    }
+
     pub fn shutdown(&self) {
         let _ = self.tx.send(GatewayCommand::Shutdown);
     }
@@ -269,15 +373,43 @@ impl Session {
 enum Outcome {
     Shutdown,
     Fatal { code: u16, reason: String },
-    Reconnect { delay: Option<Duration> },
+    Reconnect { immediate: bool, closed: bool },
 }
 
 fn fatal_close(code: u16) -> bool {
-    matches!(code, 4004 | 4010 | 4011 | 4012 | 4013 | 4014)
+    code == 4004
 }
 
 fn jitter() -> f64 {
     rand::random::<f64>()
+}
+
+pub fn should_resume(has_session: bool, last_ack: Option<SystemTime>, now: SystemTime) -> bool {
+    has_session && last_ack.is_none_or(|t| now.duration_since(t).unwrap_or_default() <= RESUME_WINDOW)
+}
+
+fn wake_ticker() -> tokio::time::Interval {
+    let mut t = tokio::time::interval_at(Instant::now() + WAKE_CHECK, WAKE_CHECK);
+    t.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    t
+}
+
+struct WakeWatch {
+    wall: SystemTime,
+    mono: Instant,
+}
+
+impl WakeWatch {
+    fn new() -> Self {
+        Self { wall: SystemTime::now(), mono: Instant::now() }
+    }
+
+    fn woke(&mut self) -> bool {
+        let wall = SystemTime::now().duration_since(self.wall).unwrap_or_default();
+        let mono = self.mono.elapsed();
+        *self = Self::new();
+        wall > mono + WAKE_DRIFT
+    }
 }
 
 struct Runner {
@@ -287,6 +419,9 @@ struct Runner {
     pending: VecDeque<GatewayCommand>,
     session: Session,
     healthy: bool,
+    backoff: Backoff,
+    last_ack: Option<SystemTime>,
+    qos: QosState,
 }
 
 async fn run(
@@ -294,54 +429,77 @@ async fn run(
     cmd_rx: mpsc::UnboundedReceiver<GatewayCommand>,
     ev_tx: mpsc::UnboundedSender<GatewayEvent>,
 ) {
-    let session = config
-        .resume
-        .as_ref()
-        .map(|r| Session { session_id: Some(r.session_id.clone()), resume_url: r.resume_url.clone(), seq: Some(r.seq) })
-        .unwrap_or_default();
-    let mut r = Runner { config, cmd_rx, ev_tx, pending: VecDeque::new(), session, healthy: false };
-    let mut attempt: u32 = 0;
+    let mut r = Runner::new(config, cmd_rx, ev_tx);
     loop {
         r.healthy = false;
         let base = r.session.resume_url.clone().filter(|_| r.session.resumable()).unwrap_or_else(|| r.config.url.clone());
         let url = r.config.connect_url(&base);
         tracing::info!(%url, resume = r.session.resumable(), "gateway connecting");
-        let outcome = match tokio_tungstenite::connect_async(url.as_str()).await {
-            Ok((ws, _)) => r.connection(ws).await,
-            Err(e) => {
-                let _ = r.ev_tx.send(GatewayEvent::Disconnected { code: None, reason: e.to_string() });
-                Outcome::Reconnect { delay: None }
-            }
-        };
-        let delay = match outcome {
+        let delay = match r.connection(&url).await {
             Outcome::Shutdown => return,
             Outcome::Fatal { code, reason } => {
                 let _ = r.ev_tx.send(GatewayEvent::Fatal { code, reason });
                 return;
             }
-            Outcome::Reconnect { delay } => {
-                if r.healthy {
-                    attempt = 0;
+            Outcome::Reconnect { immediate: true, .. } => Duration::ZERO,
+            Outcome::Reconnect { immediate: false, closed } => {
+                let d = r.backoff.fail();
+                if closed && r.backoff.fails() > RESET_AFTER_FAILS {
+                    tracing::warn!(fails = r.backoff.fails(), "gateway session reset after repeated failures");
+                    r.session.clear();
+                    let _ = r.ev_tx.send(GatewayEvent::SessionReset);
                 }
-                delay.unwrap_or_else(|| {
-                    if attempt == 0 {
-                        Duration::ZERO
-                    } else {
-                        let exp = r.config.initial_backoff.saturating_mul(1 << (attempt - 1).min(16));
-                        exp.min(r.config.max_backoff).mul_f64(0.75 + jitter() * 0.5)
-                    }
-                })
+                d
             }
         };
-        attempt = attempt.saturating_add(1);
-        let _ = r.ev_tx.send(GatewayEvent::Reconnecting { attempt, delay, resume: r.session.resumable() });
+        let _ = r.ev_tx.send(GatewayEvent::Reconnecting { attempt: r.backoff.fails(), delay, resume: r.session.resumable() });
+        if !r.wait(delay).await {
+            return;
+        }
+    }
+}
+
+impl Runner {
+    fn new(
+        config: GatewayConfig,
+        cmd_rx: mpsc::UnboundedReceiver<GatewayCommand>,
+        ev_tx: mpsc::UnboundedSender<GatewayEvent>,
+    ) -> Self {
+        let session = config
+            .resume
+            .as_ref()
+            .map(|r| Session { session_id: Some(r.session_id.clone()), resume_url: r.resume_url.clone(), seq: Some(r.seq) })
+            .unwrap_or_default();
+        let backoff = Backoff::new(config.initial_backoff, config.max_backoff);
+        let mut qos = QosState::default();
+        qos.update(config.qos.clone());
+        Runner { config, cmd_rx, ev_tx, pending: VecDeque::new(), session, healthy: false, backoff, last_ack: None, qos }
+    }
+
+    async fn wait(&mut self, delay: Duration) -> bool {
         let deadline = Instant::now() + delay;
+        let mut wake = WakeWatch::new();
+        let mut tick = wake_ticker();
         loop {
             tokio::select! {
-                _ = sleep_until(deadline) => break,
-                cmd = r.cmd_rx.recv() => match cmd {
-                    None | Some(GatewayCommand::Shutdown) => return,
-                    Some(c) => r.pending.push_back(c),
+                _ = sleep_until(deadline) => return true,
+                _ = tick.tick() => {
+                    if wake.woke() {
+                        tracing::info!("system resumed from sleep, reconnecting now");
+                        self.backoff.succeed();
+                        return true;
+                    }
+                }
+                cmd = self.cmd_rx.recv() => match cmd {
+                    None | Some(GatewayCommand::Shutdown) => return false,
+                    Some(GatewayCommand::Activity { foregrounded, rtc_connected }) => {
+                        self.qos.update(QosPayload::new(foregrounded, rtc_connected));
+                    }
+                    Some(GatewayCommand::ExpeditedHeartbeat { .. }) => {
+                        self.backoff.succeed();
+                        return true;
+                    }
+                    Some(c) => self.pending.push_back(c),
                 }
             }
         }
@@ -418,7 +576,9 @@ impl Runner {
                 (op::GUILD_SUBSCRIPTIONS_BULK, json!({ "subscriptions": m }))
             }
             GatewayCommand::Raw { op, d } => (*op, d.clone()),
-            GatewayCommand::Shutdown => return None,
+            GatewayCommand::Activity { .. } | GatewayCommand::ExpeditedHeartbeat { .. } | GatewayCommand::Shutdown => {
+                return None;
+            }
         };
         Some(json!({ "op": o, "d": d }))
     }
@@ -428,18 +588,46 @@ impl Runner {
         let _ = timeout(Duration::from_secs(2), ws.close(Some(frame))).await;
     }
 
-    async fn connection(&mut self, mut ws: Ws) -> Outcome {
+    fn resume_or_identify(&mut self) -> Value {
+        let now = SystemTime::now();
+        let resume = should_resume(self.session.resumable(), self.last_ack, now);
+        self.last_ack = Some(now);
+        if resume && let Some(sid) = &self.session.session_id {
+            return json!({ "op": op::RESUME, "d": { "token": self.config.token, "session_id": sid, "seq": self.session.seq } });
+        }
+        self.session.session_id = None;
+        self.session.seq = None;
+        self.identify()
+    }
+
+    fn heartbeat_payload(&mut self) -> Value {
+        json!({ "op": op::QOS_HEARTBEAT, "d": { "seq": self.session.seq.unwrap_or(0), "qos": self.qos.consume() } })
+    }
+
+    async fn heartbeat_timeout(&self, ws: &mut Ws) -> Outcome {
+        tracing::warn!("heartbeat ACK missed; zombie connection, reconnecting");
+        Self::close(ws, 4000, "heartbeat ack missed").await;
+        self.emit(GatewayEvent::Disconnected { code: None, reason: "heartbeat ACK missed".into() });
+        Outcome::Reconnect { immediate: false, closed: false }
+    }
+
+    async fn connection(&mut self, url: &str) -> Outcome {
+        let deadline = Instant::now() + self.config.hello_timeout;
+        let mut ws = match timeout_at(deadline, tokio_tungstenite::connect_async(url)).await {
+            Some(Ok((ws, _))) => ws,
+            Some(Err(e)) => return self.errored(e.to_string()),
+            None => return self.errored("connect timed out before HELLO".into()),
+        };
         let mut z = ZlibStream::new();
 
-        let hello_deadline = Instant::now() + self.config.hello_timeout;
         let interval = loop {
-            let msg = match timeout_at(hello_deadline, ws.next()).await {
+            let msg = match timeout_at(deadline, ws.next()).await {
                 Some(Some(Ok(m))) => m,
-                Some(Some(Err(e))) => return self.disconnected(None, e.to_string()),
+                Some(Some(Err(e))) => return self.errored(e.to_string()),
                 Some(None) => return self.disconnected(None, "closed before HELLO".into()),
                 None => {
                     Self::close(&mut ws, 4000, "hello timeout").await;
-                    return self.disconnected(None, "HELLO timeout".into());
+                    return self.errored("HELLO timeout".into());
                 }
             };
             match Self::decode(&mut z, msg) {
@@ -458,23 +646,24 @@ impl Runner {
                 }
                 Ok(Frame::Close(code, reason)) => return self.on_close(code, reason),
                 Ok(Frame::Ignore) => {}
-                Err(e) => return self.disconnected(None, format!("zlib: {e}")),
+                Err(e) => return self.errored(format!("zlib: {e}")),
             }
         };
         self.emit(GatewayEvent::Connected { heartbeat_interval: interval });
 
-        let first = if let (Some(sid), true) = (&self.session.session_id, self.session.resumable()) {
-            json!({ "op": op::RESUME, "d": { "token": self.config.token, "session_id": sid, "seq": self.session.seq } })
-        } else {
-            self.identify()
-        };
+        let first = self.resume_or_identify();
         if let Err(e) = Self::send_json(&mut ws, &first).await {
-            return self.disconnected(None, e);
+            return self.errored(e);
         }
 
+        let far = Instant::now() + Duration::from_secs(86400 * 365);
         let mut next_beat = Instant::now() + interval.mul_f64(jitter());
+        let mut interval_started = false;
         let mut acked = true;
+        let mut expedited: Option<Instant> = None;
         let mut beat_sent_at: Option<Instant> = None;
+        let mut wake = WakeWatch::new();
+        let mut tick = wake_ticker();
 
         loop {
             if self.healthy {
@@ -483,23 +672,38 @@ impl Runner {
                         && let Err(e) = Self::send_json(&mut ws, &p).await
                     {
                         self.pending.push_front(cmd);
-                        return self.disconnected(None, e);
+                        return self.errored(e);
                     }
                 }
             }
+            let mut beat_now = false;
             tokio::select! {
                 _ = sleep_until(next_beat) => {
-                    if !acked {
-                        tracing::warn!("heartbeat ACK missed; zombie connection, reconnecting");
-                        Self::close(&mut ws, 4000, "heartbeat ack missed").await;
-                        return self.disconnected(None, "heartbeat ACK missed".into());
-                    }
-                    if let Err(e) = Self::send_json(&mut ws, &json!({ "op": op::HEARTBEAT, "d": self.session.seq })).await {
-                        return self.disconnected(None, e);
-                    }
-                    acked = false;
-                    beat_sent_at = Some(Instant::now());
                     next_beat = Instant::now() + interval;
+                    if !interval_started {
+                        interval_started = true;
+                        acked = true;
+                    }
+                    if acked {
+                        acked = false;
+                        beat_now = true;
+                    } else if expedited.is_none() {
+                        return self.heartbeat_timeout(&mut ws).await;
+                    }
+                }
+                _ = sleep_until(expedited.unwrap_or(far)), if expedited.is_some() => {
+                    expedited = None;
+                    if !acked {
+                        return self.heartbeat_timeout(&mut ws).await;
+                    }
+                }
+                _ = tick.tick() => {
+                    if wake.woke() {
+                        tracing::info!("system resumed from sleep, sending an expedited heartbeat");
+                        acked = false;
+                        beat_now = true;
+                        expedited = Some(Instant::now() + EXPEDITED_HEARTBEAT);
+                    }
                 }
                 cmd = self.cmd_rx.recv() => match cmd {
                     None | Some(GatewayCommand::Shutdown) => {
@@ -507,13 +711,21 @@ impl Runner {
                         self.session.clear();
                         return Outcome::Shutdown;
                     }
+                    Some(GatewayCommand::Activity { foregrounded, rtc_connected }) => {
+                        beat_now = self.qos.update(QosPayload::new(foregrounded, rtc_connected)) && self.healthy;
+                    }
+                    Some(GatewayCommand::ExpeditedHeartbeat { timeout }) => {
+                        acked = false;
+                        beat_now = true;
+                        expedited = Some(Instant::now() + timeout);
+                    }
                     Some(c) => self.pending.push_back(c),
                 },
                 msg = ws.next() => {
                     let msg = match msg {
                         Some(Ok(m)) => m,
-                        Some(Err(e)) => return self.disconnected(None, e.to_string()),
-                        None => return self.disconnected(None, "stream ended".into()),
+                        Some(Err(e)) => return self.errored(e.to_string()),
+                        None => return self.errored("stream ended".into()),
                     };
                     let text = match Self::decode(&mut z, msg) {
                         Ok(Frame::Text(t)) => t,
@@ -528,9 +740,9 @@ impl Runner {
                         Ok(p) => p,
                         Err(e) => { tracing::warn!(error = %e, "undecodable gateway payload"); continue; }
                     };
+                    if let Some(s) = p.s { self.session.seq = Some(s); }
                     match p.op {
                         op::DISPATCH => {
-                            if let Some(s) = p.s { self.session.seq = Some(s); }
                             let name = p.t.as_deref().unwrap_or("");
                             let raw = p.d.map(|d| d.get()).unwrap_or("null");
                             if let Some(hook) = &self.config.raw_dispatch {
@@ -542,39 +754,64 @@ impl Runner {
                                     self.session.session_id = Some(r.session_id.clone());
                                     self.session.resume_url = r.resume_gateway_url.clone();
                                     self.healthy = true;
+                                    self.backoff.succeed();
                                 }
-                                GatewayEvent::Resumed => self.healthy = true,
+                                GatewayEvent::ReadySupplemental(_) => self.backoff.succeed(),
+                                GatewayEvent::Resumed => {
+                                    self.healthy = true;
+                                    self.backoff.succeed();
+                                }
                                 _ => {}
                             }
                             self.emit(ev);
                         }
                         op::HEARTBEAT => {
-                            if let Err(e) = Self::send_json(&mut ws, &json!({ "op": op::HEARTBEAT, "d": self.session.seq })).await {
-                                return self.disconnected(None, e);
+                            beat_now = true;
+                            if interval_started {
+                                next_beat = Instant::now() + interval;
                             }
                         }
                         op::HEARTBEAT_ACK => {
                             acked = true;
-                            if let Some(t) = beat_sent_at.take() {
+                            expedited = None;
+                            self.last_ack = Some(SystemTime::now());
+                            if let Some(t) = beat_sent_at {
                                 self.emit(GatewayEvent::HeartbeatAck { latency: t.elapsed() });
                             }
                         }
                         op::RECONNECT => {
                             Self::close(&mut ws, 4000, "reconnect requested").await;
                             self.emit(GatewayEvent::Disconnected { code: None, reason: "server requested reconnect".into() });
-                            return Outcome::Reconnect { delay: Some(Duration::ZERO) };
+                            return Outcome::Reconnect { immediate: true, closed: false };
                         }
                         op::INVALID_SESSION => {
                             let resumable = p.d.and_then(|d| serde_json::from_str::<bool>(d.get()).ok()).unwrap_or(false);
-                            if !resumable { self.session.clear(); }
-                            Self::close(&mut ws, 4000, "invalid session").await;
-                            self.emit(GatewayEvent::Disconnected { code: None, reason: format!("invalid session (resumable: {resumable})") });
-                            let base = self.config.invalid_session_delay;
-                            return Outcome::Reconnect { delay: Some(base.mul_f64(1.0 + jitter() * 4.0)) };
+                            tracing::info!(resumable, "gateway invalid session");
+                            self.healthy = false;
+                            let next = if resumable {
+                                self.resume_or_identify()
+                            } else {
+                                self.session.session_id = None;
+                                self.session.seq = None;
+                                self.identify()
+                            };
+                            if let Err(e) = Self::send_json(&mut ws, &next).await {
+                                return self.errored(e);
+                            }
                         }
                         other => tracing::debug!(op = other, "unhandled gateway opcode"),
                     }
+                    if beat_sent_at.is_some_and(|t| t.elapsed() > interval + HEARTBEAT_GRACE) {
+                        beat_now = true;
+                    }
                 }
+            }
+            if beat_now {
+                let hb = self.heartbeat_payload();
+                if let Err(e) = Self::send_json(&mut ws, &hb).await {
+                    return self.errored(e);
+                }
+                beat_sent_at = Some(Instant::now());
             }
         }
     }
@@ -582,7 +819,12 @@ impl Runner {
     fn disconnected(&self, code: Option<u16>, reason: String) -> Outcome {
         tracing::warn!(?code, %reason, "gateway disconnected");
         self.emit(GatewayEvent::Disconnected { code, reason });
-        Outcome::Reconnect { delay: None }
+        Outcome::Reconnect { immediate: false, closed: true }
+    }
+
+    fn errored(&mut self, reason: String) -> Outcome {
+        self.session.resume_url = None;
+        self.disconnected(None, reason)
     }
 
     fn on_close(&mut self, code: Option<u16>, reason: String) -> Outcome {
@@ -621,13 +863,91 @@ mod tests {
     fn identify_shape() {
         let (_tx, rx) = mpsc::unbounded_channel();
         let (etx, _erx) = mpsc::unbounded_channel();
-        let r = Runner { config: GatewayConfig::new("tok"), cmd_rx: rx, ev_tx: etx, pending: VecDeque::new(), session: Session::default(), healthy: false };
+        let r = Runner::new(GatewayConfig::new("tok"), rx, etx);
         let v = r.identify();
         assert_eq!(v["op"], 2);
         assert_eq!(v["d"]["token"], "tok");
         assert_eq!(v["d"]["capabilities"], capabilities::DEFAULT);
         assert_eq!(v["d"]["properties"]["browser"], "Discord Client");
         assert!(v["d"].get("intents").is_none());
+    }
+
+    #[test]
+    fn backoff_grows_like_the_client_and_resets() {
+        let mut b = Backoff::new(Duration::from_secs(1), Duration::from_secs(60));
+        assert_eq!(b.fail_with(0.0), Duration::from_secs(1));
+        assert_eq!(b.fail_with(1.0), Duration::from_secs(3));
+        assert_eq!(b.fail_with(1.0), Duration::from_secs(9));
+        assert_eq!(b.fail_with(1.0), Duration::from_secs(27));
+        assert_eq!(b.fail_with(1.0), Duration::from_secs(60));
+        assert_eq!(b.fails(), 5);
+        b.succeed();
+        assert_eq!(b.fails(), 0);
+        assert_eq!(b.fail_with(0.5), Duration::from_secs(2));
+    }
+
+    #[test]
+    fn qos_reports_activity_seen_since_the_last_beat() {
+        let mut q = QosState::default();
+        assert!(!q.update(QosPayload::new(false, false)));
+        assert!(q.update(QosPayload::new(true, false)));
+        assert!(!q.update(QosPayload::new(false, true)));
+        let sent = q.consume().unwrap();
+        assert_eq!(sent.reasons, vec!["foregrounded", "rtc_connected"]);
+        assert!(sent.active);
+        assert_eq!(q.consume().unwrap(), QosPayload::new(false, true));
+        assert!(!q.update(QosPayload::new(false, false)));
+        assert_eq!(q.consume().unwrap(), QosPayload::new(false, true));
+        assert!(!q.consume().unwrap().active);
+        let p = serde_json::to_value(QosPayload::new(true, false)).unwrap();
+        assert_eq!(p, json!({ "active": true, "ver": 31, "reasons": ["foregrounded"] }));
+    }
+
+    #[test]
+    fn resume_only_within_three_minutes_of_the_last_ack() {
+        let now = SystemTime::now();
+        assert!(should_resume(true, None, now));
+        assert!(should_resume(true, Some(now - Duration::from_secs(179)), now));
+        assert!(!should_resume(true, Some(now - Duration::from_secs(181)), now));
+        assert!(!should_resume(false, None, now));
+    }
+
+    #[test]
+    fn only_auth_failure_is_fatal() {
+        assert!(fatal_close(4004));
+        for c in [4000, 4001, 4002, 4003, 4005, 4007, 4008, 4009, 4010, 4011, 4012, 4013, 4014] {
+            assert!(!fatal_close(c), "{c}");
+        }
+    }
+
+    #[test]
+    fn wake_watch_sees_a_wall_clock_jump() {
+        let mut w = WakeWatch { wall: SystemTime::now() - Duration::from_secs(600), mono: Instant::now() };
+        assert!(w.woke());
+        assert!(!w.woke());
+    }
+
+    #[test]
+    fn heartbeat_is_the_qos_opcode() {
+        let (_tx, rx) = mpsc::unbounded_channel();
+        let (etx, _erx) = mpsc::unbounded_channel();
+        let mut r = Runner::new(GatewayConfig::new("tok"), rx, etx);
+        assert_eq!(r.heartbeat_payload(), json!({ "op": 40, "d": { "seq": 0, "qos": { "active": true, "ver": 31, "reasons": ["foregrounded"] } } }));
+        r.session.seq = Some(7);
+        assert_eq!(r.heartbeat_payload()["d"]["seq"], 7);
+    }
+
+    #[test]
+    fn stale_session_identifies_instead_of_resuming() {
+        let (_tx, rx) = mpsc::unbounded_channel();
+        let (etx, _erx) = mpsc::unbounded_channel();
+        let mut cfg = GatewayConfig::new("tok");
+        cfg.resume = Some(ResumeState { session_id: "s".into(), resume_url: None, seq: 4 });
+        let mut r = Runner::new(cfg, rx, etx);
+        assert_eq!(r.resume_or_identify()["op"], 6);
+        r.last_ack = Some(SystemTime::now() - Duration::from_secs(3600));
+        assert_eq!(r.resume_or_identify()["op"], 2);
+        assert!(r.session.session_id.is_none());
     }
 
     #[test]

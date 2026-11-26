@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -75,8 +75,13 @@ struct Bucket {
 struct Inner {
     hashes: HashMap<String, String>,
     buckets: HashMap<String, Bucket>,
+    probes: HashMap<String, Instant>,
+    unlimited: HashSet<String>,
     global_until: Option<Instant>,
 }
+
+pub const PROBE_WAIT: Duration = Duration::from_millis(25);
+pub const PROBE_EXPIRY: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Default)]
 pub struct RateLimiter {
@@ -104,6 +109,18 @@ impl RateLimiter {
             inner.global_until = None;
         }
         let id = Self::bucket_id(&inner, route, major);
+        if !inner.buckets.contains_key(&id) {
+            if inner.unlimited.contains(&id) {
+                return None;
+            }
+            if let Some(&since) = inner.probes.get(&id)
+                && now.saturating_duration_since(since) < PROBE_EXPIRY
+            {
+                return Some(PROBE_WAIT);
+            }
+            inner.probes.insert(id, now);
+            return None;
+        }
         let b = inner.buckets.get_mut(&id)?;
         if b.reset_at <= now {
             b.remaining = b.limit;
@@ -118,16 +135,32 @@ impl RateLimiter {
 
     pub fn update(&self, route: &str, major: &str, info: &RateLimitInfo, now: Instant) {
         let mut inner = self.inner.lock();
+        let old = Self::bucket_id(&inner, route, major);
+        inner.probes.remove(&old);
         if let Some(hash) = &info.bucket {
             inner.hashes.insert(route.to_owned(), hash.clone());
         }
+        let id = Self::bucket_id(&inner, route, major);
+        inner.probes.remove(&id);
         let (Some(limit), Some(remaining), Some(reset_after)) =
             (info.limit, info.remaining, info.reset_after)
         else {
+            if info.bucket.is_none() {
+                inner.unlimited.insert(id);
+            }
             return;
         };
-        let id = Self::bucket_id(&inner, route, major);
+        let remaining = match inner.buckets.get(&id) {
+            Some(b) if b.reset_at > now => remaining.min(b.remaining),
+            _ => remaining,
+        };
         inner.buckets.insert(id, Bucket { limit, remaining, reset_at: now + reset_after });
+    }
+
+    pub fn release(&self, route: &str, major: &str) {
+        let mut inner = self.inner.lock();
+        let id = Self::bucket_id(&inner, route, major);
+        inner.probes.remove(&id);
     }
 
     pub fn on_429(&self, route: &str, major: &str, retry_after: Duration, global: bool, now: Instant) {
@@ -137,6 +170,8 @@ impl RateLimiter {
             return;
         }
         let id = Self::bucket_id(&inner, route, major);
+        inner.probes.remove(&id);
+        inner.unlimited.remove(&id);
         let b = inner.buckets.entry(id).or_insert(Bucket { limit: 1, remaining: 0, reset_at: now });
         b.remaining = 0;
         b.reset_at = now + retry_after;
@@ -237,5 +272,72 @@ mod tests {
         rl.on_429("GET /y", "", Duration::from_secs(1), true, t0);
         assert_eq!(rl.acquire("GET /z", "", t0), Some(Duration::from_secs(1)));
         assert_eq!(rl.acquire("GET /z", "", t0 + Duration::from_secs(2)), None);
+    }
+
+    #[test]
+    fn unknown_bucket_lets_one_request_through_until_headers_arrive() {
+        let rl = RateLimiter::new();
+        let t0 = Instant::now();
+        let route = "GET /users/@me/notes/:id";
+        assert_eq!(rl.acquire(route, "", t0), None);
+        assert_eq!(rl.acquire(route, "", t0), Some(PROBE_WAIT));
+        assert_eq!(rl.acquire("GET /users/:id", "", t0), None);
+        let info = RateLimitInfo {
+            limit: Some(3),
+            remaining: Some(2),
+            reset_after: Some(Duration::from_secs(1)),
+            bucket: Some("n".into()),
+            ..Default::default()
+        };
+        rl.update(route, "", &info, t0);
+        assert_eq!(rl.acquire(route, "", t0), None);
+        assert_eq!(rl.acquire(route, "", t0), None);
+        assert_eq!(rl.acquire(route, "", t0), Some(Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn stale_responses_do_not_give_back_spent_requests() {
+        let rl = RateLimiter::new();
+        let t0 = Instant::now();
+        let route = "GET /users/:id/profile";
+        let info = |remaining| RateLimitInfo {
+            limit: Some(5),
+            remaining: Some(remaining),
+            reset_after: Some(Duration::from_secs(5)),
+            bucket: Some("p".into()),
+            ..Default::default()
+        };
+        assert_eq!(rl.acquire(route, "", t0), None);
+        rl.update(route, "", &info(4), t0);
+        for _ in 0..4 {
+            assert_eq!(rl.acquire(route, "", t0), None);
+        }
+        rl.update(route, "", &info(3), t0);
+        assert!(rl.acquire(route, "", t0).is_some());
+        rl.update(route, "", &info(4), t0 + Duration::from_secs(6));
+        assert_eq!(rl.acquire(route, "", t0 + Duration::from_secs(6)), None);
+    }
+
+    #[test]
+    fn probes_are_released_on_failure_and_expire() {
+        let rl = RateLimiter::new();
+        let t0 = Instant::now();
+        assert_eq!(rl.acquire("GET /a", "", t0), None);
+        rl.release("GET /a", "");
+        assert_eq!(rl.acquire("GET /a", "", t0), None);
+        assert_eq!(rl.acquire("GET /a", "", t0), Some(PROBE_WAIT));
+        assert_eq!(rl.acquire("GET /a", "", t0 + PROBE_EXPIRY), None);
+    }
+
+    #[test]
+    fn routes_without_rate_limit_headers_are_not_serialised() {
+        let rl = RateLimiter::new();
+        let t0 = Instant::now();
+        assert_eq!(rl.acquire("GET /b", "", t0), None);
+        rl.update("GET /b", "", &RateLimitInfo::default(), t0);
+        assert_eq!(rl.acquire("GET /b", "", t0), None);
+        assert_eq!(rl.acquire("GET /b", "", t0), None);
+        rl.on_429("GET /b", "", Duration::from_secs(1), false, t0);
+        assert!(rl.acquire("GET /b", "", t0).is_some());
     }
 }

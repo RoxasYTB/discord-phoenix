@@ -1063,6 +1063,7 @@ impl PhoenixApp {
             AppEvent::RemoteAuth(u) => crate::auth::on_remote_auth(self, u, cx),
             AppEvent::Resync(r) => crate::commands::on_resync(self, r, cx),
             AppEvent::Parity(e) => crate::commands::on_event(self, e, cx),
+            AppEvent::Connection(up) => self.boot.connection(up, std::time::Instant::now()),
             AppEvent::Disconnected(reason) => {
                 self.clear_session();
                 self.login_error = Some(reason.into());
@@ -1441,6 +1442,7 @@ impl Render for PhoenixApp {
         crate::auth::ensure_qr(self, cx);
         crate::theme::sync(&self.prefs, window, cx);
         crate::sounds::set_focused(window.is_window_active());
+        self.backend.set_activity(window.is_window_active(), self.voice.status == crate::voice::VoiceStatus::Connected);
         crate::notifications::sync_focus(window.is_window_active(), self.selected_channel.map(|c| c.0));
         crate::media::emoji::sync_motion(self.prefs.synced.flag("anim-emoji"), window.is_window_active());
         crate::ui::settings::effects::sync(self, cx.reduce_motion());

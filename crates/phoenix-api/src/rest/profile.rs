@@ -136,15 +136,27 @@ impl RestClient {
     }
 
     pub async fn get_user_note(&self, user: UserId) -> Result<String> {
-        match self.call::<Note>(Method::GET, &format!("/users/@me/notes/{user}"), Body::None).await {
-            Ok(n) => Ok(n.note),
-            Err(crate::Error::Api { status: 404, .. }) => Ok(String::new()),
-            Err(e) => Err(e),
-        }
+        let cell = self.inner.notes.lock().entry(user.0).or_default().clone();
+        cell.get_or_try_init(|| async {
+            match self.call::<Note>(Method::GET, &format!("/users/@me/notes/{user}"), Body::None).await {
+                Ok(n) => Ok(n.note),
+                Err(crate::Error::Api { status: 404, .. }) => Ok(String::new()),
+                Err(e) => Err(e),
+            }
+        })
+        .await
+        .cloned()
+    }
+
+    pub fn cache_user_note(&self, user: UserId, note: &str) {
+        let cell = tokio::sync::OnceCell::new_with(Some(note.to_owned()));
+        self.inner.notes.lock().insert(user.0, std::sync::Arc::new(cell));
     }
 
     pub async fn set_user_note(&self, user: UserId, note: &str) -> Result<()> {
-        self.guarded_write(&super::guard::GuardedWrite::set_note(user.0, note)).await.map(|_| ())
+        self.guarded_write(&super::guard::GuardedWrite::set_note(user.0, note)).await?;
+        self.cache_user_note(user, note);
+        Ok(())
     }
 
     pub async fn update_status_settings(

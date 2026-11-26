@@ -1417,6 +1417,8 @@ impl Adapter {
             GatewayEvent::Fatal { code, reason } => {
                 out.push(AppEvent::Disconnected(fatal_message(*code, reason)));
             }
+            GatewayEvent::SessionReset => out.push(AppEvent::Connection(false)),
+            GatewayEvent::Resumed => out.push(AppEvent::Connection(true)),
             _ => {}
         }
         out

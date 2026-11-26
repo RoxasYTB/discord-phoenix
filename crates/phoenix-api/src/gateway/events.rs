@@ -269,6 +269,7 @@ pub enum GatewayEvent {
     HeartbeatAck { latency: Duration },
     Disconnected { code: Option<u16>, reason: String },
     Reconnecting { attempt: u32, delay: Duration, resume: bool },
+    SessionReset,
     Fatal { code: u16, reason: String },
 
     Ready(Box<Ready>),

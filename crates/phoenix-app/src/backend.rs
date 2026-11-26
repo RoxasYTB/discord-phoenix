@@ -82,6 +82,7 @@ pub enum AppEvent {
     DmUpsert(Channel),
     DmDelete(Id),
     Disconnected(String),
+    Connection(bool),
     Nav(crate::ui::home::data::NavEvent),
     SettingsChanged,
     SoundboardSounds { guild: Id, sounds: Vec<crate::model::SoundboardSound> },
@@ -303,6 +304,7 @@ pub trait Backend: Send + Sync + 'static {
     fn thread_members(&self, _thread: Id) -> BoxFuture<Vec<crate::model::Member>> {
         Box::pin(async { Ok(Vec::new()) })
     }
+    fn set_activity(&self, _foregrounded: bool, _rtc_connected: bool) {}
     fn user_profile(&self, _user: Id, _guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
         Box::pin(async { Err(BackendError(crate::t!("backend.profiles_unavailable").to_string())) })
     }

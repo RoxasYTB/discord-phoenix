@@ -193,6 +193,7 @@ struct Inner {
     max_retries: u32,
     locale: parking_lot::RwLock<String>,
     timezone: Option<String>,
+    notes: parking_lot::Mutex<std::collections::HashMap<u64, Arc<tokio::sync::OnceCell<String>>>>,
 }
 
 #[derive(Clone)]
@@ -230,6 +231,7 @@ impl RestClient {
             inner: Arc::new(Inner { http, base, token, props, super_props, limiter: RateLimiter::new(), max_retries: 3,
                 locale: parking_lot::RwLock::new(crate::props::os_discord_locale()),
                 timezone: crate::props::os_timezone(),
+                notes: Default::default(),
             }),
         }
     }
@@ -312,7 +314,13 @@ impl RestClient {
                     r.body(f.encode(&boundary))
                 }
             };
-            let resp = req.send().await?;
+            let resp = match req.send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    self.inner.limiter.release(&route, &major);
+                    return Err(e.into());
+                }
+            };
             let status = resp.status();
             let info = RateLimitInfo::from_headers(resp.headers());
             let now = Instant::now();
