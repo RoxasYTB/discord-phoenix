@@ -681,12 +681,9 @@ fn type_list(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
 
 pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let e = cx.entity();
-    let close: crate::ui::modal::Action = {
-        let e = e.clone();
-        std::rc::Rc::new(move |_, cx| {
-            e.update(cx, |a, cx| send(a, false, cx));
-        })
-    };
+    let close: crate::ui::modal::Action = std::rc::Rc::new(move |_, cx| {
+        e.update(cx, |a, cx| send(a, false, cx));
+    });
     let loading = || div().h(z(270.)).flex().items_center().justify_center().child(text(crate::t!("oauth.loading"), 14., 18., FontWeight::NORMAL, idx::TEXT_MUTED)).into_any_element();
     let boxed = |body: AnyElement| {
         div()
