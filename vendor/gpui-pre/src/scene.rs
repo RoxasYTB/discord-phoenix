@@ -52,6 +52,7 @@ pub struct Scene {
     pub surfaces: Vec<PaintSurface>,
     pub glyph_gradients: Vec<GlyphGradient>,
     pub glyph_gradient_scrolls: Vec<GlyphGradientScroll>,
+    pub glyph_animations: Vec<Option<std::sync::Arc<crate::GlyphAnimation>>>,
     pub gradient_time: f64,
 }
 
@@ -71,6 +72,7 @@ impl Scene {
         self.surfaces.clear();
         self.glyph_gradients.clear();
         self.glyph_gradient_scrolls.clear();
+        self.glyph_animations.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -149,14 +151,51 @@ impl Scene {
 
     pub fn insert_scrolling_gradient_sprite(
         &mut self,
-        mut sprite: MonochromeSprite,
+        sprite: MonochromeSprite,
         gradient: GlyphGradient,
         scroll: GlyphGradientScroll,
     ) {
+        self.insert_animated_gradient_sprite(sprite, gradient, scroll, None);
+    }
+
+    // PHOENIX PATCH (text keyframes): a gradient sprite with a keyframe animation applied at
+    // present time by `glyph_sprite_now`, see `crate::GlyphAnimation`.
+    pub fn insert_animated_gradient_sprite(
+        &mut self,
+        mut sprite: MonochromeSprite,
+        gradient: GlyphGradient,
+        scroll: GlyphGradientScroll,
+        animation: Option<std::sync::Arc<crate::GlyphAnimation>>,
+    ) {
         self.glyph_gradients.push(gradient);
         self.glyph_gradient_scrolls.push(scroll);
+        self.glyph_animations.push(animation);
         sprite.pad = self.glyph_gradients.len() as u32;
         self.insert_primitive(sprite);
+    }
+
+    pub fn glyph_animation(&self, sprite: &MonochromeSprite) -> Option<&std::sync::Arc<crate::GlyphAnimation>> {
+        sprite
+            .pad
+            .checked_sub(1)
+            .and_then(|index| self.glyph_animations.get(index as usize))
+            .and_then(Option::as_ref)
+    }
+
+    pub fn glyph_sprite_now(&self, sprite: &MonochromeSprite) -> Option<(MonochromeSprite, GlyphGradient)> {
+        let mut gradient = self.glyph_gradient_now(sprite)?;
+        let mut sprite = *sprite;
+        if let Some(animation) = self.glyph_animation(&sprite) {
+            animation.apply(&mut sprite, &mut gradient, self.gradient_time);
+        }
+        Some((sprite, gradient))
+    }
+
+    pub fn animates_glyphs(&self, now: f64) -> bool {
+        self.glyph_animations
+            .iter()
+            .flatten()
+            .any(|a| a.running(now))
     }
 
     pub fn glyph_gradient_scroll(&self, sprite: &MonochromeSprite) -> GlyphGradientScroll {
@@ -177,7 +216,7 @@ impl Scene {
     }
 
     pub fn scrolls_gradients(&self, now: f64) -> bool {
-        self.glyph_gradient_scrolls.iter().any(|s| s.running(now))
+        self.glyph_gradient_scrolls.iter().any(|s| s.running(now)) || self.animates_glyphs(now)
     }
 
     pub fn glyph_gradient(&self, sprite: &MonochromeSprite) -> Option<&GlyphGradient> {
@@ -192,10 +231,11 @@ impl Scene {
             match operation {
                 PaintOperation::Primitive(Primitive::MonochromeSprite(sprite)) if sprite.pad != 0 => {
                     match prev_scene.glyph_gradient(sprite) {
-                        Some(gradient) => self.insert_scrolling_gradient_sprite(
+                        Some(gradient) => self.insert_animated_gradient_sprite(
                             *sprite,
                             *gradient,
                             prev_scene.glyph_gradient_scroll(sprite),
+                            prev_scene.glyph_animation(sprite).cloned(),
                         ),
                         None => self.insert_primitive(MonochromeSprite { pad: 0, ..*sprite }),
                     }
@@ -780,7 +820,7 @@ pub struct MonochromeSprite {
 // PHOENIX PATCH (text gradient): per-pixel gradient fill of monochrome glyphs, see
 // docs/gpui-patches.md. A sprite with `pad != 0` reads `Scene::glyph_gradients[pad - 1]`.
 /// Maximum number of colour stops of a glyph gradient.
-pub const MAX_GLYPH_GRADIENT_STOPS: usize = 8;
+pub const MAX_GLYPH_GRADIENT_STOPS: usize = 12;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 #[repr(C)]

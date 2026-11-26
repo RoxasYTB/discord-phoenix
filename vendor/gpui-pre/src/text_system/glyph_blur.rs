@@ -73,6 +73,67 @@ pub fn blur_mask(
     )
 }
 
+// PHOENIX PATCH (text stroke): `-webkit-text-stroke` under the fill (`paint-order: stroke fill`)
+// grows the glyph by half the stroke width; the mask is dilated by a disc of `radius` device
+// pixels, each source pixel weighted by how much of it the disc edge covers.
+pub fn dilate_padding(radius: f32) -> i32 {
+    if radius > 0.0 {
+        radius.ceil() as i32 + 1
+    } else {
+        0
+    }
+}
+
+pub fn dilate_mask(
+    mask_size: Size<DevicePixels>,
+    mask: &[u8],
+    radius: f32,
+) -> (Size<DevicePixels>, Vec<u8>) {
+    let pad = dilate_padding(radius) as usize;
+    let (w, h) = (
+        mask_size.width.0.max(0) as usize,
+        mask_size.height.0.max(0) as usize,
+    );
+    let (ow, oh) = (w + 2 * pad, h + 2 * pad);
+    let out_size = size(DevicePixels(ow as i32), DevicePixels(oh as i32));
+    if mask.len() < w * h {
+        return (out_size, vec![0; ow * oh]);
+    }
+    if pad == 0 {
+        return (out_size, mask[..w * h].to_vec());
+    }
+    let reach = pad as i32;
+    let mut disc = Vec::new();
+    for dy in -reach..=reach {
+        for dx in -reach..=reach {
+            let d = ((dx * dx + dy * dy) as f32).sqrt();
+            let weight = (radius + 0.5 - d).clamp(0.0, 1.0);
+            if weight > 0.0 {
+                disc.push((dx, dy, weight));
+            }
+        }
+    }
+    let mut out = vec![0u8; ow * oh];
+    for oy in 0..oh as i32 {
+        for ox in 0..ow as i32 {
+            let mut best = 0.0f32;
+            for &(dx, dy, weight) in &disc {
+                let sx = ox - pad as i32 + dx;
+                let sy = oy - pad as i32 + dy;
+                if sx < 0 || sy < 0 || sx >= w as i32 || sy >= h as i32 {
+                    continue;
+                }
+                let v = mask[sy as usize * w + sx as usize] as f32 * weight;
+                if v > best {
+                    best = v;
+                }
+            }
+            out[oy as usize * ow + ox as usize] = best.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    (out_size, out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,5 +181,33 @@ mod tests {
     fn no_blur_is_the_glyph_itself() {
         let (s, out) = blur_mask(dp(2, 1), &[10, 20], 0.0);
         assert_eq!((s, out), (dp(2, 1), vec![10, 20]));
+    }
+
+    #[test]
+    fn dilation_grows_the_glyph_by_the_radius_with_an_antialiased_edge() {
+        let mut mask = vec![0u8; 5 * 5];
+        mask[2 * 5 + 2] = 255;
+        let (s, out) = dilate_mask(dp(5, 5), &mask, 1.5);
+        assert_eq!(dilate_padding(1.5), 3);
+        assert_eq!(s, dp(11, 11));
+        let at = |x: usize, y: usize| out[y * 11 + x];
+        assert_eq!(at(5, 5), 255);
+        assert_eq!(at(6, 5), 255);
+        assert_eq!(at(5, 4), 255);
+        assert_eq!(at(7, 5), 0);
+        assert_eq!(at(6, 6), 149);
+        assert_eq!(at(4, 4), 149);
+        assert_eq!(at(7, 7), 0);
+    }
+
+    #[test]
+    fn dilation_keeps_partial_coverage_of_the_edge_pixels() {
+        let (s, out) = dilate_mask(dp(1, 1), &[100], 1.0);
+        assert_eq!(s, dp(5, 5));
+        assert_eq!(out[2 * 5 + 2], 100);
+        assert_eq!(out[2 * 5 + 3], 50);
+        assert_eq!(out[5 + 3], 9);
+        assert_eq!(out[2 * 5 + 4], 0);
+        assert_eq!(dilate_mask(dp(2, 1), &[10, 20], 0.0), (dp(2, 1), vec![10, 20]));
     }
 }

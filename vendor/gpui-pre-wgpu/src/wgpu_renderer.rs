@@ -1827,11 +1827,8 @@ impl WgpuRendererCore {
         let mut instances = Vec::with_capacity(scene.glyph_gradients.len());
         for sprite in &scene.monochrome_sprites {
             ranks.push(instances.len() as u32);
-            if let Some(gradient) = scene.glyph_gradient_now(sprite) {
-                instances.push(GradientSpriteInstance {
-                    sprite: *sprite,
-                    gradient,
-                });
+            if let Some((sprite, gradient)) = scene.glyph_sprite_now(sprite) {
+                instances.push(GradientSpriteInstance { sprite, gradient });
             }
         }
         let binding =
@@ -2950,6 +2947,46 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn headless_renderer_moves_and_tints_animated_glyphs_at_the_scene_time() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let mut scene = Scene::default();
+        let glyph = full_coverage_sprite(&renderer, "animated", (0.0, 0.0), 64, 8, gpui::red())?;
+        let gradient = gpui::GlyphGradient {
+            stop_count: 1,
+            opacity: 1.0,
+            stops: [gpui::GlyphGradientStop { color: [1.0, 0.0, 0.0, 1.0], position: 0.0 }; gpui::MAX_GLYPH_GRADIENT_STOPS],
+            ..Default::default()
+        };
+        let animation = gpui::GlyphAnimation {
+            start: 10.0,
+            duration: 1.0,
+            translate: vec![(0.0, [0.0, 0.0]), (1.0, [0.0, 8.0])],
+            tint: vec![(0.0, [1.0, 0.0, 0.0, 1.0]), (1.0, [1.0, 1.0, 1.0, 1.0])],
+            ..Default::default()
+        };
+        scene.insert_animated_gradient_sprite(
+            glyph,
+            gradient,
+            Default::default(),
+            Some(std::sync::Arc::new(animation)),
+        );
+        scene.finish();
+
+        scene.gradient_time = 9.0;
+        let before = renderer.render_scene_to_image(&scene, device_size(64, 16))?;
+        assert_pixel(&before, 4, 4, RED);
+        assert_pixel(&before, 4, 12, BLACK);
+        assert!(scene.scrolls_gradients(9.0));
+        scene.gradient_time = 12.0;
+        let after = renderer.render_scene_to_image(&scene, device_size(64, 16))?;
+        assert_pixel(&after, 4, 4, BLACK);
+        assert_pixel(&after, 4, 12, [255, 255, 255, 255]);
+        assert!(!scene.scrolls_gradients(12.0));
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn headless_renderer_captures_each_requested_size() -> anyhow::Result<()> {
         let mut renderer = WgpuHeadlessRenderer::new()?;
         let mut scene = Scene::default();
@@ -3045,8 +3082,8 @@ mod tests {
 
     #[test]
     fn gradient_sprite_record_matches_the_shader_layout() {
-        assert_eq!(std::mem::size_of::<GlyphGradient>(), 48 * 4);
-        assert_eq!(std::mem::size_of::<GradientSpriteInstance>(), (28 + 48) * 4);
+        assert_eq!(std::mem::size_of::<GlyphGradient>(), 68 * 4);
+        assert_eq!(std::mem::size_of::<GradientSpriteInstance>(), (28 + 68) * 4);
         assert_eq!(std::mem::offset_of!(GradientSpriteInstance, gradient), 28 * 4);
         assert_eq!(std::mem::offset_of!(GlyphGradient, stops), 8 * 4);
     }

@@ -1752,7 +1752,7 @@ pub fn get_gamma_correction_ratios(gamma: f32) -> [f32; 4] {
 #[expect(missing_docs)]
 pub enum AtlasKey {
     Glyph(RenderGlyphParams),
-    BlurredGlyph(RenderGlyphParams, u32),
+    BlurredGlyph(RenderGlyphParams, u32, u32),
     Svg(RenderSvgParams),
     Image(RenderImageParams),
 }

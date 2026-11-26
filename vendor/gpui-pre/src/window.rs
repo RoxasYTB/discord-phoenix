@@ -1231,6 +1231,8 @@ pub struct Window {
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
     text_gradient: Option<(crate::GlyphGradient, Hsla, crate::GlyphGradientScroll)>,
     text_glow: Option<(Pixels, f32)>,
+    text_stroke: Option<Pixels>,
+    text_animation: Option<Arc<crate::GlyphAnimation>>,
     rem_size: Pixels,
     /// The stack of override values for the window's rem size.
     ///
@@ -2369,6 +2371,8 @@ impl Window {
             text_rendering_mode: cx.text_rendering_mode.clone(),
             text_gradient: None,
             text_glow: None,
+            text_stroke: None,
+            text_animation: None,
             rem_size: px(16.),
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
@@ -3128,6 +3132,7 @@ impl Window {
             .iter()
             .filter(|s| s.speed != 0.0)
             .map(|s| s.start)
+            .chain(scene.glyph_animations.iter().flatten().map(|a| a.start))
             .fold(f64::INFINITY, f64::min);
         scene.gradient_time = if start.is_finite() {
             start + elapsed.as_secs_f64()
@@ -5146,6 +5151,7 @@ impl Window {
 
     /// PHOENIX PATCH (text gradient): paints the monochrome glyphs drawn by `f` with `gradient`
     /// (CSS `background-clip: text`) instead of their run colour. Emoji keep their colours.
+    /// SVG masks painted inside it take the gradient too (patch 18, gradient role dot).
     pub fn with_text_gradient<R>(
         &mut self,
         gradient: Option<&crate::TextGradient>,
@@ -5176,6 +5182,47 @@ impl Window {
         let result = f(self);
         self.text_glow = previous;
         result
+    }
+
+    /// PHOENIX PATCH (text stroke): paints the monochrome glyphs drawn by `f` grown by half of
+    /// `width` (CSS `-webkit-text-stroke-width` under the fill, `paint-order: stroke fill`), so
+    /// a stroke colour is the glyph run colour or gradient. Combines with `with_text_glow`.
+    pub fn with_text_stroke<R>(
+        &mut self,
+        width: Option<Pixels>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.text_stroke, width);
+        let result = f(self);
+        self.text_stroke = previous;
+        result
+    }
+
+    /// PHOENIX PATCH (text keyframes): animates the monochrome glyphs and SVG masks drawn by
+    /// `f` with `animation`, applied by the renderer at present time (no new layout or paint).
+    pub fn with_text_animation<R>(
+        &mut self,
+        animation: Option<&crate::TextAnimation>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let next = animation.map(|a| Arc::new(a.to_glyph_animation(self.scale_factor())));
+        let previous = std::mem::replace(&mut self.text_animation, next);
+        let result = f(self);
+        self.text_animation = previous;
+        result
+    }
+
+    fn solid_glyph_gradient(color: Hsla) -> crate::GlyphGradient {
+        let c = crate::Rgba::from(color);
+        crate::GlyphGradient {
+            stop_count: 1,
+            opacity: 1.0,
+            stops: [crate::GlyphGradientStop {
+                color: [c.r, c.g, c.b, c.a],
+                position: 0.0,
+            }; crate::MAX_GLYPH_GRADIENT_STOPS],
+            ..Default::default()
+        }
     }
 
     /// Paints a monochrome (non-emoji) glyph into the scene for the next frame at the current z-index.
@@ -5211,11 +5258,18 @@ impl Window {
             (quantized_origin.y.fract() * SUBPIXEL_VARIANTS_Y as f32) as u8,
         );
         let integer_origin = quantized_origin.map(|c| ScaledPixels(c.trunc()));
-        let gradient = self.text_gradient;
+        let animation = self.text_animation.clone();
+        let gradient = self.text_gradient.or_else(|| {
+            animation
+                .as_ref()
+                .map(|_| (Self::solid_glyph_gradient(color), color, Default::default()))
+        });
         let glow = self.text_glow;
+        let stroke = self.text_stroke.filter(|w| w.0 > 0.0);
         let color = gradient.map_or(color, |(_, first, _)| first);
         let subpixel_rendering = gradient.is_none()
             && glow.is_none()
+            && stroke.is_none()
             && self.should_use_subpixel_rendering(font_id, font_size);
         let dilation = self.text_system().glyph_dilation_for_color(color);
         let params = RenderGlyphParams {
@@ -5231,23 +5285,8 @@ impl Window {
 
         let raster_bounds = self.text_system().raster_bounds(&params)?;
         if !raster_bounds.is_zero() {
-            let (element_opacity, raster_origin, tile) = match glow {
-                Some((blur, opacity)) => {
-                    let sigma = blur.0 * scale_factor;
-                    let pad = crate::blur_padding(sigma);
-                    let key = crate::AtlasKey::BlurredGlyph(params.clone(), sigma.to_bits());
-                    let tile = self
-                        .sprite_atlas
-                        .get_or_insert_with(key, &mut || {
-                            let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                            let (size, bytes) = crate::blur_mask(size, &bytes, sigma);
-                            Ok(Some((size, Cow::Owned(bytes))))
-                        })?
-                        .expect("Callback above only errors or returns Some");
-                    let origin = raster_bounds.origin - point(DevicePixels(pad), DevicePixels(pad));
-                    (element_opacity * opacity, origin, tile)
-                }
-                None => {
+            let (element_opacity, raster_origin, tile) = match (glow, stroke) {
+                (None, None) => {
                     let tile = self
                         .sprite_atlas
                         .get_or_insert_with(params.clone().into(), &mut || {
@@ -5256,6 +5295,28 @@ impl Window {
                         })?
                         .expect("Callback above only errors or returns Some");
                     (element_opacity, raster_bounds.origin, tile)
+                }
+                (glow, stroke) => {
+                    let (blur, opacity) = glow.unwrap_or((Pixels(0.0), 1.0));
+                    let sigma = blur.0 * scale_factor;
+                    let radius = stroke.map_or(0.0, |w| w.0 * 0.5 * scale_factor);
+                    let pad = crate::blur_padding(sigma) + crate::dilate_padding(radius);
+                    let key = crate::AtlasKey::BlurredGlyph(
+                        params.clone(),
+                        sigma.to_bits(),
+                        radius.to_bits(),
+                    );
+                    let tile = self
+                        .sprite_atlas
+                        .get_or_insert_with(key, &mut || {
+                            let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
+                            let (size, bytes) = crate::dilate_mask(size, &bytes, radius);
+                            let (size, bytes) = crate::blur_mask(size, &bytes, sigma);
+                            Ok(Some((size, Cow::Owned(bytes))))
+                        })?
+                        .expect("Callback above only errors or returns Some");
+                    let origin = raster_bounds.origin - point(DevicePixels(pad), DevicePixels(pad));
+                    (element_opacity * opacity, origin, tile)
                 }
             };
             let bounds = Bounds {
@@ -5276,7 +5337,7 @@ impl Window {
                 });
             } else if let Some((mut glyph_gradient, _, scroll)) = gradient {
                 glyph_gradient.opacity = element_opacity;
-                self.next_frame.scene.insert_scrolling_gradient_sprite(
+                self.next_frame.scene.insert_animated_gradient_sprite(
                     MonochromeSprite {
                         order: 0,
                         pad: 0,
@@ -5288,6 +5349,7 @@ impl Window {
                     },
                     glyph_gradient,
                     scroll,
+                    animation,
                 );
             } else {
                 self.next_frame.scene.insert_primitive(MonochromeSprite {
@@ -5437,7 +5499,7 @@ impl Window {
             .map_origin(|value| ScaledPixels(round_half_toward_zero(value.0)))
             .map_size(|size| size.ceil());
 
-        self.next_frame.scene.insert_primitive(MonochromeSprite {
+        let sprite = MonochromeSprite {
             order: 0,
             pad: 0,
             bounds: final_bounds,
@@ -5445,7 +5507,28 @@ impl Window {
             color: color.opacity(element_opacity),
             tile,
             transformation,
+        };
+        let animation = self.text_animation.clone();
+        let gradient = self.text_gradient.or_else(|| {
+            animation
+                .as_ref()
+                .map(|_| (Self::solid_glyph_gradient(color), color, Default::default()))
         });
+        match gradient {
+            Some((mut glyph_gradient, first, scroll)) => {
+                glyph_gradient.opacity = element_opacity;
+                self.next_frame.scene.insert_animated_gradient_sprite(
+                    MonochromeSprite {
+                        color: first.opacity(element_opacity),
+                        ..sprite
+                    },
+                    glyph_gradient,
+                    scroll,
+                    animation,
+                );
+            }
+            None => self.next_frame.scene.insert_primitive(sprite),
+        }
 
         Ok(())
     }

@@ -2,6 +2,7 @@ mod font_fallbacks;
 mod font_features;
 mod glyph_blur;
 mod gradient;
+mod text_animation;
 mod line;
 mod line_layout;
 mod line_wrapper;
@@ -9,8 +10,9 @@ mod rich;
 
 pub use font_fallbacks::*;
 pub use font_features::*;
-pub use glyph_blur::{blur_mask, blur_padding};
+pub use glyph_blur::{blur_mask, blur_padding, dilate_mask, dilate_padding};
 pub use gradient::*;
+pub use text_animation::*;
 pub use line::*;
 pub use line_layout::*;
 pub use line_wrapper::*;

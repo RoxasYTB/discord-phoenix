@@ -19,7 +19,7 @@ struct GlyphGradient {
     period: f32,
     stop_count: u32,
     opacity: f32,
-    stops: array<GlyphGradientStop, 8>,
+    stops: array<GlyphGradientStop, 12>,
 }
 
 struct GradientSprite {
@@ -64,7 +64,7 @@ fn glyph_gradient_color(instance_id: u32, position: vec2<f32>) -> vec4<f32> {
     let offset = b_gradient_sprites[instance_id].gradient.offset;
     let period = b_gradient_sprites[instance_id].gradient.period;
     let opacity = b_gradient_sprites[instance_id].gradient.opacity;
-    let count = clamp(b_gradient_sprites[instance_id].gradient.stop_count, 1u, 8u);
+    let count = clamp(b_gradient_sprites[instance_id].gradient.stop_count, 1u, 12u);
 
     var local = position - vec2<f32>(origin_x, origin_y);
     if (period > 0.0) {
