@@ -363,7 +363,7 @@ fn page_icon(p: Page) -> &'static str {
         Page::ActivityPrivacy => "user-platform",
         Page::RegisteredGames => "game-controller",
         Page::Nitro => "nitro",
-        Page::ServerBoost => "boost",
+        Page::ServerBoost => "chat/boost",
         Page::Subscriptions => "subscription",
         Page::GiftInventory => "gift",
         Page::Billing => "credit-card",

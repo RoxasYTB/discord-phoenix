@@ -427,7 +427,7 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
                             ),
                         ),
                 )
-                .child(pill("shop-wishlist").w(z(32.)).child(glyph("heart", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
+                .child(pill("shop-wishlist").w(z(32.)).child(glyph("heart", 16., tk(idx::INTERACTIVE_TEXT_DEFAULT))))
                 .child(
                     pill("shop-orbs")
                         .px(z(12.))
@@ -771,8 +771,8 @@ pub(crate) fn carousel(app: &PhoenixApp, home: &Home, block: usize, skus: &[u64]
         .h(z(CARD_SIZE))
         .overflow_hidden()
         .child(row)
-        .when(first > 0, |d| d.child(arrow(format!("shop-prev-{block}").into(), "chevron-small-left", true, block, len, n, cx)))
-        .when(first + n < len, |d| d.child(arrow(format!("shop-next-{block}").into(), "chevron-right", false, block, len, n, cx)))
+        .when(first > 0, |d| d.child(arrow(format!("shop-prev-{block}").into(), "nav/back", true, block, len, n, cx)))
+        .when(first + n < len, |d| d.child(arrow(format!("shop-next-{block}").into(), "nav/forward", false, block, len, n, cx)))
         .into_any_element()
 }
 
