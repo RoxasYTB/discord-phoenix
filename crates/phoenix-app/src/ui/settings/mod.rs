@@ -183,7 +183,12 @@ fn config_path() -> Option<PathBuf> {
     crate::paths::config_file("settings.json")
 }
 
+pub const PROTECTED_WRITES: &str = "protected-writes";
+
 impl LocalPrefs {
+    pub fn protected_writes(&self) -> bool {
+        self.flag(PROTECTED_WRITES, false)
+    }
     pub fn streamer_hides_info(&self) -> bool {
         self.flag("streamer", false) && self.flag("st-info", true)
     }

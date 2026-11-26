@@ -180,6 +180,7 @@ enum Body {
     None,
     Json(Value),
     Multipart { payload: Value, files: Arc<Vec<FileUpload>> },
+    Form(form::FormBody),
 }
 
 struct Inner {
@@ -302,6 +303,14 @@ impl RestClient {
                 Body::None => req,
                 Body::Json(v) => req.json(v),
                 Body::Multipart { payload, files } => req.multipart(build_form(payload, files)?),
+                Body::Form(f) => {
+                    let boundary = form::FormBody::boundary();
+                    let mut r = req.header(reqwest::header::CONTENT_TYPE, form::FormBody::content_type(&boundary));
+                    for (k, v) in &f.headers {
+                        r = r.header(k.as_str(), v.as_str());
+                    }
+                    r.body(f.encode(&boundary))
+                }
             };
             let resp = req.send().await?;
             let status = resp.status();

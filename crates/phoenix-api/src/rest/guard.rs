@@ -1,10 +1,34 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use reqwest::Method;
 use serde_json::{Map, Value, json};
 
-use super::RestClient;
+use super::{Body, RestClient};
 use crate::error::{Error, Result};
 
 pub const CHANGE_PHONE_REASON: &str = "user_settings_update";
+
+pub const AGENT_ENV: &str = "PHX_AGENT";
+
+static WRITES_ENABLED: AtomicBool = AtomicBool::new(false);
+
+pub fn agent_session() -> bool {
+    std::env::var_os(AGENT_ENV).is_some()
+}
+
+fn permitted(on: bool, agent: bool) -> bool {
+    on && !agent
+}
+
+pub fn set_writes_enabled(on: bool) -> bool {
+    let on = permitted(on, agent_session());
+    WRITES_ENABLED.store(on, Ordering::SeqCst);
+    on
+}
+
+pub fn writes_enabled() -> bool {
+    permitted(WRITES_ENABLED.load(Ordering::SeqCst), agent_session())
+}
 
 pub fn read_only(method: &Method) -> bool {
     *method == Method::GET
@@ -278,7 +302,23 @@ impl GuardedWrite {
 
 impl RestClient {
     pub async fn guarded_write(&self, w: &GuardedWrite) -> Result<Value> {
-        Err(w.refusal())
+        if !writes_enabled() {
+            return Err(w.refusal());
+        }
+        self.send_guarded(w).await
+    }
+
+    async fn send_guarded(&self, w: &GuardedWrite) -> Result<Value> {
+        let body = match (&w.form, &w.body) {
+            (Some(f), _) => Body::Form(f.clone()),
+            (None, Some(v)) => Body::Json(v.clone()),
+            (None, None) => Body::None,
+        };
+        let (_, bytes) = self.raw(w.method.clone(), &w.path, body).await?;
+        if bytes.is_empty() {
+            return Ok(Value::Null);
+        }
+        Ok(serde_json::from_slice(&bytes)?)
     }
 }
 
@@ -447,6 +487,78 @@ mod tests {
         }
         let accepted = tokio::time::timeout(std::time::Duration::from_millis(200), listener.accept()).await;
         assert!(accepted.is_err(), "a guarded write opened a connection");
+    }
+
+    #[test]
+    fn agents_can_never_enable_writes() {
+        assert!(permitted(true, false));
+        assert!(!permitted(true, true));
+        assert!(!permitted(false, false));
+        assert!(!permitted(false, true));
+        assert!(!writes_enabled());
+        if agent_session() {
+            assert!(!set_writes_enabled(true));
+            assert!(!writes_enabled());
+        }
+    }
+
+    async fn one_request(listener: tokio::net::TcpListener, reply: &'static str) -> Vec<u8> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut sock, _) = listener.accept().await.unwrap();
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            let n = sock.read(&mut chunk).await.unwrap();
+            buf.extend_from_slice(&chunk[..n]);
+            let text = String::from_utf8_lossy(&buf).into_owned();
+            if let Some(end) = text.find("\r\n\r\n") {
+                let len = text[..end]
+                    .lines()
+                    .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                    .unwrap_or(0);
+                if buf.len() >= end + 4 + len {
+                    break;
+                }
+            }
+            if n == 0 {
+                break;
+            }
+        }
+        let resp = format!("HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{reply}", reply.len());
+        sock.write_all(resp.as_bytes()).await.unwrap();
+        buf
+    }
+
+    #[tokio::test]
+    async fn an_allowed_write_goes_through_the_normal_send_path() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(one_request(listener, r#"{"id":"42"}"#));
+        let rest = RestClient::with_base(Some("test-token".into()), crate::ClientProperties::linux_desktop(), format!("http://{addr}"));
+        let out = rest.send_guarded(&GuardedWrite::create_role(5, "mods")).await.unwrap();
+        assert_eq!(out, json!({ "id": "42" }));
+        let req = String::from_utf8(server.await.unwrap()).unwrap();
+        let lower = req.to_ascii_lowercase();
+        assert!(req.starts_with("POST /guilds/5/roles HTTP/1.1"), "{req}");
+        assert!(lower.contains("authorization: test-token"));
+        assert!(lower.contains("x-super-properties:"));
+        assert!(lower.contains("content-type: application/json"));
+        assert!(req.contains(r#""name":"mods""#));
+    }
+
+    #[tokio::test]
+    async fn an_allowed_sticker_upload_is_sent_as_multipart() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(one_request(listener, ""));
+        let rest = RestClient::with_base(Some("test-token".into()), crate::ClientProperties::linux_desktop(), format!("http://{addr}"));
+        let out = rest.send_guarded(&GuardedWrite::create_sticker(5, &super::super::form::tests::sticker())).await.unwrap();
+        assert_eq!(out, Value::Null);
+        let req = String::from_utf8_lossy(&server.await.unwrap()).to_ascii_lowercase();
+        assert!(req.starts_with("post /guilds/5/stickers http/1.1"), "{req}");
+        assert!(req.contains("content-type: multipart/form-data; boundary=----webkitformboundary"));
+        assert!(req.contains("x-discord-original-md5:"));
+        assert!(req.contains("name=\"tags\""));
     }
 
     #[test]

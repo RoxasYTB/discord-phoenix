@@ -1471,6 +1471,8 @@ sp.cn.none: "La gestion des applications autorisées nécessite le client offici
 sp.dv.mode_d: "Le Mode développeur révèle des éléments du menu contextuel utiles pour les personnes qui écrivent des applications en utilisant l'API Discord."
 sp.dv.test: "Mode de test d'application"
 sp.dv.test_d: "Saisis ton identifiant d'application Discord pour activer le mode de test pour cette application."
+sp.dv.protected: "Autoriser les actions protégées"
+sp.dv.protected_d: "Désactivé par défaut. Une fois activé, les actions de modération, de gestion de serveur et de compte, les achats et les autres requêtes protégées sont réellement envoyés à Discord au lieu d'être refusés."
 sp.pf.nameplate: "Plaque nominative"
 sp.pf.avatar: "Avatar et décoration"
 sp.pf.name_style: "Style du pseudonyme"

@@ -1,6 +1,6 @@
 use reqwest::Method;
 
-pub use phoenix_api::rest::guard::{GuardedWrite, blocked, read_only};
+pub use phoenix_api::rest::guard::{GuardedWrite, agent_session, blocked, read_only, set_writes_enabled, writes_enabled};
 
 use super::ActionRequest;
 use crate::commands::ParityRequest;
@@ -40,6 +40,23 @@ pub fn read_only_parity(req: &ParityRequest) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn protected_writes_stay_off_by_default_and_examples_never_enable_them() {
+        assert!(!crate::ui::settings::LocalPrefs::default().protected_writes());
+        assert!(!writes_enabled());
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|e| e == "rs") {
+                let src = std::fs::read_to_string(&path).unwrap();
+                assert!(!src.contains("set_writes_enabled"), "{} enables protected writes", path.display());
+                seen += 1;
+            }
+        }
+        assert!(seen > 0);
+    }
     use crate::{commands::ModAction, model::Id};
     use phoenix_api::{models::Snowflake, rest::guild_manage::AdminCall};
 

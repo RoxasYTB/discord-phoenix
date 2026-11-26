@@ -1803,6 +1803,15 @@ static DEVELOPER: &[B] = &[
         Bind::Synced(|s| s.developer_mode, SettingsPatch::DeveloperMode),
     ),
     B::Switch("app-test", "sp.dv.test", "sp.dv.test_d", Bind::Ui(false)),
+    B::Switch(
+        super::PROTECTED_WRITES,
+        "sp.dv.protected",
+        "sp.dv.protected_d",
+        Bind::Local(LocalPrefs::protected_writes, |p, v| {
+            p.ui.insert(super::PROTECTED_WRITES.to_owned(), u64::from(v));
+            crate::actions::guard::set_writes_enabled(v);
+        }),
+    ),
 ];
 
 static PROFILES: &[B] = &[B::Custom("sp.pf.main", |app, _| super::view::profiles(app).into_any_element())];

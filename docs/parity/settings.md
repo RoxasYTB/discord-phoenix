@@ -318,3 +318,15 @@ Inventaire : chaque `button(…)`, `btn_sm(…)` et élément `cursor_pointer` d
 | Sélecteur de collection → tuile Boutique | ouvre la Boutique et ferme les paramètres | `HomeView::Shop` | ✅ |
 | Connexions → tuiles « Ajouter des comptes » | `SA.A({platformType})` : modales propres à certaines plateformes (domaine, Bluesky…) sinon `GET /connections/{type}/authorize` puis fenêtre OAuth (types `eg.*` du bundle web : `riotgames`, `battlenet`, `bluesky`, `steam`, `twitter`, `amazon-music`, `epicgames`…) | tuiles inertes | ❌ (module `SA.A` non lu ; le compte n'a aucune connexion pour vérifier le retour) |
 | Compte → Désactiver / Supprimer le compte | `52b6e35ba37f71f0.js` `y9` : alerte `vJiTOL` / `UyVVan` si l'utilisateur possède un serveur (et `Y++oNe` pour les équipes), sinon modale de mot de passe 662758 (titre `goXv9g` / `xca2ts`, texte `gk7h32` / `FB4H1D`, critical-primary) ; POST `/users/@me/disable` ou `/delete {password}` | `account::start_removal`, `Confirm::DisableAccount` / `DeleteAccount` | ✅ refusé ; ✅ `GET /teams?include_payout_account_status=true` avant tout (`fetchTeams(!0)`), équipe dont `owner_user_id` = moi → alerte `Y++oNe` / `alpAUm` (lien du portail rendu en texte), puis serveurs possédés, puis mot de passe ; test dans `removal_follows_the_client` |
+
+## Avancé → Autoriser les actions protégées (wt/write-toggle, 26/11)
+
+Réglage propre à Phoenix, sans équivalent dans le client officiel (décision de l'utilisateur).
+
+| élément | comportement | Phoenix | état |
+|---|---|---|---|
+| Interrupteur « Autoriser les actions protégées » (`sp.dv.protected`, description `sp.dv.protected_d`) | désactivé par défaut ; sous le Mode test d'application | `pages::DEVELOPER`, préférence locale `ui["protected-writes"]` dans `settings.json`, appliquée au démarrage (`main.rs`) et à chaque changement | ✅ |
+| `RestClient::guarded_write` | désactivé : refus `WriteBlocked` sans réseau, toast du client ; activé : envoi réel par `raw` (en-têtes, X-Super-Properties, limites de débit, erreurs), corps JSON ou multipart `FormBody` (boundary WebKit, en-têtes de la forme) | `guard::set_writes_enabled` / `writes_enabled` (`AtomicBool`) | ✅ tests `every_write_is_refused_without_touching_the_network`, `an_allowed_write_goes_through_the_normal_send_path`, `an_allowed_sticker_upload_is_sent_as_multipart` (faux serveur local) |
+| Garde-fou agents | l'interrupteur reste inactif dès que `PHX_AGENT` est défini ; aucun example n'appelle `set_writes_enabled` | `guard::permitted`, `agent_session` | ✅ tests `agents_can_never_enable_writes`, `protected_writes_stay_off_by_default_and_examples_never_enable_them` |
+| Écritures hors garde (accusé de lecture sur Échap, ordre du rail, wt/func-keys) | inchangées | n'utilisent pas `guarded_write` | ✅ |
+| Écritures `ActionRequest::Admin` / `ParityRequest::Moderate` | toujours refusées par leur propre garde | hors de cet interrupteur | ❌ (à brancher séparément si voulu) |

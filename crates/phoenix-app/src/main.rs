@@ -7,6 +7,7 @@ use phoenix_app::{assets::Assets, backend::Backend, discord_backend::DiscordBack
 fn main() {
     phoenix_app::logging::init();
     phoenix_app::hwaccel::apply_at_startup();
+    phoenix_app::actions::guard::set_writes_enabled(phoenix_app::ui::settings::LocalPrefs::load().protected_writes());
     phoenix_app::perf::start();
     phoenix_app::autostart::refresh();
     let mock = std::env::var("PHOENIX_MOCK").is_ok_and(|v| !v.is_empty() && v != "0");
