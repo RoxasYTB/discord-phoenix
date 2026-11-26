@@ -2181,6 +2181,24 @@ fn main() -> anyhow::Result<()> {
         });
         pump(&mut cx, 300);
     }
+    if let Ok(spec) = std::env::var("PHX_RAIL_MENTIONS") {
+        let counts: Vec<(Id, u32)> = spec
+            .split(',')
+            .filter_map(|p| p.split_once(':'))
+            .filter_map(|(g, n)| Some((parse_id(g)?, n.trim().parse().ok()?)))
+            .collect();
+        cx.update(|cx| {
+            v.update(cx, |app, cx| {
+                for g in &mut app.guilds {
+                    if let Some((_, n)) = counts.iter().find(|(id, _)| *id == g.id) {
+                        g.mentions = *n;
+                    }
+                }
+                cx.notify();
+            })
+        });
+        pump(&mut cx, 300);
+    }
     let shoot = |cx: &mut HeadlessAppContext, path: &str| -> anyhow::Result<()> {
         let mut img = None;
         for _ in 0..2 {
