@@ -403,7 +403,7 @@ fn run_attempt(app: &mut PhoenixApp, req: SearchRequest, attempts: u32, cx: &mut
         let res = fut.await;
         let retry = this
             .update(cx, |_, cx| {
-                let Some(s) = cx.global_mut::<Search>().0.as_mut() else { return None };
+                let s = cx.global_mut::<Search>().0.as_mut()?;
                 if s.seq != seq {
                     return None;
                 }
