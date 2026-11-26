@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn key_package_has_the_lifetime_the_voice_gateway_requires() {
         let mut a = OpenMlsSession::new(7, 42).unwrap();
-        let kp = KeyPackageIn::tls_deserialize_exact(&a.key_package().unwrap())
+        let kp = KeyPackageIn::tls_deserialize_exact(a.key_package().unwrap())
             .unwrap()
             .validate(a.provider.crypto(), ProtocolVersion::Mls10)
             .unwrap();
