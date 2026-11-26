@@ -416,7 +416,7 @@ fn render_target(app: &PhoenixApp, target: Target, pos: Point<Pixels>, cx: &mut 
                     items.push(copy(crate::t!("menu.copy_link"), format!("https://discord.com/channels/{}/{}", g.0, id.0)));
                     if voice {
                         items.push(MenuItem::Separator);
-                        items.push(act(&e, crate::t!("menu.open_voice_chat"), move |a, _, cx| a.open_channel_chat(id, cx)));
+                        items.push(act(&e, crate::t!("menu.open_voice_chat"), move |a, _, cx| a.open_voice_chat(id, cx)));
                         let hidden = crate::ui::voice_row::names_hidden(id);
                         let e2 = e.clone();
                         items.push(MenuItem::check(crate::t!("menu.hide_voice_names"), hidden, move |_, _, cx: &mut App| {

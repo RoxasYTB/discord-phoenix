@@ -10,6 +10,10 @@ fn main() -> anyhow::Result<()> {
     let login_only = false;
     let rest: Vec<String> = args.collect();
     let with_chat = rest.iter().any(|a| a == "chat");
+    let empty = rest.iter().any(|a| a == "empty");
+    let unread = rest.iter().find_map(|a| a.strip_prefix("unread=").and_then(|v| v.parse::<u32>().ok()));
+    let mentions = rest.iter().find_map(|a| a.strip_prefix("mentions=").and_then(|v| v.parse::<u32>().ok()));
+    let chat_w = rest.iter().find_map(|a| a.strip_prefix("chatw=").and_then(|v| v.parse::<f32>().ok()));
     let focus_grid = rest.iter().any(|a| a == "grid");
     let no_strip = rest.iter().any(|a| a == "nostrip");
     let dm = rest.iter().any(|a| a == "dm");
@@ -115,11 +119,21 @@ fn main() -> anyhow::Result<()> {
                     ch.voice_users = std::iter::once(me).chain((3..).map(Id).take(n.saturating_sub(1) as usize)).collect();
                 }
                 phoenix_app::voice::start_time::set_channel_status(lounge.0, vc_status.as_deref());
-                app.voice_channel = Some(lounge);
+                if empty && let Some(ch) = app.channels.get_mut(&lounge) {
+                    ch.voice_users.retain(|u| *u != me);
+                    ch.voice_users.truncate(count.map_or(2, |n| n as usize));
+                }
+                app.voice_channel = (!empty).then_some(lounge);
                 app.voice.apply(phoenix_app::voice::VoiceUiEvent::Status(phoenix_app::voice::VoiceStatus::Connected));
                 app.open_channel_chat(lounge, cx);
                 phoenix_app::ui::call_view::show(lounge);
-                phoenix_app::ui::call_view::set_chat_open(with_chat);
+                phoenix_app::ui::call_view::set_chat_open(lounge, with_chat);
+                if let Some(w) = chat_w {
+                    phoenix_app::ui::call_view::set_chat_width(w, false);
+                }
+                for i in 0..unread.unwrap_or(0).max(mentions.unwrap_or(0)) {
+                    phoenix_app::ui::call_view::bump_unread(lounge, i < mentions.unwrap_or(0));
+                }
                 if focus_grid {
                     phoenix_app::ui::call_view::set_focus(phoenix_app::ui::call_view::Focus::Grid);
                 }

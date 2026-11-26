@@ -121,6 +121,11 @@ impl PhoenixApp {
             return;
         }
         if !self.leave_detached(cx) {
+            if let Some(ch) = self.selected_channel.filter(|c| ui::call_view::chat_open(*c) && ui::call_view::active(self)) {
+                ui::call_view::set_chat_open(ch, false);
+                cx.notify();
+                return;
+            }
             self.message_list.scroll_to_end();
         }
     }

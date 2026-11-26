@@ -15,7 +15,11 @@ fn t(i: usize) -> Hsla {
 
 thread_local! {
     static SHOWN: Cell<Option<Id>> = const { Cell::new(None) };
-    static CHAT_OPEN: Cell<bool> = const { Cell::new(false) };
+    static CHAT_OPEN: std::cell::RefCell<std::collections::HashSet<Id>> = Default::default();
+    static CHAT_UNREAD: std::cell::RefCell<std::collections::HashMap<Id, (u32, u32)>> = Default::default();
+    static CHAT_W: Cell<Option<f32>> = const { Cell::new(None) };
+    static CHAT_DRAG: Cell<bool> = const { Cell::new(false) };
+    static CHAT_RIGHT: Cell<f32> = const { Cell::new(0.) };
     static FOCUS: Cell<Focus> = const { Cell::new(Focus::Auto) };
     static LAST_MOVE: Cell<Option<Instant>> = const { Cell::new(None) };
     static WAKE: Cell<Option<Instant>> = const { Cell::new(None) };
@@ -32,7 +36,7 @@ pub const SPLIT_POPPED_H: f32 = 154.;
 pub const SPLIT_CHAT_RESERVE: f32 = 200.;
 
 pub fn private_split(app: &PhoenixApp) -> bool {
-    active(app) && app.voice_channel.and_then(|c| app.channels.get(&c)).is_some_and(|c| c.guild.is_none())
+    active(app) && app.selected_channel.and_then(|c| app.channels.get(&c)).is_some_and(|c| c.guild.is_none())
 }
 
 fn split_path() -> Option<std::path::PathBuf> {
@@ -146,19 +150,105 @@ pub fn show(ch: Id) {
     SHOWN.with(|s| s.set(Some(ch)));
 }
 
-pub fn set_chat_open(open: bool) {
-    CHAT_OPEN.with(|c| c.set(open));
+pub fn set_chat_open(ch: Id, open: bool) {
+    CHAT_OPEN.with_borrow_mut(|s| {
+        if open {
+            s.insert(ch);
+        } else {
+            s.remove(&ch);
+        }
+    });
+    if open {
+        CHAT_UNREAD.with_borrow_mut(|m| {
+            m.remove(&ch);
+        });
+    }
 }
 
-pub fn chat_open() -> bool {
-    CHAT_OPEN.with(|c| c.get())
+pub fn chat_open(ch: Id) -> bool {
+    CHAT_OPEN.with_borrow(|s| s.contains(&ch))
+}
+
+pub fn toggle_chat(app: &PhoenixApp) -> bool {
+    let Some(ch) = app.selected_channel.filter(|c| app.channels.get(c).is_some_and(guild_vocal)) else { return false };
+    set_chat_open(ch, !chat_open(ch));
+    true
+}
+
+pub fn on_message(app: &PhoenixApp, m: &crate::model::Message) {
+    if app.voice_channel != Some(m.channel) || m.author == app.me.id || (chat_open(m.channel) && app.selected_channel == Some(m.channel)) {
+        return;
+    }
+    bump_unread(m.channel, crate::ui::call_toasts::mentioned(app, m));
+}
+
+pub fn bump_unread(ch: Id, mention: bool) {
+    CHAT_UNREAD.with_borrow_mut(|u| {
+        let e = u.entry(ch).or_default();
+        e.0 += 1;
+        e.1 += u32::from(mention);
+    });
+}
+
+pub fn chat_unread(ch: Id) -> (u32, u32) {
+    CHAT_UNREAD.with_borrow(|m| m.get(&ch).copied().unwrap_or_default())
+}
+
+pub fn chat_badge(app: &PhoenixApp, ch: Id) -> Option<(SharedString, bool)> {
+    let (unread, mentions) = chat_unread(ch);
+    if app.voice_channel != Some(ch) || unread == 0 {
+        return None;
+    }
+    let n = if mentions > 0 { mentions } else { unread };
+    Some((if n > 99 { "99+".into() } else { n.to_string().into() }, mentions > 0))
+}
+
+pub const CHAT_MIN_W: f32 = 450.;
+pub const CHAT_DEFAULT_W: f32 = 480.;
+pub const CHAT_CALL_RESERVE: f32 = 550.;
+
+fn chat_width_path() -> Option<std::path::PathBuf> {
+    crate::paths::config_file("call_chat_sidebar_width")
+}
+
+pub fn stored_chat_width() -> f32 {
+    if let Some(w) = CHAT_W.with(Cell::get) {
+        return w;
+    }
+    let w = chat_width_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| s.trim().parse::<f32>().ok())
+        .unwrap_or(CHAT_DEFAULT_W)
+        .max(CHAT_MIN_W);
+    CHAT_W.with(|c| c.set(Some(w)));
+    w
+}
+
+pub fn set_chat_width(w: f32, persist: bool) {
+    CHAT_W.with(|c| c.set(Some(w)));
+    if persist && let Some(p) = chat_width_path() {
+        let _ = p.parent().map(std::fs::create_dir_all);
+        let _ = std::fs::write(p, format!("{w}\n"));
+    }
+}
+
+pub fn chat_width(stored: f32, wrapper_w: f32) -> (f32, bool) {
+    let max = wrapper_w - CHAT_CALL_RESERVE;
+    let floating = max <= CHAT_MIN_W;
+    (stored.clamp(CHAT_MIN_W, max.max(CHAT_MIN_W)).round(), floating)
+}
+
+fn guild_vocal(c: &crate::model::Channel) -> bool {
+    c.guild.is_some() && matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage)
 }
 
 pub fn active(app: &PhoenixApp) -> bool {
-    let Some(ch) = SHOWN.with(|s| s.get()) else { return false };
-    app.selected_channel == Some(ch)
-        && app.voice_channel == Some(ch)
-        && app.channels.get(&ch).is_some_and(|c| c.guild.is_none() || matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage))
+    let Some(ch) = app.selected_channel else { return false };
+    let Some(c) = app.channels.get(&ch) else { return false };
+    if c.guild.is_some() {
+        return guild_vocal(c);
+    }
+    SHOWN.with(|s| s.get()) == Some(ch) && app.voice_channel == Some(ch)
 }
 
 const POPOUT: &str = "icons/call/popout.svg";
@@ -242,40 +332,21 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     if !active(app) || private_split(app) {
         return None;
     }
-    let ch_id = app.voice_channel?;
+    let ch_id = app.selected_channel?;
     let ch = app.channels.get(&ch_id)?;
-    if crate::ui::call_popout::is_open() {
+    let in_call = app.voice_channel == Some(ch_id);
+    if in_call && crate::ui::call_popout::is_open() {
         return Some(popped_out(cx).flex_1().min_w_0().h_full().into_any_element());
     }
     let zoom = crate::theme::zoom();
-
-    let tiles = call_tiles(ch_id, &ch.voice_users);
-
     let vp = window.viewport_size();
-    let side = if chat_open() { CHAT_W } else { 0. };
-    let gw = (f32::from(vp.width) / zoom - 72. - crate::ui::sidebar_resize::width() - side).max(100.);
+    let wrapper_w = (f32::from(vp.width) / zoom - 72. - crate::ui::sidebar_resize::width()).max(100.);
+    let open = chat_open(ch_id);
+    let (chat_w, floating) = chat_width(stored_chat_width(), wrapper_w);
+    let side = if open && !floating { chat_w } else { 0. };
+    let gw = (wrapper_w - side).max(100.);
     let gh = (f32::from(vp.height) / zoom - 32. - if crate::theme::frame_borders() { 1. } else { 0. }).max(60.);
-    let focus = match FOCUS.with(|c| c.get()) {
-        Focus::Grid => None,
-        Focus::Tile(u, s) => tiles.iter().position(|t| t.user == u && t.stream == s),
-        Focus::Auto => tiles.iter().position(|t| t.stream),
-    };
-    let (fade, fading) = overlay_opacity();
-    let ring_fading = ch.voice_users.iter().any(|&u| {
-        let active = app.voice.is_speaking(u) || crate::voice::soundboard::is_user_playing(u);
-        crate::ui::voice_panel::speaking_fade(u, active).1
-    });
-    if fading || ring_fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active() || crate::ui::voice_effects::has_effects() {
-        window.request_animation_frame();
-    }
 
-    let tiles_el = if let Some(fi) = focus.filter(|_| tiles.len() > 1) {
-        focused_layer(app, &tiles, fi, gw, gh, fade, cx)
-    } else {
-        grid_layer(app, &tiles, gw, gh, fade, cx)
-    };
-
-    let toasts = crate::ui::call_toasts::render(app, ch_id, window, cx);
     let call = div()
         .id("call-view")
         .flex_1()
@@ -286,15 +357,39 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex_col()
         .bg(t(idx::BLACK))
         .when(crate::theme::frame_borders(), |d| d.border_t_1().border_color(t(idx::APP_FRAME_BORDER)))
-        .on_mouse_move(cx.listener(|_, _, _, cx| woke(cx)))
-        .child(tiles_el)
-        .child(top_bar(app, crate::ui::dm_profile_panel::channel_name(app, ch), cx))
-        .children(header_status(ch_id))
-        .child(div().h(z(8.)))
-        .child(div().flex_1().min_h_0())
-        .child(bottom_controls(app, collapse(gw), cx))
-        .relative()
-        .children(toasts);
+        .relative();
+    let call = if in_call {
+        let tiles = call_tiles(ch_id, &ch.voice_users);
+        let focus = match FOCUS.with(|c| c.get()) {
+            Focus::Grid => None,
+            Focus::Tile(u, s) => tiles.iter().position(|t| t.user == u && t.stream == s),
+            Focus::Auto => tiles.iter().position(|t| t.stream),
+        };
+        let (fade, fading) = overlay_opacity();
+        let ring_fading = ch.voice_users.iter().any(|&u| {
+            let active = app.voice.is_speaking(u) || crate::voice::soundboard::is_user_playing(u);
+            crate::ui::voice_panel::speaking_fade(u, active).1
+        });
+        if fading || ring_fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active() || crate::ui::voice_effects::has_effects() {
+            window.request_animation_frame();
+        }
+        let tiles_el = if let Some(fi) = focus.filter(|_| tiles.len() > 1) {
+            focused_layer(app, &tiles, fi, gw, gh, fade, cx)
+        } else {
+            grid_layer(app, &tiles, gw, gh, fade, cx)
+        };
+        let toasts = crate::ui::call_toasts::render(app, ch_id, window, cx);
+        call.on_mouse_move(cx.listener(|_, _, _, cx| woke(cx)))
+            .child(tiles_el)
+            .child(top_bar(app, ch_id, crate::ui::dm_profile_panel::channel_name(app, ch), cx))
+            .children(header_status(ch_id))
+            .child(div().h(z(8.)))
+            .child(div().flex_1().min_h_0())
+            .child(bottom_controls(app, collapse(gw), cx))
+            .children(toasts)
+    } else {
+        call.child(empty_call(app, ch_id, cx)).child(top_bar(app, ch_id, crate::ui::dm_profile_panel::channel_name(app, ch), cx))
+    };
 
     let root = div()
         .flex_1()
@@ -303,27 +398,159 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .overflow_hidden()
         .flex()
         .flex_row()
+        .relative()
         .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
         .child(call)
-        .children(stream_menu(app, cx))
-        .children(crate::ui::call_menus::render(app, ch_id, cx));
-    Some(if chat_open() {
-        root.child(
+        .when(in_call, |d| d.children(stream_menu(app, cx)).children(crate::ui::call_menus::render(app, ch_id, cx)));
+    if !open {
+        return Some(root.into_any_element());
+    }
+    let panel = div()
+        .id("call-chat-panel")
+        .w(z(chat_w))
+        .flex_none()
+        .min_w_0()
+        .h_full()
+        .flex()
+        .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+        .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(c(tok(idx::APP_FRAME_BORDER))))
+        .overflow_hidden()
+        .when(floating, |d| d.absolute().top_0().right_0().bottom_0())
+        .child(div().w(z(chat_w)).h_full().flex().flex_col().child(crate::ui::chat::render(app, window, cx)))
+        .when(!floating, |d| d.child(chat_resize_handle(wrapper_w, cx)));
+    Some(root.child(panel).into_any_element())
+}
+
+fn chat_resize_handle(wrapper_w: f32, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+    use gpui::{Bounds, DispatchPhase, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, canvas};
+    let weak = cx.entity().downgrade();
+    let probe = canvas(
+        |b: Bounds<Pixels>, _, _| CHAT_RIGHT.with(|r| r.set(f32::from(b.origin.x + b.size.width))),
+        move |_, _, window, _| {
+            if !CHAT_DRAG.with(Cell::get) {
+                return;
+            }
+            let w1 = weak.clone();
+            window.on_mouse_event(move |ev: &MouseMoveEvent, phase, _, cx| {
+                if phase != DispatchPhase::Bubble || !CHAT_DRAG.with(Cell::get) {
+                    return;
+                }
+                let w = (CHAT_RIGHT.with(Cell::get) - f32::from(ev.position.x)) / crate::theme::zoom();
+                set_chat_width(chat_width(w, wrapper_w).0, false);
+                let _ = w1.update(cx, |_, cx| cx.notify());
+            });
+            let w2 = weak.clone();
+            window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
+                if phase != DispatchPhase::Bubble || !CHAT_DRAG.with(Cell::get) {
+                    return;
+                }
+                CHAT_DRAG.with(|d| d.set(false));
+                set_chat_width(stored_chat_width(), true);
+                let _ = w2.update(cx, |_, cx| cx.notify());
+            });
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full();
+    div().absolute().top_0().left_0().size_full().child(probe).child(
+        div()
+            .id("call-chat-resize")
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left(z(-CHAT_RESIZE_HANDLE_W / 2.))
+            .w(z(CHAT_RESIZE_HANDLE_W))
+            .cursor_ew_resize()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                CHAT_DRAG.with(|d| d.set(true));
+                cx.stop_propagation();
+            }),
+    )
+}
+
+const CHAT_RESIZE_HANDLE_W: f32 = 8.;
+
+fn empty_call(app: &PhoenixApp, ch_id: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let Some(ch) = app.channels.get(&ch_id) else { return div().into_any_element() };
+    let users: Vec<Id> = ch.voice_users.iter().copied().fold(Vec::new(), |mut v, u| {
+        if !v.contains(&u) {
+            v.push(u);
+        }
+        v
+    });
+    let per_row = if users.len() == 4 { 2. } else { 3. };
+    let name = |u: Id| -> String { crate::ui::sidebar::voice_user_name(app, u).to_string() };
+    let line: SharedString = match users.as_slice() {
+        [] => crate::t!("call.empty.nobody"),
+        [a] => crate::t!("call.empty.one", a = name(*a)),
+        [a, b] => crate::t!("call.empty.two", a = name(*a), b = name(*b)),
+        [a, b, rest @ ..] => crate::t!("call.empty.many", a = name(*a), b = name(*b), n = rest.len()),
+    };
+    let tiles: Vec<AnyElement> = users
+        .iter()
+        .take(5)
+        .map(|&u| div().m(z(4.)).child(render_tile(app, &Tile { user: u, stream: false, invite: false }, 160., 90., 160., 1., cx)).into_any_element())
+        .collect();
+    let join = div()
+        .id("call-empty-join")
+        .mt(z(24.))
+        .h(z(40.))
+        .min_w(z(100.))
+        .px(z(16.))
+        .rounded(z(8.))
+        .border_1()
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(z(14.))
+        .line_height(z(16.))
+        .font_weight(FontWeight::MEDIUM)
+        .whitespace_nowrap()
+        .bg(t(idx::CONTROL_OVERLAY_PRIMARY_BACKGROUND_DEFAULT))
+        .border_color(t(idx::CONTROL_OVERLAY_PRIMARY_BORDER_DEFAULT))
+        .text_color(t(idx::CONTROL_OVERLAY_PRIMARY_TEXT_DEFAULT))
+        .cursor_pointer()
+        .hover(|s| {
+            s.bg(t(idx::CONTROL_OVERLAY_PRIMARY_BACKGROUND_HOVER))
+                .border_color(t(idx::CONTROL_OVERLAY_PRIMARY_BORDER_HOVER))
+                .text_color(t(idx::CONTROL_OVERLAY_PRIMARY_TEXT_HOVER))
+        })
+        .active(|s| {
+            s.bg(t(idx::CONTROL_OVERLAY_PRIMARY_BACKGROUND_ACTIVE))
+                .border_color(t(idx::CONTROL_OVERLAY_PRIMARY_BORDER_ACTIVE))
+                .text_color(t(idx::CONTROL_OVERLAY_PRIMARY_TEXT_ACTIVE))
+        })
+        .on_click(cx.listener(move |a, _, _, cx| a.join_voice(Some(ch_id), cx)))
+        .child(crate::t!("call.empty.join"));
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .child(div().relative().flex().flex_wrap().items_center().justify_center().mb(z(20.)).max_w(z(168. * per_row)).children(tiles))
+        .child(
             div()
-                .w(z(CHAT_W))
-                .flex_none()
-                .min_w_0()
-                .h_full()
-                .flex()
-                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
-                .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(c(tok(idx::APP_FRAME_BORDER))))
+                .my(z(8.))
+                .max_w(gpui::relative(0.75))
                 .overflow_hidden()
-                .child(div().w(z(CHAT_W)).h_full().flex().flex_col().child(crate::ui::chat::render(app, window, cx))),
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .text_size(z(24.))
+                .line_height(z(30.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t(idx::TEXT_STRONG))
+                .child(crate::ui::dm_profile_panel::channel_name(app, ch)),
         )
+        .child(div().flex().items_center().text_size(z(14.)).line_height(z(18.)).text_color(t(idx::TEXT_DEFAULT)).child(line))
+        .child(join)
         .into_any_element()
-    } else {
-        root.into_any_element()
-    })
 }
 
 pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -826,10 +1053,28 @@ fn strip_button(open: bool, top: f32, fade: f32, cx: &mut Context<PhoenixApp>) -
     )
 }
 
-const CHAT_W: f32 = 480.;
+pub const CHAT_BADGED: &str = "icons/call/chat-badged.svg";
 
-fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
-    let open = chat_open();
+pub fn badged_chat_svg(path: &str) -> Option<String> {
+    if path != CHAT_BADGED {
+        return None;
+    }
+    let src = crate::icons::lookup(&crate::icons::path("chat"))?;
+    let src = std::str::from_utf8(&src).ok()?;
+    let open_end = src.find("<svg").and_then(|i| src[i..].find('>').map(|j| i + j + 1))?;
+    let close = src.rfind("</svg>")?;
+    Some(format!(
+        r#"{}<defs><mask id="chat-badge-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect fill="white" width="24" height="24"/><circle cx="20" cy="19" r="10" fill="black"/></mask></defs><g mask="url(#chat-badge-cut)">{}</g></svg>"#,
+        &src[..open_end],
+        &src[open_end..close]
+    ))
+}
+
+fn top_bar(app: &PhoenixApp, ch: Id, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+    let open = chat_open(ch);
+    let badge = chat_badge(app, ch);
+    let icon_color = t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT });
+    let icon = glyph(if badge.is_some() { SharedString::from(CHAT_BADGED) } else { crate::icons::path("chat") }, 24., icon_color);
     div()
         .h(z(33.))
         .flex_none()
@@ -857,7 +1102,9 @@ fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) 
                 .child(
                     div()
                         .id("call-chat")
-                        .size(z(24.))
+                        .group("call-chat")
+                        .h(z(24.))
+                        .min_w(z(24.))
                         .rounded(z(8.))
                         .flex()
                         .items_center()
@@ -868,13 +1115,33 @@ fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) 
                         } else {
                             crate::t!("call.show_chat")
                         })
-                        .child(named(
-                            "chat",
-                            24.,
-                            t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT }),
-                        ))
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            set_chat_open(!chat_open());
+                        .child(icon)
+                        .children(badge.map(|(label, mention)| {
+                            let (bg, hover, fg) = if mention {
+                                (t(idx::BACKGROUND_FEEDBACK_NOTIFICATION), t(idx::RED_360), t(idx::WHITE))
+                            } else {
+                                (t(idx::INTERACTIVE_TEXT_DEFAULT), t(idx::WHITE), t(idx::BLACK))
+                            };
+                            div()
+                                .flex_none()
+                                .mt(z(14.))
+                                .ml(z(-12.))
+                                .h(z(16.))
+                                .min_w(z(16.))
+                                .px(z(4.))
+                                .rounded_full()
+                                .bg(bg)
+                                .group_hover("call-chat", move |s| s.bg(hover))
+                                .text_color(fg)
+                                .text_size(z(12.))
+                                .line_height(z(16.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .flex()
+                                .justify_center()
+                                .child(label)
+                        }))
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            set_chat_open(ch, !chat_open(ch));
                             cx.notify();
                         })),
                 ),
@@ -1672,6 +1939,43 @@ pub(crate) fn stream_empty_preview(light: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn call_chat_sidebar_width_follows_the_client_clamp() {
+        use super::chat_width;
+        assert_eq!(chat_width(480., 1600.), (480., false));
+        assert_eq!(chat_width(300., 1600.), (450., false));
+        assert_eq!(chat_width(2000., 1600.), (1050., false));
+        assert_eq!(chat_width(480., 1000.), (450., true));
+    }
+
+    #[test]
+    fn chat_open_state_is_per_channel_and_clears_unread() {
+        use super::*;
+        let (a, b) = (Id(900_001), Id(900_002));
+        assert!(!chat_open(a));
+        bump_unread(a, false);
+        bump_unread(a, true);
+        assert_eq!(chat_unread(a), (2, 1));
+        set_chat_open(a, true);
+        assert!(chat_open(a) && !chat_open(b));
+        assert_eq!(chat_unread(a), (0, 0));
+        set_chat_open(a, false);
+        assert!(!chat_open(a));
+    }
+
+    #[test]
+    fn voice_click_routes_like_handle_voice_connect() {
+        use crate::app::voice_click_routes;
+        use crate::model::Id;
+        let g = Some(Id(1));
+        let guild_of = |_| g;
+        assert!(!voice_click_routes(None, Some(Id(10)), Id(20), 0, guild_of, g));
+        assert!(voice_click_routes(None, Some(Id(10)), Id(20), 3, guild_of, g));
+        assert!(voice_click_routes(Some(Id(20)), Some(Id(10)), Id(20), 0, guild_of, g));
+        assert!(voice_click_routes(Some(Id(21)), Some(Id(21)), Id(20), 0, guild_of, g));
+        assert!(!voice_click_routes(Some(Id(21)), Some(Id(10)), Id(20), 0, guild_of, g));
+    }
+
     #[test]
     fn tile_theme_uses_the_server_profile_once_loaded() {
         use super::tile_theme;

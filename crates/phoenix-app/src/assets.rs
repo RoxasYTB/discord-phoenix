@@ -369,6 +369,9 @@ impl AssetSource for Assets {
         if let Some(b) = crate::icons::lookup(path) {
             return Ok(Some(Cow::Owned(b.to_vec())));
         }
+        if let Some(svg) = crate::ui::call_view::badged_chat_svg(path) {
+            return Ok(Some(Cow::Owned(svg.into_bytes())));
+        }
         Ok(svg_for(path).map(|s| Cow::Borrowed(s.as_bytes())))
     }
 

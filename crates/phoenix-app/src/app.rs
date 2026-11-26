@@ -618,11 +618,37 @@ impl PhoenixApp {
     pub fn select_channel(&mut self, id: Id, cx: &mut Context<Self>) {
         let Some(ch) = self.channels.get(&id) else { return };
         if matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage) {
-            self.join_voice(Some(id), cx);
+            if self.voice_channel != Some(id) {
+                self.join_voice(Some(id), cx);
+            }
             self.open_channel_chat(id, cx);
             crate::ui::call_view::show(id);
             return;
         }
+        self.open_channel_chat(id, cx);
+    }
+
+    pub fn click_channel(&mut self, id: Id, cx: &mut Context<Self>) {
+        let Some(ch) = self.channels.get(&id) else { return };
+        if ch.guild.is_none() || !matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage) {
+            self.select_channel(id, cx);
+            return;
+        }
+        let route = voice_click_routes(self.voice_channel, self.selected_channel, id, ch.mentions, |c| self.channels.get(&c).and_then(|c| c.guild), ch.guild);
+        if ch.mentions > 0 {
+            crate::ui::call_view::set_chat_open(id, true);
+        }
+        if self.voice_channel != Some(id) {
+            self.join_voice(Some(id), cx);
+        }
+        if route {
+            self.open_channel_chat(id, cx);
+        }
+        cx.notify();
+    }
+
+    pub fn open_voice_chat(&mut self, id: Id, cx: &mut Context<Self>) {
+        crate::ui::call_view::set_chat_open(id, true);
         self.open_channel_chat(id, cx);
     }
 
@@ -866,6 +892,7 @@ impl PhoenixApp {
             }
             AppEvent::MessageCreate(m) => {
                 ui::call_toasts::on_message(self, &m, cx);
+                ui::call_view::on_message(self, &m);
                 self.append_message(m, cx)
             }
             AppEvent::MessageUpdate(m) => self.replace_message(m, cx),
@@ -1529,6 +1556,10 @@ impl Render for PhoenixApp {
             }))
             .map(|d| crate::shortcuts::handlers(self, d, window, cx))
             .on_action(cx.listener(|this, _: &ToggleMembers, _, cx| {
+                if ui::call_view::toggle_chat(this) {
+                    cx.notify();
+                    return;
+                }
                 this.show_members = !this.show_members;
                 cx.notify();
             }))
@@ -1563,4 +1594,10 @@ impl Render for PhoenixApp {
             .children(ui::window_chrome::resize_handles(window))
             .children(ui::incoming_call::render(self, cx))
     }
+}
+
+pub fn voice_click_routes(voice: Option<Id>, selected: Option<Id>, clicked: Id, mentions: u32, guild_of: impl Fn(Id) -> Option<Id>, guild: Option<Id>) -> bool {
+    let connected = voice == Some(clicked);
+    let viewing_call = voice.is_some_and(|v| selected == Some(v) && guild_of(v) == guild);
+    connected || viewing_call || mentions > 0
 }

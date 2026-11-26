@@ -1174,7 +1174,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         .cursor_pointer()
                         .on_click(move |_, _, cx| {
                             cx.stop_propagation();
-                            chat_entity.update(cx, |a, cx| a.open_channel_chat(id, cx));
+                            chat_entity.update(cx, |a, cx| a.open_voice_chat(id, cx));
                         })
                         .tooltip(crate::ui::tooltip::tip(crate::t!("channel.open_chat")))
                         .child(action(Icon::Members, Some("chat"))),
@@ -1258,7 +1258,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         }
                     }
                 })
-                .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_channel(id, cx)))
+                .on_click(move |_, _, cx| e.update(cx, |a, cx| a.click_channel(id, cx)))
                 .on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
                     cx.stop_propagation();
                     crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
