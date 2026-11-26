@@ -949,6 +949,7 @@ fn add_friend(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
         .child(
             div()
                 .flex_initial()
+                .min_w_0()
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
