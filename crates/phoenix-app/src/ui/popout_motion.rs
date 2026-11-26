@@ -150,7 +150,7 @@ pub fn base_layer(open: bool, at: Instant, reduced: bool) -> Option<Transition> 
     let t = t.opacity(o.0, o.1);
     let t = if reduced { t } else { t.scale(s.0, s.1) };
     let settled = at.elapsed().as_secs_f32() > gpui::spring_settle_time(LAYER_SPRING);
-    (!(settled && !open)).then_some(t)
+    (open || !settled).then_some(t)
 }
 
 #[cfg(test)]
