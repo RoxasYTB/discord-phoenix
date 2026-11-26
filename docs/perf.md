@@ -389,3 +389,32 @@ when something is dirty, present-only otherwise) and report the CPU of the whole
   −28743.05 px, one notch of 60 px every 8 frames). The headless window is inactive, so GPUI's
   inactive-window frame limiter only runs every second request there; on screen the compositor
   frame callback steps it on every frame.
+
+## Fallback fonts from the disk cache (fe037d9b…0c97fcfb, 2026-11-26)
+
+The 24 renamed text faces and the two emoji copies are kept in
+`~/.cache/discord-phoenix/fonts/fallback-built` (about 48 MB, never in git).
+`current.json` holds the key: a format number, the app version, the
+fontconfig stamp, and the size and mtime of every file the build read
+(source faces, bold candidates, the emoji font, the web Noto folder). Any
+change rebuilds once. The chain and the gg sans extraction now run on their
+own threads, and the UI no longer waits for the extraction when gg sans is
+already installed from the decoded cache.
+
+`real_shots` with `PHX_BOOT_FRAMES`, real account, offscreen, int-bin dev
+build (load average 6–11, so only the order of magnitude counts):
+
+| mark | before (52f3c2cd) | after (358d46b7, warm) |
+|---|---|---|
+| fallback chain prepared | ~2.6 s built (`font_fallback_ready` 6.14 s) | **49–66 ms** from the cache (`font_fallback_ready` 1.07 s) |
+| `init_done` | 0.65 s | 0.36 s |
+| `connect_start` | 1.81 s | 0.75 s |
+| `snapshot_applied` | 6.22 s | 1.15 s |
+| `ready_applied` (RESUME) | 6.81 s | 2.47 s |
+| `boot_screen_fade` (UI shown) | 6.23 s | **2.80 s**, 0.33 s after READY |
+| first captured frame | 12.6 s, already `showing=false` | 0.1 s, connecting screen |
+
+The UI is shown once the open channel has its page after READY; the cached
+session itself is on screen from 1.15 s under the connecting screen. The
+headless example runs every GPUI task on one thread, so the app itself
+should be faster than these numbers.

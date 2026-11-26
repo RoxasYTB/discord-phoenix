@@ -18,7 +18,7 @@ Legend: ✅ implemented and traced to the source, ⚠ partial, ❌ missing.
 | status | `.splash-status` white, 16px, weight 500, `top:-30px`; "Checking for updates…" then "Starting…" (English only in the client) | `Status::CheckingForUpdates` → `Status::Starting` | ✅ |
 | progress | placeholder 8px, 10px top margin (bar only while downloading updates) | placeholder only (no update download at start) | ✅ |
 | quotes | `DISCORD_SPLASH_SCREEN_QUOTE` handler is empty in this build: no quote is shown | none | ✅ |
-| order | splash, then the main window shows the connecting screen | main.rs opens the splash, waits for the font fallback chain (at most 3 s), says "Starting…", opens the main window and closes the splash | ✅ |
+| order | splash, then the main window shows the connecting screen | main.rs opens the splash, waits for the font fallback chain (at most 3 s; 49–66 ms when it comes from `fonts/fallback-built`, see perf.md), says "Starting…", opens the main window and closes the splash | ✅ |
 
 ## Connecting screen in the main window (`ui/boot.rs`)
 
@@ -56,3 +56,13 @@ opacities .08 / .10–.19 / .06, 16px top margin on each group. The Phoenix rend
 1280×700, dpr 1.5 lands the avatar and blobs on the same columns (682 vs 681 device px). The blobs
 are random on both sides, so only the geometry is compared. When the channel is empty, the
 placeholder now keeps the 20px gap above the composer like the last message does.
+
+## Start-up frames (`real_shots`, `PHX_BOOT_FRAMES`)
+
+`PHX_BOOT_FRAMES=<prefix>` saves one frame every `PHX_BOOT_EVERY` ms (100 by default) from the moment the
+window opens, running pending tasks only for that interval between captures, until three frames after the
+connecting screen is gone. `PHX_ONLY_GUILD`, `PHX_GUILD` and `PHX_CHANNEL` are applied on every frame (rail
+limited to that server, target channel opened as soon as the cached session has it). Measured 26/11 at
+358d46b7: connecting screen from 0.1 s to 2.8 s, then the UI. The frame buffer is larger than the window
+when `PHX_SCALE` is not 2 (black band on the right and bottom): crop to `PHX_W·PHX_SCALE × PHX_H·PHX_SCALE`.
+The spinner video is not drawn in these headless frames yet.
