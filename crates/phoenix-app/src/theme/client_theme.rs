@@ -312,7 +312,7 @@ pub fn image(p: &Preset, w: f32, h: f32) -> Option<Arc<gpui::Image>> {
 }
 
 pub fn backdrop(window: &gpui::Window) -> Option<gpui::AnyElement> {
-    use gpui::{IntoElement, ParentElement, Styled, div};
+    use gpui::{IntoElement, ParentElement, Styled, StyledImage, div};
     let p = active()?;
     let vp = window.viewport_size();
     let img = image(p, f32::from(vp.width), f32::from(vp.height))?;

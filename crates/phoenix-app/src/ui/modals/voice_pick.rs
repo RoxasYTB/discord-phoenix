@@ -50,7 +50,7 @@ pub fn channel_row(app: &PhoenixApp, id: Id, name: SharedString, guild: SharedSt
         .gap(z(8.))
         .child(crate::ui::icon(crate::ui::sidebar::channel_icon(kind), 20., c(tok(idx::CHANNEL_ICON))))
         .child(div().flex_shrink_0().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(name))
-        .child(div().flex_shrink().min_w_0().truncate().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(guild))
+        .child(div().flex_shrink(1.).min_w_0().truncate().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(guild))
 }
 
 pub fn render_pick(app: &PhoenixApp, p: &VoicePick, cx: &mut Context<PhoenixApp>) -> AnyElement {

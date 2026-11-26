@@ -2300,7 +2300,7 @@ const THEME_SWATCHES: [(f32, u32, f32, u32, f32); 22] = [
 
 fn nitro_themes(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let current = super::client_preset(&app.prefs).map(|p| p.id);
-    let mut tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
+    let tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
         let preset = crate::theme::client_theme::PRESETS.get(i).map(|p| p.id);
         let selected = preset.is_some() && preset == current;
         let face = div().size_full().rounded(z(8.)).bg(gpui::linear_gradient(
