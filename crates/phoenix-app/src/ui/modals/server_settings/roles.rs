@@ -1005,6 +1005,7 @@ fn members(app: &PhoenixApp, e: &Editor, cx: &mut Cx) -> AnyElement {
         .flatten()
         .enumerate()
         .map(|(i, id)| {
+            let user = *id;
             let u = app.users.get(&crate::model::Id(*id));
             let name: SharedString = u.map(|u| u.display_name.clone()).unwrap_or_else(|| id.to_string().into());
             let tag: SharedString = u.map(|u| u.name.clone()).unwrap_or_default();
@@ -1021,18 +1022,134 @@ fn members(app: &PhoenixApp, e: &Editor, cx: &mut Cx) -> AnyElement {
                 .child(text(name, 14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG).ml(z(8.)))
                 .child(text(tag, 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE).ml(z(4.)))
                 .child(div().flex_1())
-                .child(div().mx(z(8.)).child(gpui::svg().path(crate::icons::path("settings/circle-x")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
+                .child(
+                    div()
+                        .id(("ss-role-member-rm", i))
+                        .mx(z(8.))
+                        .cursor_pointer()
+                        .group("ss-role-rm")
+                        .child(gpui::svg().path(crate::icons::path("settings/circle-x")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))).group_hover("ss-role-rm", |s| s.text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER)))))
+                        .on_click(cx.listener(move |a, ev: &gpui::ClickEvent, _, cx| {
+                            cx.stop_propagation();
+                            if ev.modifiers().shift {
+                                remove_member(a, user, cx);
+                            } else {
+                                with_state(|s| s.role_remove = Some(user));
+                            }
+                            cx.notify();
+                        })),
+                )
                 .into_any_element()
         })
         .collect();
-    let _ = cx;
+    let locked = e.everyone;
     div()
         .mt(z(16.))
         .flex()
         .flex_col()
-        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(None).flex_1()).child(kit::btn_sm("ss-role-add-members", crate::t!("gs.role.add_members"), BtnKind::Primary)))
+        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(None).flex_1()).child(kit::btn_sm("ss-role-add-members", crate::t!("gs.role.add_members"), BtnKind::Primary).when(locked, |b| b.opacity(0.5)).on_click(cx.listener(move |_, _, _, cx| {
+            if !locked {
+                with_state(|s| s.role_add = Some(super::super::channel_perms::AddMembers { search: None, picked: Vec::new() }));
+            }
+            cx.notify();
+        }))))
         .child(div().mt(z(24.)).flex().flex_col().children(rows))
         .into_any_element()
+}
+
+pub const MAX_ADD_MEMBERS: usize = 30;
+
+fn remove_member(a: &mut PhoenixApp, user: u64, cx: &mut Cx) {
+    let Some((guild, role)) = with_state(|s| s.role.as_ref().map(|e| (s.guild, e.id))).flatten() else { return };
+    let roles = remaining_roles(a, guild, user, role);
+    a.blocked_write(crate::actions::guard::GuardedWrite::set_member_roles(guild.0, user, &roles), cx);
+}
+
+pub fn remaining_roles(app: &PhoenixApp, guild: crate::model::Id, user: u64, role: u64) -> Vec<u64> {
+    app.members.get(&guild).into_iter().flatten().find(|m| m.user.0 == user).map(|m| m.roles.iter().map(|r| r.0).filter(|r| *r != role).collect()).unwrap_or_default()
+}
+
+pub fn remove_member_modal(app: &PhoenixApp, s: &State, user: u64, cx: &mut Cx) -> Option<AnyElement> {
+    let e = s.role.as_ref()?;
+    let name = app.users.get(&crate::model::Id(user)).map(|u| u.display_name.to_string()).unwrap_or_else(|| user.to_string());
+    let ent = cx.entity();
+    let close: crate::ui::modal::Action = std::rc::Rc::new(move |_, cx| {
+        with_state(|s| s.role_remove = None);
+        ent.update(cx, |_, cx| cx.notify());
+    });
+    let sub = crate::i18n::t("gs.role.remove_member_body", &[("username", &name), ("roleName", &e.name0)]);
+    let body = text(crate::t!("gs.role.remove_member_hint"), 16., 20., FontWeight::NORMAL, idx::TEXT_MUTED);
+    let c2 = close.clone();
+    let c3 = close.clone();
+    let footer = div()
+        .w_full()
+        .flex()
+        .justify_end()
+        .gap(z(8.))
+        .child(crate::ui::controls::button("ss-role-rm-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click(move |_, w, cx| c2(w, cx)))
+        .child(crate::ui::controls::button("ss-role-rm-ok", crate::t!("gs.role.remove_member_ok"), BtnKind::Critical).on_click(cx.listener(move |a, _, w, cx| {
+            c3(w, cx);
+            remove_member(a, user, cx);
+        })));
+    Some(crate::ui::modals::card_with(440., crate::t!("gs.role.remove_member_title"), Some(sub), body.into_any_element(), Some(footer.into_any_element()), close))
+}
+
+pub fn add_members_modal(app: &PhoenixApp, s: &State, am: &super::super::channel_perms::AddMembers, cx: &mut Cx) -> AnyElement {
+    let ent = cx.entity();
+    let close: crate::ui::modal::Action = {
+        let ent = ent.clone();
+        std::rc::Rc::new(move |_, cx| {
+            with_state(|s| s.role_add = None);
+            ent.update(cx, |_, cx| cx.notify());
+        })
+    };
+    let (role, role_name) = s.role.as_ref().map(|e| (e.id, e.name0.clone())).unwrap_or_default();
+    let present: Vec<crate::model::Id> = app.members.get(&s.guild).into_iter().flatten().filter(|m| m.roles.iter().any(|r| r.0 == role)).map(|m| m.user).collect();
+    let toggle: super::super::channel_perms::Toggle = {
+        let ent = ent.clone();
+        std::rc::Rc::new(move |id, kind, cx| {
+            with_state(|s| {
+                if let Some(a) = s.role_add.as_mut() {
+                    if let Some(i) = a.picked.iter().position(|p| p.0 == id) {
+                        a.picked.remove(i);
+                    } else {
+                        a.picked.push((id, kind));
+                    }
+                }
+            });
+            ent.update(cx, |_, cx| cx.notify());
+        })
+    };
+    let header = text(
+        crate::i18n::t("gs.role.add_members_sub", &[("numMembers", &MAX_ADD_MEMBERS.to_string()), ("roleName", &role_name)]),
+        14.,
+        18.,
+        FontWeight::NORMAL,
+        idx::TEXT_DEFAULT,
+    )
+    .mb(z(8.))
+    .into_any_element();
+    let body = super::super::channel_perms::picker_body(app, Some(s.guild), None, &present, &am.picked, am.search.as_ref(), header, toggle, cx);
+    let n = am.picked.len();
+    let ok = n > 0 && n <= MAX_ADD_MEMBERS;
+    let guild = s.guild.0;
+    let c2 = close.clone();
+    let c3 = close.clone();
+    let footer = div()
+        .w_full()
+        .flex()
+        .gap(z(8.))
+        .child(crate::ui::controls::button("ss-role-am-cancel", crate::t!("common.cancel"), BtnKind::Secondary).flex_1().on_click(move |_, w, cx| c2(w, cx)))
+        .child(crate::ui::controls::button("ss-role-am-add", crate::t!("gs.role.add_members_ok"), BtnKind::Primary).flex_1().when(!ok, |b| b.opacity(0.5).cursor_not_allowed()).on_click(cx.listener(move |a, _, w, cx| {
+            if !ok {
+                return;
+            }
+            let ids: Vec<u64> = with_state(|s| s.role_add.as_ref().map(|a| a.picked.iter().map(|p| p.0.0).collect())).flatten().unwrap_or_default();
+            c3(w, cx);
+            a.blocked_write(crate::actions::guard::GuardedWrite::add_role_members(guild, role, &ids), cx);
+        })))
+        .into_any_element();
+    super::super::channel_perms::picker_frame("ss-role-add", crate::t!("gs.role.add_members_title"), body, footer, close)
 }
 
 pub fn editor(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {

@@ -196,6 +196,8 @@ pub struct State {
     pub ban_page: usize,
     pub access: access::Pending,
     pub prune: Option<people::Prune>,
+    pub role_add: Option<super::channel_perms::AddMembers>,
+    pub role_remove: Option<u64>,
     pub security: Option<super::privacy::Security>,
     pub subs: Vec<gpui::Subscription>,
 }
@@ -223,6 +225,8 @@ impl State {
             ban_page: 0,
             access: access::Pending::default(),
             prune: None,
+            role_add: None,
+            role_remove: None,
             security: None,
             subs: Vec::new(),
         }
@@ -407,6 +411,14 @@ pub fn prepare(s: &mut State, window: &mut Window, cx: &mut Context<PhoenixApp>)
         "menu.gs.access" => access::prepare(s, window, cx),
         _ => {}
     }
+    if let Some(a) = s.role_add.as_mut()
+        && a.search.is_none()
+    {
+        let q = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("gs.role.add_search")));
+        q.update(cx, |st, cx| st.focus(window, cx));
+        s.subs.push(cx.observe(&q, |_, _, cx| cx.notify()));
+        a.search = Some(q);
+    }
     if let Some(r) = s.role.as_mut()
         && r.name.is_none()
     {
@@ -573,6 +585,8 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         .children(crate::ui::server_pages::modal(app, cx).map(|m| gpui::deferred(m).with_priority(25)))
         .children((s.key() == "menu.gs.access").then(|| access::modal(app, s, cx)).flatten().map(|m| gpui::deferred(m).with_priority(25)))
         .children(s.prune.as_ref().map(|p| gpui::deferred(people::prune_modal(app, s, p, cx)).with_priority(25)))
+        .children(s.role_add.as_ref().map(|a| gpui::deferred(roles::add_members_modal(app, s, a, cx)).with_priority(25)))
+        .children(s.role_remove.and_then(|u| roles::remove_member_modal(app, s, u, cx)).map(|m| gpui::deferred(m).with_priority(25)))
         .children(s.security.as_ref().map(|sec| {
             let e = cx.entity();
             let close: crate::ui::modal::Action = Rc::new(move |_, cx| {

@@ -813,11 +813,14 @@ fn security_keys(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         }
         return div().h(z(48.)).into_any_element();
     };
+    let last = list.len() == 1;
     div()
         .flex()
         .flex_col()
         .gap(z(8.))
         .children(list.into_iter().map(|k| {
+            let target = crate::ui::extra_menus::Target::SecurityKey { id: k.id.clone(), name: k.name.clone(), last };
+            let open = crate::ui::extra_menus::opened().as_ref() == Some(&target);
             let used = k.last_used.map(|d| crate::t!("settings.mfa.key_last_used", last_used = crate::i18n::calendar(d.with_timezone(&chrono::Local), chrono::Local::now())));
             div()
                 .flex()
@@ -835,7 +838,12 @@ fn security_keys(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                         .justify_center()
                         .cursor_pointer()
                         .hover(|s| s.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_HOVER))))
-                        .child(gpui::svg().path(crate::icons::path("more-horizontal")).size(z(20.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
+                        .when(open, |d| d.bg(c(tok(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE))))
+                        .child(gpui::svg().path(crate::icons::path("more-horizontal")).size(z(20.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT))))
+                        .on_click(move |ev, w, _| {
+                            let p = ev.position();
+                            crate::ui::extra_menus::open(target.clone(), gpui::point(p.x, p.y + gpui::px(16.)), w)
+                        }),
                 )
         }))
         .into_any_element()

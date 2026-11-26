@@ -99,6 +99,24 @@ impl GuardedWrite {
         write(Method::POST, "/users/@me/delete", Some(json!({ "password": password })))
     }
 
+    pub fn rename_webauthn(credential: &str, name: &str) -> Self {
+        write(Method::PATCH, format!("/users/@me/mfa/webauthn/credentials/{credential}"), Some(json!({ "name": name })))
+    }
+
+    pub fn delete_webauthn(credential: &str) -> Self {
+        write(Method::DELETE, format!("/users/@me/mfa/webauthn/credentials/{credential}"), None)
+    }
+
+    pub fn add_role_members(guild: u64, role: u64, members: &[u64]) -> Self {
+        let ids: Vec<String> = members.iter().map(u64::to_string).collect();
+        write(Method::PATCH, format!("/guilds/{guild}/roles/{role}/members"), Some(json!({ "member_ids": ids })))
+    }
+
+    pub fn set_member_roles(guild: u64, user: u64, roles: &[u64]) -> Self {
+        let ids: Vec<String> = roles.iter().map(u64::to_string).collect();
+        write(Method::PATCH, format!("/guilds/{guild}/members/{user}"), Some(json!({ "roles": ids })))
+    }
+
     pub fn create_role(guild: u64, name: &str) -> Self {
         write(
             Method::POST,
@@ -266,6 +284,10 @@ mod tests {
             GuardedWrite::ring_call(9),
             GuardedWrite::add_recipient(9, 2),
             GuardedWrite::disable_account("pw"),
+            GuardedWrite::add_role_members(5, 6, &[7]),
+            GuardedWrite::set_member_roles(5, 7, &[]),
+            GuardedWrite::rename_webauthn("9", "Clé"),
+            GuardedWrite::delete_webauthn("9"),
             GuardedWrite::delete_account("pw"),
             GuardedWrite::create_role(5, "new role"),
             GuardedWrite::prune(5, 7, &[6]),
@@ -332,6 +354,12 @@ mod tests {
         let dis = GuardedWrite::disable_account("pw");
         assert_eq!((dis.method, dis.path.as_str(), dis.body), (Method::POST, "/users/@me/disable", Some(json!({ "password": "pw" }))));
         assert_eq!(GuardedWrite::delete_account("pw").path, "/users/@me/delete");
+        let rn = GuardedWrite::rename_webauthn("9", "Clé");
+        assert_eq!((rn.method, rn.path.as_str(), rn.body), (Method::PATCH, "/users/@me/mfa/webauthn/credentials/9", Some(json!({ "name": "Clé" }))));
+        assert_eq!(GuardedWrite::delete_webauthn("9").method, Method::DELETE);
+        let add = GuardedWrite::add_role_members(5, 6, &[7, 8]);
+        assert_eq!((add.method, add.path.as_str(), add.body), (Method::PATCH, "/guilds/5/roles/6/members", Some(json!({ "member_ids": ["7", "8"] }))));
+        assert_eq!(GuardedWrite::set_member_roles(5, 7, &[9]).body, Some(json!({ "roles": ["9"] })));
         let role = GuardedWrite::create_role(5, "nouveau rôle");
         assert_eq!(role.path, "/guilds/5/roles");
         assert_eq!(role.body.unwrap()["permissions"], json!("0"));

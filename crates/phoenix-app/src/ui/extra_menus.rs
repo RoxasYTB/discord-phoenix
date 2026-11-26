@@ -30,6 +30,7 @@ pub enum Target {
     AnnouncementSend { channel: Id, can_thread: bool },
     ModViewRoles { user: Id, guild: Id },
     QuestMore { quest: u64, cta: Option<(SharedString, SharedString)> },
+    SecurityKey { id: String, name: SharedString, last: bool },
 }
 
 pub const NITRO_SKU: &str = "521847234246082599";
@@ -426,6 +427,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         Target::AnnouncementSend { channel, can_thread } => announcement_items(*channel, *can_thread),
         Target::ModViewRoles { user, guild } => mod_view_role_items(app, &e, *user, *guild),
         Target::QuestMore { quest, cta } => quest_items(&e, *quest, cta.clone()),
+        Target::SecurityKey { id, name, last } => security_key_items(&e, id.clone(), name.clone(), *last),
     };
     let dismiss: context_menu::Dismiss = Rc::new(|w, _| {
         close();
@@ -443,7 +445,70 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     if target == Target::SettingsMore {
         return Some(context_menu::render_anchored(pos, gpui::Anchor::BottomCenter, items, dismiss));
     }
+    if matches!(target, Target::SecurityKey { .. }) {
+        return Some(context_menu::render_anchored(pos, gpui::Anchor::TopRight, items, dismiss));
+    }
     Some(context_menu::render(pos, items, dismiss))
+}
+
+pub fn security_key_items(e: &Ent, id: String, name: SharedString, last: bool) -> Vec<MenuItem> {
+    let id2 = id.clone();
+    vec![
+        act(e, crate::t!("settings.mfa.key_edit"), move |_, w, cx| {
+            let id = id.clone();
+            crate::actions::open_modal(
+                crate::ui::modals::Modal::Form(crate::ui::modals::Form {
+                    title: crate::t!("settings.mfa.key_rename_title"),
+                    subtitle: None,
+                    fields: vec![crate::ui::modals::Field::new(crate::t!("settings.mfa.key_rename_label"), name.clone(), "").max_len(32)],
+                    choices: Vec::new(),
+                    choice: None,
+                    check: None,
+                    submit: crate::t!("settings.mfa.key_rename_done"),
+                    danger: false,
+                    on_submit: Rc::new(move |a, v, _, cx| {
+                        let n = v.first().map(|s| s.trim().to_owned()).unwrap_or_default();
+                        if (1..=32).contains(&n.chars().count()) {
+                            a.blocked_write(crate::actions::guard::GuardedWrite::rename_webauthn(&id, &n), cx);
+                        }
+                    }),
+                    preview: None,
+                    width: 440.,
+                }),
+                Some(w),
+            );
+            cx.notify();
+        }),
+        {
+            let e = e.clone();
+            MenuItem::danger(crate::t!("common.delete"), None, move |_, w, cx: &mut App| {
+                let id = id2.clone();
+                e.update(cx, |a, cx| {
+                    if !last {
+                        a.blocked_write(crate::actions::guard::GuardedWrite::delete_webauthn(&id), cx);
+                        return;
+                    }
+                    crate::actions::open_modal(
+                        crate::ui::modals::Modal::Form(crate::ui::modals::Form {
+                            title: crate::t!("settings.mfa.key_last_title"),
+                            subtitle: Some(crate::t!("settings.mfa.key_last_body")),
+                            fields: Vec::new(),
+                            choices: Vec::new(),
+                            choice: None,
+                            check: None,
+                            submit: crate::t!("common.delete"),
+                            danger: true,
+                            on_submit: Rc::new(move |a, _, _, cx| a.blocked_write(crate::actions::guard::GuardedWrite::delete_webauthn(&id), cx)),
+                            preview: None,
+                            width: 440.,
+                        }),
+                        Some(w),
+                    );
+                    cx.notify();
+                })
+            })
+        },
+    ]
 }
 
 pub const ACKNOWLEDGEMENTS_URL: &str = "https://discord.com/acknowledgements";
