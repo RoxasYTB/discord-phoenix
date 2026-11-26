@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, App, DevicePixels, Hsla, ImageCacheError, IntoElement, ParentElement, RenderImage, Styled, SvgSize, Window, img, px, size};
+use gpui::{AnyElement, App, Corners, DevicePixels, Hsla, ImageCacheError, IntoElement, ParentElement, RenderImage, Styled, SvgRenderer, SvgSize, Window, img, px, size};
 
 use crate::icons::lottie_icons::{self, Anim, Lottie};
 
@@ -150,6 +150,32 @@ impl Player {
     pub fn playing(&self, anim: &Anim, now: Instant) -> bool {
         self.held.is_none() && self.frame(anim, now) < self.to
     }
+
+    pub fn segment(&self) -> Option<Segment> {
+        self.held.is_none().then_some(Segment { from: self.from, to: self.to, at: self.at })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Segment {
+    pub from: f64,
+    pub to: f64,
+    pub at: Instant,
+}
+
+impl Segment {
+    pub fn frames(&self) -> (i32, i32) {
+        let first = self.from.round() as i32;
+        (first, (self.to.round() as i32).max(first))
+    }
+
+    pub fn phase(&self) -> f32 {
+        (self.from - self.from.round()) as f32 + 0.5
+    }
+}
+
+pub fn sheet_columns(count: u32) -> u32 {
+    ((count as f64).sqrt().ceil() as u32).max(1)
 }
 
 type FrameCache = (HashMap<FrameKey, Arc<RenderImage>>, VecDeque<FrameKey>);
@@ -191,7 +217,7 @@ pub fn frame_of(key: u64) -> Option<f64> {
     })
 }
 
-fn step(key: u64, kind: Lottie, anim: &Anim, on: bool) -> (f64, bool) {
+fn step(key: u64, kind: Lottie, anim: &Anim, on: bool) -> (f64, bool, Option<Segment>) {
     let (over, at) = crate::ui::states::state(key).unwrap_or((false, Instant::now()));
     let red = reduced();
     PLAYERS.with(|p| {
@@ -203,7 +229,8 @@ fn step(key: u64, kind: Lottie, anim: &Anim, on: bool) -> (f64, bool) {
         pl.toggle(anim, on, Instant::now(), red);
         pl.hover(anim, over, at, red);
         let now = now_for(pl);
-        (pl.frame(anim, now), pl.playing(anim, now) && FROZEN.with(Cell::get).is_none())
+        let playing = pl.playing(anim, now) && FROZEN.with(Cell::get).is_none();
+        (pl.frame(anim, now), playing, pl.segment())
     })
 }
 
@@ -217,16 +244,25 @@ struct FrameKey {
     rgba: u32,
 }
 
-fn hex(c: Hsla) -> (String, f32, u32) {
+fn rgba(c: Hsla) -> u32 {
     let r: gpui::Rgba = c.into();
     let b = |x: f32| (x * 255.).round().clamp(0., 255.) as u32;
-    (format!("#{:02x}{:02x}{:02x}", b(r.r), b(r.g), b(r.b)), r.a, (b(r.r) << 24) | (b(r.g) << 16) | (b(r.b) << 8) | b(r.a))
+    (b(r.r) << 24) | (b(r.g) << 16) | (b(r.b) << 8) | b(r.a)
+}
+
+fn hex(c: Hsla) -> (String, f32) {
+    let r: gpui::Rgba = c.into();
+    let b = |x: f32| (x * 255.).round().clamp(0., 255.) as u32;
+    (format!("#{:02x}{:02x}{:02x}", b(r.r), b(r.g), b(r.b)), r.a)
 }
 
 pub fn render_frame(anim: &Anim, frame: f64, px_size: u32, color: Hsla, cx: &App) -> Option<Arc<RenderImage>> {
-    let (rgb, alpha, _) = hex(color);
+    render_frame_with(&cx.svg_renderer(), anim, frame, px_size, color)
+}
+
+fn render_frame_with(r: &SvgRenderer, anim: &Anim, frame: f64, px_size: u32, color: Hsla) -> Option<Arc<RenderImage>> {
+    let (rgb, alpha) = hex(color);
     let svg = crate::media::lottie::frame_svg_tinted(&anim.root, frame, px_size.max(1), Some((&rgb, alpha)));
-    let r = cx.svg_renderer();
     let parsed = r.parse_svg(svg.as_bytes()).ok()?;
     let d = DevicePixels(px_size.max(1) as i32);
     r.render_parsed(&parsed, SvgSize::ExactSize(size(d, d))).ok()
@@ -234,7 +270,7 @@ pub fn render_frame(anim: &Anim, frame: f64, px_size: u32, color: Hsla, cx: &App
 
 fn cached(kind: Lottie, anim: &Anim, frame: f64, logical: f32, color: Hsla, window: &mut Window, cx: &mut App) -> Option<Arc<RenderImage>> {
     let px_size = (logical * window.scale_factor()).round().max(1.) as u32;
-    let key = FrameKey { kind, frame: frame.round() as i32, px: px_size, rgba: hex(color).2 };
+    let key = FrameKey { kind, frame: frame.round() as i32, px: px_size, rgba: rgba(color) };
     if let Some(i) = FRAMES.with(|f| f.borrow().0.get(&key).cloned()) {
         return Some(i);
     }
@@ -259,16 +295,150 @@ fn cached(kind: Lottie, anim: &Anim, frame: f64, logical: f32, color: Hsla, wind
     Some(made)
 }
 
+pub fn build_sheet(r: &SvgRenderer, anim: &Anim, frames: (i32, i32), px_size: u32, color: Hsla) -> Option<Arc<RenderImage>> {
+    let count = (frames.1 - frames.0 + 1).max(1) as u32;
+    let columns = sheet_columns(count);
+    let rows = count.div_ceil(columns);
+    let cell = px_size.max(1);
+    let mut sheet = image::RgbaImage::new(columns * cell, rows * cell);
+    for i in 0..count {
+        let frame = render_frame_with(r, anim, f64::from(frames.0 + i as i32), cell, color)?;
+        let bytes = frame.as_bytes(0)?;
+        let s = frame.size(0);
+        let (w, h) = ((s.width.0.max(0) as u32).min(cell), (s.height.0.max(0) as u32).min(cell));
+        let (x0, y0) = ((i % columns) * cell, (i / columns) * cell);
+        for y in 0..h {
+            let src = (y * s.width.0.max(0) as u32 * 4) as usize;
+            let dst = (((y0 + y) * columns * cell + x0) * 4) as usize;
+            let len = (w * 4) as usize;
+            if let (Some(from), Some(to)) = (bytes.get(src..src + len), sheet.get_mut(dst..dst + len)) {
+                to.copy_from_slice(from);
+            }
+        }
+    }
+    Some(Arc::new(RenderImage::new(vec![image::Frame::new(sheet)])))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+struct SheetKey {
+    kind: Lottie,
+    first: i32,
+    last: i32,
+    px: u32,
+    rgba: u32,
+}
+
+const MAX_SHEETS: usize = 48;
+
+type SheetCache = (HashMap<SheetKey, Option<Arc<RenderImage>>>, VecDeque<SheetKey>);
+
+thread_local! {
+    static SHEETS: RefCell<SheetCache> = RefCell::new(Default::default());
+}
+
+fn per_frame() -> bool {
+    static PER_FRAME: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PER_FRAME.get_or_init(|| std::env::var_os("PHX_LOTTIE_PER_FRAME").is_some())
+}
+
+fn sheet(kind: Lottie, anim: &Arc<Anim>, frames: (i32, i32), px_size: u32, color: Hsla, cx: &mut App) -> Option<Arc<RenderImage>> {
+    let key = SheetKey { kind, first: frames.0, last: frames.1, px: px_size, rgba: rgba(color) };
+    if let Some(found) = SHEETS.with(|s| s.borrow().0.get(&key).cloned()) {
+        return found;
+    }
+    SHEETS.with(|s| {
+        let mut s = s.borrow_mut();
+        s.0.insert(key, None);
+        s.1.push_back(key);
+    });
+    let (r, anim) = (cx.svg_renderer(), anim.clone());
+    let task = cx.background_executor().spawn(async move { build_sheet(&r, &anim, frames, px_size, color) });
+    cx.spawn(async move |cx| {
+        let made = task.await;
+        cx.update(|cx| {
+            let evicted = SHEETS.with(|s| {
+                let mut s = s.borrow_mut();
+                match made {
+                    Some(img) => {
+                        s.0.insert(key, Some(img));
+                    }
+                    None => {
+                        s.0.remove(&key);
+                        s.1.retain(|k| *k != key);
+                    }
+                }
+                let mut out = Vec::new();
+                while s.1.len() > MAX_SHEETS {
+                    if let Some(old) = s.1.pop_front()
+                        && let Some(Some(img)) = s.0.remove(&old)
+                    {
+                        out.push(img);
+                    }
+                }
+                out
+            });
+            for img in evicted {
+                cx.drop_image(img, None);
+            }
+        });
+    })
+    .detach();
+    None
+}
+
+fn segment_frames(anim: &Anim, name: &str) -> Option<(i32, i32)> {
+    let m = anim.marker(name)?;
+    Some(Segment { from: m.start, to: (m.end() - 1.).max(m.start), at: Instant::now() }.frames())
+}
+
+fn warm(kind: Lottie, anim: &Arc<Anim>, on: bool, px_size: u32, hover: Hsla, cx: &mut App) {
+    let names = [Some(hover_marker(kind, on)), action(kind, on), click_marker(kind)];
+    for name in names.into_iter().flatten() {
+        if let Some(frames) = segment_frames(anim, name) {
+            sheet(kind, anim, frames, px_size, hover, cx);
+        }
+    }
+}
+
 pub fn icon(key: u64, kind: Lottie, on: bool, logical: f32, colors: (Hsla, Hsla), fallback: impl FnOnce() -> AnyElement) -> AnyElement {
     let Some(anim) = lottie_icons::get(kind) else { return fallback() };
-    let (frame, playing) = step(key, kind, &anim, on);
+    let (frame, playing, segment) = step(key, kind, &anim, on);
     let color = if crate::ui::states::hovered(key) { colors.1 } else { colors.0 };
-    img(move |window: &mut Window, cx: &mut App| -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
-        if playing {
-            window.request_animation_frame();
-        }
-        cached(kind, &anim, frame, logical, color, window, cx).map(Ok)
-    })
+    if per_frame() {
+        return img(move |window: &mut Window, cx: &mut App| -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
+            if playing {
+                window.request_animation_frame();
+            }
+            cached(kind, &anim, frame, logical, color, window, cx).map(Ok)
+        })
+        .size(px(logical))
+        .flex_none()
+        .into_any_element();
+    }
+    let frozen = FROZEN.with(Cell::get).is_some();
+    gpui::canvas(
+        |_, _, _| {},
+        move |bounds, _, window, cx| {
+            let px_size = (logical * window.scale_factor()).round().max(1.) as u32;
+            if !frozen {
+                warm(kind, &anim, on, px_size, colors.1, cx);
+            }
+            if let Some(seg) = segment.filter(|_| playing) {
+                let frames = seg.frames();
+                if let Some(sheet) = sheet(kind, &anim, frames, px_size, color, cx) {
+                    let count = (frames.1 - frames.0 + 1) as u32;
+                    window
+                        .paint_image_sequence(bounds, Corners::default(), sheet, sheet_columns(count), count, seg.at, anim.fps as f32, seg.phase())
+                        .ok();
+                    return;
+                }
+                window.request_animation_frame();
+            }
+            if let Some(i) = cached(kind, &anim, frame, logical, color, window, cx) {
+                window.paint_image(bounds, bounds, Corners::default(), i, 0, false).ok();
+            }
+        },
+    )
     .size(px(logical))
     .flex_none()
     .into_any_element()
@@ -364,8 +534,7 @@ fn random_face() -> u32 {
 }
 
 fn cell_image(face: u32, colored: bool, tint: Hsla) -> Option<Arc<RenderImage>> {
-    let rgba = if colored { 0 } else { hex(tint).2 };
-    let key = (face, colored, rgba);
+    let key = (face, colored, if colored { 0 } else { rgba(tint) });
     if let Some(i) = CELLS.with(|c| c.borrow().get(&key).cloned()) {
         return Some(i);
     }
@@ -584,6 +753,34 @@ mod tests {
         assert!((s.value(ms(t0, 40)) - mid).abs() < 1e-9);
         assert!(s.value(ms(t0, 60)) > mid);
         assert!(s.value(ms(t0, 800)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn sheet_cells_follow_the_player_frames() {
+        let a = anim(Lottie::Mute);
+        let t0 = Instant::now();
+        let mut p = Player::new(Lottie::Mute, &a, false);
+        assert_eq!(p.segment(), None);
+        p.hover(&a, true, t0, false);
+        let seg = p.segment().expect("playing");
+        let (first, last) = seg.frames();
+        assert_eq!((first, last), (180, 219));
+        let count = (last - first + 1) as u32;
+        assert_eq!(sheet_columns(count), 7);
+        let seq = gpui::ImageSequence {
+            start: gpui::gradient_clock(seg.at),
+            fps: a.fps as f32,
+            phase: seg.phase(),
+            count,
+            columns: sheet_columns(count),
+            cell: size(DevicePixels(30), DevicePixels(30)),
+        };
+        for n in [0u64, 7, 16, 100, 333, 650, 2000] {
+            let now = ms(t0, n);
+            assert_eq!(seq.index(gpui::gradient_clock(now)) as i32 + first, p.frame(&a, now).round() as i32, "{n} ms");
+        }
+        p.hover(&a, false, ms(t0, 2000), false);
+        assert_eq!(p.segment(), None);
     }
 
     #[test]

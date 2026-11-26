@@ -83,6 +83,7 @@ pub fn window_options(cx: &App) -> WindowOptions {
 
 pub fn init(cx: &mut App) {
     gpui_component::init(cx);
+    gpui::set_smooth_wheel_scroll(std::env::var_os("PHX_INSTANT_WHEEL").is_none());
     Theme::change(ThemeMode::Dark, None, cx);
     app::bind_keys(cx);
     media::lru::init(cx);

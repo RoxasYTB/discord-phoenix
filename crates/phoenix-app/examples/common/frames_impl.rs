@@ -68,6 +68,52 @@ impl Probe<'_> {
     }
 }
 
+fn cpu_secs() -> f64 {
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+    let f: Vec<&str> = stat.rsplit_once(')').map_or("", |(_, r)| r).split_whitespace().collect();
+    let ticks = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.);
+    (ticks(11) + ticks(12)) / 100.
+}
+
+impl Probe<'_> {
+    fn live(&mut self, name: &str, frames: usize, mut step: impl FnMut(&mut Self, usize)) {
+        let (c0, w0) = (cpu_secs(), Instant::now());
+        let mut times = Vec::with_capacity(frames);
+        for i in 0..frames {
+            let t = Instant::now();
+            step(self, i);
+            self.cx.simulate_frame_request(self.win);
+            self.cx.run_until_parked();
+            let spent = t.elapsed();
+            times.push(spent.as_micros() as u64);
+            if let Some(rest) = Duration::from_millis(16).checked_sub(spent) {
+                std::thread::sleep(rest);
+            }
+        }
+        let cpu = (cpu_secs() - c0) / w0.elapsed().as_secs_f64() * 100.;
+        let total: u64 = times.iter().sum();
+        let over = times.iter().filter(|t| **t > 16_000).count();
+        times.sort_unstable();
+        println!(
+            "{name} p50_us={} p95_us={} max_us={} mean_us={} over16={over}/{frames} cpu_pct={cpu:.1}",
+            times[frames / 2],
+            times[frames * 95 / 100],
+            times[frames - 1],
+            total / frames as u64
+        );
+    }
+}
+
+fn notch(x: f32, y: f32, lines: f32) -> PlatformInput {
+    PlatformInput::Scroll(ScrollEvent {
+        position: point(px(x), px(y)),
+        delta: ScrollDelta::Lines(point(0., lines)),
+        modifiers: Modifiers::default(),
+        touch_phase: TouchPhase::Moved,
+        source: ScrollSource::Pointer,
+    })
+}
+
 fn wheel(x: f32, y: f32, dy: f32) -> PlatformInput {
     PlatformInput::Scroll(ScrollEvent {
         position: point(px(x), px(y)),
@@ -147,6 +193,28 @@ pub fn run() -> anyhow::Result<()> {
 
     p.measure("idle", 60, |_, _| {});
     p.measure("scroll_chat_wheel", 300, |p, _| p.input(wheel(700., 400., -120.)));
+    let trace = std::env::var_os("PHX_TRACE_SCROLL").is_some();
+    let t_trace = Instant::now();
+    p.live("scroll_chat_notches", 240, |p, i| {
+        if i % 8 == 0 {
+            p.input(notch(700., 400., if i < 120 { 3. } else { -3. }));
+        }
+        if trace && i < 48 {
+            let y = p.cx.update(|cx| v.read(cx).message_list.scroll_px_offset_for_scrollbar().y);
+            println!("trace t_ms={} y={:.2}", t_trace.elapsed().as_millis(), f32::from(y));
+        }
+    });
+    let mic = phoenix_app::ui::states::key(("audio-btn", "Mic"));
+    let hover = |p: &mut Probe, over: bool| {
+        phoenix_app::ui::states::set_hover(mic, over);
+        p.cx.update_window(p.win, |_, window, _| window.refresh()).ok();
+    };
+    p.live("lottie_idle", 120, |_, _| {});
+    p.live("lottie_hover_mic", 480, |p, i| match i % 60 {
+        0 => hover(p, true),
+        50 => hover(p, false),
+        _ => {}
+    });
     p.measure("scroll_chat_fast", 200, |p, _| p.cx.update(|cx| v.read(cx).message_list.scroll_by(px(600.))));
     p.measure("hover_messages", 200, |p, i| p.input(mouse(700., 120. + (i % 40) as f32 * 15.)));
     let guilds: Vec<_> = p.cx.update(|cx| v.read(cx).guilds.iter().map(|g| g.id).collect());
@@ -168,6 +236,11 @@ pub fn run() -> anyhow::Result<()> {
     });
     p.frame();
     p.measure("scroll_members", 150, |p, _| p.input(wheel(1180., 400., -120.)));
+    p.live("scroll_members_notches", 160, |p, i| {
+        if i % 8 == 0 {
+            p.input(notch(1180., 400., if i < 80 { -3. } else { 3. }));
+        }
+    });
     p.cx.update_window(p.win, |_, window, cx| {
         v.update(cx, |app, cx| {
             phoenix_app::ui::pickers::open(app, phoenix_app::ui::pickers::Tab::Emoji, phoenix_app::ui::pickers::EmojiTarget::Composer, window, cx)
