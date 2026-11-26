@@ -352,6 +352,27 @@ fn depacketize<'a>(codec: Codec, packets: impl Iterator<Item = &'a Packet>) -> O
     None
 }
 
+pub fn rtp_packets(codec: Codec, frames: &[Vec<u8>], ssrc: u32, first_seq: u16, max_payload: usize) -> Option<Vec<(RtpHeader, Vec<u8>)>> {
+    use crate::rtp::Packetizer;
+    let mut out = Vec::new();
+    let mut seq = first_seq;
+    for (i, f) in frames.iter().enumerate() {
+        let payloads = match codec {
+            Codec::H264 => rtp::h264::H264Packetizer::new().packetize(f, max_payload),
+            Codec::Vp8 => rtp::vp8::Vp8Packetizer::default().packetize(f, max_payload),
+            Codec::Av1 => rtp::av1::Av1Packetizer.packetize(f, max_payload),
+            _ => return None,
+        }
+        .ok()?;
+        let n = payloads.len();
+        for (k, p) in payloads.into_iter().enumerate() {
+            out.push((RtpHeader::new(codec.payload_type(), seq, (i as u32 + 1) * 3000, ssrc, k + 1 == n), p));
+            seq = seq.wrapping_add(1);
+        }
+    }
+    Some(out)
+}
+
 pub fn is_keyframe(codec: Codec, frame: &[u8]) -> bool {
     match codec {
         Codec::H264 => rtp::h264::is_keyframe(frame),

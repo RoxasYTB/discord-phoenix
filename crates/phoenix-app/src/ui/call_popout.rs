@@ -221,6 +221,7 @@ fn ctrl_btn(id: &'static str, icon: Icon, danger: bool, active: bool, tip: Share
 
 impl gpui::Render for CallPopoutView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::ui::call_view::release_video_images(window, cx);
         let app = self.app.read(cx);
         let Some(ch_id) = app.voice_channel else {
             clear_handle();

@@ -154,6 +154,7 @@ fn pip_btn(id: &'static str, icon: Icon, danger: bool, active_state: bool, tip: 
 }
 
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    crate::ui::call_view::release_video_images(window, cx);
     if !active(app) {
         return None;
     }
@@ -197,6 +198,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
 
     if video.is_some() {
         window.request_animation_frame();
+    }
+    crate::voice::call::set_pip_view();
+    if is_stream
+        && !me
+        && let Some(key) = crate::ui::call_view::stream_key(app, user_id)
+    {
+        let (pw, ph) = crate::ui::call_view::device_pixels(PIP_W * k, PIP_H * k, window.scale_factor());
+        crate::voice::call::set_stream_view(&key, pw, ph);
     }
 
     let muted = app.mic_muted || app.deafened;

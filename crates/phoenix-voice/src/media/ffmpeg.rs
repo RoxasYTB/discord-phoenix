@@ -297,6 +297,51 @@ pub fn read_pam(r: &mut impl std::io::BufRead) -> Option<(u32, u32, Vec<u8>)> {
     Some((w, h, buf))
 }
 
+fn encode_lavfi(args: &[&str]) -> Option<Vec<u8>> {
+    let o = ffmpeg_command()
+        .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+        .args(args)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    (o.status.success() && !o.stdout.is_empty()).then_some(o.stdout)
+}
+
+pub fn ivf_payloads(data: &[u8]) -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut o = 32;
+    while o + 12 <= data.len() {
+        let n = u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]) as usize;
+        let Some(f) = data.get(o + 12..o + 12 + n) else { break };
+        out.push(f.to_vec());
+        o += 12 + n;
+    }
+    out
+}
+
+pub fn synthetic_frames(codec: Codec, source: &str, frames: u32) -> Option<Vec<Vec<u8>>> {
+    let n = frames.to_string();
+    let n = n.as_str();
+    match codec {
+        Codec::H264 => {
+            let mut buf = encode_lavfi(&[source, "-frames:v", n, "-c:v", "libx264", "-bf", "0", "-pix_fmt", "yuv420p", "-x264-params", "aud=1", "-f", "h264", "-"])?;
+            buf.extend_from_slice(&[0, 0, 0, 1, 9, 0xf0]);
+            let mut out = Vec::new();
+            split_access_units(&mut buf, &mut out);
+            Some(out)
+        }
+        Codec::Vp8 => encode_lavfi(&[source, "-frames:v", n, "-c:v", "libvpx", "-deadline", "realtime", "-f", "ivf", "-"]).map(|d| ivf_payloads(&d)),
+        Codec::Av1 => encode_lavfi(&[source, "-frames:v", n, "-c:v", "libaom-av1", "-cpu-used", "8", "-usage", "realtime", "-f", "ivf", "-"])
+            .or_else(|| encode_lavfi(&[source, "-frames:v", n, "-c:v", "libsvtav1", "-preset", "12", "-f", "ivf", "-"]))
+            .map(|d| ivf_payloads(&d)),
+        _ => None,
+    }
+    .filter(|f| !f.is_empty())
+}
+
+static FRAME_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 pub struct FfmpegDecoder {
     child: Child,
     stdin: Option<ChildStdin>,
@@ -331,10 +376,11 @@ impl FfmpegDecoder {
             .spawn(move || {
                 let mut r = std::io::BufReader::with_capacity(1 << 20, stdout);
                 while let Some((w, h, buf)) = read_pam(&mut r) {
-                    let n = count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    let serial = FRAME_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if let Ok(mut s) = slot.lock() {
-                        *s = Some(VideoFrame { width: w, height: h, pts_us: n, data: std::sync::Arc::from(buf) });
+                        *s = Some(VideoFrame { width: w, height: h, pts_us: serial, data: std::sync::Arc::from(buf) });
                     }
+                    count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             })
             .map_err(Error::Io)?;
@@ -434,47 +480,6 @@ mod tests {
         assert_eq!(read_pam(&mut r), None);
     }
 
-    fn encode(args: &[&str]) -> Option<Vec<u8>> {
-        let o = ffmpeg_command()
-            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
-            .args(args)
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .ok()?;
-        (o.status.success() && !o.stdout.is_empty()).then_some(o.stdout)
-    }
-
-    fn ivf_frames(data: &[u8]) -> Vec<Vec<u8>> {
-        let mut out = Vec::new();
-        let mut o = 32;
-        while o + 12 <= data.len() {
-            let n = u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]) as usize;
-            out.push(data[o + 12..o + 12 + n].to_vec());
-            o += 12 + n;
-        }
-        out
-    }
-
-    fn generated(codec: Codec, size: &str) -> Option<Vec<Vec<u8>>> {
-        let src = format!("color=c=red:s={size}:r=10");
-        let src = src.as_str();
-        match codec {
-            Codec::H264 => {
-                let mut buf = encode(&[src, "-frames:v", "3", "-c:v", "libx264", "-bf", "0", "-x264-params", "aud=1", "-f", "h264", "-"])?;
-                buf.extend_from_slice(&[0, 0, 0, 1, 9, 0xf0]);
-                let mut out = Vec::new();
-                split_access_units(&mut buf, &mut out);
-                Some(out)
-            }
-            Codec::Vp8 => encode(&[src, "-frames:v", "3", "-c:v", "libvpx", "-deadline", "realtime", "-f", "ivf", "-"]).map(|d| ivf_frames(&d)),
-            Codec::Av1 => encode(&[src, "-frames:v", "3", "-c:v", "libaom-av1", "-cpu-used", "8", "-usage", "realtime", "-f", "ivf", "-"])
-                .or_else(|| encode(&[src, "-frames:v", "3", "-c:v", "libsvtav1", "-preset", "12", "-f", "ivf", "-"]))
-                .map(|d| ivf_frames(&d)),
-            _ => None,
-        }
-    }
-
     fn decode_through_rtp(codec: Codec, frames: &[Vec<u8>], max: (u32, u32)) -> Option<VideoFrame> {
         use crate::rtp::{Packetizer, RtpHeader};
         use crate::video_rx::{Layer, VideoReceiver};
@@ -522,7 +527,7 @@ mod tests {
             if !decoder_support().codecs.contains(&codec) {
                 continue;
             }
-            let Some(frames) = generated(codec, "160x90") else { continue };
+            let Some(frames) = synthetic_frames(codec, "color=c=red:s=160x90:r=10", 3) else { continue };
             let f = decode_through_rtp(codec, &frames, CAMERA_MAX).unwrap_or_else(|| panic!("{} did not decode", codec.name()));
             assert_eq!((f.width, f.height), (160, 90), "{}", codec.name());
             let px = &f.data[(45 * 160 + 80) * 4..][..4];
@@ -535,7 +540,7 @@ mod tests {
         if !available() || !decoder_support().codecs.contains(&Codec::Vp8) {
             return;
         }
-        let Some(frames) = generated(Codec::Vp8, "360x640") else { return };
+        let Some(frames) = synthetic_frames(Codec::Vp8, "color=c=red:s=360x640:r=10", 3) else { return };
         let f = decode_through_rtp(Codec::Vp8, &frames, (320, 180)).expect("vp8 decode");
         assert_eq!(f.height, 180);
         assert!((100..=102).contains(&f.width), "{}x{}", f.width, f.height);

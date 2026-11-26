@@ -1030,7 +1030,7 @@ thread_local! {
 
 pub fn camera_image() -> Option<std::sync::Arc<gpui::RenderImage>> {
     let Some(f) = crate::voice::call::camera_preview() else {
-        CAMERA_FRAME.with(|c| c.borrow_mut().take());
+        retire(CAMERA_FRAME.with(|c| c.borrow_mut().take()));
         return None;
     };
     if let Some((pts, img)) = CAMERA_FRAME.with(|c| c.borrow().clone())
@@ -1050,7 +1050,7 @@ pub fn camera_image() -> Option<std::sync::Arc<gpui::RenderImage>> {
     }
     let frame = image::Frame::new(image::RgbaImage::from_raw(w, h, buf)?);
     let img = std::sync::Arc::new(gpui::RenderImage::new(vec![frame]));
-    CAMERA_FRAME.with(|c| *c.borrow_mut() = Some((f.pts_us, img.clone())));
+    retire(CAMERA_FRAME.with(|c| c.borrow_mut().replace((f.pts_us, img.clone()))));
     Some(img)
 }
 
@@ -1154,6 +1154,24 @@ type FrameCache = std::collections::HashMap<u64, (u64, std::sync::Arc<gpui::Rend
 
 thread_local! {
     static REMOTE_FRAMES: std::cell::RefCell<FrameCache> = std::cell::RefCell::new(FrameCache::new());
+    static RETIRED: std::cell::RefCell<(Vec<std::sync::Arc<gpui::RenderImage>>, Vec<std::sync::Arc<gpui::RenderImage>>)> = Default::default();
+}
+
+fn retire(old: Option<(u64, std::sync::Arc<gpui::RenderImage>)>) {
+    if let Some((_, img)) = old {
+        RETIRED.with(|r| r.borrow_mut().0.push(img));
+    }
+}
+
+pub fn release_video_images(window: &mut Window, cx: &mut gpui::App) {
+    let aged = RETIRED.with(|r| {
+        let mut r = r.borrow_mut();
+        let fresh = std::mem::take(&mut r.0);
+        std::mem::replace(&mut r.1, fresh)
+    });
+    for img in aged {
+        cx.drop_image(img, Some(window));
+    }
 }
 
 pub fn remote_aspect(user: Id) -> Option<f32> {
@@ -1181,7 +1199,10 @@ fn video_loading() -> AnyElement {
 }
 
 pub fn remote_image(user: Id) -> Option<std::sync::Arc<gpui::RenderImage>> {
-    let f = crate::voice::call::remote_frame(user.0)?;
+    let Some(f) = crate::voice::call::remote_frame(user.0) else {
+        retire(REMOTE_FRAMES.with(|c| c.borrow_mut().remove(&user.0)));
+        return None;
+    };
     if let Some((pts, img)) = REMOTE_FRAMES.with(|c| c.borrow().get(&user.0).cloned())
         && pts == f.pts_us
     {
@@ -1189,12 +1210,12 @@ pub fn remote_image(user: Id) -> Option<std::sync::Arc<gpui::RenderImage>> {
     }
     let frame = image::Frame::new(image::RgbaImage::from_raw(f.width, f.height, f.data.to_vec())?);
     let img = std::sync::Arc::new(gpui::RenderImage::new(vec![frame]));
-    REMOTE_FRAMES.with(|c| c.borrow_mut().insert(user.0, (f.pts_us, img.clone())));
+    retire(REMOTE_FRAMES.with(|c| c.borrow_mut().insert(user.0, (f.pts_us, img.clone()))));
     Some(img)
 }
 
 thread_local! {
-    static STREAM_FRAMES: std::cell::RefCell<std::collections::HashMap<u64, (u64, std::sync::Arc<gpui::RenderImage>)>> = Default::default();
+    static STREAM_FRAMES: std::cell::RefCell<FrameCache> = Default::default();
 }
 
 thread_local! {
@@ -1219,7 +1240,7 @@ pub fn demo_still(owner: Id) -> Option<std::sync::Arc<gpui::RenderImage>> {
 pub fn stream_image(owner: Id, own: bool) -> Option<std::sync::Arc<gpui::RenderImage>> {
     let f = if own { crate::voice::call::own_stream_frame() } else { crate::voice::call::stream_frame(owner.0) };
     let Some(f) = f else {
-        STREAM_FRAMES.with(|c| c.borrow_mut().remove(&owner.0));
+        retire(STREAM_FRAMES.with(|c| c.borrow_mut().remove(&owner.0)));
         return None;
     };
     if let Some((pts, img)) = STREAM_FRAMES.with(|c| c.borrow().get(&owner.0).cloned())
@@ -1244,7 +1265,7 @@ pub fn stream_image(owner: Id, own: bool) -> Option<std::sync::Arc<gpui::RenderI
         image::RgbaImage::from_raw(f.width, f.height, f.data.to_vec())?
     };
     let img = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(rgba)]));
-    STREAM_FRAMES.with(|c| c.borrow_mut().insert(owner.0, (f.pts_us, img.clone())));
+    retire(STREAM_FRAMES.with(|c| c.borrow_mut().insert(owner.0, (f.pts_us, img.clone()))));
     Some(img)
 }
 
@@ -1830,6 +1851,15 @@ mod tests {
     }
 
     use super::grid;
+
+    #[test]
+    fn replaced_video_frames_are_queued_for_atlas_release() {
+        let img = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(image::RgbaImage::new(2, 2))]));
+        super::retire(Some((1, img.clone())));
+        super::retire(None);
+        assert_eq!(super::RETIRED.with(|r| r.borrow().0.len()), 1);
+        assert_eq!(std::sync::Arc::strong_count(&img), 2);
+    }
 
     #[test]
     fn tiles_sort_like_the_rtc_store() {

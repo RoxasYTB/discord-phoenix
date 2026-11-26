@@ -224,6 +224,11 @@ pub fn set_call_view(view: phoenix_voice::sink_wants::CallView) {
     st.call_view = Some(view);
 }
 
+pub fn set_pip_view() {
+    let view = manager().state.lock().call_view.clone().unwrap_or(phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() });
+    set_call_view(phoenix_voice::sink_wants::CallView { pip: true, ..view });
+}
+
 pub fn set_stream_view(key: &str, width: u32, height: u32) {
     let mut st = manager().state.lock();
     let Some(w) = st.watches.get_mut(key) else { return };
@@ -1078,4 +1083,119 @@ async fn watch_events(generation: u64, key: String, owner: u64, mut events: mpsc
 
 pub fn devices() -> (Vec<String>, Vec<String>) {
     (phoenix_voice::audio::device::input_devices(), phoenix_voice::audio::device::output_devices())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{push_video, remote, remote_frame, stream_frame, streams};
+    use crate::model::Id;
+    use phoenix_voice::codec::Codec;
+    use phoenix_voice::media::ffmpeg;
+    use phoenix_voice::rtp::RtpHeader;
+    use phoenix_voice::video_rx::{self, Layer, VideoReceiver};
+    use std::time::{Duration, Instant};
+
+    fn inject(map: &'static parking_lot::Mutex<super::Decoders>, user: u64, codec: Codec, frames: &[Vec<u8>], max: (u32, u32)) -> usize {
+        let mut rx = VideoReceiver::default();
+        rx.set_layers(user, vec![Layer { ssrc: 77, rtx_ssrc: 0, quality: 100 }]);
+        let now = Instant::now();
+        rx.push(&RtpHeader::new(codec.payload_type(), 0, 0, 77, true), &[0x10, 0, 0, 0, 0x65], now);
+        let packets = video_rx::rtp_packets(codec, frames, 77, 1, 1100).expect("packetize");
+        let mut pushed = 0;
+        for (h, p) in &packets {
+            for f in rx.push(h, p, now) {
+                let key = video_rx::is_keyframe(codec, &f.data);
+                assert!(rx.accept(&f, key), "{} frame refused", codec.name());
+                assert!(!push_video(map, user, codec, key, &f.data, max), "{} decoder asked for a keyframe", codec.name());
+                pushed += 1;
+            }
+        }
+        let t = Instant::now();
+        while map.lock().get(&user).map_or(0, |d| d.decoded()) < pushed as u64 && t.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        pushed
+    }
+
+    fn ready(codec: Codec) -> bool {
+        ffmpeg::available() && ffmpeg::decoder_support().codecs.contains(&codec)
+    }
+
+    #[test]
+    fn synthetic_cameras_reach_the_call_tile_image() {
+        for (i, codec) in [Codec::H264, Codec::Vp8, Codec::Av1].into_iter().enumerate() {
+            if !ready(codec) {
+                continue;
+            }
+            let Some(frames) = ffmpeg::synthetic_frames(codec, "color=c=0x00ff00:s=320x180:r=15", 4) else { continue };
+            let user = 9_100 + i as u64;
+            assert_eq!(inject(remote(), user, codec, &frames, ffmpeg::CAMERA_MAX), frames.len(), "{}", codec.name());
+            let f = remote_frame(user).unwrap_or_else(|| panic!("{} produced no frame", codec.name()));
+            assert_eq!((f.width, f.height), (320, 180), "{}", codec.name());
+            let px = &f.data[(90 * 320 + 160) * 4..][..4];
+            assert!(px[1] > 200 && px[0] < 60 && px[2] < 60, "{} centre pixel {px:?} is not green", codec.name());
+            let img = crate::ui::call_view::remote_image(Id(user)).expect("tile image");
+            let size = img.size(0);
+            assert_eq!((size.width.0, size.height.0), (320, 180));
+            assert!(std::sync::Arc::ptr_eq(&img, &crate::ui::call_view::remote_image(Id(user)).expect("cached image")));
+            assert_eq!(crate::ui::call_view::remote_aspect(Id(user)), Some(16. / 9.));
+            remote().lock().remove(&user);
+            assert!(remote_frame(user).is_none());
+            assert!(crate::ui::call_view::remote_image(Id(user)).is_none());
+        }
+    }
+
+    #[test]
+    fn a_portrait_camera_keeps_its_ratio_for_letterboxing() {
+        if !ready(Codec::Vp8) {
+            return;
+        }
+        let Some(frames) = ffmpeg::synthetic_frames(Codec::Vp8, "testsrc2=s=360x640:r=15", 3) else { return };
+        let user = 9_200;
+        inject(remote(), user, Codec::Vp8, &frames, ffmpeg::CAMERA_MAX);
+        let a = crate::ui::call_view::remote_aspect(Id(user)).expect("aspect");
+        assert!((a - 360. / 640.).abs() < 0.01, "{a}");
+        assert!(matches!(crate::ui::call_view::video_fit(true, Some(a)), gpui::ObjectFit::Contain));
+        assert!(matches!(crate::ui::call_view::video_fit(false, Some(16. / 9.)), gpui::ObjectFit::Contain));
+        assert!(matches!(crate::ui::call_view::video_fit(true, Some(16. / 9.)), gpui::ObjectFit::Cover));
+        remote().lock().remove(&user);
+    }
+
+    #[test]
+    fn a_watched_go_live_reaches_the_stream_tile_and_is_capped() {
+        if !ready(Codec::H264) {
+            return;
+        }
+        let Some(frames) = ffmpeg::synthetic_frames(Codec::H264, "testsrc2=s=2560x1440:r=15", 3) else { return };
+        let owner = 9_300;
+        assert_eq!(inject(streams(), owner, Codec::H264, &frames, ffmpeg::STREAM_MAX), frames.len());
+        let f = stream_frame(owner).expect("stream frame");
+        assert_eq!((f.width, f.height), ffmpeg::STREAM_MAX);
+        let img = crate::ui::call_view::stream_image(Id(owner), false).expect("stream image");
+        assert_eq!((img.size(0).width.0 as u32, img.size(0).height.0 as u32), ffmpeg::STREAM_MAX);
+        streams().lock().remove(&owner);
+        assert!(crate::ui::call_view::stream_image(Id(owner), false).is_none());
+    }
+
+    #[test]
+    fn delta_frames_without_a_decoder_ask_for_a_keyframe() {
+        if !ready(Codec::Vp8) {
+            return;
+        }
+        let Some(frames) = ffmpeg::synthetic_frames(Codec::Vp8, "testsrc2=s=160x90:r=15", 3) else { return };
+        let user = 9_400;
+        assert!(video_rx::is_keyframe(Codec::Vp8, &frames[0]));
+        assert!(!video_rx::is_keyframe(Codec::Vp8, &frames[1]));
+        assert!(push_video(remote(), user, Codec::Vp8, false, &frames[1], ffmpeg::CAMERA_MAX));
+        assert!(!remote().lock().contains_key(&user));
+        assert!(!push_video(remote(), user, Codec::Vp8, true, &frames[0], ffmpeg::CAMERA_MAX));
+        assert!(remote().lock().contains_key(&user));
+        if ready(Codec::H264)
+            && let Some(h264) = ffmpeg::synthetic_frames(Codec::H264, "testsrc2=s=160x90:r=15", 1)
+        {
+            assert!(!push_video(remote(), user, Codec::H264, true, &h264[0], ffmpeg::CAMERA_MAX));
+            assert_eq!(remote().lock().get(&user).map(|d| d.codec()), Some(Codec::H264));
+        }
+        remote().lock().remove(&user);
+    }
 }

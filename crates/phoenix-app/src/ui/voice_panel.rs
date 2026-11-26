@@ -46,6 +46,10 @@ pub fn flags(user: Id) -> VoiceFlags {
     FLAGS.with(|f| f.borrow().get(&user).copied().unwrap_or_default())
 }
 
+pub fn channel_has_video(users: &[Id]) -> bool {
+    users.iter().any(|u| flags(*u).video)
+}
+
 type AudioMenu = (Audio, Point<Pixels>, Vec<String>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -671,7 +675,7 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
     const OK: (usize, usize) = (idx::TEXT_FEEDBACK_POSITIVE, idx::BACKGROUND_FEEDBACK_MOD_POSITIVE);
     const WARN: (usize, usize) = (idx::TEXT_FEEDBACK_WARNING, idx::BACKGROUND_FEEDBACK_MOD_WARNING);
     const BAD: (usize, usize) = (idx::TEXT_FEEDBACK_CRITICAL, idx::BACKGROUND_FEEDBACK_MOD_CRITICAL);
-    let (key, kind) = v.status.label(flags(app.me.id).video);
+    let (key, kind) = v.status.label(channel_has_video(ch.map_or(&[][..], |c| &c.voice_users[..])));
     let title = crate::t!(key);
     let (fg, bg) = match kind {
         crate::voice::StatusKind::Connected => match v.quality() {
@@ -1359,6 +1363,17 @@ mod tests {
         }
         set_target_size_experiment(&[]);
         assert_eq!(ENLARGE.with(Cell::get), Some(false));
+    }
+
+    #[test]
+    fn video_connected_follows_any_camera_in_the_channel() {
+        use crate::model::{Id, VoiceFlags};
+        let (me, other) = (Id(1), Id(2));
+        assert!(!super::channel_has_video(&[me, other]));
+        super::set_flags(other, VoiceFlags { video: true, ..Default::default() });
+        assert!(super::channel_has_video(&[me, other]));
+        assert!(!super::channel_has_video(&[me]));
+        assert!(!super::channel_has_video(&[]));
     }
 
     #[test]
