@@ -491,6 +491,9 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
             let ch = &app.channels[&id];
             let collapsed = app.collapsed.contains(&id);
             let fav_cat = ch.guild == Some(crate::ui::favorites::GUILD);
+            let cat_guild = ch.guild;
+            let manage = cat_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4));
+            let add_entity = entity.clone();
             let e = entity.clone();
             div()
                 .id(("cat", id.0))
@@ -538,12 +541,18 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
                                 }))),
                         ),
                 )
-                .when(!fav_cat, |d| d.child(
+                .when(!fav_cat && manage, |d| d.child(
                     div()
                         .size(z(24.))
                         .flex_none()
                         .p(z(4.))
                         .id(("cat-add", id.0))
+                        .on_click(move |_, _, cx| {
+                            cx.stop_propagation();
+                            if let Some(g) = cat_guild {
+                                add_entity.update(cx, |a, cx| a.open_create_channel(g, Some(id), ChannelKind::Text, cx));
+                            }
+                        })
                         .tooltip(crate::ui::tooltip::tip(crate::t!("menu.create_channel")))
                         .group("cat-add")
                         .active(|s| s.pt(z(4.5)))
@@ -957,6 +966,8 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     let has_info = timer.is_some() || limit_pill.is_some();
     let is_voice = matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage);
     let chat_entity = entity.clone();
+    let invite_entity = entity.clone();
+    let guild = ch.guild;
     let invite_hover = (!is_dm).then(|| {
         div()
             .flex()
@@ -977,8 +988,34 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         .child(action(Icon::Members, Some("chat"))),
                 )
             })
-            .child(action(Icon::Members, Some("invite")).tooltip(crate::ui::tooltip::tip(crate::t!("perm.create_invite"))))
-            .when(can_edit, |d| d.child(action(Icon::Gear, None).tooltip(crate::ui::tooltip::tip(crate::t!("menu.edit_channel")))))
+            .child(
+                action(Icon::Members, Some("invite"))
+                    .cursor_pointer()
+                    .on_click({
+                        let e = invite_entity.clone();
+                        move |_, _, cx| {
+                            cx.stop_propagation();
+                            if let Some(g) = guild {
+                                e.update(cx, |a, cx| a.open_invite_to(g, Some(id), cx));
+                            }
+                        }
+                    })
+                    .tooltip(crate::ui::tooltip::tip(crate::t!("perm.create_invite"))),
+            )
+            .when(can_edit, |d| {
+                d.child(
+                    action(Icon::Gear, None)
+                        .cursor_pointer()
+                        .on_click({
+                            let e = invite_entity.clone();
+                            move |_, _, cx| {
+                                cx.stop_propagation();
+                                e.update(cx, |a, cx| a.open_channel_settings(id, cx));
+                            }
+                        })
+                        .tooltip(crate::ui::tooltip::tip(crate::t!("menu.edit_channel"))),
+                )
+            })
     });
     div()
         .id(("ch", id.0))

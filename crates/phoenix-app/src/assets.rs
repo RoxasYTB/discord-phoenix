@@ -135,6 +135,7 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/chat/slash-box.svg" => s!(r#"<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m14.5 7.5-5 9"/>"#),
         "icons/settings/nitro-wordmark.svg" => concat!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 26" fill="black">"#, r#"<path d="M2 25 6 1h4l5 14 2-14h5l-4 24h-4L9 11 7 25z"/>"#, "</svg>"),
         "icons/chat/forwarded.svg" => s!(r#"<path d="M20 8h-7a8 8 0 0 0-8 8v4M15 3l5 5-5 5"/>"#),
+        "icons/menu/folder-plus.svg" => s!(r#"<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM12 10v6m-3-3h6"/>"#),
         "icons/menu/view-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>"#),
         "icons/menu/remove-reactions.svg" => s!(r#"<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8"/>"#),
         "icons/menu/remove-all-reactions.svg" => s!(r#"<circle cx="11" cy="11" r="8"/><path d="M15 19h6"/>"#),

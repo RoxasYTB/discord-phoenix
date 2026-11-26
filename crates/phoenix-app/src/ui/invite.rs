@@ -72,7 +72,6 @@ impl PhoenixApp {
     }
 
     pub fn open_invite_people(&mut self, guild: Id, cx: &mut Context<Self>) {
-        self.show_overlay(Overlay::InviteLink { guild, link: None }, cx);
         let channel = self
             .selected_channel
             .filter(|c| self.channels.get(c).is_some_and(|c| c.guild == Some(guild)))
@@ -81,6 +80,11 @@ impl PhoenixApp {
                     l.iter().copied().find(|id| self.channels[id].kind == crate::model::ChannelKind::Text)
                 })
             });
+        self.open_invite_to(guild, channel, cx);
+    }
+
+    pub fn open_invite_to(&mut self, guild: Id, channel: Option<Id>, cx: &mut Context<Self>) {
+        self.show_overlay(Overlay::InviteLink { guild, link: None }, cx);
         let Some(channel) = channel else { return };
         self.nav_request(NavRequest::CreateInvite(channel), cx, move |this, res, _| {
             let link: SharedString = match res {

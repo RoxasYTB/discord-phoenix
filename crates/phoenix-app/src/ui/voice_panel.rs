@@ -332,7 +332,11 @@ fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, cx: &mut Co
             cx,
         )))
         .pb(z(4.));
-    let items = vec![
+    let ptt = (kind == Audio::Mic).then(|| {
+        let p = prefs().lock();
+        p.ptt_key.as_ref().map(|_| p.input_mode == crate::voice::prefs::InputMode::PushToTalk)
+    });
+    let mut items = vec![
         MenuItem::Submenu {
             label: if kind == Audio::Mic { crate::t!("voice.input_device_menu") } else { crate::t!("voice.output_device_menu") },
             items: list,
@@ -342,6 +346,13 @@ fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, cx: &mut Co
         MenuItem::Separator,
         MenuItem::Custom(volume.into_any_element()),
         MenuItem::Separator,
+    ];
+    if let Some(Some(on)) = ptt {
+        items.push(MenuItem::check(crate::t!("voice.ptt_menu"), on, move |_, _, _| {
+            update(move |p| p.input_mode = ptt_toggled(on), true)
+        }));
+    }
+    items.extend([
         MenuItem::action(crate::t!("voice.voice_settings"), Some(crate::icons::path("gear")), move |_, _, cx| {
             AUDIO_MENU.with(|m| *m.borrow_mut() = None);
             e.update(cx, |a, cx| {
@@ -351,8 +362,13 @@ fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, cx: &mut Co
                 }
             });
         }),
-    ];
+    ]);
     context_menu::render(pos - gpui::point(px(0.), px(200.)), items, dismiss)
+}
+
+pub fn ptt_toggled(on: bool) -> crate::voice::prefs::InputMode {
+    use crate::voice::prefs::InputMode;
+    if on { InputMode::VoiceActivity } else { InputMode::PushToTalk }
 }
 
 fn action_button(id: &'static str, path: &'static str, label: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
@@ -1186,5 +1202,12 @@ mod tests {
         assert_eq!(picked_camera(&cams, Some("B")), Some(1));
         assert_eq!(picked_camera(&cams, Some("gone")), Some(0));
         assert_eq!(picked_camera(&[], None), None);
+    }
+
+    #[test]
+    fn push_to_talk_check_flips_the_input_mode() {
+        use crate::voice::prefs::InputMode;
+        assert_eq!(ptt_toggled(true), InputMode::VoiceActivity);
+        assert_eq!(ptt_toggled(false), InputMode::PushToTalk);
     }
 }
