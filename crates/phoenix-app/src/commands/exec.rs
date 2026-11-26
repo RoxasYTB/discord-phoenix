@@ -263,10 +263,17 @@ pub(crate) async fn request_with(allowed: bool, rest: RestClient, req: ParityReq
         }
         ParityRequest::CreatePost { forum, title, content, tags, files } => {
             let mut uploads = Vec::with_capacity(files.len());
-            for p in &files {
+            for f in &files {
+                let p = &f.path;
                 let bytes = std::fs::read(p).map_err(|x| BackendError(x.to_string()))?;
-                let filename = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
-                uploads.push(phoenix_api::rest::FileUpload { filename, bytes, content_type: crate::ui::file_pick::accepts(p, &crate::ui::file_pick::IMAGES).then(|| crate::ui::file_pick::mime_of(p).into()), ..Default::default() });
+                uploads.push(phoenix_api::rest::FileUpload {
+                    filename: f.filename(),
+                    bytes,
+                    content_type: crate::ui::file_pick::accepts(p, &crate::ui::file_pick::IMAGES).then(|| crate::ui::file_pick::mime_of(p).into()),
+                    description: Some(f.description.clone()).filter(|d| !d.is_empty()),
+                    spoiler: f.spoiler,
+                    ..Default::default()
+                });
             }
             let ch = rest.create_forum_post_with_files(sf(forum), &title, &content, &ids(&tags), uploads).await.map_err(e)?;
             ParityReply::Channel(id(ch.id))

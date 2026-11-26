@@ -131,6 +131,24 @@ impl ForumSettings {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PostFile {
+    pub path: std::path::PathBuf,
+    pub name: Option<String>,
+    pub description: String,
+    pub spoiler: bool,
+}
+
+impl PostFile {
+    pub fn new(path: std::path::PathBuf) -> Self {
+        Self { path, ..Default::default() }
+    }
+
+    pub fn filename(&self) -> String {
+        self.name.clone().unwrap_or_else(|| self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into()))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum ParityRequest {
     Commands { guild: Option<Id>, channel: Id },
@@ -158,7 +176,7 @@ pub enum ParityRequest {
     CreatePoll { channel: Id, question: String, answers: Vec<PollAnswerDraft>, hours: u32, multi: bool },
     EndPoll { channel: Id, message: Id },
     ForumPosts { forum: Id, tags: Vec<Id>, offset: u32, by_creation: bool, archived: bool, match_all: bool },
-    CreatePost { forum: Id, title: String, content: String, tags: Vec<Id>, files: Vec<std::path::PathBuf> },
+    CreatePost { forum: Id, title: String, content: String, tags: Vec<Id>, files: Vec<PostFile> },
     Moderate { guild: Id, user: Id, action: ModAction },
     BulkDelete { channel: Id, messages: Vec<Id> },
     CreateGroupDm(Vec<Id>),

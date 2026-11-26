@@ -47,9 +47,21 @@ pub fn forum_post_body(title: &str, content: &str, tags: &[Snowflake]) -> Value 
     })
 }
 
-pub fn forum_post_files_body(title: &str, content: &str, tags: &[Snowflake], filenames: &[String]) -> Value {
+pub fn forum_post_files_body(title: &str, content: &str, tags: &[Snowflake], files: &[super::FileUpload]) -> Value {
     let mut b = forum_post_body(title, content, tags);
-    b["message"]["attachments"] = Value::Array(filenames.iter().enumerate().map(|(i, f)| json!({ "id": i, "filename": f })).collect());
+    b["message"]["attachments"] = Value::Array(
+        files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                let mut a = json!({ "id": i, "filename": super::upload_name(f) });
+                if let Some(d) = f.description.as_ref().filter(|d| !d.is_empty()) {
+                    a["description"] = json!(d);
+                }
+                a
+            })
+            .collect(),
+    );
     b
 }
 
@@ -138,8 +150,7 @@ impl RestClient {
         if files.is_empty() {
             return self.create_forum_post(forum, title, content, tags).await;
         }
-        let names: Vec<String> = files.iter().map(|f| f.filename.clone()).collect();
-        let payload = forum_post_files_body(title, content, tags, &names);
+        let payload = forum_post_files_body(title, content, tags, &files);
         self.call(Method::POST, &format!("/channels/{forum}/threads"), Body::Multipart { payload, files: std::sync::Arc::new(files) }).await
     }
 
@@ -230,10 +241,16 @@ mod tests {
         let b = forum_post_body("T", "hi", &[Snowflake(4)]);
         assert_eq!(b["applied_tags"][0], "4");
         assert_eq!(b["message"]["content"], "hi");
-        let f = forum_post_files_body("T", "", &[], &["a.png".into(), "b.jpg".into()]);
+        let files = [
+            super::super::FileUpload { filename: "a.png".into(), ..Default::default() },
+            super::super::FileUpload { filename: "b.jpg".into(), spoiler: true, description: Some("alt".into()), ..Default::default() },
+        ];
+        let f = forum_post_files_body("T", "", &[], &files);
         assert_eq!(f["name"], "T");
         assert_eq!(f["message"]["attachments"][1]["id"], 1);
-        assert_eq!(f["message"]["attachments"][1]["filename"], "b.jpg");
+        assert_eq!(f["message"]["attachments"][1]["filename"], "SPOILER_b.jpg");
+        assert_eq!(f["message"]["attachments"][1]["description"], "alt");
+        assert!(f["message"]["attachments"][0].get("description").is_none());
     }
 
     #[test]

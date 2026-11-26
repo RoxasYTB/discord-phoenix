@@ -172,13 +172,13 @@ pub fn ago(now: i64, ts: i64) -> String {
 const FORUM_AUTO_RETRIES: u32 = 3;
 pub(crate) const MAX_POST_FILES: usize = 10;
 
-pub(crate) fn add_files(files: &mut Vec<std::path::PathBuf>, picked: Vec<std::path::PathBuf>) {
+pub(crate) fn add_files(files: &mut Vec<crate::commands::PostFile>, picked: Vec<std::path::PathBuf>) {
     for p in picked {
         if files.len() >= MAX_POST_FILES {
             break;
         }
-        if !files.contains(&p) {
-            files.push(p);
+        if !files.iter().any(|f| f.path == p) {
+            files.push(crate::commands::PostFile::new(p));
         }
     }
 }
@@ -415,6 +415,79 @@ impl PhoenixApp {
         cx.notify();
     }
 
+    fn toggle_post_spoiler(&mut self, forum: Id, ix: usize, cx: &mut Context<Self>) {
+        let Some(cmp) = self.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) else { return };
+        let Some(f) = cmp.files.get_mut(ix) else { return };
+        f.spoiler = !f.spoiler;
+        let path = f.path.clone();
+        if f.spoiler && !cmp.blurred.contains_key(&path) && crate::ui::file_pick::accepts(&path, &crate::ui::file_pick::IMAGES) {
+            let read = path.clone();
+            let task = cx.background_spawn(async move { std::fs::read(&read).ok().and_then(|b| crate::ui::chat::spoiler::blurred_image(&b)) });
+            cx.spawn(async move |this, cx| {
+                let Some(img) = task.await else { return };
+                let _ = this.update(cx, |a, cx| {
+                    if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) {
+                        cmp.blurred.insert(path, img);
+                    }
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
+    fn edit_post_file(&mut self, forum: Id, ix: usize, cx: &mut Context<Self>) {
+        use crate::ui::modals::{Field, Form, Modal};
+        let Some(f) = self.parity.forums.get(&forum).and_then(|v| v.compose.as_ref()).and_then(|c| c.files.get(ix)).cloned() else { return };
+        let name = f.filename();
+        let preview = crate::ui::chat::state::is_image_name(&name).and_then(|fmt| {
+            let bytes = std::fs::read(&f.path).ok()?;
+            let (w, h) = image::ImageReader::new(std::io::Cursor::new(bytes.as_slice())).with_guessed_format().ok()?.into_dimensions().ok()?;
+            Some((std::sync::Arc::new(gpui::Image::from_bytes(fmt, bytes)), w, h))
+        });
+        let path = f.path.clone();
+        crate::actions::open_modal(
+            Modal::Form(Form {
+                title: crate::t!("upload.modify"),
+                subtitle: None,
+                fields: vec![
+                    Field::new(crate::t!("upload.filename"), "".into(), name),
+                    Field::new(crate::t!("upload.description"), crate::t!("upload.description_ph"), f.description.clone()).rows(3).max_len(1024),
+                ],
+                choices: Vec::new(),
+                choice: None,
+                check: Some((crate::t!("upload.mark_spoiler"), f.spoiler)),
+                submit: crate::t!("upload.save"),
+                danger: false,
+                preview,
+                width: 480.,
+                on_submit: std::rc::Rc::new(move |a: &mut PhoenixApp, v: Vec<String>, _, cx: &mut Context<PhoenixApp>| {
+                    let mut v = v.into_iter();
+                    let (name, description, spoiler) = (v.next().unwrap_or_default(), v.next().unwrap_or_default(), v.next().is_some_and(|s| s == "1"));
+                    let mut toggle = None;
+                    if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut())
+                        && let Some((i, u)) = cmp.files.iter_mut().enumerate().find(|(_, u)| u.path == path)
+                    {
+                        if !name.trim().is_empty() {
+                            u.name = Some(name.trim().to_string());
+                        }
+                        u.description = description.trim().to_string();
+                        if u.spoiler != spoiler {
+                            toggle = Some(i);
+                        }
+                    }
+                    if let Some(i) = toggle {
+                        a.toggle_post_spoiler(forum, i, cx);
+                    }
+                    cx.notify();
+                }),
+            }),
+            None,
+        );
+        cx.notify();
+    }
+
     fn submit_post(&mut self, forum: Id, cx: &mut Context<Self>) {
         let Some(comp) = self.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut()) else { return };
         let title = comp.title.read(cx).value().trim().to_owned();
@@ -500,7 +573,7 @@ pub fn prepare(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
             s.focus(window, cx)
         });
         let v = app.parity.forums.entry(forum).or_default();
-        v.compose = Some(ForumCompose { title, body, tags: Vec::new(), files: Vec::new(), media_hover: false, sending: false, previewing: false, tag_menu: None, error: None });
+        v.compose = Some(ForumCompose { title, body, tags: Vec::new(), files: Vec::new(), blurred: Default::default(), media_hover: false, sending: false, previewing: false, tag_menu: None, error: None });
         if !v.guidelines_seen {
             v.guidelines_seen = true;
             v.guidelines_open = true;
@@ -1507,8 +1580,10 @@ fn upload_tile(forum: Id, comp: &ForumCompose, cx: &mut Context<PhoenixApp>) -> 
     if comp.files.is_empty() {
         return frame.child(add("compose-media-add", cx));
     }
-    let thumb = |p: &std::path::Path| {
+    let thumb = |f: &crate::commands::PostFile| {
+        let p = f.path.as_path();
         let image = crate::ui::file_pick::accepts(p, &crate::ui::file_pick::IMAGES);
+        let blurred = f.spoiler.then(|| comp.blurred.get(p).cloned()).flatten();
         div()
             .size(z(78.))
             .flex_none()
@@ -1518,8 +1593,11 @@ fn upload_tile(forum: Id, comp: &ForumCompose, cx: &mut Context<PhoenixApp>) -> 
             .flex()
             .items_center()
             .justify_center()
-            .when(image, |d| d.child(img(p.to_path_buf()).size_full().object_fit(gpui::ObjectFit::Cover)))
-            .when(!image, |d| d.child(gpui::svg().path(crate::icons::path("file")).size(z(28.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))))
+            .map(|d| match blurred {
+                Some(b) => d.child(img(b).size_full().object_fit(gpui::ObjectFit::Cover)),
+                None if image => d.child(img(p.to_path_buf()).size_full().object_fit(gpui::ObjectFit::Cover)).when(f.spoiler, |d| d.opacity(0.15)),
+                None => d.child(gpui::svg().path(crate::icons::path("file")).size(z(28.)).flex_none().text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
+            })
     };
     let collapsed = div()
         .relative()
@@ -1550,33 +1628,70 @@ fn upload_tile(forum: Id, comp: &ForumCompose, cx: &mut Context<PhoenixApp>) -> 
     let popout = comp.media_hover.then(|| {
         let mut row = div().flex().gap(z(8.));
         for (i, f) in comp.files.iter().enumerate() {
-            row = row.child(
-                div().relative().child(thumb(f)).child(
-                    div()
-                        .id(("compose-media-remove", i))
-                        .absolute()
-                        .top(z(4.))
-                        .right(z(4.))
-                        .size(z(24.))
-                        .rounded(z(6.))
-                        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
-                        .hover(|s| s.bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER))))
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .justify_center()
+            let group: SharedString = format!("compose-upload-{i}").into();
+            let action = |id: &'static str, icon: &'static str, color: usize| {
+                div()
+                    .id((id, i))
+                    .size(z(24.))
+                    .flex_none()
+                    .rounded(z(4.))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
+                    .child(gpui::svg().path(crate::icons::path(icon)).size(z(16.)).flex_none().text_color(c(tok(color))))
+            };
+            let bar = div()
+                .absolute()
+                .top(z(-6.5))
+                .right(z(-18.5))
+                .invisible()
+                .group_hover(group.clone(), |s| s.visible())
+                .flex()
+                .items_center()
+                .h(z(26.))
+                .rounded(z(8.))
+                .overflow_hidden()
+                .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+                .border_1()
+                .border_color(c(tok(idx::BORDER_MUTED)))
+                .shadow(crate::ui::inbox::low_shadow())
+                .child(
+                    action("compose-media-spoiler", if f.spoiler { "chat/eye-slash" } else { "chat/eye" }, if f.spoiler { idx::TEXT_BRAND } else { idx::INTERACTIVE_TEXT_DEFAULT })
                         .on_click(cx.listener(move |a, _, _, cx| {
                             cx.stop_propagation();
-                            if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut())
-                                && i < cmp.files.len()
-                            {
-                                cmp.files.remove(i);
-                                cmp.media_hover = !cmp.files.is_empty();
-                            }
-                            cx.notify();
-                        }))
-                        .child(gpui::svg().path(crate::icons::path("chat/trash")).size(z(16.)).flex_none().text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL)))),
-                ),
+                            a.toggle_post_spoiler(forum, i, cx);
+                        })),
+                )
+                .child(action("compose-media-edit", "chat/edit", idx::INTERACTIVE_TEXT_DEFAULT).on_click(cx.listener(move |a, _, _, cx| {
+                    cx.stop_propagation();
+                    a.edit_post_file(forum, i, cx);
+                })))
+                .child(action("compose-media-remove", "chat/trash", idx::TEXT_FEEDBACK_CRITICAL).on_click(cx.listener(move |a, _, _, cx| {
+                    cx.stop_propagation();
+                    if let Some(cmp) = a.parity.forums.get_mut(&forum).and_then(|v| v.compose.as_mut())
+                        && i < cmp.files.len()
+                    {
+                        let f = cmp.files.remove(i);
+                        cmp.blurred.remove(&f.path);
+                        cmp.media_hover = !cmp.files.is_empty();
+                    }
+                    cx.notify();
+                })));
+            row = row.child(
+                div()
+                    .id(("compose-upload", i))
+                    .group(group)
+                    .relative()
+                    .flex_none()
+                    .size(z(78.))
+                    .rounded(z(8.))
+                    .border_1()
+                    .border_color(c(tok(idx::BORDER_NORMAL)))
+                    .shadow(crate::ui::inbox::low_shadow())
+                    .child(thumb(f).size_full())
+                    .child(bar),
             );
         }
         if comp.files.len() < 10 {
