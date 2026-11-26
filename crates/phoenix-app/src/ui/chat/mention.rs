@@ -11,11 +11,13 @@ use crate::{
     theme::{c, generated::idx, tok},
 };
 
+type Anchor = (u64, usize, Range<usize>, usize);
+
 thread_local! {
     static HOVER: Cell<Option<(u64, usize, u64, usize)>> = const { Cell::new(None) };
     static HOVER_LINK: std::cell::RefCell<Option<(u64, usize, u64, gpui::SharedString)>> = const { std::cell::RefCell::new(None) };
     static HOVER_PILL: Cell<Option<(u64, usize, usize, u64)>> = const { Cell::new(None) };
-    static ANCHOR: std::cell::RefCell<Option<(u64, usize, Range<usize>, usize)>> = const { std::cell::RefCell::new(None) };
+    static ANCHOR: std::cell::RefCell<Option<Anchor>> = const { std::cell::RefCell::new(None) };
 }
 
 pub fn anchor_at(ranges: &[Range<usize>], targets: &[ClickTarget], ix: usize) -> Option<(Range<usize>, gpui::SharedString)> {
