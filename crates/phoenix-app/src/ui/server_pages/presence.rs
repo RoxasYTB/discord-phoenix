@@ -374,7 +374,7 @@ mod tests {
         assert_eq!(social_rows(&meta, 2), vec!["https://x.com/a".to_owned(), String::new(), String::new()]);
         assert_eq!(social_rows(&meta, 20).len(), MAX_SOCIAL);
         let w = splash_write(Id(5), "");
-        assert_eq!((w.path.as_str(), w.body), ("/guilds/5", Some(json!({ "discovery_splash": null }))));
+        assert_eq!((w.path.as_str(), w.body.clone()), ("/guilds/5", Some(json!({ "discovery_splash": null }))));
         assert!(w.refusal().is_write_blocked());
     }
 
