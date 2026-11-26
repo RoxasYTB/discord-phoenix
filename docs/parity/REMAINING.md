@@ -21,24 +21,30 @@ Catégories :
 | settings-wiring : « Synchroniser le thème » | grisé tant que « Thème de l'appareil » est actif | `shouldSync("appearance")` |
 | chat : sous-titre « Tu quittes Discord » (lien d'application) | partie `$b` en semibold | `aCYv1z`, `strong{font-weight:var(--font-weight-semibold)}` |
 
+## Fermées par wt/remaining1 (26/11)
+
+| ligne | correction | commit |
+|---|---|---|
+| call-view : aperçus d'appel, pièce jointe | `V` du module 448368 (en cache, `73d5fba3085633c7.js`) : textes bloqué / ignoré / épinglé / autocollant / commande / vocal / composants v2 / « Clique pour voir les pièces jointes », icônes de fin et de transfert | dcc9aa26 |
+| call-view : poignée de redimensionnement de l'appel MP | tracée : module 587837 → `resizeHandle_poo5Jt` (module 50031), géométrie déjà juste | dcc9aa26 |
+| settings : logo Nitro hors Nitro Squad | wordmark du module 224016 extrait au runtime (`settings/nitro-wordmark`, `fill-rule` du `<g>` conservé), 160×40 mb 4 | 270492c4 |
+| settings : popout de couleur du tag | `NW`/`VN` (saturation, teinte, hex, colonne Secondaire si `C9` ≥ 2) ; ⚠ PATCH à la fermeture, hex en lecture seule, pipette inerte | 5083ea27, 0873b032 |
+| settings : A2F, clés de sécurité | liste en GET, « Ajouter » = POST refusé par la garde + toast `xSCvBf` ; ⚠ menu « … » d'une clé non construit | b3b2ad43 |
+| settings : recherche dans les pages personnalisées | haut de Voix & Vidéo filtré ; ⚠ termes cachés des `useSearchTerms` non mappés | 61804d8f, 3781b244 |
+| popouts : puce de tag de la Mod View | déjà faite (a8bb91f1), doc corrigé | 9a2d37de |
+| report : `share_with_parents` / `settings_upsells` | tracés (conditions, textes) mais non construits : ado + Centre familial, et sous-type du signalement absent du nœud | a07df836 (doc) |
+
 ## Faisable (pas encore fait)
 
 | fichier | ligne | ce qu'il faut |
 |---|---|---|
-| call-view | aperçus de messages en appel : pièce jointe | `contentPlaceholder` du module 448368 (lazy, absent du cache) : retrouver le chunk dans la table webpack de `web.*.js` et le récupérer en GET |
-| call-view | poignée de redimensionnement | CSS du module 587837 absente du cache : même méthode |
-| settings | Nitro : logo du titre hors Nitro Squad | `mu.A` (wordmark Nitro, `tierTitle_20JRSQ`) au lieu du texte « NITRO » |
-| settings | Tag du serveur : popout de couleur personnalisée | `Nz` (primaire + secondaire si `C9[badge]` ≥ 2), code en cache |
 | settings | Autocollants / Soundboard : modales d'ajout | modales du client (nom, émoji, volume), sans exécuter les POST |
-| settings | A2F : « Clés de sécurité + Ajouter » inerte | code en cache, appels finaux gardés |
 | settings | guide du serveur (étape 4) : vignettes, sélecteurs d'émoji, glisser-déposer | code en cache |
-| settings | recherche des paramètres : pages personnalisées non filtrées | `useSearchTerms` des pages |
 | navigation | Favoris : « Paramètres du fil » (stub), lignes de la modale d'ajout | modules 167846 et 677993 |
 | composer | `margin-inline` 1 px de `before_s/u/em` ; `> ` caché qui garde deux arrêts du curseur ; séparation `[`/`](url)` | CSS en cache ; comportement de l'éditeur |
 | composer | coller texte + image : GPUI lit le texte d'abord | patch GPUI (presse-papiers Wayland) |
-| popouts | Mod View : la puce de tag n'ouvre pas le popout de tag | popout de tag à construire |
 | popouts | Shop This Look : fiche produit | modale `722258.B` |
-| report | lignes `share_with_parents` et `settings_upsells` | code en cache |
+| report | lignes `share_with_parents` et `settings_upsells` | tracées (a07df836) ; il manque le sous-type du signalement et l'état Centre familial |
 | notifications | autres types de messages système, invitations d'activité, cartes parrainage / checkpoint | `stringify` en cache |
 | window-chrome | icône de la barre : sourdine / suppression de serveur, états événement / stage / activité | `hasAnyUnread` et priorités en cache |
 | text | modales non mesurées (réactions, transfert, recherche, soundboard, popout de groupe, création de fil) | dumps à faire ou CSS en cache |
