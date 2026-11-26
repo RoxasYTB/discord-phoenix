@@ -118,6 +118,12 @@ fn language_name(code: &str) -> SharedString {
     crate::i18n::languages::LANGUAGES.iter().find(|l| l.code == code).map_or_else(|| SharedString::from(code.to_owned()), |l| l.native.into())
 }
 
+pub const APP_SEARCH_PAGE_SIZE: u32 = 24;
+
+pub fn app_search_path(query: &str, page: u32, locale: &str) -> String {
+    format!("/application-directory-static/search?query={}&page={}&page_size={}&locale={}", encode(query), page, APP_SEARCH_PAGE_SIZE, encode(locale))
+}
+
 pub fn lurk_path(guild: u64, session_id: &str) -> String {
     let mut p = format!("/guilds/{guild}/members/@me?lurker=true");
     if !session_id.is_empty() {
@@ -132,7 +138,7 @@ pub fn directory_path_allowed(path: &str) -> bool {
     let id = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
     match seg.as_slice() {
         ["discoverable-guilds"] | ["discoverable-guilds", "search"] | ["discovery", "categories"] => true,
-        ["application-directory-static", "collections"] | ["application-directory-static", "categories"] => true,
+        ["application-directory-static", "collections"] | ["application-directory-static", "categories"] | ["application-directory-static", "search"] => true,
         ["application-directory-static", "applications", a] | ["application-directory-static", "applications", a, "similar"] => id(a),
         ["applications", a, "public"] | ["applications", a, "application-command-index"] => id(a),
         ["quests", "@me", "claimed"] | ["oauth2", "authorize"] => true,
@@ -889,8 +895,11 @@ fn label_w(window: &Window, text: &str, size: f32, weight: FontWeight) -> f32 {
     f32::from(window.text_system().layout_line(text, gpui::px(size), &[run], None).width)
 }
 
-fn search_empty(cx: &Context<PhoenixApp>) -> bool {
-    INPUT.with(|i| i.borrow().as_ref().is_none_or(|i| i.read(cx).value().trim().is_empty()))
+fn search_empty(kind: Tab, cx: &Context<PhoenixApp>) -> bool {
+    match kind {
+        Tab::Servers => INPUT.with(|i| i.borrow().as_ref().is_none_or(|i| i.read(cx).value().trim().is_empty())),
+        Tab::Apps => APP_INPUT.with(|i| i.borrow().as_ref().is_none_or(|i| i.read(cx).value().trim().is_empty())),
+    }
 }
 
 type TabItem = (gpui::ElementId, SharedString, bool, Option<Category>);
@@ -899,8 +908,11 @@ fn tab_header(kind: Tab, icon: &'static str, mut items: Vec<TabItem>, vw: f32, w
     let widths: Vec<f32> = items.iter().map(|i| label_w(window, &i.1, 16., FontWeight::MEDIUM)).collect();
     let more_label = crate::t!("discovery.more");
     let overflow_w = label_w(window, &more_label, 14., FontWeight::SEMIBOLD) + 4. + 16.;
-    let live = kind == Tab::Servers && INPUT.with(|i| i.borrow().is_some());
-    let empty = !live || search_empty(cx);
+    let live = match kind {
+        Tab::Servers => INPUT.with(|i| i.borrow().is_some()),
+        Tab::Apps => APP_INPUT.with(|i| i.borrow().is_some()),
+    };
+    let empty = !live || search_empty(kind, cx);
     let state = settle_search_bar(search_bar(kind), vw, &widths, empty);
     set_search_bar(kind, state);
     let last = last_visible(&widths, tabs_container_width(vw, state), overflow_w);
@@ -920,7 +932,15 @@ fn tab_header(kind: Tab, icon: &'static str, mut items: Vec<TabItem>, vw: f32, w
         .gap(z(20.))
         .child(gpui::svg().path(crate::icons::path(icon)).flex_none().size(z(24.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE)))
         .child(div().flex_1().min_w_0().h_full().overflow_hidden().child(tabs));
-    let field = (state != SearchBar::Collapsed).then(|| if live { search_field(cx) } else { static_search() });
+    let field = (state != SearchBar::Collapsed).then(|| {
+        if !live {
+            static_search()
+        } else if kind == Tab::Servers {
+            search_field(cx)
+        } else {
+            app_search_field(cx)
+        }
+    });
     let el = match state {
         SearchBar::Default => bar(left.into_any_element(), field, false),
         SearchBar::Collapsed => bar(left.into_any_element(), Some(collapsed_search(kind, cx)), false),
@@ -944,9 +964,11 @@ fn collapsed_search(kind: Tab, cx: &mut Context<PhoenixApp>) -> gpui::Div {
             .cursor_pointer()
             .on_click(cx.listener(move |_, _, w, cx| {
                 set_search_bar(kind, SearchBar::Floating);
-                if kind == Tab::Servers
-                    && let Some(i) = INPUT.with(|i| i.borrow().clone())
-                {
+                let input = match kind {
+                    Tab::Servers => INPUT.with(|i| i.borrow().clone()),
+                    Tab::Apps => APP_INPUT.with(|i| i.borrow().clone()),
+                };
+                if let Some(i) = input {
                     i.update(cx, |s, cx| s.focus(w, cx));
                 }
                 cx.notify();
@@ -1170,6 +1192,14 @@ pub fn page(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>)
         if let Some(id) = crate::ui::app_profile::current() {
             return crate::ui::app_profile::page(app, id, window, cx);
         }
+        ensure_app_input(window, cx);
+        if let Some(i) = APP_INPUT.with(|i| i.borrow().clone()) {
+            crate::ui::locale_inputs::keep_placeholder(&i, "discovery.search", window, cx);
+        }
+        if APP_SEARCH.with(|s| s.borrow().is_some()) {
+            maybe_load_more_apps(app, cx);
+            return app_search_page(window, cx);
+        }
         return apps_page(app, window, cx);
     }
     ensure_input(app, window, cx);
@@ -1318,6 +1348,25 @@ pub struct Collection {
 
 pub const PROMOTED_FLAG: u64 = 1 << 29;
 
+fn parse_app(a: &Value) -> Option<DirectoryApp> {
+    let id: u64 = a["id"].as_str()?.parse().ok()?;
+    let s = |v: &Value| v.as_str().filter(|x| !x.is_empty()).map(str::to_owned);
+    let bot = &a["bot"];
+    let banner = match (s(&bot["id"]), s(&bot["banner"])) {
+        (Some(b), Some(h)) => Some(cdn(format!("banners/{b}/{h}.png?size=600"))),
+        _ => s(&a["cover_image"]).map(|h| cdn(format!("app-icons/{id}/{h}.png?size=600"))),
+    };
+    Some(DirectoryApp {
+        id,
+        name: s(&a["name"]).unwrap_or_default().into(),
+        description: s(&a["description"]).unwrap_or_default().into(),
+        icon: s(&a["icon"]).map(|h| cdn(format!("app-icons/{id}/{h}.png?size=64"))),
+        banner,
+        category: a["categories"].get(0).and_then(|c| s(&c["name"])).map(Into::into),
+        promoted: a["flags"].as_u64().unwrap_or(0) & PROMOTED_FLAG != 0,
+    })
+}
+
 pub fn parse_collections(v: &Value) -> Vec<Collection> {
     let mut list: Vec<&Value> = v.as_array().map(|a| a.iter().collect()).unwrap_or_default();
     list.sort_by_key(|c| c["position"].as_i64().unwrap_or(i64::MAX));
@@ -1325,28 +1374,7 @@ pub fn parse_collections(v: &Value) -> Vec<Collection> {
         .filter_map(|c| {
             let mut items: Vec<&Value> = c["application_directory_collection_items"].as_array()?.iter().filter(|i| i["type"].as_u64() == Some(1)).collect();
             items.sort_by_key(|i| i["position"].as_i64().unwrap_or(i64::MAX));
-            let apps: Vec<DirectoryApp> = items
-                .into_iter()
-                .filter_map(|i| {
-                    let a = &i["application"];
-                    let id: u64 = a["id"].as_str()?.parse().ok()?;
-                    let s = |v: &Value| v.as_str().filter(|x| !x.is_empty()).map(str::to_owned);
-                    let bot = &a["bot"];
-                    let banner = match (s(&bot["id"]), s(&bot["banner"])) {
-                        (Some(b), Some(h)) => Some(cdn(format!("banners/{b}/{h}.png?size=600"))),
-                        _ => s(&a["cover_image"]).map(|h| cdn(format!("app-icons/{id}/{h}.png?size=600"))),
-                    };
-                    Some(DirectoryApp {
-                        id,
-                        name: s(&a["name"]).unwrap_or_default().into(),
-                        description: s(&a["description"]).unwrap_or_default().into(),
-                        icon: s(&a["icon"]).map(|h| cdn(format!("app-icons/{id}/{h}.png?size=64"))),
-                        banner,
-                        category: a["categories"].get(0).and_then(|c| s(&c["name"])).map(Into::into),
-                        promoted: a["flags"].as_u64().unwrap_or(0) & PROMOTED_FLAG != 0,
-                    })
-                })
-                .collect();
+            let apps: Vec<DirectoryApp> = items.into_iter().filter_map(|i| parse_app(&i["application"])).collect();
             (!apps.is_empty()).then(|| Collection { title: s_of(&c["title"]), apps })
         })
         .collect()
@@ -1354,6 +1382,17 @@ pub fn parse_collections(v: &Value) -> Vec<Collection> {
 
 fn s_of(v: &Value) -> SharedString {
     v.as_str().unwrap_or_default().to_owned().into()
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AppSearchResults {
+    pub apps: Vec<DirectoryApp>,
+    pub num_pages: u32,
+}
+
+pub fn parse_app_search(v: &Value) -> AppSearchResults {
+    let apps = v["results"].as_array().map(|a| a.iter().filter(|r| r["type"].as_u64().unwrap_or(1) == 1).filter_map(|r| parse_app(&r["data"])).collect()).unwrap_or_default();
+    AppSearchResults { apps, num_pages: v["num_pages"].as_u64().unwrap_or(0) as u32 }
 }
 
 pub fn app_columns(window_w: f32) -> usize {
@@ -1484,6 +1523,182 @@ thread_local! {
     static APP_SCROLL: gpui::ScrollHandle = gpui::ScrollHandle::new();
 }
 
+#[derive(Default)]
+struct AppSearch {
+    query: String,
+    apps: Vec<DirectoryApp>,
+    page: u32,
+    num_pages: u32,
+    loading: bool,
+    done: bool,
+    generation: u64,
+}
+
+thread_local! {
+    static APP_SEARCH: RefCell<Option<AppSearch>> = const { RefCell::new(None) };
+    static APP_INPUT: RefCell<Option<gpui::Entity<gpui_component::input::InputState>>> = const { RefCell::new(None) };
+}
+
+pub fn app_search_query() -> Option<String> {
+    APP_SEARCH.with(|s| s.borrow().as_ref().map(|x| x.query.clone()))
+}
+
+pub fn start_app_search(app: &PhoenixApp, query: String, cx: &mut Context<PhoenixApp>) {
+    let query = query.trim().to_owned();
+    if query.is_empty() {
+        APP_SEARCH.with(|s| *s.borrow_mut() = None);
+        cx.notify();
+        return;
+    }
+    let generation = APP_SEARCH.with(|s| {
+        let mut s = s.borrow_mut();
+        let generation = s.as_ref().map_or(0, |x| x.generation) + 1;
+        *s = Some(AppSearch { query: query.clone(), generation, loading: true, ..AppSearch::default() });
+        generation
+    });
+    APP_SCROLL.with(|h| h.set_offset(gpui::point(gpui::px(0.), gpui::px(0.))));
+    fetch_app_search_page(app, query, 1, generation, cx);
+}
+
+fn fetch_app_search_page(app: &PhoenixApp, query: String, page: u32, generation: u64, cx: &mut Context<PhoenixApp>) {
+    let fut = app.backend.directory_get(app_search_path(&query, page, crate::i18n::locale()));
+    cx.spawn(async move |this, cx| {
+        let v = fut.await.unwrap_or(Value::Null);
+        let res = parse_app_search(&v);
+        APP_SEARCH.with(|s| {
+            let mut s = s.borrow_mut();
+            let Some(st) = s.as_mut().filter(|x| x.generation == generation) else { return };
+            st.loading = false;
+            st.num_pages = res.num_pages;
+            st.done = page >= res.num_pages || res.apps.len() < APP_SEARCH_PAGE_SIZE as usize;
+            st.apps.extend(res.apps);
+            st.page = page;
+        });
+        let _ = this.update(cx, |_, cx| cx.notify());
+    })
+    .detach();
+}
+
+fn maybe_load_more_apps(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
+    let near = APP_SCROLL.with(|h| h.max_offset().y + h.offset().y < gpui::px(600.));
+    if !near {
+        return;
+    }
+    let next = APP_SEARCH.with(|s| {
+        let mut s = s.borrow_mut();
+        let st = s.as_mut()?;
+        if st.loading || st.done {
+            return None;
+        }
+        st.loading = true;
+        Some((st.query.clone(), st.page + 1, st.generation))
+    });
+    if let Some((q, p, g)) = next {
+        fetch_app_search_page(app, q, p, g, cx);
+    }
+}
+
+fn ensure_app_input(window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    if APP_INPUT.with(|i| i.borrow().is_some()) {
+        return;
+    }
+    let q = app_search_query().unwrap_or_default();
+    let input = cx.new(|cx| gpui_component::input::InputState::new(window, cx).placeholder(crate::t!("discovery.search")).default_value(q));
+    cx.subscribe(&input, |a: &mut PhoenixApp, i, ev: &gpui_component::input::InputEvent, cx| match ev {
+        gpui_component::input::InputEvent::PressEnter { .. } => {
+            let q = i.read(cx).value().to_string();
+            start_app_search(a, q, cx);
+        }
+        gpui_component::input::InputEvent::Change => cx.notify(),
+        _ => {}
+    })
+    .detach();
+    APP_INPUT.with(|i| *i.borrow_mut() = Some(input));
+}
+
+fn app_search_field(cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    let Some(input) = APP_INPUT.with(|i| i.borrow().clone()) else { return static_search() };
+    let filled = !input.read(cx).value().is_empty();
+    search_shell()
+        .when(filled, |d| d.border_color(tk(idx::INPUT_BORDER_ACTIVE)))
+        .child(div().flex_1().min_w_0().text_size(z(14.)).child(gpui_component::input::Input::new(&input).appearance(false).bordered(false)))
+        .when(filled, |d| {
+            d.child(
+                div()
+                    .id("discovery-app-search-clear")
+                    .flex_none()
+                    .size(z(22.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .on_click(cx.listener(|_, _, w, cx| {
+                        clear_app_search(w, cx);
+                    }))
+                    .child(gpui::svg().path(crate::icons::path("settings/circle-x")).size(z(16.)).text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))),
+            )
+        })
+}
+
+fn clear_app_search(window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    if let Some(i) = APP_INPUT.with(|i| i.borrow().clone()) {
+        i.update(cx, |s, cx| s.set_value("", window, cx));
+    }
+    APP_SEARCH.with(|s| *s.borrow_mut() = None);
+    APP_SCROLL.with(|h| h.set_offset(gpui::point(gpui::px(0.), gpui::px(0.))));
+    cx.notify();
+}
+
+fn app_search_page(window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let (query, apps, loading) = APP_SEARCH.with(|s| {
+        let s = s.borrow();
+        let st = s.as_ref().expect("app search");
+        (st.query.clone(), st.apps.clone(), st.loading)
+    });
+    let cols = app_columns(f32::from(window.viewport_size().width) / crate::theme::zoom());
+    let mut grid = div().px(z(32.)).py(z(24.)).grid().grid_cols(cols as u16).gap(z(16.));
+    if loading && apps.is_empty() {
+        for _ in 0..cols * 2 {
+            grid = grid.child(div().h(z(275.)).rounded(z(8.)).bg(tk(idx::BACKGROUND_BASE_LOWEST)));
+        }
+    } else {
+        for a in &apps {
+            grid = grid.child(app_card(a, cx));
+        }
+    }
+    let content = if apps.is_empty() && !loading {
+        div().pt(z(96.)).flex().justify_center().child(text(16., 20., FontWeight::MEDIUM, tk(idx::TEXT_MUTED), crate::t!("search.no_results")))
+    } else {
+        grid
+    };
+    let mut body = div().id("discovery-apps-scroll").size_full().overflow_y_scroll().pt(z(HEADER_H));
+    body = APP_SCROLL.with(|s| body.track_scroll(s));
+    body = body.child(content);
+    let back = div()
+        .id("discovery-app-search-back")
+        .flex_none()
+        .size(z(32.))
+        .rounded(z(4.))
+        .bg(gpui::hsla(240. / 360., 0.04, 0.61, 0.12))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .on_click(cx.listener(|_, _, w, cx| {
+            clear_app_search(w, cx);
+        }))
+        .child(gpui::svg().path(crate::icons::path("nav/back")).size(z(18.)).text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE)));
+    let left = div()
+        .h_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap(z(20.))
+        .child(back)
+        .child(text(20., 24., FontWeight::SEMIBOLD, tk(idx::TEXT_STRONG), crate::t!("discovery.search_results", query = query)).min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap());
+    div().size_full().relative().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(body).child(bar(left.into_any_element(), Some(app_search_field(cx)), true)).into_any_element()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1546,11 +1761,13 @@ mod tests {
         assert_eq!(lurk_path(42, "abc"), "/guilds/42/members/@me?lurker=true&session_id=abc");
         assert_eq!(lurk_path(42, ""), "/guilds/42/members/@me?lurker=true");
         assert!(directory_path_allowed("/discoverable-guilds/search?query=x"));
+        assert!(directory_path_allowed("/application-directory-static/search?query=x&page=1&page_size=24&locale=fr"));
         assert!(directory_path_allowed("/application-directory-static/applications/123/similar?locale=fr"));
         assert!(directory_path_allowed("/quests/@me/claimed"));
         assert!(!directory_path_allowed("/application-directory-static/applications/abc"));
         assert!(!directory_path_allowed("/users/@me/settings-proto/1"));
         assert!(!directory_path_allowed("/guilds/1/members/@me"));
+        assert_eq!(app_search_path("word game", 2, "fr"), "/application-directory-static/search?query=word%20game&page=2&page_size=24&locale=fr");
         assert_eq!(CATEGORIES.len(), 7);
         assert_eq!(category_text(Category::Id(1)).section, Some("discovery.cat_popular.gaming"));
         assert!(category_text(Category::Hubs).section.is_none());
@@ -1561,6 +1778,21 @@ mod tests {
         let a = parse_category_names(&json!([{"id": 1, "name": "Gaming"}, {"id": "14", "name": {"default": "General Chatting", "localizations": {"fr": "Discussion générale"}}}]), "fr");
         assert_eq!(a.get(&1).map(|x| x.as_ref()), Some("Gaming"));
         assert_eq!(a.get(&14).map(|x| x.as_ref()), Some("Discussion générale"));
+    }
+
+    #[test]
+    fn parses_app_directory_search() {
+        let v = json!({"results": [
+            {"type": 1, "data": {"id": "7", "name": "Wordle", "icon": "ic", "description": "d", "flags": 11665410, "categories": [{"id": 6, "name": "Games"}], "bot": {"id": "7", "banner": null}}},
+            {"type": 2, "data": {"id": "8", "name": "skip"}},
+            {"type": 1, "data": {"id": "9", "name": "Werwulf", "flags": 537002498, "categories": [], "bot": {"id": "9", "banner": "bn"}}}
+        ], "num_pages": 3, "counts_by_category": [{"id": 6, "count": 2}]});
+        let r = parse_app_search(&v);
+        assert_eq!(r.apps.iter().map(|a| a.name.as_ref()).collect::<Vec<_>>(), ["Wordle", "Werwulf"]);
+        assert_eq!(r.num_pages, 3);
+        assert_eq!(r.apps[1].banner.as_deref(), Some("https://cdn.discordapp.com/banners/9/bn.png?size=600"));
+        let empty = parse_app_search(&Value::Null);
+        assert!(empty.apps.is_empty() && empty.num_pages == 0);
     }
 
     #[test]
