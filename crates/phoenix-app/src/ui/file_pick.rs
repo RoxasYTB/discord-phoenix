@@ -25,6 +25,43 @@ pub fn data_uri(path: &Path) -> Option<String> {
     Some(encode(&bytes, mime_of(path)))
 }
 
+pub fn decode(uri: &str) -> Option<std::sync::Arc<gpui::Image>> {
+    use std::{
+        cell::RefCell,
+        collections::HashMap,
+        hash::{Hash, Hasher},
+    };
+
+    use base64::Engine;
+    thread_local! {
+        static CACHE: RefCell<HashMap<u64, std::sync::Arc<gpui::Image>>> = RefCell::new(HashMap::new());
+    }
+    let (mime, body) = uri.strip_prefix("data:")?.split_once(";base64,")?;
+    let format = match mime {
+        "image/png" => gpui::ImageFormat::Png,
+        "image/gif" => gpui::ImageFormat::Gif,
+        "image/webp" => gpui::ImageFormat::Webp,
+        "image/jpeg" | "image/jpg" => gpui::ImageFormat::Jpeg,
+        _ => return None,
+    };
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    uri.hash(&mut h);
+    let key = h.finish();
+    if let Some(hit) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
+        return Some(hit);
+    }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(body).ok()?;
+    let image = std::sync::Arc::new(gpui::Image::from_bytes(format, bytes));
+    CACHE.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() > 32 {
+            c.clear();
+        }
+        c.insert(key, image.clone());
+    });
+    Some(image)
+}
+
 pub fn accepts(path: &Path, exts: &[&str]) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| exts.iter().any(|x| x.eq_ignore_ascii_case(e)))
 }
@@ -61,5 +98,14 @@ mod tests {
         assert!(accepts(Path::new("x.Webp"), &IMAGES));
         assert!(!accepts(Path::new("x.exe"), &IMAGES));
         assert!(accepts(Path::new("x.json"), &STICKERS));
+    }
+
+    #[test]
+    fn data_uris_decode_back_to_images() {
+        let img = decode("data:image/png;base64,YWJj").unwrap();
+        assert_eq!(img.format, gpui::ImageFormat::Png);
+        assert_eq!(img.bytes, b"abc");
+        assert!(decode("data:text/plain;base64,YWJj").is_none());
+        assert!(decode("abc").is_none());
     }
 }

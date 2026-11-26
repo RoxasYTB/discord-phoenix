@@ -1790,7 +1790,51 @@ fn dashed_add(id: &'static str, label: SharedString) -> gpui::Stateful<gpui::Div
         .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_LINK, label))
 }
 
-type TaskRow = (AnyElement, SharedString, Option<(usize, SharedString)>);
+type TaskRow = (AnyElement, SharedString, Option<(usize, SharedString)>, Option<SharedString>);
+
+pub fn task_channel_ok(ch: &Chan) -> bool {
+    matches!(ch.kind, 0 | 5 | 15 | 16) && ch.public
+}
+
+pub fn resource_channel_ok(ch: &Chan) -> bool {
+    ch.kind == 0 && ch.public && !ch.chattable
+}
+
+pub fn guide_icon_src(entry: &Value, path: &str) -> Option<gpui::ImageSource> {
+    let icon = entry.get("icon").and_then(Value::as_str).filter(|i| !i.is_empty())?;
+    if icon.starts_with("data:") {
+        return crate::ui::file_pick::decode(icon).map(gpui::ImageSource::from);
+    }
+    let cid = str_of(entry, "channel_id");
+    Some(SharedString::from(format!("https://cdn.discordapp.com/{path}/{cid}/{icon}.png?size=128")).into())
+}
+
+fn has_emoji(e: &Value) -> bool {
+    e.get("id").and_then(Value::as_str).is_some_and(|s| !s.is_empty()) || e.get("name").and_then(Value::as_str).is_some_and(|s| !s.is_empty())
+}
+
+fn emoji_wrap(child: AnyElement) -> gpui::Div {
+    div()
+        .flex_none()
+        .w(z(46.))
+        .h(z(48.))
+        .p(z(12.))
+        .rounded_full()
+        .bg(t(idx::BACKGROUND_BASE_LOWEST))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(child)
+}
+
+fn task_thumb(a: &Value, ch: &Chan) -> AnyElement {
+    if let Some(src) = guide_icon_src(a, "new-member-actions") {
+        return div().flex_none().mt(z(2.)).child(gpui::img(src).size(z(48.)).rounded(z(8.))).into_any_element();
+    }
+    let e = a.get("emoji").unwrap_or(&Value::Null);
+    let inner = if has_emoji(e) { emoji(e) } else { icon(channel_icon(ch.kind, true), 24., idx::INTERACTIVE_TEXT_DEFAULT).into_any_element() };
+    emoji_wrap(inner).into_any_element()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GuideDragKind {
@@ -1973,20 +2017,24 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let mut items: Vec<TaskRow> = Vec::new();
     for (i, a) in list.iter().enumerate() {
         let cid = str_of(a, "channel_id").to_owned();
+        let Some(ch) = c.list.iter().find(|x| x.id == cid) else { continue };
+        let error = (!task_channel_ok(ch)).then(|| crate::t!("gs2.obw.task_no_perms"));
         items.push((
-            emoji(a.get("emoji").unwrap_or(&Value::Null)),
+            task_thumb(a, ch),
             str_of(a, "title").to_owned().into(),
-            Some((i, crate::t!("gs2.obw.task_in", name = c.name(&cid)))),
+            Some((i, crate::t!("gs2.obw.task_in", name = ch.name.clone()))),
+            error,
         ));
     }
     if c.rules_channel.is_some() {
         items.push((
-            icon("forum/book-check", 24., idx::INTERACTIVE_TEXT_DEFAULT).into_any_element(),
+            emoji_wrap(gpui::svg().path(crate::icons::path("forum/book-check")).w(z(22.)).h(z(20.)).flex_none().text_color(t(idx::INTERACTIVE_TEXT_DEFAULT)).into_any_element()).into_any_element(),
             crate::t!("gs2.obw.read_rules"),
+            None,
             None,
         ));
     }
-    for (e, title, edit) in items {
+    for (e, title, edit, error) in items {
         let home_t = h.clone();
         let drag_idx = edit.as_ref().map(|(i, _)| *i);
         let row_title = title.clone();
@@ -1999,6 +2047,7 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
             .py(z(12.))
             .rounded(z(12.))
             .bg(t(idx::BACKGROUND_BASE_LOWER))
+            .when(error.is_some(), |d| d.border_2().border_color(t(idx::RED_400)).mb(z(4.)))
             .flex()
             .items_center()
             .gap(z(16.))
@@ -2041,7 +2090,7 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
                     }
                 }))
             })
-            .child(emoji_disc(e))
+            .child(e)
             .child(
                 div()
                     .flex_1()
@@ -2067,7 +2116,9 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         })),
                 )
             });
-        actions = actions.child(div().mt(z(12.)).child(row));
+        actions = actions.child(div().mt(z(12.)).child(row).when_some(error, |d, msg| {
+            d.child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_FEEDBACK_CRITICAL, msg))
+        }));
     }
     if list.len() < super::guide_editors::MAX_TASKS {
         let home_t = h.clone();
@@ -2126,11 +2177,10 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
     for (i, r) in resources.iter().enumerate() {
         let home_r = h.clone();
         let cid = str_of(r, "channel_id").to_owned();
-        let writable = c
-            .list
-            .iter()
-            .find(|x| x.id == cid)
-            .is_none_or(|x| x.chattable);
+        let Some(ch) = c.list.iter().find(|x| x.id == cid) else { continue };
+        let writable = !resource_channel_ok(ch);
+        let desc = str_of(r, "description").to_owned();
+        let thumb = guide_icon_src(r, "resource-channels");
         let title = if str_of(r, "title").is_empty() {
             c.name(&cid)
         } else {
@@ -2192,11 +2242,20 @@ fn home_step(c: &Ctx, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                 cx.notify();
                             }
                         }))
+                        .when_some(thumb, |d, src| {
+                            d.child(div().flex_none().mt(z(2.)).child(gpui::img(src).size(z(32.)).rounded(z(8.))))
+                        })
                         .child(
-                            div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).child(
-                                text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title)
-                                    .truncate(),
-                            ),
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap(z(4.))
+                                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, title).truncate())
+                                .when(!desc.is_empty(), |d| {
+                                    d.child(text(12., 16., FontWeight::MEDIUM, idx::TEXT_MUTED, desc).truncate())
+                                }),
                         )
                         .child(
                             button_sm(
@@ -3143,5 +3202,30 @@ mod tests {
         assert!(tip_open(g, 1));
         dismiss_tips(g);
         assert!(!tip_open(g, 1));
+    }
+
+    fn chan(kind: u64, public: bool, chattable: bool) -> Chan {
+        Chan { id: "5".into(), name: "c".into(), kind, parent: None, position: 0, public, private: !public, chattable }
+    }
+
+    #[test]
+    fn guide_rows_check_the_channel_like_the_client() {
+        assert!(task_channel_ok(&chan(0, true, true)));
+        assert!(task_channel_ok(&chan(15, true, false)));
+        assert!(!task_channel_ok(&chan(2, true, true)));
+        assert!(!task_channel_ok(&chan(0, false, false)));
+        assert!(resource_channel_ok(&chan(0, true, false)));
+        assert!(!resource_channel_ok(&chan(0, true, true)));
+        assert!(!resource_channel_ok(&chan(5, true, false)));
+        assert!(!resource_channel_ok(&chan(0, false, false)));
+    }
+
+    #[test]
+    fn guide_icons_come_from_the_cdn_or_the_draft() {
+        let hash = json!({ "channel_id": "7", "icon": "abc" });
+        assert!(matches!(guide_icon_src(&hash, "resource-channels"), Some(gpui::ImageSource::Resource(_))));
+        let draft = json!({ "channel_id": "7", "icon": "data:image/png;base64,YWJj" });
+        assert!(matches!(guide_icon_src(&draft, "new-member-actions"), Some(gpui::ImageSource::Image(_))));
+        assert!(guide_icon_src(&json!({ "channel_id": "7", "icon": null }), "x").is_none());
     }
 }
