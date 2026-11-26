@@ -3,7 +3,7 @@ const ROW_RADIUS: f32 = 8.;
 use crate::ui::tooltip::Tipped as _;
 use gpui::{
     AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled,
-    Transformation, div, list, percentage, prelude::*, px,
+    Transformation, div, list, prelude::*, px,
 };
 
 use crate::{
@@ -543,8 +543,8 @@ fn category_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEle
                 .child(
                     icon(Icon::Chevron, 12., t(idx::CHANNELS_DEFAULT))
                         .group_hover("cat", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
-                        .with_transformation(Transformation::rotate(percentage(if collapsed {
-                            -0.25
+                        .with_transformation(Transformation::rotate(gpui::radians(if collapsed {
+                            -std::f32::consts::FRAC_PI_2
                         } else {
                             0.
                         }))),
