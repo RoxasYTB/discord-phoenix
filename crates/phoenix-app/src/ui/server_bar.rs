@@ -15,7 +15,8 @@ use crate::{
     model::{Guild, Id, ImageRef},
     theme::{Palette, c, generated::idx, m, tok, z},
     ui::{
-        badge, icon,
+        blob_mask::masked,
+        icon,
         rail_dnd::{self, RailDrop, RailNode},
     },
 };
@@ -392,15 +393,8 @@ fn pill(key: u64, selected: bool, hover: bool, unread: bool) -> AnyElement {
     div().absolute().left_0().top_0().h_full().w(z(4.)).flex().items_center().child(bar).into_any_element()
 }
 
-fn mention_badge(n: u32) -> impl IntoElement {
-    div()
-        .absolute()
-        .right(z(-4.))
-        .bottom(z(-4.))
-        .p(z(4.))
-        .rounded(z(12.))
-        .bg(c(Palette::BG_TERTIARY))
-        .child(badge(n).bg(c(Palette::NOTIFICATION)))
+fn count(n: u32) -> Option<u32> {
+    (n > 0).then_some(n)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -521,21 +515,7 @@ fn voice_badge(state: MediaState) -> Option<AnyElement> {
     use crate::theme::{generated::idx, tok};
     let icon = state.icon()?;
     let bg = tok(if state.connected { idx::STATUS_POSITIVE } else { idx::ICON_OVERLAY_DARK });
-    Some(
-        div()
-            .absolute()
-            .top(z(-2.))
-            .right(z(-2.))
-            .p(z(2.))
-            .rounded_full()
-            .bg(c(Palette::BG_TERTIARY))
-            .child(
-                div().size(z(16.)).rounded_full().bg(c(bg)).flex().items_center().justify_center().child(
-                    gpui::svg().path(crate::icons::path(icon)).size(z(12.)).text_color(gpui::white()),
-                ),
-            )
-            .into_any_element(),
-    )
+    Some(crate::ui::blob_mask::icon_badge(icon, c(bg)).into_any_element())
 }
 
 fn row(id: impl Into<ElementId>, key: u64, entity: &Entity<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
@@ -569,13 +549,7 @@ fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElem
                     })
                 })
                 .child(pill(key, false, hover, true))
-                .child(
-                    div()
-                        .relative()
-                        .size(z(ICON))
-                        .child(crate::ui::avatar(u, ICON))
-                        .child(mention_badge(ch.mentions)),
-                )
+                .child(masked(ICON, false, crate::ui::avatar(u, ICON), None, count(ch.mentions)))
                 .when(hover, |d| d.child(right_tooltip(name, ICON)))
                 .into_any_element()
         })
@@ -592,30 +566,28 @@ fn home(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> AnyElement {
     row("home", HOME_KEY, entity)
         .on_click(move |_, _, cx| e.update(cx, |a, cx| a.select_guild(None, cx)))
         .child(pill(HOME_KEY, selected, hover, false))
-        .child(
+        .child(masked(
+            ICON,
+            false,
             div()
-                .relative()
                 .size(z(ICON))
-                .child(
-                    div()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(z(ICON_RADIUS))
-                        .relative()
-                        .child(crate::ui::states::fade_to(
-                            crate::ui::states::key(("rail-tile", HOME_KEY)),
-                            selected || hover,
-                            c(Palette::GUILD_ICON_BG),
-                            c(Palette::BLURPLE),
-                            150,
-                            ICON_RADIUS,
-                        ))
-                        .child(svg().path(crate::icons::path("discord-logo")).size(z(24.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
-                )
-                .when(pending > 0, |d| d.child(mention_badge(pending))),
-        )
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(z(ICON_RADIUS))
+                .relative()
+                .child(crate::ui::states::fade_to(
+                    crate::ui::states::key(("rail-tile", HOME_KEY)),
+                    selected || hover,
+                    c(Palette::GUILD_ICON_BG),
+                    c(Palette::BLURPLE),
+                    150,
+                    ICON_RADIUS,
+                ))
+                .child(svg().path(crate::icons::path("discord-logo")).size(z(24.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
+            None,
+            count(pending),
+        ))
         .when(hover, |d| d.child(right_tooltip(crate::t!("dm.title"), ICON)))
         .into_any_element()
 }
@@ -635,30 +607,28 @@ fn favorites(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Option<AnyElement
             .on_click(move |_, _, cx| e.update(cx, crate::ui::favorites::open))
             .on_mouse_down(gpui::MouseButton::Right, |ev, w, _| crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Favorites, ev.position, w))
             .child(pill(FAVORITES_KEY, selected, hover, unread))
-            .child(
+            .child(masked(
+                ICON,
+                false,
                 div()
-                    .relative()
                     .size(z(ICON))
-                    .child(
-                        div()
-                            .size_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(z(ICON_RADIUS))
-                            .relative()
-                            .child(crate::ui::states::fade_to(
-                                crate::ui::states::key(("rail-tile", FAVORITES_KEY)),
-                                selected || hover,
-                                c(Palette::GUILD_ICON_BG),
-                                c(Palette::BLURPLE),
-                                150,
-                                ICON_RADIUS,
-                            ))
-                            .child(svg().path(crate::icons::path("star")).size(z(20.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
-                    )
-                    .when(mentions > 0, |d| d.child(mention_badge(mentions))),
-            )
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(z(ICON_RADIUS))
+                    .relative()
+                    .child(crate::ui::states::fade_to(
+                        crate::ui::states::key(("rail-tile", FAVORITES_KEY)),
+                        selected || hover,
+                        c(Palette::GUILD_ICON_BG),
+                        c(Palette::BLURPLE),
+                        150,
+                        ICON_RADIUS,
+                    ))
+                    .child(svg().path(crate::icons::path("star")).size(z(20.)).flex_none().text_color(if selected || hover { gpui::white() } else { c(Palette::TEXT_NORMAL) })),
+                None,
+                count(mentions),
+            ))
             .when(hover, |d| d.child(right_tooltip_with(crate::t!("fav.title"), voice_row(app, &crate::ui::favorites::voice_users(app)), ICON)))
             .into_any_element(),
     )
@@ -835,14 +805,7 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, folder: Optio
         })
         .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| cx.new(|_| d.clone()))
         .child(pill(id.0, selected, hover, g.unread))
-        .child(
-            div()
-                .relative()
-                .size(z(ICON))
-                .child(icon_box)
-                .children(voice_badge(guild_media(app, g)))
-                .when(g.mentions > 0, |d| d.child(mention_badge(g.mentions))),
-        )
+        .child(masked(ICON, false, icon_box, voice_badge(guild_media(app, g)), count(g.mentions)))
         .when(hover, |d| d.child(right_tooltip(g.name.clone(), ICON)))
         .into_any_element()
 }
@@ -924,14 +887,13 @@ fn folder(
             crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Folder(id), ev.position, w)
         })
         .child(pill(key, !open && has_selected, hover, !open && unread))
-        .child(
-            div()
-                .relative()
-                .size(z(FOLDER))
-                .child(head_inner)
-                .when(!open, |d| d.children(voice_badge(folder_media(app, guilds))))
-                .when(!open && mentions > 0, |d| d.child(mention_badge(mentions))),
-        )
+        .child(masked(
+            FOLDER,
+            true,
+            head_inner,
+            if open { None } else { voice_badge(folder_media(app, guilds)) },
+            count(mentions).filter(|_| !open),
+        ))
         .when(hover, |d| d.child(right_tooltip(name.clone(), FOLDER)));
     if !open {
         return header.into_any_element();

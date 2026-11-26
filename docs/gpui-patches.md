@@ -646,6 +646,35 @@ the frame, replay keeps the sequence). App: `ui::hover_icon::tests::sheet_cells_
 (the cell picked at present time is the frame the player computes, at 0, 7, 16, 100, 333,
 650 and 2000 ms).
 
+## 21. Cut-outs (`src/scene.rs` `CutoutSet` / `push_cutouts` / `replay`, `src/window.rs` `with_cutouts` / `paint_quad` / `paint_image` / `paint_emoji`, `src/color.rs` `Background::with_cutout`, wgpu `shaders.wgsl` `cutout_coverage`, `wgpu_renderer.rs` binding 2 of the globals group)
+
+**Problem.** The client cuts the guild icon around its badges with an SVG `<mask>` (BlobMask,
+module 862328): a black rounded rect 2 px larger than the badge leaves a transparent ring between
+the icon and the badge. Phoenix painted a ring in the rail colour over the icon instead, which
+showed the wrong colour over an open folder, while dragging, and around avatars on a hovered row.
+GPUI has no mask.
+
+**Patch.** `Window::with_cutouts(&[(bounds, radius)], f)` punches up to two rounded-rectangle
+holes, in window coordinates, through the quads and images (polychrome sprites, emoji) painted by
+`f`. The set (`CutoutSet`, two `CutoutHole`s in device pixels) goes into `Scene::cutouts`, and the
+primitive carries `1 + index` in a field that was padding: `Background::pad` for quads and
+the high 16 bits of `PolychromeSprite::pad` for images (the low 16 bits keep the image sequence of patch 20, `poly_sequence` / `poly_cutout`), so no instance layout changes (the WebGL decoders already read
+those words). `Scene::push_cutouts` reuses the last set when it is the same and returns 0 once
+`MAX_CUTOUT_SETS` (256) sets are stored; `replay` copies the set of a reused primitive. The wgpu
+renderer writes the sets to a 16 KiB uniform (`@group(0) @binding(2) cutouts`) after the gamma
+params when the scene has any. `fs_quad` (now a wrapper of `fs_quad_uncut`, the index comes as a
+flat varying) and `fs_poly_sprite` multiply their alpha by `saturate(distance + 0.5)` per hole,
+the signed distance of a rounded rectangle, the same half-pixel ramp as a rounded quad. Glyphs,
+SVG icons, paths, shadows and underlines are not cut. A scene without cut-outs takes the old path.
+Search `PHOENIX PATCH (cut-outs)`.
+The pinned commit (7ca4f561) is kept on the `gpui-cutouts` branch of origin.
+
+Tests: `scene::cutout_tests` (circle and pill distances, empty hole, set reuse, full table, clear),
+`scene::image_sequence_tests::sequence_and_cutout_share_the_pad_word`,
+wgpu `headless_renderer_cuts_round_holes_through_quads` (round and pill holes, a neighbour quad
+untouched), and the existing WGSL validation tests for the storage, gradient, subpixel and WebGL
+shaders. App: `ui::blob_mask::tests`.
+
 ## Running the vendored tests
 
 The lib tests of both crates run from a small test-only workspace, `vendor/Cargo.toml`

@@ -839,24 +839,20 @@ pub fn verified_check() -> gpui::Div {
 }
 
 
-fn mobile_avatar(user: Option<&crate::model::User>, cut: impl FnOnce(gpui::Div) -> gpui::Div, deco: Option<SharedString>, play: bool) -> gpui::Div {
+fn mobile_avatar(user: Option<&crate::model::User>, _cut: impl FnOnce(gpui::Div) -> gpui::Div, deco: Option<SharedString>, play: bool) -> gpui::Div {
+    let hole = crate::ui::blob_mask::Hole { x: 32. * 0.59375, y: 32. * 0.4375, w: 32. * 0.5, h: 32. * 0.65625, r: 32. * 0.13125 };
     div()
         .relative()
         .flex_none()
         .size(px(32.))
-        .child(crate::ui::avatar_hover(user, 32., play))
-        .when_some(deco, |d, src| d.child(crate::ui::avatar_deco::layer(src, 32.)))
-        .child(
+        .child(crate::ui::blob_mask::cut(
             div()
-                .absolute()
-                .left(px(32. * 0.59375))
-                .top(px(32. * 0.4375))
-                .w(px(32. * 0.5))
-                .h(px(32. * 0.65625))
-                .rounded(px(32. * 0.13125))
-                .bg(c(Palette::BG_SECONDARY))
-                .child(cut(div().size_full().rounded(px(32. * 0.13125)))),
-        )
+                .relative()
+                .size(px(32.))
+                .child(crate::ui::avatar_hover(user, 32., play))
+                .when_some(deco, |d, src| d.child(crate::ui::avatar_deco::layer(src, 32.))),
+            [hole],
+        ))
         .child(
             gpui::svg()
                 .path(crate::ui::status_svg::MOBILE)

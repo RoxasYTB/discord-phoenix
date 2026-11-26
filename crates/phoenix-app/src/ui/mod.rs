@@ -79,6 +79,7 @@ pub mod states;
 pub mod hover_icon;
 pub mod status_picker;
 pub mod status_svg;
+pub mod blob_mask;
 pub mod role_dot;
 pub mod role_gradient;
 pub mod switcher;
@@ -178,27 +179,23 @@ pub fn avatar_with_status_deco_hover(
     size: f32,
     p: Presence,
     ring: Hsla,
-    overlay: impl FnOnce(Div) -> Div,
+    _overlay: impl FnOnce(Div) -> Div,
     deco: Option<SharedString>,
     play: bool,
 ) -> Div {
-    let (cx, r, s) = status_svg::geometry(size);
+    let (cx, _, s) = status_svg::geometry(size);
     div()
         .relative()
         .flex_none()
         .size(px(size))
-        .child(avatar_hover(user, size, play))
-        .when_some(deco, |d, src| d.child(avatar_deco::layer(src, size)))
-        .child(
+        .child(blob_mask::cut(
             div()
-                .absolute()
-                .left(px(cx - r))
-                .top(px(cx - r))
-                .size(px(2. * r))
-                .rounded_full()
-                .bg(ring)
-                .child(overlay(div().size_full().rounded_full())),
-        )
+                .relative()
+                .size(px(size))
+                .child(avatar_hover(user, size, play))
+                .when_some(deco, |d, src| d.child(avatar_deco::layer(src, size))),
+            [blob_mask::status_hole(size)],
+        ))
         .child(div().absolute().left(px(cx - s / 2.)).top(px(cx - s / 2.)).child(status_dot(p, s, ring)))
 }
 
