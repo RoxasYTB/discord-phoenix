@@ -180,7 +180,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .relative()
         .flex()
         .flex_col()
-        .bg(c(Palette::BG_SECONDARY))
+        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_SECONDARY))
         .border_l_1()
         .border_color(c(Palette::DIVIDER))
         .child(

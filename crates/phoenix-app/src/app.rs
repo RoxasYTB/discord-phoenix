@@ -1581,6 +1581,7 @@ impl Render for PhoenixApp {
             .map(crate::fonts::ui_root)
             .text_color(c(Palette::TEXT_NORMAL))
             .bg(c(Palette::BG_TERTIARY))
+            .children(crate::theme::client_theme::backdrop(window))
             .child({
                 let (dx, dy) = ui::easter::shake_offset(window);
                 ui::popout_motion::base(div().size_full().relative().left(gpui::px(dx)).top(gpui::px(dy)).child(body))

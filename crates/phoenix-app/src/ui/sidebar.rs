@@ -182,7 +182,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .h_full()
         .flex()
         .flex_col()
-        .bg(c(Palette::BG_TERTIARY))
+        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::AppFrame, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_TERTIARY))
         .rounded_tl(z(m::FRAME_RADIUS))
         .overflow_hidden()
         .relative()
@@ -1484,7 +1484,7 @@ pub fn panels(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .w(z(m::SERVER_BAR_W + crate::ui::sidebar_resize::width()))
         .mt(z(-10.))
         .relative()
-        .child(div().absolute().top(z(10.)).bottom_0().left_0().w(z(m::server_bar_w())).bg(c(Palette::BG_TERTIARY)))
+        .child(div().absolute().top(z(10.)).bottom_0().left_0().w(z(m::server_bar_w())).bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::AppFrame, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_TERTIARY)))
         .child(
             div()
                 .absolute()
@@ -1494,7 +1494,7 @@ pub fn panels(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .left(z(m::server_bar_w()))
                 .border_l_1()
                 .border_color(c(Palette::APP_FRAME_BORDER))
-                .bg(c(Palette::BG_SECONDARY)),
+                .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::AppFrame, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_SECONDARY)),
         )
         .child(panels_card(app, cx))
 }
@@ -1506,7 +1506,7 @@ fn panels_card(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoEleme
         .rounded(z(8.))
         .border_1()
         .border_color(t(idx::BORDER_MUTED))
-        .bg(t(idx::BACKGROUND_BASE_LOW))
+        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Highest, Some(crate::theme::client_theme::Level::AppFrame), crate::theme::tok(idx::BACKGROUND_BASE_LOW)))
         .overflow_hidden()
         .flex()
         .flex_col()

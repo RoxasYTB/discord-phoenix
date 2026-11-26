@@ -91,6 +91,7 @@ pub static ENTRIES: &[Entry] = &[
     b("favs", &[15, 3], false),
     b("data-clips", &[19, 1], true),
     en("sb-volume", &[5, 9, 1], false, &[], 0),
+    en("client-theme", &[13, 3, 2], true, &[], 0),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

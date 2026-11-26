@@ -5,6 +5,8 @@ use gpui_component::theme::{Theme, ThemeMode};
 
 use crate::ui::settings::AppTheme;
 
+pub mod client_mix;
+pub mod client_theme;
 pub mod generated;
 
 use generated::idx;
@@ -224,8 +226,12 @@ pub fn resolve(hex: u32) -> u32 {
         if let Some(v) = crate::ui::profile_theme::lookup((hex & 0xFFFF) as usize) {
             return v;
         }
+        let i = (hex & 0xFFFF) as usize;
+        if let Some(v) = client_theme::lookup(i) {
+            return saturate(v);
+        }
         let tables = if high_contrast() { &generated::THEMES_HC } else { &generated::THEMES };
-        saturate(tables[THEME.load(Ordering::Relaxed) as usize][(hex & 0xFFFF) as usize])
+        saturate(tables[THEME.load(Ordering::Relaxed) as usize][i])
     } else {
         hex
     }
@@ -270,6 +276,9 @@ pub fn sync(prefs: &crate::ui::settings::Prefs, window: &mut Window, cx: &mut Ap
     }
     let hc = prefs.local.flag("contrast", false);
     if HIGH_CONTRAST.swap(hc, Ordering::Relaxed) != hc {
+        STYLE_GEN.fetch_add(1, Ordering::Relaxed);
+    }
+    if client_theme::set_active(crate::ui::settings::client_preset(prefs), hc) {
         STYLE_GEN.fetch_add(1, Ordering::Relaxed);
     }
     if ps != prefs.local.saturation.min(100) {

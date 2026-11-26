@@ -284,7 +284,21 @@ fn write_prefs(p: &std::path::Path, data: &[u8]) {
 
 pub const LOCAL_THEME: &str = "theme-local";
 
+pub const LOCAL_CLIENT_THEME: &str = "client-theme-local";
+
+pub fn client_preset(prefs: &Prefs) -> Option<&'static crate::theme::client_theme::Preset> {
+    let id = match prefs.local.ui.get(LOCAL_CLIENT_THEME) {
+        Some(0) => return None,
+        Some(v) => v - 1,
+        None => *prefs.synced.proto.get("client-theme")?,
+    };
+    crate::theme::client_theme::by_id(u32::try_from(id).ok()?)
+}
+
 pub fn effective_theme(prefs: &Prefs, os_dark: bool) -> AppTheme {
+    if let Some(p) = client_preset(prefs) {
+        return if p.light { AppTheme::Light } else { AppTheme::Dark };
+    }
     let local = prefs.local.ui.get(LOCAL_THEME).and_then(|i| AppTheme::ALL.get(*i as usize)).copied();
     let base = match local {
         Some(t) if !prefs.local.flag("theme-devices", true) => t,

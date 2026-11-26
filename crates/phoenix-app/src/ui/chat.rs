@@ -66,7 +66,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex()
         .flex_col()
         .when(mod_view.is_some(), |d| d.border_r_1().border_color(c(tok(idx::BORDER_SUBTLE))).rounded_tr(z(12.)).overflow_hidden())
-        .bg(c(Palette::BG_PRIMARY))
+        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_PRIMARY))
         .on_modifiers_changed(cx.listener(|a, ev: &gpui::ModifiersChangedEvent, _, cx| {
             if a.chat.shift_held != ev.modifiers.shift {
                 a.chat.shift_held = ev.modifiers.shift;
@@ -398,7 +398,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
         .py(z(8.))
         .flex()
         .items_center()
-        .bg(c(Palette::BG_PRIMARY))
+        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::Chat), Palette::BG_PRIMARY))
         .border_t_1()
         .border_b_1()
         .border_color(tk(idx::BORDER_SUBTLE))

@@ -1258,8 +1258,9 @@ static NOTIF: &[B] = &[
     ),
 ];
 
-fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
+fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let theme = crate::theme::active();
+    let gradient = super::client_preset(&app.prefs).is_some();
     div()
         .flex()
         .flex_col()
@@ -1270,7 +1271,7 @@ fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
                 .flex()
                 .gap(z(8.))
                 .children(AppTheme::ALL.map(|t| {
-                    super::view::theme_card(t, t == theme).on_click(cx.listener(move |a, _, _, cx| pick_theme(a, t, cx)))
+                    super::view::theme_card(t, t == theme && !gradient).on_click(cx.listener(move |a, _, _, cx| pick_theme(a, t, cx)))
                 }))
                 .child(
                     div()
@@ -1297,6 +1298,11 @@ fn theme_row(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
 }
 
 fn pick_theme(app: &mut PhoenixApp, t: AppTheme, cx: &mut Cx) {
+    if super::client_preset(&app.prefs).is_some() {
+        update_local(app, |p| {
+            p.ui.insert(super::LOCAL_CLIENT_THEME.into(), 0);
+        }, cx);
+    }
     if app.prefs.local.flag("theme-sync", false) {
         update_local(app, |p| {
             p.ui.insert("theme-sync".into(), 0);
@@ -2292,19 +2298,46 @@ const THEME_SWATCHES: [(f32, u32, f32, u32, f32); 22] = [
     (180., 0x2c3fe7, 0.11, 0x261d83, 0.65),
 ];
 
-fn nitro_themes(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
-    let tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
+fn nitro_themes(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
+    let current = super::client_preset(&app.prefs).map(|p| p.id);
+    let mut tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
+        let preset = crate::theme::client_theme::PRESETS.get(i).map(|p| p.id);
+        let selected = preset.is_some() && preset == current;
+        let face = div().size_full().rounded(z(8.)).bg(gpui::linear_gradient(
+            ang,
+            gpui::linear_color_stop(gpui::rgb(a), pa),
+            gpui::linear_color_stop(gpui::rgb(b), pb),
+        ));
         div()
             .id(eid(format!("nitro-theme-{i}")))
+            .relative()
             .flex_none()
             .size(z(48.))
-            .rounded(z(8.))
             .cursor_pointer()
-            .bg(gpui::linear_gradient(
-                ang,
-                gpui::linear_color_stop(gpui::rgb(a), pa),
-                gpui::linear_color_stop(gpui::rgb(b), pb),
-            ))
+            .child(face)
+            .when(selected, |d| {
+                d.child(div().absolute().top(z(-2.)).left(z(-2.)).size(z(52.)).rounded(z(8.)).border(z(4.)).border_color(c(tok(idx::BRAND_500)))).child(
+                    div()
+                        .absolute()
+                        .top(z(-6.))
+                        .right(z(-6.))
+                        .size(z(20.))
+                        .rounded_full()
+                        .bg(c(tok(idx::BRAND_500)))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(gpui::svg().path(crate::icons::path("check")).size(z(14.)).text_color(gpui::white())),
+                )
+            })
+            .hover(|s| s.opacity(0.9))
+            .when_some(preset, |d, id| {
+                d.on_click(cx.listener(move |a, _, _, cx| {
+                    update_local(a, |p| {
+                        p.ui.insert(super::LOCAL_CLIENT_THEME.into(), u64::from(id) + 1);
+                    }, cx)
+                }))
+            })
     };
     let custom = div()
         .id("nitro-theme-custom")
