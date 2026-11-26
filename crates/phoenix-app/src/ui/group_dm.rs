@@ -49,13 +49,12 @@ pub fn list_status(app: &PhoenixApp, ch: Id) -> Option<crate::model::Presence> {
 pub fn group_avatar_with_status(app: &PhoenixApp, ch: Id, size: f32, ring: Hsla) -> AnyElement {
     let pile = group_avatar(app, ch, size, ring);
     let Some(p) = list_status(app, ch) else { return pile };
-    let (cx, r, s) = crate::ui::status_svg::geometry(size);
+    let (cx, _, s) = crate::ui::status_svg::geometry(size);
     div()
         .relative()
         .flex_none()
         .size(gpui::px(size))
-        .child(pile)
-        .child(div().absolute().left(gpui::px(cx - r)).top(gpui::px(cx - r)).size(gpui::px(2. * r)).rounded_full().bg(ring))
+        .child(crate::ui::blob_mask::cut(pile, [crate::ui::blob_mask::status_hole(size)]))
         .child(div().absolute().left(gpui::px(cx - s / 2.)).top(gpui::px(cx - s / 2.)).child(crate::ui::status_dot(p, s, ring)))
         .into_any_element()
 }
