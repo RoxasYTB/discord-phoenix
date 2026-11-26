@@ -77,15 +77,27 @@ Reste : l'autocomplétion de mentions dans l'éditeur de règles (seulement avec
 
 Reste sur Découvrir : le masque `floatingSearchTabsMask_Y0eJLL` sous la recherche flottante (pas de `mask-image` dans GPUI).
 
+## Fermées par wt/remaining3 (26/11)
+
+| ligne | correction | source |
+|---|---|---|
+| settings : guide du serveur, étape 4 | sélecteurs d'émoji, upsell boost et glisser-déposer étaient déjà faits (b5833d8a) ; ajout des vignettes des lignes (icône 48 / 32, émoji dans son disque, icône du salon par défaut), description des ressources, erreurs `CbTEKP` / `kTdL8X` avec la vraie règle de permission | module 754596 (`916d0bef82cfb632.js`), CSS `fc6c9def8b40b57f.css`, `374084.Rc` / `Yt` |
+| popouts : Shop This Look, fiche produit | modale 960×650 (`size-xl`), rail gauche 330 (aperçu, titre, résumé, prix membre barré pour Nitro, Acheter / Offrir), fond de la collection à droite, fermeture ; achat = même avis « indisponible » que la Boutique | 722258 → 31541 → 844821 (`12bdcdfc1503e9e6.js`), CSS `fEFP8r` `xC7tSN` `w2vPtx` `XcVISC` `80OD1-` |
+| text : barres des modales non mesurées | réactions (thin + fade / auto + fade), transfert (auto), recherche (thin, déjà), soundboard (thin), groupe privé (auto + fade), création de fil (thin + fade) ; nouveau `Bar::AutoFade` | fabriques 516521 / 475825 dans les chunks en cache |
+| text : modale des réactions | refaite d'après le client : taille md (480), colonne d'émojis 98 px (bordure, pr 16, lignes 32 r 8, mb 8, tooltip `:nom:`), lignes de 52 px (avatar 32, nom body-md/medium, pseudo 12/14 muted), retrait par réacteur au survol (DELETE refusé par la garde), plus de bouton « Supprimer les réactions » en pied (absent du client) | `853bbaf8e88952d2.js`, CSS `3c89da594347a9b2.css` |
+| home : bouton « Nouveau groupe privé » des Amis | ouvrait rien ; ouvre le sélecteur de groupe privé | — |
+
+Reste :
+- fiche produit : aperçu de droite (chat pour les décorations, carte de profil sinon), badge, « Aller à la collection », liste de souhaits, partage, variantes, lots ;
+- réactions : la hauteur suit le plafond de 720 de `modals::card` (client : `min(800px, 100%)`), réactions Super (section burst) non faites ;
+- coller texte + image : la lecture est dans `gpui-pre-linux` 0.3.12 (`src/linux/wayland/clipboard.rs`, `Clipboard::read` : `read_text().or_else(read_image)`), qui vient de crates.io et n'est pas vendored. Le correctif tient en quelques lignes (renvoyer les deux entrées, le compositeur prend l'image en premier), mais il faut copier tout le crate dans `vendor/` et l'ajouter à `[patch.crates-io]`, ce qui recompile toute la pile GPUI pour tous les agents : pas fait, risque trop élevé pour aujourd'hui.
+
 ## Faisable (pas encore fait)
 
 | fichier | ligne | ce qu'il faut |
 |---|---|---|
-| settings | guide du serveur (étape 4) : vignettes, sélecteurs d'émoji, glisser-déposer | code en cache |
-| composer | coller texte + image : GPUI lit le texte d'abord | patch GPUI (presse-papiers Wayland) |
-| popouts | Shop This Look : fiche produit | modale `722258.B` |
+| composer | coller texte + image : GPUI lit le texte d'abord | patch du presse-papiers Wayland : `gpui-pre-linux` 0.3.12 n'est pas vendored (crates.io), voir plus bas |
 | report | lignes `share_with_parents` et `settings_upsells` | tracées (a07df836) ; il manque le sous-type du signalement et l'état Centre familial |
-| text | modales non mesurées (réactions, transfert, recherche, soundboard, popout de groupe, création de fil) | dumps à faire ou CSS en cache |
 
 ## Direct (client officiel, utilisateur présent)
 
