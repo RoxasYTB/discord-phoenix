@@ -169,8 +169,10 @@ pub fn portal_id(id: u64) -> String {
     format!("kb-{id}")
 }
 
-fn portal() -> &'static Mutex<Option<Vec<(String, String)>>> {
-    static P: OnceLock<Mutex<Option<Vec<(String, String)>>>> = OnceLock::new();
+type Bound = Option<Vec<(String, String)>>;
+
+fn portal() -> &'static Mutex<Bound> {
+    static P: OnceLock<Mutex<Bound>> = OnceLock::new();
     P.get_or_init(|| Mutex::new(None))
 }
 
@@ -242,7 +244,7 @@ pub fn global_list(list: &[Keybind]) -> Vec<(String, String, String)> {
 
 pub fn sync_global(app: &PhoenixApp) {
     thread_local! {
-        static LAST: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
+        static LAST: RefCell<Bound> = const { RefCell::new(None) };
     }
     if phoenix_api::rest::guard::agent_session() {
         return;

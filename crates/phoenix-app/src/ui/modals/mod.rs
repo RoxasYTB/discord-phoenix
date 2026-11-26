@@ -247,10 +247,8 @@ pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
         Some(Modal::GoLive(g)) => g.viewport = Some(vp),
         Some(Modal::PlaintextFull { viewport, .. }) => *viewport = Some(vp),
         Some(Modal::CustomStatus(s)) => custom_status::prepare(s, &mut mk),
-        Some(Modal::VoicePick(p)) => {
-            if p.search.is_none() {
-                p.search = Some(mk(crate::t!("kb.search_channel"), "", true));
-            }
+        Some(Modal::VoicePick(p)) if p.search.is_none() => {
+            p.search = Some(mk(crate::t!("kb.search_channel"), "", true));
         }
         _ => {}
     });
