@@ -23,6 +23,10 @@ fn main() -> anyhow::Result<()> {
         _ => None,
     });
     let sub = rest.iter().find_map(|a| a.strip_prefix("sub=").and_then(|v| v.parse::<usize>().ok()));
+    let theme = rest.iter().find_map(|a| {
+        let (p, s) = a.strip_prefix("theme=")?.split_once(',')?;
+        Some((u32::from_str_radix(p, 16).ok()?, u32::from_str_radix(s, 16).ok()?))
+    });
 
     let text = gpui_platform::current_platform(true).text_system();
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
@@ -113,6 +117,11 @@ fn main() -> anyhow::Result<()> {
                 phoenix_app::ui::voice_panel::set_flags(Id(6), VoiceFlags { server_deaf: true, ..Default::default() });
                 phoenix_app::ui::voice_panel::set_flags(Id(7), VoiceFlags { self_deaf: true, ..Default::default() });
                 app.voice.speaking.insert(Id(3));
+                if let Some(th) = theme {
+                    for u in [me, Id(4)] {
+                        app.people.profiles.insert(u, phoenix_app::presence::Profile { user: u, theme: Some(th), ..Default::default() });
+                    }
+                }
                 phoenix_app::ui::call_menus::open(menu);
                 if toasts {
                     let lines = ["anyone up for a match tonight?", "", "the stream looks great from here"];
