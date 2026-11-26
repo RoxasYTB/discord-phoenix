@@ -55,7 +55,9 @@ pub struct Look {
 pub fn look(kind: Kind, premium: bool, dark: bool, size: f32) -> Option<Look> {
     let base = (0.75 * size).floor();
     let (glyph, fg, bg, adjust) = match kind {
+        Kind::Staff => ("guild/staff", idx::WHITE, idx::GREEN_360, 0.),
         Kind::Verified | Kind::VerifiedAndPartnered => ("check-small", idx::WHITE, idx::GREEN_360, 0.),
+        Kind::Partnered => ("guild/partner", idx::WHITE, idx::BRAND_500, 0.),
         Kind::Community => {
             let (fg, bg) = if dark { (idx::PRIMARY_500, idx::WHITE) } else { (idx::WHITE, idx::PRIMARY_500) };
             ("guild/home", fg, bg, 2.)
@@ -78,7 +80,11 @@ pub fn paths_of(svg: &str) -> Vec<String> {
     svg.split(" d=\"").skip(1).filter_map(|s| s.split('"').next().map(str::to_owned)).collect()
 }
 
-pub fn badge_svg(look: &Look, glyph_paths: &[String], size: f32) -> String {
+pub fn view_box_width(svg: &str) -> f32 {
+    svg.split("viewBox=\"").nth(1).and_then(|v| v.split('"').next()).and_then(|v| v.split_whitespace().nth(2)).and_then(|w| w.parse().ok()).unwrap_or(24.)
+}
+
+pub fn badge_svg(look: &Look, glyph_paths: &[String], glyph_box: f32, size: f32) -> String {
     let scale = size / 16.;
     let (defs, fill) = match &look.bg {
         Fill::Flat(i) => (String::new(), hex(*i)),
@@ -92,7 +98,7 @@ pub fn badge_svg(look: &Look, glyph_paths: &[String], size: f32) -> String {
     let glyph: String = glyph_paths.iter().map(|d| format!(r#"<path fill="{}" d="{d}"/>"#, hex(look.fg))).collect();
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{defs}<path transform="scale({scale})" fill="{fill}" fill-rule="evenodd" clip-rule="evenodd" d="{FLOWER_STAR}"/><g transform="translate({off} {off}) scale({})">{glyph}</g></svg>"#,
-        g / 24.
+        g / glyph_box
     )
 }
 
@@ -108,7 +114,7 @@ pub fn element(kind: Kind, premium: bool, size: f32) -> Option<AnyElement> {
             .entry((kind, premium, dark))
             .or_insert_with(|| {
                 let svg = crate::icons::lookup(&crate::icons::path(look.glyph)).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
-                Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Svg, badge_svg(&look, &paths_of(&svg), size).into_bytes()))
+                Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Svg, badge_svg(&look, &paths_of(&svg), view_box_width(&svg), size).into_bytes()))
             })
             .clone()
     });
@@ -141,6 +147,11 @@ mod tests {
         assert_eq!((p.fg, p.bg), (idx::WHITE, Fill::Gradient(idx::PREMIUM_TIER_2_PURPLE, idx::PREMIUM_TIER_2_PINK)));
         assert_eq!(look(Kind::Verified, false, true, 18.).unwrap().glyph_size, 13.);
         assert!(look(Kind::Discoverable, false, true, 18.).is_none());
+        let p = look(Kind::Partnered, false, true, 18.).unwrap();
+        assert_eq!((p.glyph, p.fg, p.bg, p.glyph_size), ("guild/partner", idx::WHITE, Fill::Flat(idx::BRAND_500), 13.));
+        assert_eq!(look(Kind::Staff, false, true, 18.).unwrap().glyph, "guild/staff");
+        assert_eq!(view_box_width(r#"<svg viewBox="0 0 16 16"><path d="M1"/></svg>"#), 16.);
+        assert_eq!(view_box_width("<svg><path/></svg>"), 24.);
         assert_eq!(paths_of(r#"<svg><path d="M1 2"/><path fill="x" d="M3 4Z"/></svg>"#), vec!["M1 2".to_owned(), "M3 4Z".to_owned()]);
     }
 }

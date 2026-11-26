@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 
 use crate::ui::tooltip::Tipped as _;
-use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, img, prelude::*};
+use gpui::{AnimationExt as _, AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, img, prelude::*};
 use serde_json::Value;
 
 use crate::{
@@ -65,6 +65,95 @@ thread_local! {
     static BALANCE_ASKED: Cell<bool> = const { Cell::new(false) };
     static SEARCH: RefCell<Option<gpui::Entity<gpui_component::input::InputState>>> = const { RefCell::new(None) };
     static WISHED: RefCell<Vec<crate::ui::profile_wishlist::WishItem>> = const { RefCell::new(Vec::new()) };
+    static WISH_HOVER: RefCell<Option<SharedString>> = const { RefCell::new(None) };
+    static WISH_CLICK: RefCell<Option<(SharedString, u32)>> = const { RefCell::new(None) };
+}
+
+pub const WISH_PULSE_MS: u64 = 1250;
+pub const WISH_CLICK_MS: u64 = 400;
+pub const WISH_PINK: u32 = 0xec1060;
+
+pub fn keyframes(keys: &[(f32, f32)], ease: impl Fn(f32) -> f32, t: f32) -> f32 {
+    let t = t.clamp(0., 1.);
+    for w in keys.windows(2) {
+        let ((t0, v0), (t1, v1)) = (w[0], w[1]);
+        if t <= t1 {
+            let u = if t1 > t0 { (t - t0) / (t1 - t0) } else { 1. };
+            return v0 + (v1 - v0) * ease(u);
+        }
+    }
+    keys.last().map_or(1., |k| k.1)
+}
+
+pub fn wish_pulse_scale(t: f32) -> f32 {
+    keyframes(&[(0., 1.), (0.2, 1.1), (0.6, 0.9), (0.8, 1.), (1., 1.)], crate::ui::states::cubic_bezier(0.23, 0., 0.58, 1.), t)
+}
+
+pub fn wish_click_scale(t: f32) -> f32 {
+    keyframes(&[(0., 0.), (0.625, 1.35), (1., 1.)], crate::ui::states::cubic_bezier(0.67, 0., 0.26, 1.), t)
+}
+
+pub fn wish_click_pink(t: f32) -> f32 {
+    keyframes(&[(0., 0.), (0.2, 0.), (0.7, 1.), (1., 1.)], crate::ui::states::cubic_bezier(0.67, 0., 0.26, 1.), t)
+}
+
+fn wish_heart(id: &SharedString, on: bool) -> AnyElement {
+    let motion = !crate::ui::settings::effects::reduced_motion();
+    let hovered = WISH_HOVER.with(|h| h.borrow().as_ref() == Some(id));
+    let click = WISH_CLICK.with(|c| c.borrow().as_ref().filter(|(i, _)| i == id).map(|(_, n)| *n)).filter(|_| motion);
+    let pink: gpui::Hsla = gpui::rgb(WISH_PINK).into();
+    let icon = if on || click.is_some() { glyph("heart", 20., pink) } else { glyph("heart-outline", 20., tk(idx::ICON_STRONG)) };
+    let icon = if hovered && motion && !on && click.is_none() {
+        icon.with_animation(
+            gpui::ElementId::Name(format!("{id}-pulse").into()),
+            gpui::Animation::new(std::time::Duration::from_millis(WISH_PULSE_MS)).repeat(),
+            |s, t| {
+                let k = wish_pulse_scale(t);
+                s.with_transformation(gpui::Transformation::scale(gpui::size(k, k)))
+            },
+        )
+        .into_any_element()
+    } else {
+        icon.into_any_element()
+    };
+    div()
+        .relative()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(icon)
+        .children(click.map(|n| {
+            div().absolute().inset_0().flex().items_center().justify_center().child(glyph("heart", 20., gpui::white()).with_animation(
+                gpui::ElementId::Name(format!("{id}-click-{n}").into()),
+                gpui::Animation::new(std::time::Duration::from_millis(WISH_CLICK_MS)),
+                move |s, t| {
+                    let k = wish_click_scale(t);
+                    s.with_transformation(gpui::Transformation::scale(gpui::size(k, k))).text_color(gpui::white().blend(pink.opacity(wish_click_pink(t))))
+                },
+            ))
+        }))
+        .into_any_element()
+}
+
+fn start_wish_click(id: SharedString, cx: &mut Context<PhoenixApp>) {
+    if crate::ui::settings::effects::reduced_motion() {
+        return;
+    }
+    let n = WISH_CLICK.with(|c| {
+        let n = c.borrow().as_ref().map_or(0, |(_, n)| n.wrapping_add(1));
+        *c.borrow_mut() = Some((id, n));
+        n
+    });
+    cx.spawn(async move |this, cx| {
+        cx.background_executor().timer(std::time::Duration::from_millis(WISH_CLICK_MS)).await;
+        WISH_CLICK.with(|c| {
+            if c.borrow().as_ref().is_some_and(|(_, m)| *m == n) {
+                *c.borrow_mut() = None;
+            }
+        });
+        let _ = this.update(cx, |_, cx| cx.notify());
+    })
+    .detach();
 }
 
 pub fn wished(sku: u64) -> Option<crate::ui::profile_wishlist::WishItem> {
@@ -586,7 +675,7 @@ pub(crate) fn card_sized(app: &PhoenixApp, k: &ShopCard, width: f32, height: f32
                 .when(!on, |d| d.opacity(0.).group_hover(group.clone(), |s| s.opacity(1.)))
                 .child(
                     div()
-                        .id(wish_id)
+                        .id(wish_id.clone())
                         .size(z(40.))
                         .flex()
                         .items_center()
@@ -598,11 +687,37 @@ pub(crate) fn card_sized(app: &PhoenixApp, k: &ShopCard, width: f32, height: f32
                         .hover(|s| s.bg(tk(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_HOVER)))
                         .active(|s| s.bg(tk(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_ACTIVE)))
                         .cursor_pointer()
-                        .on_click(cx.listener(move |a, _, _, cx| {
-                            cx.stop_propagation();
-                            a.blocked_write(wishlist_write(sku, wished(sku).as_ref()), cx);
-                        }))
-                        .child(if on { glyph("heart", 20., gpui::rgb(0xec1060).into()) } else { glyph("heart-outline", 20., tk(idx::ICON_STRONG)) })
+                        .on_hover({
+                            let id = wish_id.clone();
+                            cx.listener(move |_, h: &bool, _, cx| {
+                                let changed = WISH_HOVER.with(|w| {
+                                    let mut w = w.borrow_mut();
+                                    if *h {
+                                        w.replace(id.clone()).as_ref() != Some(&id)
+                                    } else if w.as_ref() == Some(&id) {
+                                        *w = None;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                });
+                                if changed {
+                                    cx.notify();
+                                }
+                            })
+                        })
+                        .on_click({
+                            let id = wish_id.clone();
+                            cx.listener(move |a, _, _, cx| {
+                                cx.stop_propagation();
+                                let current = wished(sku);
+                                if current.is_none() {
+                                    start_wish_click(id.clone(), cx);
+                                }
+                                a.blocked_write(wishlist_write(sku, current.as_ref()), cx);
+                            })
+                        })
+                        .child(wish_heart(&wish_id, on))
                         .tip(tip),
                 )
         })
@@ -1209,7 +1324,15 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
 
 #[cfg(test)]
 mod tests {
-    use super::{discount, parse};
+    use super::{discount, parse, wish_click_pink, wish_click_scale, wish_pulse_scale};
+
+    #[test]
+    fn wishlist_heart_follows_the_client_keyframes() {
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        assert!(near(wish_pulse_scale(0.), 1.) && near(wish_pulse_scale(0.2), 1.1) && near(wish_pulse_scale(0.6), 0.9) && near(wish_pulse_scale(0.9), 1.));
+        assert!(near(wish_click_scale(0.), 0.) && near(wish_click_scale(0.625), 1.35) && near(wish_click_scale(1.), 1.));
+        assert!(near(wish_click_pink(0.1), 0.) && near(wish_click_pink(0.7), 1.) && near(wish_click_pink(1.), 1.));
+    }
 
     #[test]
     fn card_heart_adds_or_removes_through_the_guard() {

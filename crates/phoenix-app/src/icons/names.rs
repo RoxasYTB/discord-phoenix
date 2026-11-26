@@ -129,6 +129,8 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("picker/fire", &["FireIcon"]),
     ("guild/flower-star", &["path:M5.52995 0.431867"]),
     ("guild/home", &["HomeIcon"]),
+    ("guild/partner", &["path:M10.5906 6.39993"]),
+    ("guild/staff", &["StaffBadgeIcon"]),
     ("mod/shield-user", &["path:M8 6.66659C9.47275 6.66659"]),
     ("picker/star", &["StarIcon"]),
     ("picker/nitro", &["NitroWheelIcon"]),

@@ -466,7 +466,7 @@ fn verified_badge(partner: bool) -> AnyElement {
                 .size(z(16.))
                 .text_color(tk(if partner { idx::BRAND_500 } else { idx::GREEN_360 })),
         )
-        .child(gpui::svg().path(crate::icons::path("check-small")).size(z(10.)).text_color(gpui::white()))
+        .child(gpui::svg().path(crate::icons::path(if partner { "guild/partner" } else { "check-small" })).size(z(10.)).text_color(gpui::white()))
         .into_any_element()
 }
 
