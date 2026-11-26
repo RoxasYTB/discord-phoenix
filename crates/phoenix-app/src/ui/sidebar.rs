@@ -497,82 +497,80 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
 }
 
 fn category_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElement {
-    {
-            let ch = &app.channels[&id];
-            let collapsed = app.collapsed.contains(&id);
-            let fav_cat = ch.guild == Some(crate::ui::favorites::GUILD);
-            let cat_guild = ch.guild;
-            let manage = cat_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4));
-            let add_entity = entity.clone();
-            let e = entity.clone();
+    let ch = &app.channels[&id];
+    let collapsed = app.collapsed.contains(&id);
+    let fav_cat = ch.guild == Some(crate::ui::favorites::GUILD);
+    let cat_guild = ch.guild;
+    let manage = cat_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4));
+    let add_entity = entity.clone();
+    let e = entity.clone();
+    div()
+        .id(("cat", id.0))
+        .group("cat")
+        .pt(z(space::category_before()))
+        .pl(z(20.))
+        .pr(z(6. + 8.))
+        .h(z(24. + space::category_before()))
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_between()
+        .cursor_pointer()
+        .text_color(t(idx::CHANNELS_DEFAULT))
+        .hover(|s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
+        .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_category_saved(id, cx)))
+        .when(!fav_cat, |d| {
+            d.on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
+                cx.stop_propagation();
+                crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
+            })
+        })
+        .child(
             div()
-                .id(("cat", id.0))
-                .group("cat")
-                .pt(z(space::category_before()))
-                .pl(z(20.))
-                .pr(z(6. + 8.))
-                .h(z(24. + space::category_before()))
-                .w_full()
+                .min_w_0()
                 .flex()
                 .items_center()
-                .justify_between()
-                .cursor_pointer()
-                .text_color(t(idx::CHANNELS_DEFAULT))
-                .hover(|s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
-                .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_category_saved(id, cx)))
-                .when(!fav_cat, |d| {
-                    d.on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
-                        cx.stop_propagation();
-                        crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(id), ev.position, w)
-                    })
-                })
+                .gap(z(4.))
                 .child(
                     div()
                         .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap(z(4.))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .text_size(z(14.))
-                                .line_height(z(18.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_ellipsis()
-                                .child(crate::ui::emoji_text::label(ch.name.clone(), 14.)),
-                        )
-                        .child(
-                            icon(Icon::Chevron, 12., t(idx::CHANNELS_DEFAULT))
-                                .group_hover("cat", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
-                                .with_transformation(Transformation::rotate(percentage(if collapsed {
-                                    -0.25
-                                } else {
-                                    0.
-                                }))),
-                        ),
+                        .text_size(z(14.))
+                        .line_height(z(18.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_ellipsis()
+                        .child(crate::ui::emoji_text::label(ch.name.clone(), 14.)),
                 )
-                .when(!fav_cat && manage, |d| d.child(
-                    div()
-                        .size(z(24.))
-                        .flex_none()
-                        .p(z(4.))
-                        .id(("cat-add", id.0))
-                        .on_click(move |_, _, cx| {
-                            cx.stop_propagation();
-                            if let Some(g) = cat_guild {
-                                add_entity.update(cx, |a, cx| a.open_create_channel(g, Some(id), ChannelKind::Text, cx));
-                            }
-                        })
-                        .tooltip(crate::ui::tooltip::tip(crate::t!("menu.create_channel")))
-                        .group("cat-add")
-                        .active(|s| s.pt(z(4.5)))
-                        .child(
-                            icon(Icon::Plus, 16. * crate::theme::zoom(), t(idx::CHANNELS_DEFAULT))
-                                .group_hover("cat-add", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))),
-                        ),
-                ))
-                .into_any_element()
-        }
+                .child(
+                    icon(Icon::Chevron, 12., t(idx::CHANNELS_DEFAULT))
+                        .group_hover("cat", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
+                        .with_transformation(Transformation::rotate(percentage(if collapsed {
+                            -0.25
+                        } else {
+                            0.
+                        }))),
+                ),
+        )
+        .when(!fav_cat && manage, |d| d.child(
+            div()
+                .size(z(24.))
+                .flex_none()
+                .p(z(4.))
+                .id(("cat-add", id.0))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    if let Some(g) = cat_guild {
+                        add_entity.update(cx, |a, cx| a.open_create_channel(g, Some(id), ChannelKind::Text, cx));
+                    }
+                })
+                .tooltip(crate::ui::tooltip::tip(crate::t!("menu.create_channel")))
+                .group("cat-add")
+                .active(|s| s.pt(z(4.5)))
+                .child(
+                    icon(Icon::Plus, 16. * crate::theme::zoom(), t(idx::CHANNELS_DEFAULT))
+                        .group_hover("cat-add", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))),
+                ),
+        ))
+        .into_any_element()
 }
 
 fn reorder_slots(app: &PhoenixApp, g: Id) -> Vec<crate::ui::channel_dnd::Slot> {
