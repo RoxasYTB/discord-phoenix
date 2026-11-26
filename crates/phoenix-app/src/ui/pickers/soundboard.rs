@@ -767,7 +767,12 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let list_el: AnyElement = if empty {
         super::empty_state(if loading { crate::t!("soundboard.loading") } else { crate::t!("soundboard.empty") })
     } else {
-        list(st.list.clone(), |ix, _w, cx| render_row(ix, cx)).size_full().into_any_element()
+        div()
+            .relative()
+            .size_full()
+            .child(list(st.list.clone(), |ix, _w, cx| render_row(ix, cx)).size_full())
+            .children(crate::ui::chat::scrollbar::thin_list_scrollbar(&st.list))
+            .into_any_element()
     };
     let header = div()
         .h(px(HEADER_H))

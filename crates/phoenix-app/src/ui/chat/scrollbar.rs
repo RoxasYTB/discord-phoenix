@@ -11,6 +11,7 @@ pub enum Bar {
     Thin,
     ThinFade,
     Auto,
+    AutoFade,
 }
 
 thread_local! {
@@ -35,12 +36,17 @@ pub fn bar_for_n(key: &'static str, part: u8, bar: Bar) -> Option<AnyElement> {
         Bar::Thin => thin_scrollbar_div(&h),
         Bar::ThinFade => thin_fade_scrollbar_div(&h),
         Bar::Auto => auto_scrollbar_div(&h),
+        Bar::AutoFade => auto_fade_scrollbar_div(&h),
     }
 }
 
 pub fn host(bar: Bar) -> gpui::Div {
     let d = div().relative().flex().flex_col();
-    if bar == Bar::ThinFade { d.group(THIN_FADE_GROUP) } else { d }
+    match bar {
+        Bar::ThinFade => d.group(THIN_FADE_GROUP),
+        Bar::AutoFade => d.group(AUTO_FADE_GROUP),
+        _ => d,
+    }
 }
 
 pub fn auto_scrollbar(state: &ListState) -> Option<AnyElement> {
@@ -49,6 +55,13 @@ pub fn auto_scrollbar(state: &ListState) -> Option<AnyElement> {
     let max = f32::from(state.max_offset_for_scrollbar().y);
     let off = -f32::from(state.scroll_px_offset_for_scrollbar().y);
     auto(vh, max, off, f32::from(z(36.)), true)
+}
+
+pub const AUTO_FADE_GROUP: &str = "auto-fade-scroller";
+
+pub fn auto_fade_scrollbar_div(scroll: &ScrollHandle) -> Option<AnyElement> {
+    let bar = auto_scrollbar_div(scroll)?;
+    Some(div().absolute().top_0().right_0().bottom_0().w(z(16.)).opacity(0.).group_hover(AUTO_FADE_GROUP, |s| s.opacity(1.)).child(bar).into_any_element())
 }
 
 pub fn auto_scrollbar_div(scroll: &ScrollHandle) -> Option<AnyElement> {

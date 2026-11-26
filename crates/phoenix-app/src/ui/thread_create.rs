@@ -334,7 +334,24 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
             .flex()
             .flex_col()
             .child(header)
-            .child(div().id("create-thread-scroll").flex_1().min_h_0().overflow_y_scroll().flex().flex_col().justify_end().child(form).children(preview))
+            .child(
+                crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::ThinFade)
+                    .flex_1()
+                    .min_h_0()
+                    .child(
+                        div()
+                            .id("create-thread-scroll")
+                            .size_full()
+                            .overflow_y_scroll()
+                            .track_scroll(&crate::ui::chat::scrollbar::handle("create-thread-scroll"))
+                            .flex()
+                            .flex_col()
+                            .justify_end()
+                            .child(form)
+                            .children(preview),
+                    )
+                    .children(crate::ui::chat::scrollbar::bar_for("create-thread-scroll", crate::ui::chat::scrollbar::Bar::ThinFade)),
+            )
             .child(composer)
             .into_any_element(),
     )

@@ -187,6 +187,11 @@ impl GuardedWrite {
         write(Method::PUT, format!("/channels/{channel}/recipients/{user}"), None)
     }
 
+    pub fn remove_user_reaction(channel: u64, message: u64, emoji: &crate::models::ReactionEmoji, user: u64) -> Self {
+        let e: String = url::form_urlencoded::byte_serialize(emoji.route_form().as_bytes()).collect();
+        write(Method::DELETE, format!("/channels/{channel}/messages/{message}/reactions/{e}/{user}"), None)
+    }
+
     pub fn refusal(&self) -> Error {
         blocked(&self.method, self.path.clone())
     }
@@ -205,6 +210,7 @@ mod tests {
     fn every_write() -> Vec<GuardedWrite> {
         vec![
             GuardedWrite::change_password("old", "new"),
+            GuardedWrite::remove_user_reaction(1, 2, &crate::models::ReactionEmoji { id: None, name: Some("👍".into()), animated: false }, 3),
             GuardedWrite::change_username("name", None, "pw"),
             GuardedWrite::change_email("a@b.c", Some("tok"), "pw"),
             GuardedWrite::send_email_code(),
@@ -313,5 +319,12 @@ mod tests {
         }
         let accepted = tokio::time::timeout(std::time::Duration::from_millis(200), listener.accept()).await;
         assert!(accepted.is_err(), "a guarded write opened a connection");
+    }
+
+    #[test]
+    fn removing_a_reactor_targets_the_user_route() {
+        let w = GuardedWrite::remove_user_reaction(1, 2, &crate::models::ReactionEmoji { id: Some(crate::models::Snowflake(9)), name: Some("blob".into()), animated: false }, 3);
+        assert_eq!(w.method, Method::DELETE);
+        assert_eq!(w.path, "/channels/1/messages/2/reactions/blob%3A9/3");
     }
 }

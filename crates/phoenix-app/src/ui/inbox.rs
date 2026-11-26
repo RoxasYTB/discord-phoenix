@@ -2004,7 +2004,7 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
         })
         .collect();
     let left = picker_room(p.picked.len(), p.with.len());
-    let mut list = div().id("gdm-list").h(z(240.)).overflow_y_scroll().flex().flex_col();
+    let mut list = div().id("gdm-list").size_full().pr(z(16.)).overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("gdm-list")).flex().flex_col();
     if friends.is_empty() {
         list = list.child(div().p(z(16.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("groupdm.none")));
     }
@@ -2103,7 +2103,14 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
                         .when_some(p.search.clone(), |d, s| d.child(Input::new(&s).appearance(false).bordered(false))),
                 ),
         )
-        .child(div().px(z(8.)).child(list))
+        .child(
+            div().px(z(8.)).child(
+                crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::AutoFade)
+                    .h(z(240.))
+                    .child(list)
+                    .children(crate::ui::chat::scrollbar::bar_for("gdm-list", crate::ui::chat::scrollbar::Bar::AutoFade)),
+            ),
+        )
         .child(
             div().p(z(16.)).border_t_1().border_color(c(Palette::DIVIDER)).child(
                 div()

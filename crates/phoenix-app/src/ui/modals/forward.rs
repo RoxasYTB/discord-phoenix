@@ -200,7 +200,7 @@ pub fn checkbox(on: bool, disabled: bool) -> gpui::Div {
 
 pub fn render(app: &PhoenixApp, f: &Forward, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let q = f.search.as_ref().map(|s| s.read(cx).value().to_string()).unwrap_or_default();
-    let mut list = div().id("fwd-list").h(z(320.)).px(z(8.)).overflow_y_scroll().flex().flex_col();
+    let mut list = div().id("fwd-list").size_full().pl(z(8.)).pr(z(16.)).overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("fwd-list")).flex().flex_col();
     let dest = destinations_of(app, &q, f.favorites);
     if dest.is_empty() {
         let none = if f.favorites { crate::t!("fav.add_none") } else { crate::t!("fwd.none") };
@@ -211,6 +211,10 @@ pub fn render(app: &PhoenixApp, f: &Forward, cx: &mut Context<PhoenixApp>) -> An
         let on = f.picked.contains(&id);
         list = list.child(share_row(app, id, name, sub, on, full && !on, cx));
     }
+    let list = crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::Auto)
+        .h(z(320.))
+        .child(list)
+        .children(crate::ui::chat::scrollbar::bar_for("fwd-list", crate::ui::chat::scrollbar::Bar::Auto));
     let mut body = div().flex().flex_col().gap(z(12.));
     if let Some(s) = &f.search {
         body = body.child(input_box(s));
