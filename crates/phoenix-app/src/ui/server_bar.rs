@@ -23,7 +23,7 @@ use crate::{
 const FOLDER_DEFAULT: u32 = 0x5865F2;
 
 enum RailItem<'a> {
-    Guild(&'a Guild, bool),
+    Guild(&'a Guild),
     Folder { id: u64, name: SharedString, color: u32, guilds: Vec<&'a Guild>, open: bool },
 }
 
@@ -32,7 +32,7 @@ fn rail(app: &PhoenixApp) -> Vec<RailItem<'_>> {
     let in_folders: std::collections::HashSet<Id> =
         app.nav.folders.iter().flat_map(|f| f.guilds.iter().copied()).collect();
     let mut out: Vec<RailItem> =
-        app.guilds.iter().filter(|g| !in_folders.contains(&g.id)).map(|g| RailItem::Guild(g, false)).collect();
+        app.guilds.iter().filter(|g| !in_folders.contains(&g.id)).map(RailItem::Guild).collect();
     for f in &app.nav.folders {
         let guilds: Vec<&Guild> = f.guilds.iter().filter_map(|g| by_id(*g)).collect();
         match f.id {
@@ -48,7 +48,7 @@ fn rail(app: &PhoenixApp) -> Vec<RailItem<'_>> {
                     guilds,
                 });
             }
-            _ => out.extend(guilds.into_iter().map(|g| RailItem::Guild(g, false))),
+            _ => out.extend(guilds.into_iter().map(RailItem::Guild)),
         }
     }
     out
@@ -58,7 +58,7 @@ pub fn flat_guild_order(app: &PhoenixApp) -> Vec<Id> {
     rail(app)
         .into_iter()
         .flat_map(|item| match item {
-            RailItem::Guild(g, _) => vec![g.id],
+            RailItem::Guild(g) => vec![g.id],
             RailItem::Folder { guilds, .. } => guilds.iter().map(|g| g.id).collect(),
         })
         .collect()
@@ -91,7 +91,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
     let is_unread = |g: &Guild| g.unread || g.mentions > 0;
     for (i, item) in rail(app).into_iter().enumerate() {
         match &item {
-            RailItem::Guild(g, _) if is_unread(g) => spans.push(Span { ix: base + i, y: 0., h: ICON, mentions: g.mentions }),
+            RailItem::Guild(g) if is_unread(g) => spans.push(Span { ix: base + i, y: 0., h: ICON, mentions: g.mentions }),
             RailItem::Folder { guilds, open: false, .. } if guilds.iter().any(|g| is_unread(g)) => spans.push(Span {
                 ix: base + i,
                 y: 0.,
@@ -107,7 +107,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
             _ => {}
         }
         col = match item {
-            RailItem::Guild(g, _) => col.child(guild(app, &entity, g, None, false)),
+            RailItem::Guild(g) => col.child(guild(app, &entity, g, None, false)),
             RailItem::Folder { id, name, color, guilds, open } => {
                 col.child(folder(app, &entity, id, name, color, &guilds, open))
             }
