@@ -51,6 +51,8 @@ pub struct Scene {
     pub polychrome_sprites: Vec<PolychromeSprite>,
     pub surfaces: Vec<PaintSurface>,
     pub glyph_gradients: Vec<GlyphGradient>,
+    pub glyph_gradient_scrolls: Vec<GlyphGradientScroll>,
+    pub gradient_time: f64,
 }
 
 #[expect(missing_docs)]
@@ -68,6 +70,7 @@ impl Scene {
         self.polychrome_sprites.clear();
         self.surfaces.clear();
         self.glyph_gradients.clear();
+        self.glyph_gradient_scrolls.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -140,10 +143,41 @@ impl Scene {
             .push(PaintOperation::Primitive(primitive));
     }
 
-    pub fn insert_gradient_sprite(&mut self, mut sprite: MonochromeSprite, gradient: GlyphGradient) {
+    pub fn insert_gradient_sprite(&mut self, sprite: MonochromeSprite, gradient: GlyphGradient) {
+        self.insert_scrolling_gradient_sprite(sprite, gradient, GlyphGradientScroll::default());
+    }
+
+    pub fn insert_scrolling_gradient_sprite(
+        &mut self,
+        mut sprite: MonochromeSprite,
+        gradient: GlyphGradient,
+        scroll: GlyphGradientScroll,
+    ) {
         self.glyph_gradients.push(gradient);
+        self.glyph_gradient_scrolls.push(scroll);
         sprite.pad = self.glyph_gradients.len() as u32;
         self.insert_primitive(sprite);
+    }
+
+    pub fn glyph_gradient_scroll(&self, sprite: &MonochromeSprite) -> GlyphGradientScroll {
+        sprite
+            .pad
+            .checked_sub(1)
+            .and_then(|index| self.glyph_gradient_scrolls.get(index as usize))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn glyph_gradient_now(&self, sprite: &MonochromeSprite) -> Option<GlyphGradient> {
+        let gradient = *self.glyph_gradient(sprite)?;
+        Some(
+            self.glyph_gradient_scroll(sprite)
+                .apply(gradient, self.gradient_time),
+        )
+    }
+
+    pub fn scrolls_gradients(&self, now: f64) -> bool {
+        self.glyph_gradient_scrolls.iter().any(|s| s.running(now))
     }
 
     pub fn glyph_gradient(&self, sprite: &MonochromeSprite) -> Option<&GlyphGradient> {
@@ -158,7 +192,11 @@ impl Scene {
             match operation {
                 PaintOperation::Primitive(Primitive::MonochromeSprite(sprite)) if sprite.pad != 0 => {
                     match prev_scene.glyph_gradient(sprite) {
-                        Some(gradient) => self.insert_gradient_sprite(*sprite, *gradient),
+                        Some(gradient) => self.insert_scrolling_gradient_sprite(
+                            *sprite,
+                            *gradient,
+                            prev_scene.glyph_gradient_scroll(sprite),
+                        ),
                         None => self.insert_primitive(MonochromeSprite { pad: 0, ..*sprite }),
                     }
                 }
@@ -763,6 +801,43 @@ pub struct GlyphGradient {
     pub stop_count: u32,
     pub opacity: f32,
     pub stops: [GlyphGradientStop; MAX_GLYPH_GRADIENT_STOPS],
+}
+
+// PHOENIX PATCH (gradient scroll): `background-position-x` animation of a glyph gradient,
+// in device pixels per second of `crate::gradient_clock`, applied by `Scene::glyph_gradient_now`.
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[expect(missing_docs)]
+pub struct GlyphGradientScroll {
+    pub speed: f32,
+    pub start: f64,
+    pub duration: f32,
+}
+
+impl GlyphGradientScroll {
+    /// Whether the animation still moves at `now`.
+    pub fn running(&self, now: f64) -> bool {
+        self.speed != 0.0 && now - self.start < self.duration as f64
+    }
+
+    /// Horizontal shift of the gradient at `now`, wrapped by a repeat `period`.
+    pub fn displacement(&self, now: f64, period: f32) -> f32 {
+        if self.speed == 0.0 {
+            return 0.0;
+        }
+        let elapsed = (now - self.start).clamp(0.0, self.duration as f64);
+        let shift = self.speed as f64 * elapsed;
+        if period > 0.0 {
+            shift.rem_euclid(period as f64) as f32
+        } else {
+            shift as f32
+        }
+    }
+
+    /// The gradient with its tile moved to where the animation is at `now`.
+    pub fn apply(&self, mut gradient: GlyphGradient, now: f64) -> GlyphGradient {
+        gradient.origin[0] += self.displacement(now, gradient.period);
+        gradient
+    }
 }
 
 impl GlyphGradient {

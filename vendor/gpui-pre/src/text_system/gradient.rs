@@ -1,8 +1,11 @@
 #![allow(missing_docs)]
 
 use crate::{
-    Bounds, GlyphGradient, GlyphGradientStop, MAX_GLYPH_GRADIENT_STOPS, Pixels, Point, Rgba, Size,
+    Bounds, GlyphGradient, GlyphGradientScroll, GlyphGradientStop, MAX_GLYPH_GRADIENT_STOPS,
+    Pixels, Point, Rgba, Size,
 };
+use scheduler::Instant;
+use std::{sync::OnceLock, time::Duration};
 
 // PHOENIX PATCH (text gradient): a CSS `linear-gradient` painted through the glyphs of a
 // text run (`background-clip: text`), sampled per device pixel by the glyph shader.
@@ -12,6 +15,44 @@ pub struct TextGradient {
     pub stops: Vec<(Rgba, f32)>,
     pub tile: Bounds<Pixels>,
     pub repeat_x: bool,
+    pub scroll: Option<GradientScroll>,
+}
+
+// PHOENIX PATCH (gradient scroll): a CSS animation of `background-position-x`, `speed`
+// logical px per second from `start`, for `duration` (forever when `None`). The renderer
+// applies it at present time, so the animation needs no new layout or paint.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GradientScroll {
+    pub speed: f32,
+    pub start: Instant,
+    pub duration: Option<Duration>,
+}
+
+impl GradientScroll {
+    pub fn new(speed: f32, start: Instant, duration: Option<Duration>) -> Self {
+        Self {
+            speed,
+            start,
+            duration,
+        }
+    }
+
+    pub fn to_glyph_scroll(&self, scale_factor: f32) -> GlyphGradientScroll {
+        GlyphGradientScroll {
+            speed: self.speed * scale_factor,
+            start: gradient_clock(self.start),
+            duration: self.duration.map_or(f32::INFINITY, |d| d.as_secs_f32()),
+        }
+    }
+}
+
+pub fn gradient_clock(at: Instant) -> f64 {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    let epoch = *EPOCH.get_or_init(Instant::now);
+    match at.checked_duration_since(epoch) {
+        Some(after) => after.as_secs_f64(),
+        None => -epoch.duration_since(at).as_secs_f64(),
+    }
 }
 
 impl TextGradient {
@@ -21,7 +62,13 @@ impl TextGradient {
             stops: Vec::new(),
             tile,
             repeat_x: false,
+            scroll: None,
         }
+    }
+
+    pub fn scroll(mut self, scroll: Option<GradientScroll>) -> Self {
+        self.scroll = scroll;
+        self
     }
 
     pub fn to_corner(right: bool, bottom: bool, tile: Bounds<Pixels>) -> Self {
@@ -160,6 +207,48 @@ mod tests {
         assert_eq!(g.color_at(point(px(95.0), px(0.0))).r, 1.0);
         let d = g.to_glyph_gradient(1.0, 0.5);
         assert!(close(d.color_at_position(0.5)[3], 0.5));
+    }
+
+    #[test]
+    fn scroll_moves_the_tile_right_and_wraps_by_the_period() {
+        let start = Instant::now();
+        let g = TextGradient::new(90.0, tile(0.0, 0.0, 100.0, 20.0))
+            .repeat_x(true)
+            .scroll(Some(GradientScroll::new(100.0 / 1.5, start, None)));
+        let scroll = g.scroll.unwrap().to_glyph_scroll(1.5);
+        let d = g.to_glyph_gradient(1.5, 1.0);
+        let t0 = gradient_clock(start);
+        assert!(close(scroll.displacement(t0, d.period), 0.0));
+        assert!(close(scroll.displacement(t0 + 0.75, d.period), 75.0));
+        assert!(close(scroll.displacement(t0 + 1.5, d.period), 0.0));
+        assert!(close(scroll.displacement(t0 + 3600.375, d.period), 37.5));
+        assert!(close(scroll.displacement(t0 - 1.0, d.period), 0.0));
+        let moved = scroll.apply(d, t0 + 0.375);
+        assert!(close(moved.position_at(37.5, 0.0), 0.0));
+        assert!(close(moved.position_at(112.5, 0.0), 0.5));
+        assert!(scroll.running(t0 + 1000.0));
+    }
+
+    #[test]
+    fn a_finite_scroll_stops_on_its_last_frame_like_fill_mode_forwards() {
+        let start = Instant::now();
+        let s = GradientScroll::new(-48.0, start, Some(Duration::from_secs(2))).to_glyph_scroll(1.0);
+        let t0 = gradient_clock(start);
+        assert!(close(s.displacement(t0 + 1.0, 96.0), 48.0));
+        assert!(close(s.displacement(t0 + 0.5, 0.0), -24.0));
+        assert!(close(s.displacement(t0 + 5.0, 0.0), -96.0));
+        assert!(s.running(t0 + 1.9));
+        assert!(!s.running(t0 + 2.1));
+        assert!(!GlyphGradientScroll::default().running(t0));
+    }
+
+    #[test]
+    fn the_clock_orders_instants_on_both_sides_of_its_epoch() {
+        let now = Instant::now();
+        let before = now - Duration::from_millis(1500);
+        let a = gradient_clock(before);
+        let b = gradient_clock(now);
+        assert!(((b - a) - 1.5).abs() < 1e-6);
     }
 
     #[test]

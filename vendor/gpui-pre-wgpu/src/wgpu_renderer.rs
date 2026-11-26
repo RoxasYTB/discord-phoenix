@@ -1827,10 +1827,10 @@ impl WgpuRendererCore {
         let mut instances = Vec::with_capacity(scene.glyph_gradients.len());
         for sprite in &scene.monochrome_sprites {
             ranks.push(instances.len() as u32);
-            if let Some(gradient) = scene.glyph_gradient(sprite) {
+            if let Some(gradient) = scene.glyph_gradient_now(sprite) {
                 instances.push(GradientSpriteInstance {
                     sprite: *sprite,
-                    gradient: *gradient,
+                    gradient,
                 });
             }
         }
@@ -2912,6 +2912,39 @@ mod tests {
         for x in [0, 16, 31, 32, 48, 63] {
             assert_pixel(&image, x, 12, expect(x));
         }
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn headless_renderer_scrolls_gradient_glyphs_at_the_scene_time() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let mut scene = Scene::default();
+        let glyph = full_coverage_sprite(&renderer, "scrolled", (0.0, 0.0), 64, 8, gpui::red())?;
+        let tile = Bounds {
+            origin: Point { x: gpui::px(0.0), y: gpui::px(0.0) },
+            size: Size { width: gpui::px(64.0), height: gpui::px(8.0) },
+        };
+        let gradient = gpui::TextGradient::new(90.0, tile)
+            .repeat_x(true)
+            .stop(gpui::rgb(0x000000), 0.0)
+            .stop(gpui::rgb(0xffffff), 1.0);
+        let scroll = gpui::GlyphGradientScroll { speed: 16.0, start: 10.0, duration: f32::INFINITY };
+        scene.insert_scrolling_gradient_sprite(glyph, gradient.to_glyph_gradient(1.0, 1.0), scroll);
+        scene.finish();
+        let expect = |x: f32| {
+            let v = (x / 64.0 * 255.0).round() as u8;
+            [v, v, v, 255]
+        };
+
+        scene.gradient_time = 10.0;
+        let still = renderer.render_scene_to_image(&scene, device_size(64, 8))?;
+        assert_pixel(&still, 16, 4, expect(16.5));
+        scene.gradient_time = 11.0;
+        let moved = renderer.render_scene_to_image(&scene, device_size(64, 8))?;
+        assert_pixel(&moved, 16, 4, expect(0.5));
+        assert_pixel(&moved, 0, 4, expect(48.5));
+        assert!(scene.scrolls_gradients(11.0));
         Ok(())
     }
 

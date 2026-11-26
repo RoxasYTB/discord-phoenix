@@ -1229,7 +1229,8 @@ pub struct Window {
     sprite_atlas: Arc<dyn PlatformAtlas>,
     text_system: Rc<WindowTextSystem>,
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
-    text_gradient: Option<(crate::GlyphGradient, Hsla)>,
+    text_gradient: Option<(crate::GlyphGradient, Hsla, crate::GlyphGradientScroll)>,
+    text_glow: Option<(Pixels, f32)>,
     rem_size: Pixels,
     /// The stack of override values for the window's rem size.
     ///
@@ -2367,6 +2368,7 @@ impl Window {
             text_system,
             text_rendering_mode: cx.text_rendering_mode.clone(),
             text_gradient: None,
+            text_glow: None,
             rem_size: px(16.),
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
@@ -3890,6 +3892,8 @@ impl Window {
         let _foreground_turn = profiler::journal::foreground_turn();
         #[cfg(feature = "profiler")]
         let present_start = Instant::now();
+        let gradient_time = crate::gradient_clock(Instant::now());
+        self.rendered_frame.scene.gradient_time = gradient_time;
         self.platform_window.draw(&self.rendered_frame.scene);
         #[cfg(feature = "profiler")]
         self.window_profiler.record_present(
@@ -3899,6 +3903,11 @@ impl Window {
             !self.next_frame_callbacks.borrow().is_empty(),
         );
         self.needs_present.set(false);
+        if self.rendered_frame.scene.scrolls_gradients(gradient_time) {
+            self.needs_present.set(true);
+            self.platform_window.schedule_frame();
+            self.invalidator.wake_platform();
+        }
         profiling::finish_frame!();
     }
 
@@ -5118,11 +5127,28 @@ impl Window {
     ) -> R {
         let next = gradient.map(|g| {
             let first = g.first_color().map(Hsla::from).unwrap_or_default();
-            (g.to_glyph_gradient(self.scale_factor(), 1.0), first)
+            let scroll = g
+                .scroll
+                .map(|s| s.to_glyph_scroll(self.scale_factor()))
+                .unwrap_or_default();
+            (g.to_glyph_gradient(self.scale_factor(), 1.0), first, scroll)
         });
         let previous = std::mem::replace(&mut self.text_gradient, next);
         let result = f(self);
         self.text_gradient = previous;
+        result
+    }
+
+    /// PHOENIX PATCH (text glow): paints the monochrome glyphs drawn by `f` blurred by a
+    /// gaussian of standard deviation `blur` (CSS `filter: blur(blur)`) at `opacity`.
+    pub fn with_text_glow<R>(
+        &mut self,
+        glow: Option<(Pixels, f32)>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.text_glow, glow);
+        let result = f(self);
+        self.text_glow = previous;
         result
     }
 
@@ -5160,9 +5186,11 @@ impl Window {
         );
         let integer_origin = quantized_origin.map(|c| ScaledPixels(c.trunc()));
         let gradient = self.text_gradient;
-        let color = gradient.map_or(color, |(_, first)| first);
-        let subpixel_rendering =
-            gradient.is_none() && self.should_use_subpixel_rendering(font_id, font_size);
+        let glow = self.text_glow;
+        let color = gradient.map_or(color, |(_, first, _)| first);
+        let subpixel_rendering = gradient.is_none()
+            && glow.is_none()
+            && self.should_use_subpixel_rendering(font_id, font_size);
         let dilation = self.text_system().glyph_dilation_for_color(color);
         let params = RenderGlyphParams {
             font_id,
@@ -5177,15 +5205,35 @@ impl Window {
 
         let raster_bounds = self.text_system().raster_bounds(&params)?;
         if !raster_bounds.is_zero() {
-            let tile = self
-                .sprite_atlas
-                .get_or_insert_with(params.clone().into(), &mut || {
-                    let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
+            let (element_opacity, raster_origin, tile) = match glow {
+                Some((blur, opacity)) => {
+                    let sigma = blur.0 * scale_factor;
+                    let pad = crate::blur_padding(sigma);
+                    let key = crate::AtlasKey::BlurredGlyph(params.clone(), sigma.to_bits());
+                    let tile = self
+                        .sprite_atlas
+                        .get_or_insert_with(key, &mut || {
+                            let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
+                            let (size, bytes) = crate::blur_mask(size, &bytes, sigma);
+                            Ok(Some((size, Cow::Owned(bytes))))
+                        })?
+                        .expect("Callback above only errors or returns Some");
+                    let origin = raster_bounds.origin - point(DevicePixels(pad), DevicePixels(pad));
+                    (element_opacity * opacity, origin, tile)
+                }
+                None => {
+                    let tile = self
+                        .sprite_atlas
+                        .get_or_insert_with(params.clone().into(), &mut || {
+                            let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
+                            Ok(Some((size, Cow::Owned(bytes))))
+                        })?
+                        .expect("Callback above only errors or returns Some");
+                    (element_opacity, raster_bounds.origin, tile)
+                }
+            };
             let bounds = Bounds {
-                origin: integer_origin + raster_bounds.origin.map(Into::into),
+                origin: integer_origin + raster_origin.map(Into::into),
                 size: tile.bounds.size.map(Into::into),
             };
             let content_mask = self.snapped_content_mask();
@@ -5200,9 +5248,9 @@ impl Window {
                     tile,
                     transformation: TransformationMatrix::unit(),
                 });
-            } else if let Some((mut glyph_gradient, _)) = gradient {
+            } else if let Some((mut glyph_gradient, _, scroll)) = gradient {
                 glyph_gradient.opacity = element_opacity;
-                self.next_frame.scene.insert_gradient_sprite(
+                self.next_frame.scene.insert_scrolling_gradient_sprite(
                     MonochromeSprite {
                         order: 0,
                         pad: 0,
@@ -5213,6 +5261,7 @@ impl Window {
                         transformation: TransformationMatrix::unit(),
                     },
                     glyph_gradient,
+                    scroll,
                 );
             } else {
                 self.next_frame.scene.insert_primitive(MonochromeSprite {
