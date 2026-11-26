@@ -116,6 +116,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 phoenix_app::voice::start_time::set_channel_status(lounge.0, vc_status.as_deref());
                 app.voice_channel = Some(lounge);
+                app.voice.apply(phoenix_app::voice::VoiceUiEvent::Status(phoenix_app::voice::VoiceStatus::Connected));
                 app.open_channel_chat(lounge, cx);
                 phoenix_app::ui::call_view::show(lounge);
                 phoenix_app::ui::call_view::set_chat_open(with_chat);
@@ -220,10 +221,12 @@ fn main() -> anyhow::Result<()> {
             snap(&mut cx, &format!("{}-leave.png", out.trim_end_matches(".png")))?;
         }
     }
+    phoenix_app::ui::call_view::touch();
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
     cx.advance_clock(std::time::Duration::from_secs(2));
     let _ = cx.capture_screenshot(win.into())?;
+    phoenix_app::ui::call_view::touch();
     cx.update_window(win.into(), |_, window, _| window.refresh())?;
     pump(&mut cx, 2);
     cx.advance_clock(std::time::Duration::from_secs(2));
