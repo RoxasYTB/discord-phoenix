@@ -341,6 +341,11 @@ impl Cache {
             GatewayEvent::GuildEmojisUpdate(e) => {
                 return modify_guild(&mut s, e.guild_id, |g| g.emojis = e.emojis.clone());
             }
+            GatewayEvent::Unknown { name, data } if name == "GUILD_STICKERS_UPDATE" => {
+                let Some(id) = data.get("guild_id").and_then(Value::as_str).and_then(|x| x.parse().ok()).map(Snowflake) else { return false };
+                let Some(list) = data.get("stickers").and_then(Value::as_array) else { return false };
+                return modify_guild(&mut s, id, |g| g.stickers = list.clone());
+            }
             GatewayEvent::ChannelCreate(c) | GatewayEvent::ChannelUpdate(c) | GatewayEvent::ThreadCreate(c) => insert_channel(&mut s, (**c).clone()),
             GatewayEvent::ThreadUpdate(c) => {
                 let mut c = (**c).clone();
