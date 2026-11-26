@@ -21,7 +21,9 @@ process start> <event> [<duration>ms]` on stderr:
 | `rest_messages_latest` / `rest_messages_older` | GET /channels/{id}/messages |
 | `messages_cache_fresh` / `messages_cache_stale` | page served from the message cache |
 | `channel_messages_ready[load\|memory]` | channel opened → messages in app state |
-| `channel_switch_frame` | channel opened → first frame rendered with them |
+| `channel_switch_frame` | channel opened → first frame rendered with them (only frames where the open channel has its page) |
+| `page_layout_bg` | first, older or refreshed page laid out on a `phoenix-layout` thread |
+| `snapshot_applied` / `ready_applied` | now also give the time spent applying it on the UI thread |
 | `media_disk` / `media_net` | avatar / emoji / attachment GET, disk cache hit or network |
 
 Real account, read-only, offscreen (no window, no acks):
@@ -137,8 +139,11 @@ stays under 1 ms.
   (it is 8–15 ms warm).
 - RESUME: relationships / user settings changes of the previous run come
   from READY in `nav::snapshot`, so they are stale until the next READY.
-- Prefetch the channels with unread mentions after READY (now only the 6
-  most recently viewed channels and hovered rows).
+- Prefetch the channels with unread mentions after READY. Hovered rows,
+  server icons and the 8 most recent cached channels are now preloaded into
+  memory (see `docs/OPTIMIZATION.md`, 26/11). `PHX_SWITCH_BENCH=<n>` in
+  `real_shots` times server, channel and DM switches (`PHX_SWITCH_HOVER=<ms>`
+  hovers first, `PHX_NO_PRELOAD=1` turns the preload off).
 
 ## Phase 2: Rendering, page layout, and strict LRU memory budget
 

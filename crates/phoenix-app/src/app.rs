@@ -1468,7 +1468,7 @@ impl Focusable for PhoenixApp {
 
 impl Render for PhoenixApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        crate::perf::on_render(self.selected_channel.map(|c| c.0), true);
+        crate::perf::on_render(self.selected_channel.map(|c| c.0), self.selected_channel.and_then(|c| self.messages.get(&c)).is_some_and(|e| e.loaded_once));
         ui::context_menu::begin_frame();
         crate::auth::ensure_qr(self, cx);
         crate::theme::sync(&self.prefs, window, cx);

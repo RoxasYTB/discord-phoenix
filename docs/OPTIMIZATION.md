@@ -79,6 +79,34 @@ Reste à faire :
 2. **Autres `with_animation`** qui redessinent encore la fenêtre : toasts (`components::toast`, `profile_toolbar`), points de saisie (`composer`, `command_msg`), icône de `message_ext`, bandeau d'annonce, carte de `voice_row`, `dm_call`, `soundboard`, `invite_embed`. Ils peuvent passer à `present_transition` de la même façon.
 3. **Popouts restants** : boîte de réception et fils (animation du client non relevée), menus de `nav_menus` et `extra_menus` (à classer TRANSLATE ou NONE d'après leur `Popout` dans le client).
 
+### Changement de salon, de serveur et de MP (26/11, edc17bd3)
+
+Fait :
+- **Préchargement** (`history_ui::preload`, `hover_channel`, `hover_guild`) : au survol d'un salon, d'un MP ou d'une icône de serveur, la première page est lue dans le cache des messages (mémoire, puis disque), mise en page sur un thread `phoenix-layout` et rangée dans `PhoenixApp::messages`. Au clic, la page est déjà en mémoire. L'appui de la souris précharge comme le `CHANNEL_PRELOAD` du client, sans ack (source dans `docs/parity/loading.md`). Sans page en cache, le survol lance seulement le GET en arrière-plan (sémaphore de 2). Au plus 24 pages préchargées ; la plus ancienne jamais ouverte est libérée.
+- **Après READY**, les 8 salons les plus récents du cache disque sont préchargés, un toutes les 150 ms, 1,5 s après READY.
+- **Hors du thread UI** : mise en page des pages plus anciennes (défilement vers le haut d'un long historique) et des rafraîchissements en arrière-plan, décodage des fonds de profil et des couleurs d'avatar.
+- La première page résout les mentions avec le pseudo de serveur, comme `render_msg`.
+- `PHX_NO_PRELOAD=1` remet l'ancien chemin, pour mesurer ; `channel_switch_frame` n'est plus compté sur un frame sans messages.
+
+Mesures : `PHX_SWITCH_BENCH=6 int-bin/real_shots`, vrai compte, lecture seule, hors écran, 1280×800, build dev d'int-bin sous `phoenix-nice`, charge 4 à 5. Six serveurs, six salons du premier serveur et six MP, survol de 300 ms avant le clic (puis appui), même binaire :
+
+| mesure | avant (`PHX_NO_PRELOAD=1`) | après |
+|---|---|---|
+| premières visites servies depuis la mémoire au clic | 0 / 18 | **18 / 18** |
+| clic → messages dans l'état de l'app (`channel_messages_ready`) | lecture du cache sur le runtime + mise en page de 50 messages sur le thread UI (115 à 229 ms à froid, 8 à 15 ms à chaud, voir perf.md) | **0,0 à 0,3 ms** |
+| mise en page d'une page hors écran (`page_layout_bg`) | 636 à 965 ms (chemin froid, sous charge) | 17 à 21 ms |
+| clic → frame avec messages, serveur déjà visité, p50 (max) | 54 (142) ms | 51 (70) ms |
+| même chose, salon / MP déjà visité | 41 (118) / 44 (49) ms | 49 (98) / 47 (56) ms |
+| premier passage, p50 serveur / salon / MP | 1068 / 183 / 299 ms | 797 / 278 / 138 ms |
+| application du snapshot puis de READY sur le thread UI | 8,1 puis 4,1 ms | 2,6 puis 5,8 ms |
+
+Lecture : les messages sont là au clic dans tous les cas. Le premier passage en headless reste lent pour une autre raison : l'example exécute toutes les tâches GPUI sur un seul thread, donc le décodage des avatars, des emoji et des bannières du serveur ouvert pour la première fois passe dans le même frame. Dans l'app, ces décodages se font sur l'exécuteur d'arrière-plan. Ce chiffre ne se compare donc qu'entre deux runs headless. Le frame d'un changement déjà en mémoire (40 à 55 ms en dev) est le coût du tracé de la vue entière, soit 5 à 10 fois moins en release.
+
+Reste à faire :
+- tracer un changement de salon en release (`profile.bench`, cible 9 de perf.md) pour avoir le vrai temps du frame ;
+- premier passage dans un serveur : préparer à l'avance la liste des membres (`rebuild_members`) et les icônes du haut de la liste des salons au survol de l'icône ;
+- allocations par frame de défilement (cible 2 de perf.md), pour la fluidité sur un long historique.
+
 ### Démarrage, données et rendu
 
 Les pistes déjà chiffrées sont dans `docs/perf.md` : repli des polices hors du démarrage, allocations par frame de défilement, frames au repos, minuteries et réveils, un seul runtime et un seul client HTTP, snapshot binaire pour le RESUME, budget des médias décodés, dépendances lourdes, profil optimisé. On les traite dans cet ordre, sauf si une nouvelle mesure en change le classement.
