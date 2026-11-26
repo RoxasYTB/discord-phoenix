@@ -5169,8 +5169,10 @@ impl Window {
 
     /// PHOENIX PATCH (cut-outs): punches up to two rounded-rectangle holes, in window
     /// coordinates with their corner radius, through the quads and images painted by `f`
-    /// (glyphs, SVG icons, paths and shadows are not cut). The edge gets the same half-pixel
-    /// antialiasing ramp as a rounded quad. An inner call replaces the holes of an outer one.
+    /// (glyphs, SVG icons, paths and shadows are not cut). The radius is clamped to half of
+    /// each side on its own, like SVG `<rect rx>`, so the corners of a hole lower than twice
+    /// its radius become ellipses. The edge gets the same half-pixel antialiasing ramp as a
+    /// rounded quad. An inner call replaces the holes of an outer one.
     pub fn with_cutouts<R>(
         &mut self,
         holes: &[(Bounds<Pixels>, Pixels)],
@@ -5183,7 +5185,8 @@ impl Window {
                 origin: [bounds.origin.x.0 * scale, bounds.origin.y.0 * scale],
                 size: [bounds.size.width.0 * scale, bounds.size.height.0 * scale],
                 radius: radius.0 * scale,
-                pad: [0.; 3],
+                radius_y: radius.0 * scale,
+                pad: [0.; 2],
             };
         }
         let next = if holes.is_empty() {

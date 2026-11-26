@@ -100,7 +100,7 @@ struct CutoutHole {
     origin: vec2<f32>,
     size: vec2<f32>,
     radius: f32,
-    pad0: f32,
+    radius_y: f32,
     pad1: f32,
     pad2: f32,
 }
@@ -118,9 +118,16 @@ fn cutout_hole_coverage(hole: CutoutHole, point: vec2<f32>) -> f32 {
         return 1.0;
     }
     let half_size = hole.size * 0.5;
-    let radius = max(min(hole.radius, min(half_size.x, half_size.y)), 0.0);
-    let q = abs(point - (hole.origin + half_size)) - half_size + vec2<f32>(radius);
-    let distance = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+    let radius = clamp(vec2<f32>(hole.radius, hole.radius_y), vec2<f32>(0.0), half_size);
+    let q = abs(point - (hole.origin + half_size)) - half_size + radius;
+    var distance = max(q.x - radius.x, q.y - radius.y);
+    if (q.x > 0.0 && q.y > 0.0) {
+        if (radius.x > 0.0 && radius.y > 0.0) {
+            distance = (length(q / radius) - 1.0) * min(radius.x, radius.y);
+        } else {
+            distance = length(max(q - radius, vec2<f32>(0.0)));
+        }
+    }
     return saturate(distance + 0.5);
 }
 
