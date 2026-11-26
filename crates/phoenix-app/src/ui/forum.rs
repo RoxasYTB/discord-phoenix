@@ -1403,8 +1403,10 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
     });
     let (ready, tag_missing) = compose_ready(app, forum, comp, cx);
     let full = comp.tags.len() >= 5;
+    let moderator = app.selected_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 34));
+    let usable: Vec<&ForumTag> = tags.iter().filter(|t| moderator || !t.moderated).collect();
     let mut tag_list = div().flex().flex_wrap().gap(z(4.));
-    for t in tags.iter().filter(|t| !t.moderated) {
+    for t in usable.iter().copied() {
         let on = comp.tags.contains(&t.id);
         let id = t.id;
         let disabled = full && !on;
@@ -1488,7 +1490,7 @@ fn compose_card(app: &PhoenixApp, forum: Id, comp: &ForumCompose, tags: &[ForumT
             d.child(div().px(z(46.)).pt(z(4.)).text_size(z(14.)).text_color(c(tok(idx::TEXT_FEEDBACK_CRITICAL))).child(er))
         })
         .child(
-            div().px(z(8.)).when(!tags.is_empty(), |d| {
+            div().px(z(8.)).when(!usable.is_empty(), |d| {
                 d.child(
                     div()
                         .mt(z(16.))
