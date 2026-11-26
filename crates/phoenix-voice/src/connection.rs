@@ -724,10 +724,11 @@ async fn run(
                     if sound_log {
                         let v = vrx.stats();
                         eprintln!(
-                            "voice-net: stream={} connected={connected} dave={} v{} rtp_audio={} lost={} {} video_packets={} rtx={} frames={} shown={} dropped={} nacks={} plis={} video_decrypt_errors={}",
+                            "voice-net: stream={} connected={connected} dave={} v{} dave_keys={:?} rtp_audio={} lost={} {} video_packets={} rtx={} frames={} shown={} dropped={} nacks={} plis={} video_decrypt_errors={}",
                             cfg.info.stream,
                             dave.is_active(),
                             dave.protocol_version(),
+                            dave.key_users(),
                             stats.packets_received,
                             stats.packets_lost,
                             rx.summary(),

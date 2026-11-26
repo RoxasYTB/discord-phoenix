@@ -22,6 +22,18 @@ struct UserDecryptor {
     previous: Option<(FrameDecryptor, Instant)>,
 }
 
+fn dave_message_name(m: &DaveServerMessage) -> String {
+    match m {
+        DaveServerMessage::PrepareTransition { transition_id, protocol_version } => format!("op21 prepare_transition id={transition_id} v={protocol_version}"),
+        DaveServerMessage::ExecuteTransition { transition_id } => format!("op22 execute_transition id={transition_id}"),
+        DaveServerMessage::PrepareEpoch { epoch, protocol_version } => format!("op24 prepare_epoch epoch={epoch} v={protocol_version}"),
+        DaveServerMessage::ExternalSender(p) => format!("op25 external_sender {} bytes", p.len()),
+        DaveServerMessage::Proposals(p) => format!("op27 proposals {} bytes", p.len()),
+        DaveServerMessage::AnnounceCommit { transition_id, commit } => format!("op29 commit id={transition_id} {} bytes", commit.len()),
+        DaveServerMessage::Welcome { transition_id, welcome } => format!("op30 welcome id={transition_id} {} bytes", welcome.len()),
+    }
+}
+
 pub struct DaveSession {
     mls: Box<dyn MlsSession>,
     self_id: u64,
@@ -80,7 +92,10 @@ impl DaveSession {
 
     fn key_package_action(&mut self) -> Vec<DaveAction> {
         match self.mls.key_package() {
-            Ok(kp) => vec![DaveAction::KeyPackage(kp)],
+            Ok(kp) => {
+                tracing::debug!(bytes = kp.len(), "dave: sending key package");
+                vec![DaveAction::KeyPackage(kp)]
+            }
             Err(e) => {
                 tracing::warn!(error = %e, "dave: key package");
                 Vec::new()
@@ -100,7 +115,7 @@ impl DaveSession {
         let ratchet = match sender_ratchet(self.mls.as_ref(), self.self_id) {
             Ok(r) => r,
             Err(e) => {
-                tracing::warn!(error = %e, "dave: no sender key, staying in passthrough");
+                tracing::warn!(error = %e, member = self.mls.is_member(), "dave: no sender key, staying in passthrough");
                 return;
             }
         };
@@ -138,6 +153,7 @@ impl DaveSession {
             self.active_version = version;
             self.install_keys();
         }
+        tracing::info!(version, keys = ?self.key_users(), encryptor = self.encryptor.is_some(), "dave: transition executed");
     }
 
     fn stage(&mut self, transition_id: u16, version: u16, out: &mut Vec<DaveAction>) {
@@ -155,7 +171,14 @@ impl DaveSession {
         out.extend(self.key_package_action());
     }
 
+    pub fn key_users(&self) -> Vec<u64> {
+        let mut v: Vec<u64> = self.decryptors.keys().copied().collect();
+        v.sort_unstable();
+        v
+    }
+
     pub fn handle(&mut self, msg: &DaveServerMessage) -> Vec<DaveAction> {
+        tracing::debug!(message = %dave_message_name(msg), member = self.mls.is_member(), version = self.active_version, "dave: gateway message");
         let mut out = Vec::new();
         match msg {
             DaveServerMessage::PrepareTransition { transition_id, protocol_version } => {

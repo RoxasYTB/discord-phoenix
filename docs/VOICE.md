@@ -50,6 +50,8 @@ Sliders hold the value the client shows (perceptual, 0–200). The engine gets `
 
 `PHOENIX_SOUND_LOG=1` also prints `voice-audio: engine input=… output=…` when the audio engine starts (or `audio engine failed: …`) and, once per second, `voice-net: … dave=… rtp_audio=… lost=… mapped=[ssrc:user] unmapped=[ssrc:held] decrypt_errors=…`. Reading it: `rtp_audio` stuck at 0 means no audio reaches the socket; `unmapped` growing means the SSRC was never named by op 5 / op 12; `decrypt_errors` growing means DAVE keys are missing; `output=None` means no speakers were opened.
 
+DAVE key packages carry the lifetime the voice gateway requires (`not_before` 0, `not_after` u64 max, protocol.md « Key Packages »); with openmls' default 12-week lifetime the gateway never added Phoenix to the MLS group, so every sender stayed at « no key for sender » (user log of 358d46b7). `RUST_LOG=phoenix_voice=debug` now logs each DAVE opcode (21–30), the key package, merged commits, the welcome join (epoch, members) and each executed transition with the users that have a key; the `voice-net` line shows `dave_keys=[…]`.
+
 The v0.1.0-beta.2 release (4fe939cc) predates the receive work (b647f9a7, 0ad2f8a3, eaf516a3): it drops the packets of every SSRC that op 5 / op 12 had not named yet and has no FEC, so it can stay silent; use a build from main.
 
 Automated tests: `connection::receive_tests`, `audio::mixer::tests`, `rtp::jitter::tests`, `media::opus::tests`, `dave::session::tests`, `crypto::tests`.

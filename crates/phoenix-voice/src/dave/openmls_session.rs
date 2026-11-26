@@ -8,6 +8,10 @@ use crate::{Error, Result};
 
 pub const CIPHERSUITE: Ciphersuite = Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256;
 
+pub fn key_package_lifetime() -> openmls::key_packages::Lifetime {
+    openmls::key_packages::Lifetime::init(0, u64::MAX)
+}
+
 fn mls<E: std::fmt::Display>(ctx: &'static str) -> impl Fn(E) -> Error {
     move |e| Error::Mls(format!("{ctx}: {e}"))
 }
@@ -124,9 +128,12 @@ impl MlsSession for OpenMlsSession {
     fn key_package(&mut self) -> Result<Vec<u8>> {
         let kp = KeyPackage::builder()
             .leaf_node_capabilities(Self::capabilities())
+            .key_package_lifetime(key_package_lifetime())
             .build(CIPHERSUITE, &self.provider, &self.signer, self.credential.clone())
             .map_err(mls("key package"))?;
-        kp.key_package().tls_serialize_detached().map_err(mls("serialize key package"))
+        let bytes = kp.key_package().tls_serialize_detached().map_err(mls("serialize key package"))?;
+        tracing::debug!(user = self.user_id, bytes = bytes.len(), "dave: key package built");
+        Ok(bytes)
     }
 
     fn process_proposals(&mut self, payload: &[u8], recognized_user_ids: &[u64]) -> Result<Option<CommitWelcome>> {
@@ -202,6 +209,7 @@ impl MlsSession for OpenMlsSession {
                 }
             };
             g.merge_pending_commit(&self.provider).map_err(mls("merge own commit"))?;
+            tracing::debug!(epoch = g.epoch().as_u64(), "dave: own commit merged");
             return Ok(());
         }
         let Some(g) = self.group.as_mut() else {
@@ -217,6 +225,7 @@ impl MlsSession for OpenMlsSession {
             ProcessedMessageContent::StagedCommitMessage(sc) => {
                 let removed = sc.self_removed();
                 g.merge_staged_commit(&self.provider, *sc).map_err(mls("merge commit"))?;
+                tracing::debug!(epoch = g.epoch().as_u64(), "dave: commit merged");
                 if removed {
                     self.reset();
                     return Err(Error::Mls("removed from group".into()));
@@ -247,6 +256,7 @@ impl MlsSession for OpenMlsSession {
             }
         }
         let g = staged.into_group(&self.provider).map_err(mls("join group"))?;
+        tracing::info!(epoch = g.epoch().as_u64(), members = ?g.members().filter_map(|m| credential_user_id(&m.credential)).collect::<Vec<_>>(), "dave: joined the group from a welcome");
         self.group = Some(g);
         Ok(())
     }
@@ -333,6 +343,20 @@ mod tests {
         for u in users {
             assert_eq!(a.export_sender_secret(*u).unwrap(), b.export_sender_secret(*u).unwrap());
         }
+    }
+
+    #[test]
+    fn key_package_has_the_lifetime_the_voice_gateway_requires() {
+        let mut a = OpenMlsSession::new(7, 42).unwrap();
+        let kp = KeyPackageIn::tls_deserialize_exact(&a.key_package().unwrap())
+            .unwrap()
+            .validate(a.provider.crypto(), ProtocolVersion::Mls10)
+            .unwrap();
+        assert_eq!((kp.life_time().not_before(), kp.life_time().not_after()), (0, u64::MAX));
+        assert_eq!(credential_user_id(kp.leaf_node().credential()), Some(7));
+        assert_eq!(kp.ciphersuite(), CIPHERSUITE);
+        assert_eq!(kp.extensions().iter().count(), 0);
+        assert_eq!(kp.leaf_node().extensions().iter().count(), 0);
     }
 
     #[test]
