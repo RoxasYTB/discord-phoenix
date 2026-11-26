@@ -308,6 +308,9 @@ impl Backend for ReadOnly {
     fn guild_affinities(&self) -> BoxFuture<Vec<Id>> {
         self.0.guild_affinities()
     }
+    fn user_affinities(&self) -> BoxFuture<Vec<phoenix_app::ui::home::friends::Affinity>> {
+        self.0.user_affinities()
+    }
     fn account_standing(&self) -> BoxFuture<Option<u64>> {
         self.0.account_standing()
     }

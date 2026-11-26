@@ -168,6 +168,7 @@ fn main() -> anyhow::Result<()> {
                                             image: None,
                                             start: None,
                                             application_id: None,
+                                            party: None,
                                         }],
                                     );
                                 }

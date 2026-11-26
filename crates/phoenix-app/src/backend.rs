@@ -352,6 +352,9 @@ pub trait Backend: Send + Sync + 'static {
     fn guild_affinities(&self) -> BoxFuture<Vec<Id>> {
         Box::pin(async { Ok(Vec::new()) })
     }
+    fn user_affinities(&self) -> BoxFuture<Vec<crate::ui::home::friends::Affinity>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
     fn guarded_write(&self, w: crate::actions::guard::GuardedWrite) -> BoxFuture<()> {
         Box::pin(async move { Err(BackendError(w.refusal().to_string())) })
     }

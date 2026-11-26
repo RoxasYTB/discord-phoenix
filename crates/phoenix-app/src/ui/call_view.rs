@@ -1666,7 +1666,7 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
         )
 }
 
-fn stream_empty_preview(light: bool) -> &'static str {
+pub(crate) fn stream_empty_preview(light: bool) -> &'static str {
     if light { "https://discord.com/assets/bc689a4cf705a445.svg" } else { "https://discord.com/assets/6b1a461f35c05c7a.svg" }
 }
 

@@ -1063,6 +1063,7 @@ mod tests {
             image: None,
             start: None,
             application_id: app_id.map(|s| s.to_owned().into()),
+            party: None,
         }
     }
 

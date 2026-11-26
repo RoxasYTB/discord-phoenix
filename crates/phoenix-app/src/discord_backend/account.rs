@@ -347,6 +347,17 @@ impl DiscordBackend {
         })
     }
 
+    pub(super) fn user_affinities_impl(&self) -> BoxFuture<Vec<crate::ui::home::friends::Affinity>> {
+        self.with_session(move |_, s| async move {
+            let consent = s.rest.get_consent().await.map_err(api_err)?;
+            if !crate::ui::home::friends::personalization_consented(&consent) {
+                return Ok(Vec::new());
+            }
+            let v = s.rest.request_json(reqwest::Method::GET, "/users/@me/affinities/v2/users", None).await.map_err(api_err)?;
+            Ok(crate::ui::home::friends::parse_affinities(&v))
+        })
+    }
+
     pub(super) fn authorized_apps_impl(&self) -> BoxFuture<Option<Vec<crate::ui::settings::authorized_apps::AuthorizedApp>>> {
         self.with_session(move |_, s| async move {
             let v = s.rest.request_json(reqwest::Method::GET, "/oauth2/tokens", None).await.map_err(api_err)?;

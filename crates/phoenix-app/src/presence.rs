@@ -29,6 +29,7 @@ pub struct Activity {
     pub image: Option<SharedString>,
     pub start: Option<i64>,
     pub application_id: Option<SharedString>,
+    pub party: Option<SharedString>,
 }
 
 impl Activity {
@@ -108,6 +109,7 @@ pub fn parse_activity(a: &Value) -> Option<Activity> {
         image: asset_url(a),
         start: a.get("timestamps").and_then(|t| t.get("start")).and_then(Value::as_i64),
         application_id: a.get("application_id").and_then(|v| v.as_str().map(str::to_owned).or_else(|| v.as_u64().map(|n| n.to_string()))).map(Into::into),
+        party: a.get("party").and_then(|p| s(p, "id")),
     };
     let empty = match kind {
         ActivityKind::Custom => act.state.is_none() && act.emoji.is_none(),

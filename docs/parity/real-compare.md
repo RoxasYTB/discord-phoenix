@@ -815,7 +815,7 @@ account: same positions on both sides. They are not switched off when the experi
   DM with a real mention still shows. Phoenix hid every muted DM, so a muted DM with a mention never reached the rail; it now follows
   the client (`server_bar.rs` `rail_dm_ids`, six tests). Live counting follows `ReadStateStore` too: in a muted DM only a real mention
   counts (`eD` = private and not muted), test `muted_dm_counts_only_real_mentions_like_the_read_state_store`. The DM tile now gets the
-  call badge (`oi`) and the selected pill. ❌ The « Messages favoris » order (`isMessagesFavorite`) is not modelled.
+  call badge (`oi`) and the selected pill. ✅ (wt/active-now) « Messages favoris » order: `PrivateChannelSortStore` (module 645959) puts the DMs whose DM settings override has `FAVORITED` (2048, `isMessagesFavorite` = `getChannelOverrides(null)[id].flags`) in a FAVORITE section before the DEFAULT one, each by newest `lastMessageId`; `server_bar.rs` `rail_dm_ids` takes the same partition (`NotifyPrefs::is_messages_favorite`), tests `favourite_dms_come_first_in_the_private_channel_order`, `favourite_dms_read_the_favorited_override_flag_of_the_dm_settings`.
 - The three window sizes were rendered without the client's live state (sidebar width, folders, voice) when the CDP pause was on, so their
   fixed region scores (rail + channels 20–22 %, user panel 12–16 %, member list 12–16 %) mostly measure that, not a layout gap. At the client size
   with the live state the same regions score 11.7 / 9.3 / 8.5 %.

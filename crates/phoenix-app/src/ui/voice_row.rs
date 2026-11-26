@@ -318,23 +318,63 @@ pub fn set_stream_hover(user: Id, hovered: bool) -> bool {
     })
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PreviewEntry {
+    pub url: Option<SharedString>,
+    pub expires: Option<std::time::Instant>,
+    pub tries: u32,
+    pub loading: bool,
+}
+
+impl PreviewEntry {
+    pub fn should_fetch(&self, now: std::time::Instant) -> bool {
+        !self.loading && self.expires.is_none_or(|e| now > e) && (self.expires.is_some() || self.tries < 5)
+    }
+
+    pub fn start(&mut self) {
+        self.tries += 1;
+        self.loading = true;
+    }
+
+    pub fn finish(&mut self, url: Result<Option<SharedString>, ()>, now: std::time::Instant) {
+        self.loading = false;
+        match url {
+            Ok(u) => {
+                self.url = u;
+                self.expires = Some(now + PREVIEW_TTL);
+                self.tries = 0;
+            }
+            Err(()) => self.expires = Some(now + PREVIEW_RETRY * self.tries),
+        }
+    }
+}
+
 thread_local! {
-    static PREVIEWS: RefCell<HashMap<String, (Option<SharedString>, std::time::Instant)>> = RefCell::new(HashMap::new());
+    static PREVIEWS: RefCell<HashMap<String, PreviewEntry>> = RefCell::new(HashMap::new());
 }
 
 pub const PREVIEW_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+pub const PREVIEW_RETRY: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub fn fetch_preview(app: &crate::app::PhoenixApp, key: String, cx: &mut gpui::App) {
-    let fresh = PREVIEWS.with(|p| p.borrow().get(&key).is_some_and(|(_, at)| at.elapsed() < PREVIEW_TTL));
-    if fresh {
+    let now = std::time::Instant::now();
+    let go = PREVIEWS.with(|p| {
+        let mut p = p.borrow_mut();
+        let e = p.entry(key.clone()).or_default();
+        let go = e.should_fetch(now);
+        if go {
+            e.start();
+        }
+        go
+    });
+    if !go {
         return;
     }
-    PREVIEWS.with(|p| p.borrow_mut().insert(key.clone(), (None, std::time::Instant::now())));
     let fut = app.backend.stream_preview(key.clone());
     cx.spawn(async move |cx| {
-        let url = fut.await.ok().flatten().map(SharedString::from);
+        let res = fut.await.map(|u| u.map(SharedString::from)).map_err(|_| ());
         cx.update(|cx| {
-            PREVIEWS.with(|p| p.borrow_mut().insert(key, (url, std::time::Instant::now())));
+            PREVIEWS.with(|p| p.borrow_mut().entry(key).or_default().finish(res, std::time::Instant::now()));
             cx.refresh_windows();
         });
     })
@@ -342,7 +382,11 @@ pub fn fetch_preview(app: &crate::app::PhoenixApp, key: String, cx: &mut gpui::A
 }
 
 pub fn preview_url(key: &str) -> Option<SharedString> {
-    PREVIEWS.with(|p| p.borrow().get(key).and_then(|(u, _)| u.clone()))
+    PREVIEWS.with(|p| p.borrow().get(key).and_then(|e| e.url.clone()))
+}
+
+pub fn preview_loading(key: &str) -> bool {
+    PREVIEWS.with(|p| p.borrow().get(key).is_some_and(|e| e.loading))
 }
 
 pub fn stream_preview(app: &crate::app::PhoenixApp, user: Id, entity: gpui::Entity<crate::app::PhoenixApp>) -> Option<AnyElement> {
@@ -718,4 +762,36 @@ pub fn stream_activity_card(
             )
             .into_any_element(),
     )
+}
+
+#[cfg(test)]
+mod preview_cache_tests {
+    use super::{PREVIEW_RETRY, PREVIEW_TTL, PreviewEntry};
+
+    #[test]
+    fn a_preview_is_kept_two_minutes_then_fetched_again() {
+        let t = std::time::Instant::now();
+        let mut e = PreviewEntry::default();
+        assert!(e.should_fetch(t));
+        e.start();
+        assert!(!e.should_fetch(t));
+        e.finish(Ok(Some("https://x/p.jpeg".into())), t);
+        assert_eq!(e.tries, 0);
+        assert!(!e.should_fetch(t + PREVIEW_TTL));
+        assert!(e.should_fetch(t + PREVIEW_TTL + std::time::Duration::from_millis(1)));
+    }
+
+    #[test]
+    fn a_failed_preview_retries_after_ten_seconds_per_attempt_and_keeps_the_old_image() {
+        let t = std::time::Instant::now();
+        let mut e = PreviewEntry { url: Some("old".into()), ..Default::default() };
+        e.start();
+        e.finish(Err(()), t);
+        assert_eq!(e.url.as_deref(), Some("old"));
+        assert!(!e.should_fetch(t + PREVIEW_RETRY));
+        assert!(e.should_fetch(t + PREVIEW_RETRY + std::time::Duration::from_millis(1)));
+        e.start();
+        e.finish(Err(()), t);
+        assert!(!e.should_fetch(t + PREVIEW_RETRY * 2));
+    }
 }

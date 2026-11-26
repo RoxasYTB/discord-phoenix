@@ -208,6 +208,10 @@ impl NotifyPrefs {
         self.guilds.get(&guild.unwrap_or(0))?.channels.get(&channel)
     }
 
+    pub fn is_messages_favorite(&self, channel: u64) -> bool {
+        self.channel_prefs(None, channel).is_some_and(|c| c.flags & MESSAGES_FAVORITED != 0)
+    }
+
     pub fn is_guild_muted(&self, guild: Option<u64>) -> bool {
         self.guilds.get(&guild.unwrap_or(0)).is_some_and(|g| mute_active(g.muted, g.until, now_ms()))
     }
@@ -317,6 +321,7 @@ pub const SUPPRESS_NOTIFICATIONS: u64 = 1 << 12;
 pub const SPAMMER: u64 = 1 << 20;
 pub const OPT_IN_CHANNELS_ON: u64 = 16384;
 pub const OPT_IN_ENABLED: u64 = 4096;
+pub const MESSAGES_FAVORITED: u64 = 2048;
 pub const NEW_FORUM_THREADS_ON: u64 = 16384;
 pub const NEW_FORUM_THREADS_OFF: u64 = 8192;
 const EVENT_NOTIF_START: u64 = 1;
@@ -908,6 +913,17 @@ mod tests {
         assert!(!show_message(&p, &MessageFacts { mentions_me: true, ..f(Some(2), 20) }, &c), "mention in a muted guild");
         assert!(show_message(&p, &f(None, 40), &c), "dm");
         assert!(!show_message(&p, &f(None, 50), &c), "muted dm");
+    }
+
+    #[test]
+    fn favourite_dms_read_the_favorited_override_flag_of_the_dm_settings() {
+        let p = NotifyPrefs::from_ready(Some(&json!([
+            {"guild_id": null, "channel_overrides": [{"channel_id": "60", "flags": 2048}, {"channel_id": "61", "flags": 4096}]},
+            {"guild_id": "1", "channel_overrides": [{"channel_id": "62", "flags": 2048}]}
+        ])));
+        assert!(p.is_messages_favorite(60));
+        assert!(!p.is_messages_favorite(61));
+        assert!(!p.is_messages_favorite(62));
     }
 
     #[test]

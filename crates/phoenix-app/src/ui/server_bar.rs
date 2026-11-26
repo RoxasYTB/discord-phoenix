@@ -531,10 +531,17 @@ const HOME_KEY: u64 = 1;
 
 pub const RAIL_DM_LIMIT: usize = 20;
 
-pub fn rail_dm_ids(dms: &[Id], mentions: impl Fn(Id) -> Option<u32>, hidden: impl Fn(Id) -> bool, call_dm: Option<Id>) -> Vec<Id> {
-    let mut out: Vec<Id> = dms
-        .iter()
-        .copied()
+pub fn rail_dm_ids(
+    dms: &[Id],
+    mentions: impl Fn(Id) -> Option<u32>,
+    hidden: impl Fn(Id) -> bool,
+    favorite: impl Fn(Id) -> bool,
+    call_dm: Option<Id>,
+) -> Vec<Id> {
+    let (mut sorted, rest): (Vec<Id>, Vec<Id>) = dms.iter().copied().partition(|d| favorite(*d));
+    sorted.extend(rest);
+    let mut out: Vec<Id> = sorted
+        .into_iter()
         .filter(|d| !hidden(*d) && mentions(*d).is_some_and(|n| n > 0))
         .take(RAIL_DM_LIMIT)
         .filter(|d| Some(*d) != call_dm)
@@ -563,7 +570,9 @@ fn dm_media(app: &PhoenixApp, id: Id) -> MediaState {
 fn unread_dm_items(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Vec<AnyElement> {
     let call_dm = app.voice_channel.filter(|v| app.channels.get(v).is_some_and(|c| c.guild.is_none()));
     let requests = |d: Id| app.nav.message_requests.contains(&d) || app.nav.spam_requests.contains(&d);
-    rail_dm_ids(&app.dms, |d| app.channels.get(&d).map(|c| c.mentions), requests, call_dm)
+    let prefs = app.backend.notify_prefs();
+    let favorite = |d: Id| prefs.as_ref().is_some_and(|p| p.is_messages_favorite(d.0));
+    rail_dm_ids(&app.dms, |d| app.channels.get(&d).map(|c| c.mentions), requests, favorite, call_dm)
         .into_iter()
         .filter_map(|d| app.channels.get(&d))
         .map(|ch| {
@@ -1003,7 +1012,15 @@ mod rail_dm_tests {
 
     fn run(dms: &[u64], reads: &[(u64, u32)], hidden: &[u64], call: Option<u64>) -> Vec<u64> {
         let m = |d: Id| reads.iter().find(|(c, _)| *c == d.0).map(|(_, n)| *n);
-        rail_dm_ids(&ids(dms), m, |d| hidden.contains(&d.0), call.map(Id)).into_iter().map(|d| d.0).collect()
+        rail_dm_ids(&ids(dms), m, |d| hidden.contains(&d.0), |_| false, call.map(Id)).into_iter().map(|d| d.0).collect()
+    }
+
+    #[test]
+    fn favourite_dms_come_first_in_the_private_channel_order() {
+        let reads = [(1, 1), (2, 1), (3, 1), (4, 1)];
+        let m = |d: Id| reads.iter().find(|(c, _)| *c == d.0).map(|(_, n)| *n);
+        let out = rail_dm_ids(&ids(&[1, 2, 3, 4]), m, |_| false, |d| d.0 == 3 || d.0 == 4, None);
+        assert_eq!(out, ids(&[3, 4, 1, 2]));
     }
 
     #[test]
