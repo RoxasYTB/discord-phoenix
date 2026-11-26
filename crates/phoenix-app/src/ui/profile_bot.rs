@@ -233,11 +233,13 @@ pub fn card(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size<Pixels>
             if let Some(p) = i.prof {
                 panel = panel.child(section(crate::t!("profile.created_on"), crate::ui::profile::member_since_row(app, p, guild)));
             }
-            let note = i.prof.map(|p| p.note.clone()).unwrap_or_default();
-            panel = panel.child(section(
-                crate::t!("profile.note_title"),
-                crate::ui::profile_note::modal_note(note, uid, crate::ui::profile_note::NoteLook::Bot, cx),
-            ));
+            if crate::ui::profile_note::shown(crate::ui::profile_note::Surface::FullProfile, false, false, app.prefs.local.streamer_hides_info()) {
+                let note = i.prof.map(|p| p.note.clone()).unwrap_or_default();
+                panel = panel.child(section(
+                    crate::t!("profile.note_title"),
+                    crate::ui::profile_note::modal_note(note, uid, crate::ui::profile_note::NoteLook::Bot, cx),
+                ));
+            }
         }
     }
 
