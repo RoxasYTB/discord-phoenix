@@ -254,7 +254,7 @@ pub fn open_sub(guild: Id, s: &str) {
             if kind == "upload-sound" {
                 expr_upload::open_sound(guild);
             } else {
-                expr_upload::open_sticker(guild, false);
+                expr_upload::open_sticker(guild, kind == "upload-sticker-partnered");
             }
             let (path, play) = path.split_once("#play=").map_or((path, None), |(p, ms)| (p, ms.parse::<f64>().ok()));
             if !path.is_empty() {
