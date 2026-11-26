@@ -267,7 +267,8 @@ fn overlay_ex(
                 .child(div().flex_none().when(narrow, |d| d.w_full()).when(!narrow, |d| d.w(z(264.))).py(z(60.)).pl(z(20.)).pr(z(6.)).flex().child(side)),
         )
         .children(crate::ui::chat::scrollbar::bar_for_n(id, 2, crate::ui::chat::scrollbar::Bar::ThinFade));
-    deferred(
+    deferred(crate::ui::popout_motion::layer(
+        id,
         div()
             .id(id)
             .absolute()
@@ -280,7 +281,7 @@ fn overlay_ex(
             .child(sidebar_region)
             .child(content_region)
             .children(extra),
-    )
+    ))
     .with_priority(20)
     .into_any_element()
 }

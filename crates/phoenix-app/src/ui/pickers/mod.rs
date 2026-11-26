@@ -562,6 +562,11 @@ pub fn render_overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<P
         && t != EmojiTarget::Status
         && let Some(el) = render_picker(app, window, cx)
     {
+        let el = if matches!(t, EmojiTarget::Composer) {
+            crate::ui::popout_motion::popout("expression-picker-pt", crate::ui::popout_motion::Kind::Translate, crate::ui::popout_motion::Side::Top, el)
+        } else {
+            el
+        };
         out.push(if matches!(t, EmojiTarget::Field(_) | EmojiTarget::PollAnswer(_) | EmojiTarget::GuideTask | EmojiTarget::GuideAnswer | EmojiTarget::ExprUpload | EmojiTarget::ProfileReact | EmojiTarget::RoleIcon | EmojiTarget::ForumPost(_)) { gpui::deferred(el).with_priority(50).into_any_element() } else { el });
     }
     if let Some(el) = soundboard::render(app, window, cx) {

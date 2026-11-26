@@ -166,7 +166,10 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
     if let Some(p) = &app.people.popout {
         let x = (p.at.x - px(POPOUT_W + 16.)).max(z(8.));
         let y = (p.at.y - z(50.)).min(vp.height - px(POPOUT_H + 8.)).max(z(8.));
-        out.push(
+        out.push(crate::ui::popout_motion::popout(
+            gpui::ElementId::NamedInteger("profile-popout-pt".into(), p.user.0),
+            crate::ui::popout_motion::Kind::Translate,
+            crate::ui::popout_motion::side_of(f32::from(p.at.x), f32::from(x)),
             div()
                 .id("profile-popout")
                 .absolute()
@@ -177,14 +180,14 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
                 .flex()
                 .flex_col()
                 .occlude()
-                .child(popout_card(app, p.user, p.guild, Some(&p.note), cx))
-                .into_any_element(),
-        );
+                .child(popout_card(app, p.user, p.guild, Some(&p.note), cx)),
+        ));
     }
     if let Some(u) = app.people.modal.filter(|u| app.users.get(u).is_some_and(|u| u.bot)) {
         let w = px(crate::ui::profile_bot::W).min(vp.width);
         let h = px(crate::ui::profile_bot::height(f32::from(vp.height)));
-        out.push(
+        out.push(crate::ui::popout_motion::modal_card(
+            "profile-modal",
             div()
                 .id("profile-modal")
                 .absolute()
@@ -193,13 +196,13 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
                 .w(w)
                 .h(h)
                 .occlude()
-                .child(crate::ui::profile_bot::card(app, u, app.selected_guild, vp, cx))
-                .into_any_element(),
-        );
+                .child(crate::ui::profile_bot::card(app, u, app.selected_guild, vp, cx)),
+        ));
     } else if let Some(u) = app.people.modal {
         let b = modal_box(f32::from(vp.width), f32::from(vp.height), false);
         let (w, h) = (px(b.w), px(b.h));
-        out.push(
+        out.push(crate::ui::popout_motion::modal_card(
+            "profile-modal",
             div()
                 .id("profile-modal")
                 .absolute()
@@ -208,9 +211,8 @@ pub fn overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
                 .w(w)
                 .h(h)
                 .occlude()
-                .child(modal_card(app, u, app.selected_guild, vp, cx))
-                .into_any_element(),
-        );
+                .child(modal_card(app, u, app.selected_guild, vp, cx)),
+        ));
     }
     if app.people.status_picker {
         out.push(status_picker::render(app, window, cx));

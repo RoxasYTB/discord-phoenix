@@ -3,12 +3,9 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, FontWeight, IntoElement, MouseButton, ParentElement, SharedString, Styled,
-    Window, deferred, div, prelude::*, px,
+    Window, deferred, div, prelude::*,
 };
 
-use std::time::Duration;
-
-use gpui::{Animation, AnimationExt, ease_out_quint};
 
 use crate::theme::{c, generated::idx, tok};
 
@@ -31,31 +28,22 @@ pub fn frame(id: &'static str, on_cancel: Action, card: impl IntoElement) -> Any
             .top_0()
             .left_0()
             .size_full()
-            .bg(c(tok(idx::BACKGROUND_SCRIM)))
             .occlude()
             .flex()
             .items_center()
             .justify_center()
             .on_mouse_down(MouseButton::Left, move |_, w, cx| on_cancel(w, cx))
-            .child(
+            .child(crate::ui::popout_motion::modal_backdrop(id, div().absolute().top_0().left_0().size_full().bg(c(tok(idx::BACKGROUND_SCRIM)))))
+            .child(crate::ui::popout_motion::modal_card(
+                id,
                 crate::ui::focus_ring::trap_modal(
                     div()
                         .id("modal-card")
                         .occlude()
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
                 )
-                .child(card)
-                .with_animation(
-                    id,
-                    Animation::new(crate::ui::settings::effects::motion(200)).with_easing(ease_out_quint()),
-                    |d, t| d.opacity(t).mt(px(24. * (1. - t))),
-                ),
-            )
-            .with_animation(
-                "modal-backdrop-fade",
-                Animation::new(Duration::from_millis(150)),
-                |d, t| d.bg(c(tok(idx::BACKGROUND_SCRIM)).opacity(t)),
-            ),
+                .child(card),
+            )),
     )
     .with_priority(20)
     .into_any_element()

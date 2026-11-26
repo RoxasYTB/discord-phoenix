@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, App, Corners, DevicePixels, Hsla, ImageCacheError, IntoElement, ParentElement, RenderImage, Styled, SvgRenderer, SvgSize, Window, img, px, size};
+use gpui::{AnyElement, App, Corners, DevicePixels, Hsla, ImageCacheError, IntoElement, ParentElement, PresentTransitionExt, RenderImage, Styled, SvgRenderer, SvgSize, Window, img, px, size};
 
 use crate::icons::lottie_icons::{self, Anim, Lottie};
 
@@ -575,30 +575,35 @@ pub fn emoji_button(key: u64, active: bool, logical: f32, tint: Hsla, fallback: 
         }
         *e
     });
-    let now = FROZEN.with(Cell::get).map_or_else(Instant::now, |d| st.spring.at + d);
+    let frozen = FROZEN.with(Cell::get);
+    let now = frozen.map_or_else(Instant::now, |d| st.spring.at + d);
     let lit = over || active;
-    let scale = st.scale(now);
-    let moving = !st.spring.resting(now) && FROZEN.with(Cell::get).is_none();
+    let moving = !st.spring.resting(now) && frozen.is_none();
+    let scale = if moving { 1. + (EMOJI_SCALE - 1.) * st.spring.target as f32 } else { st.scale(now) };
     let face = st.face;
     let size = logical * scale;
     let off = (logical - size) / 2.;
+    let t = moving.then(|| emoji_transition(&st.spring, scale));
     gpui::div()
         .relative()
         .size(px(logical))
         .flex_none()
         .child(
-            img(move |window: &mut Window, _: &mut App| -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
-                if moving {
-                    window.request_animation_frame();
-                }
-                cell_image(face, lit, tint).map(Ok)
-            })
-            .absolute()
-            .left(px(off))
-            .top(px(off))
-            .size(px(size)),
+            img(move |_: &mut Window, _: &mut App| -> Option<Result<Arc<RenderImage>, ImageCacheError>> { cell_image(face, lit, tint).map(Ok) })
+                .absolute()
+                .left(px(off))
+                .top(px(off))
+                .size(px(size))
+                .present_transition(gpui::ElementId::NamedInteger("emoji-spring".into(), key), t),
         )
         .into_any_element()
+}
+
+pub fn emoji_transition(spring: &Spring, to_scale: f32) -> gpui::Transition {
+    let from = 1. + (EMOJI_SCALE - 1.) * spring.p0 as f32;
+    gpui::Transition::spring(gpui::SpringConfig::new(SPRING_TENSION as f32, SPRING_FRICTION as f32, 1.))
+        .start(spring.at)
+        .scale(from / to_scale, 1.)
 }
 
 #[cfg(test)]

@@ -1214,19 +1214,20 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
             .absolute()
             .inset_0()
             .occlude()
-            .bg(c(tok(idx::BACKGROUND_SCRIM)))
             .on_mouse_down(gpui::MouseButton::Left, cx.listener(|a, _, _, cx| {
                 a.settings = None;
                 cx.notify();
             }))
-            .child(
+            .child(crate::ui::popout_motion::modal_backdrop("user-settings", div().absolute().inset_0().bg(c(tok(idx::BACKGROUND_SCRIM)))))
+            .child(crate::ui::popout_motion::modal_card(
+                "user-settings",
                 div()
                     .absolute()
                     .inset(z(40.))
                     .flex()
                     .justify_center()
                     .child(card.on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())),
-            )
+            ))
             .when(confirm, |d| d.child(logout_modal(cx)))
             .when(changelog, |d| d.child(changelog_modal(cx)))
             .children(super::authorized_apps::confirm_modal(cx))

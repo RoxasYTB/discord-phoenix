@@ -215,6 +215,11 @@ pub fn run() -> anyhow::Result<()> {
         50 => hover(p, false),
         _ => {}
     });
+    p.live("hover_rail_guild", 240, |p, i| match i % 40 {
+        0 => p.input(mouse(36., 140.)),
+        20 => p.input(mouse(640., 300.)),
+        _ => {}
+    });
     p.measure("scroll_chat_fast", 200, |p, _| p.cx.update(|cx| v.read(cx).message_list.scroll_by(px(600.))));
     p.measure("hover_messages", 200, |p, i| p.input(mouse(700., 120. + (i % 40) as f32 * 15.)));
     let guilds: Vec<_> = p.cx.update(|cx| v.read(cx).guilds.iter().map(|g| g.id).collect());
@@ -240,6 +245,20 @@ pub fn run() -> anyhow::Result<()> {
         if i % 8 == 0 {
             p.input(notch(1180., 400., if i < 80 { -3. } else { 3. }));
         }
+    });
+    p.live("open_expression_picker", 240, |p, i| match i % 60 {
+        0 => {
+            p.cx.update_window(p.win, |_, window, cx| {
+                v.update(cx, |app, cx| {
+                    phoenix_app::ui::pickers::open(app, phoenix_app::ui::pickers::Tab::Emoji, phoenix_app::ui::pickers::EmojiTarget::Composer, window, cx)
+                })
+            })
+            .ok();
+        }
+        40 => {
+            p.cx.update_window(p.win, |_, window, cx| v.update(cx, |app, cx| phoenix_app::ui::pickers::close(app, window, cx))).ok();
+        }
+        _ => {}
     });
     p.cx.update_window(p.win, |_, window, cx| {
         v.update(cx, |app, cx| {

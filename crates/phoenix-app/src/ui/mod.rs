@@ -78,6 +78,7 @@ pub mod server_pages;
 pub mod sidebar;
 pub mod sidebar_resize;
 pub mod states;
+pub mod popout_motion;
 pub mod hover_icon;
 pub mod status_picker;
 pub mod status_svg;

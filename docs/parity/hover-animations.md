@@ -47,3 +47,7 @@ Aucun `@keyframes` ni changement de `d`/`stroke-dashoffset` au survol sur les ic
 
 - Barre d'en-tête (fils, notifications, épingles, membres), boîte de réception, aide, « + » d'ajout de serveur, Découvrir, Nitro, Quêtes : icônes statiques dans le client 2026 (pas de Lottie, pas de keyframes), seule la couleur change.
 - ⚠ Survoler « Commencer une activité » dans la vue d'appel du client officiel envoie `PATCH /users/@me/settings-proto/1`. Ne plus le survoler en CDP.
+
+## Fondus et ressorts joués au present (26/11)
+
+Les fondus de fond (`states::fade_layer`, `fade_to`), le roulement de texte (`states::hover_roll`), le zoom des infobulles, la pastille du rail (`server_bar::pill`, hauteur animée autour du milieu, coins conservés) et le ressort du bouton emoji du compositeur (`hover_icon::emoji_button`, tension 800 / friction 24, mise à l'échelle autour du centre) passent par les transitions au present du patch GPUI 22 : le survol redessine la fenêtre une fois, puis les images suivantes ne font que présenter la scène. Easings : fondus `cubic-bezier(.25,.46,.45,.94)` (le carré ease-out de Phoenix, approché par une Bézier), roulement `ease`, pastille `cubic-bezier(.22,1,.36,1)` (quint ease-out). Le mélange des couleurs est prémultiplié comme en CSS.

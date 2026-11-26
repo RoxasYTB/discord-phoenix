@@ -4,9 +4,9 @@ use std::{
 };
 
 use gpui::{
-    Animation, AnimationExt, AnchoredPositionMode, AnyElement, App, Context, ElementId, Entity, FontWeight,
+    AnchoredPositionMode, AnyElement, App, Context, ElementId, Entity, FontWeight,
     IntoElement, ParentElement, Render, SharedString, Styled, Window, anchored, deferred, div,
-    ease_out_quint, img, point, prelude::*, px, svg,
+    PresentTransitionExt, img, point, prelude::*, px, svg,
 };
 
 use crate::{
@@ -248,10 +248,11 @@ const FOLDER_PAD: f32 = (FOLDER - ICON) / 2.;
 const PREVIEW_PAD: f32 = 4.;
 const PREVIEW_GAP: f32 = 2.;
 const PILL_MS: u64 = 200;
+const EASE_OUT_QUINT: gpui::CubicBezier = gpui::CubicBezier(0.22, 1., 0.36, 1.);
 
 thread_local! {
     static HOVERED: Cell<Option<u64>> = const { Cell::new(None) };
-    static PILLS: RefCell<HashMap<u64, (f32, f32, u32)>> = RefCell::new(HashMap::new());
+    static PILLS: RefCell<HashMap<u64, (f32, f32, std::time::Instant)>> = RefCell::new(HashMap::new());
 }
 
 fn hovered(key: u64) -> bool {
@@ -333,8 +334,7 @@ fn right_tooltip_with(text: SharedString, extra: Option<gpui::Div>, item_h: f32)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(Palette::TEXT_NORMAL))
         .child(text)
-        .children(extra)
-        .with_animation("rail-tip-zoom", crate::ui::states::tip_zoom(), |d, t| crate::ui::states::zoom_card_sized(d, t, 16., 20.));
+        .children(extra);
     let mut pointer = div().flex().flex_col().justify_center().items_end().w(z(5.));
     for i in 0..9 {
         let w = 5. - (4. - i as f32).abs();
@@ -349,11 +349,10 @@ fn right_tooltip_with(text: SharedString, extra: Option<gpui::Div>, item_h: f32)
                 .flex()
                 .items_center()
                 .child(pointer)
-                .child(card)
-                .with_animation(
+                .child(card.present_transition("rail-tip-zoom", Some(crate::ui::states::tip_transition((0., 0.5)))))
+                .present_transition(
                     "rail-tip",
-                    Animation::new(crate::ui::settings::effects::motion(100)).with_easing(ease_out_quint()),
-                    |d, t| d.ml(z(4. * (1. - t))),
+                    Some(gpui::Transition::ease(crate::ui::settings::effects::motion(100), EASE_OUT_QUINT).translate(point(z(4.), z(0.)), point(px(0.), px(0.)))),
                 ),
         ),
     )
@@ -371,25 +370,17 @@ fn pill(key: u64, selected: bool, hover: bool, unread: bool) -> AnyElement {
     } else {
         0.
     };
-    let (from, to, epoch) = PILLS.with(|p| {
+    let (from, to, at) = PILLS.with(|p| {
         let mut p = p.borrow_mut();
-        let e = p.entry(key).or_insert((target, target, 0));
+        let e = p.entry(key).or_insert((target, target, std::time::Instant::now()));
         if e.1 != target {
-            *e = (e.1, target, e.2.wrapping_add(1));
+            *e = (e.1, target, std::time::Instant::now());
         }
         *e
     });
-    let bar = div().w(z(4.)).rounded_r(z(4.)).bg(c(Palette::TEXT_HEADER));
-    let bar: AnyElement = if from == to {
-        bar.h(z(to)).into_any_element()
-    } else {
-        bar.with_animation(
-            ElementId::Name(format!("pill-{key}-{epoch}").into()),
-            Animation::new(crate::ui::settings::effects::motion(PILL_MS)).with_easing(ease_out_quint()),
-            move |d, t| d.h(z(from + (to - from) * t)),
-        )
-        .into_any_element()
-    };
+    let ms = crate::ui::settings::effects::motion(PILL_MS);
+    let t = (from != to && at.elapsed() < ms).then(|| gpui::Transition::ease(ms, EASE_OUT_QUINT).start(at).height(z(from), z(to)));
+    let bar = div().w(z(4.)).rounded_r(z(4.)).bg(c(Palette::TEXT_HEADER)).h(z(if t.is_some() { to.max(from) } else { to })).present_transition(ElementId::NamedInteger("pill".into(), key), t);
     div().absolute().left_0().top_0().h_full().w(z(4.)).flex().items_center().child(bar).into_any_element()
 }
 

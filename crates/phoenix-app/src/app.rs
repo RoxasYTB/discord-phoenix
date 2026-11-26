@@ -1539,7 +1539,7 @@ impl Render for PhoenixApp {
             .bg(c(Palette::BG_TERTIARY))
             .child({
                 let (dx, dy) = ui::easter::shake_offset(window);
-                div().size_full().relative().left(gpui::px(dx)).top(gpui::px(dy)).child(body)
+                ui::popout_motion::base(div().size_full().relative().left(gpui::px(dx)).top(gpui::px(dy)).child(body))
             })
             .children(ui::settings::render(self, window, cx))
             .children(ui::boost_layer::render(self, window, cx).map(|e| if crate::actions::with_modal(|m| m.is_some()) { gpui::deferred(e).with_priority(27).into_any_element() } else { e }))

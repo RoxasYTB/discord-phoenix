@@ -1,6 +1,6 @@
 use crate::theme::{c, generated::idx, tok, z};
 use crate::ui::Icon;
-use gpui::{AnimationExt, Div, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled, div, svg};
+use gpui::{Div, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled, div, svg};
 use gpui::prelude::FluentBuilder as _;
 
 pub fn composer_button(id: &'static str, i: Icon) -> gpui::Stateful<Div> {
@@ -119,36 +119,35 @@ pub fn track(el: gpui::Stateful<Div>, key: u64) -> gpui::Stateful<Div> {
     })
 }
 
+pub fn roll_place(line: f32, pos: f32) -> ((f32, f32), (f32, f32)) {
+    let d = 1.07 * line;
+    ((-d * pos, 1. - pos), (d * (1. - pos), pos))
+}
+
 pub fn hover_roll(key: u64, line: f32, default: gpui::AnyElement, hovered: gpui::AnyElement) -> Div {
-    use gpui::{AnimationExt, IntoElement};
+    use gpui::{IntoElement, PresentTransitionExt};
     const MS: u64 = 220;
     let (over, at, animating) = match state(key) {
         Some((o, a)) => (o, a, a.elapsed() < std::time::Duration::from_millis(MS)),
         None => (false, std::time::Instant::now(), false),
     };
-    let d = 1.07 * line;
-    let place = move |pos: f32| ((-d * pos, 1. - pos), (d * (1. - pos), pos));
     let wrap = |el: gpui::AnyElement, front: bool| {
         let base = div().w_full().relative().child(el);
         if front { base } else { base.absolute().left_0().top_0().size_full() }
     };
     let layer = |el: gpui::AnyElement, front: bool| -> gpui::AnyElement {
-        let pick = move |pos: f32| if front { place(pos).0 } else { place(pos).1 };
-        let set = move |d: Div, pos: f32| {
-            let (y, o) = pick(pos);
-            d.top(gpui::px(y)).opacity(o)
-        };
-        if animating {
-            wrap(el, front)
-                .with_animation(
-                    gpui::ElementId::Name(format!("roll-{key}-{front}-{over}-{at:?}").into()),
-                    gpui::Animation::new(std::time::Duration::from_millis(MS)).with_easing(cubic_bezier(0.25, 0.1, 0.25, 1.)),
-                    move |d, t| set(d, if over { t } else { 1. - t }),
-                )
-                .into_any_element()
-        } else {
-            set(wrap(el, front), if over { 1. } else { 0. }).into_any_element()
-        }
+        let pick = move |pos: f32| if front { roll_place(line, pos).0 } else { roll_place(line, pos).1 };
+        let (to_pos, from_pos) = if over { (1., 0.) } else { (0., 1.) };
+        let ((y1, o1), (y0, o0)) = (pick(to_pos), pick(from_pos));
+        let el = wrap(el, front).top(gpui::px(y1)).opacity(if animating { 1. } else { o1 });
+        let t = animating.then(|| {
+            gpui::Transition::ease(std::time::Duration::from_millis(MS), gpui::CubicBezier(0.25, 0.1, 0.25, 1.))
+                .start(at)
+                .translate(gpui::point(gpui::px(0.), gpui::px(y0 - y1)), gpui::point(gpui::px(0.), gpui::px(0.)))
+                .opacity(o0, o1)
+                .keep_masks()
+        });
+        el.present_transition(gpui::ElementId::NamedInteger(if front { "roll-front".into() } else { "roll-back".into() }, key), t).into_any_element()
     };
     div().relative().w_full().h(gpui::px(line)).overflow_hidden().child(layer(default, true)).child(layer(hovered, false))
 }
@@ -171,25 +170,22 @@ pub fn fade_layer_pressed(
     ms: u64,
     radius: f32,
 ) -> gpui::AnyElement {
-    use gpui::{AnimationExt, IntoElement};
+    use gpui::{IntoElement, PresentTransitionExt};
     let state = HOVER.with(|h| h.borrow().get(&key).copied());
     let on = state.is_some_and(|s| s.0);
     let (from, to) = if on { (rest, hover) } else { (hover, rest) };
-    let mut layer = div().absolute().top_0().left_0().size_full().rounded(z(radius)).id("fade-layer");
+    let mut layer = div().absolute().top_0().left_0().size_full().rounded(z(radius)).id("fade-layer").bg(to);
     if let Some((group, col)) = pressed {
         layer = layer.group_active(group, move |s| s.bg(col));
     }
-    match state {
-        Some((_, at)) if at.elapsed().as_millis() < ms as u128 => layer
-            .with_animation(
-                gpui::ElementId::Name(format!("fade-{key}-{on}-{at:?}").into()),
-                gpui::Animation::new(std::time::Duration::from_millis(ms)).with_easing(ease_out),
-                move |d, t| d.bg(mix(from, to, t)),
-            )
-            .into_any_element(),
-        _ => layer.bg(to).into_any_element(),
-    }
+    let t = state.and_then(|(_, at)| {
+        (at.elapsed().as_millis() < ms as u128)
+            .then(|| gpui::Transition::ease(std::time::Duration::from_millis(ms), EASE_OUT_QUAD).start(at).background(from, to))
+    });
+    layer.present_transition(gpui::ElementId::NamedInteger("fade-pt".into(), key), t).into_any_element()
 }
+
+pub const EASE_OUT_QUAD: gpui::CubicBezier = gpui::CubicBezier(0.25, 0.46, 0.45, 0.94);
 
 pub fn ease_out(t: f32) -> f32 {
     1. - (1. - t) * (1. - t)
@@ -223,12 +219,13 @@ pub fn below_tip(text: gpui::SharedString, button_w: f32, button_h: f32) -> gpui
         .font_weight(FontWeight::MEDIUM)
         .text_color(c(tok(idx::TEXT_DEFAULT)))
         .whitespace_nowrap()
-        .child(text)
-        .with_animation("tip-zoom", tip_zoom(), zoom_card);
+        .child(text);
     let tip = deferred(
-        anchored().position_mode(AnchoredPositionMode::Local).position(point(z(button_w / 2. - SPAN / 2.), z(button_h + 6.))).child(
+        anchored().position_mode(AnchoredPositionMode::Local).position(point(z(button_w / 2. - SPAN / 2.), z(button_h + 6.))).child(tip_zoom(
+            "below-tip",
+            (0.5, 0.),
             div().w(z(SPAN)).flex().flex_col().items_center().child(caret).child(card),
-        ),
+        )),
     )
     .with_priority(2);
     div().absolute().top_0().left_0().child(tip).into_any_element()
@@ -288,17 +285,13 @@ pub fn fade_to(key: u64, on: bool, rest: gpui::Hsla, hover: gpui::Hsla, ms: u64,
     fade_layer(key, rest, hover, ms, radius)
 }
 
-pub fn tip_zoom() -> gpui::Animation {
-    gpui::Animation::new(crate::ui::settings::effects::motion(100)).with_easing(ease_out)
+pub fn tip_transition(origin: (f32, f32)) -> gpui::Transition {
+    gpui::Transition::ease(crate::ui::settings::effects::motion(100), EASE_OUT_QUAD).origin(origin.0, origin.1).scale(0.95, 1.)
 }
 
-pub fn zoom_card(d: Div, t: f32) -> Div {
-    zoom_card_sized(d, t, 14., 18.)
-}
-
-pub fn zoom_card_sized(d: Div, t: f32, font: f32, line: f32) -> Div {
-    let k = 0.95 + 0.05 * t;
-    d.px(z(12. * k)).py(z(8. * k)).rounded(z(8. * k)).text_size(z(font * k)).line_height(z(line * k))
+pub fn tip_zoom(id: &'static str, origin: (f32, f32), el: impl gpui::IntoElement + 'static) -> gpui::AnyElement {
+    use gpui::{IntoElement, PresentTransitionExt};
+    el.present_transition(id, Some(tip_transition(origin))).into_any_element()
 }
 
 pub fn forget(key: u64) {

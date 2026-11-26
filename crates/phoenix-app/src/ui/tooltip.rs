@@ -49,7 +49,7 @@ pub fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> A
 
 use std::{cell::RefCell, collections::HashMap};
 
-use gpui::{Anchor, AnchoredPositionMode, AnimationExt, Bounds, HitboxBehavior, MouseMoveEvent, Pixels, anchored, canvas, deferred, point};
+use gpui::{Anchor, AnchoredPositionMode, Bounds, HitboxBehavior, MouseMoveEvent, Pixels, anchored, canvas, deferred, point};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
@@ -99,9 +99,6 @@ fn card(text: SharedString) -> gpui::Div {
         .child(text)
 }
 
-fn zoomed(text: SharedString) -> gpui::AnimationElement<gpui::Div> {
-    card(text).with_animation("tip-zoom", crate::ui::states::tip_zoom(), crate::ui::states::zoom_card)
-}
 
 fn layer(text: SharedString, b: Bounds<Pixels>, side: Side, view_h: f32) -> gpui::AnyElement {
     let top = f32::from(b.origin.y);
@@ -116,9 +113,9 @@ fn layer(text: SharedString, b: Bounds<Pixels>, side: Side, view_h: f32) -> gpui
     };
     let frame = div().w(px(span)).flex().flex_col().items_center();
     let (frame, corner, y) = if below {
-        (frame.child(caret(false)).child(zoomed(text)), Anchor::TopLeft, bottom + gap - caret_h)
+        (crate::ui::states::tip_zoom("tip-zoom", (0.5, 0.), frame.child(caret(false)).child(card(text))), Anchor::TopLeft, bottom + gap - caret_h)
     } else {
-        (frame.child(zoomed(text)).child(caret(true)), Anchor::BottomLeft, top - gap + caret_h)
+        (crate::ui::states::tip_zoom("tip-zoom", (0.5, 1.), frame.child(card(text)).child(caret(true))), Anchor::BottomLeft, top - gap + caret_h)
     };
     let tip = deferred(
         anchored()

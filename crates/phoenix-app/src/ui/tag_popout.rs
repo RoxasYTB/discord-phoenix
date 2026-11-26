@@ -158,7 +158,10 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
                     cx.notify();
                 }),
             )
-            .child(
+            .child(crate::ui::popout_motion::popout(
+                "tag-popout-pt",
+                crate::ui::popout_motion::Kind::Translate,
+                crate::ui::popout_motion::side_of(f32::from(pop.at.x), f32::from(left)),
                 div()
                     .id("tag-popout-card")
                     .absolute()
@@ -167,7 +170,7 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
                     .shadow_lg()
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(card),
-            )
+            ))
             .into_any_element(),
     )
 }
