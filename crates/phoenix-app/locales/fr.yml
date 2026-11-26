@@ -3921,6 +3921,7 @@ boost.faq.a8: "Oui, les Boosts utilisés pour les avantages supplémentaires son
 boost.faq.q9: "Les avantages supplémentaires sont-ils un achat unique, ou nécessitent-ils de dépenser des Boosts en continu ?"
 boost.faq.a9: "Pour chaque avantage supplémentaire, tu dois attribuer en continu les Boosts qu'il requiert pour qu'il reste actif, exactement comme les niveaux. Si ton serveur tombe sous la barre du nombre requis de Boosts, l'avantage sera désactivé jusqu'à ce que les Boosts nécessaires soient réattribués."
 boost.unavailable: "Achat de Boosts actuellement indisponible"
+boost.unavailable_tip: "Tu ne peux pas acheter de Boosts tant que tu es membre d'un abonnement {name}."
 boost.faq.a2: "Tu peux booster ce serveur directement sur cette page ! Si tu souhaites booster un serveur différent, tu trouveras les instructions détaillées dans notre centre d'aide."
 boost.t.res: "{resolution} et {framerate} fps"
 boost.t.kbps: "{bitrate} ko/s"

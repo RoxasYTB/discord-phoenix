@@ -3921,6 +3921,7 @@ boost.faq.a8: "Yes, Boosts used for additional perks are dedicated specifically 
 boost.faq.q9: "Are additional perks a one-time purchase, or do they require ongoing Boosts?"
 boost.faq.a9: "Each additional perk requires an ongoing allocation of its required Boosts to stay active, just like levels. If your server drops below the required number of Boosts, the perk will be disabled until the necessary Boosts are reallocated."
 boost.unavailable: "Boost Purchasing Currently Unavailable"
+boost.unavailable_tip: "You can’t buy Boosts while you’re a member of a {name} plan."
 boost.faq.a2: "You can Boost this server directly on this page! If you want to Boost a different server, you can find step-by-step instructions in our Help Center."
 boost.t.res: "{resolution} & {framerate}fps"
 boost.t.kbps: "{bitrate}kbps"

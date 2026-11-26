@@ -406,19 +406,22 @@ fn faq() -> AnyElement {
 }
 
 fn unavailable_notice() -> AnyElement {
+    use crate::ui::tooltip::Tipped as _;
     div()
         .flex()
         .justify_center()
         .mb(z(32.))
         .child(
             div()
+                .id("boost-unavailable")
                 .px(z(16.))
                 .py(z(8.))
                 .rounded_full()
                 .bg(gpui::hsla(0., 0., 1., 0.1))
                 .border_2()
                 .border_color(gpui::white())
-                .child(text(16., 20., FontWeight::MEDIUM, gpui::white(), crate::t!("boost.unavailable").to_uppercase())),
+                .child(text(16., 20., FontWeight::MEDIUM, gpui::white(), crate::t!("boost.unavailable").to_uppercase()))
+                .tip(crate::t!("boost.unavailable_tip", name = crate::t!("sp.su.squad"))),
         )
         .into_any_element()
 }
@@ -450,8 +453,10 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .gap(z(12.))
         .child(icon)
         .child(div().flex().flex_col().items_center().gap(z(4.)).child(text(20., 24., FontWeight::SEMIBOLD, white, g.name.clone())).child(count));
-    let boost_btn = crate::ui::controls::button_icon("boost-layer-cta", "boost", crate::t!("boost.cta"), crate::ui::controls::BtnKind::Expressive)
-        .on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("boost.cta"), cx)));
+    let group_member = app.backend.premium_group_member();
+    let disable = |b: gpui::Stateful<gpui::Div>| b.opacity(0.5).cursor_not_allowed().hover(|s| s).active(|s| s);
+    let boost_btn = crate::ui::controls::button_icon("boost-layer-cta", "boost", crate::t!("boost.cta"), crate::ui::controls::BtnKind::Expressive);
+    let boost_btn = if group_member { disable(boost_btn) } else { boost_btn.on_click(cx.listener(|a, _, _, cx| a.stub(&crate::t!("boost.cta"), cx))) };
     let tier2 = app.backend.premium_tier2();
     let nitro_label = if tier2 { crate::t!("boost.gift_nitro") } else { crate::t!("boost.get_nitro") };
     let nl = nitro_label.clone();
@@ -459,8 +464,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         crate::ui::controls::button_icon("boost-layer-nitro", "gift", nitro_label, crate::ui::controls::BtnKind::Secondary)
     } else {
         crate::ui::controls::button("boost-layer-nitro", nitro_label, crate::ui::controls::BtnKind::Secondary)
-    }
-    .on_click(cx.listener(move |a, _, _, cx| a.stub(&nl, cx)));
+    };
+    let nitro_btn = if group_member && !tier2 { disable(nitro_btn) } else { nitro_btn.on_click(cx.listener(move |a, _, _, cx| a.stub(&nl, cx))) };
     let hero = div()
         .flex()
         .flex_col()
@@ -477,7 +482,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .text_color(tk(idx::TEXT_STRONG))
                 .child(crate::t!("boost.heading").to_uppercase()),
         )
-        .children(app.backend.premium_group_member().then(unavailable_notice))
+        .children(group_member.then(unavailable_notice))
         .child(div().flex().justify_center().gap(z(12.)).child(boost_btn).child(nitro_btn));
     let top = div().flex().flex_col().items_center().gap(z(24.)).mb(z(40.)).child(server).child(hero);
     let mut cards = div().w_full().flex().gap(z(24.));
