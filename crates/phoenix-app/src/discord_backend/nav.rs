@@ -170,7 +170,7 @@ pub fn folders_from_proto(b64: &str) -> Vec<GuildFolder> {
             for (fnum, fw, fp, fs) in fields(p) {
                 match fnum {
                     1 if fw == 2 => {
-                        f.guilds.extend(fp.chunks_exact(8).map(|c| Id(u64::from_le_bytes(c.try_into().unwrap()))))
+                        f.guilds.extend(fp.as_chunks::<8>().0.iter().map(|c| Id(u64::from_le_bytes(*c))))
                     }
                     1 if fw == 1 => f.guilds.push(Id(fs)),
                     2 => f.id = wrapped_u64(fp).filter(|v| *v != 0),

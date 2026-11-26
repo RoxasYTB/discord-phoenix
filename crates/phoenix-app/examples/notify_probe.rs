@@ -1,15 +1,22 @@
+#[cfg(target_os = "linux")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "linux")]
 use futures::StreamExt;
+#[cfg(target_os = "linux")]
 use phoenix_api::{Cache, ClientProperties, Gateway, GatewayConfig, GatewayEvent, models as api};
+#[cfg(target_os = "linux")]
 use phoenix_app::{
     discord_backend::store::{KeyringStore, TokenStore},
     notifications::{self as n, Level, NotifyPrefs, Target, dbus},
 };
 
+#[cfg(target_os = "linux")]
 const TEST_CHANNEL: u64 = 1_574_797_385_463_496_724;
+#[cfg(target_os = "linux")]
 const STAND_IN: api::Snowflake = api::Snowflake(1);
 
+#[cfg(target_os = "linux")]
 fn private_bus() -> anyhow::Result<String> {
     let bus = std::env::var("PHOENIX_NOTIFY_PRIVATE_BUS").unwrap_or_default();
     if bus.is_empty() || bus.contains("/run/user/") || Some(&bus) == std::env::var("DBUS_SESSION_BUS_ADDRESS").ok().as_ref() {
@@ -18,6 +25,7 @@ fn private_bus() -> anyhow::Result<String> {
     Ok(bus)
 }
 
+#[cfg(target_os = "linux")]
 fn main() -> anyhow::Result<()> {
     let bus = private_bus()?;
     let secs: u64 = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(120);
@@ -94,4 +102,9 @@ fn main() -> anyhow::Result<()> {
         }
         anyhow::bail!("no click received ({shown} notifications shown)")
     })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn main() {
+    eprintln!("notify_probe is only available on Linux");
 }
