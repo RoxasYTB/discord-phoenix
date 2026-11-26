@@ -189,11 +189,11 @@ fn tokens(m: &FiltersModal) -> String {
     let mut out = Vec::new();
     for ((key, _, _), picks) in FIELDS.iter().zip(&m.picks) {
         for v in picks {
-            out.push(format!("{key}{}", quoted(v)));
+            out.push(format!("{}{}", crate::ui::search_query::localize_token(key), quoted(v)));
         }
     }
     for d in &m.dates {
-        out.push(format!("{}{}", d.op.key(), d.day.format("%Y-%m-%d")));
+        out.push(format!("{}{}", crate::ui::search_query::localize_token(d.op.key()), d.day.format("%Y-%m-%d")));
     }
     out.join(" ")
 }
@@ -247,48 +247,59 @@ fn score(name: &str, q: &str) -> Option<u8> {
     }
 }
 
+pub(crate) fn user_options(app: &PhoenixApp, q: &str) -> Vec<(Id, String, SharedString)> {
+    let mut ids: Vec<Id> = vec![app.me.id];
+    if let Some(msgs) = app.selected_channel.and_then(|c| app.messages.get(&c)) {
+        ids.extend(msgs.msgs.iter().rev().take(200).map(|m| m.author));
+    }
+    let nick = |u: Id| {
+        app.selected_guild.and_then(|g| app.members.get(&g)).and_then(|ms| ms.iter().find(|m| m.user == u)).and_then(|m| m.nick.clone())
+    };
+    if let Some(g) = app.selected_guild {
+        ids.extend(app.members.get(&g).into_iter().flatten().map(|m| m.user));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<(u8, usize, (Id, String, SharedString))> = Vec::new();
+    for (order, id) in ids.into_iter().enumerate() {
+        if !seen.insert(id) {
+            continue;
+        }
+        let Some(u) = (if id == app.me.id { Some(&app.me) } else { app.users.get(&id) }) else { continue };
+        let shown = nick(id).unwrap_or_else(|| if u.display_name.is_empty() { u.name.clone() } else { u.display_name.clone() });
+        let Some(sc) = [score(&shown, q), score(&u.name, q)].into_iter().flatten().min() else { continue };
+        out.push((sc, order, (id, u.name.to_string(), shown)));
+    }
+    out.sort_by_key(|(sc, order, _)| (*sc, *order));
+    out.into_iter().map(|(_, _, o)| o).collect()
+}
+
+pub(crate) fn channel_options(app: &PhoenixApp, q: &str) -> Vec<(ChannelKind, SharedString)> {
+    let Some(g) = app.selected_guild else { return Vec::new() };
+    let mut list: Vec<(u8, usize, (ChannelKind, SharedString))> = Vec::new();
+    for (order, ch) in app.guild_channels.get(&g).into_iter().flatten().filter_map(|id| app.channels.get(id)).enumerate() {
+        if matches!(ch.kind, ChannelKind::Category | ChannelKind::Voice | ChannelKind::Stage) {
+            continue;
+        }
+        let Some(sc) = score(&ch.name, q) else { continue };
+        let first = Some(ch.id) == app.selected_channel;
+        list.push((sc, if first { 0 } else { order + 1 }, (ch.kind, ch.name.clone())));
+    }
+    list.sort_by_key(|(sc, order, _)| (*sc, *order));
+    list.into_iter().map(|(_, _, o)| o).collect()
+}
+
 fn options(app: &PhoenixApp, key: &str, query: &str) -> Vec<Opt> {
     let q = query.trim().to_lowercase();
     match key {
-        "from:" | "mentions:" => {
-            let mut ids: Vec<Id> = vec![app.me.id];
-            if let Some(msgs) = app.selected_channel.and_then(|c| app.messages.get(&c)) {
-                ids.extend(msgs.msgs.iter().rev().take(200).map(|m| m.author));
-            }
-            let nick = |u: Id| {
-                app.selected_guild.and_then(|g| app.members.get(&g)).and_then(|ms| ms.iter().find(|m| m.user == u)).and_then(|m| m.nick.clone())
-            };
-            if let Some(g) = app.selected_guild {
-                ids.extend(app.members.get(&g).into_iter().flatten().map(|m| m.user));
-            }
-            let mut seen = std::collections::HashSet::new();
-            let mut out: Vec<(u8, usize, Opt)> = Vec::new();
-            for (order, id) in ids.into_iter().enumerate() {
-                if !seen.insert(id) {
-                    continue;
-                }
-                let Some(u) = (if id == app.me.id { Some(&app.me) } else { app.users.get(&id) }) else { continue };
-                let shown = nick(id).unwrap_or_else(|| if u.display_name.is_empty() { u.name.clone() } else { u.display_name.clone() });
-                let Some(sc) = [score(&shown, &q), score(&u.name, &q)].into_iter().flatten().min() else { continue };
-                out.push((sc, order, Opt { value: u.name.to_string(), label: shown, sub: Some(u.name.clone()), lead: Lead::Avatar(id) }));
-            }
-            out.sort_by_key(|(sc, order, _)| (*sc, *order));
-            out.into_iter().take(50).map(|(_, _, o)| o).collect()
-        }
-        "in:" => {
-            let Some(g) = app.selected_guild else { return Vec::new() };
-            let mut list: Vec<(u8, usize, Opt)> = Vec::new();
-            for (order, ch) in app.guild_channels.get(&g).into_iter().flatten().filter_map(|id| app.channels.get(id)).enumerate() {
-                if matches!(ch.kind, ChannelKind::Category | ChannelKind::Voice | ChannelKind::Stage) {
-                    continue;
-                }
-                let Some(sc) = score(&ch.name, &q) else { continue };
-                let first = Some(ch.id) == app.selected_channel;
-                list.push((sc, if first { 0 } else { order + 1 }, Opt { value: ch.name.to_string(), label: ch.name.clone(), sub: None, lead: Lead::Channel(ch.kind) }));
-            }
-            list.sort_by_key(|(sc, order, _)| (*sc, *order));
-            list.into_iter().map(|(_, _, o)| o).collect()
-        }
+        "from:" | "mentions:" => user_options(app, &q)
+            .into_iter()
+            .take(50)
+            .map(|(id, value, label)| Opt { sub: Some(value.clone().into()), value, label, lead: Lead::Avatar(id) })
+            .collect(),
+        "in:" => channel_options(app, &q)
+            .into_iter()
+            .map(|(kind, name)| Opt { value: name.to_string(), label: name, sub: None, lead: Lead::Channel(kind) })
+            .collect(),
         "has:" => HAS
             .iter()
             .filter_map(|(v, label, glyph)| {

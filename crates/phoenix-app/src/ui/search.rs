@@ -4,7 +4,9 @@ use gpui::{
     Window, div, prelude::*, px,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
-use phoenix_api::rest::search::{date_to_snowflake, parse_search};
+use phoenix_api::rest::search::{FilterKey, complete_filter, parse_search_with, pending_filter};
+
+use crate::ui::search_query::{self as sq, Answer, AnswerLead};
 
 use crate::{
     search_highlight::Highlighter,
@@ -61,6 +63,7 @@ pub struct SearchState {
     dm_menu: bool,
     seq: u64,
     idle: bool,
+    ac: (String, usize),
     _sub: Subscription,
 }
 
@@ -73,8 +76,6 @@ impl gpui::Global for SearchHistory {}
 pub struct Search(pub Option<SearchState>);
 
 impl gpui::Global for Search {}
-
-const DAY: u64 = 86_400_000 << 22;
 
 pub fn cross_dm(app: &PhoenixApp) -> bool {
     crate::ui::settings::synced_map::get_pick(&app.prefs.synced.proto, "dm-search") == 1
@@ -105,17 +106,27 @@ fn quote(v: &str) -> String {
 }
 
 pub fn strip_in(q: &str) -> String {
+    let local = sq::token(FilterKey::In);
+    let mut out = strip_key(q, "in:");
+    if local != "in:" {
+        out = strip_key(&out, &local);
+    }
+    out
+}
+
+fn strip_key(q: &str, key: &str) -> String {
     let mut out = String::new();
     let mut rest = q;
-    while let Some(i) = rest.find("in:") {
+    let n = key.len();
+    while let Some(i) = rest.find(key) {
         let at_word = i == 0 || rest[..i].ends_with(' ');
         if !at_word {
-            out.push_str(&rest[..i + 3]);
-            rest = &rest[i + 3..];
+            out.push_str(&rest[..i + n]);
+            rest = &rest[i + n..];
             continue;
         }
         out.push_str(&rest[..i]);
-        let v = rest[i + 3..].trim_start();
+        let v = rest[i + n..].trim_start();
         let end = if let Some(stripped) = v.strip_prefix('"') { stripped.find('"').map_or(v.len(), |e| e + 2) } else { v.find(' ').unwrap_or(v.len()) };
         rest = &v[end..];
     }
@@ -124,7 +135,7 @@ pub fn strip_in(q: &str) -> String {
 }
 
 pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, String> {
-    let p = parse_search(text);
+    let p = parse_search_with(text, &sq::keys());
     let all_dms = in_dm(app) && cross_dm(app);
     let mut req = SearchRequest {
         guild: app.selected_guild,
@@ -180,17 +191,19 @@ pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, Stri
             .ok_or_else(|| crate::t!("search.no_channel", name = name).to_string())?;
         req.channels.push(ch.id);
     }
-    let day = |d: &str| date_to_snowflake(d).map(|s| s.0).ok_or_else(|| crate::t!("search.bad_date", d = d).to_string());
+    let words = sq::DateWords::current();
+    let today = chrono::Local::now().date_naive();
+    let range = |d: &str| sq::date_range(d, today, &words).ok_or_else(|| crate::t!("search.bad_date", d = d).to_string());
     if let Some(d) = &p.before {
-        req.max_id = Some(Id(day(d)?));
+        req.max_id = Some(Id(sq::local_snowflake(range(d)?.0)));
     }
     if let Some(d) = &p.after {
-        req.min_id = Some(Id(day(d)? + DAY));
+        req.min_id = Some(Id(sq::local_snowflake(range(d)?.1)));
     }
     if let Some(d) = &p.during {
-        let s = day(d)?;
-        req.min_id = Some(Id(s));
-        req.max_id = Some(Id(s + DAY));
+        let (a, b) = range(d)?;
+        req.min_id = Some(Id(sq::local_snowflake(a)));
+        req.max_id = Some(Id(sq::local_snowflake(b)));
     }
     let empty = req.content.is_none()
         && req.authors.is_empty()
@@ -248,6 +261,7 @@ pub fn open(_app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
         dm_menu: false,
         seq: 0,
         idle: false,
+        ac: (String::new(), 0),
         _sub: sub,
     })));
     cx.notify();
@@ -284,11 +298,56 @@ pub fn on_key(app: &mut PhoenixApp, key: &str, window: &mut Window, cx: &mut Con
     if key == "escape" && (close_sort_menu(cx) | close_dm_menu(cx)) {
         return true;
     }
+    if matches!(key, "up" | "down" | "enter") && !results_shown(cx) {
+        let list = current_answers(app, cx);
+        if !list.is_empty() {
+            let Some(s) = cx.global_mut::<Search>().0.as_mut() else { return false };
+            let n = list.len();
+            let cur = s.ac.1.min(n - 1);
+            match key {
+                "up" => s.ac.1 = (cur + n - 1) % n,
+                "down" => s.ac.1 = (cur + 1) % n,
+                _ => {
+                    pick_answer(app, &list[cur].value, window, cx);
+                    return true;
+                }
+            }
+            cx.notify();
+            return true;
+        }
+    }
     if key == "escape" {
+        let input = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).map(|s| s.input.clone());
+        if let Some(input) = input.filter(|i| !i.read(cx).value().is_empty() && !results_shown(cx)) {
+            input.update(cx, |s, cx| s.set_value("", window, cx));
+            cx.notify();
+            return true;
+        }
         close(app, window, cx);
         return true;
     }
     false
+}
+
+fn current_answers(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<Answer> {
+    let Some(s) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()) else { return Vec::new() };
+    let text = s.input.read(cx).value().to_string();
+    let Some(p) = pending_filter(&text, &sq::keys()) else { return Vec::new() };
+    if s.ac.0 != text
+        && let Some(s) = cx.global_mut::<Search>().0.as_mut()
+    {
+        s.ac = (text, 0);
+    }
+    sq::answers(app, p.key, &p.partial)
+}
+
+fn pick_answer(app: &mut PhoenixApp, value: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    let Some(input) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).map(|s| s.input.clone()) else { return };
+    let text = input.read(cx).value().to_string();
+    let Some(p) = pending_filter(&text, &sq::keys()) else { return };
+    let next = complete_filter(&text, &p, value);
+    input.update(cx, |s, cx| s.set_value(next, window, cx));
+    submit(app, cx);
 }
 
 fn submit(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
@@ -368,11 +427,10 @@ pub fn append_and_submit(app: &mut PhoenixApp, tokens: &str, window: &mut Window
     submit(app, cx);
 }
 
-const MORE_KEYS: [&str; 5] = ["before:", "after:", "during:", "pinned:", "authorType:"];
-
-fn add_filter(prefix: &'static str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
+fn add_filter(key: FilterKey, window: &mut Window, cx: &mut Context<PhoenixApp>) {
     let Some(s) = cx.global::<Search>().0.as_ref() else { return };
     let input = s.input.clone();
+    let prefix = sq::token(key);
     input.update(cx, |s, cx| {
         let v = s.value().to_string();
         let sep = if v.is_empty() || v.ends_with(' ') { "" } else { " " };
@@ -381,11 +439,11 @@ fn add_filter(prefix: &'static str, window: &mut Window, cx: &mut Context<Phoeni
     });
 }
 
-const FILTERS: [(&str, &str, &str, &str, &str); 4] = [
-    ("from:", "search/user", "search.f_from", "search.k_from", "search.v_user"),
-    ("in:", "hash", "search.f_in", "search.k_in", "search.v_channel"),
-    ("has:", "search/attachment", "search.f_has", "search.k_has", "search.v_has"),
-    ("mentions:", "search/at", "search.f_mentions", "search.k_mentions", "search.v_user"),
+const FILTERS: [(FilterKey, &str, &str, &str); 4] = [
+    (FilterKey::From, "search/user", "search.f_from", "search.v_user"),
+    (FilterKey::In, "hash", "search.f_in", "search.v_channel"),
+    (FilterKey::Has, "search/attachment", "search.f_has", "search.v_has"),
+    (FilterKey::Mentions, "search/at", "search.f_mentions", "search.v_user"),
 ];
 
 
@@ -1141,16 +1199,16 @@ fn named(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
 #[derive(Debug, PartialEq)]
 enum HistorySeg {
     Text(String),
-    Filter { key: &'static str, value: String },
+    Filter { key: FilterKey, value: String },
 }
 
 fn history_segments(q: &str) -> Vec<HistorySeg> {
-    let keys: Vec<&'static str> = FILTERS.iter().map(|f| f.0).chain(MORE_KEYS).collect();
+    let keys = sq::keys();
     let mut out: Vec<HistorySeg> = Vec::new();
     for word in q.split_whitespace() {
-        let lower = word.to_lowercase();
-        if let Some(k) = keys.iter().find(|k| lower.starts_with(**k) && word.len() > k.len()) {
-            out.push(HistorySeg::Filter { key: k, value: word[k.len()..].to_owned() });
+        let filter = word.split_once(':').filter(|(_, v)| !v.is_empty()).and_then(|(k, v)| keys.key(k).map(|k| (k, v)));
+        if let Some((key, value)) = filter {
+            out.push(HistorySeg::Filter { key, value: value.to_owned() });
         } else if let Some(HistorySeg::Text(t)) = out.last_mut() {
             t.push(' ');
             t.push_str(word);
@@ -1168,8 +1226,8 @@ fn history_pills(app: &PhoenixApp, q: &str) -> gpui::Div {
         row = match seg {
             HistorySeg::Text(t) => row.child(div().mr(z(8.)).child(t)),
             HistorySeg::Filter { key, value } => {
-                let label: SharedString = FILTERS.iter().find(|f| f.0 == key).map(|f| crate::i18n::t(f.3, &[])).unwrap_or(key.into());
-                let user = (key == "from:" || key == "mentions:")
+                let label: SharedString = sq::token(key).into();
+                let user = matches!(key, FilterKey::From | FilterKey::Mentions)
                     .then(|| {
                         let n = value.to_lowercase();
                         app.users.values().find(|u| u.name.to_lowercase() == n || u.display_name.to_lowercase() == n)
@@ -1211,15 +1269,71 @@ fn group_header(label: SharedString) -> gpui::Div {
         .child(div().flex_1().child(label))
 }
 
+fn answer_lead(app: &PhoenixApp, lead: &AnswerLead) -> Option<AnyElement> {
+    let user = |id: Id| if id == app.me.id { Some(&app.me) } else { app.users.get(&id) };
+    Some(match lead {
+        AnswerLead::User(id) => avatar(user(*id), 20.),
+        AnswerLead::Dm(ch) => avatar(dm_peer(app, *ch), 20.),
+        AnswerLead::Channel(kind) => {
+            gpui::svg().path(crate::ui::sidebar::channel_icon(*kind).path()).flex_none().size(z(20.)).text_color(tk(idx::TEXT_MUTED)).into_any_element()
+        }
+        AnswerLead::Glyph(g) => named(g, 20., tk(idx::TEXT_MUTED)).into_any_element(),
+        AnswerLead::None => return None,
+    })
+}
+
+fn answer_label(a: &Answer) -> AnyElement {
+    let base = || div().text_size(z(14.)).line_height(z(18.));
+    match (&a.lead, &a.sub) {
+        (AnswerLead::User(_), Some(sub)) => div()
+            .flex()
+            .gap(z(3.))
+            .min_w_0()
+            .child(base().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_DEFAULT)).child(a.label.clone()))
+            .child(base().font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_SUBTLE)).child(sub.clone()))
+            .into_any_element(),
+        (AnswerLead::Channel(_) | AnswerLead::Dm(_), _) => base().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_STRONG)).child(a.label.clone()).into_any_element(),
+        _ => base().font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(a.label.clone()).into_any_element(),
+    }
+}
+
+fn answers_body(app: &PhoenixApp, key: FilterKey, list: &[Answer], selected: usize, cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    let title = sq::group_title(key);
+    let header = if title.is_empty() { div().h(z(8.)) } else { group_header(title) };
+    let mut group = div().flex().flex_col().gap(z(4.)).child(header);
+    for (i, a) in list.iter().enumerate() {
+        let value = a.value.clone();
+        group = group.child(
+            option_row(("search-answer", i))
+                .when(i == selected, |d| d.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)))
+                .on_click(cx.listener(move |a, _, w, cx| pick_answer(a, &value, w, cx)))
+                .children(answer_lead(app, &a.lead).map(|l| div().flex_none().mr(z(8.)).child(l)))
+                .child(answer_label(a)),
+        );
+    }
+    group
+}
+
 fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<SharedString>, loading: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let raw = input.read(cx).value().to_string();
+    let pending = pending_filter(&raw, &sq::keys()).filter(|p| !p.key.is_date());
+    if let Some(p) = pending {
+        let list = sq::answers(app, p.key, &p.partial);
+        if !list.is_empty() {
+            let selected = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).filter(|s| s.ac.0 == raw).map_or(0, |s| s.ac.1).min(list.len() - 1);
+            let body = answers_body(app, p.key, &list, selected, cx);
+            return popout_frame(input, body, cx);
+        }
+    }
     let history = cx.try_global::<SearchHistory>().map(|h| h.0.clone()).unwrap_or_default();
     let mut filters = div().flex().flex_col().gap(z(4.)).child(group_header(crate::t!("search.filters")));
     let dm = in_dm(app);
     let all_dms = dm && cross_dm(app);
-    for (i, (k, glyph, label, key, value)) in FILTERS.into_iter().enumerate() {
-        if k == "in:" && dm && !all_dms {
+    for (i, (k, glyph, label, value)) in FILTERS.into_iter().enumerate() {
+        if k == FilterKey::In && dm && !all_dms {
             continue;
         }
+        let key = sq::token(k);
         filters = filters.child(
             option_row(("search-filter", i))
                 .on_click(cx.listener(move |_, _, w, cx| add_filter(k, w, cx)))
@@ -1235,7 +1349,7 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
                                 .gap(z(4.))
                                 .text_size(z(14.))
                                 .line_height(z(18.))
-                                .child(div().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_SUBTLE)).child(crate::t!(key)))
+                                .child(div().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_SUBTLE)).child(key))
                                 .child(div().font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!(value))),
                         ),
                 ),
@@ -1284,7 +1398,7 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
         && let Some(cur) = app.selected_channel
     {
         let tag = dm_tag(app, cur);
-        let token = format!("in:{}", quote(&tag));
+        let token = format!("{}{}", sq::token(FilterKey::In), quote(&tag));
         body = body.child(
             option_row(("search-find-in", 0))
                 .on_click(cx.listener(move |a, _, w, cx| {
@@ -1332,6 +1446,10 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
     if loading {
         body = body.child(div().px(z(8.)).pt(z(8.)).text_size(z(14.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("search.searching")));
     }
+    popout_frame(input, body, cx)
+}
+
+fn popout_frame(input: Entity<InputState>, body: gpui::Div, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let bar = live_bar(&input, true, cx);
     div()
         .absolute()
@@ -1390,8 +1508,8 @@ mod history_tests {
             history_segments("hello world from:kasiopy has:image"),
             vec![
                 HistorySeg::Text("hello world".into()),
-                HistorySeg::Filter { key: "from:", value: "kasiopy".into() },
-                HistorySeg::Filter { key: "has:", value: "image".into() },
+                HistorySeg::Filter { key: FilterKey::From, value: "kasiopy".into() },
+                HistorySeg::Filter { key: FilterKey::Has, value: "image".into() },
             ]
         );
         assert_eq!(history_segments("from:"), vec![HistorySeg::Text("from:".into())]);

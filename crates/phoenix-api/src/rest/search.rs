@@ -16,10 +16,11 @@ pub enum HasFilter {
     Sound,
     Sticker,
     Poll,
+    Snapshot,
 }
 
 impl HasFilter {
-    pub const ALL: [HasFilter; 8] = [
+    pub const ALL: [HasFilter; 9] = [
         Self::Link,
         Self::Embed,
         Self::File,
@@ -28,6 +29,7 @@ impl HasFilter {
         Self::Sound,
         Self::Sticker,
         Self::Poll,
+        Self::Snapshot,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -40,6 +42,14 @@ impl HasFilter {
             Self::Sound => "sound",
             Self::Sticker => "sticker",
             Self::Poll => "poll",
+            Self::Snapshot => "snapshot",
+        }
+    }
+
+    pub fn english(self) -> &'static str {
+        match self {
+            Self::Snapshot => "forward",
+            h => h.as_str(),
         }
     }
 
@@ -216,6 +226,110 @@ pub fn parse_tabs_reply(status: StatusCode, bytes: &[u8]) -> Result<SearchOutcom
     Ok(SearchOutcome::Results(SearchResponse { total_results, messages, doing_deep_historical_index: v.get("doing_deep_historical_index").and_then(serde_json::Value::as_bool).unwrap_or(false) }))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FilterKey {
+    From,
+    Mentions,
+    Has,
+    Before,
+    After,
+    On,
+    In,
+    Pinned,
+    AuthorType,
+}
+
+impl FilterKey {
+    pub const ALL: [FilterKey; 9] =
+        [Self::From, Self::Mentions, Self::Has, Self::Before, Self::After, Self::On, Self::In, Self::Pinned, Self::AuthorType];
+
+    pub fn english(self) -> &'static str {
+        match self {
+            Self::From => "from",
+            Self::Mentions => "mentions",
+            Self::Has => "has",
+            Self::Before => "before",
+            Self::After => "after",
+            Self::On => "during",
+            Self::In => "in",
+            Self::Pinned => "pinned",
+            Self::AuthorType => "authorType",
+        }
+    }
+
+    pub fn is_date(self) -> bool {
+        matches!(self, Self::Before | Self::After | Self::On)
+    }
+}
+
+pub const AUTHOR_TYPES: [&str; 3] = ["user", "bot", "webhook"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchKeys {
+    pub keys: Vec<(FilterKey, String)>,
+    pub has: Vec<(String, HasFilter)>,
+    pub author_types: Vec<(String, &'static str)>,
+}
+
+impl Default for SearchKeys {
+    fn default() -> Self {
+        Self::english()
+    }
+}
+
+impl SearchKeys {
+    pub fn english() -> Self {
+        let mut keys: Vec<(FilterKey, String)> = FilterKey::ALL.iter().map(|k| (*k, k.english().to_owned())).collect();
+        keys.push((FilterKey::On, "on".into()));
+        keys.push((FilterKey::AuthorType, "author_type".into()));
+        Self {
+            keys,
+            has: HasFilter::ALL.iter().map(|h| (h.english().to_owned(), *h)).collect(),
+            author_types: AUTHOR_TYPES.iter().map(|t| ((*t).to_owned(), *t)).collect(),
+        }
+    }
+
+    pub fn localized(keys: Vec<(FilterKey, String)>, has: Vec<(String, HasFilter)>, author_types: Vec<(String, &'static str)>) -> Self {
+        let en = Self::english();
+        let mut out = Self { keys, has, author_types };
+        out.keys.extend(en.keys);
+        out.has.extend(en.has);
+        out.author_types.extend(en.author_types);
+        out
+    }
+
+    pub fn key(&self, word: &str) -> Option<FilterKey> {
+        self.keys.iter().find(|(_, w)| w.to_lowercase() == word.to_lowercase()).map(|(k, _)| *k)
+    }
+
+    pub fn label(&self, key: FilterKey) -> &str {
+        self.keys.iter().find(|(k, _)| *k == key).map_or(key.english(), |(_, w)| w.as_str())
+    }
+
+    pub fn has_value(&self, word: &str) -> Option<HasFilter> {
+        let w = word.to_lowercase();
+        self.has.iter().find(|(n, _)| n.to_lowercase() == w).map(|(_, h)| *h).or_else(|| HasFilter::parse(&w))
+    }
+
+    pub fn has_label(&self, h: HasFilter) -> &str {
+        self.has.iter().find(|(_, x)| *x == h).map_or(h.english(), |(n, _)| n.as_str())
+    }
+
+    pub fn author_type(&self, word: &str) -> Option<String> {
+        let (neg, w) = match word.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, word),
+        };
+        let w = w.to_lowercase();
+        let t = self.author_types.iter().find(|(n, _)| n.to_lowercase() == w).map(|(_, t)| *t)?;
+        Some(if neg { format!("-{t}") } else { t.to_owned() })
+    }
+
+    pub fn author_label(&self, t: &str) -> &str {
+        self.author_types.iter().find(|(_, x)| *x == t).map_or("", |(n, _)| n.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParsedSearch {
     pub content: String,
@@ -231,6 +345,10 @@ pub struct ParsedSearch {
 }
 
 pub fn parse_search(input: &str) -> ParsedSearch {
+    parse_search_with(input, &SearchKeys::english())
+}
+
+pub fn parse_search_with(input: &str, keys: &SearchKeys) -> ParsedSearch {
     let mut out = ParsedSearch::default();
     let mut words = Vec::new();
     for tok in tokenize(input) {
@@ -239,21 +357,21 @@ pub fn parse_search(input: &str) -> ParsedSearch {
             continue;
         };
         let val = val.trim_matches('"').to_string();
-        let handled = match key.to_ascii_lowercase().as_str() {
+        let handled = match keys.key(key) {
             _ if val.is_empty() => false,
-            "from" => {
+            Some(FilterKey::From) => {
                 out.from.push(val.trim_start_matches('@').to_string());
                 true
             }
-            "mentions" => {
+            Some(FilterKey::Mentions) => {
                 out.mentions.push(val.trim_start_matches('@').to_string());
                 true
             }
-            "in" => {
+            Some(FilterKey::In) => {
                 out.in_channels.push(val.trim_start_matches('#').to_string());
                 true
             }
-            "has" => match HasFilter::parse(&val) {
+            Some(FilterKey::Has) => match keys.has_value(&val) {
                 Some(h) => {
                     if !out.has.contains(&h) {
                         out.has.push(h);
@@ -262,31 +380,39 @@ pub fn parse_search(input: &str) -> ParsedSearch {
                 }
                 None => false,
             },
-            "before" => {
+            Some(FilterKey::Before) => {
                 out.before = Some(val);
                 true
             }
-            "after" => {
+            Some(FilterKey::After) => {
                 out.after = Some(val);
                 true
             }
-            "during" | "on" => {
+            Some(FilterKey::On) => {
                 out.during = Some(val);
                 true
             }
-            "pinned" => {
-                out.pinned = Some(val.eq_ignore_ascii_case("true") || val == "yes");
-                true
-            }
-            "authortype" | "author_type" => {
-                let v = val.to_ascii_lowercase();
-                let ok = matches!(v.trim_start_matches('-'), "user" | "bot" | "webhook");
-                if ok && !out.author_types.contains(&v) {
-                    out.author_types.push(v);
+            Some(FilterKey::Pinned) => match val.to_ascii_lowercase().as_str() {
+                "true" => {
+                    out.pinned = Some(true);
+                    true
                 }
-                ok
-            }
-            _ => false,
+                "false" => {
+                    out.pinned = Some(false);
+                    true
+                }
+                _ => false,
+            },
+            Some(FilterKey::AuthorType) => match keys.author_type(&val) {
+                Some(v) => {
+                    if !out.author_types.contains(&v) {
+                        out.author_types.push(v);
+                    }
+                    true
+                }
+                None => false,
+            },
+            None => false,
         };
         if !handled {
             words.push(tok);
@@ -294,6 +420,34 @@ pub fn parse_search(input: &str) -> ParsedSearch {
     }
     out.content = words.join(" ");
     out
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingFilter {
+    pub key: FilterKey,
+    pub start: usize,
+    pub partial: String,
+}
+
+pub fn pending_filter(input: &str, keys: &SearchKeys) -> Option<PendingFilter> {
+    let mut quoted = false;
+    let mut start = 0;
+    for (i, ch) in input.char_indices() {
+        if ch == '"' {
+            quoted = !quoted;
+        } else if ch.is_whitespace() && !quoted {
+            start = i + ch.len_utf8();
+        }
+    }
+    let last = &input[start..];
+    let (k, v) = last.split_once(':')?;
+    let key = keys.key(k)?;
+    Some(PendingFilter { key, start: start + k.len() + 1, partial: v.trim_start_matches('"').to_owned() })
+}
+
+pub fn complete_filter(input: &str, pending: &PendingFilter, value: &str) -> String {
+    let v = if value.contains(char::is_whitespace) { format!("\"{value}\"") } else { value.to_owned() };
+    format!("{}{v} ", &input[..pending.start])
 }
 
 fn tokenize(input: &str) -> Vec<String> {
@@ -579,6 +733,66 @@ mod tests {
         assert_eq!(p.after.as_deref(), Some("2023-05-06"));
         assert_eq!(p.pinned, Some(true));
         assert!(p.content.is_empty());
+    }
+
+    fn french() -> SearchKeys {
+        let k = |key, w: &str| (key, w.to_owned());
+        SearchKeys::localized(
+            vec![
+                k(FilterKey::From, "de"),
+                k(FilterKey::Mentions, "mentions"),
+                k(FilterKey::Has, "contient"),
+                k(FilterKey::Before, "avant"),
+                k(FilterKey::After, "après"),
+                k(FilterKey::On, "pendant"),
+                k(FilterKey::On, "le"),
+                k(FilterKey::In, "dans"),
+                k(FilterKey::Pinned, "épinglé"),
+                k(FilterKey::AuthorType, "auteur"),
+            ],
+            vec![("lien".into(), HasFilter::Link), ("transférer".into(), HasFilter::Snapshot), ("vidéo".into(), HasFilter::Video)],
+            vec![("utilisateur".into(), "user"), ("bot".into(), "bot")],
+        )
+    }
+
+    #[test]
+    fn french_keys_and_values() {
+        let fr = french();
+        let p = parse_search_with(r#"salut de:ninette dans:"Coin Café" contient:lien contient:transférer Épinglé:true avant:2026-01-02 le:hier auteur:-utilisateur"#, &fr);
+        assert_eq!(p.content, "salut");
+        assert_eq!(p.from, vec!["ninette"]);
+        assert_eq!(p.in_channels, vec!["Coin Café"]);
+        assert_eq!(p.has, vec![HasFilter::Link, HasFilter::Snapshot]);
+        assert_eq!(p.pinned, Some(true));
+        assert_eq!(p.before.as_deref(), Some("2026-01-02"));
+        assert_eq!(p.during.as_deref(), Some("hier"));
+        assert_eq!(p.author_types, vec!["-user"]);
+        let en = parse_search_with("from:bob has:link has:forward pinned:maybe", &fr);
+        assert_eq!(en.from, vec!["bob"]);
+        assert_eq!(en.has, vec![HasFilter::Link, HasFilter::Snapshot]);
+        assert_eq!(en.pinned, None);
+        assert_eq!(en.content, "pinned:maybe");
+        assert_eq!(fr.label(FilterKey::From), "de");
+        assert_eq!(fr.has_label(HasFilter::Snapshot), "transférer");
+        assert_eq!(SearchKeys::english().has_label(HasFilter::Snapshot), "forward");
+        assert_eq!(HasFilter::parse("snapshot"), Some(HasFilter::Snapshot));
+    }
+
+    #[test]
+    fn pending_filter_tracks_the_last_token() {
+        let fr = french();
+        let p = pending_filter("salut de:nin", &fr).unwrap();
+        assert_eq!((p.key, p.partial.as_str(), p.start), (FilterKey::From, "nin", 9));
+        assert_eq!(complete_filter("salut de:nin", &p, "ninette"), "salut de:ninette ");
+        let q = pending_filter(r#"dans:"Coin Ca"#, &fr).unwrap();
+        assert_eq!((q.key, q.partial.as_str()), (FilterKey::In, "Coin Ca"));
+        assert_eq!(complete_filter(r#"dans:"Coin Ca"#, &q, "Coin Café"), "dans:\"Coin Café\" ");
+        let e = pending_filter("contient:", &fr).unwrap();
+        assert_eq!((e.key, e.partial.as_str()), (FilterKey::Has, ""));
+        assert_eq!(pending_filter("de:ninette ", &fr), None);
+        assert_eq!(pending_filter("hello", &fr), None);
+        assert_eq!(pending_filter("http://x", &fr), None);
+        assert_eq!(pending_filter("épinglé:t", &fr).map(|p| p.key), Some(FilterKey::Pinned));
     }
 
     #[test]

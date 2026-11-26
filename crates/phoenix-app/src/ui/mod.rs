@@ -66,6 +66,7 @@ pub mod quest_modals;
 pub mod profile_bio;
 pub mod search;
 pub mod search_filters;
+pub mod search_query;
 pub mod server_bar;
 pub mod server_pages;
 pub mod sidebar;
