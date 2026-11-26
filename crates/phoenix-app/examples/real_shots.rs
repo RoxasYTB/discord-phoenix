@@ -1840,6 +1840,11 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 "textmenu" => phoenix_app::ui::extra_menus::open(phoenix_app::ui::extra_menus::Target::Textarea, gpui::point(px(500.), px(560.)), window),
+                "appinstall" => {
+                    if let Ok(id) = arg.parse::<u64>() {
+                        phoenix_app::ui::modals::app_install::start(app, id, window, cx);
+                    }
+                }
                 "profileoverflow" => {
                     let (user, sub) = arg.split_once(',').unwrap_or((arg.as_str(), ""));
                     if let Some(user) = parse_id(user) {
