@@ -139,6 +139,10 @@ mentions|unreads|saved|reminders|scheduled).
 `PHX_OPEN` = pins|threads|search[:q]|filters[:date|calendar|list<n>]|settings[:page]|server_settings[:n]|emoji|gif|sticker|msgmenu|chanmenu[:n]|catmenu[:n]|guildmenu|guilddrop|usermenu[:n]|switcher|thread:<id>|thread_create:<msg>|attach|poll_create|leave|invite|post[:n]|events|community[:browse]|guide.
 `PHX_PROFILE=member:<n>` = nth member of the list; `PHX_DEBUG_GIF=1` prints the GIF home previews.
 `PHX_FX_STILL=1` = still profile effects (reduce motion).
+`PHX_GRADIENT_AT=0,375,…` writes `<out>-gNNNN.png`, the frame with the gradient clock that many ms
+after the first scrolling name gradient (hover a message with `PHX_MOUSE`), see GPUI patch 17.
+`PHX_PRESENT_CPU=<secs>` prints the process CPU while a hovered name scrolls through
+re-presents, with a full redraw every frame, and idle.
 `PHX_SEARCH_SORT=old|rel` and `PHX_SEARCH_PAGE=<n>` with `PHX_OPEN=search:<q>`.
 `PHX_WAIT` = seconds to wait for messages and images (default 15).
 `PHX_TABS=n` presses Tab n times before the capture (`-n` = Shift+Tab), for the focus rings.

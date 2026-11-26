@@ -473,6 +473,22 @@ Tests: `text_system::gradient::tests::scroll_moves_the_tile_right_and_wraps_by_t
 `prism_scrolls_its_cycle_to_the_left_in_2s_once_or_forever`,
 `reduced_motion_window_focus_and_still_names_do_not_scroll`, `only_moving_role_gradients_glow`.
 
+**CPU, 2026-11-26.** `real_shots` `PHX_PRESENT_CPU=10` on the real account (Aperture #général,
+1536×840 at DPR 1.5, Clem's « Coordinateur de Sécurité » #9e6bff → #9fc1ff name hovered, so the
+gradient scrolls and glows), under `phoenix-nice`, frame requests every 16 ms, two runs:
+
+| phase | CPU (one core) | frame requests in 10 s |
+|---|---|---|
+| hovered name scrolling, present only (patch 17) | 58.9 % / 56.6 % | 257 / 271 |
+| hovered name scrolling, full redraw every frame (what `request_animation_frame` would do) | 72.1 % / 73.3 % | 173 / 166 |
+| idle, mouse gone, nothing scrolls | 57.6 % / 59.5 % | 264 / 250 |
+
+The ~58 % floor is the harness itself (the headless test dispatcher, gateway and media work of
+the real account) and is the same with nothing on screen. A scrolling name stays within the
+±2 points noise of idle, while redrawing the view each frame costs 14 to 16 more points at only
+~17 frames per second (about 8 ms of CPU per frame). Frames in
+`/mnt/windata/project-phoenix/compare/gradient-anim` (`PHX_GRADIENT_AT=0,375,750,1125`, private).
+
 Not done: the glow's 0.1s opacity transition (it appears and disappears at once), and the blur is
 applied to the glyph coverage, then filled with the gradient, where Chromium blurs the painted
 colours. With a 100px gradient period and a 4px blur the colour difference is under one step of
