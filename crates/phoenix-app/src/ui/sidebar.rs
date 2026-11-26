@@ -486,8 +486,18 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     let Some(r) = app.sidebar_rows.get(ix - 1).copied() else {
         return div().into_any_element();
     };
+    if !cx.has_active_drag() {
+        crate::ui::channel_dnd::set_over(None);
+    }
     match r {
-        SidebarRow::Category(id) => {
+        SidebarRow::Category(id) => reorderable(app, entity, id, category_row(app, entity, id)),
+        SidebarRow::Channel(id) => reorderable(app, entity, id, channel_row(app, entity, id)),
+        _ => other_row(app, entity, r, ix),
+    }
+}
+
+fn category_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElement {
+    {
             let ch = &app.channels[&id];
             let collapsed = app.collapsed.contains(&id);
             let fav_cat = ch.guild == Some(crate::ui::favorites::GUILD);
@@ -563,7 +573,110 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
                 ))
                 .into_any_element()
         }
-        SidebarRow::Channel(id) => channel_row(app, entity, id),
+}
+
+fn reorder_slots(app: &PhoenixApp, g: Id) -> Vec<crate::ui::channel_dnd::Slot> {
+    app.guild_channels
+        .get(&g)
+        .into_iter()
+        .flatten()
+        .filter_map(|id| app.channels.get(id))
+        .map(|c| crate::ui::channel_dnd::Slot { id: c.id, kind: c.kind, parent: c.parent, position: c.position })
+        .collect()
+}
+
+#[derive(Clone)]
+pub struct DraggedChannel {
+    pub id: Id,
+    name: SharedString,
+}
+
+impl gpui::Render for DraggedChannel {
+    fn render(&mut self, _w: &mut gpui::Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
+        div()
+            .h(z(32.))
+            .px(z(8.))
+            .rounded(z(4.))
+            .flex()
+            .items_center()
+            .bg(t(idx::BACKGROUND_SURFACE_HIGH))
+            .text_size(z(16.))
+            .line_height(z(20.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(t(idx::INTERACTIVE_TEXT_ACTIVE))
+            .opacity(0.8)
+            .child(self.name.clone())
+    }
+}
+
+fn reorder_line(after: bool) -> gpui::Div {
+    let line = div()
+        .absolute()
+        .left(z(8.))
+        .right_0()
+        .h(z(4.))
+        .rounded(z(2.))
+        .bg(t(idx::GREEN_360))
+        .shadow(vec![gpui::BoxShadow {
+            color: t(idx::OPACITY_BLACK_40),
+            offset: gpui::point(px(0.), px(0.)),
+            blur_radius: z(3.),
+            spread_radius: px(0.),
+            inset: false,
+        }]);
+    if after { line.bottom(z(-2.)) } else { line.top(z(-2.)) }
+}
+
+fn reorderable(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id, el: AnyElement) -> AnyElement {
+    let Some(ch) = app.channels.get(&id) else { return el };
+    let Some(g) = ch.guild.filter(|g| *g != crate::ui::favorites::GUILD) else { return el };
+    if !crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4) {
+        return el;
+    }
+    let mark = crate::ui::channel_dnd::over()
+        .filter(|(_, target)| *target == id)
+        .map(|(dragged, _)| reorder_line(crate::ui::channel_dnd::lands_after(&reorder_slots(app, g), dragged, id)));
+    let slots = reorder_slots(app, g);
+    let drop_e = entity.clone();
+    div()
+        .id(("channel-dnd", id.0))
+        .w_full()
+        .relative()
+        .on_drag(DraggedChannel { id, name: ch.name.clone() }, |d: &DraggedChannel, _, _, cx: &mut App| cx.new(|_| d.clone()))
+        .on_drag_move::<DraggedChannel>(move |ev, window, cx| {
+            let dragged = ev.drag(cx).id;
+            let next = if ev.bounds.contains(&ev.event.position) {
+                crate::ui::channel_dnd::can_drop(&slots, dragged, id).then_some((dragged, id))
+            } else if crate::ui::channel_dnd::over().is_some_and(|(_, t)| t == id) {
+                None
+            } else {
+                return;
+            };
+            if crate::ui::channel_dnd::set_over(next) {
+                window.refresh();
+            }
+        })
+        .on_drop(move |d: &DraggedChannel, _, cx| {
+            crate::ui::channel_dnd::set_over(None);
+            drop_e.update(cx, |a, cx| a.drop_channel(d.id, id, cx))
+        })
+        .child(el)
+        .children(mark)
+        .into_any_element()
+}
+
+impl PhoenixApp {
+    pub fn drop_channel(&mut self, dragged: Id, target: Id, cx: &mut gpui::Context<Self>) {
+        cx.notify();
+        let Some(g) = self.channels.get(&target).and_then(|c| c.guild) else { return };
+        let Some(body) = crate::ui::channel_dnd::reorder_body(&reorder_slots(self, g), dragged, target) else { return };
+        self.blocked_write(crate::actions::guard::GuardedWrite::batch_channel_update(g.0, body), cx);
+    }
+}
+
+fn other_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, r: SidebarRow, ix: usize) -> AnyElement {
+    match r {
+        SidebarRow::Category(id) | SidebarRow::Channel(id) => channel_row(app, entity, id),
         SidebarRow::Thread(id) => thread_row(app, entity, id),
         SidebarRow::StageAudience(id) => crate::ui::voice_row::stage_audience(app, id),
         SidebarRow::VoiceUser { user } => {

@@ -225,3 +225,15 @@ written to the account; the write path is covered by unit tests only.
 | barre d'objectif de boost | `6b05ca0762af596a.js` `tp` : clic = 828162 `A(guildId, GUILD_BOOSTING_SIDEBAR_DISPLAY)` → route `CHANNEL(guild, GUILD_BOOSTS)` ; clic droit (ADMINISTRATOR, 363487) = menu `progress-bar-context` (chunk 371728 `e2f1781f76a92203.js` récupéré sur le CDN) avec la case `progress-bar-enabled` « Activer la barre de progression » (`0CJWP2`) qui fait `saveGuild({premiumProgressBarEnabled})` si MANAGE_GUILD | clic → `boost_layer::open` ; clic droit → `extra_menus::Target::BoostBar`, écriture via la garde (`ServerCall::EditSafety`) | ✅ ; ⚠ le `scale(1.02,1.1)` du survol n'est pas reproduit |
 | bandeau de fil archivé / verrouillé | « Ouvrir » = `unarchiveThread` `{archived:false}`, « Déverrouiller » = `{locked:false, archived:false}` (`ceb73656db6e6af4.js`, web `unlockThread`) | `GuardedWrite::edit_channel` refusé + toast | ✅ (était un stub) |
 
+
+## Drag and drop (2026-11-26)
+| Item | Client | Phoenix | Status |
+|---|---|---|---|
+| rail: drop zones | per item a wrapper from top −16 to bottom −4 (`wrapper_nL08_v`) split in halves: top = move above (`target_nL08_v`, 4px `--status-positive` line at top 10, inset 4, radius 2, shadow 0 0 3 `--opacity-black-28`), bottom = combine (`centerTarget_nL08_v`, 16px dot at 4/28) only for items outside folders; end of an open folder = add to it (`folderEndWrapper`) | same split (above when y < h/2 − 6), same line and dot | ✅ |
+| rail: combine | `GUILD_MOVE_BY_ID` with `combine`: a guild onto a guild makes a folder (`convertToFolder`: random 32-bit id, no name or colour, target first), onto a folder appends; a folder can never combine or go into a folder | `rail_dnd::apply_drop` (tests) | ✅ |
+| rail: folders | folder headers are draggable as a block | same | ✅ |
+| rail: saving | settings proto guild_folders | existing SaveFolders action; the previous order comes back if it fails | ✅ |
+| rail: drag preview | react-dnd preview of the icon, `dragInner_OkKLIP` dashed placeholder | icon at 80 %, no placeholder | ❌ placeholder |
+| channels: reorder | MANAGE_CHANNELS only; text-like and vocal channels and categories move within their class; positions follow `calculatePositionDeltas` over the class list in sidebar order, `parent_id` when the category changes, then `PATCH /guilds/{id}/channels` (`batchChannelUpdate`); indicator `containerDragBefore/After_Wx6SnQ`: 4px `--green-360` line, inset 8 0, top or bottom −2, shadow 0 0 3 `--opacity-black-40` | same deltas (`channel_dnd` tests), written through `GuardedWrite::batch_channel_update`, so the guard refuses it with its toast | ✅ |
+| channels: drop on a category header to move into it, lock permissions prompt | `QO()` reference rules, `544169` modal | not built | ❌ |
+| files on the chat | upload overlay | already built (`chat/panels.rs` `track_drop`, animation measured) | ✅ |

@@ -242,6 +242,10 @@ impl GuardedWrite {
         write(Method::POST, format!("/channels/{channel}/call/ring"), Some(json!({ "recipients": null })))
     }
 
+    pub fn batch_channel_update(guild: u64, body: Value) -> Self {
+        write(Method::PATCH, format!("/guilds/{guild}/channels"), Some(body))
+    }
+
     pub fn edit_channel(channel: u64, body: Value) -> Self {
         write(Method::PATCH, format!("/channels/{channel}"), Some(body))
     }
@@ -285,6 +289,7 @@ mod tests {
     fn every_write() -> Vec<GuardedWrite> {
         vec![
             GuardedWrite::change_password("old", "new"),
+            GuardedWrite::batch_channel_update(5, json!([{ "id": "6", "position": 0 }])),
             GuardedWrite::set_guild_identity(5, true),
             GuardedWrite::remove_user_reaction(1, 2, &crate::models::ReactionEmoji { id: None, name: Some("👍".into()), animated: false }, 3),
             GuardedWrite::change_username("name", None, "pw"),

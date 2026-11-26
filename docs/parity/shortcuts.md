@@ -17,6 +17,11 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 | Ctrl+K | Quick Switcher | ✅ |
 | Ctrl+Shift+N | Create or join a server | ✅ |
 | Ctrl+1..9 | Nth rail item: 1 = Home (bound in the client as `mod+${n}`, not listed in the modal) | ✅ |
+| Ctrl+T | Quick Switcher too: the client binds `["mod+k","mod+t"]` (module 161388) when tabs are off; the modal only lists Ctrl+K | ✅ (2026-11-26) |
+| Ctrl+Alt+Left | While connected to voice: open the voice channel's server (its last channel) and scroll the channel list to the voice channel (module 806964, `isConnected` → `transitionTo(guild, selectedChannel)` + `channelListScrollTo`) | ✅ (2026-11-26) |
+| Ctrl+Shift+A | Collapse every category of the server, or expand them all when they are all collapsed (module 151199: `some(!isCollapsed)` → collapse all, else expand all); local nav prefs, like the category menu | ✅ (2026-11-26) |
+| Ctrl+Ctrl+A (`mod+ctrl+a`, OPEN_APP_DIRECTORY) | Opens Discover > Apps. On Linux `mod` is Ctrl, so the combo is Ctrl+A, which the composer keeps for select-all | ➖ not bound: unclear on Linux, and checking it in the live client opens a view that writes settings |
+| Ctrl+Alt+I | Browser devtools, only on discord.com in a browser | ➖ desktop client only |
 
 ## Voice and video
 | Shortcut | Action | Status |
@@ -32,7 +37,7 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 | Shortcut | Action | Status |
 |---|---|---|
 | Shift+Esc | Mark server read | ✅ |
-| Esc | Mark channel read (and jump to present) | ✅ |
+| Esc, Shift+Page Down | Mark channel read and jump to present (the client binds `["esc","shift+pagedown"]`) | ✅ Shift+Page Down added 2026-11-26. The read ack is the normal client ack (`select_channel`), which agents' real_shots refuse |
 | Ctrl+Shift+T | Create a group DM | ✅ |
 | Ctrl+Shift+Alt+N | Create a thread | ✅ Focused message: opens the thread form. Otherwise: opens the “Nouveau fil” sidebar (rebuilt from ref-cache create-thread-sidebar-*.json), which sends `POST /channels/{id}/threads` and then the starter message |
 | Ctrl+P | Toggle pins popout | ✅ |
@@ -46,6 +51,9 @@ Source: the live 2026 client's shortcuts modal (Ctrl+/), read on 2026-11-24, plu
 | Alt+R | Record a voice message | ✅ opens the recorder bar like the client's `RECORD_VOICE_MESSAGE` handler (see `voice-messages.md`). The measured account lacks the desktop recording experiment, so its live client does nothing on Alt+R; Phoenix follows the enabled code path. The microphone is only opened when the user presses it |
 | Ctrl+Shift+U | Upload a file | ✅ |
 | Ctrl+Shift+L | Copy channel link | ✅ |
+
+## Keyboard drag and drop
+The bundle's modal list has a DND group (Ctrl+D start, Up/Down move, Space/Enter drop, Esc cancel: strings `Lns0Fc`, `dmMqay`, `cs/HVH`, `1ioMJQ`), but the live modal (`shortcuts-modal-default.json`) does not show it on this account. ➖ not built: mouse drag and drop is (navigation.md).
 
 ## Focused-message shortcuts
 Shift+Tab from an empty composer focuses the newest message. Up and Down then move the focus (clamped, no wrap), and the focused row gets the hover/selected background. The focus clears when another element takes focus.
