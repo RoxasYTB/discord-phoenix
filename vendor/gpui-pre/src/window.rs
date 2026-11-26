@@ -3137,6 +3137,7 @@ impl Window {
             .filter(|s| s.speed != 0.0)
             .map(|s| s.start)
             .chain(scene.glyph_animations.iter().flatten().map(|a| a.start))
+            .chain(scene.sprite_sequences.iter().map(|s| s.start))
             .fold(f64::INFINITY, f64::min);
         scene.gradient_time = if start.is_finite() {
             start + elapsed.as_secs_f64()
