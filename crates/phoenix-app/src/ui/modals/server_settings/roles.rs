@@ -101,6 +101,7 @@ pub struct Editor {
     pub mention0: bool,
     pub mention: bool,
     pub members: Option<Vec<u64>>,
+    pub icon: Option<Option<std::path::PathBuf>>,
 }
 
 impl Editor {
@@ -125,11 +126,12 @@ impl Editor {
             mention0: mention,
             mention,
             members: None,
+            icon: None,
         }
     }
 
     pub fn dirty(&self) -> bool {
-        self.colors != self.colors0 || self.perms != self.perms0 || self.hoist != self.hoist0 || self.mention != self.mention0
+        self.colors != self.colors0 || self.perms != self.perms0 || self.hoist != self.hoist0 || self.mention != self.mention0 || self.icon.is_some()
     }
 
     pub fn reset(&mut self) {
@@ -138,6 +140,7 @@ impl Editor {
         self.hoist = self.hoist0;
         self.mention = self.mention0;
         self.name = None;
+        self.icon = None;
     }
 
     pub fn commit(&mut self) {
@@ -145,6 +148,7 @@ impl Editor {
         self.perms0 = self.perms;
         self.hoist0 = self.hoist;
         self.mention0 = self.mention;
+        self.icon = None;
     }
 
     pub fn edit(&self, cx: &gpui::App) -> Option<RoleEdit> {
@@ -155,6 +159,8 @@ impl Editor {
             hoist: (self.hoist != self.hoist0).then_some(self.hoist),
             mentionable: (self.mention != self.mention0).then_some(self.mention),
             permissions: (self.perms != self.perms0).then_some(self.perms),
+            icon: self.icon.as_ref().map(|p| p.as_ref().and_then(|p| crate::ui::file_pick::data_uri(p))),
+            unicode_emoji: self.icon.as_ref().map(|_| None),
             ..Default::default()
         };
         (e != RoleEdit::default()).then_some(e)
@@ -219,6 +225,45 @@ fn role_icon(guild: u64, r: &Value, size: f32) -> AnyElement {
     gpui::svg().path(crate::icons::path("settings/shield-user")).size(z(size)).flex_none().text_color(fill).into_any_element()
 }
 
+pub fn has_icon(r: &Value, e: &Editor) -> bool {
+    match &e.icon {
+        Some(p) => p.is_some(),
+        None => r.get("icon").and_then(Value::as_str).is_some() || r.get("unicode_emoji").and_then(Value::as_str).is_some(),
+    }
+}
+
+fn draft_icon(guild: u64, r: &Value, e: &Editor, size: f32) -> AnyElement {
+    match &e.icon {
+        Some(Some(p)) => gpui::img(p.clone()).size(z(size)).flex_none().into_any_element(),
+        Some(None) => {
+            let mut bare = r.clone();
+            if let Some(o) = bare.as_object_mut() {
+                o.remove("icon");
+                o.remove("unicode_emoji");
+            }
+            role_icon(guild, &bare, size)
+        }
+        None => role_icon(guild, r, size),
+    }
+}
+
+fn pick_role_icon(a: &mut PhoenixApp, cx: &mut Cx) {
+    let Some(guild) = with_state(|s| s.guild) else { return };
+    if !a.backend.guild_features(guild).iter().any(|f| f == "ROLE_ICONS") {
+        crate::ui::boost_layer::open(guild);
+        cx.notify();
+        return;
+    }
+    crate::ui::file_pick::pick(&["png", "jpg", "jpeg", "webp", "gif"], cx, |_, path, cx| {
+        with_state(|s| {
+            if let Some(e) = s.role.as_mut() {
+                e.icon = Some(Some(path));
+            }
+        });
+        cx.notify();
+    });
+}
+
 fn open_editor(id: u64, everyone: bool, members_tab: bool, a: &mut PhoenixApp, cx: &mut Cx) {
     let need = with_state(|s| {
         let r = s.list("roles").iter().find(|r| kit::n(r, "id") == id).cloned()?;
@@ -251,6 +296,7 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let roles = sorted_roles(s);
     let counts = s.get("counts").cloned().unwrap_or(Value::Null);
     let everyone = s.guild.0;
+    let guild = s.guild.0;
     let default_card = div()
         .id("ss-role-everyone")
         .h(z(73.6))
@@ -284,7 +330,10 @@ pub fn list(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .items_center()
         .gap(z(16.))
         .child(kit::search_box(s.inputs.get("role_search")).flex_1())
-        .child(kit::btn_sm("ss-role-create", crate::t!("gs.roles.create"), BtnKind::Primary));
+        .child(kit::btn_sm("ss-role-create", crate::t!("gs.roles.create"), BtnKind::Primary).on_click(cx.listener(move |a, _, _, cx| {
+            let w = crate::actions::guard::GuardedWrite::create_role(guild, &crate::t!("gs.roles.new_name"));
+            a.blocked_write(w, cx);
+        })));
     let help = div()
         .mt(z(8.))
         .flex()
@@ -836,9 +885,18 @@ fn display(app: &PhoenixApp, s: &State, e: &Editor, cx: &mut Cx) -> AnyElement {
                         .flex()
                         .items_center()
                         .gap(z(16.))
-                        .child(div().size(z(80.)).flex_none().rounded(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWEST))).flex().items_center().justify_center().child(role_icon(s.guild.0, &role, 40.)))
-                        .child(crate::ui::controls::button("ss-role-icon-pick", crate::t!("gs.role.icon_pick"), BtnKind::Secondary))
-                        .child(crate::ui::controls::button("ss-role-icon-remove", crate::t!("gs.role.icon_remove"), BtnKind::Secondary)),
+                        .child(div().size(z(80.)).flex_none().rounded(z(8.)).bg(c(tok(idx::BACKGROUND_BASE_LOWEST))).flex().items_center().justify_center().child(draft_icon(s.guild.0, &role, e, 40.)))
+                        .child(crate::ui::controls::button("ss-role-icon-pick", crate::t!("gs.role.icon_pick"), BtnKind::Primary).on_click(cx.listener(|a, _, _, cx| pick_role_icon(a, cx))))
+                        .when(has_icon(&role, e), |d| {
+                            d.child(kit::critical_secondary("ss-role-icon-remove", crate::t!("gs.role.icon_remove")).h(z(40.)).px(z(16.)).on_click(cx.listener(|_, _, _, cx| {
+                                with_state(|s| {
+                                    if let Some(e) = s.role.as_mut() {
+                                        e.icon = Some(None);
+                                    }
+                                });
+                                cx.notify();
+                            })))
+                        }),
                 ),
         )
         .child(theme_preview(s.guild.0, &role, e))

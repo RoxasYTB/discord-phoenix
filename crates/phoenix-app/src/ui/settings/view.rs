@@ -184,7 +184,7 @@ fn my_account(app: &PhoenixApp, cx: &mut Cx) -> Div {
             .on_click(cx.listener(|a, _, _, cx| super::nested::open(a, super::nested::Nested::FamilyCenter, cx)))
             .into_any_element(),
     )];
-    let removal: Vec<(SharedString, AnyElement)> = [t("settings.account.disable"), t("settings.account.close")].into_iter().zip(acct::removal_rows()).collect();
+    let removal: Vec<(SharedString, AnyElement)> = [t("settings.account.disable"), t("settings.account.close")].into_iter().zip(acct::removal_rows(cx)).collect();
     let sections: Vec<Div> = [
         filtered(&q, Some(crate::t!("settings.account.info")), info_rows),
         filtered(&q, Some(crate::t!("settings.account.security")), security_rows),

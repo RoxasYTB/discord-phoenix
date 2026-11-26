@@ -68,10 +68,12 @@ pub fn overlay(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixAp
         return Some(screen);
     }
     let ov = app.nav.overlay.clone()?;
-    Some(match ov {
+    let above_modal = matches!(ov, Overlay::InviteLink { .. }) && crate::actions::with_modal(|m| m.is_some());
+    let el = match ov {
         Overlay::Topic(ch) => topic::render(app, ch, cx),
         other => crate::ui::invite::render(app, &other, window, cx),
-    })
+    };
+    Some(if above_modal { gpui::deferred(el).with_priority(26).into_any_element() } else { el })
 }
 
 impl PhoenixApp {

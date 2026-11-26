@@ -91,6 +91,31 @@ impl GuardedWrite {
         write(Method::POST, "/auth/verify/view-backup-codes-challenge", Some(json!({ "password": password })))
     }
 
+    pub fn disable_account(password: &str) -> Self {
+        write(Method::POST, "/users/@me/disable", Some(json!({ "password": password })))
+    }
+
+    pub fn delete_account(password: &str) -> Self {
+        write(Method::POST, "/users/@me/delete", Some(json!({ "password": password })))
+    }
+
+    pub fn create_role(guild: u64, name: &str) -> Self {
+        write(
+            Method::POST,
+            format!("/guilds/{guild}/roles"),
+            Some(json!({ "name": name, "color": 0, "colors": { "primary_color": 0, "secondary_color": null, "tertiary_color": null }, "permissions": "0" })),
+        )
+    }
+
+    pub fn prune(guild: u64, days: u32, roles: &[u64]) -> Self {
+        let roles: Vec<String> = roles.iter().map(u64::to_string).collect();
+        write(Method::POST, format!("/guilds/{guild}/prune"), Some(json!({ "days": days, "compute_prune_count": false, "include_roles": roles })))
+    }
+
+    pub fn create_webhook(channel: u64, name: &str) -> Self {
+        write(Method::POST, format!("/channels/{channel}/webhooks"), Some(json!({ "name": name })))
+    }
+
     pub fn wishlist_visibility(wishlist: &str, public: bool) -> Self {
         write(Method::PATCH, format!("/users/@me/wishlists/{wishlist}"), Some(json!({ "visibility": u8::from(public) })))
     }
@@ -240,6 +265,11 @@ mod tests {
             GuardedWrite::quest_enroll(8, 11),
             GuardedWrite::ring_call(9),
             GuardedWrite::add_recipient(9, 2),
+            GuardedWrite::disable_account("pw"),
+            GuardedWrite::delete_account("pw"),
+            GuardedWrite::create_role(5, "new role"),
+            GuardedWrite::prune(5, 7, &[6]),
+            GuardedWrite::create_webhook(6, "Captain Hook"),
         ]
     }
 
@@ -299,6 +329,16 @@ mod tests {
         assert_eq!((ring.method, ring.path.as_str(), ring.body), (Method::POST, "/channels/9/call/ring", Some(json!({ "recipients": null }))));
         let add = GuardedWrite::add_recipient(9, 2);
         assert_eq!((add.method, add.path.as_str(), add.body), (Method::PUT, "/channels/9/recipients/2", None));
+        let dis = GuardedWrite::disable_account("pw");
+        assert_eq!((dis.method, dis.path.as_str(), dis.body), (Method::POST, "/users/@me/disable", Some(json!({ "password": "pw" }))));
+        assert_eq!(GuardedWrite::delete_account("pw").path, "/users/@me/delete");
+        let role = GuardedWrite::create_role(5, "nouveau rôle");
+        assert_eq!(role.path, "/guilds/5/roles");
+        assert_eq!(role.body.unwrap()["permissions"], json!("0"));
+        let pr = GuardedWrite::prune(5, 30, &[6, 7]);
+        assert_eq!(pr.body, Some(json!({ "days": 30, "compute_prune_count": false, "include_roles": ["6", "7"] })));
+        let hook = GuardedWrite::create_webhook(6, "Spidey Bot");
+        assert_eq!((hook.method, hook.path.as_str()), (Method::POST, "/channels/6/webhooks"));
     }
 
     #[tokio::test]

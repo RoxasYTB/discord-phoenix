@@ -281,3 +281,25 @@ Client: the user's running Discord, settings opened over the current route with 
 | Appearance « Thème » header | `stack_TWWX0S` align center: h2 centred on the 40px « Aperçu du thème » button (title +3.8), pb 24, 1px spacer | `theme_title` items center, pb 15 | ✅ |
 | Server Boost card gem | `boostGemIcon_rH8mBz` BoostGem glyph (`M11.02 1.36…`) in `--guild-boosting-pink-refresh`, same glyph 16px in the secondary button | `chat/boost` | ✅ |
 | Subscriptions | Nitro Squad card and credits | `real_shots` now forwards `subscriptions()` (GETs only) | ✅ data in the offscreen render |
+
+## Boutons des paramètres (wt/btn-settings, 26/11)
+
+Inventaire : chaque `button(…)`, `btn_sm(…)` et élément `cursor_pointer` des paramètres utilisateur, du serveur, des salons et des rôles, sans `on_click` dans sa chaîne. Les écritures passent par `GuardedWrite` (refusées, toast `acct.blocked`).
+
+| bouton | comportement du client | Phoenix | état |
+|---|---|---|---|
+| Membres → Congédier | module 749872 (`a667d8c06f3b3cfa.js`) `P` : titre `zbyz7p—{serveur}`, select « Vu pour la dernière fois » 7 / 30 jours (`FM1dHS`), multi-select des rôles sous mon rôle le plus haut hors rôles gérés (`buoe17`), texte `f13az9` / `98cHOp` / `5WxHHp` / `xSDcLk`, Annuler / Congédier ; estimation par GET `prune`, POST `prune {days, compute_prune_count:false, include_roles}` | `people::prune_modal` ; compte par `GET /guilds/{id}/prune?days&include_roles` (sans effet de bord, le client passe par `prune/v2` + événement gateway) ; bouton critical-secondary | ✅ ; ⚠ parties `$b` du texte non mises en gras |
+| Invitations → Suspendre les invitations | `b1c598c00601cb65.js` `ec` : `w` ouvre la modale d'actions d'incident 671576 ; variante critical-secondary, primary « Activer les invitations » (`/dbw3H`) quand elles sont suspendues | `privacy::render_security_with` au-dessus des paramètres (`State::security`) | ✅ |
+| Invitations → Créer un lien d'invitation | `y` ouvre la modale d'invitation 137811 (`source: SETTINGS_INVITE`) | `open_invite_people`, superposée aux paramètres (deferred 26) | ✅ |
+| Bannissements → Rechercher | filtre déjà en direct | revient à la page 1 | ✅ ; ⚠ la modale de détail d'un banni (`UPcIa5`) n'est pas en cache |
+| Rôles → Création de rôle | `hb.A.createRole` (web) : POST `/guilds/{id}/roles` `{name:"nouveau rôle" (QBMHvB), color:0, colors:{primary_color:0,…}, permissions:"0"}` puis onglet Affichage | `GuardedWrite::create_role` | ✅ refusé |
+| Rôle → Choisir une image / Supprimer l'icône | `916d0bef82cfb632.js` : primary `mD1oGB` (modale 126061 si `ROLE_ICONS`, sinon upsell), critical-secondary `uY+Nk/` seulement si une icône existe ; `updateRole` envoie `icon` (data URI ou null) et `unicode_emoji` | sélecteur d'image → brouillon de l'éditeur (aperçu, barre d'enregistrement, `RoleEdit.icon` / `unicode_emoji: null`) ; sans `ROLE_ICONS` ouvre la page Boost | ✅ ; ⚠ choix d'un émoji Unicode (onglet de la modale 126061) non construit |
+| Autocollants → Débloquer plus d'emplacements | `os.A` (bouton de boost, `targetBoostedGuildTier`) | `boost_layer::open` au-dessus des paramètres | ✅ |
+| Intégrations → Webhooks → Nouveau webhook | `t1` `p` : `eD.A.create(guild, channel)` = POST `/channels/{premier salon}/webhooks {name: "Spidey Bot" ou "Captain Hook"}` | `GuardedWrite::create_webhook` sur le premier salon textuel | ✅ refusé |
+| Intégrations → Salons suivis → En savoir plus | aucun salon suivi : `open(getArticleURL(CHANNEL_FOLLOWING))`, article 360028384531 | ouvre l'article | ✅ |
+| Intégrations → Twitch / YouTube | `m.A({platformType})` : flux OAuth de connexion | non branché | ❌ (GET `/connections/{type}/authorize` puis navigateur, à faire) |
+| Analyses → Aller sur les analyses de serveur | `cB` : POST `/handoff` puis portail développeur | ouvre `https://discord.com/developers/servers/{id}` sans jeton de transfert (le POST est une écriture) | ✅ ; ⚠ connexion à refaire dans le navigateur |
+| Présence → Afficher la page | `window.open(uL + slug)` | `open_url(canonical_url)` | ✅ |
+| Présence → En ajouter une autre | ajoute `""` aux `socialLinks` (max 9, désactivé au-delà) | ligne vide, barre d'enregistrement | ✅ |
+| Présence → Uploader un arrière-plan / Supprimer | `lt.A` + `le.A` : `discovery_splash` dans le brouillon du serveur | sélecteur d'image, aperçu, « Supprimer » visible seulement avec une image ; PATCH `discovery_splash` refusé | ✅ |
+| Compte → Désactiver / Supprimer le compte | `52b6e35ba37f71f0.js` `y9` : alerte `vJiTOL` / `UyVVan` si l'utilisateur possède un serveur (et `Y++oNe` pour les équipes), sinon modale de mot de passe 662758 (titre `goXv9g` / `xca2ts`, texte `gk7h32` / `FB4H1D`, critical-primary) ; POST `/users/@me/disable` ou `/delete {password}` | `account::start_removal`, `Confirm::DisableAccount` / `DeleteAccount` | ✅ refusé ; ⚠ la vérification des équipes (`GET /teams`) n'est pas faite |

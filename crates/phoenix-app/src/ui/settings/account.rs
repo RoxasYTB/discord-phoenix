@@ -173,12 +173,49 @@ pub(super) fn standing_rows(info: &AccountInfo, cx: &mut Cx) -> Vec<AnyElement> 
     rows
 }
 
-pub(super) fn removal_rows() -> Vec<AnyElement> {
+pub fn removal_flow(owns_server: bool, delete: bool) -> Option<crate::ui::modals::account_edit::Flow> {
+    use crate::ui::modals::account_edit::{Confirm, Flow};
+    (!owns_server).then_some(Flow::Confirm(if delete { Confirm::DeleteAccount } else { Confirm::DisableAccount }))
+}
+
+fn start_removal(a: &mut PhoenixApp, delete: bool, window: &mut gpui::Window, cx: &mut Cx) {
+    let owns = a.guilds.iter().any(|g| g.owner == Some(a.me.id));
+    match removal_flow(owns, delete) {
+        Some(flow) => a.open_account_edit(flow, window, cx),
+        None => {
+            crate::actions::open_modal(
+                crate::ui::modals::Modal::Form(crate::ui::modals::Form {
+                    title: crate::t!("acct.owns_servers_title"),
+                    subtitle: Some(crate::t!("acct.owns_servers_body")),
+                    fields: Vec::new(),
+                    choices: Vec::new(),
+                    choice: None,
+                    check: None,
+                    submit: crate::t!("common.okay"),
+                    danger: false,
+                    on_submit: std::rc::Rc::new(|_, _, _, _| {}),
+                    preview: None,
+                    width: 440.,
+                }),
+                Some(window),
+            );
+            cx.notify();
+        }
+    }
+}
+
+pub(super) fn removal_rows(cx: &mut Cx) -> Vec<AnyElement> {
     let disable = controls::button("acct-disable", crate::t!("settings.account.disable_btn"), BtnKind::Secondary)
         .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
         .bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_DEFAULT)))
-        .border_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BORDER_DEFAULT)));
-    let delete = controls::button("acct-delete", crate::t!("settings.account.delete_btn"), BtnKind::Critical);
+        .border_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BORDER_DEFAULT)))
+        .hover(|s| {
+            s.bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_HOVER)))
+                .border_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BORDER_HOVER)))
+                .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_HOVER)))
+        })
+        .on_click(cx.listener(|a, _, w, cx| start_removal(a, false, w, cx)));
+    let delete = controls::button("acct-delete", crate::t!("settings.account.delete_btn"), BtnKind::Critical).on_click(cx.listener(|a, _, w, cx| start_removal(a, true, w, cx)));
     vec![
         controls::control_item(crate::t!("settings.account.disable"), Some(crate::t!("settings.account.disable_d")), Some(disable.into_any_element()))
             .into_any_element(),
@@ -252,6 +289,14 @@ pub fn sessions() -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn removal_follows_the_client() {
+        use crate::ui::modals::account_edit::{Confirm, Flow};
+        assert_eq!(super::removal_flow(true, true), None);
+        assert_eq!(super::removal_flow(false, false), Some(Flow::Confirm(Confirm::DisableAccount)));
+        assert_eq!(super::removal_flow(false, true), Some(Flow::Confirm(Confirm::DeleteAccount)));
+    }
+
     #[test]
     fn masks_like_the_client() {
         assert_eq!(super::mask_email("abc@gmail.com"), "***@gmail.com");

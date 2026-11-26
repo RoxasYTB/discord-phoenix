@@ -75,6 +75,10 @@ fn stat(title_key: &str, value: String, delta: Option<f64>, info: bool, left: bo
         .child(trend(delta))
 }
 
+pub fn portal_url(guild: Id) -> String {
+    format!("https://discord.com/developers/servers/{}", guild.0)
+}
+
 pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let (start, end) = window(guild);
     let call = |kind| ServerCall::Analytics { guild: sf(guild), kind, start: start.clone(), end: end.clone() };
@@ -93,7 +97,7 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                 .items_center()
                 .gap(z(20.))
                 .child(div().w(z(350.)).text_center().child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.analytics_external"))))
-                .child(button("gs2-analytics-open", crate::t!("gs2.analytics_open"), BtnKind::Primary)),
+                .child(button("gs2-analytics-open", crate::t!("gs2.analytics_open"), BtnKind::Primary).on_click(move |_, _, cx| cx.open_url(&portal_url(guild)))),
         );
     let (Some(eng), Some(growth), Some(ret)) = (eng, growth, ret) else { return p.child(super::loading()).into_any_element() };
     let v = weekly(&eng, "visitors");

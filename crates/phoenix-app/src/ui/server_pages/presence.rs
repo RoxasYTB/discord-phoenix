@@ -89,9 +89,15 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                 .flex()
                 .items_center()
                 .child(div().flex_1().min_w_0().child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, url.clone()).truncate()))
-                .child(button_sm("gs2-copy-url", crate::t!("gs2.copy"), BtnKind::Secondary).on_click(move |_, _, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(url.clone())))),
+                .child(button_sm("gs2-copy-url", crate::t!("gs2.copy"), BtnKind::Secondary).on_click({
+                    let url = url.clone();
+                    move |_, _, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(url.clone()))
+                })),
         )
-        .child(div().mt(z(16.)).flex().child(button_sm("gs2-open-page", crate::t!("gs2.view_page"), BtnKind::Primary)))
+        .child(div().mt(z(16.)).flex().child(button_sm("gs2-open-page", crate::t!("gs2.view_page"), BtnKind::Primary).on_click({
+            let url = url.clone();
+            move |_, _, cx| cx.open_url(&url)
+        })))
         .child(divider(40.));
     let primary = meta.get("primary_category_id").and_then(Value::as_u64).unwrap_or(0);
     let mut subs = div().flex().flex_wrap().gap(z(4.));
@@ -105,7 +111,13 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
         .child(div().mt(z(40.)).child(label(crate::t!("gs2.subcategories"))))
         .child(div().mt(z(8.)).min_h(z(40.)).p(z(6.)).rounded(z(8.)).border_1().border_color(t(idx::INPUT_BORDER_DEFAULT)).bg(t(idx::INPUT_BACKGROUND_DEFAULT)).child(subs))
         .child(divider(40.));
-    let splash = g.get("discovery_splash").and_then(Value::as_str).map(|h| format!("https://cdn.discordapp.com/discovery-splashes/{}/{h}.jpg?size=512", guild.0));
+    let picked = splash_draft(guild);
+    let splash: Option<gpui::ImageSource> = match &picked {
+        Some(p) if p.is_empty() => None,
+        Some(p) => Some(std::path::PathBuf::from(p).into()),
+        None => g.get("discovery_splash").and_then(Value::as_str).map(|h| SharedString::from(format!("https://cdn.discordapp.com/discovery-splashes/{}/{h}.jpg?size=512", guild.0)).into()),
+    };
+    let has_splash = splash.is_some();
     p = p.child(
         div()
             .flex()
@@ -117,9 +129,21 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                     .flex()
                     .flex_col()
                     .gap(z(12.))
-                    .child(div().h(z(157.)).rounded(z(8.)).overflow_hidden().bg(t(idx::BACKGROUND_MOD_STRONG)).children(splash.map(|u| gpui::img(SharedString::from(u)).size_full().object_fit(gpui::ObjectFit::Cover))))
-                    .child(div().flex().justify_center().child(text(14., 14., FontWeight::NORMAL, idx::TEXT_LINK, crate::t!("gs2.remove"))))
-                    .child(button_sm("gs2-upload-cover", crate::t!("gs2.upload_bg"), BtnKind::Secondary)),
+                    .child(div().h(z(157.)).rounded(z(8.)).overflow_hidden().bg(t(idx::BACKGROUND_MOD_STRONG)).children(splash.map(|u| gpui::img(u).size_full().object_fit(gpui::ObjectFit::Cover))))
+                    .when(has_splash, |d| {
+                        d.child(div().flex().justify_center().child(
+                            div().id("gs2-remove-cover").cursor_pointer().hover(|s| s.underline()).child(text(14., 14., FontWeight::NORMAL, idx::TEXT_LINK, crate::t!("gs2.remove"))).on_click(cx.listener(move |_, _, _, cx| {
+                                set_splash_draft(guild, String::new());
+                                cx.notify();
+                            })),
+                        ))
+                    })
+                    .child(button_sm("gs2-upload-cover", crate::t!("gs2.upload_bg"), BtnKind::Secondary).w_full().on_click(cx.listener(move |_, _, _, cx| {
+                        crate::ui::file_pick::pick(&["png", "jpg", "jpeg", "webp", "gif"], cx, move |_, path, cx| {
+                            set_splash_draft(guild, path.to_string_lossy().into_owned());
+                            cx.notify();
+                        });
+                    }))),
             ),
     );
     let sect = |k: &str| content.get(k).cloned().unwrap_or(Value::Null);
@@ -177,7 +201,8 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
         .child(divider(40.))
         .child(label(crate::t!("gs2.social")))
         .child(div().mt(z(4.)).child(description(crate::t!("gs2.social_desc"))));
-    for (i, l) in meta.get("social_links").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).enumerate() {
+    let links = social_rows(&meta, social_extra(guild));
+    for (i, l) in links.iter().map(String::as_str).enumerate() {
         let (plat, prefix) = social_platform(l);
         p = p.child(
             div()
@@ -193,12 +218,23 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
         );
     }
     p = p
-        .child(div().mt(z(20.)).flex().child(button_sm("gs2-social-add", crate::t!("gs2.add_another"), BtnKind::Secondary)))
+        .child(div().mt(z(20.)).flex().child({
+            let full = links.len() >= MAX_SOCIAL;
+            button_sm("gs2-social-add", crate::t!("gs2.add_another"), BtnKind::Secondary).when(full, |b| b.opacity(0.5).cursor_not_allowed()).on_click(cx.listener(move |_, _, _, cx| {
+                if !full {
+                    super::with(|s| {
+                        let n = s.text.get(&(guild, "pr-social-extra".to_owned())).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+                        s.text.insert((guild, "pr-social-extra".to_owned()), (n + 1).to_string());
+                    });
+                    cx.notify();
+                }
+            }))
+        }))
         .child(div().mt(z(80.)).child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.presence_remove_hint"))));
     let draft = Draft::read(guild, &meta, cx);
     let orig = Draft::original(&g, &meta);
-    if let Some(d) = draft.filter(|d| *d != orig) {
-        let reset: crate::ui::modals::settings_layout::Act = std::rc::Rc::new(move |_, _, _| super::forget_prefix(guild, "pr-"));
+    if let Some(d) = draft.filter(|d| *d != orig || picked.is_some()) {
+        let reset: crate::ui::modals::settings_layout::Act = std::rc::Rc::new(move |_, _, _| forget_draft(guild));
         let reasons0: Vec<Value> = meta.get("reasons_to_join").and_then(Value::as_array).cloned().unwrap_or_default();
         let save: crate::ui::modals::settings_layout::Act = std::rc::Rc::new(move |a, _, cx| {
             let (meta_patch, desc) = d.patch(&orig, &reasons0);
@@ -212,11 +248,47 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
                     cx,
                 );
             }
-            super::forget_prefix(guild, "pr-");
+            if let Some(w) = splash_draft(guild).map(|p| splash_write(guild, &p)) {
+                a.blocked_write(w, cx);
+            }
+            forget_draft(guild);
         });
         p = p.child(div().mt(z(16.)).child(crate::ui::modals::settings_layout::unsaved_bar(reset, save, cx)));
     }
     p.into_any_element()
+}
+
+pub const MAX_SOCIAL: usize = 9;
+
+pub fn social_rows(meta: &Value, extra: usize) -> Vec<String> {
+    let mut v: Vec<String> = meta.get("social_links").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect();
+    v.extend(std::iter::repeat_n(String::new(), extra));
+    v.truncate(MAX_SOCIAL);
+    v
+}
+
+fn social_extra(guild: Id) -> usize {
+    super::with(|s| s.text.get(&(guild, "pr-social-extra".to_owned())).and_then(|v| v.parse().ok()).unwrap_or(0))
+}
+
+fn splash_draft(guild: Id) -> Option<String> {
+    super::with(|s| s.text.get(&(guild, "pr-splash".to_owned())).cloned())
+}
+
+fn set_splash_draft(guild: Id, path: String) {
+    super::with(|s| {
+        s.text.insert((guild, "pr-splash".to_owned()), path);
+    });
+}
+
+fn forget_draft(guild: Id) {
+    super::forget_prefix(guild, "pr-");
+    super::with(|s| s.text.retain(|(g, k), _| !(*g == guild && k.starts_with("pr-"))));
+}
+
+pub fn splash_write(guild: Id, path: &str) -> crate::actions::guard::GuardedWrite {
+    let data = (!path.is_empty()).then(|| crate::ui::file_pick::data_uri(std::path::Path::new(path))).flatten();
+    crate::actions::guard::GuardedWrite::edit_guild(guild.0, serde_json::json!({ "discovery_splash": data }))
 }
 
 fn social_display(l: &str, prefix: &str) -> String {
@@ -243,7 +315,7 @@ impl Draft {
     }
 
     fn read(guild: Id, meta: &Value, cx: &gpui::App) -> Option<Self> {
-        let social_n = meta.get("social_links").and_then(Value::as_array).map_or(0, |a| a.len());
+        let social_n = social_rows(meta, social_extra(guild)).len();
         let desc = super::area_value(guild, "pr-desc", cx)?;
         Some(Self {
             description: desc,
@@ -295,6 +367,16 @@ pub fn social_platform(url: &str) -> (&'static str, &'static str) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn social_rows_grow_up_to_nine() {
+        let meta = json!({ "social_links": ["https://x.com/a"] });
+        assert_eq!(social_rows(&meta, 2), vec!["https://x.com/a".to_owned(), String::new(), String::new()]);
+        assert_eq!(social_rows(&meta, 20).len(), MAX_SOCIAL);
+        let w = splash_write(Id(5), "");
+        assert_eq!((w.path.as_str(), w.body), ("/guilds/5", Some(json!({ "discovery_splash": null }))));
+        assert!(w.refusal().is_write_blocked());
+    }
 
     #[test]
     fn presence_helpers() {

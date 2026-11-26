@@ -155,6 +155,11 @@ pub(crate) fn with_sec(f: impl FnOnce(&mut Security)) {
                 f(s)
             }
         }
+        Some(Modal::ServerSettings(ss)) => {
+            if let Some(s) = ss.security.as_mut() {
+                f(s)
+            }
+        }
         _ => {}
     });
 }

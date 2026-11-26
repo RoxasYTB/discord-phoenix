@@ -1556,7 +1556,7 @@ impl Render for PhoenixApp {
                 div().size_full().relative().left(gpui::px(dx)).top(gpui::px(dy)).child(body)
             })
             .children(ui::settings::render(self, window, cx))
-            .children(ui::boost_layer::render(self, window, cx))
+            .children(ui::boost_layer::render(self, window, cx).map(|e| if crate::actions::with_modal(|m| m.is_some()) { gpui::deferred(e).with_priority(27).into_any_element() } else { e }))
             .children(ui::chat::panels::overlays(self, window, cx))
             .children(ui::home::overlay(self, window, cx))
             .when_some(self.switcher.as_ref(), |d, sw| d.child(ui::switcher::render(self, sw, cx)))

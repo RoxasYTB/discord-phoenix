@@ -195,6 +195,8 @@ pub struct State {
     pub uploads: HashMap<&'static str, std::path::PathBuf>,
     pub ban_page: usize,
     pub access: access::Pending,
+    pub prune: Option<people::Prune>,
+    pub security: Option<super::privacy::Security>,
     pub subs: Vec<gpui::Subscription>,
 }
 
@@ -220,6 +222,8 @@ impl State {
             uploads: HashMap::new(),
             ban_page: 0,
             access: access::Pending::default(),
+            prune: None,
+            security: None,
             subs: Vec::new(),
         }
     }
@@ -568,6 +572,15 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
         .child(shell)
         .children(crate::ui::server_pages::modal(app, cx).map(|m| gpui::deferred(m).with_priority(25)))
         .children((s.key() == "menu.gs.access").then(|| access::modal(app, s, cx)).flatten().map(|m| gpui::deferred(m).with_priority(25)))
+        .children(s.prune.as_ref().map(|p| gpui::deferred(people::prune_modal(app, s, p, cx)).with_priority(25)))
+        .children(s.security.as_ref().map(|sec| {
+            let e = cx.entity();
+            let close: crate::ui::modal::Action = Rc::new(move |_, cx| {
+                with_state(|s| s.security = None);
+                e.update(cx, |_, cx| cx.notify());
+            });
+            gpui::deferred(super::privacy::render_security_with(sec, close, true, cx)).with_priority(25)
+        }))
         .into_any_element()
 }
 

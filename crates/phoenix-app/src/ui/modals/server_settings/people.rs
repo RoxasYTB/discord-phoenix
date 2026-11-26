@@ -198,7 +198,10 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .flex_col()
         .gap(z(16.))
         .child(kit::page_head(crate::t!("menu.gs.members"), Some(crate::t!("gs.members.desc", n = total))))
-        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(s.inputs.get("member_search")).flex_1()).child(kit::btn_sm("ss-members-prune", crate::t!("gs.members.prune"), BtnKind::Secondary)))
+        .child(div().flex().items_center().gap(z(16.)).child(kit::search_box(s.inputs.get("member_search")).flex_1()).child(kit::critical_secondary("ss-members-prune", crate::t!("gs.members.prune")).h(z(32.)).px(z(12.)).on_click(cx.listener(|_, _, _, cx| {
+            with_state(|s| s.prune = Some(Prune::default()));
+            cx.notify();
+        }))))
         .child(div().rounded(z(8.)).border_1().border_color(c(tok(idx::BORDER_SUBTLE))).flex().flex_col().child(head).child(body))
         .into_any_element()
 }
@@ -343,7 +346,13 @@ pub fn invites(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 ),
         );
     }
-    let _ = app;
+    let guild = s.guild;
+    let paused = app.backend.guild_features(guild).iter().any(|f| f == "INVITES_DISABLED");
+    let pause = if paused {
+        crate::ui::controls::button("ss-inv-pause", crate::t!("gs.inv.resume"), BtnKind::Primary)
+    } else {
+        kit::critical_secondary("ss-inv-pause", crate::t!("gs.inv.pause")).h(z(40.)).px(z(16.)).text_size(z(14.))
+    };
     div()
         .flex()
         .flex_col()
@@ -357,8 +366,12 @@ pub fn invites(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 .items_center()
                 .gap(z(16.))
                 .child(text(crate::t!("gs.inv.active"), 14., 18.7, FontWeight::MEDIUM, idx::TEXT_STRONG).flex_1())
-                .child(crate::ui::controls::button("ss-inv-pause", crate::t!("gs.inv.pause"), BtnKind::Secondary))
-                .child(crate::ui::controls::button("ss-inv-create", crate::t!("gs.inv.create"), BtnKind::Primary)),
+                .child(pause.on_click(cx.listener(move |a, _, _, cx| {
+                    let sec = a.security_state(guild);
+                    with_state(|s| s.security = Some(sec));
+                    cx.notify();
+                })))
+                .child(crate::ui::controls::button("ss-inv-create", crate::t!("gs.inv.create"), BtnKind::Primary).on_click(cx.listener(move |a, _, _, cx| a.open_invite_people(guild, cx)))),
         )
         .child(head)
         .child(body)
@@ -483,17 +496,246 @@ pub fn bans(_app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 .items_center()
                 .gap(z(8.))
                 .child(div().flex_1().min_w_0().child(kit::search_box(s.inputs.get("ban_search"))))
-                .child(crate::ui::controls::button("ss-ban-search", crate::t!("gs.bans.search_btn"), BtnKind::Primary)),
+                .child(crate::ui::controls::button("ss-ban-search", crate::t!("gs.bans.search_btn"), BtnKind::Primary).on_click(cx.listener(|_, _, _, cx| {
+                    super::with_state(|s| s.ban_page = 0);
+                    cx.notify();
+                }))),
         )
         .child(body)
         .child(pager)
         .into_any_element()
 }
 
+pub const PRUNE_DAYS: [u32; 2] = [7, 30];
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Prune {
+    pub days: u32,
+    pub roles: Vec<u64>,
+    pub days_open: bool,
+    pub roles_open: bool,
+}
+
+impl Default for Prune {
+    fn default() -> Self {
+        Self { days: PRUNE_DAYS[0], roles: Vec::new(), days_open: false, roles_open: false }
+    }
+}
+
+impl Prune {
+    pub fn count_call(&self, guild: Id) -> phoenix_api::rest::guild_server::ServerCall {
+        let mut roles: Vec<u64> = self.roles.clone();
+        roles.sort_unstable();
+        phoenix_api::rest::guild_server::ServerCall::PruneCount { guild: sf(guild), days: self.days, roles: roles.into_iter().map(Snowflake).collect() }
+    }
+
+    pub fn write(&self, guild: Id) -> crate::actions::guard::GuardedWrite {
+        crate::actions::guard::GuardedWrite::prune(guild.0, self.days, &self.roles)
+    }
+
+    pub fn toggle(&mut self, role: u64) {
+        if let Some(i) = self.roles.iter().position(|r| *r == role) {
+            self.roles.remove(i);
+        } else {
+            self.roles.push(role);
+        }
+    }
+}
+
+pub fn prunable_roles(roles: &[Value], guild: Id, mine: &[u64], owner: bool) -> Vec<(u64, String)> {
+    let pos = |r: &Value| r.get("position").and_then(Value::as_i64).unwrap_or(0);
+    let top = roles.iter().filter(|r| mine.contains(&kit::n(r, "id"))).map(pos).max().unwrap_or(0);
+    let mut v: Vec<&Value> = roles
+        .iter()
+        .filter(|r| kit::n(r, "id") != guild.0 && !r.get("managed").and_then(Value::as_bool).unwrap_or(false) && (owner || pos(r) < top))
+        .collect();
+    v.sort_by_key(|r| (-pos(r), kit::n(r, "id")));
+    v.into_iter().map(|r| (kit::n(r, "id"), kit::s(r, "name"))).collect()
+}
+
+fn prune_text(p: &Prune, count: Option<u64>) -> SharedString {
+    let days = p.days.to_string();
+    let members = count.map_or_else(|| "-1".to_owned(), |n| n.to_string());
+    let key = match (p.roles.is_empty(), count.is_some()) {
+        (true, true) => "gs.prune.count",
+        (true, false) => "gs.prune.count_loading",
+        (false, true) => "gs.prune.count_roles",
+        (false, false) => "gs.prune.count_roles_loading",
+    };
+    crate::i18n::t(key, &[("members", &members), ("days", &days)])
+}
+
+fn prune_option(id: (&'static str, usize), label: SharedString, on: bool, multi: bool) -> gpui::Stateful<gpui::Div> {
+    let name = div().flex_1().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(label);
+    if multi {
+        return crate::ui::controls::checkbox_option_el(id, name.into_any_element(), on).h(z(40.)).px(z(8.)).items_center().rounded(z(4.)).hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))));
+    }
+    div()
+        .id(id)
+        .h(z(40.))
+        .pl(z(8.))
+        .pr(z(4.))
+        .rounded(z(4.))
+        .flex()
+        .items_center()
+        .gap(z(8.))
+        .cursor_pointer()
+        .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
+        .child(name)
+        .when(on, |d| d.child(gpui::svg().path(crate::icons::path("circle-check")).flex_none().size(z(20.)).text_color(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW)))))
+}
+
+fn prune_list(id: &'static str, rows: Vec<AnyElement>) -> AnyElement {
+    gpui::deferred(
+        div()
+            .id(id)
+            .absolute()
+            .top(z(44.))
+            .left_0()
+            .w_full()
+            .max_h(z(400.))
+            .overflow_y_scroll()
+            .p(z(4.))
+            .rounded(z(8.))
+            .border_1()
+            .border_color(c(tok(idx::BORDER_SUBTLE)))
+            .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
+            .occlude()
+            .children(rows),
+    )
+    .with_priority(40)
+    .into_any_element()
+}
+
+fn with_prune(f: impl FnOnce(&mut Prune)) {
+    with_state(|s| {
+        if let Some(p) = s.prune.as_mut() {
+            f(p)
+        }
+    });
+}
+
+pub fn prune_modal(app: &PhoenixApp, s: &State, p: &Prune, cx: &mut Cx) -> AnyElement {
+    let guild = s.guild;
+    let g = app.guilds.iter().find(|g| g.id == guild);
+    let name = g.map(|g| g.name.to_string()).unwrap_or_default();
+    let owner = g.and_then(|g| g.owner) == Some(app.me.id);
+    let mine: Vec<u64> = app.members.get(&guild).into_iter().flatten().find(|m| m.user == app.me.id).map(|m| m.roles.iter().map(|r| r.0).collect()).unwrap_or_default();
+    let roles = prunable_roles(s.list("roles"), guild, &mine, owner);
+    let count = crate::ui::server_pages::fetch(app, guild, p.count_call(guild), cx).and_then(|v| v.get("pruned").and_then(Value::as_u64));
+    let e = cx.entity();
+    let close: crate::ui::modal::Action = std::rc::Rc::new(move |_, cx| {
+        with_state(|s| s.prune = None);
+        e.update(cx, |_, cx| cx.notify());
+    });
+    let days_label = |d: u32| crate::i18n::t("gs.prune.days", &[("days", &d.to_string())]);
+    let mut days_box = div().relative().w_full().child(
+        kit::select_box("ss-prune-days", days_label(p.days).into_any_element(), p.days_open).on_click(cx.listener(|_, _, _, cx| {
+            with_prune(|p| {
+                p.days_open = !p.days_open;
+                p.roles_open = false;
+            });
+            cx.notify();
+        })),
+    );
+    if p.days_open {
+        let rows = PRUNE_DAYS
+            .iter()
+            .enumerate()
+            .map(|(i, d)| {
+                let d = *d;
+                prune_option(("ss-prune-day", i), days_label(d), d == p.days, false)
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        with_prune(|p| {
+                            p.days = d;
+                            p.days_open = false;
+                        });
+                        cx.notify();
+                    }))
+                    .into_any_element()
+            })
+            .collect();
+        days_box = days_box.child(prune_list("ss-prune-days-list", rows));
+    }
+    let picked: Vec<String> = roles.iter().filter(|(id, _)| p.roles.contains(id)).map(|(_, n)| n.clone()).collect();
+    let mut roles_box = div().relative().w_full().child(
+        kit::select_box("ss-prune-roles", SharedString::from(picked.join(", ")).into_any_element(), p.roles_open).on_click(cx.listener(|_, _, _, cx| {
+            with_prune(|p| {
+                p.roles_open = !p.roles_open;
+                p.days_open = false;
+            });
+            cx.notify();
+        })),
+    );
+    if p.roles_open {
+        let rows = roles
+            .iter()
+            .enumerate()
+            .map(|(i, (id, n))| {
+                let id = *id;
+                prune_option(("ss-prune-role", i), n.clone().into(), p.roles.contains(&id), true)
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        with_prune(|p| p.toggle(id));
+                        cx.notify();
+                    }))
+                    .into_any_element()
+            })
+            .collect();
+        roles_box = roles_box.child(prune_list("ss-prune-roles-list", rows));
+    }
+    let body = div()
+        .flex()
+        .flex_col()
+        .gap(z(16.))
+        .child(div().flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.prune.last_seen"), 14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(days_box))
+        .child(div().flex().flex_col().gap(z(8.)).child(text(crate::t!("gs.prune.roles"), 14., 18., FontWeight::MEDIUM, idx::TEXT_STRONG)).child(roles_box))
+        .child(text(prune_text(p, count), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).whitespace_normal());
+    let c2 = close.clone();
+    let c3 = close.clone();
+    let footer = div()
+        .w_full()
+        .flex()
+        .justify_end()
+        .gap(z(8.))
+        .child(crate::ui::controls::button("ss-prune-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click(move |_, w, cx| c2(w, cx)))
+        .child(crate::ui::controls::button("ss-prune-ok", crate::t!("gs.prune.submit"), BtnKind::Primary).on_click(cx.listener(move |a, _, w, cx| {
+            let draft = with_state(|s| s.prune.clone()).flatten();
+            c3(w, cx);
+            if let Some(d) = draft {
+                a.blocked_write(d.write(guild), cx);
+            }
+        })));
+    crate::ui::modals::card_with(440., format!("{}\u{2014}{name}", crate::t!("gs.prune.title")).into(), None, body.into_any_element(), Some(footer.into_any_element()), close)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn prune_follows_the_client() {
+        let roles = vec![
+            json!({ "id": "1", "name": "@everyone", "position": 0 }),
+            json!({ "id": "2", "name": "Bot", "position": 3, "managed": true }),
+            json!({ "id": "3", "name": "Mod", "position": 2 }),
+            json!({ "id": "4", "name": "Membre", "position": 1 }),
+            json!({ "id": "5", "name": "Admin", "position": 4 }),
+        ];
+        assert_eq!(prunable_roles(&roles, Id(1), &[3], false), vec![(4, "Membre".to_owned())]);
+        assert_eq!(prunable_roles(&roles, Id(1), &[], true).iter().map(|r| r.0).collect::<Vec<_>>(), [5, 3, 4]);
+        let mut p = Prune::default();
+        assert_eq!(p.days, 7);
+        p.toggle(4);
+        p.toggle(3);
+        p.toggle(4);
+        assert_eq!(p.roles, [3]);
+        let r = phoenix_api::rest::guild_server::build(&p.count_call(Id(9)));
+        assert_eq!((r.method.as_str(), r.path.as_str()), ("GET", "/guilds/9/prune?days=7&include_roles=3"));
+        let w = p.write(Id(9));
+        assert_eq!((w.method.as_str(), w.path.as_str()), ("POST", "/guilds/9/prune"));
+        assert!(w.refusal().is_write_blocked());
+    }
 
     #[test]
     fn bans_paginate_by_100() {

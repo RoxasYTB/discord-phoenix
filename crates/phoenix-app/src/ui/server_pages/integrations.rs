@@ -74,6 +74,16 @@ fn icon_tile(name: &str) -> gpui::Div {
     div().size(z(48.)).flex_none().rounded_full().bg(t(idx::CARD_BACKGROUND_DEFAULT)).flex().items_center().justify_center().child(icon(name, 24., idx::ICON_SUBTLE))
 }
 
+pub const CHANNEL_FOLLOWING_ARTICLE: &str = "360028384531";
+
+pub fn following_article() -> String {
+    format!("https://support.discord.com/hc/{}/articles/{CHANNEL_FOLLOWING_ARTICLE}", crate::i18n::locale().to_lowercase())
+}
+
+pub fn webhook_name(seed: u64) -> &'static str {
+    ["Spidey Bot", "Captain Hook"][(seed % 2) as usize]
+}
+
 fn card_row(id: impl Into<gpui::ElementId>, lead_el: AnyElement, head: SharedString, sub: gpui::Div, trailing: AnyElement) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id.into())
@@ -150,7 +160,7 @@ fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
             icon_tile("megaphone").into_any_element(),
             crate::t!("gs2.followed"),
             text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!("gs2.n_channels", n = followed)),
-            button_sm("gs2-int-followed-more", crate::t!("gs2.learn_more"), BtnKind::Primary).into_any_element(),
+            button_sm("gs2-int-followed-more", crate::t!("gs2.learn_more"), BtnKind::Primary).on_click(|_, _, cx| cx.open_url(&following_article())).into_any_element(),
         ));
     for (n, (name, desc, cta, col)) in
         [("Twitch", "gs2.twitch_desc", "gs2.twitch_connect", 0x9146FFu32), ("YouTube", "gs2.youtube_desc", "gs2.youtube_connect", 0xE3302Fu32)].into_iter().enumerate()
@@ -247,7 +257,12 @@ fn webhooks(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
     let mut p = page()
         .child(breadcrumb(guild, crate::t!("gs2.webhooks"), cx))
         .child(div().mt(z(20.)).child(lead(crate::t!("gs2.webhooks_lead"))))
-        .child(div().mt(z(28.)).mb(z(24.)).flex().child(button_sm("gs2-new-webhook", crate::t!("gs2.new_webhook"), BtnKind::Primary)));
+        .child(div().mt(z(28.)).mb(z(24.)).flex().child(button_sm("gs2-new-webhook", crate::t!("gs2.new_webhook"), BtnKind::Primary).on_click(cx.listener(move |a, _, _, cx| {
+            let channel = a.guild_channels.get(&guild).and_then(|l| l.iter().copied().find(|c| a.channels.get(c).is_some_and(|c| c.kind == crate::model::ChannelKind::Text)));
+            if let Some(ch) = channel {
+                a.blocked_write(crate::actions::guard::GuardedWrite::create_webhook(ch.0, webhook_name(crate::actions::now_unix())), cx);
+            }
+        }))));
     let Some(hooks) = hooks else { return p.child(super::loading()).into_any_element() };
     for (ch, list) in group_by_channel(&hooks) {
         p = p.child(
@@ -489,6 +504,15 @@ fn app_page(app: &PhoenixApp, guild: Id, id: &str, cx: &mut Context<PhoenixApp>)
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn webhook_and_following_follow_the_client() {
+        assert_eq!(super::webhook_name(0), "Spidey Bot");
+        assert_eq!(super::webhook_name(1), "Captain Hook");
+        assert!(super::following_article().ends_with("/articles/360028384531"));
+        let w = crate::actions::guard::GuardedWrite::create_webhook(5, super::webhook_name(3));
+        assert!(w.refusal().is_write_blocked());
+    }
+
     use super::*;
     use serde_json::json;
 

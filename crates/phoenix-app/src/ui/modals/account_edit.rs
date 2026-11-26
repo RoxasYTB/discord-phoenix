@@ -26,6 +26,8 @@ pub enum Confirm {
     RemovePhone,
     DisableSms,
     BackupCodes,
+    DisableAccount,
+    DeleteAccount,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,6 +179,8 @@ pub fn write_for(flow: Flow, values: &[String], phone: &str) -> Option<GuardedWr
         Flow::Confirm(Confirm::RemovePhone) => GuardedWrite::remove_phone(v(0)),
         Flow::Confirm(Confirm::DisableSms) => GuardedWrite::disable_sms(v(0)),
         Flow::Confirm(Confirm::BackupCodes) => GuardedWrite::backup_codes_challenge(v(0)),
+        Flow::Confirm(Confirm::DisableAccount) => GuardedWrite::disable_account(v(0)),
+        Flow::Confirm(Confirm::DeleteAccount) => GuardedWrite::delete_account(v(0)),
         Flow::RemoveTotp => GuardedWrite::disable_totp(),
         _ => return None,
     })
@@ -493,7 +497,14 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
             false,
         ),
         Flow::PhonePassword | Flow::Confirm(_) => {
+            let plain = match s.flow {
+                Flow::Confirm(Confirm::DisableAccount) => Some(t("acct.disable_account_body")),
+                Flow::Confirm(Confirm::DeleteAccount) => Some(t("acct.delete_account_body")),
+                _ => None,
+            };
             let (title, warn, label, critical) = match s.flow {
+                Flow::Confirm(Confirm::DisableAccount) => (t("acct.disable_account_title"), None, t("settings.account.disable_btn"), true),
+                Flow::Confirm(Confirm::DeleteAccount) => (t("acct.delete_account_title"), None, t("settings.account.delete_btn"), true),
                 Flow::Confirm(Confirm::RemovePhone) => (
                     t("acct.remove_phone_title"),
                     info.sms.then(|| t("acct.remove_phone_sms")),
@@ -519,6 +530,9 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                             .child(text(w)),
                     )
                     .child(body);
+            }
+            if let Some(p) = plain {
+                body = div().flex().flex_col().gap(z(16.)).child(text(p)).child(body);
             }
             let mut ok = act("acct-confirm", label, if critical { BtnKind::Critical } else { BtnKind::Primary }, submit);
             ok.disabled = empty;
@@ -744,6 +758,8 @@ mod tests {
             Flow::Confirm(Confirm::RemovePhone),
             Flow::Confirm(Confirm::DisableSms),
             Flow::Confirm(Confirm::BackupCodes),
+            Flow::Confirm(Confirm::DisableAccount),
+            Flow::Confirm(Confirm::DeleteAccount),
             Flow::RemoveTotp,
         ];
         for f in flows {

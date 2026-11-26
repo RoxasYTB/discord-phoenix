@@ -38,6 +38,7 @@ pub enum ServerCall {
     DiscoverableContent { guild: Snowflake },
     ServerIndex { guild: Snowflake },
     TopGames { guild: Snowflake },
+    PruneCount { guild: Snowflake, days: u32, roles: Vec<Snowflake> },
     PublicApps { ids: Vec<Snowflake> },
     EditDiscoveryMetadata { guild: Snowflake, patch: Value },
     Profile { guild: Snowflake },
@@ -253,6 +254,13 @@ pub fn build(call: &ServerCall) -> ApiReq {
         S::DiscoverableContent { guild } => req(Method::GET, format!("/guilds/{guild}/discoverable-content"), None),
         S::ServerIndex { guild } => req(Method::GET, format!("/index/servers/{guild}"), None),
         S::TopGames { guild } => req(Method::GET, format!("/guilds/{guild}/top-games"), None),
+        S::PruneCount { guild, days, roles } => {
+            let mut q = format!("days={days}");
+            for r in roles {
+                q.push_str(&format!("&include_roles={r}"));
+            }
+            req(Method::GET, format!("/guilds/{guild}/prune?{q}"), None)
+        }
         S::PublicApps { ids } => {
             let q: Vec<String> = ids.iter().map(|i| format!("application_ids={i}")).collect();
             req(Method::GET, format!("/applications/public?{}", q.join("&")), None)
@@ -334,6 +342,9 @@ mod tests {
         let r = build(&ServerCall::PublicApps { ids: vec![Snowflake(1), Snowflake(2)] });
         assert_eq!(r.path, "/applications/public?application_ids=1&application_ids=2");
         assert!(ServerCall::TopGames { guild: Snowflake(5) }.is_read());
+        let prune = ServerCall::PruneCount { guild: Snowflake(5), days: 30, roles: vec![Snowflake(6), Snowflake(7)] };
+        assert!(prune.is_read());
+        assert_eq!(build(&prune).path, "/guilds/5/prune?days=30&include_roles=6&include_roles=7");
     }
 
     const G: Snowflake = Snowflake(1);

@@ -325,7 +325,16 @@ pub fn stickers(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         let right: Option<AnyElement> = if !unlocked {
             Some(text(crate::t!("gs.st.boosts", n = TIER_BOOSTS[level - 1]), 16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT).into_any_element())
         } else if level == t as usize && level < 3 {
-            Some(kit::btn_sm("ss-sticker-unlock", crate::t!("gs.st.unlock"), BtnKind::Primary).into_any_element())
+            Some(
+                kit::btn_sm("ss-sticker-unlock", crate::t!("gs.st.unlock"), BtnKind::Primary)
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        if let Some(g) = super::with_state(|s| s.guild) {
+                            crate::ui::boost_layer::open(g);
+                        }
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+            )
         } else {
             None
         };
