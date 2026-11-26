@@ -223,15 +223,7 @@ fn start_removal(a: &mut PhoenixApp, delete: bool, window: &mut gpui::Window, cx
 }
 
 pub(super) fn removal_rows(cx: &mut Cx) -> Vec<AnyElement> {
-    let disable = controls::button("acct-disable", crate::t!("settings.account.disable_btn"), BtnKind::Secondary)
-        .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
-        .bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_DEFAULT)))
-        .border_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BORDER_DEFAULT)))
-        .hover(|s| {
-            s.bg(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BACKGROUND_HOVER)))
-                .border_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_BORDER_HOVER)))
-                .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_HOVER)))
-        })
+    let disable = controls::button("acct-disable", crate::t!("settings.account.disable_btn"), BtnKind::CriticalSecondary)
         .on_click(cx.listener(|a, _, w, cx| start_removal(a, false, w, cx)));
     let delete = controls::button("acct-delete", crate::t!("settings.account.delete_btn"), BtnKind::Critical).on_click(cx.listener(|a, _, w, cx| start_removal(a, true, w, cx)));
     vec![

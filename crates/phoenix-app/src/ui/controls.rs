@@ -278,6 +278,7 @@ pub enum BtnKind {
     Secondary,
     Primary,
     Critical,
+    CriticalSecondary,
     Active,
     Expressive,
 }
@@ -329,6 +330,17 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bt
             CONTROL_EXPRESSIVE_TEXT_ACTIVE,
             CONTROL_EXPRESSIVE_BORDER_ACTIVE,
         ],
+        BtnKind::CriticalSecondary => [
+            CONTROL_CRITICAL_SECONDARY_BACKGROUND_DEFAULT,
+            CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT,
+            CONTROL_CRITICAL_SECONDARY_BORDER_DEFAULT,
+            CONTROL_CRITICAL_SECONDARY_BACKGROUND_HOVER,
+            CONTROL_CRITICAL_SECONDARY_TEXT_HOVER,
+            CONTROL_CRITICAL_SECONDARY_BORDER_HOVER,
+            CONTROL_CRITICAL_SECONDARY_BACKGROUND_ACTIVE,
+            CONTROL_CRITICAL_SECONDARY_TEXT_ACTIVE,
+            CONTROL_CRITICAL_SECONDARY_BORDER_ACTIVE,
+        ],
         BtnKind::Critical => [
             CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT,
             CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT,
@@ -371,6 +383,7 @@ pub fn button_icon(id: impl Into<ElementId>, icon: &'static str, label: impl Int
         BtnKind::Secondary => idx::CONTROL_SECONDARY_TEXT_DEFAULT,
         BtnKind::Primary => idx::CONTROL_PRIMARY_TEXT_DEFAULT,
         BtnKind::Critical => idx::CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT,
+        BtnKind::CriticalSecondary => idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT,
         BtnKind::Active => idx::CONTROL_CONNECTED_TEXT_DEFAULT,
         BtnKind::Expressive => idx::CONTROL_EXPRESSIVE_TEXT_DEFAULT,
     };
