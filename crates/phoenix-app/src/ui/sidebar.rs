@@ -448,6 +448,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                             div()
                                 .id("guild-invite")
                                 .tooltip(crate::ui::tooltip::tip(crate::t!("menu.invite")))
+                                .on_click(cx.listener(move |a, _, _, cx| a.open_invite_people(Id(gid), cx)))
                                 .size(z(32.))
                                 .flex_none()
                                 .flex()

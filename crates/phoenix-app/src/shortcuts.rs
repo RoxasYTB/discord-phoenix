@@ -285,6 +285,8 @@ fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
     STATE.with(|s| f(&mut s.borrow_mut()))
 }
 
+pub const HELP_CENTER_URL: &str = "https://support.discord.com";
+
 pub fn open_help() {
     with(|s| s.help_open = true);
 }
@@ -491,7 +493,7 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
             crate::ui::pickers::soundboard::toggle(a, w, cx);
         }
     }))
-    .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url("https://support.discord.com")))
+    .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url(HELP_CENTER_URL)))
 }
 
 pub const MESSAGE_SHORTCUTS: &[(&str, &str)] = &[

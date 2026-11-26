@@ -30,13 +30,12 @@ fn render_items(items: Vec<crate::ui::context_menu::MenuItem>, top: f32, cx: &mu
             cx.notify();
         }))
         .child(
-            div()
-                .absolute()
-                .top(px(top))
-                .left(z(8.))
-                .w(z(220.))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(crate::ui::context_menu::panel("guild-menu", items, dismiss)),
+            div().absolute().top(px(top)).left_0().right_0().flex().justify_center().child(
+                div()
+                    .w(z(220.))
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(crate::ui::context_menu::panel("guild-menu", items, dismiss)),
+            ),
         )
         .into_any_element()
 }

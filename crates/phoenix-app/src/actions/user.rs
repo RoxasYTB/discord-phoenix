@@ -47,6 +47,19 @@ impl PhoenixApp {
         self.action_toast(ActionRequest::Ignore { user, ignored }, Some(ok), cx);
     }
 
+    pub fn open_voice_channel(&mut self, cx: &mut Context<Self>) {
+        let Some(ch) = self.voice_channel else { return };
+        let guild = self.channels.get(&ch).and_then(|c| c.guild);
+        if self.selected_guild != guild || self.favorites_view {
+            self.select_guild(guild, cx);
+        }
+        self.open_channel_chat(ch, cx);
+        if guild.is_some() {
+            crate::ui::call_view::show(ch);
+        }
+        cx.notify();
+    }
+
     pub fn open_call_ui(&mut self, user: Id, cx: &mut Context<Self>) {
         self.open_dm_with(user, cx);
         let ch = self.selected_channel.unwrap_or(Id(0));

@@ -215,7 +215,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                     bar_button("title-inbox", Icon::Inbox, app.parity.inbox.open, crate::t!("inbox.title"))
                         .on_click(cx.listener(|a, _, _, cx| a.toggle_inbox(cx))),
                 )
-                .child(bar_button("title-help", Icon::Help, false, crate::t!("title.help")))
+                .child(bar_button("title-help", Icon::Help, false, crate::t!("title.help")).on_click(|_, _, cx| cx.open_url(crate::shortcuts::HELP_CENTER_URL)))
                 .when(client_decorated(window), |d| d.child(win_buttons(cx))),
         )
 }

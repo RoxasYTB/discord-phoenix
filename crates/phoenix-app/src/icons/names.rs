@@ -102,6 +102,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("chat/eye", &["EyeIcon"]),
     ("chat/eye-slash", &["EyeSlashIcon"]),
     ("menu/view-reactions", &["ViewReactionIcon"]),
+    ("menu/folder-plus", &["FolderPlusIcon"]),
     ("menu/remove-reactions", &["RemoveReactionIcon"]),
     ("menu/remove-all-reactions", &["ReactionMinusIcon"]),
     ("menu/bookmark", &["BookmarkOutlineIcon"]),

@@ -320,30 +320,17 @@ fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, cx: &mut Co
                 .text_color(t(idx::TEXT_STRONG))
                 .child(if kind == Audio::Mic { crate::t!("voice.input_volume_menu") } else { crate::t!("voice.output_volume_menu") }),
         )
-        .child(
-            div().px(z(8.)).mt(z(-4.)).h(z(24.)).relative().child(
-                div()
-                    .absolute()
-                    .top(z(10.))
-                    .left_0()
-                    .right_0()
-                    .h(z(4.))
-                    .rounded(z(4.))
-                    .bg(t(idx::SLIDER_TRACK_BACKGROUND))
-                    .child(div().h_full().w(gpui::relative(frac)).rounded(z(4.)).bg(t(idx::SLIDER_INDICATOR_BACKGROUND))),
-            )
-            .child(
-                div().absolute().top(z(4.)).left(gpui::relative(frac)).ml(z(-8.)).child(
-                    div()
-                        .size(z(16.))
-                        .rounded_full()
-                        .bg(gpui::white())
-                        .border_1()
-                        .border_color(t(if crate::theme::high_contrast() { idx::BORDER_STRONG } else { idx::BORDER_NORMAL }))
-                        .shadow_sm(),
-                ),
-            ),
-        )
+        .child(div().px(z(8.)).mt(z(-4.)).child(crate::ui::settings::voice::slider(
+            if kind == Audio::Mic { "menu-input-volume" } else { "menu-output-volume" },
+            frac,
+            format!("{vol_now}%").into(),
+            Some((tok(idx::SLIDER_INDICATOR_BACKGROUND), tok(idx::SLIDER_TRACK_BACKGROUND))),
+            Rc::new(move |_, f, done, _| {
+                let v = (f * max as f32).round() as u32;
+                update(move |p| if kind == Audio::Mic { p.input_volume = v } else { p.output_volume = v }, done);
+            }),
+            cx,
+        )))
         .pb(z(4.));
     let items = vec![
         MenuItem::Submenu {
@@ -634,11 +621,17 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
                                 )
                                 .child(
                                     div()
+                                        .id("voice-channel-link")
+                                        .debug_selector(|| "voice-channel-link".to_owned())
                                         .text_size(z(12.))
                                         .line_height(z(16.))
                                         .text_color(c(Palette::TEXT_MUTED))
                                         .text_ellipsis()
                                         .hover(|s| s.underline())
+                                        .on_click(cx.listener(|a, _, _, cx| {
+                                            cx.stop_propagation();
+                                            a.open_voice_channel(cx);
+                                        }))
                                         .child(label),
                                 ),
                         ),

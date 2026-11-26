@@ -205,40 +205,50 @@ pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> 
     let mut items = Vec::new();
     let owner = app.guilds.iter().find(|x| x.id == g).and_then(|x| x.owner) == Some(app.me.id);
     let (manage_guild, manage_channels, events) = (perms(app, g, MANAGE_GUILD), perms(app, g, MANAGE_CHANNELS), perms(app, g, MANAGE_EVENTS));
-    items.push(act(&e, crate::t!("settings.page.server_boost"), move |_, _, cx| {
-        crate::ui::boost_layer::open(g);
-        cx.notify();
-    }));
+    let community = app.guilds.iter().any(|x| x.id == g && x.community);
+    items.push(
+        act(&e, crate::t!("settings.page.server_boost"), move |_, _, cx| {
+            crate::ui::boost_layer::open(g);
+            cx.notify();
+        })
+        .with_icon("chat/boost"),
+    );
     items.push(MenuItem::Separator);
-    items.push(act(&e, crate::t!("menu.invite_to_server"), move |a, _, cx| a.open_invite_people(g, cx)));
+    items.push(act(&e, crate::t!("menu.invite_to_server"), move |a, _, cx| a.open_invite_people(g, cx)).with_icon("add-to-dm"));
     if manage_guild {
-        items.push(act(&e, crate::t!("menu.server_settings"), move |a, _, cx| a.open_server_settings(g, 0, cx)));
+        items.push(act(&e, crate::t!("menu.server_settings"), move |a, _, cx| a.open_server_settings(g, 0, cx)).with_icon("gear"));
     }
     if crate::ui::modals::server_settings::visible(app, g, "menu.gs.analytics") {
         let section = crate::ui::modals::server_settings::section_index("menu.gs.analytics");
-        items.push(act(&e, crate::t!("menu.gs.analytics"), move |a, _, cx| a.open_server_settings(g, section, cx)));
+        items.push(act(&e, crate::t!("menu.gs.analytics"), move |a, _, cx| a.open_server_settings(g, section, cx)).with_icon("picker/trending"));
     }
     if manage_channels {
-        items.push(act(&e, crate::t!("menu.create_channel"), move |a, _, cx| a.open_create_channel(g, None, crate::model::ChannelKind::Text, cx)));
-        items.push(act(&e, crate::t!("menu.create_category"), move |a, _, cx| a.open_create_channel(g, None, crate::model::ChannelKind::Category, cx)));
+        items.push(act(&e, crate::t!("menu.create_channel"), move |a, _, cx| a.open_create_channel(g, None, crate::model::ChannelKind::Text, cx)).with_icon("plus-circle"));
+        items.push(
+            act(&e, crate::t!("menu.create_category"), move |a, _, cx| a.open_create_channel(g, None, crate::model::ChannelKind::Category, cx))
+                .with_icon("menu/folder-plus"),
+        );
     }
     if events {
-        items.push(act(&e, crate::t!("menu.create_event"), move |a, _, cx| a.open_create_event(g, cx)));
+        items.push(act(&e, crate::t!("menu.create_event"), move |a, _, cx| a.open_create_event(g, cx)).with_icon("inbox/schedule"));
     }
     if !crate::ui::modals::active_threads::active_threads(app, g).is_empty() {
-        items.push(act(&e, crate::t!("menu.active_threads"), move |a, _, cx| a.open_active_threads(g, cx)));
+        items.push(act(&e, crate::t!("menu.active_threads"), move |a, _, cx| a.open_active_threads(g, cx)).with_icon("chat"));
     }
-    items.push(act(&e, crate::t!("menu.gs.app_directory"), |_, _, cx| crate::ui::modals::server_settings::open_app_directory(cx)));
+    items.push(act(&e, crate::t!("menu.gs.app_directory"), |_, _, cx| crate::ui::modals::server_settings::open_app_directory(cx)).with_icon("apps"));
     items.push(MenuItem::Separator);
-    items.extend(crate::actions::channel::show_all_item(app, &e, g));
-    items.push(act(&e, crate::t!("menu.notify_settings"), move |a, _, cx| {
-        let st = crate::ui::modals::guild_notify::State::new(a, g);
-        crate::actions::open_modal(crate::ui::modals::Modal::GuildNotify(st), None);
-        cx.notify();
-    }));
-    items.push(act(&e, crate::t!("menu.privacy_settings"), move |a, _, cx| a.open_privacy_settings(g, cx)));
+    items.extend(crate::actions::channel::show_all_item(app, &e, g).map(|i| i.with_icon("chat/eye")));
+    items.push(
+        act(&e, crate::t!("menu.notify_settings"), move |a, _, cx| {
+            let st = crate::ui::modals::guild_notify::State::new(a, g);
+            crate::actions::open_modal(crate::ui::modals::Modal::GuildNotify(st), None);
+            cx.notify();
+        })
+        .with_icon("bell"),
+    );
+    items.push(act(&e, crate::t!("menu.privacy_settings"), move |a, _, cx| a.open_privacy_settings(g, cx)).with_icon("shield"));
     items.push(MenuItem::Separator);
-    items.push(act(&e, crate::t!("menu.edit_server_profile"), move |a, _, cx| a.open_server_profile(g, cx)));
+    items.push(act(&e, crate::t!("menu.edit_server_profile"), move |a, _, cx| a.open_server_profile(g, cx)).with_icon("pen"));
     items.push(MenuItem::check(crate::t!("menu.hide_muted"), app.nav.hide_muted.contains(&g), {
         let e = e.clone();
         move |_, _, cx: &mut App| {
@@ -251,29 +261,30 @@ pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> 
                 cx.notify();
             })
         }
-    }));
-    if manage_guild {
-        items.push(MenuItem::Separator);
-        items.push(MenuItem::danger(crate::t!("menu.security_actions"), None, {
+    })
+    .with_icon("chat/eye-slash"));
+    let mut danger = Vec::new();
+    if manage_guild && community {
+        danger.push(MenuItem::danger(crate::t!("menu.security_actions"), Some(crate::icons::path("lock")), {
             let e = e.clone();
             move |_, _, cx: &mut App| e.update(cx, |a, cx| a.open_security_actions(g, cx))
         }));
     }
     if crate::ui::modals::report_raid::visible(app, g) {
-        if !manage_guild {
-            items.push(MenuItem::Separator);
-        }
-        items.push(MenuItem::danger(crate::t!("menu.report_raid"), None, {
+        danger.push(MenuItem::danger(crate::t!("menu.report_raid"), Some(crate::icons::path("shield")), {
             let e = e.clone();
             move |_, _, cx: &mut App| e.update(cx, |a, cx| a.open_report_raid(g, cx))
         }));
     }
     if !owner {
-        items.push(MenuItem::Separator);
-        items.push(MenuItem::danger(crate::t!("menu.leave_server"), None, {
+        danger.push(MenuItem::danger(crate::t!("menu.leave_server"), Some(crate::icons::path("door-exit")), {
             let e = e.clone();
             move |_, _, cx: &mut App| e.update(cx, |a, cx| a.show_overlay(Overlay::LeaveGuild(g), cx))
         }));
+    }
+    if !danger.is_empty() {
+        items.push(MenuItem::Separator);
+        items.extend(danger);
     }
     if app.prefs.synced.developer_mode {
         items.push(MenuItem::Separator);

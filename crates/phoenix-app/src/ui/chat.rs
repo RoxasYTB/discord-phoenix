@@ -623,6 +623,10 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
                 })
                 .child(
                     div()
+                        .id("hdr-search")
+                        .debug_selector(|| "hdr-search".to_owned())
+                        .cursor(gpui::CursorStyle::IBeam)
+                        .on_click(cx.listener(|a, _, w, cx| crate::ui::search::open(a, w, cx)))
                         .ml(z(4.))
                         .flex_none()
                         .w(z(header_search_w(pad_start)))

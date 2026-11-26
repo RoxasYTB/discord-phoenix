@@ -183,6 +183,10 @@ impl GuardedWrite {
         write(Method::POST, format!("/channels/{channel}/call/ring"), Some(json!({ "recipients": null })))
     }
 
+    pub fn edit_channel(channel: u64, body: Value) -> Self {
+        write(Method::PATCH, format!("/channels/{channel}"), Some(body))
+    }
+
     pub fn add_recipient(channel: u64, user: u64) -> Self {
         write(Method::PUT, format!("/channels/{channel}/recipients/{user}"), None)
     }
@@ -288,6 +292,8 @@ mod tests {
         let add = GuardedWrite::discovery_category(5, 49, true);
         assert_eq!((add.method, add.path.as_str(), add.body), (Method::PUT, "/guilds/5/discovery-categories/49", None));
         assert_eq!(GuardedWrite::discovery_category(5, 49, false).method, Method::DELETE);
+        let thread = GuardedWrite::edit_channel(8, json!({ "archived": false }));
+        assert_eq!((thread.method, thread.path.as_str()), (Method::PATCH, "/channels/8"));
         let raid = GuardedWrite::report_raid(5);
         assert_eq!((raid.method, raid.path.as_str(), raid.body), (Method::POST, "/guilds/5/auto-moderation/report-raid", None));
         let quest = GuardedWrite::quest_enroll(8, 11);

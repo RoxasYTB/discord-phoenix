@@ -16,7 +16,7 @@ pub enum MenuItem {
     Separator,
     Custom(AnyElement),
     Submenu { label: SharedString, items: Vec<MenuItem>, icon: Option<SharedString>, subtext: Option<SharedString> },
-    Check { label: SharedString, checked: bool, radio: bool, subtext: Option<SharedString>, on_click: Handler },
+    Check { label: SharedString, checked: bool, radio: bool, subtext: Option<SharedString>, icon: Option<SharedString>, on_click: Handler },
     Disabled { label: SharedString, icon: Option<SharedString> },
     Leading { label: SharedString, leading: AnyElement, subtext: Option<SharedString>, on_click: Option<Handler> },
 }
@@ -208,7 +208,7 @@ impl MenuItem {
         checked: bool,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        Self::Check { label: label.into(), checked, radio: false, subtext: None, on_click: Rc::new(on_click) }
+        Self::Check { label: label.into(), checked, radio: false, subtext: None, icon: None, on_click: Rc::new(on_click) }
     }
 
     pub fn radio(
@@ -216,7 +216,7 @@ impl MenuItem {
         checked: bool,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        Self::Check { label: label.into(), checked, radio: true, subtext: None, on_click: Rc::new(on_click) }
+        Self::Check { label: label.into(), checked, radio: true, subtext: None, icon: None, on_click: Rc::new(on_click) }
     }
 
     pub fn with_subtext(mut self, text: impl Into<SharedString>) -> Self {
@@ -227,7 +227,7 @@ impl MenuItem {
     }
 
     pub fn with_icon(mut self, name: &str) -> Self {
-        if let Self::Action { icon, .. } | Self::Submenu { icon, .. } = &mut self {
+        if let Self::Action { icon, .. } | Self::Submenu { icon, .. } | Self::Check { icon, .. } = &mut self {
             *icon = Some(crate::icons::path(name));
         }
         self
@@ -383,7 +383,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                     )
                     .into_any_element()
             }
-            MenuItem::Check { label, checked, radio, subtext, on_click } => {
+            MenuItem::Check { label, checked, radio, subtext, icon, on_click } => {
                 let dismiss = dismiss.clone();
                 let mark = if radio {
                     crate::ui::controls::radio_indicator(checked)
@@ -415,6 +415,10 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                             }
                             set_hl(depth, Some(ix), w);
                         }
+                    })
+                    .when_some(icon, |d, path| {
+                        let fg = if lit { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT };
+                        d.child(svg().path(path).mr(z(8.)).size(z(20.)).flex_none().text_color(c(tok(fg))))
                     })
                     .child(div().flex_1().min_w_0().flex().flex_col().child(label_box(label)).when_some(subtext, |d, s| {
                         d.child(

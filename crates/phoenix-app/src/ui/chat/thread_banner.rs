@@ -19,9 +19,10 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::An
     };
     let action = x.can_manage_threads.then(|| {
         let label = if x.thread_locked { crate::t!("chat.thread_unlock") } else { crate::t!("chat.thread_open") };
-        let stub_label = label.clone();
+        let channel = ch.0;
+        let body = banner_patch(x.thread_locked);
         button_sm("thread-banner-action", label, BtnKind::Secondary).on_click(cx.listener(move |app, _, _, cx| {
-            app.stub(&stub_label, cx);
+            app.blocked_write(crate::actions::guard::GuardedWrite::edit_channel(channel, body.clone()), cx);
         }))
     });
     Some(
@@ -46,4 +47,17 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<gpui::An
             .children(action)
             .into_any_element(),
     )
+}
+
+pub fn banner_patch(locked: bool) -> serde_json::Value {
+    if locked { serde_json::json!({ "locked": false, "archived": false }) } else { serde_json::json!({ "archived": false }) }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn banner_cta_matches_unarchive_and_unlock() {
+        assert_eq!(super::banner_patch(false), serde_json::json!({ "archived": false }));
+        assert_eq!(super::banner_patch(true), serde_json::json!({ "locked": false, "archived": false }));
+    }
 }
