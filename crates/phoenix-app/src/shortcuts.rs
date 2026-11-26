@@ -56,6 +56,10 @@ actions!(
         ZoomOut,
         ZoomReset,
         ToggleFullscreen,
+        QuickSwitcherAlt,
+        JumpToPresent,
+        ToggleAllCategories,
+        JumpToVoiceGuild,
     ]
 );
 
@@ -192,6 +196,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-0", ZoomReset, ctx),
         KeyBinding::new("ctrl-à", ZoomReset, ctx),
         KeyBinding::new("f11", ToggleFullscreen, ctx),
+        KeyBinding::new("ctrl-t", QuickSwitcherAlt, ctx),
+        KeyBinding::new("shift-pagedown", JumpToPresent, ctx),
+        KeyBinding::new("ctrl-shift-a", ToggleAllCategories, ctx),
+        KeyBinding::new("ctrl-alt-left", JumpToVoiceGuild, ctx),
     ]);
 }
 
@@ -219,6 +227,10 @@ pub fn seek<T: Copy + PartialEq>(list: &[T], cur: Option<T>, step: i32, pred: im
         })
         .map(|i| list[i as usize])
         .find(|x| Some(*x) != cur && pred(*x))
+}
+
+pub fn collapse_all_target(categories: &[Id], collapsed: &std::collections::HashSet<Id>) -> bool {
+    categories.iter().any(|c| !collapsed.contains(c))
 }
 
 pub fn rail_order(guilds: &[Id], folders: &[Vec<Id>]) -> Vec<Option<Id>> {
@@ -395,6 +407,40 @@ impl PhoenixApp {
         self.message_list.scroll_by(if up { -d } else { d });
     }
 
+    fn toggle_all_categories(&mut self, cx: &mut Context<Self>) {
+        let Some(g) = self.selected_guild else { return };
+        let cats: Vec<Id> = self
+            .guild_channels
+            .get(&g)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|c| self.channels.get(c).is_some_and(|c| c.kind == ChannelKind::Category))
+            .collect();
+        if collapse_all_target(&cats, &self.collapsed) {
+            self.collapsed.extend(cats);
+        } else {
+            for c in &cats {
+                self.collapsed.remove(c);
+            }
+        }
+        self.rebuild_sidebar();
+        self.save_nav_prefs();
+        cx.notify();
+    }
+
+    fn jump_to_voice_guild(&mut self, cx: &mut Context<Self>) {
+        let Some(v) = self.voice_channel else { return };
+        let guild = self.channels.get(&v).and_then(|c| c.guild);
+        if self.selected_guild != guild || self.favorites_view {
+            self.select_guild(guild, cx);
+        }
+        if let Some(ix) = self.sidebar_rows.iter().position(|r| matches!(r, crate::app::SidebarRow::Channel(id) if *id == v)) {
+            self.sidebar_list.scroll_to_reveal_item(ix + 1);
+        }
+        cx.notify();
+    }
+
     fn copy_channel_link(&self, cx: &mut Context<Self>) {
         let Some(ch) = self.selected_channel else { return };
         let guild = self.channels.get(&ch).and_then(|c| c.guild).map_or("@me".to_string(), |g| g.0.to_string());
@@ -494,6 +540,13 @@ pub fn handlers(app: &PhoenixApp, root: Stateful<gpui::Div>, cx: &mut Context<Ph
         }
     }))
     .on_action(cx.listener(|_, _: &GetHelp, _, cx| cx.open_url(HELP_CENTER_URL)))
+    .on_action(cx.listener(|a, _: &QuickSwitcherAlt, w, cx| a.open_switcher(w, cx)))
+    .on_action(cx.listener(|a, _: &JumpToPresent, _, cx| {
+        a.message_list.scroll_to_end();
+        a.mark_channel_read(cx);
+    }))
+    .on_action(cx.listener(|a, _: &ToggleAllCategories, _, cx| a.toggle_all_categories(cx)))
+    .on_action(cx.listener(|a, _: &JumpToVoiceGuild, _, cx| a.jump_to_voice_guild(cx)))
 }
 
 pub const MESSAGE_SHORTCUTS: &[(&str, &str)] = &[
@@ -815,6 +868,42 @@ mod tests {
                 }
             }
         });
+    }
+
+    #[test]
+    fn client_only_binds_are_wired() {
+        let cx = gpui::TestAppContext::single();
+        cx.update(|cx| {
+            bind_keys(cx);
+            for (k, name) in [
+                ("ctrl-t", "QuickSwitcherAlt"),
+                ("shift-pagedown", "JumpToPresent"),
+                ("ctrl-shift-a", "ToggleAllCategories"),
+                ("ctrl-alt-left", "JumpToVoiceGuild"),
+                ("ctrl-shift-tab", "PrevGuild"),
+                ("ctrl-tab", "NextGuild"),
+                ("f1", "GetHelp"),
+            ] {
+                let ks = gpui::Keystroke::parse(k).unwrap();
+                let keymap = cx.key_bindings();
+                let keymap = keymap.borrow();
+                let hit = keymap.bindings().find(|b| b.keystrokes().len() == 1 && b.keystrokes()[0].inner().modifiers == ks.modifiers && b.keystrokes()[0].inner().key == ks.key);
+                let hit = hit.unwrap_or_else(|| panic!("{k} not bound"));
+                assert!(hit.action().name().ends_with(name), "{k} -> {}", hit.action().name());
+            }
+        });
+    }
+
+    #[test]
+    fn collapse_all_collapses_until_everything_is_folded() {
+        let cats = [Id(1), Id(2)];
+        let mut c = std::collections::HashSet::new();
+        assert!(collapse_all_target(&cats, &c));
+        c.insert(Id(1));
+        assert!(collapse_all_target(&cats, &c));
+        c.insert(Id(2));
+        assert!(!collapse_all_target(&cats, &c));
+        assert!(!collapse_all_target(&[], &c));
     }
 
     #[test]

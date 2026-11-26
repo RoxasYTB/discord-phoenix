@@ -69,7 +69,7 @@ pub fn passes_through_composer(ks: &Keystroke) -> bool {
     if m.control && m.shift {
         return !matches!(k, "z" | "left" | "right" | "home" | "end" | "up" | "down" | "v");
     }
-    m.control && matches!(k, "i" | "p" | "u" | "k" | "s" | "/" | "," | "tab")
+    m.control && matches!(k, "i" | "p" | "u" | "k" | "t" | "s" | "/" | "," | "tab")
 }
 
 pub fn digit_target(rail: &[Option<Id>], key: &str) -> Option<Option<Id>> {
@@ -288,6 +288,10 @@ mod tests {
         assert!(passes_through_composer(&k("pageup")));
         assert!(passes_through_composer(&k("ctrl-shift-u")));
         assert!(passes_through_composer(&k("ctrl-alt-down")));
+        assert!(passes_through_composer(&k("ctrl-t")));
+        assert!(passes_through_composer(&k("shift-pagedown")));
+        assert!(passes_through_composer(&k("ctrl-shift-a")));
+        assert!(passes_through_composer(&k("ctrl-alt-left")));
         assert!(!passes_through_composer(&k("ctrl-a")));
         assert!(!passes_through_composer(&k("ctrl-c")));
         assert!(!passes_through_composer(&k("up")));
