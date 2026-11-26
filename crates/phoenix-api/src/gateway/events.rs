@@ -101,6 +101,23 @@ pub struct ReactionEvent {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ReactionBatch {
+    pub emoji: ReactionEmoji,
+    #[serde(default, deserialize_with = "null_default")]
+    pub users: Vec<UserId>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReactionAddMany {
+    pub channel_id: ChannelId,
+    pub message_id: MessageId,
+    #[serde(default)]
+    pub guild_id: Option<GuildId>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub reactions: Vec<ReactionBatch>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ReactionRemoveAll {
     pub channel_id: ChannelId,
     pub message_id: MessageId,
@@ -302,6 +319,7 @@ pub enum GatewayEvent {
     MessageDeleteBulk(MessageDeleteBulk),
     MessageReactionAdd(Box<ReactionEvent>),
     MessageReactionRemove(Box<ReactionEvent>),
+    MessageReactionAddMany(Box<ReactionAddMany>),
     MessageReactionRemoveAll(ReactionRemoveAll),
     MessageReactionRemoveEmoji(ReactionRemoveAll),
     MessageAck(MessageAck),
@@ -368,6 +386,7 @@ pub fn parse_dispatch(name: &str, raw: &str) -> GatewayEvent {
         "MESSAGE_DELETE_BULK" => MessageDeleteBulk,
         "MESSAGE_REACTION_ADD" => MessageReactionAdd(Box::new),
         "MESSAGE_REACTION_REMOVE" => MessageReactionRemove(Box::new),
+        "MESSAGE_REACTION_ADD_MANY" => MessageReactionAddMany(Box::new),
         "MESSAGE_REACTION_REMOVE_ALL" => MessageReactionRemoveAll,
         "MESSAGE_REACTION_REMOVE_EMOJI" => MessageReactionRemoveEmoji,
         "MESSAGE_ACK" => MessageAck,

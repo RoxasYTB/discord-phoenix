@@ -1201,6 +1201,11 @@ impl Adapter {
                     }
                 }
             }
+            GatewayEvent::MessageReactionAddMany(r) => {
+                if let Some(m) = cache.message(r.channel_id, r.message_id) {
+                    out.push(AppEvent::MessageUpdate(message(&m)));
+                }
+            }
             GatewayEvent::MessageReactionRemoveAll(r) | GatewayEvent::MessageReactionRemoveEmoji(r) => {
                 if let Some(m) = cache.message(r.channel_id, r.message_id) {
                     out.push(AppEvent::MessageUpdate(message(&m)));

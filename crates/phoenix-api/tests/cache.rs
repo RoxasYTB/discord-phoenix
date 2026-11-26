@@ -69,6 +69,13 @@ fn message_ring_buffer_and_updates() {
         r#"{"user_id":"5","channel_id":"77","message_id":"5","emoji":{"id":null,"name":"🦀"},"burst":false,"type":0}"#,
     ));
     assert_eq!(cache.message(Snowflake(ch), Snowflake(5)).unwrap().reactions[0].count, 1);
+
+    assert!(cache.apply(&parse_dispatch(
+        "MESSAGE_REACTION_ADD_MANY",
+        r#"{"channel_id":"77","message_id":"5","guild_id":"1","reactions":[{"emoji":{"id":null,"name":"🦀"},"users":["6","7"]},{"emoji":{"id":"9","name":"blob"},"users":["8"]}]}"#,
+    )));
+    let r = cache.message(Snowflake(ch), Snowflake(5)).unwrap().reactions.clone();
+    assert_eq!((r[0].count, r[1].count, r.len()), (3, 1, 2));
 }
 
 #[test]

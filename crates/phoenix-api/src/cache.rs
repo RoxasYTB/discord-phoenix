@@ -462,6 +462,16 @@ impl Cache {
                     }
                 });
             }
+            GatewayEvent::MessageReactionAddMany(r) => {
+                let me = s.me.as_ref().map(|u| u.id);
+                return modify_message(&mut s, r.channel_id, r.message_id, |m| {
+                    for b in &r.reactions {
+                        for u in &b.users {
+                            m.apply_reaction(&b.emoji, Some(*u) == me, true, false);
+                        }
+                    }
+                });
+            }
             GatewayEvent::MessageReactionRemoveAll(r) => {
                 return modify_message(&mut s, r.channel_id, r.message_id, |m| m.reactions.clear());
             }

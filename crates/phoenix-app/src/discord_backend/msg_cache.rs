@@ -199,6 +199,7 @@ pub fn on_gateway(ev: &GatewayEvent) {
             }
         }
         GatewayEvent::MessageReactionAdd(r) | GatewayEvent::MessageReactionRemove(r) => mark_stale(r.channel_id.0),
+        GatewayEvent::MessageReactionAddMany(r) => mark_stale(r.channel_id.0),
         GatewayEvent::MessageReactionRemoveAll(r) | GatewayEvent::MessageReactionRemoveEmoji(r) => mark_stale(r.channel_id.0),
         GatewayEvent::Ready(_) => mark_all_stale(),
         _ => {}
