@@ -119,26 +119,35 @@ pub fn poly_with_sequence(pad: u32, sequence: u32) -> u32 {
 }
 
 /// PHOENIX PATCH (cut-outs): one hole, a rounded rectangle in device pixels. A hole with an
-/// empty size cuts nothing.
+/// empty size cuts nothing. The corners are ellipses of `radius` by `radius_y`, each clamped to
+/// half of its side like SVG `<rect rx ry>`, so a 26 x 20 hole with a radius of 12 keeps 12 x 10
+/// corners.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(C)]
 pub struct CutoutHole {
     pub origin: [f32; 2],
     pub size: [f32; 2],
     pub radius: f32,
-    pub pad: [f32; 3],
+    pub radius_y: f32,
+    pub pad: [f32; 2],
 }
 
 impl CutoutHole {
     /// Signed distance from `point` to the edge of the hole: negative inside, positive outside.
     pub fn distance(&self, point: [f32; 2]) -> f32 {
         let half = [self.size[0] / 2., self.size[1] / 2.];
-        let radius = self.radius.min(half[0]).min(half[1]).max(0.);
+        let rx = self.radius.min(half[0]).max(0.);
+        let ry = self.radius_y.min(half[1]).max(0.);
         let center = [self.origin[0] + half[0], self.origin[1] + half[1]];
-        let qx = (point[0] - center[0]).abs() - half[0] + radius;
-        let qy = (point[1] - center[1]).abs() - half[1] + radius;
-        let outside = (qx.max(0.).powi(2) + qy.max(0.).powi(2)).sqrt();
-        outside + qx.max(qy).min(0.) - radius
+        let qx = (point[0] - center[0]).abs() - half[0] + rx;
+        let qy = (point[1] - center[1]).abs() - half[1] + ry;
+        if qx > 0. && qy > 0. {
+            if rx > 0. && ry > 0. {
+                return (((qx / rx).powi(2) + (qy / ry).powi(2)).sqrt() - 1.) * rx.min(ry);
+            }
+            return ((qx - rx).max(0.).powi(2) + (qy - ry).max(0.).powi(2)).sqrt();
+        }
+        (qx - rx).max(qy - ry)
     }
 
     /// Coverage left by the hole at `point`, with the same half-pixel ramp as the shader.
@@ -1656,7 +1665,20 @@ mod cutout_tests {
     use super::*;
 
     fn hole(x: f32, y: f32, w: f32, h: f32, r: f32) -> CutoutHole {
-        CutoutHole { origin: [x, y], size: [w, h], radius: r, pad: [0.; 3] }
+        CutoutHole { origin: [x, y], size: [w, h], radius: r, radius_y: r, pad: [0.; 2] }
+    }
+
+    #[test]
+    fn corners_clamp_each_axis_like_an_svg_rect() {
+        let h = hole(0., 0., 26., 20., 12.);
+        assert!((h.distance([0., 10.])).abs() < 1e-4);
+        assert!((h.distance([13., 0.])).abs() < 1e-4);
+        assert!((h.distance([12., 10.]) + 10.).abs() < 1e-4);
+        let corner = [12. - 12. * std::f32::consts::FRAC_1_SQRT_2, 10. - 10. * std::f32::consts::FRAC_1_SQRT_2];
+        assert!(h.distance(corner).abs() < 1e-4);
+        assert!(h.distance([corner[0] - 0.5, corner[1] - 0.5]) > 0.);
+        let round = CutoutHole { radius_y: 10., radius: 10., ..h };
+        assert!(round.distance([1.2, 1.2]) < h.distance([1.2, 1.2]));
     }
 
     #[test]

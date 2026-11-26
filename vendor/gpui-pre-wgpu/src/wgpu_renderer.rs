@@ -73,7 +73,7 @@ fn least_common_multiple(left: u64, right: u64) -> u64 {
 }
 
 // PHOENIX PATCH (cut-outs): the `cutouts` uniform, `MAX_CUTOUT_SETS` sets of two holes
-// (origin, size, radius and padding: 8 floats each), see `gpui::Window::with_cutouts`.
+// (origin, size, both corner radii and padding: 8 floats each), see `gpui::Window::with_cutouts`.
 const CUTOUT_HOLE_FLOATS: usize = 8;
 const CUTOUTS_SIZE: u64 = (gpui::MAX_CUTOUT_SETS * 2 * CUTOUT_HOLE_FLOATS * 4) as u64;
 
@@ -87,7 +87,7 @@ fn cutout_bytes(sets: &[gpui::CutoutSet]) -> Vec<u8> {
                 hole.size[0],
                 hole.size[1],
                 hole.radius,
-                0.,
+                hole.radius_y,
                 0.,
                 0.,
             ]);
@@ -3005,7 +3005,8 @@ mod tests {
             origin: [x, y],
             size: [w, h],
             radius: r,
-            pad: [0.; 3],
+            radius_y: r,
+            pad: [0.; 2],
         };
         let index = scene.push_cutouts(gpui::CutoutSet {
             holes: [hole(20.0, -4.0, 16.0, 16.0, 8.0), hole(8.0, 20.0, 24.0, 16.0, 8.0)],
