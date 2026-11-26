@@ -687,3 +687,52 @@ Verified on new renders (int-bin 594490f1).
 ### Open
 
 - Profile role pills put the role icon after the name; the client chunk of the profile role list is not in the cache, so not changed.
+
+## Glitch hunt 8 (2026-11-26, wt/glitch8): popouts and modals
+
+Offscreen renders only, no CDP pass: `real_shots` on `#phoenix` with a `node` stub first in `PATH`, 1536×840 at dpr 1 and 1.5,
+dark and light, int-bin 80a9684b / f8bcd4e8 for the before shots, 7aea879c then later builds for the after shots. Views: member
+profile popout and modal (bot), own profile modal, `PHX_OPEN` modview, tagpopout, follow, createevent, addserver, poll_create,
+acct:username / password / email, remindcustom, nickname, report, settings:changelog, settings:family, statuspicker, invite,
+leave, customstatus. Renders stay in `/mnt/windata/project-phoenix/compare/glitch8`. References: CSS and JS of the local client cache.
+
+### Profile role list
+
+The glitch 7 open line is closed: the list is in the cache (chunk `282c099a…`, module 166005, CSS module 434367 `_xL50-d`).
+The pill `Y` renders, in this order: role dot (`roleCircle_7RsUnm` 12 px, margin 0 4) or the `dot` role style, a 12 px
+`LinkIcon` for a connection role (`connectionRoleIcon_xL50-d`, `--icon-default`, margin-inline-end 4), the name
+(`body-xs/normal`, `--text-default`), the role icon (`roleIcon_xL50-d`, 12 px, margin-inline-start 4), then the remove button
+(`XSmallIcon` xxs). So the icon after the name is the client order. The same component serves the popout and the full profile.
+
+| Item | Client | Fix |
+|---|---|---|
+| Connection role | `R && LinkIcon` before the name | `profile.rs` `roles_block`, width in `role_pill_w` (test `role_pill_reserves_dot_link_name_icon_and_remove_like_the_client`) |
+| Expand / collapse | `ChevronSmallLeftIcon` size `xs` = 16 | `chevron-small-left` 16 (was a rotated 12 px chevron) |
+| Add role | `.addButton_xL50-d`: no border, no hover background, colour only; `PlusSmallIcon` size `sm` = 18 | borderless, `plus-small` 18, hover `--interactive-text-hover` |
+
+### Fixed
+
+| Zone | Glitch | Client reference | Fix |
+|---|---|---|---|
+| Profile activity card | a streaming bot showed « En direct sur J'aime bien ce point violet. » over an empty 48 px tile | module 770689: STREAMING header `4CQq9Q` « Streame {name} » only for Twitch / YouTube, else `Jpkr/q` « En direct »; module 802880 `t0`: image and elapsed time only when `!user.bot`; title = details ?? name | `profile.rs` `activity_header`, `activity_block(.., bot)` (test `streaming_header_names_only_known_platforms`) |
+| Profile modal tabs | « Liste de souhaits » always shown, « 0 ami en commun », mutual tabs on your own profile, « 15 serveurs en com… » cut | chunk `dd9e93b2…` tab list: wishlist only for yourself or a public non-empty wishlist (module 419341), mutual tabs only for other users; labels from modules 837531 / 186272: 0 gives `n9g3ay` / `jpY0X5` | `modal_card_inner` tabs, `mutual_tab_label` (test `empty_mutual_tabs_use_the_client_none_label`) |
+| Own profile modal | « Envoyer un message » (disabled), shop and ⋯ | module 74525 `D`: for yourself a full width primary « Modifier le profil » (`s5vZlQ`, PencilIcon), with the server / main profile menu inside a guild | `modal_actions` + `profile_toolbar::edit_profile_button` (test `own_profile_modal_shows_only_edit_profile`) |
+| Account popout, light app theme | name, username and bio dark on the dark profile theme, menu cards white | the themed card takes the profile theme scheme (`custom-user-profile-theme`), like the member popout | `status_picker::render` runs inside `profile_theme::scoped`, inner overlay `profile_theme::overlay` |
+| Account edit modals | field text 23 px from the edge, 14 px | `.input_0PLWhS{padding-inline:var(--space-12)}`, font inherited 16 px (same as glitch 6 `input_box`) | `account_edit.rs` `input`: input `px 0`, 16/20 |
+| Server tag popout | always the load error card in `real_shots` | `GET /guilds/{id}/profile` | the `real_shots` read-only backend now forwards `guild_profile` (GET only) |
+| Server profile date | « Depuis le Jan 2026 » (English month, boost string `lY2Bur`) | module 107123 `P`: `toLocaleDateString(locale,{year:"numeric",month:"short"})`, string `zb2Q56` « depuis {createdAtDate} » / « Est. » | `guide::established` shared with `tag_popout`, `guide.established` → `zb2Q56` (test `established_uses_the_localised_short_month_and_year`) |
+
+### Checked, not bugs
+
+- Poll creation « Post » in French: the client string `JOj8Zk` is « Post » in fr too.
+- Custom reminder: the Heure field stays empty until the current time is a quarter hour (`lookupByValue`, chunk 549208, see inventory).
+- Follow modal « Suivre » disabled until a server and a channel are chosen; create event « Suivant » disabled until a place is picked.
+- Bot profile: the white APERTURE custom emoji in the bio is a white image, invisible on a light card in the client too.
+
+### Open
+
+- Email change « Envoyer le code de véri… » is cut in two equal width buttons: the mana button text ellipsizes in the client too (`.buttonChildren_F7qvhY{text-overflow:ellipsis;white-space:nowrap}`), but the modal component (and so its button layout) is not in the cache.
+- Invite modal: Phoenix still draws the legacy invite modal (centred 24 px title with a loose line height, no friend list). The 2026 client uses a mana list modal (`p.a`, title / subtitle / search / friend rows, chunk `a6539095…` `getHeaderContent`); this is a rebuild, not a glitch.
+- Mod View role pills have no role icon; the Mod View chunk is not in the cache, so not changed.
+- Server tag popout without a splash shows a flat grey banner; the client fallback was not found.
+- Bot bio `:rocket:` stays as text; whether the client bio parser turns shortcodes into emoji was not checked.
