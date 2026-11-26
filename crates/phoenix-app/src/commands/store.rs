@@ -109,6 +109,13 @@ impl PollView {
             }
         }
     }
+
+    pub fn apply_gateway_vote(&mut self, answer: u32, add: bool, mine: bool) {
+        if mine && self.answers.iter().any(|a| a.id == answer && a.me == add) {
+            return;
+        }
+        self.apply_vote(answer, add, mine);
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -220,5 +227,9 @@ mod tests {
         assert_eq!(p.answers[1].count, 1);
         p.apply_vote(1, false, true);
         assert!(!p.voted());
+        p.apply_gateway_vote(1, false, true);
+        assert_eq!(p.answers[0].count, 2);
+        p.apply_gateway_vote(2, true, true);
+        assert_eq!((p.answers[1].count, p.answers[1].me), (2, true));
     }
 }

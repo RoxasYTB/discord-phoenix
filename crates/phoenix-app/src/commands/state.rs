@@ -382,7 +382,7 @@ pub fn on_event(app: &mut App, ev: ParityEvent, cx: &mut Context<App>) {
         ParityEvent::Autocomplete { nonce, choices } => crate::ui::chat::slash::autocomplete_result(nonce, choices, cx),
         ParityEvent::PollVote { channel, message, user, answer, add } => {
             let mine = user == app.me.id;
-            if !mine && store::update_poll(message, |p| p.apply_vote(answer, add, false)) {
+            if store::update_poll(message, |p| p.apply_gateway_vote(answer, add, mine)) {
                 app.refresh_message(channel, message);
             }
         }
