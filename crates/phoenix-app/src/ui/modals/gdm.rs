@@ -487,16 +487,16 @@ pub fn render_invites(s: &Invites, cx: &mut Context<PhoenixApp>) -> AnyElement {
                                 .items_center()
                                 .gap(z(8.))
                                 .child(crate::ui::avatar(i.avatar.as_ref(), 24.))
-                                .child(div().min_w_0().text_ellipsis().text_color(c(tok(idx::TEXT_STRONG))).child(i.inviter.clone())),
+                                .child(div().min_w_0().text_ellipsis().font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(i.inviter.clone())),
                         )
-                        .child(div().w(z(100.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(i.code.clone()))
+                        .child(div().w(z(100.)).min_w_0().text_ellipsis().font_family(crate::fonts::mono_family()).opacity(0.6).text_color(c(tok(idx::TEXT_STRONG))).child(i.code.clone()))
                         .child(
                             div()
                                 .w(z(140.))
                                 .flex()
                                 .items_center()
                                 .gap(z(8.))
-                                .child(div().flex_1().text_color(muted).child(countdown(i.expires, now)))
+                                .child(div().flex_1().flex().justify_end().font_family(crate::fonts::mono_family()).text_color(c(tok(idx::TEXT_STRONG))).child(countdown(i.expires, now)))
                                 .child(
                                     div()
                                         .id(("gdm-inv-del", n))
