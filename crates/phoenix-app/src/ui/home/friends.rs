@@ -1325,7 +1325,7 @@ pub fn card_title(names: &[SharedString]) -> String {
     match names.len() {
         0 | 1 => a,
         2 => crate::t!("friends.now_two", user1 = a, user2 = b).to_string(),
-        3 => crate::t!("friends.now_more_one", user1 = a, user2 = b).to_string(),
+        3 => crate::t!("friends.now_more_one", user1 = a, user2 = b, extras = 1).to_string(),
         n => crate::t!("friends.now_more", user1 = a, user2 = b, extras = n - 2).to_string(),
     }
 }
@@ -2081,6 +2081,14 @@ mod tests {
     fn single_member_cards_use_the_plain_name() {
         assert_eq!(card_title(&["Alchi".into()]), "Alchi");
         assert_eq!(card_title(&[]), "");
+    }
+
+    #[test]
+    fn three_member_cards_count_the_third() {
+        let t = card_title(&["A".into(), "B".into(), "C".into()]);
+        assert!(!t.contains('{'), "{t}");
+        assert!(t.contains('1'), "{t}");
+        assert!(!card_title(&["A".into(), "B".into(), "C".into(), "D".into()]).contains('{'));
     }
 
     #[test]
