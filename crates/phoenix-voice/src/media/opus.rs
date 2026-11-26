@@ -25,6 +25,15 @@ impl OpusEncoder {
     }
 }
 
+impl OpusEncoder {
+    pub fn for_media(stereo: bool) -> Result<Self> {
+        let ch = if stereo { Channels::Stereo } else { Channels::Mono };
+        let mut inner = Encoder::new(SampleRate::Hz48000, ch, Application::Audio).map_err(err)?;
+        inner.set_bitrate(Bitrate::Auto).map_err(err)?;
+        Ok(Self { inner, channels: if stereo { 2 } else { 1 }, buf: vec![0; 4000] })
+    }
+}
+
 impl AudioEncoder for OpusEncoder {
     fn encode(&mut self, pcm: &[i16]) -> Result<Vec<u8>> {
         if pcm.len() != FRAME_SAMPLES * self.channels {

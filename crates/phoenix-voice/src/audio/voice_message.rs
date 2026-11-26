@@ -288,6 +288,25 @@ pub fn encode_ogg(pcm: &Pcm) -> Result<Vec<u8>> {
     Ok(ogg::write_opus(&packets, FRAME_SAMPLES as u64, real, rand::random::<u32>()))
 }
 
+pub fn encode_sound_ogg(pcm: &Pcm) -> Result<Vec<u8>> {
+    let ch = usize::from(pcm.channels.max(1));
+    if ch > 2 {
+        return Err(Error::Encoder("Only handles up to 2 channels".into()));
+    }
+    let mut rs = Resampler::new(pcm.rate.max(1), RATE, ch);
+    let mut pending = Vec::with_capacity(pcm.samples.len());
+    rs.process(&pcm.samples, &mut pending);
+    let mut opus = OpusEncoder::for_media(ch == 2)?;
+    let frame = FRAME_SAMPLES * ch;
+    let mut packets = Vec::with_capacity(pending.len() / frame + 1);
+    for chunk in pending.chunks(frame) {
+        let mut f = chunk.to_vec();
+        f.resize(frame, 0.);
+        packets.push(opus.encode(&to_i16(&f))?);
+    }
+    Ok(ogg::write_webcodecs(&packets, FRAME_SAMPLES as u64, ch as u8, RATE))
+}
+
 pub fn decode_ogg(data: &[u8]) -> Result<Pcm> {
     let s = ogg::read_opus(data).ok_or(Error::Malformed("not an Ogg Opus file"))?;
     let stereo = s.channels >= 2;
@@ -369,6 +388,28 @@ pub fn time_stretch(x: &[f32], rate: f32, sample_rate: u32) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sound_upload_keeps_stereo_in_the_webcodecs_layout() {
+        let frames = 24_000usize;
+        let samples: Vec<f32> = (0..frames).flat_map(|i| {
+            let t = i as f32 / 48_000.;
+            [(t * 440. * std::f32::consts::TAU).sin() * 0.3, (t * 660. * std::f32::consts::TAU).sin() * 0.3]
+        }).collect();
+        let ogg_bytes = encode_sound_ogg(&Pcm { rate: 48_000, channels: 2, samples }).unwrap();
+        let s = ogg::read_opus(&ogg_bytes).unwrap();
+        assert_eq!(s.channels, 2);
+        assert_eq!(s.pre_skip, 0);
+        assert_eq!(s.packets.len(), 25);
+        assert_eq!(s.last_granule, 25 * 960);
+        assert_eq!(&ogg_bytes[14..18], &[0, 0, 0, 1]);
+        assert_eq!(ogg_bytes[5], 2);
+        let tags = ogg_bytes.windows(8).position(|w| w == b"OpusTags").unwrap();
+        assert_eq!(&ogg_bytes[tags + 8..tags + 16], &[0; 8]);
+        let mono = encode_sound_ogg(&Pcm { rate: 44_100, channels: 1, samples: vec![0.; 4410] }).unwrap();
+        assert_eq!(ogg::read_opus(&mono).unwrap().channels, 1);
+        assert!(encode_sound_ogg(&Pcm { rate: 48_000, channels: 6, samples: vec![0.; 60] }).is_err());
+    }
 
     #[test]
     fn level_mapping_matches_client() {

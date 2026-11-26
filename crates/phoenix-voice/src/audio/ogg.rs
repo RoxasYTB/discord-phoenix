@@ -110,6 +110,23 @@ pub fn write_opus(packets: &[Vec<u8>], frame_samples: u64, total_samples: u64, s
     w.out
 }
 
+pub const WEBCODECS_SERIAL: u32 = 0x0100_0000;
+
+pub fn write_webcodecs(packets: &[Vec<u8>], samples_per_packet: u64, channels: u8, input_rate: u32) -> Vec<u8> {
+    let mut w = Writer { out: Vec::with_capacity(packets.iter().map(Vec::len).sum::<usize>() + 4096), serial: WEBCODECS_SERIAL, seq: 0 };
+    w.page(&[&opus_head(channels, 0, input_rate)], 0, 0x02);
+    let mut tags = b"OpusTags".to_vec();
+    tags.extend_from_slice(&[0; 8]);
+    w.page(&[&tags], 0, 0);
+    let mut granule = 0u64;
+    for p in packets {
+        granule += samples_per_packet;
+        w.page(&[p], granule, 0);
+    }
+    w.page(&[], granule, 0x04);
+    w.out
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpusStream {
     pub channels: u8,

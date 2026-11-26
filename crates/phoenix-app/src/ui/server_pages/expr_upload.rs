@@ -937,7 +937,7 @@ fn sound_modal(u: &Upload, cx: &mut Context<PhoenixApp>) -> AnyElement {
         let name = clipped(g, "eu-name", SOUND_NAME_MAX, cx);
         let Some((Some(file), tag, volume, trim)) = snapshot(|u| (u.file.clone(), u.tag.clone(), u.volume, u.trim)) else { return };
         let Some(pcm) = file.pcm else { return };
-        let Ok(ogg) = phoenix_voice::audio::voice_message::encode_ogg(&trimmed(&pcm, trim.start_ms, trim.end_ms)) else {
+        let Ok(ogg) = phoenix_voice::audio::voice_message::encode_sound_ogg(&trimmed(&pcm, trim.start_ms, trim.end_ms)) else {
             with(|u| u.error = Some((crate::t!("eu.processing_failed"), false)));
             return;
         };
