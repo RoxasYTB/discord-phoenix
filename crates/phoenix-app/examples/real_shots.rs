@@ -1187,6 +1187,20 @@ fn main() -> anyhow::Result<()> {
             })
         })?;
         pump(&mut cx, wait * 1000 / 3);
+        if std::env::var_os("PHX_KEEP_NOTES").is_none() {
+            cx.update(|cx| {
+                v.update(cx, |app, cx| {
+                    for p in app.people.profiles.values_mut() {
+                        p.note = Default::default();
+                    }
+                    if let Some(p) = app.settings.as_mut().and_then(|s| s.profile.as_mut()).and_then(|e| e.profile.as_mut()) {
+                        p.note = Default::default();
+                    }
+                    cx.notify();
+                })
+            });
+            pump(&mut cx, 300);
+        }
     }
     if let Some(on) = std::env::var("PHX_ANNOUNCE_COMPOSER").ok().map(|v| v != "0") {
         phoenix_app::ui::chat::announce::force(on);

@@ -564,3 +564,53 @@ fn own_status_sent_before_ready_reaches_the_user_panel(cx: &mut TestAppContext) 
         .unwrap();
     assert_eq!(status, crate::model::Presence::Dnd);
 }
+
+#[gpui::test]
+fn own_full_profile_is_the_editor_from_every_entry_point(cx: &mut TestAppContext) {
+    let mut h = setup(cx);
+    let (me, other, guild) = h.read(|a| {
+        let me = a.me.id;
+        let other = a.users.values().find(|u| u.id != me && !u.bot).map(|u| u.id).unwrap();
+        (me, other, a.selected_guild)
+    });
+    let at = point(px(900.), px(200.));
+    let entries: [(&str, fn(&mut PhoenixApp, Id, Option<Id>, Point<Pixels>, &mut gpui::Window, &mut gpui::Context<PhoenixApp>)); 5] = [
+        ("popout", |a, u, _, at, w, cx| {
+            a.open_profile(u, None, at, w, cx);
+            a.open_profile_modal(u, cx);
+        }),
+        ("member list", |a, u, g, at, w, cx| {
+            a.open_profile(u, g, at, w, cx);
+            a.open_profile_modal(u, cx);
+        }),
+        ("dm panel", |a, u, _, _, _, cx| a.open_profile_modal(u, cx)),
+        ("mention", |a, u, g, at, w, cx| {
+            a.open_profile(u, g, at, w, cx);
+            a.open_profile_modal_at(u, crate::ui::profile::TAB_BOARD, cx);
+        }),
+        ("mod view", |a, u, g, at, w, cx| {
+            a.open_profile(u, g, at, w, cx);
+            a.open_profile_modal_at(u, 0, cx);
+        }),
+    ];
+    for (name, open) in entries {
+        h.act(|a, w, cx| {
+            a.settings = None;
+            a.people.close_overlays();
+            open(a, me, guild, at, w, cx);
+        });
+        let (modal, editor) = h.read(|a| (a.people.modal, a.settings.as_ref().and_then(|s| s.profile.as_ref()).is_some_and(|e| e.modal)));
+        assert_eq!(modal, None, "{name}: own full profile opened the read-only modal");
+        assert!(editor, "{name}: own full profile did not open in edit mode");
+        assert!(h.read(|a| a.people.popout.is_none()), "{name}: popout left open under the editor");
+
+        h.act(|a, w, cx| {
+            a.settings = None;
+            a.people.close_overlays();
+            open(a, other, guild, at, w, cx);
+        });
+        let (modal, editor) = h.read(|a| (a.people.modal, a.settings.is_some()));
+        assert_eq!(modal, Some(other), "{name}: someone else's full profile did not open");
+        assert!(!editor, "{name}: someone else's full profile opened the editor");
+    }
+}

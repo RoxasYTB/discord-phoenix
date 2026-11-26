@@ -1132,7 +1132,7 @@ fn popout_card_inner(
     if uid == app.me.id {
         body = body.child(div().text_size(z(12.)).text_color(c(tok(idx::TEXT_MUTED))).child(status_label(i.presence)));
     }
-    if uid != app.me.id && !app.prefs.local.streamer_hides_info() && crate::ui::profile_note::editing(uid).is_some() {
+    if crate::ui::profile_note::shown(crate::ui::profile_note::Surface::Popout, uid == app.me.id, crate::ui::profile_note::editing(uid).is_some(), app.prefs.local.streamer_hides_info()) {
         body = body.children(crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx));
     }
     match i.prof {
@@ -1286,16 +1286,16 @@ pub(crate) fn popout_shadow() -> Vec<gpui::BoxShadow> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ModalActions {
-    EditProfile,
+    Own,
     Hidden,
     Others,
 }
 
 pub(crate) fn modal_actions(me: bool, rel: crate::ui::home::data::RelationshipKind) -> ModalActions {
-    if me {
-        ModalActions::EditProfile
-    } else if rel == crate::ui::home::data::RelationshipKind::Blocked {
+    if rel == crate::ui::home::data::RelationshipKind::Blocked {
         ModalActions::Hidden
+    } else if me {
+        ModalActions::Own
     } else {
         ModalActions::Others
     }
@@ -1481,14 +1481,14 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         })
     });
     let actions = modal_actions(me, rel);
-    let edit = (actions == ModalActions::EditProfile).then(|| crate::ui::profile_toolbar::edit_profile_button(uid, guild, cx));
     let buttons = (actions != ModalActions::Hidden).then(|| {
         use crate::ui::home::data::RelationshipKind as R;
         let send = |primary: bool| {
             let e2 = e2.clone();
             let fg = if primary { idx::CONTROL_PRIMARY_TEXT_DEFAULT } else { idx::CONTROL_SECONDARY_TEXT_DEFAULT };
             mana_button(("profile-modal-message", uid.0), "", primary, false)
-                .on_click(move |_, _, cx| e2.update(cx, |a, cx| a.message_user(uid, cx)))
+                .when(me, |d| d.opacity(0.5).cursor_default())
+                .when(!me, |d| d.on_click(move |_, _, cx| e2.update(cx, |a, cx| a.message_user(uid, cx))))
                 .child(
                     div()
                         .flex()
@@ -1507,7 +1507,7 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
         );
         let row = div().flex().items_center().gap(z(8.));
         if me {
-            return row.children(edit);
+            return row.child(send(true)).child(icon_btn(("profile-modal-shop", uid.0), "shop").tooltip(crate::ui::tooltip::tip(crate::t!("ptb.shop")))).child(more);
         }
         if bot || rel == R::Incoming {
             return row.child(send(true)).children(shop_look).child(more);
@@ -1579,7 +1579,10 @@ fn modal_card_inner(app: &PhoenixApp, uid: Id, guild: Option<Id>, vp: gpui::Size
     }
     pbody = pbody.children(roles_section(app, guild, uid, cx));
     if let Some(p) = i.prof {
-        pbody = pbody.children(connections_section(&p.connections)).child(note_section(p));
+        pbody = pbody.children(connections_section(&p.connections));
+        if crate::ui::profile_note::shown(crate::ui::profile_note::Surface::FullProfile, me, false, app.prefs.local.streamer_hides_info()) {
+            pbody = pbody.child(note_section(p));
+        }
     }
 
     let profile = div()
@@ -1981,11 +1984,11 @@ mod activity_header_tests {
     }
 
     #[test]
-    fn own_profile_modal_shows_only_edit_profile() {
+    fn own_profile_modal_shows_the_disabled_message_row_like_the_client() {
         use super::{ModalActions, modal_actions};
         use crate::ui::home::data::RelationshipKind as R;
-        assert_eq!(modal_actions(true, R::None), ModalActions::EditProfile);
-        assert_eq!(modal_actions(true, R::Friend), ModalActions::EditProfile);
+        assert_eq!(modal_actions(true, R::None), ModalActions::Own);
+        assert_eq!(modal_actions(true, R::Friend), ModalActions::Own);
         assert_eq!(modal_actions(false, R::Friend), ModalActions::Others);
         assert_eq!(modal_actions(false, R::None), ModalActions::Others);
         assert_eq!(modal_actions(false, R::Blocked), ModalActions::Hidden);

@@ -943,7 +943,8 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 .child(gpui::svg().path(crate::icons::path("plus")).size(z(18.)).text_color(if themed { white(0.76) } else { c(tok(idx::TEXT_MUTED)) }))
                 .child(crate::t!("pe.add_connection")),
         ))
-        .child(section(
+        .when(crate::ui::profile_note::shown(crate::ui::profile_note::Surface::FullProfile, true, false, app.prefs.local.streamer_hides_info()), |d| {
+            d.child(section(
             "pe.note",
             heading,
             div()
@@ -958,7 +959,8 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                     Some(n) => d.text_color(strong).child(n),
                     None => d.text_color(if themed { white(0.6) } else { c(tok(idx::TEXT_MUTED)) }).child(crate::t!("profile.note_placeholder")),
                 }),
-        ));
+            ))
+        });
     let effect = applied(app, e, super::collectibles::Kind::Effect, cx).and_then(|c| crate::ui::profile_fx::effect(&c, 400., cx));
     let frame = applied(app, e, super::collectibles::Kind::Frame, cx).and_then(|c| c.frame);
     let inner = div()

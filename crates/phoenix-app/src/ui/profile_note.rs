@@ -113,3 +113,44 @@ pub fn note_section(note: Option<SharedString>, uid: Id, cx: &mut Context<Phoeni
             .into_any_element(),
     )
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Surface {
+    Popout,
+    Sidebar,
+    FullProfile,
+}
+
+pub fn shown(surface: Surface, own: bool, editing: bool, streamer_hides: bool) -> bool {
+    if streamer_hides {
+        return false;
+    }
+    match surface {
+        Surface::FullProfile => true,
+        Surface::Popout | Surface::Sidebar => !own && editing,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Surface, shown};
+
+    #[test]
+    fn never_a_note_on_your_own_popout_or_sidebar() {
+        for s in [Surface::Popout, Surface::Sidebar] {
+            assert!(!shown(s, true, false, false));
+            assert!(!shown(s, true, true, false));
+            assert!(!shown(s, false, false, false));
+            assert!(shown(s, false, true, false));
+            assert!(!shown(s, false, true, true));
+        }
+    }
+
+    #[test]
+    fn full_profile_note_follows_the_client_and_streamer_mode() {
+        assert!(shown(Surface::FullProfile, false, false, false));
+        assert!(shown(Surface::FullProfile, true, false, false));
+        assert!(!shown(Surface::FullProfile, false, false, true));
+        assert!(!shown(Surface::FullProfile, true, false, true));
+    }
+}
