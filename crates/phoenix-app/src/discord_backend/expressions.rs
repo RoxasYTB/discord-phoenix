@@ -155,6 +155,8 @@ pub(super) fn query_of(req: &SearchRequest) -> SearchQuery {
         pinned: req.pinned,
         author_types: req.author_types.clone(),
         attachment_extensions: req.attachment_extensions.clone(),
+        attachment_filenames: req.attachment_filenames.clone(),
+        link_hostnames: req.link_hostnames.clone(),
         sort: match req.sort {
             SortOrder::Newest => SearchSort::Newest,
             SortOrder::Oldest => SearchSort::Oldest,
@@ -184,8 +186,9 @@ pub(super) async fn search(inner: Arc<Inner>, s: Arc<Session>, req: SearchReques
                 }
                 inner.emit(AppEvent::Users(users));
                 super::ensure_message_authors(&inner, &s, &hits);
-                return Ok(SearchPage { total: r.total_results, messages: hits.iter().map(convert::message).collect() });
+                return Ok(SearchPage { total: r.total_results, messages: hits.iter().map(convert::message).collect(), indexing: None });
             }
+            SearchOutcome::Indexing { retry_after } if req.report_indexing => return Ok(SearchPage { indexing: Some(retry_after), ..Default::default() }),
             SearchOutcome::Indexing { retry_after } => tokio::time::sleep(Duration::from_secs_f64(retry_after)).await,
         }
     }

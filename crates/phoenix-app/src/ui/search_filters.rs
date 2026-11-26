@@ -681,16 +681,49 @@ fn month_weeks(month: NaiveDate, sunday_first: bool) -> Vec<[NaiveDate; 7]> {
 }
 
 fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    let spec = CalSpec { key: i.to_string(), month, selected, min: None, six: false, width: 322. };
+    let on_month: OnMonth = std::rc::Rc::new(move |to: NaiveDate, cx: &mut App| with_modal(cx, |m| m.calendar = Some((i, to))));
+    let on_day: OnDay = std::rc::Rc::new(move |d: NaiveDate, _: &mut PhoenixApp, _: &mut Window, cx: &mut Context<PhoenixApp>| {
+        with_modal(cx, |m| {
+            if let Some(r) = m.dates.get_mut(i) {
+                r.day = d;
+            }
+            m.calendar = None;
+        });
+        cx.notify();
+    });
+    calendar_box(spec, on_month, on_day, cx)
+}
+
+pub(crate) struct CalSpec {
+    pub key: String,
+    pub month: NaiveDate,
+    pub selected: NaiveDate,
+    pub min: Option<NaiveDate>,
+    pub six: bool,
+    pub width: f32,
+}
+
+pub(crate) type OnMonth = std::rc::Rc<dyn Fn(NaiveDate, &mut App)>;
+pub(crate) type OnDay = std::rc::Rc<dyn Fn(NaiveDate, &mut PhoenixApp, &mut Window, &mut Context<PhoenixApp>)>;
+
+pub(crate) fn calendar_box(spec: CalSpec, on_month: OnMonth, on_day: OnDay, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    let CalSpec { key: i, month, selected, min, six, width } = spec;
     let light = crate::theme::is_light();
     let edge = c(tok(if light { idx::PRIMARY_200 } else { idx::PRIMARY_800 }));
     let rule = if light { c(tok(idx::PRIMARY_200)).opacity(0.2) } else { c(tok(idx::PRIMARY_800)).opacity(0.3) };
     let ink = c(tok(if light { idx::PRIMARY_500 } else { idx::PRIMARY_100 }));
     let now = today();
     let sunday_first = crate::i18n::locale() == "en";
-    let weeks = month_weeks(month, sunday_first);
+    let mut weeks = month_weeks(month, sunday_first);
+    while six && weeks.len() < 6 {
+        let Some(last) = weeks.last().map(|w| w[6]) else { break };
+        weeks.push(std::array::from_fn(|k| last + Days::new(k as u64 + 1)));
+    }
     let n_weeks = weeks.len();
     let title = format!("{} {}", crate::t!(&format!("month.{}", month.month())).to_uppercase(), month.year());
     let nav = |id: &'static str, to: NaiveDate, next: bool, cx: &mut Context<PhoenixApp>| {
+        let on_month = on_month.clone();
         let arrow = gpui::svg().path(crate::icons::path("chevron-right")).size(z(12.)).text_color(c(tok(idx::TEXT_STRONG)));
         div()
             .id(gpui::ElementId::Name(format!("{id}-{i}").into()))
@@ -707,7 +740,7 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
             .justify_center()
             .cursor_pointer()
             .on_click(cx.listener(move |_, _, _, cx| {
-                with_modal(cx, |m| m.calendar = Some((i, to)));
+                on_month(to, cx);
                 cx.notify();
             }))
             .child(if next { arrow } else { arrow.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI))) })
@@ -731,7 +764,7 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
         let last_row = wi + 1 == n_weeks;
         let mut row = div().flex();
         for (k, d) in week.into_iter().enumerate() {
-            let disabled = d > now;
+            let disabled = d > now || min.is_some_and(|m| d < m);
             let outside = d.month() != month.month();
             let muted = disabled || outside;
             let fg = if disabled && light {
@@ -772,28 +805,24 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
                 .when(last_row, |e| e.child(div().absolute().left_0().right_0().bottom_0().h(z(1.)).bg(edge)))
                 .when(d == selected, |e| e.child(div().absolute().left_0().right_0().bottom_0().h(z(3.)).bg(c(tok(idx::BRAND_500)))))
                 .when(!disabled, |e| {
-                    e.cursor_pointer().hover(|s| s.bg(c(tok(idx::BRAND_500))).text_color(c(tok(idx::WHITE)))).on_click(cx.listener(
-                        move |_, _, _, cx| {
-                            with_modal(cx, |m| {
-                                if let Some(r) = m.dates.get_mut(i) {
-                                    r.day = d;
-                                }
-                                m.calendar = None;
-                            });
-                            cx.notify();
-                        },
-                    ))
+                    let on_day = on_day.clone();
+                    e.cursor_pointer()
+                        .hover(|s| s.bg(c(tok(idx::BRAND_500))).text_color(c(tok(idx::WHITE))))
+                        .on_click(cx.listener(move |a, _, w, cx| on_day(d, a, w, cx)))
                 });
             row = row.child(cell);
         }
         grid = grid.child(row);
     }
-    let prev = nav("search-date-prev", month - Months::new(1), false, cx);
+    let prev = min.is_none_or(|m| month > month_start(m)).then(|| nav("search-date-prev", month - Months::new(1), false, cx));
     let next = (month < month_start(now)).then(|| nav("search-date-next", month + Months::new(1), true, cx));
     div()
         .id(gpui::ElementId::Name(format!("search-date-calendar-{i}").into()))
-        .w(z(322.))
+        .w(z(width))
         .p(z(20.))
+        .flex()
+        .flex_col()
+        .items_center()
         .rounded(z(4.8))
         .border_1()
         .border_color(c(tok(idx::BORDER_SUBTLE)))
@@ -818,6 +847,7 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(
             div()
+                .w(z(280.))
                 .pb(z(20.))
                 .mb(z(10.))
                 .border_b_1()
@@ -832,7 +862,7 @@ fn calendar_el(i: usize, month: NaiveDate, selected: NaiveDate, cx: &mut Context
         )
         .child(names)
         .child(grid)
-        .child(prev)
+        .children(prev)
         .children(next)
 }
 

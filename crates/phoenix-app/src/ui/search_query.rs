@@ -22,7 +22,7 @@ pub const HAS_VALUES: [(HasFilter, &str, &str); 9] = [
 pub const AUTHOR_VALUES: [(&str, &str, &str); 3] =
     [("user", "search.kv.user", "search/user"), ("bot", "search.kv.bot", "mod/robot"), ("webhook", "search.kv.webhook", "settings/webhook")];
 
-const KEY_WORDS: [(FilterKey, &str); 10] = [
+const KEY_WORDS: [(FilterKey, &str); 13] = [
     (FilterKey::From, "search.kw.from"),
     (FilterKey::Mentions, "search.kw.mentions"),
     (FilterKey::Has, "search.kw.has"),
@@ -33,6 +33,9 @@ const KEY_WORDS: [(FilterKey, &str); 10] = [
     (FilterKey::In, "search.kw.in"),
     (FilterKey::Pinned, "search.kw.pinned"),
     (FilterKey::AuthorType, "search.kw.author"),
+    (FilterKey::LinkFrom, "search.kw.link_from"),
+    (FilterKey::FileType, "search.kw.file_type"),
+    (FilterKey::FileName, "search.kw.file_name"),
 ];
 
 fn w(key: &str) -> String {
@@ -223,8 +226,50 @@ pub fn answers(app: &PhoenixApp, key: FilterKey, partial: &str) -> Vec<Answer> {
             .into_iter()
             .map(|v| Answer { value: v.into(), label: v.into(), sub: None, lead: AnswerLead::None })
             .collect(),
-        FilterKey::Before | FilterKey::After | FilterKey::On => Vec::new(),
+        FilterKey::Before | FilterKey::After | FilterKey::On | FilterKey::LinkFrom | FilterKey::FileType | FilterKey::FileName => Vec::new(),
     }
+}
+
+pub const CROSS_MAX: usize = 3;
+
+pub fn cross_keys(skip_in: bool) -> Vec<FilterKey> {
+    let mut keys = vec![FilterKey::From, FilterKey::Mentions];
+    if !skip_in {
+        keys.push(FilterKey::In);
+    }
+    keys
+}
+
+pub fn free_word(input: &str, keys: &SearchKeys) -> Option<(usize, String)> {
+    if input.ends_with(char::is_whitespace) || phoenix_api::rest::search::pending_filter(input, keys).is_some() {
+        return None;
+    }
+    let mut quoted = false;
+    let mut start = 0;
+    for (i, ch) in input.char_indices() {
+        if ch == '"' {
+            quoted = !quoted;
+        } else if ch.is_whitespace() && !quoted {
+            start = i + ch.len_utf8();
+        }
+    }
+    let word = input[start..].trim();
+    (!word.is_empty()).then(|| (start, word.to_owned()))
+}
+
+pub fn cross_answers(app: &PhoenixApp, word: &str, skip_in: bool) -> Vec<(FilterKey, Vec<Answer>)> {
+    cross_keys(skip_in)
+        .into_iter()
+        .filter_map(|k| {
+            let list: Vec<Answer> = answers(app, k, word).into_iter().take(CROSS_MAX).collect();
+            (!list.is_empty()).then_some((k, list))
+        })
+        .collect()
+}
+
+pub fn replace_word(input: &str, start: usize, key: FilterKey, value: &str) -> String {
+    let v = if value.contains(char::is_whitespace) { format!("\"{value}\"") } else { value.to_owned() };
+    format!("{}{}{v} ", &input[..start], token(key))
 }
 
 #[cfg(test)]
@@ -304,5 +349,20 @@ mod tests {
         assert_eq!(localize_token("from:"), token(FilterKey::From));
         assert_eq!(localize_token("authorType:"), token(FilterKey::AuthorType));
         assert_eq!(localize_token("nope:"), "nope:");
+        assert_eq!(k.key(&w("search.kw.file_type")), Some(FilterKey::FileType));
+        assert_eq!(k.key("linkFrom"), Some(FilterKey::LinkFrom));
+    }
+
+    #[test]
+    fn free_word_is_the_trailing_plain_word() {
+        let k = keys();
+        assert_eq!(free_word("hello nin", &k), Some((6, "nin".into())));
+        assert_eq!(free_word("hello ", &k), None);
+        assert_eq!(free_word("from:nin", &k), None);
+        assert_eq!(free_word("", &k), None);
+        assert_eq!(replace_word("hello nin", 6, FilterKey::From, "ninette"), format!("hello {}ninette ", token(FilterKey::From)));
+        assert_eq!(replace_word("cafe", 0, FilterKey::In, "Coin Café"), format!("{}\"Coin Café\" ", token(FilterKey::In)));
+        assert_eq!(cross_keys(true), vec![FilterKey::From, FilterKey::Mentions]);
+        assert_eq!(cross_keys(false).len(), 3);
     }
 }

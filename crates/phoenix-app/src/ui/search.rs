@@ -4,7 +4,8 @@ use gpui::{
     Window, div, prelude::*, px,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
-use phoenix_api::rest::search::{FilterKey, complete_filter, parse_search_with, pending_filter};
+use chrono::{Datelike, NaiveDate};
+use phoenix_api::rest::search::{FilterKey, PendingFilter, complete_filter, parse_search_with, pending_filter};
 
 use crate::ui::search_query::{self as sq, Answer, AnswerLead};
 
@@ -35,8 +36,11 @@ pub struct SearchRequest {
     pub pinned: Option<bool>,
     pub author_types: Vec<String>,
     pub attachment_extensions: Vec<String>,
+    pub attachment_filenames: Vec<String>,
+    pub link_hostnames: Vec<String>,
     pub offset: u32,
     pub sort: SortOrder,
+    pub report_indexing: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -51,6 +55,7 @@ pub enum SortOrder {
 pub struct SearchPage {
     pub total: u32,
     pub messages: Vec<Message>,
+    pub indexing: Option<f64>,
 }
 
 pub struct SearchState {
@@ -63,7 +68,9 @@ pub struct SearchState {
     dm_menu: bool,
     seq: u64,
     idle: bool,
-    ac: (String, usize),
+    ac: (String, Option<usize>),
+    cal: Option<(usize, NaiveDate)>,
+    attempts: u32,
     _sub: Subscription,
 }
 
@@ -145,6 +152,10 @@ pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, Stri
         has: p.has.iter().map(|h| h.as_str().to_owned()).collect(),
         pinned: p.pinned,
         author_types: p.author_types.clone(),
+        attachment_extensions: p.file_types.clone(),
+        attachment_filenames: p.file_names.clone(),
+        link_hostnames: p.link_from.clone(),
+        report_indexing: true,
         ..Default::default()
     };
     if req.guild.is_none() && req.channel.is_none() && !req.all_dms {
@@ -213,7 +224,10 @@ pub fn build_request(app: &PhoenixApp, text: &str) -> Result<SearchRequest, Stri
         && req.min_id.is_none()
         && req.max_id.is_none()
         && req.pinned.is_none()
-        && req.author_types.is_empty();
+        && req.author_types.is_empty()
+        && req.attachment_extensions.is_empty()
+        && req.attachment_filenames.is_empty()
+        && req.link_hostnames.is_empty();
     if empty {
         return Err(String::new());
     }
@@ -261,7 +275,9 @@ pub fn open(_app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
         dm_menu: false,
         seq: 0,
         idle: false,
-        ac: (String::new(), 0),
+        ac: (String::new(), None),
+        cal: None,
+        attempts: 0,
         _sub: sub,
     })));
     cx.notify();
@@ -299,16 +315,23 @@ pub fn on_key(app: &mut PhoenixApp, key: &str, window: &mut Window, cx: &mut Con
         return true;
     }
     if matches!(key, "up" | "down" | "enter") && !results_shown(cx) {
-        let list = current_answers(app, cx);
-        if !list.is_empty() {
+        let Some(text) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).map(|s| s.input.read(cx).value().to_string()) else { return false };
+        let shape = popout_layout(app, &text, cx);
+        let rows = shape.rows();
+        if !rows.is_empty() {
+            let first = shape.first_selected();
             let Some(s) = cx.global_mut::<Search>().0.as_mut() else { return false };
-            let n = list.len();
-            let cur = s.ac.1.min(n - 1);
+            if s.ac.0 != text {
+                s.ac = (text, first);
+            }
+            let n = rows.len();
+            let cur = s.ac.1.map(|c| c.min(n - 1));
             match key {
-                "up" => s.ac.1 = (cur + n - 1) % n,
-                "down" => s.ac.1 = (cur + 1) % n,
+                "up" => s.ac.1 = Some(cur.map_or(n - 1, |c| (c + n - 1) % n)),
+                "down" => s.ac.1 = Some(cur.map_or(0, |c| (c + 1) % n)),
                 _ => {
-                    pick_answer(app, &list[cur].value, window, cx);
+                    let Some(c) = cur else { return false };
+                    activate(app, rows[c].clone(), window, cx);
                     return true;
                 }
             }
@@ -327,18 +350,6 @@ pub fn on_key(app: &mut PhoenixApp, key: &str, window: &mut Window, cx: &mut Con
         return true;
     }
     false
-}
-
-fn current_answers(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<Answer> {
-    let Some(s) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()) else { return Vec::new() };
-    let text = s.input.read(cx).value().to_string();
-    let Some(p) = pending_filter(&text, &sq::keys()) else { return Vec::new() };
-    if s.ac.0 != text
-        && let Some(s) = cx.global_mut::<Search>().0.as_mut()
-    {
-        s.ac = (text, 0);
-    }
-    sq::answers(app, p.key, &p.partial)
 }
 
 fn pick_answer(app: &mut PhoenixApp, value: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
@@ -374,33 +385,68 @@ fn submit(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
 }
 
 pub fn run(app: &mut PhoenixApp, req: SearchRequest, cx: &mut Context<PhoenixApp>) {
+    run_attempt(app, req, 0, cx);
+}
+
+pub const INDEX_RETRIES: u32 = 5;
+
+fn run_attempt(app: &mut PhoenixApp, req: SearchRequest, attempts: u32, cx: &mut Context<PhoenixApp>) {
     let Some(s) = cx.global_mut::<Search>().0.as_mut() else { return };
     s.seq += 1;
     let seq = s.seq;
-    s.loading = true;
+    s.loading = attempts == 0;
     s.error = None;
+    s.attempts = attempts;
     s.request = Some(req.clone());
-    let fut = app.backend.search_messages(req);
+    let fut = app.backend.search_messages(req.clone());
     cx.spawn(async move |this, cx| {
         let res = fut.await;
-        let _ = this.update(cx, |_, cx| {
-            let Some(s) = cx.global_mut::<Search>().0.as_mut() else { return };
-            if s.seq != seq {
-                return;
-            }
-            s.loading = false;
-            match res {
-                Ok(p) => s.page = Some(p),
-                Err(e) => {
-                    s.page = None;
-                    s.error = Some(e.0.into());
+        let retry = this
+            .update(cx, |_, cx| {
+                let Some(s) = cx.global_mut::<Search>().0.as_mut() else { return None };
+                if s.seq != seq {
+                    return None;
                 }
+                s.loading = false;
+                let mut retry = None;
+                match res {
+                    Ok(p) => {
+                        if let Some(wait) = p.indexing {
+                            s.attempts += 1;
+                            retry = (s.attempts <= INDEX_RETRIES).then_some((wait, s.attempts));
+                        }
+                        s.page = Some(p);
+                    }
+                    Err(e) => {
+                        s.page = None;
+                        s.error = Some(e.0.into());
+                    }
+                }
+                cx.notify();
+                retry
+            })
+            .ok()
+            .flatten();
+        let Some((wait, attempts)) = retry else { return };
+        cx.background_executor().timer(std::time::Duration::from_secs_f64(wait)).await;
+        let _ = this.update(cx, |app, cx| {
+            if cx.try_global::<Search>().and_then(|s| s.0.as_ref()).is_some_and(|s| s.seq == seq) {
+                run_attempt(app, req, attempts, cx);
             }
-            cx.notify();
         });
     })
     .detach();
     cx.notify();
+}
+
+pub fn indexing_text(req: &SearchRequest) -> SharedString {
+    if req.all_dms {
+        crate::t!("search.indexing_dms")
+    } else if req.guild.is_some() {
+        crate::t!("search.indexing_guild")
+    } else {
+        crate::t!("search.indexing_dm")
+    }
 }
 
 fn rerun(app: &mut PhoenixApp, f: impl FnOnce(&mut SearchRequest), cx: &mut Context<PhoenixApp>) {
@@ -763,7 +809,7 @@ fn results_panel(
     let total = page.total;
     let dm_scope = req.all_dms || (req.guild.is_none() && req.channel.is_some());
     let dm_menu = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).is_some_and(|s| s.dm_menu);
-    let title: SharedString = if loading {
+    let title: SharedString = if loading || page.indexing.is_some() {
         crate::t!("search.searching")
     } else if total == 0 {
         crate::t!("search.no_result_title")
@@ -818,6 +864,8 @@ fn results_panel(
     let mut body = div().flex().flex_col().pt(z(16.)).pl(z(16.)).pr(z(16. + gutter));
     if let Some(e) = error.filter(|_| !loading) {
         body = body.child(empty_state(e, true));
+    } else if page.indexing.is_some() && page.messages.is_empty() && !loading {
+        body = body.child(empty_state(indexing_text(&req), false));
     } else if page.messages.is_empty() && !loading {
         body = body.child(empty_state(crate::t!("search.no_results"), false));
     } else {
@@ -1314,131 +1362,322 @@ fn answers_body(app: &PhoenixApp, key: FilterKey, list: &[Answer], selected: usi
     group
 }
 
-fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<SharedString>, loading: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let raw = input.read(cx).value().to_string();
-    let pending = pending_filter(&raw, &sq::keys()).filter(|p| !p.key.is_date());
-    if let Some(p) = pending {
-        let list = sq::answers(app, p.key, &p.partial);
-        if !list.is_empty() {
-            let selected = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).filter(|s| s.ac.0 == raw).map_or(0, |s| s.ac.1).min(list.len() - 1);
-            let body = answers_body(app, p.key, &list, selected, cx);
-            return popout_frame(input, body, cx);
+#[derive(Clone, Debug, PartialEq)]
+enum Row {
+    Answer(String),
+    SearchFor,
+    Filter(FilterKey),
+    MoreFilters(bool),
+    Cross(FilterKey, Answer),
+    FindIn(String, SharedString),
+    History(String),
+}
+
+enum Item {
+    Row(Row),
+    Group { title: SharedString, clear: bool, rows: Vec<Row> },
+}
+
+enum Layout {
+    Answers(FilterKey, Vec<Answer>),
+    Calendar(PendingFilter),
+    Hidden,
+    Items(Vec<Item>),
+}
+
+impl Layout {
+    fn rows(&self) -> Vec<Row> {
+        match self {
+            Self::Answers(_, list) => list.iter().map(|a| Row::Answer(a.value.clone())).collect(),
+            Self::Items(items) => items
+                .iter()
+                .flat_map(|i| match i {
+                    Item::Row(r) => vec![r.clone()],
+                    Item::Group { rows, .. } => rows.clone(),
+                })
+                .collect(),
+            Self::Calendar(_) | Self::Hidden => Vec::new(),
         }
     }
-    let history = cx.try_global::<SearchHistory>().map(|h| h.0.clone()).unwrap_or_default();
-    let mut filters = div().flex().flex_col().gap(z(4.)).child(group_header(crate::t!("search.filters")));
+
+    fn first_selected(&self) -> Option<usize> {
+        matches!(self, Self::Answers(..)).then_some(0)
+    }
+}
+
+fn filter_rows(skip_in: bool) -> Vec<Row> {
+    FILTERS.iter().filter(|(k, ..)| !(skip_in && *k == FilterKey::In)).map(|(k, ..)| Row::Filter(*k)).chain([Row::MoreFilters(true)]).collect()
+}
+
+fn popout_layout(app: &PhoenixApp, raw: &str, cx: &App) -> Layout {
+    let keys = sq::keys();
+    if let Some(p) = pending_filter(raw, &keys) {
+        if p.key.is_date() {
+            return Layout::Calendar(p);
+        }
+        let list = sq::answers(app, p.key, &p.partial);
+        return if list.is_empty() { Layout::Hidden } else { Layout::Answers(p.key, list) };
+    }
     let dm = in_dm(app);
     let all_dms = dm && cross_dm(app);
-    for (i, (k, glyph, label, value)) in FILTERS.into_iter().enumerate() {
-        if k == FilterKey::In && dm && !all_dms {
-            continue;
+    let skip_in = dm && !all_dms;
+    let filters = || Item::Group { title: crate::t!("search.filters"), clear: false, rows: filter_rows(skip_in) };
+    let mut items = Vec::new();
+    if raw.trim().is_empty() {
+        if all_dms && let Some(cur) = app.selected_channel {
+            let tag = dm_tag(app, cur);
+            items.push(Item::Row(Row::FindIn(format!("{}{}", sq::token(FilterKey::In), quote(&tag)), tag)));
         }
-        let key = sq::token(k);
-        filters = filters.child(
-            option_row(("search-filter", i))
-                .on_click(cx.listener(move |_, _, w, cx| add_filter(k, w, cx)))
-                .child(named(glyph, 20., tk(idx::TEXT_MUTED)).mr(z(8.)))
-                .child(
+        items.push(filters());
+        let history = cx.try_global::<SearchHistory>().map(|h| h.0.clone()).unwrap_or_default();
+        if !history.is_empty() {
+            items.push(Item::Group { title: crate::t!("search.history"), clear: true, rows: history.into_iter().map(Row::History).collect() });
+        }
+        return Layout::Items(items);
+    }
+    items.push(Item::Row(Row::SearchFor));
+    let cross = sq::free_word(raw, &keys).map(|(_, w)| sq::cross_answers(app, &w, skip_in)).unwrap_or_default();
+    if cross.is_empty() {
+        items.push(filters());
+    } else {
+        items.push(Item::Row(Row::MoreFilters(false)));
+        for (k, list) in cross {
+            items.push(Item::Group { title: sq::group_title(k), clear: false, rows: list.into_iter().map(|a| Row::Cross(k, a)).collect() });
+        }
+    }
+    Layout::Items(items)
+}
+
+fn set_and_submit(app: &mut PhoenixApp, q: String, window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    let Some(inp) = cx.global::<Search>().0.as_ref().map(|s| s.input.clone()) else { return };
+    inp.update(cx, |s, cx| s.set_value(q, window, cx));
+    submit(app, cx);
+}
+
+fn activate(app: &mut PhoenixApp, row: Row, window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    match row {
+        Row::Answer(v) => pick_answer(app, &v, window, cx),
+        Row::SearchFor => submit(app, cx),
+        Row::Filter(k) => add_filter(k, window, cx),
+        Row::MoreFilters(_) => crate::ui::search_filters::open(app, window, cx),
+        Row::Cross(k, a) => pick_cross(k, &a.value, window, cx),
+        Row::FindIn(q, _) | Row::History(q) => set_and_submit(app, q, window, cx),
+    }
+}
+
+fn pick_cross(key: FilterKey, value: &str, window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    let Some(input) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).map(|s| s.input.clone()) else { return };
+    let text = input.read(cx).value().to_string();
+    let Some((start, _)) = sq::free_word(&text, &sq::keys()) else { return };
+    let next = sq::replace_word(&text, start, key, value);
+    input.update(cx, |s, cx| {
+        s.set_value(next, window, cx);
+        s.focus(window, cx);
+    });
+    cx.notify();
+}
+
+fn pick_date(app: &mut PhoenixApp, d: NaiveDate, window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    let Some(input) = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).map(|s| s.input.clone()) else { return };
+    let text = input.read(cx).value().to_string();
+    let Some(p) = pending_filter(&text, &sq::keys()) else { return };
+    let next = complete_filter(&text, &p, &d.format("%Y-%m-%d").to_string());
+    if let Some(s) = cx.global_mut::<Search>().0.as_mut() {
+        s.cal = None;
+    }
+    input.update(cx, |s, cx| s.set_value(next, window, cx));
+    submit(app, cx);
+}
+
+pub const MIN_SEARCH_DATE: (i32, u32, u32) = (2015, 5, 15);
+
+fn date_popout(p: &PendingFilter, cx: &mut Context<PhoenixApp>) -> gpui::Stateful<gpui::Div> {
+    let today = chrono::Local::now().date_naive();
+    let first = |d: NaiveDate| d.with_day(1).unwrap_or(d);
+    let start = p.start;
+    let month = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).and_then(|s| s.cal).filter(|(at, _)| *at == start).map_or(first(today), |(_, m)| m);
+    let (y, m, d) = MIN_SEARCH_DATE;
+    let spec = crate::ui::search_filters::CalSpec { key: "popout".into(), month, selected: today, min: NaiveDate::from_ymd_opt(y, m, d), six: true, width: 356. };
+    let on_month: crate::ui::search_filters::OnMonth = std::rc::Rc::new(move |to: NaiveDate, cx: &mut App| {
+        if let Some(s) = cx.global_mut::<Search>().0.as_mut() {
+            s.cal = Some((start, to));
+        }
+    });
+    let on_day: crate::ui::search_filters::OnDay = std::rc::Rc::new(|d: NaiveDate, a: &mut PhoenixApp, w: &mut Window, cx: &mut Context<PhoenixApp>| pick_date(a, d, w, cx));
+    crate::ui::search_filters::calendar_box(spec, on_month, on_day, cx)
+}
+
+fn row_lead(glyph: &str) -> gpui::Svg {
+    named(glyph, 20., tk(idx::TEXT_MUTED)).mr(z(8.))
+}
+
+fn two_line(label: AnyElement, sub: AnyElement) -> gpui::Div {
+    div().flex().flex_col().min_w_0().child(label).child(sub)
+}
+
+fn text_14(weight: FontWeight, color: usize, s: impl Into<SharedString>) -> gpui::Div {
+    div().text_size(z(14.)).line_height(z(18.)).font_weight(weight).text_color(tk(color)).child(s.into())
+}
+
+fn cross_row(app: &PhoenixApp, key: FilterKey, a: &Answer) -> Vec<AnyElement> {
+    let glyph = match key {
+        FilterKey::Mentions => "search/at",
+        FilterKey::In => "hash",
+        _ => "search/user",
+    };
+    let token: SharedString = sq::token(key).into();
+    let body = match &a.lead {
+        AnswerLead::User(id) => {
+            let user = if *id == app.me.id { Some(&app.me) } else { app.users.get(id) };
+            two_line(
+            div()
+                .flex()
+                .items_center()
+                .gap(z(4.))
+                .child(avatar(user, 16.))
+                .child(text_14(FontWeight::SEMIBOLD, idx::TEXT_DEFAULT, a.label.clone()))
+                .into_any_element(),
+            div()
+                .flex()
+                .items_center()
+                .gap(z(4.))
+                .child(text_14(FontWeight::SEMIBOLD, idx::TEXT_SUBTLE, token))
+                .child(text_14(FontWeight::MEDIUM, idx::TEXT_MUTED, a.sub.clone().unwrap_or_default()))
+                .into_any_element(),
+            )
+        }
+        lead => {
+            let icon = match lead {
+                AnswerLead::Channel(kind) => {
+                    gpui::svg().path(crate::ui::sidebar::channel_icon(*kind).path()).flex_none().size(z(14.)).mr(z(4.)).text_color(tk(idx::TEXT_DEFAULT)).into_any_element()
+                }
+                AnswerLead::Dm(ch) => div().flex_none().mr(z(4.)).child(avatar(dm_peer(app, *ch), 16.)).into_any_element(),
+                _ => div().into_any_element(),
+            };
+            div()
+                .flex()
+                .items_center()
+                .gap(z(4.))
+                .min_w_0()
+                .child(text_14(FontWeight::MEDIUM, idx::TEXT_STRONG, token))
+                .child(div().flex().items_center().min_w_0().child(icon).child(text_14(FontWeight::SEMIBOLD, idx::TEXT_STRONG, a.label.clone()).truncate()))
+        }
+    };
+    vec![row_lead(glyph).into_any_element(), body.into_any_element()]
+}
+
+fn row_el(app: &PhoenixApp, row: &Row, ix: usize, selected: bool, query: &str, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let base = option_row(("search-row", ix)).when(selected, |d| d.bg(tk(idx::INTERACTIVE_BACKGROUND_HOVER)));
+    let picked = row.clone();
+    let base = base.on_click(cx.listener(move |a, _, w, cx| activate(a, picked.clone(), w, cx)));
+    let children: Vec<AnyElement> = match row {
+        Row::Answer(_) => Vec::new(),
+        Row::SearchFor => vec![
+            row_lead("search").into_any_element(),
+            div()
+                .flex()
+                .gap(z(4.))
+                .child(text_14(FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("search.search_for")))
+                .child(text_14(FontWeight::SEMIBOLD, idx::TEXT_STRONG, query.to_owned()).mr(z(8.)))
+                .into_any_element(),
+        ],
+        Row::Filter(k) => {
+            let (glyph, label, value) = FILTERS.iter().find(|(f, ..)| f == k).map_or(("search", "", ""), |(_, g, l, v)| (*g, *l, *v));
+            vec![
+                row_lead(glyph).into_any_element(),
+                two_line(
+                    text_14(FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!(label)).into_any_element(),
                     div()
                         .flex()
-                        .flex_col()
-                        .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(crate::t!(label)))
-                        .child(
-                            div()
-                                .flex()
-                                .gap(z(4.))
-                                .text_size(z(14.))
-                                .line_height(z(18.))
-                                .child(div().font_weight(FontWeight::SEMIBOLD).text_color(tk(idx::TEXT_SUBTLE)).child(key))
-                                .child(div().font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_MUTED)).child(crate::t!(value))),
-                        ),
-                ),
-        );
-    }
-    filters = filters.child(
-        option_row(("search-filter", FILTERS.len()))
-            .on_click(cx.listener(|a, _, w, cx| {
-                crate::ui::search_filters::open(a, w, cx);
-            }))
-            .child(named("inbox/filter", 20., tk(idx::TEXT_MUTED)).mr(z(8.)))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .text_size(z(14.))
-                    .line_height(z(18.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(div().text_color(tk(idx::TEXT_STRONG)).child(crate::t!("search.f_more")))
-                    .child(div().text_color(tk(idx::TEXT_MUTED)).child(crate::t!("search.v_more"))),
-            ),
-    );
-    let mut body = div().flex().flex_col();
-    let query = input.read(cx).value().trim().to_string();
-    let query_empty = query.is_empty();
-    if !query.is_empty() {
-        body = body
-            .child(
-                option_row(("search-for", 0))
-                    .on_click(cx.listener(|a, _, _, cx| submit(a, cx)))
-                    .child(named("search", 20., tk(idx::TEXT_MUTED)).mr(z(8.)))
-                    .child(
-                        div()
-                            .flex()
-                            .gap(z(4.))
-                            .text_size(z(14.))
-                            .line_height(z(18.))
-                            .text_color(tk(idx::TEXT_STRONG))
-                            .child(div().font_weight(FontWeight::MEDIUM).child(crate::t!("search.search_for")))
-                            .child(div().mr(z(8.)).font_weight(FontWeight::SEMIBOLD).child(SharedString::from(query))),
-                    ),
-            )
-            .child(div().my(z(8.)).mx(z(-8.)).h(z(1.)).bg(tk(idx::BORDER_SUBTLE)));
-    }
-    if all_dms && query_empty
-        && let Some(cur) = app.selected_channel
-    {
-        let tag = dm_tag(app, cur);
-        let token = format!("{}{}", sq::token(FilterKey::In), quote(&tag));
-        body = body.child(
-            option_row(("search-find-in", 0))
-                .on_click(cx.listener(move |a, _, w, cx| {
-                    let Some(inp) = cx.global::<Search>().0.as_ref().map(|s| s.input.clone()) else { return };
-                    let t = token.clone();
-                    inp.update(cx, |s, cx| s.set_value(t, w, cx));
-                    submit(a, cx);
-                }))
-                .child(named("search", 20., tk(idx::TEXT_MUTED)).mr(z(8.)))
-                .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(crate::t!("search.find_in", name = tag))),
-        );
-    }
-    body = body.child(filters);
-    if !history.is_empty() {
-        let mut group = div().flex().flex_col().gap(z(4.)).child(
-            group_header(crate::t!("search.history")).child(
-                div()
-                    .id("search-clear-history")
-                    .cursor_pointer()
-                    .child(named("chat/trash", 18., tk(idx::TEXT_SUBTLE)))
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        cx.default_global::<SearchHistory>().0.clear();
-                        cx.notify();
-                    })),
-            ),
-        );
-        for (i, q) in history.into_iter().enumerate() {
-            let text = q.clone();
-            group = group.child(
-                option_row(("search-history", i))
-                    .on_click(cx.listener(move |a, _, w, cx| {
-                        let Some(inp) = cx.global::<Search>().0.as_ref().map(|s| s.input.clone()) else { return };
-                        inp.update(cx, |s, cx| s.set_value(text.clone(), w, cx));
-                        submit(a, cx);
-                    }))
-                    .child(named("search", 20., tk(idx::TEXT_MUTED)).mr(z(8.)))
-                    .child(history_pills(app, &q)),
-            );
+                        .gap(z(4.))
+                        .child(text_14(FontWeight::SEMIBOLD, idx::TEXT_SUBTLE, sq::token(*k)))
+                        .child(text_14(FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!(value)))
+                        .into_any_element(),
+                )
+                .into_any_element(),
+            ]
         }
-        body = body.child(div().my(z(8.)).mx(z(-8.)).h(z(1.)).bg(tk(idx::BORDER_SUBTLE))).child(group);
+        Row::MoreFilters(true) => vec![
+            row_lead("inbox/filter").into_any_element(),
+            two_line(
+                text_14(FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("search.f_more")).into_any_element(),
+                text_14(FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!("search.v_more")).into_any_element(),
+            )
+            .into_any_element(),
+        ],
+        Row::MoreFilters(false) => {
+            vec![row_lead("inbox/filter").into_any_element(), text_14(FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("search.f_add")).into_any_element()]
+        }
+        Row::Cross(k, a) => cross_row(app, *k, a),
+        Row::FindIn(_, tag) => vec![
+            row_lead("search").into_any_element(),
+            text_14(FontWeight::MEDIUM, idx::TEXT_STRONG, crate::t!("search.find_in", name = tag.clone())).into_any_element(),
+        ],
+        Row::History(q) => vec![row_lead("search").into_any_element(), history_pills(app, q).into_any_element()],
+    };
+    base.children(children).into_any_element()
+}
+
+fn divider() -> gpui::Div {
+    div().my(z(8.)).mx(z(-8.)).h(z(1.)).bg(tk(idx::BORDER_SUBTLE))
+}
+
+fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<SharedString>, loading: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let raw = input.read(cx).value().to_string();
+    let shape = popout_layout(app, &raw, cx);
+    let stored = cx.try_global::<Search>().and_then(|s| s.0.as_ref()).filter(|s| s.ac.0 == raw).map(|s| s.ac.1);
+    let selected = stored.unwrap_or_else(|| shape.first_selected());
+    let mut body = div().flex().flex_col();
+    match shape {
+        Layout::Calendar(p) => {
+            let cal = date_popout(&p, cx);
+            return popout_frame(input, div().child(cal), false, cx);
+        }
+        Layout::Answers(key, list) => {
+            let sel = selected.unwrap_or(0).min(list.len() - 1);
+            body = body.child(answers_body(app, key, &list, sel, cx));
+        }
+        Layout::Hidden => {
+            if error.is_none() && !loading {
+                return div().absolute().top_0().left_0().right_0().bottom_0().child(live_bar(&input, true, cx)).into_any_element();
+            }
+        }
+        Layout::Items(items) => {
+            let query = raw.trim().to_owned();
+            let mut n = 0;
+            for item in items {
+                match item {
+                    Item::Row(r) => {
+                        body = body.child(row_el(app, &r, n, selected == Some(n), &query, cx));
+                        n += 1;
+                    }
+                    Item::Group { title, clear, rows } => {
+                        if n > 0 {
+                            body = body.child(divider());
+                        }
+                        let mut header = group_header(title);
+                        if clear {
+                            header = header.child(
+                                div()
+                                    .id("search-clear-history")
+                                    .cursor_pointer()
+                                    .child(named("chat/trash", 18., tk(idx::TEXT_SUBTLE)))
+                                    .on_click(cx.listener(|_, _, _, cx| {
+                                        cx.default_global::<SearchHistory>().0.clear();
+                                        cx.notify();
+                                    })),
+                            );
+                        }
+                        let mut group = div().flex().flex_col().gap(z(4.)).child(header);
+                        for r in rows {
+                            group = group.child(row_el(app, &r, n, selected == Some(n), &query, cx));
+                            n += 1;
+                        }
+                        body = body.child(group);
+                    }
+                }
+            }
+        }
     }
     if let Some(e) = error {
         body = body.child(div().px(z(8.)).pt(z(8.)).text_size(z(14.)).text_color(tk(idx::TEXT_FEEDBACK_CRITICAL)).child(e));
@@ -1446,10 +1685,10 @@ fn options_popout(app: &PhoenixApp, input: Entity<InputState>, error: Option<Sha
     if loading {
         body = body.child(div().px(z(8.)).pt(z(8.)).text_size(z(14.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("search.searching")));
     }
-    popout_frame(input, body, cx)
+    popout_frame(input, body, true, cx)
 }
 
-fn popout_frame(input: Entity<InputState>, body: gpui::Div, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn popout_frame(input: Entity<InputState>, body: gpui::Div, pad: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let bar = live_bar(&input, true, cx);
     div()
         .absolute()
@@ -1475,8 +1714,8 @@ fn popout_frame(input: Entity<InputState>, body: gpui::Div, cx: &mut Context<Pho
                 .top(z(layout::TITLE_BAR_H + layout::HEADER_H - 3.))
                 .right(z(12.))
                 .w(z(356.))
-                .px(z(8.))
-                .py(z(12.))
+                .when(pad, |d| d.px(z(8.)).py(z(12.)))
+                .when(!pad, |d| d.overflow_hidden())
                 .rounded(z(8.))
                 .border_1()
                 .border_color(tk(idx::BORDER_SUBTLE))

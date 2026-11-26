@@ -78,6 +78,8 @@ pub struct SearchQuery {
     pub pinned: Option<bool>,
     pub author_types: Vec<String>,
     pub attachment_extensions: Vec<String>,
+    pub attachment_filenames: Vec<String>,
+    pub link_hostnames: Vec<String>,
     pub sort: SearchSort,
     pub offset: u32,
     pub include_nsfw: bool,
@@ -99,6 +101,8 @@ impl SearchQuery {
             && self.pinned.is_none()
             && self.author_types.is_empty()
             && self.attachment_extensions.is_empty()
+            && self.attachment_filenames.is_empty()
+            && self.link_hostnames.is_empty()
     }
 
     pub fn to_query(&self) -> String {
@@ -132,6 +136,12 @@ impl SearchQuery {
         }
         for e in &self.attachment_extensions {
             s.append_pair("attachment_extension", e);
+        }
+        for f in &self.attachment_filenames {
+            s.append_pair("attachment_filename", f);
+        }
+        for h in &self.link_hostnames {
+            s.append_pair("link_hostname", h);
         }
         match self.sort {
             SearchSort::Newest => {
@@ -196,6 +206,12 @@ impl SearchQuery {
         if !self.attachment_extensions.is_empty() {
             tab.insert("attachment_extension".into(), json!(self.attachment_extensions));
         }
+        if !self.attachment_filenames.is_empty() {
+            tab.insert("attachment_filename".into(), json!(self.attachment_filenames));
+        }
+        if !self.link_hostnames.is_empty() {
+            tab.insert("link_hostname".into(), json!(self.link_hostnames));
+        }
         tab.insert("offset".into(), json!(self.offset));
         tab.insert("limit".into(), json!(limit));
         let mut body = Map::new();
@@ -237,11 +253,26 @@ pub enum FilterKey {
     In,
     Pinned,
     AuthorType,
+    LinkFrom,
+    FileType,
+    FileName,
 }
 
 impl FilterKey {
-    pub const ALL: [FilterKey; 9] =
-        [Self::From, Self::Mentions, Self::Has, Self::Before, Self::After, Self::On, Self::In, Self::Pinned, Self::AuthorType];
+    pub const ALL: [FilterKey; 12] = [
+        Self::From,
+        Self::Mentions,
+        Self::Has,
+        Self::LinkFrom,
+        Self::FileType,
+        Self::FileName,
+        Self::Before,
+        Self::After,
+        Self::On,
+        Self::In,
+        Self::Pinned,
+        Self::AuthorType,
+    ];
 
     pub fn english(self) -> &'static str {
         match self {
@@ -254,6 +285,9 @@ impl FilterKey {
             Self::In => "in",
             Self::Pinned => "pinned",
             Self::AuthorType => "authorType",
+            Self::LinkFrom => "linkFrom",
+            Self::FileType => "fileType",
+            Self::FileName => "fileName",
         }
     }
 
@@ -342,6 +376,15 @@ pub struct ParsedSearch {
     pub during: Option<String>,
     pub pinned: Option<bool>,
     pub author_types: Vec<String>,
+    pub link_from: Vec<String>,
+    pub file_types: Vec<String>,
+    pub file_names: Vec<String>,
+}
+
+fn push_unique(list: &mut Vec<String>, v: String) {
+    if !list.contains(&v) {
+        list.push(v);
+    }
 }
 
 pub fn parse_search(input: &str) -> ParsedSearch {
@@ -403,6 +446,18 @@ pub fn parse_search_with(input: &str, keys: &SearchKeys) -> ParsedSearch {
                 }
                 _ => false,
             },
+            Some(FilterKey::LinkFrom) => {
+                push_unique(&mut out.link_from, val);
+                true
+            }
+            Some(FilterKey::FileType) => {
+                push_unique(&mut out.file_types, val);
+                true
+            }
+            Some(FilterKey::FileName) => {
+                push_unique(&mut out.file_names, val);
+                true
+            }
             Some(FilterKey::AuthorType) => match keys.author_type(&val) {
                 Some(v) => {
                     if !out.author_types.contains(&v) {
@@ -529,7 +584,7 @@ fn parse_search_reply(status: StatusCode, bytes: &[u8]) -> Result<SearchOutcome>
             retry_after: Option<f64>,
         }
         let p: Option<Pending> = serde_json::from_slice(bytes).ok();
-        let retry_after = p.and_then(|p| p.retry_after).unwrap_or(2.0).clamp(0.5, 60.0);
+        let retry_after = p.and_then(|p| p.retry_after).filter(|r| *r > 0.).unwrap_or(5.0).clamp(0.5, 60.0);
         return Ok(SearchOutcome::Indexing { retry_after });
     }
     Ok(SearchOutcome::Results(serde_json::from_slice(bytes)?))
@@ -776,6 +831,29 @@ mod tests {
         assert_eq!(fr.has_label(HasFilter::Snapshot), "transférer");
         assert_eq!(SearchKeys::english().has_label(HasFilter::Snapshot), "forward");
         assert_eq!(HasFilter::parse("snapshot"), Some(HasFilter::Snapshot));
+    }
+
+    #[test]
+    fn link_and_file_filters() {
+        let p = parse_search("logs linkFrom:github.com fileType:png filetype:png fileName:crash.txt fileType:");
+        assert_eq!(p.content, "logs fileType:");
+        assert_eq!(p.link_from, vec!["github.com"]);
+        assert_eq!(p.file_types, vec!["png"]);
+        assert_eq!(p.file_names, vec!["crash.txt"]);
+        let fr = SearchKeys::localized(
+            vec![(FilterKey::LinkFrom, "lienDe".into()), (FilterKey::FileType, "typeFichier".into()), (FilterKey::FileName, "nomFichier".into())],
+            vec![],
+            vec![],
+        );
+        let f = parse_search_with("liende:youtube.com typeFichier:mp4 nomFichier:clip", &fr);
+        assert_eq!((f.link_from, f.file_types, f.file_names), (vec!["youtube.com".to_owned()], vec!["mp4".to_owned()], vec!["clip".to_owned()]));
+        assert_eq!(fr.label(FilterKey::FileType), "typeFichier");
+        let q = SearchQuery { link_hostnames: vec!["github.com".into()], attachment_filenames: vec!["crash.txt".into()], ..Default::default() };
+        assert!(!q.is_empty());
+        assert_eq!(q.to_query(), "attachment_filename=crash.txt&link_hostname=github.com&sort_by=timestamp&sort_order=desc");
+        let b = q.to_tabs_body(25);
+        assert_eq!(b["tabs"]["messages"]["link_hostname"], serde_json::json!(["github.com"]));
+        assert_eq!(b["tabs"]["messages"]["attachment_filename"], serde_json::json!(["crash.txt"]));
     }
 
     #[test]
