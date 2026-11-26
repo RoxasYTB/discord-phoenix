@@ -123,8 +123,8 @@ fn client_tray_dirs() -> Vec<PathBuf> {
         for v in versions.into_iter().rev() {
             let Ok(mods) = std::fs::read_dir(v.join("modules")) else { continue };
             for m in mods.flatten() {
-                let dir = m.path().join("discord_desktop_core/app/images/systemtray/linux");
-                if dir.join("tray.png").is_file() {
+                let dir = m.path().join("discord_desktop_core/app/images/systemtray");
+                if dir.join("linux/tray.png").is_file() {
                     out.push(dir);
                 }
             }
@@ -151,13 +151,34 @@ fn app_pixmap() -> Pixmap {
     [32u32, 64].iter().map(|&s| argb(&image::imageops::resize(&rgba, s, s, image::imageops::FilterType::Lanczos3))).collect()
 }
 
+pub const TRAY_SCALES: [&str; 10] = ["1.25", "1.33", "1.4", "1.5", "1.8", "2", "2.5", "3", "4", "5"];
+
+pub fn tray_files(dir: &Path, name: &str) -> Vec<PathBuf> {
+    let win = dir.join("win32");
+    let mut files = vec![dir.join("linux").join(format!("{name}.png")), win.join(format!("{name}.png"))];
+    files.extend(TRAY_SCALES.iter().map(|s| win.join(format!("{name}@{s}x.png"))));
+    files
+}
+
+fn client_pixmaps(dir: &Path, name: &str) -> Pixmap {
+    let mut out: Pixmap = Vec::new();
+    for img in tray_files(dir, name).iter().filter_map(|f| load_png(f.as_path())) {
+        let px = argb(&img);
+        if !out.iter().any(|p| (p.0, p.1) == (px.0, px.1)) {
+            out.push(px);
+        }
+    }
+    out.sort_by_key(|p| p.0);
+    out
+}
+
 fn icons() -> HashMap<&'static str, Pixmap> {
     let fallback = app_pixmap();
     let dir = client_tray_dirs().into_iter().next();
     ICON_NAMES
         .iter()
         .map(|&n| {
-            let px = dir.as_ref().and_then(|d| load_png(&d.join(format!("{n}.png")))).map(|i| vec![argb(&i)]).unwrap_or_else(|| fallback.clone());
+            let px = dir.as_ref().map(|d| client_pixmaps(d, n)).filter(|p| !p.is_empty()).unwrap_or_else(|| fallback.clone());
             (n, px)
         })
         .collect()
@@ -493,6 +514,15 @@ impl Menu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tray_files_cover_every_client_scale() {
+        let files = tray_files(Path::new("/s"), "tray-unread");
+        assert_eq!(files[0], Path::new("/s/linux/tray-unread.png"));
+        assert_eq!(files[1], Path::new("/s/win32/tray-unread.png"));
+        assert_eq!(files.last().map(PathBuf::as_path), Some(Path::new("/s/win32/tray-unread@5x.png")));
+        assert_eq!(files.len(), 12);
+    }
 
     #[test]
     fn icon_follows_the_client_priority() {
