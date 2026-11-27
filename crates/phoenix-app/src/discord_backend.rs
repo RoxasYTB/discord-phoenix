@@ -1295,7 +1295,11 @@ impl Backend for DiscordBackend {
     fn guild_profile(&self, guild: Id) -> BoxFuture<crate::commands::guide::GuildProfile> {
         self.with_session(move |_, s| async move {
             let v = s.rest.guild_profile(sf(guild)).await.map_err(api_err)?;
-            Ok(crate::commands::guide::parse_profile(&v))
+            let mut profile = crate::commands::guide::parse_profile(&v);
+            if profile.banner_hash.is_none() {
+                profile.banner_hash = s.cache.guild(sf(guild)).and_then(|g| g.properties.banner.clone());
+            }
+            Ok(profile)
         })
     }
     fn join_guild(&self, guild: Id) -> BoxFuture<()> {

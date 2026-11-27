@@ -12,7 +12,16 @@ use crate::{
 };
 
 pub const POPOUT_W: f32 = 300.;
-const POPOUT_H: f32 = 360.;
+const PREFERRED_HEIGHT: f32 = 460.;
+
+fn placement(at: Point<Pixels>, viewport: gpui::Size<Pixels>) -> (Pixels, Pixels, Pixels, Pixels) {
+    let margin = z(12.);
+    let width = z(POPOUT_W).min((viewport.width - margin * 2.).max(px(1.)));
+    let height = z(PREFERRED_HEIGHT).min((viewport.height - margin * 2.).max(px(1.)));
+    let left = (at.x + z(8.)).clamp(margin, (viewport.width - width - margin).max(margin));
+    let top = (at.y - z(24.)).clamp(margin, (viewport.height - height - margin).max(margin));
+    (left, top, width, (viewport.height - top - margin).max(px(1.)))
+}
 
 fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
@@ -118,11 +127,7 @@ impl PhoenixApp {
 
 pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let pop = app.people.tag_popout.as_ref()?;
-    let vp = window.viewport_size();
-    let w = z(POPOUT_W);
-    let h = z(POPOUT_H);
-    let left = (pop.at.x + px(8.)).min(vp.width - w - px(12.)).max(px(12.));
-    let top = (pop.at.y - px(24.)).min(vp.height - h - px(12.)).max(px(12.));
+    let (left, top, w, max_height) = placement(pop.at, window.viewport_size());
 
     let card = if pop.loading {
         div()
@@ -141,7 +146,7 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
     } else if pop.private {
         render_fallback(pop, crate::t!("tag_popout.private"), false, cx)
     } else if let Some(p) = &pop.profile {
-        render_profile(app, pop, p, cx)
+        render_profile(app, pop, p, max_height, cx)
     } else {
         render_fallback(pop, crate::t!("tag_popout.error"), true, cx)
     };
@@ -164,12 +169,15 @@ pub fn render(app: &PhoenixApp, window: &Window, cx: &mut Context<PhoenixApp>) -
                 crate::ui::popout_motion::side_of(f32::from(pop.at.x), f32::from(left)),
                 div()
                     .id("tag-popout-card")
+                    .occlude()
                     .absolute()
                     .left(left)
                     .top(top)
+                    .w(w)
+                    .max_h(max_height)
                     .shadow_lg()
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(card),
+                    .child(card.w_full()),
             ))
             .into_any_element(),
     )
@@ -244,20 +252,28 @@ fn render_fallback(pop: &TagPopout, msg: SharedString, is_error: bool, cx: &mut 
         )
 }
 
-fn render_profile(app: &PhoenixApp, pop: &TagPopout, p: &GuildProfile, cx: &mut Context<PhoenixApp>) -> Div {
+fn render_profile(app: &PhoenixApp, pop: &TagPopout, p: &GuildProfile, max_height: Pixels, cx: &mut Context<PhoenixApp>) -> Div {
     let gid = pop.guild_id;
     let is_member = app.guilds.iter().any(|g| g.id == gid);
-    let banner_bg = p.brand_color_primary.as_deref().and_then(parse_hex_color).map(c).unwrap_or_else(|| tk(idx::BACKGROUND_MOD_STRONG));
+    let accent = p.brand_color_primary.as_deref().and_then(parse_hex_color).map(c)
+        .unwrap_or_else(|| tk(idx::BACKGROUND_BRAND).opacity(0.45));
+    let background = tk(idx::BACKGROUND_SURFACE_HIGHER);
+    let artwork = p.custom_banner_hash.as_ref()
+        .map(|hash| cdn(format!("discovery-splashes/{}/{hash}.jpg?size=640", gid.0)))
+        .or_else(|| p.banner_hash.as_ref().map(|hash| cdn(format!("banners/{}/{hash}.webp?size=640", gid.0))));
     let banner = div()
         .relative()
         .h(z(120.))
         .w_full()
         .flex_none()
         .overflow_hidden()
-        .bg(banner_bg)
-        .when_some(p.custom_banner_hash.clone(), |d, h| {
+        .bg(background)
+        .child(div().absolute().inset_0().bg(gpui::linear_gradient(
+            130., gpui::linear_color_stop(accent, 0.), gpui::linear_color_stop(background, 1.),
+        )))
+        .when_some(artwork, |d, image| {
             d.child(
-                img(cdn(format!("discovery-splashes/{}/{h}.jpg?size=640", gid.0)))
+                img(image)
                     .absolute()
                     .inset_0()
                     .size_full()
@@ -405,9 +421,10 @@ fn render_profile(app: &PhoenixApp, pop: &TagPopout, p: &GuildProfile, cx: &mut 
         crate::t!("tag_popout.join_server")
     };
 
-    let cta = div().px(z(16.)).pb(z(16.)).w_full().child(
+    let cta = div().flex_none().px(z(16.)).pt(z(4.)).pb(z(12.)).w_full().child(
         div()
             .id("tag-popout-cta")
+            .debug_selector(|| "tag-popout-cta".into())
             .w_full()
             .h(z(32.))
             .rounded(z(8.))
@@ -451,12 +468,34 @@ fn render_profile(app: &PhoenixApp, pop: &TagPopout, p: &GuildProfile, cx: &mut 
         .overflow_hidden()
         .flex()
         .flex_col()
-        .child(banner)
-        .child(avatar)
-        .child(header)
-        .when(has_body, |d| d.child(body))
-        .when_some(pop.error.clone(), |d, err| {
-            d.child(div().px(z(16.)).pb(z(8.)).text_size(z(12.)).text_color(tk(idx::TEXT_FEEDBACK_WARNING)).child(err))
-        })
+        .max_h(max_height)
+        .child(
+            div().id("tag-popout-content").min_h_0().w_full().overflow_y_scroll()
+                .child(banner)
+                .child(avatar)
+                .child(header)
+                .when(has_body, |d| d.child(body))
+                .when_some(pop.error.clone(), |d, err| {
+                    d.child(div().px(z(16.)).pb(z(8.)).text_size(z(12.)).text_color(tk(idx::TEXT_FEEDBACK_WARNING)).child(err))
+                }),
+        )
         .child(cta)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tag_card_leaves_space_for_the_footer_at_window_edges() {
+        for (width, height) in [(420., 550.), (220., 260.), (1280., 720.)] {
+            let viewport = gpui::size(px(width), px(height));
+            let margin = z(12.);
+            let (left, top, width, max_height) = placement(gpui::point(viewport.width, viewport.height), viewport);
+            assert!(left >= margin && top >= margin);
+            assert!(left + width + margin <= viewport.width);
+            assert!(top + max_height + margin <= viewport.height);
+            assert!(max_height >= z(100.));
+        }
+    }
 }

@@ -60,7 +60,10 @@ fn close_modals(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> bool {
 }
 
 fn close_popouts(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> bool {
-    if app.people.any_overlay() || app.people.tag_popout.is_some() {
+    if app.people.tag_popout.take().is_some() {
+        return true;
+    }
+    if app.people.any_overlay() {
         app.people.close_overlays();
         return true;
     }

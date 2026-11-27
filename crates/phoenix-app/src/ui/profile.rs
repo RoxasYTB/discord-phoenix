@@ -660,6 +660,7 @@ fn guild_tag_pill(
     let badge_s = badge.clone();
     div()
         .id(SharedString::from(format!("guild-tag-{t}")))
+        .debug_selector(|| "profile-server-tag".into())
         .h(z(24.))
         .px(z(8.))
         .flex()
