@@ -12,6 +12,37 @@ pub const ENTITY_NONE: u64 = 0;
 pub struct Live {
     pub stages: HashMap<u64, u64>,
     pub events: HashMap<u64, Option<u64>>,
+    pub activities: HashMap<(String, u64), Activity>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Activity {
+    pub channel: Option<u64>,
+    pub users: Vec<u64>,
+}
+
+fn activity_entry(instance: &Value) -> Option<((String, u64), Activity)> {
+    let location = instance.get("location")?;
+    let key = (location.get("id")?.as_str()?.to_string(), id(instance.get("application_id"))?);
+    let users = instance
+        .get("participants")
+        .and_then(Value::as_array)
+        .map(|p| p.iter().filter_map(|u| id(u.get("user_id"))).collect())
+        .unwrap_or_default();
+    Some((key, Activity { channel: id(location.get("channel_id")), users }))
+}
+
+fn upsert_activity(l: &mut Live, instance: &Value) -> bool {
+    let Some((key, a)) = activity_entry(instance) else { return false };
+    if a.users.is_empty() {
+        l.activities.remove(&key).is_some()
+    } else {
+        l.activities.insert(key, a.clone()) != Some(a)
+    }
+}
+
+fn activity_guild(instance: &Value) -> Option<u64> {
+    id(instance.get("guild_id")).or_else(|| id(instance.get("location")?.get("guild_id")))
 }
 
 static STORE: Mutex<Option<HashMap<u64, Live>>> = Mutex::new(None);
@@ -32,8 +63,11 @@ pub fn active_event(e: &Value) -> bool {
     e.get("status").and_then(Value::as_u64) == Some(EVENT_ACTIVE) && e.get("entity_type").and_then(Value::as_u64).is_some_and(|t| t != ENTITY_NONE)
 }
 
-pub fn from_guild(stages: &[Value], events: &[Value]) -> Live {
+pub fn from_guild(stages: &[Value], events: &[Value], activities: &[Value]) -> Live {
     let mut l = Live::default();
+    for a in activities {
+        upsert_activity(&mut l, a);
+    }
     for s in stages {
         if let (Some(i), Some(c)) = (id(s.get("id")), id(s.get("channel_id"))) {
             l.stages.insert(i, c);
@@ -47,8 +81,17 @@ pub fn from_guild(stages: &[Value], events: &[Value]) -> Live {
     l
 }
 
-pub fn load(guild: u64, stages: &[Value], events: &[Value]) {
-    store().get_or_insert_with(HashMap::new).insert(guild, from_guild(stages, events));
+pub fn load(guild: u64, stages: &[Value], events: &[Value], activities: &[Value]) {
+    store().get_or_insert_with(HashMap::new).insert(guild, from_guild(stages, events, activities));
+}
+
+pub fn load_activities(guild: u64, activities: &[Value]) {
+    let mut st = store();
+    let l = st.get_or_insert_with(HashMap::new).entry(guild).or_default();
+    l.activities.clear();
+    for a in activities {
+        upsert_activity(l, a);
+    }
 }
 
 pub fn forget(guild: u64) {
@@ -58,6 +101,10 @@ pub fn forget(guild: u64) {
 }
 
 pub fn apply(live: &mut HashMap<u64, Live>, name: &str, data: &Value) -> bool {
+    if name == "EMBEDDED_ACTIVITY_UPDATE_V2" {
+        let Some(guild) = activity_guild(data) else { return false };
+        return upsert_activity(live.entry(guild).or_default(), data);
+    }
     let (Some(guild), Some(i)) = (id(data.get("guild_id")), id(data.get("id"))) else { return false };
     let l = live.entry(guild).or_default();
     match name {
@@ -95,9 +142,31 @@ mod tests {
                 json!({ "id": "10", "status": 2, "entity_type": 3, "channel_id": null }),
                 json!({ "id": "11", "status": 2, "entity_type": 0 }),
             ],
+            &[],
         );
         assert_eq!(l.stages, HashMap::from([(7, 70)]));
         assert_eq!(l.events, HashMap::from([(8, Some(80)), (10, None)]));
+    }
+
+    #[test]
+    fn embedded_activities_follow_their_participants() {
+        let inst = |users: &[&str]| {
+            json!({
+                "application_id": "880218394199220334",
+                "guild_id": "5",
+                "location": { "id": "gc-5-50", "kind": "gc", "channel_id": "50", "guild_id": "5" },
+                "participants": users.iter().map(|u| json!({ "user_id": u, "session_id": "s" })).collect::<Vec<_>>(),
+            })
+        };
+        let l = from_guild(&[], &[], &[inst(&["1", "2"]), json!({ "application_id": "9" })]);
+        assert_eq!(l.activities.len(), 1);
+        assert_eq!(l.activities[&("gc-5-50".to_string(), 880218394199220334)], Activity { channel: Some(50), users: vec![1, 2] });
+        let mut m = HashMap::new();
+        assert!(apply(&mut m, "EMBEDDED_ACTIVITY_UPDATE_V2", &inst(&["1"])));
+        assert!(!apply(&mut m, "EMBEDDED_ACTIVITY_UPDATE_V2", &inst(&["1"])));
+        assert_eq!(m[&5].activities.len(), 1);
+        assert!(apply(&mut m, "EMBEDDED_ACTIVITY_UPDATE_V2", &inst(&[])));
+        assert!(m[&5].activities.is_empty());
     }
 
     #[test]

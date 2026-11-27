@@ -403,6 +403,7 @@ pub struct MediaState {
     pub connected: bool,
     pub live_stage: bool,
     pub active_event: bool,
+    pub activity: bool,
 }
 
 impl MediaState {
@@ -421,6 +422,16 @@ impl MediaState {
         self
     }
 
+    pub fn with_activities(mut self, live: &crate::guild_live::Live, muted: bool, hidden_user: impl Fn(u64) -> bool, channel_ok: impl Fn(u64) -> bool) -> Self {
+        let mut shown = live.activities.values().filter(|a| !a.users.iter().any(|u| hidden_user(*u)));
+        self.activity = if self.connected {
+            shown.next().is_some()
+        } else {
+            !muted && shown.any(|a| a.channel.is_some_and(&channel_ok))
+        };
+        self
+    }
+
     pub fn icon(&self) -> Option<&'static str> {
         if self.active_event {
             Some("calendar")
@@ -432,6 +443,8 @@ impl MediaState {
             Some("video-call")
         } else if self.audio {
             Some("speaker")
+        } else if self.activity {
+            Some("apps")
         } else {
             None
         }
@@ -480,10 +493,13 @@ pub fn guild_media(app: &PhoenixApp, g: &Guild) -> MediaState {
             self_stream: crate::ui::go_live::live(app) || flags(me).stream,
         };
         let stage = app.channels.get(&v).is_some_and(|c| c.kind == crate::model::ChannelKind::Stage);
-        return media_state(Some(here), false, &[]).with_live(&crate::guild_live::get(g.id.0), false, Some((v.0, stage)), |_| true);
+        let live = crate::guild_live::get(g.id.0);
+        return media_state(Some(here), false, &[])
+            .with_live(&live, false, Some((v.0, stage)), |_| true)
+            .with_activities(&live, false, |u| hidden(app, u), |_| true);
     }
     let live = crate::guild_live::get(g.id.0);
-    let quiet = live.stages.is_empty() && live.events.is_empty();
+    let quiet = live.stages.is_empty() && live.events.is_empty() && live.activities.is_empty();
     if quiet && chans.iter().filter_map(|c| app.channels.get(c)).all(|ch| ch.voice_users.is_empty()) {
         return MediaState::default();
     }
@@ -502,7 +518,26 @@ pub fn guild_media(app: &PhoenixApp, g: &Guild) -> MediaState {
         }
     }
     let visible = |c: u64| chans.contains(&crate::model::Id(c));
-    media_state(None, guild_muted, &presences).with_live(&live, guild_muted, None, visible)
+    media_state(None, guild_muted, &presences)
+        .with_live(&live, guild_muted, None, visible)
+        .with_activities(&live, guild_muted, |u| hidden(app, u), |c| activity_channel(app, crate::model::Id(c)))
+}
+
+fn hidden(app: &PhoenixApp, u: u64) -> bool {
+    app.nav.is_blocked(crate::model::Id(u)) || app.nav.is_ignored(crate::model::Id(u))
+}
+
+const USE_EMBEDDED_ACTIVITIES: u64 = 1 << 39;
+
+fn activity_channel(app: &PhoenixApp, id: crate::model::Id) -> bool {
+    use crate::model::ChannelKind;
+    let Some(ch) = app.channels.get(&id) else { return false };
+    let top_level = ch.parent.and_then(|p| app.channels.get(&p)).is_none_or(|p| p.kind == ChannelKind::Category);
+    let vocal = matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage);
+    let launchable = top_level
+        && matches!(ch.kind, ChannelKind::Text | ChannelKind::Voice)
+        && app.backend.channel_permissions(id).is_none_or(|p| p & USE_EMBEDDED_ACTIVITIES != 0);
+    vocal || launchable || !top_level
 }
 
 pub fn folder_media(app: &PhoenixApp, guilds: &[&Guild]) -> MediaState {
@@ -510,7 +545,7 @@ pub fn folder_media(app: &PhoenixApp, guilds: &[&Guild]) -> MediaState {
         .iter()
         .map(|g| guild_media(app, g))
         .find(|s| s.connected)
-        .map(|s| MediaState { audio: !s.video, live_stage: false, active_event: false, ..s })
+        .map(|s| MediaState { audio: !s.video, live_stage: false, active_event: false, activity: false, ..s })
         .unwrap_or_default()
 }
 
@@ -1212,6 +1247,21 @@ mod media_tests {
         let s = here.with_live(&live, true, Some((50, false)), |_| true);
         assert_eq!((s.icon(), s.connected), (Some("calendar"), true));
         assert_eq!(here.with_live(&live, false, Some((60, true)), |_| true).icon(), Some("stage"));
+    }
+
+    #[test]
+    fn activities_come_last_and_skip_blocked_players() {
+        let mut live = crate::guild_live::Live::default();
+        live.activities.insert(("gc".into(), 9), crate::guild_live::Activity { channel: Some(50), users: vec![1, 2] });
+        let idle = MediaState::default();
+        assert_eq!(idle.with_activities(&live, false, |_| false, |_| true).icon(), Some("apps"));
+        assert_eq!(idle.with_activities(&live, false, |u| u == 2, |_| true).icon(), None);
+        assert_eq!(idle.with_activities(&live, true, |_| false, |_| true).icon(), None);
+        assert_eq!(idle.with_activities(&live, false, |_| false, |c| c != 50).icon(), None);
+        let voice = media_state(None, false, &[p(false, false)]).with_activities(&live, false, |_| false, |_| true);
+        assert_eq!((voice.icon(), voice.activity), (Some("speaker"), true));
+        let here = media_state(Some(Here { channel_has_video: false, self_stream: false }), false, &[]);
+        assert!(here.with_activities(&live, true, |_| false, |_| false).activity);
     }
 
     #[test]

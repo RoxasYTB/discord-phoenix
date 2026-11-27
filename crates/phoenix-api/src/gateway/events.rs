@@ -60,6 +60,8 @@ pub struct SupplementalGuild {
     pub id: GuildId,
     #[serde(default, deserialize_with = "null_default")]
     pub voice_states: Vec<VoiceState>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub activity_instances: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

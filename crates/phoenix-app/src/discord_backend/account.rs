@@ -221,7 +221,7 @@ fn density_to_proto(d: Density) -> i32 {
 
 pub(super) fn on_gateway(s: &Session, ev: &GatewayEvent) {
     if let GatewayEvent::Unknown { name, data } = ev
-        && (name.starts_with("STAGE_INSTANCE_") || name.starts_with("GUILD_SCHEDULED_EVENT_"))
+        && (name.starts_with("STAGE_INSTANCE_") || name.starts_with("GUILD_SCHEDULED_EVENT_") || name == "EMBEDDED_ACTIVITY_UPDATE_V2")
     {
         crate::guild_live::on_event(name, data);
     }
@@ -253,7 +253,12 @@ pub(super) fn on_gateway(s: &Session, ev: &GatewayEvent) {
         GatewayEvent::Ready(_) => {
             crate::notifications::on_ready(&s.cache);
             for g in s.cache.guilds() {
-                crate::guild_live::load(g.id.0, &g.stage_instances, &g.guild_scheduled_events);
+                crate::guild_live::load(g.id.0, &g.stage_instances, &g.guild_scheduled_events, &g.activity_instances);
+            }
+        }
+        GatewayEvent::ReadySupplemental(r) => {
+            for g in &r.guilds {
+                crate::guild_live::load_activities(g.id.0, &g.activity_instances);
             }
         }
         GatewayEvent::GuildDelete(g) => crate::guild_live::forget(g.id.0),
@@ -263,7 +268,7 @@ pub(super) fn on_gateway(s: &Session, ev: &GatewayEvent) {
         GatewayEvent::MessageAck(a) => crate::notifications::on_ack(a.channel_id.0),
         GatewayEvent::GuildCreate(g) | GatewayEvent::GuildUpdate(g) => {
             if matches!(ev, GatewayEvent::GuildCreate(_)) {
-                crate::guild_live::load(g.id.0, &g.stage_instances, &g.guild_scheduled_events);
+                crate::guild_live::load(g.id.0, &g.stage_instances, &g.guild_scheduled_events, &g.activity_instances);
             }
             if let Some(d) = g.properties.default_message_notifications {
                 s.notify.lock().set_default(g.id.0, crate::notifications::Level::from_default(Some(d)));
