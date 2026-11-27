@@ -420,8 +420,12 @@ pub struct CustomUserTheme {
     pub base_mix: i32,
 }
 
+fn sub_message(b: &[u8], tag: u32) -> Option<&[u8]> {
+    fields(b).into_iter().rev().find(|(t, w, ..)| *t == tag && *w == 2).map(|f| f.3)
+}
+
 pub fn custom_user_theme(raw: &[u8]) -> Option<CustomUserTheme> {
-    let sub = |b: &[u8], tag: u32| fields(b).into_iter().rev().find(|(t, w, ..)| *t == tag && *w == 2).map(|f| f.3);
+    let sub = sub_message;
     let custom = sub(sub(sub(raw, 13)?, 3)?, 4)?;
     let mut out = CustomUserTheme::default();
     for (tag, wt, v, d) in fields(custom) {
