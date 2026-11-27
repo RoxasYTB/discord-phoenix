@@ -201,6 +201,236 @@ pub fn active(app: &PhoenixApp) -> bool {
         && app.channels.get(&ch).is_some_and(|c| c.guild.is_none() || matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage))
 }
 
+fn lobby_channel(app: &PhoenixApp) -> Option<Id> {
+    let ch = app.selected_channel?;
+    if app.voice_channel == Some(ch) {
+        return None;
+    }
+    app.channels.get(&ch).filter(|c| c.guild.is_some() && c.kind == ChannelKind::Voice).map(|_| ch)
+}
+
+pub fn lobby_bg_rgb(x: f32, y: f32) -> [u8; 3] {
+    let dx = (x - 0.5) / 0.72;
+    let dy = (y - 1.0) / 0.95;
+    let r = (dx * dx + dy * dy).sqrt().clamp(0., 1.);
+    let k = (1. - r) * (1. - r);
+    let lerp = |a: f32, b: f32| (a + (b - a) * k).round().clamp(0., 255.) as u8;
+    [lerp(14., 101.), lerp(14., 81.), lerp(50., 201.)]
+}
+
+thread_local! {
+    static LOBBY_BG: std::cell::RefCell<Option<std::sync::Arc<gpui::RenderImage>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn lobby_bg() -> std::sync::Arc<gpui::RenderImage> {
+    if let Some(img) = LOBBY_BG.with(|c| c.borrow().clone()) {
+        return img;
+    }
+    let (w, h) = (320u32, 180u32);
+    let mut out = image::RgbaImage::new(w, h);
+    for (x, y, px) in out.enumerate_pixels_mut() {
+        let [r, g, b] = lobby_bg_rgb((x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32);
+        *px = image::Rgba([b, g, r, 255]);
+    }
+    let arc = std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(out)]));
+    LOBBY_BG.with(|c| *c.borrow_mut() = Some(arc.clone()));
+    arc
+}
+
+fn lobby_subtitle(names: &[String]) -> SharedString {
+    match names {
+        [] => crate::t!("call.lobby_empty"),
+        [a] => crate::t!("call.lobby_one", a = a.as_str()),
+        [a, b] => crate::t!("call.lobby_two", a = a.as_str(), b = b.as_str()),
+        [a, b, rest @ ..] if rest.len() == 1 => crate::t!("call.lobby_many_one", a = a.as_str(), b = b.as_str(), n = 1),
+        [a, b, rest @ ..] => crate::t!("call.lobby_many", a = a.as_str(), b = b.as_str(), n = rest.len()),
+    }
+}
+
+fn lobby_tile(app: &PhoenixApp, user: Id, zoom: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    div()
+        .id(SharedString::from(format!("lobby-tile-{}", user.0)))
+        .w(z(160.))
+        .h(z(90.))
+        .flex_none()
+        .rounded(z(8.))
+        .overflow_hidden()
+        .bg(tile_background(app, user, cx))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(avatar(app.users.get(&user), 48. * zoom))
+        .into_any_element()
+}
+
+fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    let ch = app.channels.get(&ch_id)?;
+    let zoom = crate::theme::zoom();
+    let name = crate::ui::dm_profile_panel::channel_name(app, ch);
+    let names: Vec<String> = ch.voice_users.iter().map(|&u| crate::ui::sidebar::voice_user_name(app, u).to_string()).collect();
+    let preview: Vec<Id> = ch.voice_users.iter().copied().take(5).collect();
+    let tiles_el = (!preview.is_empty()).then(|| {
+        let row = |slice: &[Id], cx: &mut Context<PhoenixApp>| {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .gap(z(8.))
+                .children(slice.iter().map(|&u| lobby_tile(app, u, zoom, cx)))
+        };
+        let mut col = div().flex().flex_col().items_center().gap(z(8.)).mb(z(24.));
+        if preview.len() <= 3 {
+            col = col.child(row(&preview, cx));
+        } else {
+            col = col.child(row(&preview[..3], cx)).child(row(&preview[3..], cx));
+        }
+        col
+    });
+
+    let open = chat_open();
+    let header = div()
+        .flex_none()
+        .pt(z(8.))
+        .pb(z(8.))
+        .child(
+            div()
+                .h(z(33.))
+                .px(z(24.))
+                .flex()
+                .items_center()
+                .gap(z(10.))
+                .child(named("speaker", 20., t(idx::CHANNEL_ICON)))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_size(z(16.))
+                        .line_height(z(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t(idx::TEXT_STRONG))
+                        .text_ellipsis()
+                        .child(crate::ui::emoji_text::label(name.clone(), 16.)),
+                )
+                .child(
+                    div()
+                        .id("lobby-chat")
+                        .size(z(24.))
+                        .rounded(z(8.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .tip(if open {
+                            crate::t!("call.hide_chat")
+                        } else {
+                            crate::t!("call.show_chat")
+                        })
+                        .child(named(
+                            "chat",
+                            24.,
+                            t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT }),
+                        ))
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            set_chat_open(!chat_open());
+                            cx.notify();
+                        })),
+                ),
+        );
+
+    let center = div()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .px(z(24.))
+        .children(tiles_el)
+        .child(
+            div()
+                .text_size(z(28.))
+                .line_height(z(34.))
+                .font_weight(FontWeight::BOLD)
+                .text_color(t(idx::WHITE))
+                .child(crate::ui::emoji_text::label(name, 28.)),
+        )
+        .child(
+            div()
+                .mt(z(8.))
+                .text_size(z(14.))
+                .line_height(z(20.))
+                .text_color(gpui::hsla(0., 0., 1., 0.72))
+                .child(lobby_subtitle(&names)),
+        )
+        .child(
+            div()
+                .id("lobby-join-voice")
+                .mt(z(20.))
+                .h(z(38.))
+                .px(z(20.))
+                .rounded(z(8.))
+                .bg(t(idx::WHITE))
+                .hover(|s| s.bg(gpui::rgba(0xe3e5e8ff)))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .text_size(z(14.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(gpui::rgba(0x060607ff))
+                .child(crate::t!("call.join_voice"))
+                .on_click(cx.listener(move |a, _, _, cx| a.enter_voice_channel(ch_id, cx))),
+        );
+
+    let lobby = div()
+        .id("voice-lobby")
+        .relative()
+        .flex_1()
+        .min_w_0()
+        .h_full()
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .when(crate::theme::frame_borders(), |d| d.border_t_1().border_color(t(idx::APP_FRAME_BORDER)))
+        .child(
+            gpui::img(gpui::ImageSource::Render(lobby_bg()))
+                .absolute()
+                .inset_0()
+                .size_full()
+                .object_fit(gpui::ObjectFit::Fill),
+        )
+        .child(div().relative().size_full().flex().flex_col().child(header).child(center));
+
+    let root = div()
+        .flex_1()
+        .min_w_0()
+        .size_full()
+        .overflow_hidden()
+        .flex()
+        .flex_row()
+        .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+        .child(lobby);
+
+    Some(if open {
+        root.child(
+            div()
+                .w(z(CHAT_W))
+                .flex_none()
+                .min_w_0()
+                .h_full()
+                .flex()
+                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(c(tok(idx::APP_FRAME_BORDER))))
+                .overflow_hidden()
+                .child(div().w(z(CHAT_W)).h_full().flex().flex_col().child(crate::ui::chat::render(app, window, cx, true))),
+        )
+        .into_any_element()
+    } else {
+        root.into_any_element()
+    })
+}
+
 pub(crate) const POPOUT: &str = "icons/call/popout.svg";
 pub(crate) const FULLSCREEN: &str = "icons/call/fullscreen.svg";
 const CAMERA_OFF: &str = "icons/call/camera-off.svg";
@@ -279,7 +509,10 @@ pub fn grid(n: usize, w: f32, h: f32, gap: f32) -> (usize, f32) {
 }
 
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    if !active(app) || private_split(app) {
+    if !active(app) {
+        return lobby_channel(app).and_then(|ch| render_lobby(app, ch, window, cx));
+    }
+    if private_split(app) {
         return None;
     }
     let ch_id = app.voice_channel?;
@@ -1916,5 +2149,23 @@ mod tests {
         assert_eq!(super::voice_status_icon(VoiceFlags { server_mute: true, self_deaf: true, ..Default::default() }, false), Some(("mic-deny", true)));
         assert_eq!(super::voice_status_icon(VoiceFlags { server_deaf: true, server_mute: true, ..Default::default() }, false), Some(("headphones-deny", true)));
         assert_eq!(super::voice_status_icon(VoiceFlags::default(), true), Some(("mic-deny", true)));
+    }
+
+    #[test]
+    fn lobby_bg_is_brighter_at_bottom_center() {
+        let center = super::lobby_bg_rgb(0.5, 1.0);
+        let corner = super::lobby_bg_rgb(0.0, 0.0);
+        assert!(center[2] > corner[2]);
+        assert!(center[0] > corner[0]);
+    }
+
+    #[test]
+    fn lobby_subtitle_formats_participant_counts() {
+        assert!(!super::lobby_subtitle(&[]).is_empty());
+        assert!(super::lobby_subtitle(&["Alice".into()]).contains("Alice"));
+        let two = super::lobby_subtitle(&["Alice".into(), "Bob".into()]);
+        assert!(two.contains("Alice") && two.contains("Bob"));
+        let four = super::lobby_subtitle(&["Alice".into(), "Bob".into(), "Carl".into(), "Dan".into()]);
+        assert!(four.contains("Alice") && four.contains("Bob") && four.contains('2'));
     }
 }
