@@ -329,7 +329,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     let sched = if reply.is_none() { super::scheduled::bar(app, cx) } else { None };
     let has_banner = reply.is_some() || sched.is_some();
     let tray = upload_tray(app, cx);
-    let blocked = app.selected_channel.and_then(|c| app.nav.extras.get(&c)).is_some_and(|x| x.send_blocked);
+    let blocked = channel_read_only(app);
     let show_send_button = should_show_send_button(app.prefs.local.flag("send-btn", false), blocked);
     let can_send = !placeholder_empty || !app.chat.uploads.is_empty();
     let placeholder = if blocked { crate::t!("chat.no_permission") } else { placeholder };
