@@ -11,7 +11,7 @@ input handler both see them). Between steps it reads app state and compares.
 
 ```sh
 cd /mnt/windata/project-phoenix/compare/qa-input
-PHX_AGENT=1 PHX_NO_SCROLL=1 PHX_MEMBERS=true PHX_IN_VOICE=false \
+PHX_AGENT=1 PHX_NO_SCROLL=1 PHX_MEMBERS=true PHX_IN_VOICE=false PHX_FOLDERS=0 \
 PHX_W=1280 PHX_H=800 PHX_SCALE=1.5 PHX_GUILD=1369382919948210248 \
 PHX_CHANNEL=1574797385463496724 PHX_SCRIPT=~/discord-phoenix/scripts/qa/basic_input.qa \
 flock /tmp/phoenix-render.lock phoenix-nice ~/discord-phoenix/int-bin/real_shots qa.png
@@ -21,7 +21,14 @@ Without `PHX_NO_SCROLL`, `PHX_MEMBERS` and `PHX_IN_VOICE`, `real_shots` copies t
 sidebar scroll, the member list toggle and the voice panel from the official client
 over CDP. The 27/11 runs inherited a hidden member list that way (`members item #2 is
 not laid out`, `members_y` stuck at 0) and a scrolled sidebar (channel click on the
-wrong row), so the scenario pins them.
+wrong row), so the scenario pins them. `PHX_FOLDERS=0` closes every rail folder, so the
+guild step opens the second folder (40,173) and clicks its first server (40,229).
+
+#phoenix gets new test messages all the time, so the video steps do not click a
+fixed point: `jump <message id>` scrolls to the test video message the way a reply
+or search jump does, `@video` is the bounds of the video player painted last
+(`region video @video` hashes its pixels, `@video.br+-16,-16` is the fullscreen
+button), and `action bottom` goes back to the present afterwards.
 
 The offscreen window runs on GPUI's test dispatcher, whose timers only fire when its
 clock moves. `wait`, `until` and every step that drives frames advance that clock by
@@ -52,7 +59,7 @@ integrator.
 
 Points are window coordinates in logical px (`x,y`) or anchors:
 `@chat`, `@sidebar`, `@members`, `@guilds` (list viewports), `@settings` (the
-settings scroll area), `@window`. `.tl .tr .bl .br .t .b .l .r` pick a corner
+settings scroll area), `@video` (the video player painted last), `@window`. `.tl .tr .bl .br .t .b .l .r` pick a corner
 or edge instead of the centre, `#n` picks list item `n` (`#-1` = last), and
 `+dx,dy` offsets the point: `@chat#-1.tl+30,20`, `@chat.b+0,-24`.
 
@@ -72,6 +79,7 @@ or edge instead of the centre, `#n` picks list item `n` (`#-1` = last), and
 | `hold shift\|ctrl\|alt\|none` | modifiers for the following mouse events |
 | `action pageup\|pagedown\|top\|bottom` | dispatch the action itself (no key) |
 | `select <channel id>` | setup only: open a channel without clicking |
+| `jump <message id>` | setup only: jump to a message of the open channel |
 | `text <text>` | insert text in the composer (one input change, like a paste or an IME commit; `\n` = new line) |
 | `clip_image <file>` | put a PNG or JPEG on the offscreen window's clipboard (never the user's), for `key ctrl-v` |
 | `region <name> x,y,w,h` | a screen rectangle for `px:<name>` |

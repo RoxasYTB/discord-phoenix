@@ -277,6 +277,7 @@ struct Player {
     position: f64,
     image: Option<Arc<RenderImage>>,
     painted: Option<Instant>,
+    shown_at: Option<Bounds<Pixels>>,
     hovered: bool,
     moved: Instant,
     controls: Spring,
@@ -312,6 +313,7 @@ impl Player {
             position: 0.,
             image: None,
             painted: None,
+            shown_at: None,
             hovered: false,
             moved: Instant::now(),
             controls: Spring::new(0., 250., 5.),
@@ -1653,6 +1655,7 @@ fn tracker(key: SharedString, src: SharedString, looped: bool, plays: Option<boo
             p.want_max = want;
             if !fullscreen {
                 p.measured = Some(f32::from(b.size.width) / f32::from(z(1.)).max(0.01));
+                p.shown_at = Some(b);
             }
             if let Some(play) = plays {
                 p.active = true;
@@ -2298,6 +2301,11 @@ pub fn exit_fullscreen(window: &mut Window, cx: &mut App) -> bool {
     }
     set_fullscreen(cx, window, None);
     true
+}
+
+pub fn shot_bounds(cx: &App) -> Option<Bounds<Pixels>> {
+    let fresh = |p: &&Player| p.painted.is_some_and(|t| t.elapsed() < OFFSCREEN);
+    cx.try_global::<Store>()?.players.values().filter(|p| !p.looped).filter(fresh).max_by_key(|p| p.painted).and_then(|p| p.shown_at)
 }
 
 pub fn shot_time(cx: &App) -> Option<f64> {

@@ -160,6 +160,7 @@ impl Run<'_, '_> {
                     Ok(b)
                 }
                 "window" => Ok(Bounds { origin: point(px(0.), px(0.)), size: vp }),
+                "video" => phoenix_app::ui::chat::video_player::shot_bounds(cx).ok_or_else(|| anyhow::anyhow!("no video player on screen")),
                 _ => anyhow::bail!("unknown anchor @{name}"),
             }
         })
@@ -495,7 +496,14 @@ impl Run<'_, '_> {
             }
             "region" => {
                 let name = args.first().ok_or_else(|| anyhow::anyhow!("region needs a name"))?.to_string();
-                let r: Vec<f32> = args.get(1).copied().unwrap_or_default().split(',').filter_map(|v| v.parse().ok()).collect();
+                let spec = args.get(1).copied().unwrap_or_default();
+                let r: Vec<f32> = if let Some(a) = spec.strip_prefix('@') {
+                    let b = self.anchor(cx, a, None)?;
+                    let k = cx.update_window(self.env.win, |_, window, _| window.page_zoom())?;
+                    [b.origin.x, b.origin.y, b.size.width, b.size.height].map(|v| f32::from(v) * k).to_vec()
+                } else {
+                    spec.split(',').filter_map(|v| v.parse().ok()).collect()
+                };
                 anyhow::ensure!(r.len() == 4, "region {name} needs x,y,w,h");
                 self.regions.insert(name, [r[0], r[1], r[2], r[3]]);
             }
@@ -551,6 +559,17 @@ impl Run<'_, '_> {
                 let format = if rest.ends_with(".jpg") || rest.ends_with(".jpeg") { gpui::ImageFormat::Jpeg } else { gpui::ImageFormat::Png };
                 let item = gpui::ClipboardItem { entries: vec![gpui::ClipboardEntry::Image(gpui::Image::from_bytes(format, bytes))] };
                 cx.update(|cx| cx.write_to_clipboard(item));
+            }
+            "jump" => {
+                let id = phoenix_app::model::Id(rest.parse()?);
+                cx.update_window(self.env.win, |_, _, cx| {
+                    self.env.app.update(cx, |app, cx| {
+                        if let Some(ch) = app.selected_channel {
+                            app.jump_to_message(ch, id, cx);
+                        }
+                    })
+                })?;
+                self.frames(cx, 1500);
             }
             "select" => {
                 let id = phoenix_app::model::Id(rest.parse()?);

@@ -44,16 +44,17 @@ wait 1500
 expect at_bottom == 1
 shot 05-present
 step Vidéo : lecture au clic
-region video 470,440,480,240
+jump 1575813162031382548
+region video @video
 mark px:video
-click 714,560
+click @video
 until 20000 video_t > 0.3
 mark video_t px:video
 wait 1500
 expect video_t up 0.8
 expect px:video changed
 step Vidéo : pause au clic
-click 714,560
+click @video
 wait 300
 mark video_t px:video
 wait 1200
@@ -66,13 +67,15 @@ key right
 wait 300
 expect video_t up 3
 step Vidéo : plein écran
-click 948,694
+click @video.br+-16,-16
 wait 600
 expect fullscreen == 1
 shot 08-video-fullscreen
 key escape
 wait 600
 expect fullscreen == 0
+action bottom
+wait 1500
 step Menu contextuel d'un message
 click @chat.b+0,-60 right
 wait 300
@@ -160,7 +163,9 @@ expect channel changed
 shot 18-channel
 step Changer de serveur au clic
 mark guild
-click 40,525
+click 40,173
+wait 400
+click 40,229
 wait 3000
 expect guild changed
 shot 19-guild
