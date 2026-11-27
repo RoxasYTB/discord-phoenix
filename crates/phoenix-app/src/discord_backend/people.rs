@@ -1,7 +1,4 @@
-use phoenix_api::{
-    gateway::GuildSubscription,
-    rest::settings::{CustomStatusProto, with_custom_status, with_status},
-};
+use phoenix_api::rest::settings::{CustomStatusProto, with_custom_status, with_status};
 
 use super::{
     DiscordBackend, api_err, convert,
@@ -18,9 +15,7 @@ use convert::{id, sf};
 impl DiscordBackend {
     pub(super) fn people_ranges(&self, guild: Id, channel: Id, ranges: Vec<[u32; 2]>) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
-            let mut sub = GuildSubscription::focused(None);
-            sub.channels.insert(sf(channel), ranges);
-            let _ = s.gateway.subscribe_guild(sf(guild), sub);
+            s.subs.channel(&s.gateway, sf(guild), sf(channel), ranges, false);
             Ok(())
         })
     }

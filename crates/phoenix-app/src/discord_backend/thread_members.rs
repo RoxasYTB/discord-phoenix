@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 
-use phoenix_api::{gateway::GatewayEvent, gateway::GuildSubscription};
+use phoenix_api::gateway::GatewayEvent;
 use serde_json::Value;
 use tokio::sync::oneshot;
 
@@ -62,9 +62,7 @@ impl DiscordBackend {
             if let Ok(mut p) = PENDING.lock() {
                 p.get_or_insert_default().insert(thread.0, tx);
             }
-            let mut sub = GuildSubscription::focused(None);
-            sub.thread_member_lists.push(sf(thread));
-            let _ = s.gateway.subscribe_guild(guild, sub);
+            s.subs.thread_list(&s.gateway, guild, sf(thread));
             let (members, users) = tokio::time::timeout(Duration::from_secs(10), rx)
                 .await
                 .map_err(|_| BackendError("Thread member list timed out.".into()))?

@@ -17,12 +17,13 @@ mod msg_cache;
 mod snapshot;
 mod preupload;
 mod self_presence;
+mod subscriptions;
 #[cfg(test)]
 pub(crate) use profile_edit::bodies as profile_edit_bodies;
 pub mod store;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -30,7 +31,6 @@ use std::{
 use parking_lot::Mutex;
 use phoenix_api::{
     Cache, ClientProperties, Error as ApiError, Gateway, GatewayConfig, GatewayEvent, GatewayHandle, RestClient,
-    gateway::GuildSubscription,
     models as api,
     rest::{CreateMessage, LoginResponse},
 };
@@ -77,7 +77,7 @@ struct Session {
     adapter: Arc<Mutex<Adapter>>,
     selected_channel: Mutex<Option<api::Snowflake>>,
     pending_acks: Mutex<HashSet<u64>>,
-    subscribed: Mutex<HashMap<u64, u64>>,
+    subs: subscriptions::Subscriptions,
     last_typing: Mutex<Option<(u64, Instant)>>,
     notify: Mutex<crate::notifications::NotifyPrefs>,
     new_notifications: bool,
@@ -269,7 +269,7 @@ async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<Rea
     let adapter = Adapter::new(ready.user.id, prefs);
     let data = start_session(&inner, rest, gateway, cache, &ready, adapter, rx, data);
     if let Some(s) = inner.session.lock().clone() {
-        self_presence::send(&s);
+        self_presence::resend(&s);
     }
     Ok(data)
 }
@@ -294,7 +294,7 @@ fn start_session(
         adapter,
         selected_channel: Mutex::new(None),
         pending_acks: Mutex::new(HashSet::new()),
-        subscribed: Mutex::new(HashMap::new()),
+        subs: Default::default(),
         last_typing: Mutex::new(None),
         notify: Mutex::new(crate::notifications::NotifyPrefs::from_ready_with_defaults(
             ready.user_guild_settings.as_ref(),
@@ -396,7 +396,7 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
         thread_members::on_gateway(&ev);
         pins::on_gateway(&ev);
         match &ev {
-            GatewayEvent::Resumed => self_presence::send(&s),
+            GatewayEvent::Resumed => self_presence::resend(&s),
             GatewayEvent::Unknown { name, data } if name == "USER_SETTINGS_PROTO_UPDATE" => self_presence::on_settings_update(&s, data),
             _ => {}
         }
@@ -419,7 +419,9 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
                 *a = Adapter::new(r.user.id, prefs);
                 authors
             };
-            s.subscribed.lock().clear();
+            let selected = *s.selected_channel.lock();
+            let selected_guild = selected.and_then(|c| s.cache.channel(c)).and_then(|c| c.guild_id);
+            s.subs.new_session(&s.gateway, selected_guild);
             inner.emit(AppEvent::Connection(true));
             inner.emit(AppEvent::Resync(crate::commands::Resync(data)));
             nav::snapshot(&s.cache, r).into_iter().for_each(|e| inner.emit(e));
@@ -817,7 +819,7 @@ impl Backend for DiscordBackend {
     fn select_guild(&self, guild: Option<Id>) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
             if let Some(g) = guild {
-                let _ = s.gateway.subscribe_guild(sf(g), GuildSubscription::focused(None));
+                s.subs.guild(&s.gateway, sf(g));
                 if let Some((op, d)) = crate::voice::start_time::request(g.0) {
                     let _ = s.gateway.send(phoenix_api::gateway::GatewayCommand::Raw { op, d });
                 }
@@ -831,10 +833,8 @@ impl Backend for DiscordBackend {
             let ch = sf(channel);
             *s.selected_channel.lock() = Some(ch);
             let c = s.cache.channel(ch);
-            if let Some(g) = c.as_ref().and_then(|c| c.guild_id)
-                && s.subscribed.lock().insert(g.0, ch.0) != Some(ch.0)
-            {
-                let _ = s.gateway.subscribe_guild(g, GuildSubscription::focused(Some(ch)));
+            if let Some(g) = c.as_ref().and_then(|c| c.guild_id) {
+                s.subs.channel(&s.gateway, g, ch, vec![subscriptions::FIRST_RANGE], true);
             }
             let shown = s.adapter.lock().show_list(&s.cache, ch);
             shown.into_iter().for_each(|e| inner.emit(e));
@@ -1178,6 +1178,7 @@ impl Backend for DiscordBackend {
         self.people_ranges(guild, channel, ranges)
     }
     fn set_activity(&self, foregrounded: bool, rtc_connected: bool) {
+        phoenix_api::props::set_app_focused(foregrounded);
         let v = u8::from(foregrounded) | (u8::from(rtc_connected) << 1);
         if ACTIVITY.swap(v, std::sync::atomic::Ordering::Relaxed) == v {
             return;

@@ -51,6 +51,8 @@ pub struct Ready {
     pub swp_message_promotion_locked: Option<bool>,
     #[serde(default)]
     pub swp_message_promotion_default_opted_out: Option<bool>,
+    #[serde(default)]
+    pub qos_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

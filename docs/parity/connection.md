@@ -62,3 +62,32 @@ that is the session reset after 5 failed attempts, and it fades out on the next 
 
 No live CDP capture of the client's network was possible on 26/11 (CDP port closed), so the client side above
 comes from the bundle only.
+
+## Live check against the client (27/11)
+
+Sources: CDP `Network.webSocketFrameSent` on the main page of the running client (stable 1.0.171, build
+681625, native 99581), the client's `X-Super-Properties` header (decoded, ids removed), the live bundle
+`web.1732a939a32a5e17.js` fetched from the CDN (`_doIdentify`, `handleIdentify`, `presenceUpdate`,
+`GuildSubscriptionsStore`, `SelfPresenceStore`), `discord_desktop_core/core.asar` (crash reporter metadata)
+and `~/.config/discord/installer.db`. Observation only: no reconnect was forced, no server or channel was
+opened, so the identify and op 37 rows come from the live bundle.
+
+The client sends ETF (`encoding=etf`, zstd-stream); Phoenix sends JSON over zlib-stream. The payloads below
+are compared after decoding.
+
+| item | client (live) | Phoenix | status |
+|---|---|---|---|
+| op 40 frames | `{op:40, d:{seq, qos:{active, ver:31, reasons}}}`, `reasons: ["foregrounded"]` when focused, `active:false, reasons:[]` otherwise; no op 1 at all | same | ✅ |
+| op 40 interval | 41.25 s (four beats in a row: 41 252, 41 250, 41 251 ms); an extra beat as soon as the window gets focused, the interval timer keeps running | same | ✅ |
+| identify keys | `token, capabilities, properties, presence, compress:false, client_state:{guild_versions:{}}, qos_token` | same keys | ✅ |
+| `qos_token` | base64 of `QosToken { client_provided: { is_active }, derived }`, `derived` = READY `qos_token` (base64 `DerivedQosData`), kept per user | same encoding, derived kept from the last READY of the process (not persisted across restarts) | ⚠ |
+| identify `properties` | super properties + `client_app_state`, `is_fast_connect:false`, `gateway_connect_reasons` (`AppSkeleton` once the app shell is mounted, `COLD_START` before), `installation_id` when tracked | same, `gateway_connect_reasons` is always `AppSkeleton`, no `installation_id` | ⚠ |
+| super properties | key order `os, browser, release_channel, client_version, os_version, os_version_is_release, os_arch, app_arch, system_locale, has_client_mods, client_launch_id, browser_user_agent, browser_version, window_manager, distro, runtime_environment, display_server, client_build_number, native_build_number, client_event_source, launch_signature, client_heartbeat_session_id, client_app_state` | same order and values (`os_version` = kernel release, `system_locale` from the OS locale, `window_manager` = `$XDG_CURRENT_DESKTOP,$GDMSESSION`, `distro` = os-release `PRETTY_NAME`, `display_server` = `$XDG_SESSION_TYPE`, `native_build_number` = `metadata_version` from `installer.db`, `client_app_state` follows window focus in REST too); was a fixed `6.12.0` / `en-US` / `Debian GNU/Linux` / no native build | ✅ except `launch_signature` ❌ (made by the client's libdiscore WASM `generateLaunchSignature`, not reproducible) |
+| capabilities | `1767421` (bits 0, 2–10, 12–15, 17, 19, 20) | `8639` (bits 0–5, 7, 8, 13); bit 1 is set by Phoenix but not by the client; the client's set changes READY and guild events (PASSIVE_UPDATE_V2 for bit 14) that Phoenix does not parse yet | ❌ |
+| identify presence | `SelfPresenceStore.getLocalPresence()`: `status:"unknown", since:0, activities:[], afk:false` before the first READY, then the current presence on every later identify | the first identify sends `unknown`, later ones send the last op 3 | ✅ `identify_carries_the_last_presence_sent` |
+| op 3 shape | `{status, since, activities, afk}` (no `broadcast`) | same | ✅ |
+| op 3 timing | after READY only if the presence differs from the one sent (so once after the first READY), on RESUMED always (`forceUpdate`), on every change of status, custom status, idle or AFK; identical payloads are dropped; at most 5 per 20 s, the next one is delayed to the end of the window | same (`self_presence::Sent::gate`) | ✅ `op3_is_deduplicated_and_limited_to_five_per_twenty_seconds` |
+| op 14 | not sent by the 2026 client (no `LAZY_REQUEST` in the bundle) | not sent by the app | ✅ |
+| op 37 on server open | `GuildSubscriptionsStore`: `{typing, activities, threads}: true` once per guild, then deltas only; `channels` holds the 5 most recent channels of the guild (LRU) with their ranges, `[[0,99]]` on select without replacing ranges set by the member list; `thread_member_lists` the same way; pending deltas are merged and flushed in one op 37 | same (`discord_backend/subscriptions.rs`, 10 ms flush); a new session resends the selected guild in full | ✅ `features_are_sent_once_per_guild`, `channels_keep_the_five_most_recent_and_send_deltas`, `a_new_session_resends_only_the_selected_guild` |
+| op 37 member list gate | the channel is only subscribed on select when the member list is shown (`getSection() === MEMBERS`) | always subscribed on select | ⚠ |
+| op 37 on idle | when the user goes idle, guilds other than the selected or voice one are unsubscribed | not done | ❌ |

@@ -1,13 +1,16 @@
+use parking_lot::Mutex;
 use phoenix_api::{
     Cache,
     gateway::{GatewayCommand, UpdatePresence},
     rest::settings::CustomStatusProto,
 };
 use serde_json::{Value, json};
+use std::collections::VecDeque;
 use std::sync::{
     Arc, Once,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
+use std::time::{Duration, Instant};
 
 use super::nav::fields;
 
@@ -33,6 +36,8 @@ const AFK_DEFAULT_S: u32 = 60;
 static IDLE_SINCE: AtomicU64 = AtomicU64::new(0);
 static AFK: AtomicBool = AtomicBool::new(false);
 static WATCH: Once = Once::new();
+const PRESENCE_LIMIT: usize = 5;
+const PRESENCE_WINDOW: Duration = Duration::from_secs(20);
 
 fn sub(b: &[u8], n: u64) -> Option<&[u8]> {
     fields(b).into_iter().rev().find(|f| f.0 == n && f.1 == 2).map(|f| f.2)
@@ -155,14 +160,71 @@ pub(super) fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
-pub(super) fn send(s: &super::Session) {
+struct Sent {
+    last: Option<UpdatePresence>,
+    slots: VecDeque<Instant>,
+    retry: bool,
+}
+
+static SENT: Mutex<Sent> = Mutex::new(Sent { last: None, slots: VecDeque::new(), retry: false });
+
+enum Gate {
+    Send,
+    Skip,
+    Wait(Duration),
+}
+
+impl Sent {
+    fn gate(&mut self, p: &UpdatePresence, force: bool, now: Instant) -> Gate {
+        if !force && self.last.as_ref() == Some(p) {
+            return Gate::Skip;
+        }
+        while self.slots.front().is_some_and(|t| *t <= now) {
+            self.slots.pop_front();
+        }
+        if self.slots.len() < PRESENCE_LIMIT {
+            self.slots.push_back(now + PRESENCE_WINDOW);
+            self.last = Some(p.clone());
+            return Gate::Send;
+        }
+        if self.retry {
+            return Gate::Skip;
+        }
+        self.retry = true;
+        Gate::Wait(self.slots.front().map_or(PRESENCE_WINDOW, |t| t.saturating_duration_since(now)))
+    }
+}
+
+pub(super) fn send(s: &Arc<super::Session>) {
+    send_with(s, false);
+}
+
+pub(super) fn resend(s: &Arc<super::Session>) {
+    send_with(s, true);
+}
+
+fn send_with(s: &Arc<super::Session>, force: bool) {
     let p = {
         let mut l = s.presence.lock();
         l.idle_since = IDLE_SINCE.load(Ordering::Relaxed);
         l.afk = AFK.load(Ordering::Relaxed);
         l.payload(now_ms(), |e| emoji_animated(&s.cache, e))
     };
-    let _ = s.gateway.send(GatewayCommand::UpdatePresence(p));
+    let gate = SENT.lock().gate(&p, force, Instant::now());
+    match gate {
+        Gate::Send => {
+            let _ = s.gateway.send(GatewayCommand::UpdatePresence(p));
+        }
+        Gate::Skip => {}
+        Gate::Wait(d) => {
+            let s = s.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(d);
+                SENT.lock().retry = false;
+                send_with(&s, force);
+            });
+        }
+    }
 }
 
 pub(crate) fn afk_ms(afk_timeout: Option<u32>) -> Option<u32> {
@@ -203,7 +265,7 @@ pub(super) fn watch_idle(inner: &Arc<super::Inner>, afk_timeout: Option<u32>) {
     });
 }
 
-pub(super) fn on_settings_update(s: &super::Session, data: &Value) {
+pub(super) fn on_settings_update(s: &Arc<super::Session>, data: &Value) {
     let Some((raw, partial)) = settings_update(data) else { return };
     let changed = {
         let mut l = s.presence.lock();
@@ -313,6 +375,23 @@ mod tests {
         assert_eq!(serde_json::to_value(l.payload(0, |_| false)).unwrap(), json!({"since": 1_000, "activities": [], "status": "idle", "afk": true}));
         l.set_status("dnd");
         assert_eq!((l.payload(0, |_| false).status.as_str(), l.payload(0, |_| false).since), ("dnd", 1_000));
+    }
+
+    #[test]
+    fn op3_is_deduplicated_and_limited_to_five_per_twenty_seconds() {
+        let mut g = Sent { last: None, slots: VecDeque::new(), retry: false };
+        let t0 = Instant::now();
+        let p = |status: &str| UpdatePresence { since: 0, activities: vec![], status: status.into(), afk: false };
+        assert!(matches!(g.gate(&p("online"), false, t0), Gate::Send));
+        assert!(matches!(g.gate(&p("online"), false, t0), Gate::Skip));
+        assert!(matches!(g.gate(&p("online"), true, t0), Gate::Send));
+        for s in ["idle", "dnd", "online"] {
+            assert!(matches!(g.gate(&p(s), false, t0), Gate::Send));
+        }
+        assert!(matches!(g.gate(&p("idle"), false, t0 + Duration::from_secs(5)), Gate::Wait(d) if d == Duration::from_secs(15)));
+        assert!(matches!(g.gate(&p("dnd"), false, t0 + Duration::from_secs(6)), Gate::Skip));
+        g.retry = false;
+        assert!(matches!(g.gate(&p("idle"), false, t0 + Duration::from_secs(20)), Gate::Send));
     }
 
     #[test]

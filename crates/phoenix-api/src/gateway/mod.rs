@@ -69,6 +69,29 @@ mod op {
 }
 
 pub const QOS_VERSION: u32 = 31;
+pub const CONNECT_REASONS: &str = "AppSkeleton";
+
+pub fn qos_token(active: bool, derived: Option<&str>) -> String {
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD;
+    let mut out = vec![0x0a];
+    if active {
+        out.extend_from_slice(&[0x02, 0x08, 0x01]);
+    } else {
+        out.push(0x00);
+    }
+    if let Some(d) = derived.and_then(|d| b64.decode(d.trim()).ok()) {
+        out.push(0x12);
+        let mut n = d.len();
+        while n >= 0x80 {
+            out.push((n as u8 & 0x7f) | 0x80);
+            n >>= 7;
+        }
+        out.push(n as u8);
+        out.extend_from_slice(&d);
+    }
+    b64.encode(out)
+}
 pub const RESUME_WINDOW: Duration = Duration::from_secs(180);
 pub const EXPEDITED_HEARTBEAT: Duration = Duration::from_secs(5);
 pub const HEARTBEAT_GRACE: Duration = Duration::from_secs(5);
@@ -116,6 +139,10 @@ impl QosState {
         }
         self.upcoming = Some(e);
         send
+    }
+
+    fn is_active(&self) -> bool {
+        self.upcoming.as_ref().or(self.current.as_ref()).is_some_and(|q| q.active)
     }
 
     fn consume(&mut self) -> Option<QosPayload> {
@@ -422,6 +449,7 @@ struct Runner {
     backoff: Backoff,
     last_ack: Option<SystemTime>,
     qos: QosState,
+    derived_qos: Option<String>,
 }
 
 async fn run(
@@ -473,7 +501,18 @@ impl Runner {
         let backoff = Backoff::new(config.initial_backoff, config.max_backoff);
         let mut qos = QosState::default();
         qos.update(config.qos.clone());
-        Runner { config, cmd_rx, ev_tx, pending: VecDeque::new(), session, healthy: false, backoff, last_ack: None, qos }
+        Runner {
+            config,
+            cmd_rx,
+            ev_tx,
+            pending: VecDeque::new(),
+            session,
+            healthy: false,
+            backoff,
+            last_ack: None,
+            qos,
+            derived_qos: None,
+        }
     }
 
     async fn wait(&mut self, delay: Duration) -> bool {
@@ -499,7 +538,7 @@ impl Runner {
                         self.backoff.succeed();
                         return true;
                     }
-                    Some(c) => self.pending.push_back(c),
+                    Some(c) => self.queue(c),
                 }
             }
         }
@@ -550,17 +589,32 @@ impl Runner {
     }
 
     fn identify(&self) -> Value {
+        let mut properties = self.config.properties.to_value(crate::props::client_app_state());
+        if let Some(m) = properties.as_object_mut() {
+            m.insert("is_fast_connect".into(), false.into());
+            m.insert("gateway_connect_reasons".into(), CONNECT_REASONS.into());
+        }
         json!({
             "op": op::IDENTIFY,
             "d": {
                 "token": self.config.token,
                 "capabilities": self.config.capabilities,
-                "properties": self.config.properties,
+                "properties": properties,
                 "presence": self.config.presence,
                 "compress": false,
                 "client_state": { "guild_versions": {} },
+                "qos_token": qos_token(self.qos.is_active(), self.derived_qos.as_deref()),
             }
         })
+    }
+
+    fn queue(&mut self, c: GatewayCommand) {
+        if let GatewayCommand::UpdatePresence(p) = &c
+            && let Ok(v) = serde_json::to_value(p)
+        {
+            self.config.presence = v;
+        }
+        self.pending.push_back(c);
     }
 
     fn command_payload(cmd: &GatewayCommand) -> Option<Value> {
@@ -719,7 +773,7 @@ impl Runner {
                         beat_now = true;
                         expedited = Some(Instant::now() + timeout);
                     }
-                    Some(c) => self.pending.push_back(c),
+                    Some(c) => self.queue(c),
                 },
                 msg = ws.next() => {
                     let msg = match msg {
@@ -753,6 +807,7 @@ impl Runner {
                                 GatewayEvent::Ready(r) => {
                                     self.session.session_id = Some(r.session_id.clone());
                                     self.session.resume_url = r.resume_gateway_url.clone();
+                                    self.derived_qos = r.qos_token.clone();
                                     self.healthy = true;
                                     self.backoff.succeed();
                                 }
@@ -869,7 +924,30 @@ mod tests {
         assert_eq!(v["d"]["token"], "tok");
         assert_eq!(v["d"]["capabilities"], capabilities::DEFAULT);
         assert_eq!(v["d"]["properties"]["browser"], "Discord Client");
+        assert_eq!(v["d"]["properties"]["is_fast_connect"], false);
+        assert_eq!(v["d"]["properties"]["gateway_connect_reasons"], "AppSkeleton");
+        assert!(v["d"]["properties"]["client_app_state"].is_string());
+        assert_eq!(v["d"]["qos_token"], "CgIIAQ==");
         assert!(v["d"].get("intents").is_none());
+    }
+
+    #[test]
+    fn qos_token_wraps_the_derived_data_from_ready() {
+        assert_eq!(qos_token(true, None), "CgIIAQ==");
+        assert_eq!(qos_token(false, None), "CgA=");
+        assert_eq!(qos_token(true, Some("CgEB")), "CgIIARIDCgEB");
+        assert_eq!(qos_token(false, Some("not base64!")), "CgA=");
+    }
+
+    #[test]
+    fn identify_carries_the_last_presence_sent() {
+        let (_tx, rx) = mpsc::unbounded_channel();
+        let (etx, _erx) = mpsc::unbounded_channel();
+        let mut r = Runner::new(GatewayConfig::new("tok"), rx, etx);
+        assert_eq!(r.identify()["d"]["presence"]["status"], "unknown");
+        r.queue(GatewayCommand::UpdatePresence(UpdatePresence { since: 0, activities: vec![], status: "dnd".into(), afk: false }));
+        assert_eq!(r.identify()["d"]["presence"], json!({ "since": 0, "activities": [], "status": "dnd", "afk": false }));
+        assert_eq!(r.pending.len(), 1);
     }
 
     #[test]

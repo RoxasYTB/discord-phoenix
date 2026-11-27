@@ -188,7 +188,7 @@ struct Inner {
     base: String,
     token: Option<String>,
     props: ClientProperties,
-    super_props: String,
+    super_props: [String; 2],
     limiter: RateLimiter,
     max_retries: u32,
     locale: parking_lot::RwLock<String>,
@@ -227,7 +227,7 @@ impl RestClient {
             .use_rustls_tls()
             .build()
             .expect("reqwest client");
-        let super_props = props.to_header();
+        let super_props = [props.to_header_with("focused"), props.to_header_with("unfocused")];
         Self {
             inner: Arc::new(Inner { http, base, token, props, super_props, limiter: RateLimiter::new(), max_retries: 3,
                 locale: parking_lot::RwLock::new(crate::props::os_discord_locale()),
@@ -263,7 +263,8 @@ impl RestClient {
         {
             h.insert(reqwest::header::AUTHORIZATION, v);
         }
-        if let Ok(v) = HeaderValue::from_str(&self.inner.super_props) {
+        let state = usize::from(crate::props::client_app_state() != "focused");
+        if let Ok(v) = HeaderValue::from_str(&self.inner.super_props[state]) {
             h.insert("x-super-properties", v);
         }
         let locale = self.inner.locale.read().clone();

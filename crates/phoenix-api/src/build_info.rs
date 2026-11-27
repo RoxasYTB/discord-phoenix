@@ -13,6 +13,8 @@ pub struct BuildInfo {
     pub electron_version: String,
     pub chrome_version: String,
     pub release_channel: String,
+    #[serde(default)]
+    pub native_build_number: Option<u64>,
 }
 
 impl Default for BuildInfo {
@@ -23,6 +25,7 @@ impl Default for BuildInfo {
             electron_version: DEFAULT_ELECTRON_VERSION.into(),
             chrome_version: DEFAULT_CHROME_VERSION.into(),
             release_channel: "stable".into(),
+            native_build_number: None,
         }
     }
 }
@@ -72,6 +75,21 @@ pub fn parse_build_info_json(s: &str) -> Option<(String, Option<String>)> {
     valid_version(&ver).then_some(())?;
     let ch = v.get("releaseChannel").and_then(|c| c.as_str()).map(str::to_string);
     Some((ver, ch))
+}
+
+pub fn find_native_build_number(installer_db: &[u8]) -> Option<u64> {
+    let needle = b"\"metadata_version\":";
+    let mut best = None;
+    let mut from = 0;
+    while let Some(i) = find(installer_db, needle, from) {
+        let start = i + needle.len();
+        let digits: Vec<u8> = installer_db[start..].iter().take_while(|c| c.is_ascii_digit()).copied().collect();
+        if let Some(n) = std::str::from_utf8(&digits).ok().and_then(|d| d.parse::<u64>().ok()) {
+            best = best.max(Some(n));
+        }
+        from = start;
+    }
+    best
 }
 
 pub fn find_chrome_version(s: &[u8]) -> Option<String> {
@@ -134,6 +152,9 @@ impl BuildInfo {
                 }
                 if let Some(c) = std::fs::read(dir.join("Preferences")).ok().and_then(|p| find_chrome_version(&p)) {
                     b.chrome_version = c;
+                }
+                if let Some(n) = std::fs::read(dir.join("installer.db")).ok().and_then(|db| find_native_build_number(&db)) {
+                    b.native_build_number = Some(n);
                 }
                 break;
             }
@@ -202,6 +223,13 @@ mod tests {
     }
 
     #[test]
+    fn finds_native_build_number() {
+        let db = br#"\0\0{"modules":["discord_utils"],"metadata_version":99580,"x":1}\0{"metadata_version":99581,"required_update":true}"#;
+        assert_eq!(find_native_build_number(db), Some(99_581));
+        assert_eq!(find_native_build_number(b"nothing"), None);
+    }
+
+    #[test]
     fn finds_versions() {
         assert_eq!(find_chrome_version(b"UA Chrome/152.0.7977.169 Electron"), Some("152.0.7977.169".into()));
         assert_eq!(find_version_after(b"xx Electron v44.10.2\0", b"Electron v"), Some("44.10.2".into()));
@@ -220,8 +248,9 @@ mod tests {
 
     #[test]
     fn props_follow_build_info() {
-        let b = BuildInfo { build_number: 700_000, client_version: "1.0.200".into(), electron_version: "45.0.0".into(), chrome_version: "153.0.1.2".into(), release_channel: "stable".into() };
+        let b = BuildInfo { build_number: 700_000, client_version: "1.0.200".into(), electron_version: "45.0.0".into(), chrome_version: "153.0.1.2".into(), release_channel: "stable".into(), native_build_number: Some(99_581) };
         let p = crate::ClientProperties::from_build_info(&b);
+        assert_eq!(p.native_build_number, Some(99_581));
         assert_eq!(p.client_build_number, 700_000);
         assert_eq!(p.client_version, "1.0.200");
         assert_eq!(p.browser_version, "45.0.0");

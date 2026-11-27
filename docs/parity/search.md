@@ -37,3 +37,16 @@ Code: `phoenix-api/src/rest/search.rs` (parser), `ui/search_query.rs` (keys, dat
 | server and channel/DM search use `GET …/messages/search` | ✅ |
 | "search all DMs" uses the client's `POST /users/@me/messages/search/tabs` (read-only query, but not a GET) | ⚠ kept as merged in 3b1e998d; agents must not run it on the real account |
 | 202 "index not ready" (chunk `9329220d4bdc3583.js` module 177068 `SearchFetcher`): retry after `retry-after` seconds (5 s when missing or 0), at most 5 retries, the results show the context text from `Y7()`: `AXPbZr` (server), `Q0JJjv` (DM), `Br0xJA` (all DMs) | the backend returns the 202 at once (`report_indexing`), the panel shows the same text and retries up to 5 times (body `retry_after`, else 5 s); the member page search keeps its own blocking retries | ✅ (⚠ the results chunk that lays this text out is not in the local cache: drawn with the empty-state layout) |
+
+## Search tabs (live check 27/11)
+
+Source: live chunks fetched from the CDN for build 681625 (`065be327ed5934fd.js` module 753806 `fetchMessages`,
+module 256796 `fetchTabMessages`, `9329220d4bdc3583.js` module 177068 `SearchFetcher`, web bundle module 768570).
+No search was run in the client and no `…/search/tabs` request was sent for this check.
+
+| item | client | Phoenix | status |
+|---|---|---|---|
+| server, channel and DM search | `MS` fetcher: `GET …/messages/search`, no tabs in the results panel | same | ✅ |
+| search all DMs | `DX` fetcher: `POST /users/@me/messages/search/tabs` with the single `messages` tab, limit 25 | same | ✅ |
+| tab filters (module 768570 `B7`/`su`) | `messages {}`, `media {has:[image,video]}`, `links {has:[link]}`, `files {has:[file]}`, `pins {pinned:true}`, `us = {sort_by:"timestamp", sort_order:"desc"}`; on desktop only used by the Mod View member panel (counts of messages, links and media through `POST /guilds/{id}/messages/search/tabs`) | the results panel has no tabs, like the client; the Mod View counts are not built (a GET `…/messages/search?author_id=…&has=link` gives the same totals) | ⚠ |
+
