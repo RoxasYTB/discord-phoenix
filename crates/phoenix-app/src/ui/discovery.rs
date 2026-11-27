@@ -140,7 +140,7 @@ pub fn directory_path_allowed(path: &str) -> bool {
         ["discoverable-guilds"] | ["discoverable-guilds", "search"] | ["discovery", "categories"] => true,
         ["application-directory-static", "collections"] | ["application-directory-static", "categories"] | ["application-directory-static", "search"] => true,
         ["application-directory-static", "applications", a] | ["application-directory-static", "applications", a, "similar"] => id(a),
-        ["applications", a, "public"] | ["applications", a, "application-command-index"] => id(a),
+        ["applications", a, "public"] | ["applications", a, "application-command-index"] | ["oauth2", "applications", a, "assets"] => id(a),
         ["quests", "@me", "claimed"] | ["oauth2", "authorize"] => true,
         _ => false,
     }

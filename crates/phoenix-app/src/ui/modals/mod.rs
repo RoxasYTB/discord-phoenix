@@ -556,13 +556,16 @@ fn form(f: &Form, cx: &mut Context<PhoenixApp>) -> AnyElement {
             cx.notify();
         })));
     }
+    let alert = f.fields.is_empty() && f.choices.is_empty() && f.check.is_none() && f.submit == crate::t!("common.okay");
     let footer = div()
         .flex()
         .gap(z(8.))
-        .child(button("aform-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click({
-            let close = close_action(cx);
-            move |_, w, cx| close(w, cx)
-        }))
+        .when(!alert, |d| {
+            d.child(button("aform-cancel", crate::t!("common.cancel"), BtnKind::Secondary).on_click({
+                let close = close_action(cx);
+                move |_, w, cx| close(w, cx)
+            }))
+        })
         .child(
             button("aform-submit", f.submit.clone(), if f.danger { BtnKind::Critical } else { BtnKind::Primary }).on_click(cx.listener(|a, _, _, cx| {
                 let taken = with_modal(|m| match m.take() {

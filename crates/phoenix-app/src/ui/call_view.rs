@@ -58,7 +58,7 @@ fn report_video_view(app: &PhoenixApp, voice_users: &[Id], focus: Option<&Tile>,
     let drawn = DRAWN.with(|d| std::mem::take(&mut *d.borrow_mut()));
     let mut view = phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() };
     view.others = voice_users.iter().filter(|u| **u != app.me.id).count();
-    view.selected = focus.filter(|t| !t.stream && t.user != app.me.id).map(|t| t.user.0);
+    view.selected = focus.filter(|t| !t.stream && t.activity.is_none() && t.user != app.me.id).map(|t| t.user.0);
     {
         let prefs = crate::voice::prefs::prefs().lock();
         view.local_mutes = voice_users.iter().filter(|u| **u != app.me.id && prefs.user(**u).muted).map(|u| u.0).collect();
@@ -268,6 +268,52 @@ fn lobby_subtitle(names: &[String]) -> SharedString {
     }
 }
 
+const CREATE_INSTANT_INVITE: u64 = 1;
+const CONNECT: u64 = 1 << 20;
+
+fn lobby_can_connect(app: &PhoenixApp, ch: Id) -> bool {
+    app.backend.channel_permissions(ch).is_none_or(|p| p & CONNECT != 0)
+}
+
+pub fn channel_full(app: &PhoenixApp, ch_id: Id) -> bool {
+    let Some(ch) = app.channels.get(&ch_id) else { return false };
+    let Some(limit) = app.backend.channel_user_limit(ch_id) else { return false };
+    let mover = app.backend.channel_permissions(ch_id).is_some_and(|p| p & crate::actions::MOVE_MEMBERS != 0 && p & CONNECT != 0);
+    ch.voice_users.len() >= limit as usize && !mover
+}
+
+fn lobby_join(a: &mut PhoenixApp, ch_id: Id, cx: &mut Context<PhoenixApp>) {
+    if !channel_full(a, ch_id) {
+        a.enter_voice_channel(ch_id, cx);
+        return;
+    }
+    crate::actions::open_modal(
+        crate::ui::modals::Modal::Form(crate::ui::modals::Form {
+            title: crate::t!("call.channel_full"),
+            subtitle: Some(crate::t!("call.channel_full_body")),
+            fields: Vec::new(),
+            choices: Vec::new(),
+            choice: None,
+            check: None,
+            submit: crate::t!("common.okay"),
+            danger: false,
+            preview: None,
+            width: 440.,
+            on_submit: std::rc::Rc::new(|_, _, _, _| {}),
+        }),
+        None,
+    );
+    cx.notify();
+}
+
+fn solo_tile_allowed(app: &PhoenixApp, ch_id: Id) -> bool {
+    let Some(ch) = app.channels.get(&ch_id) else { return false };
+    let Some(guild) = ch.guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)) else { return false };
+    let limit_ok = app.backend.channel_user_limit(ch_id).is_none_or(|n| n != 1);
+    let can_invite = app.backend.channel_permissions(ch_id).is_none_or(|p| p & CREATE_INSTANT_INVITE != 0);
+    guild.afk_channel != Some(ch_id) && ch.kind != ChannelKind::Stage && limit_ok && can_invite
+}
+
 fn lobby_tile(app: &PhoenixApp, user: Id, zoom: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
     div()
         .id(SharedString::from(format!("lobby-tile-{}", user.0)))
@@ -290,6 +336,7 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
     let name = crate::ui::dm_profile_panel::channel_name(app, ch);
     let names: Vec<String> = ch.voice_users.iter().map(|&u| crate::ui::sidebar::voice_user_name(app, u).to_string()).collect();
     let preview: Vec<Id> = ch.voice_users.iter().copied().take(5).collect();
+    let can_connect = lobby_can_connect(app, ch_id);
     let tiles_el = (!preview.is_empty()).then(|| {
         let row = |slice: &[Id], cx: &mut Context<PhoenixApp>| {
             div()
@@ -396,17 +443,20 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
                 .px(z(16.))
                 .rounded(z(8.))
                 .bg(t(idx::WHITE))
-                .hover(|s| s.bg(gpui::rgba(0xe3e5e8ff)))
                 .flex()
                 .items_center()
                 .justify_center()
-                .cursor_pointer()
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(gpui::rgba(0x060607ff))
-                .child(crate::t!("call.lobby_join"))
-                .on_click(cx.listener(move |a, _, _, cx| a.enter_voice_channel(ch_id, cx))),
+                .when(!can_connect, |d| d.opacity(0.5))
+                .when(can_connect, |d| {
+                    d.cursor_pointer()
+                        .hover(|s| s.bg(gpui::rgba(0xe3e5e8ff)))
+                        .on_click(cx.listener(move |a, _, _, cx| lobby_join(a, ch_id, cx)))
+                })
+                .child(if can_connect { crate::t!("call.lobby_join") } else { crate::t!("call.lobby_locked") }),
         );
 
     let lobby = div()
@@ -520,6 +570,7 @@ struct Tile {
     user: Id,
     stream: bool,
     invite: bool,
+    activity: Option<u64>,
 }
 
 pub fn grid(n: usize, w: f32, h: f32, gap: f32) -> (usize, f32) {
@@ -970,20 +1021,23 @@ fn call_tiles(app: &PhoenixApp, ch_id: Id, users: &[Id]) -> Vec<Tile> {
         let f = crate::ui::voice_panel::flags(u);
         let name = crate::ui::sidebar::voice_user_name(app, u);
         if f.stream {
-            keyed.push((sort_key(true, f.video, true, &name, u), Tile { user: u, stream: true, invite: false }));
+            keyed.push((sort_key(true, f.video, true, &name, u), Tile { user: u, stream: true, invite: false, activity: None }));
         }
         if !hide_no_video || f.video {
-            keyed.push((sort_key(false, f.video, f.stream, &name, u), Tile { user: u, stream: false, invite: false }));
+            keyed.push((sort_key(false, f.video, f.stream, &name, u), Tile { user: u, stream: false, invite: false, activity: None }));
         }
+    }
+    for (app_id, _) in crate::ui::call_activity::channel_activities(app, ch_id) {
+        keyed.push((format!("\u{1}{app_id}"), Tile { user: Id(app_id), stream: false, invite: false, activity: Some(app_id) }));
     }
     keyed.sort_by(|a, b| a.0.cmp(&b.0));
     tiles.extend(keyed.into_iter().map(|(_, t)| t));
-    let solo = match tiles.as_slice() {
-        [only] if !only.stream => Some(only.user),
+    let solo = match users {
+        [only] if !tiles.iter().any(|t| t.stream) => Some(*only),
         _ => None,
     };
-    if let Some(user) = solo {
-        tiles.push(Tile { user, stream: false, invite: true });
+    if let Some(user) = solo.filter(|_| solo_tile_allowed(app, ch_id)) {
+        tiles.push(Tile { user, stream: false, invite: true, activity: None });
     }
     tiles
 }
@@ -1802,6 +1856,9 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
     if tile.invite {
         return solo_tile(w, h, cx);
     }
+    if let Some(app_id) = tile.activity {
+        return crate::ui::call_activity::tile(app, app_id, w, h, cx);
+    }
     let u = app.users.get(&tile.user);
     let me = tile.user == app.me.id;
     let in_strip = IN_STRIP.with(|c| c.get());
@@ -2045,6 +2102,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))
             .when(look.show_name, |d| {
+                let badge = crate::ui::call_activity::badge(app, tile.user, rule_w, cx);
                 let keep = state_icon.is_some();
                 let idle = fade < 0.5;
                 let user = tile.user;
@@ -2057,7 +2115,17 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                         .flex()
                         .items_center()
                         .justify_between()
-                        .child(pill(state_icon, (!idle).then_some(name)).opacity(if keep { 1. } else { fade }))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_initial()
+                                .min_w_0()
+                                .items_center()
+                                .gap(z(if look.compact { 4. } else { 8. }))
+                                .mr(z(if look.compact { 4. } else { 8. }))
+                                .child(pill(state_icon, (!idle).then_some(name)).opacity(if keep { 1. } else { fade }))
+                                .children(badge.filter(|_| !idle).map(|b| div().flex_initial().min_w_0().opacity(fade).child(b))),
+                        )
                         .when(!idle && (hovered || (crate::ui::user_menu::is_open() && MORE_USER.with(Cell::get) == Some(user))), |d| {
                             d.child(
                                 div()
