@@ -16,7 +16,19 @@ Every 20 ms Opus frame goes through `InputChain` as two 10 ms blocks of 480 samp
 
 The echo reference is the mixer output: `mix_loop` pushes each 20 ms frame it actually queues to the speakers into a `RenderTap` (bounded channel, mono downmix), with the queue length ahead of it in ms; the encode thread drains it before each capture block (`process_render_f32`) and sets the stream delay to that queue length + 10 ms. AEC3 also estimates the delay itself. Soundboard sounds and notification sounds (separate streams in `effects.rs`) are not part of the reference.
 
-Latency added: none in Off and Standard mode (WebRTC processes the block in place), one 10 ms block in Krisp mode (RNNoise overlap-add). The self-test measures it by cross-correlation.
+Latency added (cross-correlation in the self-test): Off 0 ms, Standard 6.9 ms (WebRTC NS overlap + band split), Krisp 10.9 ms (RNNoise overlap-add of one block), echo cancellation adds about 4 ms on top (14.9 ms for AEC3 + RNNoise + AGC2, the Voice Isolation chain).
+
+Measured on 79a47024 (`PHX_AUDIOPROC_SELFTEST=1 int-bin/real_shots`, dev build with dependencies at opt-level 2, synthetic voice at −19 dBFS in pink + white noise at −33 dBFS):
+
+| mode | noise reduction | SNR gain | latency | CPU per 10 ms block |
+|---|---|---|---|---|
+| off | 0.0 dB | 0.0 dB | 0 ms | 0 µs |
+| Standard (WebRTC NS) | 17.2 dB | 16.0 dB | 6.9 ms | 28 µs (0.3 % of a core) |
+| Krisp (RNNoise) | 24.8 dB | 24.1 dB | 10.9 ms | 114 µs (1.1 %) |
+| AEC3 + RNNoise + AGC2 | 23.5 dB | 23.0 dB | 14.9 ms | 177 µs (1.8 %) |
+| AEC3 + NS + AGC2 | 16.1 dB | 19.3 dB | 10.9 ms | 97 µs (1.0 %) |
+
+Echo (60 ms delay, two reflections): echo −28.5 dBFS in, −64.3 dBFS out (35.7 dB removed), near-end talker during double talk −25.8 → −27.0 dBFS. Live in 〢🔊・phoenix-vocal (Voice Isolation, synthetic noisy voice, mixer reference running at 100 blocks/s): about 5 % of one core in the dev build, gate open on ~80 % of frames.
 
 The chain is rebuilt only when a stage is switched on or off. `ChainSettings::from_control` reads the effective flags sent by the app; the synthetic tone input (`SYNTHETIC_INPUT`) bypasses the chain so the transport tests keep a steady tone, the synthetic noisy voice (`SYNTHETIC_VOICE_INPUT`) goes through it.
 
