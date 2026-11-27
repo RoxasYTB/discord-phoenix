@@ -561,33 +561,43 @@ fn family_hero(cx: &mut Cx) -> Div {
         FAMILY_TAB.with(|t| t.set(1));
         cx.notify();
     }));
+    let (row, wide) = family_breakpoints(crate::ui::title_bar::viewport_w_css());
     family_box()
-        .p(z(32.))
+        .p(z(if row { 32. } else { 24. }))
         .flex()
-        .items_start()
+        .when(row, |d| d.items_start())
+        .when(!row, |d| d.flex_col().items_center().text_center())
         .justify_between()
-        .child(div().min_w_0().flex().flex_col().child(text_block).child(div().mt(z(16.)).flex().child(start)))
+        .child(div().min_w_0().flex().flex_col().when(!row, |d| d.items_center()).child(text_block).child(div().mt(z(16.)).flex().when(!wide, |d| d.justify_center()).child(start)))
         .child(
             div()
                 .self_center()
                 .flex_none()
                 .pl(z(16.))
+                .when(!wide, |d| d.mt(z(32.)))
                 .child(gpui::img(SharedString::from(FAMILY_HERO_ART)).w(z(188.)).h(z(136.)).object_fit(gpui::ObjectFit::Contain)),
         )
 }
 
-fn family_feature(icon: &'static str, title: &str, desc: &str) -> Div {
+pub fn family_breakpoints(vw: f32) -> (bool, bool) {
+    let known = vw > 0.;
+    (!known || vw >= 485., !known || vw >= 900.)
+}
+
+fn family_feature(icon: &'static str, title: &str, desc: &str, wide: bool) -> Div {
     family_box()
         .flex_initial()
         .min_w_0()
         .p(z(20.))
         .flex()
-        .flex_col()
-        .items_start()
+        .when(wide, |d| d.flex_col().items_start())
+        .when(!wide, |d| d.flex_row().items_center())
         .child(
             div()
+                .flex_none()
                 .size(z(36.))
                 .mb(z(10.))
+                .mr(z(12.))
                 .rounded_full()
                 .border_1()
                 .border_color(c(tok(idx::BORDER_SUBTLE)))
@@ -597,8 +607,14 @@ fn family_feature(icon: &'static str, title: &str, desc: &str) -> Div {
                 .justify_center()
                 .child(gpui::svg().path(crate::icons::path(icon)).size(z(20.)).text_color(c(tok(idx::TEXT_STRONG)))),
         )
-        .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!(title)).mb(z(6.)))
-        .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!(desc)))
+        .child(
+            div()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!(title)).mb(z(6.)))
+                .child(text(14., 18., FontWeight::MEDIUM, idx::TEXT_MUTED, crate::t!(desc))),
+        )
 }
 
 fn family_section(title: &str, desc: Option<&str>, rows: &[(&'static str, &str, &str)]) -> Div {
@@ -636,13 +652,15 @@ fn family_section(title: &str, desc: Option<&str>, rows: &[(&'static str, &str, 
 }
 
 fn family_activity(cx: &mut Cx) -> Div {
+    let wide = family_breakpoints(crate::ui::title_bar::viewport_w_css()).1;
     let features = div()
         .mt(z(12.))
         .flex()
+        .when(!wide, |d| d.flex_col())
         .gap(z(10.))
-        .child(family_feature("chat-check", "settings.family.f1_t", "settings.family.f1_d"))
-        .child(family_feature("chat/eye", "settings.family.f2_t", "settings.family.f2_d"))
-        .child(family_feature("qr-code", "settings.family.f3_t", "settings.family.f3_d"));
+        .child(family_feature("chat-check", "settings.family.f1_t", "settings.family.f1_d", wide))
+        .child(family_feature("chat/eye", "settings.family.f2_t", "settings.family.f2_d", wide))
+        .child(family_feature("qr-code", "settings.family.f3_t", "settings.family.f3_d", wide));
     let sections = div()
         .flex()
         .flex_col()
@@ -868,6 +886,14 @@ pub fn reset() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn family_center_follows_the_client_breakpoints() {
+        assert_eq!(family_breakpoints(0.), (true, true));
+        assert_eq!(family_breakpoints(480.), (false, false));
+        assert_eq!(family_breakpoints(700.), (true, false));
+        assert_eq!(family_breakpoints(900.), (true, true));
+    }
 
     #[test]
     fn security_keys_parse_the_credentials_list() {
