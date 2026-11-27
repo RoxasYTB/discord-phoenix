@@ -196,6 +196,8 @@ impl MockBackend {
                         vec![Id(3), Id(4), Id(7)]
                     } else if *cn == "Pair Programming" && gi == 0 {
                         vec![Id(6)]
+                    } else if *cn == "Stage" && gi == 0 && crate::mock_stage::enabled() {
+                        crate::mock_stage::USERS.to_vec()
                     } else {
                         vec![]
                     };
@@ -278,6 +280,11 @@ impl MockBackend {
             })),
             latency: Duration::from_millis(120),
         }
+    }
+
+    fn stage_channel(&self) -> Option<Id> {
+        let inner = self.inner.lock().ok()?;
+        crate::mock_stage::channel(&inner.channels)
     }
 
     pub fn sent_uploads(&self) -> Vec<Vec<Upload>> {
@@ -550,6 +557,12 @@ impl Backend for MockBackend {
                 })
             });
         }
+        let stage = if ok && crate::mock_stage::enabled() { self.stage_channel() } else { None };
+        if let Some(stage) = stage {
+            for (user, flags) in crate::mock_stage::seed(stage) {
+                self.emit_later(Duration::from_millis(40), move || AppEvent::VoiceFlags { user, flags });
+            }
+        }
         Box::pin(async move {
             if !ok {
                 return Err(BackendError("Login or password is invalid.".into()));
@@ -766,6 +779,10 @@ impl Backend for MockBackend {
 
     fn join_voice(&self, channel: Option<Id>) -> BoxFuture<()> {
         self.emit_later(Duration::from_millis(50), move || AppEvent::VoiceStateUpdate { channel, user: ME, own: true });
+        if channel.is_some() && crate::mock_stage::enabled() && channel == self.stage_channel() {
+            let flags = crate::mock_stage::join(ME);
+            self.emit_later(Duration::from_millis(55), move || AppEvent::VoiceFlags { user: ME, flags });
+        }
         if channel.is_some() {
             self.emit_later(Duration::from_millis(60), || {
                 AppEvent::Voice(crate::voice::VoiceUiEvent::Status(crate::voice::VoiceStatus::Connected))
@@ -782,8 +799,19 @@ impl Backend for MockBackend {
         Box::pin(async { Ok(()) })
     }
     fn action(&self, req: crate::actions::ActionRequest) -> BoxFuture<crate::actions::ActionReply> {
+        if let crate::actions::ActionRequest::Stage(call) = &req
+            && crate::mock_stage::enabled()
+        {
+            for (user, flags) in crate::mock_stage::on_call(ME, call) {
+                self.emit_later(Duration::from_millis(30), move || AppEvent::VoiceFlags { user, flags });
+            }
+        }
         let users = self.inner.lock().unwrap().users.clone();
         Box::pin(async move { crate::actions::mock::reply(req, users) })
+    }
+
+    fn channel_permissions(&self, channel: Id) -> Option<u64> {
+        (crate::mock_stage::enabled() && self.stage_channel() == Some(channel)).then_some(crate::ui::stage::STAGE_MODERATOR | crate::ui::stage::REQUEST_TO_SPEAK)
     }
 
     fn guild_features(&self, _guild: Id) -> Vec<String> {

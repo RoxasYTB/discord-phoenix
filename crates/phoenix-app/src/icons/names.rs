@@ -60,6 +60,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("chat/slash-box", &["SlashBoxIcon"]),
     ("sys/mic-arrow-right", &["MicrophoneArrowRightIcon"]),
     ("sys/hand-request-speak", &["HandRequestSpeakIcon"]),
+    ("stage/group-arrow-down", &["GroupArrowDownIcon"]),
     ("sys/ticket", &["TicketIcon"]),
     ("invite", &["UserPlusIcon"]),
     ("gift", &["GiftIcon"]),

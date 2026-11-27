@@ -24,6 +24,7 @@ pub mod media;
 pub mod demo_media;
 pub mod mock;
 pub mod mock_showcase;
+pub mod mock_stage;
 pub mod model;
 pub mod notifications;
 pub mod paths;

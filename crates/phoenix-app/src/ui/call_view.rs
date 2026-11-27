@@ -9,7 +9,7 @@ use crate::model::{ChannelKind, Id};
 use crate::theme::{DEFAULT_AVATAR, c, generated::idx, tok, z};
 use crate::ui::avatar;
 
-fn t(i: usize) -> Hsla {
+pub(crate) fn t(i: usize) -> Hsla {
     crate::theme::c_for(tok(i), crate::ui::settings::AppTheme::Onyx)
 }
 
@@ -201,8 +201,8 @@ pub fn active(app: &PhoenixApp) -> bool {
         && app.channels.get(&ch).is_some_and(|c| c.guild.is_none() || matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage))
 }
 
-const POPOUT: &str = "icons/call/popout.svg";
-const FULLSCREEN: &str = "icons/call/fullscreen.svg";
+pub(crate) const POPOUT: &str = "icons/call/popout.svg";
+pub(crate) const FULLSCREEN: &str = "icons/call/fullscreen.svg";
 const CAMERA_OFF: &str = "icons/call/camera-off.svg";
 
 pub fn svg_asset(path: &str) -> Option<&'static str> {
@@ -242,7 +242,7 @@ pub fn svg_asset(path: &str) -> Option<&'static str> {
     })
 }
 
-fn glyph(path: impl Into<SharedString>, size: f32, color: Hsla) -> gpui::Svg {
+pub(crate) fn glyph(path: impl Into<SharedString>, size: f32, color: Hsla) -> gpui::Svg {
     svg().path(path.into()).size(z(size)).flex_none().text_color(color)
 }
 
@@ -254,7 +254,7 @@ fn anim(id: &'static str, kind: crate::icons::lottie_icons::Lottie, on: bool, co
     crate::ui::hover_icon::icon(call_key(id), kind, on, 20. * crate::theme::zoom(), (color, color), || fallback.into_any_element())
 }
 
-fn named(name: &str, size: f32, color: Hsla) -> gpui::Svg {
+pub(crate) fn named(name: &str, size: f32, color: Hsla) -> gpui::Svg {
     glyph(crate::icons::path(name), size, color)
 }
 
@@ -289,10 +289,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     }
     let zoom = crate::theme::zoom();
 
-    let tiles = call_tiles(app, ch_id, &ch.voice_users);
+    let stage = ch.kind == ChannelKind::Stage;
+    let mut tiles = call_tiles(app, ch_id, &crate::ui::stage::tile_users(ch));
+    if stage {
+        tiles.retain(|t| !t.invite);
+    }
 
     let vp = window.viewport_size();
-    let side = if chat_open() { CHAT_W } else { 0. };
+    let side = (if chat_open() { CHAT_W } else { 0. }) + (if crate::ui::stage::sidebar_open(ch_id) { crate::ui::stage::SIDEBAR_W } else { 0. });
     let gw = (f32::from(vp.width) / zoom - crate::theme::m::SERVER_BAR_W - crate::ui::sidebar_resize::width() - side).max(100.);
     let gh = (f32::from(vp.height) / zoom - 32. - if crate::theme::frame_borders() { 1. } else { 0. }).max(60.);
     let focus = match FOCUS.with(|c| c.get()) {
@@ -311,7 +315,12 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
 
     DRAWN.with(|d| d.borrow_mut().clear());
     let focused = focus.filter(|_| tiles.len() > 1);
-    let tiles_el = if let Some(fi) = focused {
+    let stage_layer = |el: AnyElement| div().absolute().top_0().left_0().w(z(gw)).h(z(gh)).child(el).into_any_element();
+    let tiles_el = if stage && crate::ui::stage::show_start(app, ch) {
+        stage_layer(crate::ui::stage::start_screen(app, ch_id, cx).unwrap_or_else(|| div().into_any_element()))
+    } else if stage && tiles.is_empty() {
+        stage_layer(crate::ui::stage::empty_state())
+    } else if let Some(fi) = focused {
         focused_layer(app, &tiles, fi, gw, gh, fade, cx)
     } else {
         grid_layer(app, &tiles, gw, gh, fade, cx)
@@ -345,7 +354,10 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .child(div().h(z(8.))),
         )
         .child(div().flex_1().min_h_0())
-        .child(div().flex_none().flex().flex_col().relative().top(z(CONTROLS_SLIDE * (1. - fade))).opacity(fade).child(bottom_controls(app, collapse(gw), cx)))
+        .child(div().flex_none().flex().flex_col().relative().top(z(CONTROLS_SLIDE * (1. - fade))).opacity(fade).child(match crate::ui::stage::bottom(app, ch_id, cx) {
+            Some(b) => b,
+            None => bottom_controls(app, collapse(gw), cx).into_any_element(),
+        }))
         .relative()
         .children(toasts);
 
@@ -358,6 +370,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex_row()
         .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
         .child(call)
+        .children(crate::ui::stage::sidebar(app, ch_id, cx))
+        .children(crate::ui::stage::leave_menu(ch_id, cx))
         .children(stream_menu(app, cx))
         .children(crate::ui::call_menus::render(app, ch_id, cx));
     Some(if chat_open() {
@@ -917,8 +931,9 @@ fn strip_button(open: bool, top: f32, fade: f32, cx: &mut Context<PhoenixApp>) -
 
 const CHAT_W: f32 = 480.;
 
-fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let open = chat_open();
+    let stage = app.voice_channel.filter(|c| crate::ui::stage::stage_channel(app, *c).is_some());
     div()
         .h(z(33.))
         .flex_none()
@@ -926,10 +941,11 @@ fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) 
         .flex()
         .items_center()
         .gap(z(10.))
-        .child(named("speaker", 20., t(idx::CHANNEL_ICON)))
+        .child(named(if stage.is_some() { "stage" } else { "speaker" }, 20., t(idx::CHANNEL_ICON)))
         .child(
             div()
-                .flex_1()
+                .when(stage.is_none(), |d| d.flex_1())
+                .when(stage.is_some(), |d| d.flex_shrink())
                 .min_w_0()
                 .text_size(z(16.))
                 .line_height(z(20.))
@@ -938,11 +954,17 @@ fn top_bar(_app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) 
                 .text_ellipsis()
                 .child(name),
         )
+        .when_some(stage, |d, ch| {
+            d.children(crate::ui::stage::header_summary(app, ch))
+                .children(crate::ui::stage::header_topic(app, ch, cx))
+                .child(div().flex_1())
+        })
         .child(
             div()
                 .flex()
                 .items_center()
                 .gap(z(20.))
+                .children(stage.and_then(|ch| crate::ui::stage::audience_toggle(app, ch, cx)))
                 .child(
                     div()
                         .id("call-chat")
@@ -1522,7 +1544,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Look {
+pub(crate) enum Look {
     Dark,
     Red,
     Green,
@@ -1530,7 +1552,7 @@ enum Look {
 
 type CaretClick = std::rc::Rc<dyn Fn(&mut PhoenixApp, gpui::Point<gpui::Pixels>, &mut Context<PhoenixApp>)>;
 
-fn center_button(
+pub(crate) fn center_button(
     id: &'static str,
     icon: impl IntoElement,
     look: Look,
@@ -1543,7 +1565,7 @@ fn center_button(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn center_button_ex(
+pub(crate) fn center_button_ex(
     id: &'static str,
     icon: impl IntoElement,
     look: Look,
@@ -1597,7 +1619,7 @@ fn center_button_ex(
     wrap.into_any_element()
 }
 
-fn section() -> gpui::Div {
+pub(crate) fn section() -> gpui::Div {
     div()
         .flex()
         .items_center()
@@ -1617,7 +1639,7 @@ fn invite(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     }
 }
 
-fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) -> gpui::Stateful<gpui::Div> {
+pub(crate) fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .size(z(24.))

@@ -62,6 +62,7 @@ pub mod tag_popout;
 pub mod dm_profile_panel;
 pub mod avatar_color;
 pub mod squircle;
+pub mod stage;
 pub mod fade_image;
 pub mod profile_bg;
 pub mod profile_note;
