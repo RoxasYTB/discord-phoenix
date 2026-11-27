@@ -1932,18 +1932,15 @@ pub(crate) fn media_image_with(
     still: bool,
 ) -> gpui::Stateful<gpui::Img> {
     let animated = media::is_animated(url) || media::is_animated(&filename) || media::is_animated(&original);
-    let source = |width, height, play| {
-        if play && animated && original.starts_with("https://cdn.discordapp.com/attachments/") && media::is_animated(&original) {
-            original.clone()
-        } else if animated {
-            media::gif_preview(url, width, height, play)
-        } else {
-            media::resized(url, width, height)
-        }
+    let (width, height) = ((w * 2.) as u32, (h * 2.) as u32);
+    let (src, fallbacks) = if animated {
+        let mut sources = media::gif_image_sources(url, &original, width, height, !still).into_iter();
+        (sources.next().expect("GIF preview source"), sources.collect())
+    } else {
+        (media::resized(url, width, height), Vec::new())
     };
-    let src = source((w * 2.) as u32, (h * 2.) as u32, !still);
     let viewer = media::ViewerImage {
-        url: source(ow.min(2048), oh.min(2048), true),
+        url: if animated { media::gif_preview(url, ow.min(2048), oh.min(2048), true) } else { media::resized(url, ow.min(2048), oh.min(2048)) },
         original: if original.is_empty() { url.to_owned().into() } else { original },
         filename,
         width: ow,
@@ -1963,8 +1960,29 @@ pub(crate) fn media_image_with(
         .object_fit(if ow == 0 || oh == 0 { gpui::ObjectFit::Contain } else { gpui::ObjectFit::Cover })
         .cursor_pointer()
         .with_loading(|| div().size_full().rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_NORMAL)).into_any_element())
-        .with_fallback(|| div().size_full().rounded(z(8.)).bg(tk(idx::BACKGROUND_MOD_NORMAL)).into_any_element())
+        .with_fallback(move || gif_image_fallback(&fallbacks, animated))
         .on_click(move |_, _, cx| media::open_viewer(viewer.clone(), cx))
+}
+
+fn gif_image_fallback(sources: &[SharedString], animated: bool) -> AnyElement {
+    let Some((src, remaining)) = sources.split_first() else {
+        return div()
+            .size_full()
+            .rounded(z(8.))
+            .bg(tk(idx::BACKGROUND_MOD_NORMAL))
+            .when(animated, |d| d.flex().items_center().justify_center().text_size(z(13.)).text_color(tk(idx::TEXT_MUTED)).child(crate::t!("picker.gifs_unavailable")))
+            .into_any_element();
+    };
+    let mut image = img(src.clone());
+    if let Some(cache) = media::lru::chat() {
+        image = image.image_cache(&cache);
+    }
+    let remaining = remaining.to_vec();
+    image.id(media::anim_id(src))
+        .size_full()
+        .rounded(z(8.))
+        .with_fallback(move || gif_image_fallback(&remaining, animated))
+        .into_any_element()
 }
 
 pub(crate) fn spoiler_pill(group: SharedString) -> gpui::Div {
