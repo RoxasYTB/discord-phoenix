@@ -42,6 +42,7 @@ pub struct StickerPackData {
 pub struct GifItem {
     pub url: SharedString,
     pub preview: SharedString,
+    pub source: Option<SharedString>,
     pub width: u32,
     pub height: u32,
 }

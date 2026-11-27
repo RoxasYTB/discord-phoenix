@@ -1843,7 +1843,9 @@ pub(crate) fn media_image_with(
 ) -> gpui::Stateful<gpui::Img> {
     let animated = media::is_animated(url) || media::is_animated(&filename) || media::is_animated(&original);
     let source = |width, height, play| {
-        if animated {
+        if play && animated && original.starts_with("https://cdn.discordapp.com/attachments/") && media::is_animated(&original) {
+            original.clone()
+        } else if animated {
             media::gif_preview(url, width, height, play)
         } else {
             media::resized(url, width, height)

@@ -96,8 +96,41 @@ fn show_favorites(cx: &mut Context<PhoenixApp>) {
 
 fn send(app: &mut PhoenixApp, gif: &GifItem, window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) {
     let Some(ch) = app.selected_channel else { return };
-    let fut = app.backend.send_message(ch, gif.url.to_string(), None);
-    super::detach(fut, cx);
+    let gif = gif.clone();
+    let http = cx.http_client();
+    let backend = app.backend.clone();
+    let account = app.me.id;
+    let attach = backend.channel_permissions(ch).is_none_or(|permissions| {
+        let attach = phoenix_api::models::Permissions::ATTACH_FILES.bits();
+        permissions & attach != 0
+    });
+    let limit = backend.max_upload_size(ch);
+    let nonce = crate::ui::chat::pending::make_nonce();
+    cx.spawn(async move |this, cx| {
+        let media = crate::media::gif_file::download(http, gif, limit, cx.background_executor()).await;
+        let result = match media {
+            Ok((bytes, source)) => {
+                let upload = crate::backend::Upload {
+                    filename: "animation.gif".into(), bytes, spoiler: false, description: None, pre: None, hero: false,
+                };
+                let (content, files) = if attach { (String::new(), vec![upload]) } else { (source.to_string(), Vec::new()) };
+                let Ok(Some(send)) = this.update(cx, |app, _| {
+                    (app.me.id == account && app.screen == crate::app::Screen::Main)
+                        .then(|| app.backend.send_message_ex(ch, content, None, files, nonce, None))
+                }) else { return };
+                send.await
+            }
+            Err(error) => Err(error),
+        };
+        let _ = this.update(cx, |app, cx| {
+            if app.me.id == account && app.screen == crate::app::Screen::Main {
+                match result {
+                    Ok(message) => app.append_message(message, cx),
+                    Err(error) => app.parity_toast(crate::t!("picker.gif_send_failed", error = error.0), cx),
+                }
+            }
+        });
+    }).detach();
     close(app, window, cx);
 }
 
