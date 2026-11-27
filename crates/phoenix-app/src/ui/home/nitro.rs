@@ -25,6 +25,8 @@ pub enum Cta {
     Profiles,
     Themes,
     AppIcons,
+    VoiceVideo,
+    Shop,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -63,6 +65,8 @@ pub fn perks(multiplier: Option<f64>) -> Vec<Perk> {
 fn run(a: &mut PhoenixApp, cta: Cta, cx: &mut Context<PhoenixApp>) {
     let page = match cta {
         Cta::Quests => return a.open_home_view(crate::ui::home::data::HomeView::Quests, cx),
+        Cta::Shop => return a.open_home_view(crate::ui::home::data::HomeView::Shop, cx),
+        Cta::VoiceVideo => crate::ui::settings::Page::VoiceVideo,
         Cta::Profiles => crate::ui::settings::Page::Profiles,
         Cta::Themes | Cta::AppIcons => crate::ui::settings::Page::Appearance,
     };
@@ -181,6 +185,52 @@ fn card(ix: usize, p: &Perk, pill: Option<SharedString>, cx: &mut Context<Phoeni
         .into_any_element()
 }
 
+fn compare_plans(cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    let perks = [
+        ("nitro.compare_emoji", true, None),
+        ("nitro.compare_uploads", true, None),
+        ("nitro.compare_reactions", true, None),
+        ("nitro.compare_badges", true, None),
+        ("nitro.compare_video_backgrounds", true, None),
+        ("nitro.c_app_icons", true, Some(Cta::AppIcons)),
+        ("nitro.p_profile", false, Some(Cta::Profiles)),
+        ("nitro.p_name_styles", false, Some(Cta::Profiles)),
+        ("nitro.p_themes", false, Some(Cta::Themes)),
+        ("nitro.p_stream", false, Some(Cta::VoiceVideo)),
+        ("nitro.compare_soundboard", false, Some(Cta::VoiceVideo)),
+        ("nitro.compare_messages", false, None),
+        ("nitro.compare_servers", false, None),
+        ("nitro.compare_boosts", false, None),
+        ("nitro.compare_shop", false, Some(Cta::Shop)),
+        ("nitro.compare_quests", false, Some(Cta::Quests)),
+    ];
+    let col = || div().w(z(108.)).flex_none().text_center();
+    let included = |available| {
+        if available { crate::t!("nitro.compare_included") } else { SharedString::from("—") }
+    };
+    let headers = div().flex().items_center().gap(z(8.)).px(z(12.)).py(z(10.)).font_weight(FontWeight::SEMIBOLD)
+        .child(div().flex_1().min_w_0().child(crate::t!("nitro.compare_perk")))
+        .child(col().child("Nitro Basic"))
+        .child(col().child("Nitro"));
+    div().flex().flex_col()
+        .child(headers)
+        .children(perks.into_iter().map(|(key, basic, action)| {
+            div().id(key).flex().items_center().gap(z(8.)).px(z(12.)).py(z(8.))
+                .border_t_1().border_color(c(tok(idx::BORDER_SUBTLE)))
+                .child(div().flex_1().min_w_0().child(crate::t!(key)))
+                .child(col().text_sm().child(included(basic)))
+                .child(col().text_sm().child(included(true)))
+                .when_some(action, |d, action| {
+                    d.cursor_pointer()
+                        .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))))
+                        .on_click(cx.listener(move |app, _, _, cx| run(app, action, cx)))
+                })
+        }))
+        .child(div().id("nitro-official-benefits").mt(z(10.)).px(z(12.)).py(z(6.)).text_color(c(tok(idx::TEXT_LINK)))
+            .cursor_pointer().child(crate::t!("nitro.compare_details"))
+            .on_click(|_, _, cx| cx.open_url("https://support.discord.com/hc/en-us/articles/115000435108")))
+}
+
 pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let me = app.me.clone();
     let overlay_btn = |id: &'static str| {
@@ -289,7 +339,8 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
                         .flex_col()
                         .child(section_title(crate::t!("nitro.whats_new")))
                         .child(grid),
-                ),
+                )
+                .child(div().px(z(32.)).pb(z(32.)).child(section_title(crate::t!("nitro.compare_title"))).child(compare_plans(cx))),
         )
         .children(crate::ui::chat::scrollbar::bar_for("nitro-scroll", crate::ui::chat::scrollbar::Bar::Auto))
         .into_any_element()
