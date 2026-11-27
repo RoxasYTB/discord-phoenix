@@ -52,18 +52,21 @@ impl VoiceConnectInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Resolution {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub kind: String,
+    #[serde(default)]
     pub width: u32,
+    #[serde(default)]
     pub height: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StreamDescriptor {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub kind: String,
+    #[serde(default)]
     pub rid: String,
     #[serde(default)]
     pub ssrc: u32,
@@ -85,8 +88,11 @@ pub struct StreamDescriptor {
 pub struct VideoPayload {
     #[serde(default)]
     pub user_id: Option<String>,
+    #[serde(default)]
     pub audio_ssrc: u32,
+    #[serde(default)]
     pub video_ssrc: u32,
+    #[serde(default)]
     pub rtx_ssrc: u32,
     #[serde(default)]
     pub streams: Vec<StreamDescriptor>,
@@ -354,6 +360,19 @@ mod tests {
         assert_eq!(v["op"], 12);
         assert_eq!(v["d"]["streams"][0]["max_resolution"]["width"], 1280);
         assert_eq!(v["d"]["streams"][0]["type"], "video");
+    }
+
+    #[test]
+    fn server_video_op_without_stream_types_still_decodes() {
+        let r = decode_text(r#"{"op":12,"seq":7,"d":{"user_id":"42","audio_ssrc":2732,"video_ssrc":2733,"streams":[{"rid":"100","ssrc":2733,"rtx_ssrc":2734,"active":true,"quality":100,"max_resolution":{"width":1280,"height":720}}]}}"#).unwrap();
+        let ServerMessage::Video(v) = r.msg else { panic!("not video") };
+        assert_eq!((v.user_id.as_deref(), v.audio_ssrc, v.video_ssrc, v.rtx_ssrc), (Some("42"), 2732, 2733, 0));
+        assert_eq!(v.streams[0].kind, "");
+        assert_eq!((v.streams[0].ssrc, v.streams[0].rtx_ssrc, v.streams[0].active), (2733, 2734, true));
+        assert_eq!(v.streams[0].max_resolution.as_ref().map(|m| (m.width, m.height)), Some((1280, 720)));
+        let r = decode_text(r#"{"op":12,"d":{"user_id":"42","audio_ssrc":2732}}"#).unwrap();
+        let ServerMessage::Video(v) = r.msg else { panic!("not video") };
+        assert!(v.streams.is_empty() && v.video_ssrc == 0);
     }
 
     #[test]

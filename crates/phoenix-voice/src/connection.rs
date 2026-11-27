@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::net::ToSocketAddrs;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
@@ -61,6 +63,10 @@ pub struct ConnStats {
     pub video_nacks_sent: u64,
     pub video_keyframe_requests: u64,
     pub video_decrypt_errors: u64,
+    pub video_keyframes_sent: u64,
+    pub video_keyframe_requests_received: u64,
+    pub video_nacks_received: u64,
+    pub video_rtx_sent: u64,
 }
 
 pub struct VoiceConfig {
@@ -92,6 +98,7 @@ enum Cmd {
     View(VideoView),
     KeyFrame(u64),
     Priority(bool),
+    KeyframeSink(Arc<AtomicBool>),
 }
 
 #[derive(Clone)]
@@ -118,6 +125,10 @@ impl VoiceConnection {
 
     pub fn set_priority(&self, on: bool) {
         let _ = self.tx.send(Cmd::Priority(on));
+    }
+
+    pub fn forward_keyframe_requests(&self, flag: Arc<AtomicBool>) {
+        let _ = self.tx.send(Cmd::KeyframeSink(flag));
     }
 }
 
@@ -166,8 +177,69 @@ struct Media {
 
 struct VideoTx {
     sender: RtpSender,
+    rtx: Option<RtpSender>,
+    history: RtxHistory,
     packetizer: crate::rtp::h264::H264Packetizer,
     base: u32,
+}
+
+pub const RTX_HISTORY: usize = 1024;
+
+#[derive(Default)]
+pub struct RtxHistory {
+    packets: std::collections::VecDeque<SentPacket>,
+}
+
+struct SentPacket {
+    sequence: u16,
+    timestamp: u32,
+    marker: bool,
+    payload: Vec<u8>,
+}
+
+impl RtxHistory {
+    pub fn record(&mut self, sequence: u16, timestamp: u32, marker: bool, payload: &[u8]) {
+        if self.packets.len() == RTX_HISTORY {
+            self.packets.pop_front();
+        }
+        self.packets.push_back(SentPacket { sequence, timestamp, marker, payload: payload.to_vec() });
+    }
+
+    pub fn retransmit(&self, rtx: &mut RtpSender, lost: &[u16]) -> Vec<Vec<u8>> {
+        lost.iter()
+            .filter_map(|&seq| {
+                let p = self.packets.iter().rev().find(|p| p.sequence == seq)?;
+                let mut body = Vec::with_capacity(p.payload.len() + 2);
+                body.extend_from_slice(&seq.to_be_bytes());
+                body.extend_from_slice(&p.payload);
+                let h = rtp::RtpHeader::new(rtx.payload_type, rtx.sequence, p.timestamp, rtx.ssrc, p.marker);
+                rtx.sequence = rtx.sequence.wrapping_add(1);
+                Some(rtp::build_packet(&h, &body))
+            })
+            .collect()
+    }
+}
+
+pub enum VideoFeedback {
+    KeyFrame,
+    Nack(Vec<u16>),
+}
+
+pub fn video_feedback(rtcp: &[u8], video_ssrc: u32) -> Vec<VideoFeedback> {
+    if video_ssrc == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for f in rtp::rtcp::parse(rtcp).unwrap_or_default() {
+        match f {
+            rtp::rtcp::Feedback::Pli { media_ssrc } | rtp::rtcp::Feedback::Fir { media_ssrc } if media_ssrc == video_ssrc => {
+                out.push(VideoFeedback::KeyFrame);
+            }
+            rtp::rtcp::Feedback::Nack { media_ssrc, lost } if media_ssrc == video_ssrc => out.push(VideoFeedback::Nack(lost)),
+            _ => {}
+        }
+    }
+    out
 }
 
 pub const CAMERA_MAX_BITRATE: u32 = 2_500_000;
@@ -204,6 +276,19 @@ impl VideoSendState {
 
     pub fn is_active(&self) -> bool {
         self.active
+    }
+
+    pub fn with_kind(mut self, kind: &str) -> Self {
+        self.kind = match kind {
+            "video" => "video",
+            "screen" => "screen",
+            _ => self.kind,
+        };
+        self
+    }
+
+    pub fn rtx_ssrc(&self) -> u32 {
+        self.rtx_ssrc
     }
 
     pub fn start(&mut self, width: u32, height: u32, fps: u32, bitrate: u32) -> Option<gateway::protocol::VideoPayload> {
@@ -515,6 +600,7 @@ async fn run(
     let mut wants_due: Option<Instant> = None;
     let mut priority = false;
     let mut connected = false;
+    let mut keyframe_sink: Option<Arc<AtomicBool>> = None;
     let sound_log = std::env::var_os("PHOENIX_SOUND_LOG").is_some();
 
     loop {
@@ -538,12 +624,9 @@ async fn run(
                                 let list: Vec<_> = r.streams.iter().map(|s| (s.kind.as_str(), s.rid.as_str(), s.ssrc, s.rtx_ssrc)).collect();
                                 eprintln!("voice-trace: ready stream={} streams={list:?}", cfg.info.stream);
                             }
-                            let vs = r
-                                .streams
-                                .iter()
-                                .find(|s| s.kind == want)
-                                .or_else(|| r.streams.iter().find(|s| s.ssrc != 0))
-                                .map_or((0, 0), |s| (s.ssrc, s.rtx_ssrc));
+                            let chosen = r.streams.iter().find(|s| s.kind == want).or_else(|| r.streams.iter().find(|s| s.ssrc != 0));
+                            let vs = chosen.map_or((0, 0), |s| (s.ssrc, s.rtx_ssrc));
+                            let kind = chosen.map_or(want, |s| s.kind.as_str());
                             media = Some(Media {
                                 socket,
                                 ssrc: r.ssrc,
@@ -553,7 +636,7 @@ async fn run(
                                 silence_left: 0,
                                 video_ssrc: vs.0,
                                 video: None,
-                                video_state: VideoSendState::new(cfg.info.stream, r.ssrc, vs.0, vs.1),
+                                video_state: VideoSendState::new(cfg.info.stream, r.ssrc, vs.0, vs.1).with_kind(kind),
                             });
                         }
                         ServerMessage::SessionDescription(sd) => {
@@ -651,11 +734,32 @@ async fn run(
                 let pkt = match pkt {
                     Ok(Incoming::Rtp(p)) => p,
                     Ok(Incoming::Rtcp(r)) => {
-                        if let Some(m) = media.as_ref()
-                            && m.video.is_some()
-                            && r.windows(4).any(|w| w == m.video_ssrc.to_be_bytes())
+                        if let Some(m) = media.as_mut()
+                            && let Some(vt) = m.video.as_mut()
                         {
-                            stats.video_rtcp_received += 1;
+                            if r.windows(4).any(|w| w == m.video_ssrc.to_be_bytes()) {
+                                stats.video_rtcp_received += 1;
+                            }
+                            for f in video_feedback(&r, m.video_ssrc) {
+                                match f {
+                                    VideoFeedback::KeyFrame => {
+                                        stats.video_keyframe_requests_received += 1;
+                                        if let Some(k) = keyframe_sink.as_ref() {
+                                            k.store(true, Ordering::Relaxed);
+                                        }
+                                    }
+                                    VideoFeedback::Nack(lost) => {
+                                        stats.video_nacks_received += 1;
+                                        let Some(rtx) = vt.rtx.as_mut() else { continue };
+                                        for p in vt.history.retransmit(rtx, &lost) {
+                                            match m.socket.send_rtp(&p).await {
+                                                Ok(()) => stats.video_rtx_sent += 1,
+                                                Err(e) => tracing::debug!(error = %e, "voice: rtx send failed"),
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                         if let Some(m) = media.as_ref()
                             && let Some((_, frac)) = rtp::rtcp::report_blocks(&r).into_iter().find(|(ssrc, _)| *ssrc == m.ssrc)
@@ -817,6 +921,7 @@ async fn run(
                     wants_due = Some(Instant::now() + STREAM_VIEW_DEBOUNCE);
                 }
                 Some(Cmd::KeyFrame(user)) => vrx.request_keyframe(user),
+                Some(Cmd::KeyframeSink(flag)) => keyframe_sink = Some(flag),
                 Some(Cmd::Priority(on)) => {
                     if on != priority && !cfg.info.stream {
                         priority = on;
@@ -837,8 +942,11 @@ async fn run(
                                 continue;
                             };
                             gw.video(&p)?;
+                            let rtx_ssrc = m.video_state.rtx_ssrc();
                             m.video = Some(VideoTx {
                                 sender: RtpSender::new(m.video_ssrc, Codec::H264.payload_type()),
+                                rtx: Codec::H264.rtx_payload_type().filter(|_| rtx_ssrc != 0).map(|pt| RtpSender::new(rtx_ssrc, pt)),
+                                history: RtxHistory::default(),
                                 packetizer: crate::rtp::h264::H264Packetizer::new(),
                                 base: rand::random(),
                             });
@@ -861,6 +969,14 @@ async fn run(
                             let Ok(au) = dave.encrypt(Codec::H264, &au) else { continue };
                             let Ok(payloads) = vt.packetizer.packetize_prepared(&au, rtp::DEFAULT_MAX_PAYLOAD) else { continue };
                             let ts = vt.base.wrapping_add((e.pts_us.wrapping_mul(90) / 1000) as u32);
+                            if e.keyframe {
+                                stats.video_keyframes_sent += 1;
+                            }
+                            let first_seq = vt.sender.sequence;
+                            let count = payloads.len();
+                            for (i, p) in payloads.iter().enumerate() {
+                                vt.history.record(first_seq.wrapping_add(i as u16), ts, i + 1 == count, p);
+                            }
                             for p in vt.sender.wrap(payloads, ts) {
                                 match m.socket.send_rtp(&p).await {
                                     Ok(()) => stats.video_packets_sent += 1,
@@ -933,6 +1049,129 @@ mod video_tests {
         assert_eq!(stopped.video_ssrc, 0);
         assert!(!stopped.streams[0].active);
         assert!(st.update(1280, 720, 30, 2_500_000, false).is_none());
+    }
+}
+
+#[cfg(test)]
+mod go_live_loop_tests {
+    use super::*;
+    use crate::media::ffmpeg::{self, FfmpegDecoder};
+    use crate::rtp::h264::H264Packetizer;
+    use crate::udp::classify_and_decrypt;
+    use crate::video_rx::Layer;
+
+    fn through(rxc: &TransportCipher, vrx: &mut VideoReceiver, wire: &[u8], now: Instant) -> Vec<EncodedFrame> {
+        let Incoming::Rtp(p) = classify_and_decrypt(Some(rxc), wire).unwrap() else { panic!("rtcp") };
+        let (h, payload) = rtp::parse_packet(&p).unwrap();
+        assert!(Codec::from_payload_type(h.payload_type).is_some_and(|(c, _)| c == Codec::H264));
+        vrx.push(&h, payload, now)
+    }
+
+    #[test]
+    fn rtx_keeps_marker_and_original_sequence() {
+        let mut h = RtxHistory::default();
+        h.record(10, 900, false, &[1, 2]);
+        h.record(11, 900, true, &[3]);
+        let mut rtx = RtpSender::new(51, 106);
+        let out = h.retransmit(&mut rtx, &[11, 10, 99]);
+        assert_eq!(out.len(), 2);
+        let (a, pa) = rtp::parse_packet(&out[0]).unwrap();
+        assert_eq!((a.ssrc, a.payload_type, a.timestamp, a.marker), (51, 106, 900, true));
+        assert_eq!(pa, [0, 11, 3]);
+        let (b, pb) = rtp::parse_packet(&out[1]).unwrap();
+        assert_eq!((b.marker, b.sequence), (false, a.sequence.wrapping_add(1)));
+        assert_eq!(pb, [0, 10, 1, 2]);
+        let mut pli = rtp::rtcp::build_pli(1, 50);
+        pli.extend(rtp::rtcp::build_nack(1, 50, &[10, 11]));
+        pli.extend(rtp::rtcp::build_pli(1, 77));
+        let f = video_feedback(&pli, 50);
+        assert!(matches!(f.as_slice(), [VideoFeedback::KeyFrame, VideoFeedback::Nack(l)] if l == &[10, 11]));
+        assert!(video_feedback(&pli, 0).is_empty());
+    }
+
+    #[test]
+    fn go_live_loop_from_encoder_to_decoder() {
+        if !ffmpeg::available() || !ffmpeg::decoder_support().codecs.contains(&Codec::H264) {
+            return;
+        }
+        let Some(aus) = ffmpeg::synthetic_frames(Codec::H264, "testsrc=s=320x180:r=10", 12) else { return };
+        assert!(aus.len() >= 10);
+        let (mut alice, mut bob) = crate::dave::session::tests::paired_sessions();
+        let mut tx = TransportCipher::new(EncryptionMode::Aes256GcmRtpSize, &[5; 32]).unwrap();
+        let rxc = TransportCipher::new(EncryptionMode::Aes256GcmRtpSize, &[5; 32]).unwrap();
+        let mut packetizer = H264Packetizer::new();
+        let mut sender = RtpSender::new(200, Codec::H264.payload_type());
+        let mut rtx = RtpSender::new(201, Codec::H264.rtx_payload_type().unwrap());
+        let mut history = RtxHistory::default();
+        let mut vrx = VideoReceiver::default();
+        vrx.set_layers(1, vec![Layer { ssrc: 200, rtx_ssrc: 201, quality: 100 }]);
+        let now = Instant::now();
+        let mut order: Vec<usize> = vec![0];
+        order.extend(0..aus.len());
+        let mut sent = Vec::new();
+        let mut frames = Vec::new();
+        let mut dropped = None;
+        for (step, &i) in order.iter().enumerate() {
+            let au = packetizer.prepare_access_unit(&aus[i]);
+            let enc = alice.encrypt(Codec::H264, &au).unwrap();
+            if i == 0 {
+                let footer = crate::dave::frame::parse_footer(&enc).unwrap();
+                let idr = au.windows(5).position(|w| w[..4] == [0, 0, 0, 1] && w[4] & 0x1f == 5).unwrap();
+                let clear = footer.ranges.iter().find(|r| r.offset <= idr && idr < r.offset + r.len).unwrap();
+                assert!(clear.offset + clear.len > idr + 5, "slice header through the PPS id stays clear");
+                assert_eq!(&enc[..clear.offset + clear.len], &au[..clear.offset + clear.len]);
+            }
+            let payloads = packetizer.packetize_prepared(&enc, rtp::DEFAULT_MAX_PAYLOAD).unwrap();
+            let ts = (step as u32 + 1) * 9000;
+            let first = sender.sequence;
+            let count = payloads.len();
+            for (k, p) in payloads.iter().enumerate() {
+                history.record(first.wrapping_add(k as u16), ts, k + 1 == count, p);
+            }
+            for (k, p) in sender.wrap(payloads, ts).iter().enumerate() {
+                let w = tx.encrypt_rtp(p).unwrap();
+                if step == 4 && k == 0 {
+                    dropped = Some(first);
+                    continue;
+                }
+                frames.extend(through(&rxc, &mut vrx, &w, now));
+            }
+            let (requests, more) = vrx.poll(now);
+            frames.extend(more);
+            for r in requests {
+                let rtcp = feedback_packet(9, &r);
+                for f in video_feedback(&rtcp, 200) {
+                    match f {
+                        VideoFeedback::KeyFrame => assert_eq!(step, 0, "only the frame before the first marker asks for a keyframe"),
+                        VideoFeedback::Nack(lost) => {
+                            assert_eq!(Some(lost.as_slice()), dropped.as_ref().map(std::slice::from_ref));
+                            for p in history.retransmit(&mut rtx, &lost) {
+                                frames.extend(through(&rxc, &mut vrx, &tx.encrypt_rtp(&p).unwrap(), now));
+                            }
+                        }
+                    }
+                }
+            }
+            if step > 0 {
+                sent.push(au);
+            }
+        }
+        assert_eq!(vrx.stats().rtx, 1);
+        assert_eq!(frames.len(), sent.len());
+        let mut dec = FfmpegDecoder::spawn_with(Codec::H264, ffmpeg::STREAM_MAX, None).unwrap();
+        for (f, au) in frames.iter().zip(&sent) {
+            let plain = open_video_frame(f, &mut bob).expect("dave opens every frame");
+            assert_eq!(&plain, au);
+            assert!(vrx.accept(f, video_rx::is_keyframe(Codec::H264, &plain)));
+            dec.push(&plain).unwrap();
+        }
+        let t = Instant::now();
+        while dec.decoded() < sent.len() as u64 && t.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(dec.decoded() + 1 >= sent.len() as u64, "decoded {} of {}", dec.decoded(), sent.len());
+        let last = dec.latest.lock().unwrap().clone().unwrap();
+        assert_eq!((last.width, last.height), (320, 180));
     }
 }
 

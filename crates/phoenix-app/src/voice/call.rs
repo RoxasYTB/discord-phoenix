@@ -320,6 +320,7 @@ fn start_camera(st: &mut State) {
     let sink = conn.clone();
     match phoenix_voice::media::camera::Camera::start(input, w, h, fps, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
         Ok(c) => {
+            conn.forward_keyframe_requests(c.keyframe_flag());
             watch_first_frame(c.preview.clone());
             st.camera = Some(c);
         }
@@ -1107,7 +1108,10 @@ fn start_capture(st: &mut State) {
         }
     }
     match phoenix_voice::media::camera::Camera::start_with(input, w, h, fps, bitrate, false, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
-        Ok(c) => o.capture = Some(c),
+        Ok(c) => {
+            conn.forward_keyframe_requests(c.keyframe_flag());
+            o.capture = Some(c);
+        }
         Err(e) => {
             conn.video(phoenix_voice::connection::VideoOut::Stop);
             screen_failed(st, super::MediaFailure::Other(e.to_string()));

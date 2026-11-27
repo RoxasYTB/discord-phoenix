@@ -33,7 +33,19 @@ Go Live: « Regarder le stream » sends op 20 STREAM_WATCH only; STREAM_CREATE a
 
 Testing video live: someone joins `〢🔊・phoenix-vocal` with their camera on (or streams a test window), Phoenix joins with `PHOENIX_SOUND_LOG=1 PHOENIX_VOICE_TRACE=1`. stderr prints `voice-trace: op 12 user=… layers=[…]`, `voice-trace: op 15 media sink wants …` and once per second `voice-net: … video_packets=… rtx=… frames=… shown=… dropped=… nacks=… plis=… video_decrypt_errors=…`. `shown` must grow at the sender's frame rate and `video_decrypt_errors` stay at 0.
 
-Automated tests: `video_rx::tests` (order, NACK, RTX, loss, simulcast, H.264/AV1 frames), `sink_wants::tests` (ladder, focus, 1:1 size, Go Live), `media::ffmpeg::tests` (generated H.264 / VP8 / AV1 frames sent through RTP, the receiver and ffmpeg; ratio kept), `rtp::rtcp::tests` (NACK, FIR), `rtp::av1::tests`.
+## Sending video (camera and Go Live)
+
+Capture (test pattern, v4l2, PipeWire portal) → `FfmpegH264` (libx264, Annex B with AUD) → `H264Packetizer::prepare_access_unit` (AUD dropped, SPS/PPS repeated before each IDR, 4-byte start codes) → `DaveSession::encrypt` → `packetize_prepared` (single NAL, STAP-A, FU-A, 1100-byte payloads) → RTP payload type 105 on the `video` SSRC from op 2 READY → transport encryption.
+
+Fixed after the first real call with friends (user log of 8fc6cda5, 27/11):
+1. Receiving: the server's op 12 has no `type` in `streams[]` (the client handler does not read a top-level `rtx_ssrc` either). Our decoder required them, so the whole op 12 was dropped (`ignoring undecodable voice gateway frame error=json: missing field type`), the streamer never got a layer, no op 15 asked for its video, and `video_packets` stayed at 0. Every op 12 field now has a default, as in the client's `tr()` (missing type means VIDEO).
+2. Sending: DAVE left only the 1-byte NAL header of each H.264 slice in the clear. libdave (`codec_utils.cpp`, `BytesCoveringH264PPS`) keeps the NAL header and the slice header bytes up to the end of `pic_parameter_set_id` (three exp-Golomb values, emulation prevention bytes skipped) in the clear, because WebRTC's H.264 depacketizer reads the PPS id; with it encrypted, viewers dropped every frame and kept asking for keyframes. Only NAL types 1 and 5 are treated as slices, like libdave. The start-code check now covers the DAVE footer too (`ValidateEncryptedFrame` validates ciphertext and supplemental bytes).
+3. PLI / FIR for the video SSRC force a new keyframe (`Camera::keyframe_flag`, at most once a second); before, a viewer that joined mid-stream waited for the next periodic keyframe (every 4 s) and a lost keyframe was never answered. NACKs are answered with RTX on the `rtx_ssrc` (payload type 106, original sequence first, original marker and timestamp), from the last 1024 packets.
+4. op 12 `streams[].type` follows op 2 READY (the stream server answers `video` for a Go Live connection, the client copies READY's type into its stream parameters).
+
+Stats on the stream connection (`voice-trace: stream(own) Stats(…)`): `video_packets_sent`, `video_keyframes_sent`, `video_keyframe_requests_received`, `video_nacks_received`, `video_rtx_sent`. A working stream shows `video_keyframe_requests_received` that stops growing once viewers have a picture.
+
+Automated tests: `video_rx::tests` (order, NACK, RTX, loss, simulcast, H.264/AV1 frames), `connection::go_live_loop_tests` (generated H.264 → packetizer → DAVE → transport encryption → receiver with a lost packet recovered by NACK/RTX and a PLI → DAVE → ffmpeg), `tests/gateway_mock.rs` (Go Live op 2 / op 12 against a mock voice gateway), `sink_wants::tests` (ladder, focus, 1:1 size, Go Live), `media::ffmpeg::tests` (generated H.264 / VP8 / AV1 frames sent through RTP, the receiver and ffmpeg; ratio kept), `rtp::rtcp::tests` (NACK, FIR), `rtp::av1::tests`.
 
 ## Joining, switching and reconnecting
 

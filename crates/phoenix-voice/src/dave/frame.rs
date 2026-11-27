@@ -83,14 +83,43 @@ fn annex_b_ranges(codec: Codec, f: &[u8]) -> Vec<Range> {
     }
     for (k, &(sc, nal)) in starts.iter().enumerate() {
         let end = starts.get(k + 1).map(|s| s.0).unwrap_or(f.len());
-        let (hdr_len, vcl) = match codec {
-            Codec::H265 => (2, f.get(nal).is_some_and(|b| (b >> 1) & 0x3f < 32)),
-            _ => (1, f.get(nal).is_some_and(|b| matches!(b & 0x1f, 1..=5))),
+        let prefix = match codec {
+            Codec::H265 => f.get(nal).is_some_and(|b| (b >> 1) & 0x3f < 32).then_some(2),
+            _ => f.get(nal).is_some_and(|b| matches!(b & 0x1f, 1 | 5)).then(|| {
+                let payload = f.get(nal + 1..end).unwrap_or_default();
+                1 + bytes_covering_h264_pps(payload).min(payload.len())
+            }),
         };
-        let clear_end = if vcl { (nal + hdr_len).min(end) } else { end };
+        let clear_end = prefix.map_or(end, |p| (nal + p).min(end));
         out.push(Range { offset: sc, len: clear_end - sc });
     }
     out
+}
+
+pub fn bytes_covering_h264_pps(payload: &[u8]) -> usize {
+    let mut bit = 0usize;
+    let mut zeros = 0u32;
+    let mut parsed = 0;
+    while bit < payload.len() * 8 && parsed < 3 {
+        let (byte_index, bit_index) = (bit / 8, bit % 8);
+        let byte = payload[byte_index];
+        if bit_index == 0 && byte_index >= 2 && byte == 3 && payload[byte_index - 1] == 0 && payload[byte_index - 2] == 0 {
+            bit += 8;
+            continue;
+        }
+        if byte & (1 << (7 - bit_index)) == 0 {
+            zeros += 1;
+            bit += 1;
+            if zeros >= 32 {
+                return 0;
+            }
+        } else {
+            parsed += 1;
+            bit += 1 + zeros as usize;
+            zeros = 0;
+        }
+    }
+    bit / 8 + 1
 }
 
 fn av1_ranges(f: &[u8]) -> Result<Vec<Range>> {
@@ -210,10 +239,10 @@ impl FrameEncryptor {
             footer.push(supp_u8);
             footer.extend_from_slice(&MAGIC);
             let mut out = interleave(&clear, &body, &ranges, frame.len() + supp)?;
+            out.extend_from_slice(&footer);
             if check_sc && emulates_start_code(&out, &ranges) {
                 continue;
             }
-            out.extend_from_slice(&footer);
             return Ok(out);
         }
         Err(Error::Crypto("could not avoid start code emulation"))
@@ -372,11 +401,33 @@ mod tests {
         for _ in 0..20 {
             let enc = e.encrypt(Codec::H264, &frame).unwrap();
             let f = parse_footer(&enc).unwrap();
-            assert_eq!(f.ranges[0], Range { offset: 0, len: 18 });
-            assert_eq!(&enc[..18], &frame[..18]);
+            assert_eq!(f.ranges[0], Range { offset: 0, len: 22 });
+            assert_eq!(&enc[..22], &frame[..22]);
+            let p_slice = frame.windows(4).rposition(|w| w == [0, 0, 1, 0x41]).unwrap();
+            assert_eq!(f.ranges[1], Range { offset: p_slice, len: 8 });
             let body = &enc[..f.body_len];
             let starts = body.windows(3).filter(|w| w == &[0, 0, 1]).count();
             assert_eq!(starts, 4, "no emulated start codes");
+            assert_eq!(d.decrypt(&enc).unwrap(), frame);
+        }
+    }
+
+    #[test]
+    fn h264_slice_header_clear_through_pps_id() {
+        assert_eq!(bytes_covering_h264_pps(&[0x88, 0x84, 0x21, 0x40]), 2);
+        assert_eq!(bytes_covering_h264_pps(&[0x9a, 0x20, 0x11]), 1);
+        assert_eq!(bytes_covering_h264_pps(&[0x00, 0x00, 0x03, 0x80, 0x00, 0x60]), 6);
+        assert_eq!(bytes_covering_h264_pps(&[0; 8]), 0);
+        let mut frame = vec![0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80, 0, 0, 0, 1, 0x65, 0x88, 0x84];
+        frame.extend((0..400u32).map(|i| (i % 250) as u8 + 4));
+        let ranges = unencrypted_ranges(Codec::H264, &frame).unwrap();
+        assert_eq!(ranges, vec![Range { offset: 0, len: 23 }]);
+        let mut e = FrameEncryptor::new(Box::new(StaticRatchet([2; 16])));
+        let mut d = FrameDecryptor::new(Box::new(StaticRatchet([2; 16])));
+        for _ in 0..50 {
+            let enc = e.encrypt(Codec::H264, &frame).unwrap();
+            assert_eq!(&enc[..23], &frame[..23]);
+            assert!(!enc[23..].windows(3).any(|w| w[0] == 0 && w[1] == 0 && w[2] <= 3), "no start code in ciphertext or footer");
             assert_eq!(d.decrypt(&enc).unwrap(), frame);
         }
     }

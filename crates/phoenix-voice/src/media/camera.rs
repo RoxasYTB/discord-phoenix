@@ -130,8 +130,11 @@ pub struct CaptureParams {
     pub bitrate: u32,
 }
 
+pub const KEYFRAME_MIN_INTERVAL: Duration = Duration::from_secs(1);
+
 pub struct Camera {
     stop: Arc<AtomicBool>,
+    keyframe: Arc<AtomicBool>,
     reconfig: Arc<Mutex<Option<CaptureParams>>>,
     thread: Option<JoinHandle<()>>,
     pub preview: Preview,
@@ -246,6 +249,7 @@ impl Camera {
     {
         let CaptureParams { width, height, fps, bitrate } = params;
         let stop = Arc::new(AtomicBool::new(false));
+        let keyframe = Arc::new(AtomicBool::new(false));
         let reconfig: Arc<Mutex<Option<CaptureParams>>> = Arc::new(Mutex::new(None));
         let preview: Preview = Arc::new(Mutex::new(None));
         let cfg = VideoEncoderConfig::new(Codec::H264, width, height, fps, bitrate, screen);
@@ -254,7 +258,7 @@ impl Camera {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let needs_reader = input.reads_device();
         let initial_reader = if needs_reader { Some(DeviceReader::open(&input, width, height, fps)?) } else { None };
-        let (s2, r2, p2) = (stop.clone(), reconfig.clone(), preview.clone());
+        let (s2, r2, p2, k2) = (stop.clone(), reconfig.clone(), preview.clone(), keyframe.clone());
         let thread = std::thread::Builder::new()
             .name("phoenix-camera".into())
             .spawn(move || {
@@ -283,6 +287,7 @@ impl Camera {
                 let mut period = Duration::from_micros(1_000_000 / u64::from(fps.max(1)));
                 let mut next = Instant::now();
                 let mut first = true;
+                let mut last_key = Instant::now();
                 while !s2.load(Ordering::Relaxed) {
                     if let Some(target) = r2.lock().ok().and_then(|mut slot| slot.take())
                         && target != current
@@ -324,7 +329,12 @@ impl Camera {
                     if let Ok(mut p) = p2.lock() {
                         *p = Some(frame.clone());
                     }
-                    match enc.encode(&frame, first) {
+                    let force = first || (k2.load(Ordering::Relaxed) && last_key.elapsed() >= KEYFRAME_MIN_INTERVAL);
+                    if force {
+                        k2.store(false, Ordering::Relaxed);
+                        last_key = Instant::now();
+                    }
+                    match enc.encode(&frame, force) {
                         Ok(Some(e)) => on_frame(e),
                         Ok(None) => {}
                         Err(e) => {
@@ -347,13 +357,17 @@ impl Camera {
             .map_err(Error::Io)?;
         #[cfg(windows)]
         ready_rx.recv().map_err(|e| Error::Encoder(e.to_string()))??;
-        Ok(Self { stop, reconfig, thread: Some(thread), preview })
+        Ok(Self { stop, keyframe, reconfig, thread: Some(thread), preview })
     }
 
     pub fn reconfigure(&self, width: u32, height: u32, fps: u32, bitrate: u32) {
         if let Ok(mut slot) = self.reconfig.lock() {
             *slot = Some(CaptureParams { width, height, fps, bitrate });
         }
+    }
+
+    pub fn keyframe_flag(&self) -> Arc<AtomicBool> {
+        self.keyframe.clone()
     }
 
     pub fn stop(mut self) {
@@ -470,5 +484,47 @@ mod tests {
         let fl = frames.lock().unwrap();
         let first_new = fl.iter().find(|&&(w, h, _)| (w, h) == (1280, 720)).copied();
         assert_eq!(first_new, Some((1280, 720, true)));
+    }
+
+    #[test]
+    fn keyframe_requests_force_a_throttled_keyframe() {
+        struct Keys(Arc<Mutex<Vec<bool>>>);
+        impl VideoEncoder for Keys {
+            fn codec(&self) -> Codec {
+                Codec::H264
+            }
+            fn encode(&mut self, frame: &VideoFrame, force_keyframe: bool) -> Result<Option<EncodedVideo>> {
+                self.0.lock().unwrap().push(force_keyframe);
+                Ok(Some(EncodedVideo { codec: Codec::H264, keyframe: force_keyframe, data: vec![0, 0, 0, 1, 0x65], pts_us: frame.pts_us }))
+            }
+            fn set_bitrate(&mut self, _bps: u32) -> Result<()> {
+                Ok(())
+            }
+        }
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let l2 = log.clone();
+        let cam = Camera::start_with_factory(
+            Input::TestPattern,
+            CaptureParams { width: 64, height: 36, fps: 50, bitrate: 500_000 },
+            true,
+            move |_| Ok(Box::new(Keys(l2.clone()))),
+            |_| {},
+        )
+        .unwrap();
+        let flag = cam.keyframe_flag();
+        std::thread::sleep(Duration::from_millis(200));
+        flag.store(true, Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(flag.load(Ordering::Relaxed), "held back until the minimum interval passes");
+        let deadline = Instant::now() + KEYFRAME_MIN_INTERVAL + Duration::from_secs(2);
+        while flag.load(Ordering::Relaxed) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        cam.stop();
+        let keys = log.lock().unwrap().clone();
+        assert!(!flag.load(Ordering::Relaxed));
+        assert!(keys[0]);
+        assert_eq!(keys.iter().filter(|k| **k).count(), 2);
     }
 }
