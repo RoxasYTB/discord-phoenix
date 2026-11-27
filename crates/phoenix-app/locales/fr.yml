@@ -4184,6 +4184,10 @@ settings.standing.at_risk_d: "Tu as enfreint les règles de Discord. Tu seras su
 settings.standing.suspended_d: "En raison de graves violations de la politique, ton compte est suspendu de manière permanente. Tu ne peux plus utiliser Discord."
 sp.auth.deauth_title: "Retirer l'autorisation à l'application"
 sp.auth.deauth_body: "Cette action supprimera le lien entre ton compte Discord et {name}"
+sp.auth.disconnect_title: "Déconnecter {name}"
+sp.auth.disconnect_body: "Tu ne pourras plus accéder aux fonctionnalités de {name} sur ton compte Discord."
+sp.auth.disconnect_warning: "Si tu déconnectes tes comptes, tes messages privés resteront sur Discord et tes amis en jeu resteront dans le jeu."
+sp.auth.console_notice: "{name} est aussi un compte connecté. Le déconnecter le retirera également des comptes connectés."
 
 add_server.title: "Crée ton serveur"
 add_server.subtitle: "Ton serveur est l'endroit où tu retrouves tes amis. Crée le tien et lance une discussion."

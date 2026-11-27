@@ -4184,6 +4184,10 @@ settings.standing.at_risk_d: "You broke Discord's rules. You will be permanently
 settings.standing.suspended_d: "Due to serious policy violations, your account is permanently suspended. You can no longer use Discord."
 sp.auth.deauth_title: "Deauthorize Application"
 sp.auth.deauth_body: "This action will remove the link between your Discord account and {name}"
+sp.auth.disconnect_title: "Disconnect {name}"
+sp.auth.disconnect_body: "You will no longer be able to access the features of {name} on your Discord account."
+sp.auth.disconnect_warning: "If you disconnect your accounts, your direct messages will stay on Discord and your in-game friends will remain in the game."
+sp.auth.console_notice: "{name} is also a Connected Account. Disconnecting will also remove it from Connected Accounts."
 
 add_server.title: "Create Your Server"
 add_server.subtitle: "Your server is where you and your friends hang out. Make yours and start talking."

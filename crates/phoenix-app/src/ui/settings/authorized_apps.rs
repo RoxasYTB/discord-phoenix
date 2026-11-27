@@ -18,10 +18,31 @@ pub struct AuthorizedApp {
     pub terms: bool,
     pub privacy: bool,
     pub scopes: Vec<String>,
+    pub flags: u64,
+}
+
+const SOCIAL_LAYER_INTEGRATION_LIMITED: u64 = 1 << 10;
+const SOCIAL_LAYER_INTEGRATION: u64 = 1 << 27;
+const CONSOLE_APPS: [u64; 3] = [622_174_530_214_821_906, 984_193_235_868_065_795, 1_008_890_872_156_405_890];
+
+pub fn game_connection(a: &AuthorizedApp) -> bool {
+    a.flags & (SOCIAL_LAYER_INTEGRATION_LIMITED | SOCIAL_LAYER_INTEGRATION) != 0 && a.scopes.iter().any(|s| s == "sdk.social_layer" || s == "sdk.social_layer_presence")
+}
+
+pub fn console_connection(app_id: u64) -> bool {
+    CONSOLE_APPS.contains(&app_id)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Pending {
+    token: u64,
+    name: String,
+    game: bool,
+    console: bool,
 }
 
 static APPS: RwLock<Option<Vec<AuthorizedApp>>> = RwLock::new(None);
-static CONFIRM: RwLock<Option<(u64, String)>> = RwLock::new(None);
+static CONFIRM: RwLock<Option<Pending>> = RwLock::new(None);
 
 pub fn deauth_request(token_id: u64) -> (&'static str, String) {
     ("DELETE", format!("/oauth2/tokens/{token_id}"))
@@ -41,11 +62,23 @@ fn deauthorize(app: &PhoenixApp, token_id: u64, cx: &mut Context<PhoenixApp>) {
 }
 
 pub fn confirm_modal(cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    let (token, name) = CONFIRM.read().clone()?;
+    let Pending { token, name, game, console } = CONFIRM.read().clone()?;
     let (e1, e2) = (cx.entity(), cx.entity());
+    let (title, sub) = if game {
+        (crate::t!("sp.auth.disconnect_title", name = name), crate::t!("sp.auth.disconnect_body", name = name))
+    } else {
+        (crate::t!("sp.auth.deauth_title"), crate::t!("sp.auth.deauth_body", name = name))
+    };
+    let mut body = vec![sub.into_any_element()];
+    if game {
+        body.push(warning_notice(crate::t!("sp.auth.disconnect_warning")));
+    }
+    if console {
+        body.push(crate::ui::modals::settings_form::info_notice(crate::t!("sp.auth.console_notice", name = name)));
+    }
     Some(crate::ui::modal::confirm(crate::ui::modal::Confirm {
-        title: crate::t!("sp.auth.deauth_title"),
-        body: vec![crate::t!("sp.auth.deauth_body", name = name).into_any_element()],
+        title,
+        body,
         confirm_label: crate::t!("sp.auth.deauth"),
         danger: true,
         on_confirm: std::rc::Rc::new(move |_, cx| {
@@ -57,6 +90,21 @@ pub fn confirm_modal(cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
             e2.update(cx, |_, cx| cx.notify());
         }),
     }))
+}
+
+fn warning_notice(t: SharedString) -> AnyElement {
+    div()
+        .p(z(12.))
+        .rounded(z(8.))
+        .border_1()
+        .border_color(c(tok(idx::BORDER_FEEDBACK_WARNING)))
+        .bg(c(tok(idx::BACKGROUND_FEEDBACK_WARNING)))
+        .flex()
+        .items_start()
+        .gap(z(8.))
+        .child(div().h(z(18.)).flex().items_center().child(gpui::svg().path(crate::icons::path("warning")).size(z(16.)).text_color(c(tok(idx::ICON_FEEDBACK_WARNING)))))
+        .child(div().flex_1().min_w_0().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_STRONG))).child(t))
+        .into_any_element()
 }
 
 pub fn close_confirm() -> bool {
@@ -90,6 +138,7 @@ pub fn parse(v: &Value) -> Vec<AuthorizedApp> {
                 terms: g("terms_of_service_url").and_then(Value::as_str).is_some_and(|u| !u.is_empty()),
                 privacy: g("privacy_policy_url").and_then(Value::as_str).is_some_and(|u| !u.is_empty()),
                 scopes: t.get("scopes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect(),
+                flags: g("flags").and_then(Value::as_u64).unwrap_or(0),
             }
         })
         .collect()
@@ -249,9 +298,9 @@ pub fn render(_: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement {
                             controls::button_sm(gpui::ElementId::Name(format!("deauth-{}", a.token_id).into()), crate::t!("sp.auth.deauth"), BtnKind::Secondary)
                                 .text_color(c(tok(idx::CONTROL_CRITICAL_SECONDARY_TEXT_DEFAULT)))
                                 .on_click({
-                                    let (token, name) = (a.token_id, a.name.clone());
+                                    let pending = Pending { token: a.token_id, name: a.name.clone(), game: game_connection(&a), console: console_connection(a.app_id) };
                                     cx.listener(move |_, _, _, cx| {
-                                        *CONFIRM.write() = Some((token, name.clone()));
+                                        *CONFIRM.write() = Some(pending.clone());
                                         cx.notify();
                                     })
                                 }),
@@ -278,5 +327,17 @@ mod tests {
         assert_eq!(a[0].scopes.len(), 2);
         assert!(a[0].privacy && !a[0].terms);
         assert_eq!(super::scope_key("guilds"), Some("sp.auth.s.guilds"));
+        assert!(!super::game_connection(&a[0]));
+    }
+
+    #[test]
+    fn game_connections_get_the_disconnect_variant() {
+        let v = serde_json::json!([{"id": "2", "scopes": ["sdk.social_layer"], "application": {"id": "622174530214821906", "name": "Xbox", "flags": 1u64 << 27}}]);
+        let a = super::parse(&v);
+        assert!(super::game_connection(&a[0]));
+        assert!(super::console_connection(a[0].app_id));
+        let v = serde_json::json!([{"id": "3", "scopes": ["identify"], "application": {"id": "9", "name": "G", "flags": 1u64 << 10}}]);
+        assert!(!super::game_connection(&super::parse(&v)[0]));
+        assert!(!super::console_connection(9));
     }
 }
