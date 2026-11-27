@@ -721,6 +721,26 @@ Tests: `present_transition::tests` (ease-out slide with its delay and end, sprin
 overshoot / settle, scale around the origin and faded colours, premultiplied mix, nested chains
 and fixed masks, quad height). App: `ui::popout_motion::tests`.
 
+## 23. Wayland clipboard keeps the image and the text (`vendor/gpui-pre-linux`, `src/linux/wayland/clipboard.rs` `both_entries`)
+
+Contributed by Rodrigue Neveux (PR #17).
+
+**Problem.** `gpui-pre-linux` read the clipboard text first and only fell back to the image.
+A browser that copies an image also offers its URL or HTML, so pasting it in the composer
+pasted the text and lost the image. The client (Chromium `clipboardData.files`) attaches the
+image.
+
+**Patch.** `read_from_clipboard` and `read_from_primary` read both offers and return one
+`ClipboardItem` with the image entry first and the text entry after it. A source that offers
+only one of them is unchanged. `ChatState::paste_clipboard` already uploads image entries and
+consumes the paste when it took one.
+
+`vendor/gpui-pre-linux` is the crates.io `gpui-pre-linux` 0.3.12 source with only this patch
+(marked `PHOENIX PATCH (clipboard)`). It is wired through its own git rev, the
+`gpui-linux-clipboard` branch, so the other GPUI crates keep their rev and are not rebuilt.
+After changing it: commit it on that branch, push, and set the `gpui-pre-linux` rev in
+`Cargo.toml` and in `Cargo.lock`. X11 is not patched.
+
 ## Running the vendored tests
 
 The lib tests of both crates run from a small test-only workspace, `vendor/Cargo.toml`
