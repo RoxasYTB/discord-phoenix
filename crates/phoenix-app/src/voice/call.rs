@@ -74,6 +74,7 @@ struct State {
     ptt_key: Option<String>,
     global_binds: Vec<(String, String, String)>,
     camera_on: bool,
+    priority: bool,
     camera_device: Option<String>,
     camera: Option<phoenix_voice::media::camera::Camera>,
     region: Option<String>,
@@ -357,6 +358,7 @@ fn watch_first_frame(preview: phoenix_voice::media::camera::Preview) {
 
 fn stop(st: &mut State) {
     st.camera_on = false;
+    manager().control.clear_priority_speakers();
     remote().lock().clear();
     stop_own_stream(st, None);
     for key in st.watches.keys().cloned().collect::<Vec<_>>() {
@@ -554,6 +556,7 @@ impl VoiceManager {
         if let Some(v) = st.call_view.clone() {
             conn.set_view(connection::VideoView::Call(v));
         }
+        conn.set_priority(st.priority);
         st.running = Some(Running { conn, engine, out_tx, sink });
         ui(emit, VoiceUiEvent::Status(VoiceStatus::Connecting));
         let generation = st.generation;
@@ -582,6 +585,7 @@ impl VoiceManager {
                     VoiceEvent::Stats(s) => VoiceUiEvent::Stats(s),
                     VoiceEvent::Ping(p) => VoiceUiEvent::Ping(p),
                     VoiceEvent::Speaking { user_id, speaking } => VoiceUiEvent::Speaking { user: Id(user_id), speaking },
+                    VoiceEvent::SpeakingFlags { user_id, flags } => VoiceUiEvent::SpeakingFlags { user: Id(user_id), flags },
                     VoiceEvent::Encryption { e2ee, .. } => VoiceUiEvent::Encryption(e2ee),
                     VoiceEvent::Reconnecting => {
                         ping_on_reconnect(None);
@@ -679,6 +683,13 @@ impl VoiceManager {
                 self.control.set_ptt_pressed(false);
             }
             VoiceControl::SetPttPressed(v) => self.control.set_ptt_pressed(v),
+            VoiceControl::SetPriority(on) => {
+                st.priority = on;
+                if let Some(r) = st.running.as_ref() {
+                    r.conn.set_priority(on);
+                }
+            }
+            VoiceControl::SetPrioritySpeaker(u, on) => self.control.set_priority_speaker(u.0, on),
             VoiceControl::SetPttDelay(ms) => self.control.set_ptt_release_ms(ms),
             VoiceControl::SetCameraDevice(d) => st.camera_device = d,
             VoiceControl::SetCamera(on) => {

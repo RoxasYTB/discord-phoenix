@@ -792,6 +792,11 @@ impl Backend for DiscordBackend {
         s.cache.roles_permissions_in(sf(channel), &roles).is_none_or(|p| p.contains(phoenix_api::models::Permissions::VIEW_CHANNEL))
     }
 
+    fn member_permissions(&self, channel: Id, user: Id) -> Option<u64> {
+        let s = self.inner.session().ok()?;
+        s.cache.member_permissions_in(sf(channel), sf(user)).map(|p| p.bits())
+    }
+
     fn member_can_view(&self, channel: Id, user: Id) -> bool {
         let Ok(s) = self.inner.session() else { return true };
         s.cache

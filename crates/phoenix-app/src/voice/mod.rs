@@ -1,5 +1,6 @@
 pub mod call;
 pub mod prefs;
+pub mod priority;
 pub mod soundboard;
 pub mod start_time;
 pub mod stream;
@@ -54,6 +55,7 @@ pub enum VoiceUiEvent {
     Status(VoiceStatus),
     Ping(u32),
     Speaking { user: Id, speaking: bool },
+    SpeakingFlags { user: Id, flags: u32 },
     Encryption(bool),
     PrivacyCode(Option<String>),
     Stats(ConnStats),
@@ -106,6 +108,8 @@ pub enum VoiceControl {
     SetPttKey(Option<String>),
     SetGlobalKeybinds(Vec<(String, String, String)>),
     SetPttPressed(bool),
+    SetPriority(bool),
+    SetPrioritySpeaker(Id, bool),
     SetPttDelay(u32),
     SetCamera(bool),
     SetCameraDevice(Option<String>),
@@ -185,7 +189,7 @@ impl VoiceUi {
                 }
             }
             VoiceUiEvent::Error(e) => self.last_error = Some(e),
-            VoiceUiEvent::CameraFailed(_) | VoiceUiEvent::ScreenFailed(_) => {}
+            VoiceUiEvent::SpeakingFlags { .. } | VoiceUiEvent::CameraFailed(_) | VoiceUiEvent::ScreenFailed(_) => {}
             VoiceUiEvent::Stream(e) => match e {
                 StreamUiEvent::Live(k) => {
                     self.own_stream = k;

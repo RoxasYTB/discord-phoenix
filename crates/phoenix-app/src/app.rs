@@ -1001,6 +1001,7 @@ impl PhoenixApp {
                     });
                 }
                 match &e {
+                    crate::voice::VoiceUiEvent::SpeakingFlags { user, flags } => crate::voice::priority::on_flags(self, *user, *flags),
                     crate::voice::VoiceUiEvent::CameraFailed(f) => crate::ui::voice_panel::media_failure_modal(f, false),
                     crate::voice::VoiceUiEvent::ScreenFailed(f) => crate::ui::voice_panel::media_failure_modal(f, true),
                     _ => {}

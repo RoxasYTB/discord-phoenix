@@ -201,7 +201,7 @@ impl Mixer {
                 t.stats.level_db = -100.0;
                 continue;
             };
-            let gain = if deaf { 0.0 } else { control.user_volume(*uid) };
+            let gain = if deaf { 0.0 } else { control.user_volume(*uid) * control.priority_gain(*uid) };
             let mut track = vec![0f32; pcm.len()];
             mix_into(&mut track, &pcm, 1.0);
             t.stats.level_db = level_db(&track);

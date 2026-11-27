@@ -13,7 +13,7 @@ pub mod voice_message;
 #[cfg(feature = "audio")]
 pub mod ogg_opus;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use std::sync::{Mutex, MutexGuard};
@@ -30,6 +30,9 @@ fn store_f32(a: &AtomicU32, v: f32) {
     a.store(v.to_bits(), Ordering::Relaxed);
 }
 
+pub const PRIORITY_SPEAKER_DUCKING: f32 = 0.1;
+pub const STREAM_USER_BIT: u64 = 1 << 63;
+
 pub struct AudioControl {
     muted: AtomicBool,
     deafened: AtomicBool,
@@ -39,6 +42,7 @@ pub struct AudioControl {
     gate_threshold_db: AtomicU32,
     input_level_db: AtomicU32,
     user_volume: Mutex<HashMap<u64, f32>>,
+    priority_speakers: Mutex<HashSet<u64>>,
     noise_suppression: AtomicBool,
     agc: AtomicBool,
     echo_cancellation: AtomicBool,
@@ -59,6 +63,7 @@ impl Default for AudioControl {
             gate_threshold_db: AtomicU32::new((-50.0f32).to_bits()),
             input_level_db: AtomicU32::new((-100.0f32).to_bits()),
             user_volume: Mutex::new(HashMap::new()),
+            priority_speakers: Mutex::new(HashSet::new()),
             noise_suppression: AtomicBool::new(true),
             agc: AtomicBool::new(true),
             echo_cancellation: AtomicBool::new(true),
@@ -119,6 +124,21 @@ impl AudioControl {
     pub fn set_user_volume(&self, user: u64, v: f32) {
         lock(&self.user_volume).insert(user, v.clamp(0.0, 2.0));
     }
+    pub fn set_priority_speaker(&self, user: u64, on: bool) {
+        let mut s = lock(&self.priority_speakers);
+        if on {
+            s.insert(user);
+        } else {
+            s.remove(&user);
+        }
+    }
+    pub fn clear_priority_speakers(&self) {
+        lock(&self.priority_speakers).clear();
+    }
+    pub fn priority_gain(&self, user: u64) -> f32 {
+        let s = lock(&self.priority_speakers);
+        if user & STREAM_USER_BIT == 0 && !s.is_empty() && !s.contains(&user) { PRIORITY_SPEAKER_DUCKING } else { 1.0 }
+    }
     pub fn noise_suppression(&self) -> bool {
         self.noise_suppression.load(Ordering::Relaxed)
     }
@@ -160,5 +180,25 @@ impl AudioControl {
     }
     pub fn set_transmitting(&self, v: bool) {
         self.transmitting.store(v, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn priority_speakers_duck_everyone_else() {
+        let c = AudioControl::default();
+        assert_eq!(c.priority_gain(2), 1.0);
+        c.set_priority_speaker(1, true);
+        assert_eq!(c.priority_gain(1), 1.0);
+        assert_eq!(c.priority_gain(2), PRIORITY_SPEAKER_DUCKING);
+        assert_eq!(c.priority_gain(2 | STREAM_USER_BIT), 1.0);
+        c.set_priority_speaker(1, false);
+        assert_eq!(c.priority_gain(2), 1.0);
+        c.set_priority_speaker(3, true);
+        c.clear_priority_speakers();
+        assert_eq!(c.priority_gain(2), 1.0);
     }
 }

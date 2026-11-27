@@ -39,6 +39,7 @@ pub enum VoiceEvent {
     Connected { ssrc: u32, mode: String },
     Ping(u32),
     Speaking { user_id: u64, speaking: bool },
+    SpeakingFlags { user_id: u64, flags: u32 },
     Encryption { e2ee: bool, protocol_version: u16 },
     PrivacyCode(Option<String>),
     Stats(ConnStats),
@@ -90,6 +91,7 @@ enum Cmd {
     Video(VideoOut),
     View(VideoView),
     KeyFrame(u64),
+    Priority(bool),
 }
 
 #[derive(Clone)]
@@ -113,6 +115,14 @@ impl VoiceConnection {
     pub fn request_keyframe(&self, user_id: u64) {
         let _ = self.tx.send(Cmd::KeyFrame(user_id));
     }
+
+    pub fn set_priority(&self, on: bool) {
+        let _ = self.tx.send(Cmd::Priority(on));
+    }
+}
+
+pub fn mic_flags(priority: bool) -> u32 {
+    speaking::MICROPHONE | if priority { speaking::PRIORITY } else { 0 }
 }
 
 pub fn connect(
@@ -503,6 +513,7 @@ async fn run(
     let mut wants = SinkWants::new(cfg.user_id);
     let mut golive = GoLiveWants::new();
     let mut wants_due: Option<Instant> = None;
+    let mut priority = false;
     let mut connected = false;
     let sound_log = std::env::var_os("PHOENIX_SOUND_LOG").is_some();
 
@@ -560,8 +571,9 @@ async fn run(
                                 let _ = events.send(VoiceEvent::Ping((now - nonce) as u32));
                             }
                         }
-                        ServerMessage::Speaking { user_id, ssrc, .. } => {
+                        ServerMessage::Speaking { user_id, ssrc, speaking: flags } => {
                             if let Some(uid) = user_id.and_then(|u| u.parse::<u64>().ok()) {
+                                let _ = events.send(VoiceEvent::SpeakingFlags { user_id: uid, flags });
                                 dave.add_users([uid]);
                                 wants.set_audio(uid, ssrc);
                                 wants_due = Some(Instant::now());
@@ -705,7 +717,7 @@ async fn run(
                     AudioOut::Frame(f) => {
                         if !m.transmitting {
                             m.transmitting = true;
-                            gw.speaking(if cfg.info.stream { speaking::SOUNDSHARE } else { speaking::MICROPHONE }, m.ssrc)?;
+                            gw.speaking(if cfg.info.stream { speaking::SOUNDSHARE } else { mic_flags(priority) }, m.ssrc)?;
                             if !cfg.info.stream {
                                 let _ = events.send(VoiceEvent::Speaking { user_id: cfg.user_id, speaking: true });
                             }
@@ -805,6 +817,14 @@ async fn run(
                     wants_due = Some(Instant::now() + STREAM_VIEW_DEBOUNCE);
                 }
                 Some(Cmd::KeyFrame(user)) => vrx.request_keyframe(user),
+                Some(Cmd::Priority(on)) => {
+                    if on != priority && !cfg.info.stream {
+                        priority = on;
+                        if let Some(m) = media.as_ref().filter(|m| m.transmitting) {
+                            gw.speaking(mic_flags(priority), m.ssrc)?;
+                        }
+                    }
+                }
                 Some(Cmd::Video(v)) => {
                     let Some(m) = media.as_mut() else { continue };
                     match v {

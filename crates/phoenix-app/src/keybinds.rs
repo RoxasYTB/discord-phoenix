@@ -325,8 +325,14 @@ fn hold(app: &PhoenixApp, a: Action, down: bool) {
     let mode = crate::voice::prefs::prefs().lock().input_mode;
     match a {
         Action::PushToTalk | Action::PushToTalkPriority if mode == InputMode::PushToTalk => {
+            if a == Action::PushToTalkPriority {
+                crate::voice::call::manager().apply_control(None, VoiceControl::SetPriority(down));
+            }
             crate::voice::call::manager().apply_control(None, VoiceControl::SetPttPressed(down));
             crate::sounds::watch::on_ptt(app, down);
+        }
+        Action::VadPriority if mode == InputMode::VoiceActivity => {
+            crate::voice::call::manager().apply_control(None, VoiceControl::SetPriority(down));
         }
         Action::PushToMute if mode == InputMode::VoiceActivity && app.voice_channel.is_some() => {
             drop(app.backend.voice_control(VoiceControl::SetMute(down || app.mic_muted || app.deafened)));
