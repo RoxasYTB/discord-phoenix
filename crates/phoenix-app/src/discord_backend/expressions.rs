@@ -82,21 +82,7 @@ fn gif(g: &Gif) -> GifItem {
     } else {
         crate::media::gifv_animated(&g.src, 200.).unwrap_or_else(|| g.src.clone().into())
     };
-    let alternative = if preview.as_ref() == g.src.as_str() { &g.gif_src } else { &g.src };
-    let source = if alternative.is_empty() {
-        None
-    } else if alternative.split('?').next().is_some_and(|url| url.ends_with(".mp4") || url.ends_with(".webm")) {
-        crate::media::gifv_animated(alternative, 400.)
-    } else {
-        Some(alternative.clone().into())
-    };
-    GifItem {
-        url: g.url.clone().into(),
-        preview,
-        source,
-        width: g.width,
-        height: g.height,
-    }
+    GifItem { url: g.url.clone().into(), preview, width: g.width, height: g.height }
 }
 
 const PREVIEW: GifFormat = GifFormat::TinyGif;
@@ -137,7 +123,7 @@ pub(super) async fn frecency(s: Arc<Session>) -> Result<crate::ui::pickers::type
         favorite_gifs: f
             .favorite_gifs()
             .into_iter()
-            .map(|(url, g)| GifItem { url: url.into(), preview: tenor_still(&g.src).into(), source: None, width: g.width, height: g.height })
+            .map(|(url, g)| GifItem { url: url.into(), preview: tenor_still(&g.src).into(), width: g.width, height: g.height })
             .collect(),
         applications: f.applications_ranked(),
         favorite_sounds: f.favorite_sounds(),
