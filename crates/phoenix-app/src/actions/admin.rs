@@ -120,6 +120,20 @@ impl PhoenixApp {
         });
     }
 
+    pub fn admin_mfa(&mut self, call: AdminCall, code: String, cx: &mut Context<Self>, done: impl FnOnce(&mut Self, Result<Value, String>, &mut Context<Self>) + 'static) {
+        self.action(ActionRequest::AdminMfa(call, code), cx, move |a, r, cx| {
+            done(
+                a,
+                match r {
+                    Ok(ActionReply::Json(v)) => Ok(v),
+                    Ok(_) => Ok(Value::Null),
+                    Err(e) => Err(e.0),
+                },
+                cx,
+            )
+        });
+    }
+
     pub fn admin_toast(&mut self, call: AdminCall, ok: Option<gpui::SharedString>, cx: &mut Context<Self>) {
         self.admin(call, cx, move |a, r, cx| match r {
             Ok(_) => {

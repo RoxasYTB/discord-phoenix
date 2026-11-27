@@ -288,6 +288,10 @@ impl RestClient {
     }
 
     async fn raw_failed(&self, method: Method, path: &str, body: Body, failed: u32) -> Result<(StatusCode, Vec<u8>)> {
+        self.raw_with(method, path, body, failed, None).await
+    }
+
+    async fn raw_with(&self, method: Method, path: &str, body: Body, failed: u32, extra: Option<(&'static str, String)>) -> Result<(StatusCode, Vec<u8>)> {
         let route = route_key(method.as_str(), path);
         let major = major_param(path).to_owned();
         let url = format!("{}{}", self.inner.base, path);
@@ -302,6 +306,9 @@ impl RestClient {
             let retried = failed + backoff.fails();
             if retried > 0 {
                 req = req.header("x-failed-requests", retried.to_string());
+            }
+            if let Some((name, value)) = &extra {
+                req = req.header(*name, value.as_str());
             }
             req = match &body {
                 Body::None => req,
@@ -412,6 +419,25 @@ impl RestClient {
             return Ok(Value::Null);
         }
         Ok(serde_json::from_slice(&bytes)?)
+    }
+
+    pub async fn request_json_mfa(&self, method: Method, path: &str, body: Option<Value>, mfa_token: &str) -> Result<Value> {
+        let body = body.map(Body::Json).unwrap_or(Body::None);
+        let (_, bytes) = self.raw_with(method, path, body, 0, Some(("x-discord-mfa-authorization", mfa_token.to_owned()))).await?;
+        if bytes.is_empty() {
+            return Ok(Value::Null);
+        }
+        Ok(serde_json::from_slice(&bytes)?)
+    }
+
+    pub async fn mfa_finish(&self, ticket: &str, code: &str) -> Result<String> {
+        #[derive(Deserialize)]
+        struct T {
+            token: String,
+        }
+        let code: String = code.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+        let t: T = self.call(Method::POST, "/mfa/finish", Body::Json(json!({ "ticket": ticket, "mfa_type": "totp", "data": code }))).await?;
+        Ok(t.token)
     }
 
     pub async fn get_guild(&self, id: GuildId) -> Result<Guild> {

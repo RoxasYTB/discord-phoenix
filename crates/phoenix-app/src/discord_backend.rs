@@ -623,9 +623,21 @@ impl Backend for DiscordBackend {
     }
 
     fn action(&self, req: crate::actions::ActionRequest) -> BoxFuture<crate::actions::ActionReply> {
-        self.with_session(move |inner, s| {
+        self.with_session(move |inner, s| async move {
+            use crate::actions::ActionRequest;
+            use phoenix_api::rest::{guild_manage::AdminCall, guild_server::ServerCall};
+
+            if let ActionRequest::Admin(AdminCall::Server(ServerCall::DeleteGuild { guild }))
+            | ActionRequest::AdminMfa(AdminCall::Server(ServerCall::DeleteGuild { guild }), _) = &req
+            {
+                let owner = s.cache.guild(*guild).and_then(|g| g.owner_id());
+                let current_user = s.cache.current_user().map(|user| user.id);
+                if current_user.is_none() || owner != current_user {
+                    return Err(err(crate::t!("gs2.delete_owner_only").to_string()));
+                }
+            }
             let emit: crate::backend::EventSink = Arc::new(move |e| inner.emit(e));
-            crate::actions::exec::request(s.rest.clone(), req, emit)
+            crate::actions::exec::request(s.rest.clone(), req, emit).await
         })
     }
 

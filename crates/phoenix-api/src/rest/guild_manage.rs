@@ -496,6 +496,29 @@ impl RestClient {
         let r = build(call);
         self.request_json(r.method, &r.path, r.body).await
     }
+
+    pub async fn admin_with_mfa(&self, call: &AdminCall, code: &str) -> Result<Value> {
+        let r = build(call);
+        match self.request_json(r.method.clone(), &r.path, r.body.clone()).await {
+            Err(crate::error::Error::Api { body, raw, .. }) if body.code == 60003 => {
+                let ticket = serde_json::from_str::<Value>(&raw)
+                    .ok()
+                    .and_then(|v| v.pointer("/mfa/ticket").and_then(Value::as_str).map(str::to_owned));
+                match ticket {
+                    Some(ticket) => {
+                        let token = self.mfa_finish(&ticket, code).await?;
+                        self.request_json_mfa(r.method, &r.path, r.body, &token).await
+                    }
+                    None => {
+                        let mut b = r.body.unwrap_or_else(|| serde_json::json!({}));
+                        b["code"] = Value::String(code.trim().to_owned());
+                        self.request_json(r.method, &r.path, Some(b)).await
+                    }
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -50,6 +50,7 @@ pub(crate) async fn request_with(allowed: bool, rest: RestClient, req: ActionReq
     use ActionRequest as R;
     Ok(match req {
         R::Admin(c) => ActionReply::Json(rest.admin(&c).await.map_err(e)?),
+        R::AdminMfa(c, code) => ActionReply::Json(rest.admin_with_mfa(&c, &code).await.map_err(e)?),
         R::SaveFolders(folders) => {
             rest.save_guild_folders(&folder_protos(&folders)).await.map_err(e)?;
             ActionReply::Done
