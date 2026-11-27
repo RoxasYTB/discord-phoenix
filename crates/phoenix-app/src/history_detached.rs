@@ -131,6 +131,7 @@ impl PhoenixApp {
                         app.insert_history(ch, page, false, cx);
                         app.message_list.scroll_to_end();
                         app.chat.at_bottom = true;
+                        app.chat.new_messages = None;
                         app.mark_channel_read(cx);
                     }
                     Err(_) => app.parity_toast(crate::t!("chat.history_failed"), cx),
