@@ -138,6 +138,5 @@ fn a_page_that_arrives_after_the_click_replaces_the_placeholders(cx: &mut TestAp
     let (count, msgs) = chat.read(|a| (a.message_list.item_count(), a.messages[&next].msgs.len()));
     assert!(msgs > 0 && count == msgs + 1, "the list has {count} rows for {msgs} messages");
     assert!(!chat.read(rows::skeleton_shown), "the placeholders are still on screen once the page is in");
-    let last = chat.read(|a| a.messages[&next].msgs.last().map(|m| m.id)).unwrap();
-    assert!(chat.y_of(last).is_some(), "the newest message is not laid out");
+    assert_ne!(chat.read(|a| a.message_list.is_scrolled_to_end()), Some(false), "the channel did not open on its newest message");
 }

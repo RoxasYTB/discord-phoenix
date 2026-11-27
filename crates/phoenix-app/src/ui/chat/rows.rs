@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use gpui::{AnyElement, App, AvailableSpace, Entity, IntoElement, ListOffset, ListState, Styled, canvas, px, size};
+use gpui::{AnyElement, App, AvailableSpace, Bounds, Entity, IntoElement, ListOffset, ListState, Pixels, Styled, canvas, px, size};
 
 use crate::{app::PhoenixApp, model::Id};
 
@@ -15,6 +15,8 @@ struct Keep {
 
 thread_local! {
     static KEEP: Cell<Option<Keep>> = const { Cell::new(None) };
+    static TOP_ROW: Cell<Option<Bounds<Pixels>>> = const { Cell::new(None) };
+    static TOP_ROW_SHOWN: Cell<Option<Bounds<Pixels>>> = const { Cell::new(None) };
 }
 
 pub fn insert(list: &ListState, at: usize, n: usize) {
@@ -45,9 +47,13 @@ pub fn prepend(list: &ListState, channel: Id, n: usize, len: usize) {
     KEEP.set(keep.map(|y| Keep { channel, item: n + 1, y }));
 }
 
+pub fn top_row_probe() -> AnyElement {
+    canvas(|b, _, _| TOP_ROW.set(Some(b)), |_, _, _, _| {}).absolute().top_0().left_0().size_full().into_any_element()
+}
+
 pub fn skeleton_in_view(list: &ListState) -> bool {
     let view = list.viewport_bounds();
-    view.size.height > px(0.) && list.bounds_for_item(0).is_some_and(|b| b.bottom() > view.top() && b.top() < view.bottom())
+    view.size.height > px(0.) && TOP_ROW_SHOWN.get().is_some_and(|b| b.bottom() > view.top() && b.top() < view.bottom())
 }
 
 pub fn skeleton_shown(app: &PhoenixApp) -> bool {
@@ -79,6 +85,7 @@ fn anchor_above(heights: impl Iterator<Item = f32>, item: usize, y: f32) -> List
 pub fn keep_anchor(entity: Entity<PhoenixApp>, render: RenderRow) -> AnyElement {
     canvas(
         move |_, window, cx| {
+            TOP_ROW.set(None);
             let Some(k) = KEEP.take() else { return };
             let (list, selected) = {
                 let app = entity.read(cx);
@@ -106,6 +113,7 @@ pub fn keep_anchor(entity: Entity<PhoenixApp>, render: RenderRow) -> AnyElement 
 pub fn load_when_visible(entity: Entity<PhoenixApp>) -> AnyElement {
     canvas(
         move |_, _, cx| {
+            TOP_ROW_SHOWN.set(TOP_ROW.get());
             let app = entity.read(cx);
             let wanted = app
                 .selected_channel

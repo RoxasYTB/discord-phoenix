@@ -676,7 +676,12 @@ fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
     let Some(ch_id) = app.selected_channel else { return div().into_any_element() };
     let Some(entry) = app.messages.get(&ch_id) else { return div().into_any_element() };
     if ix == 0 {
-        return row_wrapper().when(entry.msgs.is_empty() && !entry.reached_start, |d| d.pb(z(20.))).child(intro(app, entity, ch_id, entry.reached_start)).into_any_element();
+        return row_wrapper()
+            .relative()
+            .when(entry.msgs.is_empty() && !entry.reached_start, |d| d.pb(z(20.)))
+            .child(intro(app, entity, ch_id, entry.reached_start))
+            .child(rows::top_row_probe())
+            .into_any_element();
     }
     let i = ix - 1;
     let (Some(msg), Some(r)) = (entry.msgs.get(i), entry.rendered.get(i)) else {
