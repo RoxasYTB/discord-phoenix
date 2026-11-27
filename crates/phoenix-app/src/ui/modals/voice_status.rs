@@ -65,7 +65,7 @@ pub fn prepare(s: &mut State, window: &mut Window, cx: &mut Context<PhoenixApp>)
     });
     s._enter = Some(cx.subscribe_in(&input, window, |a, input, ev: &InputEvent, window, cx| {
         match ev {
-            InputEvent::PressEnter { .. } => a.submit_voice_status(cx),
+            InputEvent::PressEnter { shift: false, .. } => a.submit_voice_status(cx),
             InputEvent::Change => input.update(cx, |st, cx| {
                 let text = st.value().to_string();
                 if text.contains(['\n', '\r']) {
@@ -342,8 +342,8 @@ mod tests {
         let t = c.tokens();
         assert_eq!(t.len(), 2);
         assert_eq!(t[0].range(), 3..14);
-        assert_eq!(t[0].token().label().as_ref(), ":pepe:");
-        assert_eq!(t[1].token().label().as_ref(), ":dance:");
+        assert_eq!(t[0].token().label().to_string(), ":pepe:");
+        assert_eq!(t[1].token().label().to_string(), ":dance:");
         assert!(emoji_content("<@123> <#4>").tokens().is_empty());
         assert_eq!(single_line("a\nb\r\nc"), "abc");
     }
