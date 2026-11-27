@@ -1680,13 +1680,14 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                     }
                 }))
                 .overflow_hidden()
-                .child(crate::ui::avatar_with_status_deco(
+                .child(crate::ui::avatar_with_status_speaking(
                     Some(&app.me),
                     32.,
                     app.presence,
                     c(Palette::BG_SECONDARY_ALT),
-                    |d| d.group_hover("user-panel-avatar", |s| s.bg(t(idx::BACKGROUND_MOD_NORMAL))),
                     crate::ui::avatar_deco::source(Some(&app.me), Some(crate::ui::avatar_deco::hover_key(3, 0))),
+                    false,
+                    crate::ui::voice_panel::self_speaking_ring(app),
                 ))
                 .child(
                     div()

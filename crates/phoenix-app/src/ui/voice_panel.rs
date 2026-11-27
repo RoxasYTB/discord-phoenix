@@ -712,6 +712,36 @@ pub fn speaking_ring_alpha(avatar: AnyElement, size: f32, alpha: f32, soundboard
         .into_any_element()
 }
 
+pub fn self_speaking_inset(db: f32, reduced: bool) -> f32 {
+    if reduced || !db.is_finite() || db <= crate::ui::settings::voice::DB_MIN {
+        return 2.;
+    }
+    0.5 + 3.5 / (1. + (-0.03 * (db + 45.)).exp())
+}
+
+pub fn self_speaking_overlay(inset: f32, soundboard: bool) -> AnyElement {
+    let color = t(if soundboard { idx::BRAND_500 } else { idx::STATUS_SPEAKING });
+    div()
+        .absolute()
+        .inset_0()
+        .rounded_full()
+        .border(z(inset))
+        .border_color(color)
+        .child(div().size_full().rounded_full().border(z(1.)).border_color(t(idx::BACKGROUND_BASE_LOWER)))
+        .into_any_element()
+}
+
+pub fn self_speaking_ring(app: &PhoenixApp) -> Option<AnyElement> {
+    app.voice_channel?;
+    let me = app.me.id;
+    let soundboard = crate::voice::soundboard::is_user_playing(me);
+    if !app.voice.is_speaking(me) && !soundboard {
+        return None;
+    }
+    let db = crate::voice::call::manager().control().input_level_db();
+    Some(self_speaking_overlay(self_speaking_inset(db, crate::ui::settings::effects::reduced_motion()), soundboard))
+}
+
 pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let ch = app.voice_channel.and_then(|v| app.channels.get(&v));
     let guild = ch
@@ -1367,6 +1397,16 @@ pub fn open_user_menu(user: Id, pos: Point<Pixels>, cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn self_ring_follows_the_client_inset_spread() {
+        assert_eq!(self_speaking_inset(f32::NEG_INFINITY, false), 2.);
+        assert_eq!(self_speaking_inset(-100., false), 2.);
+        assert_eq!(self_speaking_inset(-20., true), 2.);
+        assert!((self_speaking_inset(-45., false) - 2.25).abs() < 1e-4);
+        assert!((self_speaking_inset(0., false) - 3.28).abs() < 0.01);
+        assert!((self_speaking_inset(-90., false) - 1.22).abs() < 0.01);
+    }
 
     #[test]
     fn connection_icon_follows_the_client_quality_map() {

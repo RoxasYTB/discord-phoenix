@@ -190,6 +190,18 @@ pub fn avatar_with_status_deco_hover(
     deco: Option<SharedString>,
     play: bool,
 ) -> Div {
+    avatar_with_status_speaking(user, size, p, ring, deco, play, None)
+}
+
+pub fn avatar_with_status_speaking(
+    user: Option<&User>,
+    size: f32,
+    p: Presence,
+    ring: Hsla,
+    deco: Option<SharedString>,
+    play: bool,
+    speaking: Option<AnyElement>,
+) -> Div {
     let (cx, _, s) = status_svg::geometry(size);
     div()
         .relative()
@@ -200,6 +212,7 @@ pub fn avatar_with_status_deco_hover(
                 .relative()
                 .size(px(size))
                 .child(avatar_hover(user, size, play))
+                .children(speaking)
                 .when_some(deco, |d, src| d.child(avatar_deco::layer(src, size))),
             [blob_mask::status_hole(size)],
         ))
