@@ -50,6 +50,7 @@ Live reference: official client joined to the test voice channel `〢🔊・phoe
 | send | `SEND_SOUNDBOARD_SOUND` | `POST /channels/{id}/send-soundboard-sound` `{sound_id, emoji_id, emoji_name, source_guild_id (not for "0")}` | `RestClient::send_soundboard_sound` | ✅ request shape from the bundle; live POST seen from the official client (pass3) |
 | receive | gateway `VOICE_CHANNEL_EFFECT_SEND` (`sound_id`, `sound_volume`, `user_id`, `channel_id`, `emoji`, `animation_type/id`) | played when `user_id != me` and the channel is ours, never while deafened | `GatewayEvent::VoiceChannelEffectSend` → `voice::soundboard::on_effect` | ✅ code + parse test |
 | local playback | `_playSound`: own sound played locally on click (`GUILD_SOUNDBOARD_SOUND_PLAY_LOCALLY`) with the sound's own volume | `cdn.discordapp.com/soundboard-sounds/{id}` (guild sounds are Ogg Opus, defaults mp3) | `voice::soundboard::play`, `audio::ogg_opus` demuxer + Opus decode | ✅ |
+| output path | the client plays soundboard sounds on the selected output device, mixed with the call | | in a call, `audio::effects::EngineOutput` mixes every sound effect (soundboard, UI sounds) into the voice engine output (same device, same 20 ms clock, no second stream); outside a call the effects stream opens on demand as before | ✅ unit test (27/11, wt/voice-ghost: sounds were lost or cut when the effects stream and the call output did not share a device) |
 | volume | module 904054: `min(soundVolume * M(setting)/100 * min(outputVolume/100, 1), 1)`, M = 792251 (`n<1 ? n^(1/2.8) : 20·log10(n)/6+1`) ×100, setting `voice_and_video.soundboard_settings.volume` (proto 5.9.1 float, default 100) | | `playback_volume`, `perceptual`, synced entry `sb-volume` | ✅ unit test |
 | cooldown | no client-side cooldown in the bundle; the server rate-limits the POST | | none | ✅ (same as client) |
 | stop on leave | `VOICE_CHANNEL_SELECT` → `_stopAndClearSounds` | | `app.join_voice` → `soundboard::stop_all` | ✅ |
@@ -332,3 +333,14 @@ Sources: chunk `9cf4c852c9727cd1.js` (ChannelCall: `renderBottomCenter` uses the
 | leave | `c6qKwr` / `SMKyih` "Disconnect Quietly" | red 65×49 button | ✅ |
 
 Writes: Aperture Sciences has no stage channel and none may be created, so nothing here was sent for real. Demo: `PHX_MOCK_STAGE=1` gives the mock "Stage" channel of the first guild 2 speakers, 2 raised hands, 1 invited user, 2 listeners, a live instance "Phoenix office hours" and stage moderator rights; mock actions update the flags (`mock_stage.rs`).
+
+## Participant list of a guild call (wt/voice-ghost, 27/11)
+
+First real call with friends (build 8fc6cda5): everyone was heard, but some members were missing from the channel list.
+
+| case | client | Phoenix |
+|---|---|---|
+| voice states per guild | `VoiceStateStore` keys states by guild and user; a `VOICE_STATE_UPDATE` with `channel_id: null` only clears that guild | `AppEvent::VoiceStateUpdate` carries the guild; a null from another guild, a DM call leave or our other session (official client in another voice channel) no longer removes the member from this guild's channels. ✅ test `leaving_voice_in_another_guild_or_a_dm_keeps_the_member` |
+| own leave from another guild | ignored when our call is elsewhere | `apply_voice_state` ignores it (same fix as 766fa7ba for the call manager) ✅ |
+| members heard but without a voice state | the voice gateway (op 11 `CLIENTS_CONNECT`, op 5 speaking, op 13 `CLIENT_DISCONNECT`) is the real list of who is connected | `voice::roster`: users connected on the voice gateway are added to our channel, their member is requested (`request_feed_members`), they survive channel rebuilds and leave on op 13; a voice state always wins. ✅ test `members_heard_on_the_voice_gateway_join_the_list` |
+| READY_SUPPLEMENTAL | full list of voice states per guild | `AppEvent::GuildVoiceReset` clears the guild before re-adding, so rows from an old snapshot do not stay. ✅ test `ready_supplemental_replaces_stale_voice_rows` |

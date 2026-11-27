@@ -48,6 +48,7 @@ pub enum VoiceEvent {
     Reconnecting,
     Disconnected { reason: String, retry: bool },
     VideoState { user_id: u64, active: bool },
+    Clients { user_ids: Vec<u64>, connected: bool },
     Video { user_id: u64, codec: Codec, keyframe: bool, frame: Vec<u8> },
 }
 
@@ -690,10 +691,13 @@ async fn run(
                             }
                         }
                         ServerMessage::ClientsConnect { user_ids } => {
-                            dave.add_users(user_ids.iter().filter_map(|u| u.parse().ok()));
+                            let ids: Vec<u64> = user_ids.iter().filter_map(|u| u.parse().ok()).collect();
+                            dave.add_users(ids.iter().copied());
+                            let _ = events.send(VoiceEvent::Clients { user_ids: ids, connected: true });
                         }
                         ServerMessage::ClientDisconnect { user_id } => {
                             if let Ok(uid) = user_id.parse::<u64>() {
+                                let _ = events.send(VoiceEvent::Clients { user_ids: vec![uid], connected: false });
                                 dave.remove_user(uid);
                                 rx.remove_user(uid, events);
                                 vrx.remove_user(uid);

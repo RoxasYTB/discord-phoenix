@@ -571,6 +571,7 @@ fn mix_loop(
     let mut last_log = Instant::now();
     let mut underruns = 0u64;
     let mut buf = Vec::with_capacity(FRAME_SAMPLES * 4);
+    let effects = super::effects::EngineOutput::attach();
     while !stop.load(Ordering::Relaxed) {
         let queued = lock(&q).len();
         if queued == 0 {
@@ -578,7 +579,8 @@ fn mix_loop(
         }
         let mut pending = queued;
         while pending < target && !stop.load(Ordering::Relaxed) {
-            let mixed = lock(&mixer).mix_frame(&control);
+            let mut mixed = lock(&mixer).mix_frame(&control);
+            effects.mix_into(&mut mixed);
             let ahead_ms = (pending * 1000 / (rate as usize * ch).max(1)) as u32;
             let frame = convert_channels(&mixed, 2, ch);
             buf.clear();

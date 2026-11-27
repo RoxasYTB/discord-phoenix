@@ -375,7 +375,7 @@ mod tests {
                 app.apply_ready(first, cx);
                 let vc = app.channels.values().find(|c| c.kind == crate::model::ChannelKind::Voice && c.guild.is_some()).map(|c| c.id).unwrap();
                 let user = crate::model::Id(4242);
-                app.handle_event(AppEvent::VoiceStateUpdate { channel: Some(vc), user, own: false }, cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: None, channel: Some(vc), user, own: false }, cx);
                 let flags = crate::model::VoiceFlags { self_mute: true, self_deaf: true, ..Default::default() };
                 app.handle_event(AppEvent::VoiceFlags { user, flags }, cx);
                 let mut live = ready();
@@ -386,7 +386,7 @@ mod tests {
                 assert!(app.channels[&vc].voice_users.contains(&user), "voice row lost by the ReadyData after READY_SUPPLEMENTAL");
                 let f = crate::ui::voice_panel::flags(user);
                 assert!(f.self_mute && f.self_deaf);
-                app.handle_event(AppEvent::VoiceStateUpdate { channel: None, user, own: false }, cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: app.channels[&vc].guild, channel: None, user, own: false }, cx);
                 assert!(!app.channels[&vc].voice_users.contains(&user));
             })
             .unwrap();
@@ -481,5 +481,105 @@ mod onboarding_tests {
         assert_eq!(p[0].options[0].emoji_name.as_deref(), Some("🧠"));
         assert_eq!(p[0].options[1].emoji_id, Some(super::Id(44)));
         assert!(p[0].options[1].animated);
+    }
+    fn voice_app(cx: &mut gpui::TestAppContext) -> gpui::WindowHandle<App> {
+        let backend = std::sync::Arc::new(MockBackend::synchronous());
+        let first = futures::executor::block_on(backend.login(crate::backend::Credentials::Token("x".into()))).unwrap();
+        cx.update(gpui_component::init);
+        let window = cx.add_window(|w, cx| App::new(backend.clone(), w, cx));
+        window.update(cx, |app, _, cx| app.apply_ready(first, cx)).unwrap();
+        window
+    }
+
+    fn guild_voice(app: &App) -> (crate::model::Id, crate::model::Id) {
+        let c = app.channels.values().find(|c| c.kind == crate::model::ChannelKind::Voice && c.guild.is_some()).unwrap();
+        (c.id, c.guild.unwrap())
+    }
+
+    #[gpui::test]
+    fn leaving_voice_in_another_guild_or_a_dm_keeps_the_member(cx: &mut gpui::TestAppContext) {
+        use crate::backend::AppEvent;
+        use crate::model::Id;
+        let window = voice_app(cx);
+        window
+            .update(cx, |app, _, cx| {
+                let (vc, g) = guild_voice(app);
+                let user = Id(5151);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user, own: false }, cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(Id(999_001)), channel: None, user, own: false }, cx);
+                assert!(app.channels[&vc].voice_users.contains(&user), "a null voice state from another guild removed the member");
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: None, channel: None, user, own: false }, cx);
+                assert!(app.channels[&vc].voice_users.contains(&user), "a DM call leave removed the guild member");
+                let me = app.me.id;
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: me, own: true }, cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(Id(999_001)), channel: Some(Id(999_002)), user: me, own: false }, cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(Id(999_001)), channel: None, user: me, own: true }, cx);
+                assert!(app.channels[&vc].voice_users.contains(&me), "our other session in another guild hid us");
+                assert_eq!(app.voice_channel, Some(vc), "a stale leave from another guild ended our call");
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: None, user, own: false }, cx);
+                assert!(!app.channels[&vc].voice_users.contains(&user));
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: None, user: me, own: true }, cx);
+                assert_eq!(app.voice_channel, None);
+            })
+            .unwrap();
+    }
+
+    #[gpui::test]
+    fn members_heard_on_the_voice_gateway_join_the_list(cx: &mut gpui::TestAppContext) {
+        use crate::backend::AppEvent;
+        use crate::model::Id;
+        use crate::voice::VoiceUiEvent;
+        let window = voice_app(cx);
+        window
+            .update(cx, |app, _, cx| {
+                let (vc, g) = guild_voice(app);
+                let (a, b, c) = (Id(6161), Id(6262), Id(6363));
+                for u in [a, b, c] {
+                    crate::voice::roster::forget(u);
+                }
+                let me = app.me.id;
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: me, own: true }, cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: a, own: false }, cx);
+                app.handle_event(AppEvent::Voice(VoiceUiEvent::Clients { users: vec![a, b, me], connected: true }), cx);
+                app.handle_event(AppEvent::Voice(VoiceUiEvent::SpeakingFlags { user: c, flags: 1 }), cx);
+                let users = app.channels[&vc].voice_users.clone();
+                for u in [a, b, c, me] {
+                    assert_eq!(users.iter().filter(|x| **x == u).count(), 1, "{u:?} missing or doubled in {users:?}");
+                }
+                let channels: Vec<_> = app.guild_channels[&g].iter().map(|id| {
+                    let mut ch = app.channels[id].clone();
+                    ch.voice_users.retain(|u| *u == a || *u == me);
+                    ch
+                }).collect();
+                app.handle_event(AppEvent::GuildChannels { guild: g, channels }, cx);
+                assert!(app.channels[&vc].voice_users.contains(&b), "a channel rebuild dropped a member only known from the voice gateway");
+                app.handle_event(AppEvent::Voice(VoiceUiEvent::Clients { users: vec![b], connected: false }), cx);
+                assert!(!app.channels[&vc].voice_users.contains(&b));
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: c, own: false }, cx);
+                app.handle_event(AppEvent::Voice(VoiceUiEvent::Clients { users: vec![a, c], connected: false }), cx);
+                assert!(app.channels[&vc].voice_users.contains(&a) && app.channels[&vc].voice_users.contains(&c), "the voice gateway overrode a voice state");
+                app.handle_event(AppEvent::Voice(VoiceUiEvent::Clients { users: vec![b], connected: true }), cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: None, user: me, own: true }, cx);
+                assert!(!app.channels[&vc].voice_users.contains(&b), "leaving kept a member only known from the voice gateway");
+            })
+            .unwrap();
+    }
+
+    #[gpui::test]
+    fn ready_supplemental_replaces_stale_voice_rows(cx: &mut gpui::TestAppContext) {
+        use crate::backend::AppEvent;
+        use crate::model::Id;
+        let window = voice_app(cx);
+        window
+            .update(cx, |app, _, cx| {
+                let (vc, g) = guild_voice(app);
+                let (gone, here) = (Id(7171), Id(7272));
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: gone, own: false }, cx);
+                app.handle_event(AppEvent::GuildVoiceReset(g), cx);
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: here, own: false }, cx);
+                assert!(!app.channels[&vc].voice_users.contains(&gone));
+                assert!(app.channels[&vc].voice_users.contains(&here));
+            })
+            .unwrap();
     }
 }

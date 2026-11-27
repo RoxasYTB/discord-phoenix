@@ -587,6 +587,7 @@ impl VoiceManager {
                     VoiceEvent::Ping(p) => VoiceUiEvent::Ping(p),
                     VoiceEvent::Speaking { user_id, speaking } => VoiceUiEvent::Speaking { user: Id(user_id), speaking },
                     VoiceEvent::SpeakingFlags { user_id, flags } => VoiceUiEvent::SpeakingFlags { user: Id(user_id), flags },
+                    VoiceEvent::Clients { user_ids, connected } => VoiceUiEvent::Clients { users: user_ids.into_iter().map(Id).collect(), connected },
                     VoiceEvent::Encryption { e2ee, .. } => VoiceUiEvent::Encryption(e2ee),
                     VoiceEvent::Reconnecting => {
                         ping_on_reconnect(None);

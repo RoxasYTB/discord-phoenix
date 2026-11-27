@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 use std::time::Duration;
 
@@ -8,6 +8,38 @@ use cpal::{SampleFormat, Stream, StreamConfig};
 use super::dsp::{Resampler, convert_channels};
 
 const IDLE_CLOSE: Duration = Duration::from_secs(3);
+const ENGINE_FORMAT: (u32, u16) = (48_000, 2);
+
+static ATTACHED: AtomicUsize = AtomicUsize::new(0);
+
+pub struct EngineOutput(());
+
+impl EngineOutput {
+    pub fn attach() -> Self {
+        if ATTACHED.fetch_add(1, Ordering::SeqCst) == 0 {
+            lock().format = Some(ENGINE_FORMAT);
+        }
+        let _ = worker().send(Cmd::Wake);
+        EngineOutput(())
+    }
+
+    pub fn mix_into(&self, out: &mut [f32]) {
+        mix_voices(out, ENGINE_FORMAT);
+    }
+}
+
+impl Drop for EngineOutput {
+    fn drop(&mut self) {
+        if ATTACHED.fetch_sub(1, Ordering::SeqCst) == 1 {
+            lock().format = None;
+            let _ = worker().send(Cmd::Wake);
+        }
+    }
+}
+
+fn attached() -> bool {
+    ATTACHED.load(Ordering::SeqCst) > 0
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pcm {
@@ -106,8 +138,19 @@ pub fn play(pcm: Arc<Pcm>, volume: f32, looped: bool) -> Handle {
 
 fn mix(out: &mut [f32]) {
     out.fill(0.);
+    if attached() {
+        return;
+    }
+    let Some(format) = lock().format else { return };
+    mix_voices(out, format);
+}
+
+fn mix_voices(out: &mut [f32], format: (u32, u16)) {
     let mut s = lock();
-    let Some((rate, ch)) = s.format else { return };
+    if s.format != Some(format) {
+        return;
+    }
+    let (rate, ch) = format;
     for v in &mut s.voices {
         if v.handle.is_stopped() {
             continue;
@@ -199,6 +242,16 @@ fn open() -> Option<Stream> {
 fn run(rx: mpsc::Receiver<Cmd>) {
     let mut stream: Option<Stream> = None;
     loop {
+        if attached() {
+            if stream.take().is_some() {
+                lock().format = Some(ENGINE_FORMAT);
+            }
+            prepare();
+            if let Err(mpsc::RecvTimeoutError::Disconnected) = rx.recv_timeout(Duration::from_millis(250)) {
+                return;
+            }
+            continue;
+        }
         let busy = !lock().voices.is_empty();
         if busy && stream.is_none() {
             stream = open();
@@ -248,5 +301,23 @@ mod tests {
         assert_eq!(out[1990], 0.);
         assert!(h.is_stopped());
         lock().format = None;
+
+        let engine = EngineOutput::attach();
+        let h = Handle::new(0.5);
+        let stereo = Pcm { rate: 48_000, channels: 2, samples: vec![0.4; 960 * 2] };
+        lock().voices.push(Voice { pcm: Arc::new(stereo), buf: None, pos: 0, looped: false, handle: h.clone() });
+        prepare();
+        let mut own = vec![1.; 64];
+        mix(&mut own);
+        assert!(own.iter().all(|x| *x == 0.), "the effects stream kept playing while the call engine mixes");
+        let mut call = vec![0.1; 960];
+        engine.mix_into(&mut call);
+        assert!((call[10] - 0.3).abs() < 1e-3, "{}", call[10]);
+        let mut rest = vec![0.; 960];
+        engine.mix_into(&mut rest);
+        assert!((rest[959] - 0.2).abs() < 1e-3);
+        lock().voices.clear();
+        drop(engine);
+        assert_eq!(lock().format, None);
     }
 }

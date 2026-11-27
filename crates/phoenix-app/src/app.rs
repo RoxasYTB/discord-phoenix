@@ -576,6 +576,7 @@ impl PhoenixApp {
             list.sort_by_key(|id| self.channels[id].position);
         }
         self.voice_channel = self.pending_own_voice.take().or(in_call);
+        crate::voice::roster::reapply(self);
         if self.voice_channel.is_some() {
             crate::ui::voice_effects::prewarm();
         }
@@ -990,28 +991,16 @@ impl PhoenixApp {
                 self.rebuild_sidebar();
             }
             AppEvent::VoiceFlags { user, flags } => crate::ui::voice_panel::set_flags(user, flags),
-            AppEvent::VoiceStateUpdate { channel, user, own } => {
-                let dm = channel.filter(|c| self.channels.get(c).is_some_and(|x| x.guild.is_none()));
-                crate::commands::state::call_voice_state(&mut self.parity.call_users, dm, user);
-                for ch in self.channels.values_mut().filter(|c| c.guild.is_some()) {
-                    ch.voice_users.retain(|u| *u != user);
+            AppEvent::GuildVoiceReset(guild) => {
+                for ch in self.channels.values_mut().filter(|c| c.guild == Some(guild)) {
+                    ch.voice_users.retain(|u| crate::voice::roster::is_net(*u));
                 }
-                self.pending_voice.remove(&user);
-                if let Some(c) = channel.and_then(|c| self.channels.get_mut(&c)) {
-                    c.voice_users.push(user);
-                } else if let Some(c) = channel {
-                    self.pending_voice.insert(user, c);
+                if self.selected_guild == Some(guild) {
+                    self.rebuild_sidebar();
                 }
-                if user == self.me.id && own {
-                    let prev = self.voice_channel;
-                    if channel.is_some() {
-                        crate::ui::voice_effects::prewarm();
-                    } else if prev.is_some() && self.selected_channel == prev {
-                        crate::ui::call_view::set_chat_open(false);
-                    }
-                    self.voice_channel = channel;
-                    self.pending_own_voice = channel.filter(|c| !self.channels.contains_key(c));
-                }
+            }
+            AppEvent::VoiceStateUpdate { guild, channel, user, own } => {
+                self.apply_voice_state(guild, channel, user, own);
                 self.rebuild_sidebar();
             }
             AppEvent::Voice(e) => {
@@ -1026,7 +1015,17 @@ impl PhoenixApp {
                     });
                 }
                 match &e {
-                    crate::voice::VoiceUiEvent::SpeakingFlags { user, flags } => crate::voice::priority::on_flags(self, *user, *flags),
+                    crate::voice::VoiceUiEvent::SpeakingFlags { user, flags } => {
+                        crate::voice::priority::on_flags(self, *user, *flags);
+                        if crate::voice::roster::on_clients(self, &[*user], true) {
+                            self.rebuild_sidebar();
+                        }
+                    }
+                    crate::voice::VoiceUiEvent::Clients { users, connected } => {
+                        if crate::voice::roster::on_clients(self, users, *connected) {
+                            self.rebuild_sidebar();
+                        }
+                    }
                     crate::voice::VoiceUiEvent::CameraFailed(f) => crate::ui::voice_panel::media_failure_modal(f, false),
                     crate::voice::VoiceUiEvent::ScreenFailed(f) => crate::ui::voice_panel::media_failure_modal(f, true),
                     _ => {}
@@ -1136,6 +1135,51 @@ impl PhoenixApp {
         cx.notify();
     }
 
+    pub fn apply_voice_state(&mut self, guild: Option<Id>, channel: Option<Id>, user: Id, own: bool) {
+        let guild = guild.or_else(|| channel.and_then(|c| self.channels.get(&c)).and_then(|c| c.guild));
+        let call_guild = self.voice_channel.and_then(|c| self.channels.get(&c)).map(|c| c.guild);
+        if guild.is_none() {
+            let dm = channel.filter(|c| self.channels.get(c).is_some_and(|x| x.guild.is_none()));
+            crate::commands::state::call_voice_state(&mut self.parity.call_users, dm, user);
+        }
+        if guild.is_some() && call_guild == Some(guild) {
+            crate::voice::roster::forget(user);
+        }
+        match (guild, channel) {
+            (Some(g), _) => {
+                for ch in self.channels.values_mut().filter(|c| c.guild == Some(g)) {
+                    ch.voice_users.retain(|u| *u != user);
+                }
+                self.pending_voice.remove(&user);
+                if let Some(c) = channel.and_then(|c| self.channels.get_mut(&c)) {
+                    c.voice_users.push(user);
+                } else if let Some(c) = channel {
+                    self.pending_voice.insert(user, c);
+                }
+            }
+            (None, Some(c)) if !self.channels.contains_key(&c) => {
+                self.pending_voice.insert(user, c);
+            }
+            _ => {}
+        }
+        if user == self.me.id && own {
+            let stale_leave = channel.is_none() && guild.is_some() && call_guild.is_some_and(|g| g != guild);
+            if !stale_leave {
+                let prev = self.voice_channel;
+                if channel != prev {
+                    crate::voice::roster::reset(self);
+                }
+                if channel.is_some() {
+                    crate::ui::voice_effects::prewarm();
+                } else if prev.is_some() && self.selected_channel == prev {
+                    crate::ui::call_view::set_chat_open(false);
+                }
+                self.voice_channel = channel;
+                self.pending_own_voice = channel.filter(|c| !self.channels.contains_key(c));
+            }
+        }
+    }
+
     fn set_guild_channels(&mut self, guild: Id, channels: Vec<crate::model::Channel>) {
         if let Some(old) = self.guild_channels.remove(&guild) {
             for id in old {
@@ -1153,6 +1197,7 @@ impl PhoenixApp {
         }
         ids.sort_by_key(|id| self.channels[id].position);
         self.guild_channels.insert(guild, ids);
+        crate::voice::roster::reapply(self);
         if let Some(sel) = self.selected_channel
             && !self.channels.contains_key(&sel)
         {

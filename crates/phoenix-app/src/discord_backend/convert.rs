@@ -1281,9 +1281,10 @@ impl Adapter {
                     }
                 }
                 for g in &r.guilds {
+                    out.push(AppEvent::GuildVoiceReset(id(g.id)));
                     for v in &g.voice_states {
                         if v.channel_id.is_some() {
-                            out.push(AppEvent::VoiceStateUpdate { channel: v.channel_id.map(id), user: id(v.user_id), own: false });
+                            out.push(AppEvent::VoiceStateUpdate { guild: Some(id(g.id)), channel: v.channel_id.map(id), user: id(v.user_id), own: false });
                             out.push(AppEvent::VoiceFlags { user: id(v.user_id), flags: voice_flags(v) });
                         }
                     }
@@ -1411,7 +1412,7 @@ impl Adapter {
                     out.push(AppEvent::Users(vec![user(u)]));
                 }
                 let own = v.user_id.0 == self.me.0 && !v.session_id.is_empty() && v.session_id == crate::commands::session_id();
-                out.push(AppEvent::VoiceStateUpdate { channel: v.channel_id.map(id), user: id(v.user_id), own });
+                out.push(AppEvent::VoiceStateUpdate { guild: v.guild_id.map(id), channel: v.channel_id.map(id), user: id(v.user_id), own });
                 out.push(AppEvent::VoiceFlags { user: id(v.user_id), flags: voice_flags(v) });
             }
             GatewayEvent::Unknown { name, data } if name == "CHANNEL_RECIPIENT_ADD" || name == "CHANNEL_RECIPIENT_REMOVE" => {

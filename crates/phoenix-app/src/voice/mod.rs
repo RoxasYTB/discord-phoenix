@@ -1,6 +1,7 @@
 pub mod call;
 pub mod prefs;
 pub mod priority;
+pub mod roster;
 pub mod soundboard;
 pub mod start_time;
 pub mod stream;
@@ -56,6 +57,7 @@ pub enum VoiceUiEvent {
     Ping(u32),
     Speaking { user: Id, speaking: bool },
     SpeakingFlags { user: Id, flags: u32 },
+    Clients { users: Vec<Id>, connected: bool },
     Encryption(bool),
     PrivacyCode(Option<String>),
     Stats(ConnStats),
@@ -191,7 +193,7 @@ impl VoiceUi {
                 }
             }
             VoiceUiEvent::Error(e) => self.last_error = Some(e),
-            VoiceUiEvent::SpeakingFlags { .. } | VoiceUiEvent::CameraFailed(_) | VoiceUiEvent::ScreenFailed(_) => {}
+            VoiceUiEvent::SpeakingFlags { .. } | VoiceUiEvent::Clients { .. } | VoiceUiEvent::CameraFailed(_) | VoiceUiEvent::ScreenFailed(_) => {}
             VoiceUiEvent::Stream(e) => match e {
                 StreamUiEvent::Live(k) => {
                     self.own_stream = k;

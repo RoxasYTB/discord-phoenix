@@ -778,7 +778,12 @@ impl Backend for MockBackend {
     }
 
     fn join_voice(&self, channel: Option<Id>) -> BoxFuture<()> {
-        self.emit_later(Duration::from_millis(50), move || AppEvent::VoiceStateUpdate { channel, user: ME, own: true });
+        self.emit_later(Duration::from_millis(50), move || AppEvent::VoiceStateUpdate {
+            guild: None,
+            channel,
+            user: ME,
+            own: true,
+        });
         if channel.is_some() && crate::mock_stage::enabled() && channel == self.stage_channel() {
             let flags = crate::mock_stage::join(ME);
             self.emit_later(Duration::from_millis(55), move || AppEvent::VoiceFlags { user: ME, flags });
