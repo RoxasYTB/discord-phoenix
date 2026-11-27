@@ -1360,7 +1360,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             div()
                 .absolute()
                 .left(z(1.))
-                .top(z(if is_dm { 21. } else { 15. }))
+                .top(z(if is_dm { dm_row_h() / 2. - 3. } else { 15. }))
                 .w(z(4.))
                 .h(z(8.))
                 .rounded_r(z(4.))
@@ -1370,7 +1370,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             div()
                 .id(("chrow", id.0))
                 .group(group)
-                .h(z(if is_dm { 48. } else if status_line { space::channels_name_lh() + 24. } else { space::channels_name_lh() + 8. }))
+                .h(z(if is_dm { dm_row_h() } else if status_line { space::channels_name_lh() + 24. } else { space::channels_name_lh() + 8. }))
                 .pl(z(10.))
                 .pr(z(if is_dm { 0. } else { 10. }))
                 .rounded(z(ROW_RADIUS))
@@ -2054,4 +2054,8 @@ fn guild_top(app: &PhoenixApp, entity: Entity<PhoenixApp>, cx: &App) -> impl Int
         )
         .child(div().mt(z(15.)).ml(z(20.)).mr(z(20.)).h(z(1.)).bg(t(idx::BORDER_SUBTLE)))
         .child(div().h(z(12.)))
+}
+
+fn dm_row_h() -> f32 {
+    space::channels_name_lh() + 18.
 }

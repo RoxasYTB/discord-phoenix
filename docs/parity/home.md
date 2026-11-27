@@ -15,7 +15,7 @@ No real-data compare ran for this pass: the user's Discord was on a guild channe
 | "Direct Messages" header | hover: text `--interactive-text-hover` | `privateChannelsHeaderContainer_:hover` | ui/sidebar.rs `dm_top` | ✅ (this pass) |
 | Header "More" button | hidden (opacity 0), shown on header hover | #655 `moreButton_Bce46W` | ui/sidebar.rs `dm_top` | ✅ (menu: Clean up group DMs) |
 | Header "Create DM" button | rest `--icon-muted`, hover `--icon-subtle`, tooltip | #657 `iconWrapper_ybUK7Z clickable_` | ui/sidebar.rs `dm_top` | ✅ (this pass) |
-| DM row | rest, hover, active, selected (48px, link pl 10 / pr 0, avatar 32 + 12) | #659–#694 | ui/sidebar.rs channel row | ✅ |
+| DM row | rest, hover, active, selected (42px at the default density, 44 px apart like the client next to Phoenix on 2026-11-27; link pl 10 / pr 0, avatar 32 + 12) | #659–#694 | ui/sidebar.rs channel row | ✅ |
 | DM row nameplate | rest / hover / selected opacity; gradient under the image; mask start = `layout_TBNqol` width − 5 (module 351952, ref `ti`), measured with `nameplate::width_probe` | #661 `container_AFi54G` | ui/nameplate.rs, ui/sidebar.rs | ✅ |
 | DM row server tag | chiplet, margin-left 4 | #675 | ui/sidebar.rs | ✅ |
 | Group DM row | face pile 32px, "N members" | group-dm #800 | ui/sidebar.rs, ui/group_dm.rs | ✅ |
