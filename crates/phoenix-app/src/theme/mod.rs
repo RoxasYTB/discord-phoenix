@@ -278,7 +278,7 @@ pub fn sync(prefs: &crate::ui::settings::Prefs, window: &mut Window, cx: &mut Ap
     if HIGH_CONTRAST.swap(hc, Ordering::Relaxed) != hc {
         STYLE_GEN.fetch_add(1, Ordering::Relaxed);
     }
-    if client_theme::set_active(crate::ui::settings::client_preset(prefs), hc) {
+    if client_theme::set_active(crate::ui::settings::client_source(prefs), hc, usize::from(t)) {
         STYLE_GEN.fetch_add(1, Ordering::Relaxed);
     }
     if ps != prefs.local.saturation.min(100) {

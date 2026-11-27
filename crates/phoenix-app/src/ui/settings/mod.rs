@@ -73,6 +73,7 @@ pub struct SyncedSettings {
     pub density: crate::theme::Density,
     pub rest: std::collections::HashMap<&'static str, bool>,
     pub favorites: phoenix_api::rest::favorites::Favorites,
+    pub custom_theme: Option<crate::theme::client_theme::CustomTheme>,
 }
 
 impl Default for SyncedSettings {
@@ -87,6 +88,7 @@ impl Default for SyncedSettings {
             density: crate::theme::Density::default(),
             rest: Default::default(),
             favorites: Default::default(),
+            custom_theme: None,
         }
     }
 }
@@ -286,13 +288,24 @@ pub const LOCAL_THEME: &str = "theme-local";
 
 pub const LOCAL_CLIENT_THEME: &str = "client-theme-local";
 
+pub fn client_source(prefs: &Prefs) -> Option<crate::theme::client_theme::Source> {
+    use crate::theme::client_theme::{Source, by_id};
+    let preset = |id: u64| u32::try_from(id).ok().and_then(by_id).map(Source::Preset);
+    match prefs.local.ui.get(LOCAL_CLIENT_THEME) {
+        Some(0) => None,
+        Some(v) => preset(v - 1),
+        None => match &prefs.synced.custom_theme {
+            Some(t) => Some(Source::Custom(t.clone())),
+            None => preset(*prefs.synced.proto.get("client-theme")?),
+        },
+    }
+}
+
 pub fn client_preset(prefs: &Prefs) -> Option<&'static crate::theme::client_theme::Preset> {
-    let id = match prefs.local.ui.get(LOCAL_CLIENT_THEME) {
-        Some(0) => return None,
-        Some(v) => v - 1,
-        None => *prefs.synced.proto.get("client-theme")?,
-    };
-    crate::theme::client_theme::by_id(u32::try_from(id).ok()?)
+    match client_source(prefs)? {
+        crate::theme::client_theme::Source::Preset(p) => Some(p),
+        crate::theme::client_theme::Source::Custom(_) => None,
+    }
 }
 
 pub fn effective_theme(prefs: &Prefs, os_dark: bool) -> AppTheme {

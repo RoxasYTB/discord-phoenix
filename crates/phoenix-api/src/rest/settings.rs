@@ -413,6 +413,28 @@ pub fn custom_status_expires_ms(raw: &[u8]) -> Option<u64> {
     Some(fields(custom).into_iter().rev().find(|(t, w, ..)| *t == 4 && *w == 1).map_or(0, |f| f.2))
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CustomUserTheme {
+    pub colors: Vec<String>,
+    pub angle: i32,
+    pub base_mix: i32,
+}
+
+pub fn custom_user_theme(raw: &[u8]) -> Option<CustomUserTheme> {
+    let sub = |b: &[u8], tag: u32| fields(b).into_iter().rev().find(|(t, w, ..)| *t == tag && *w == 2).map(|f| f.3);
+    let custom = sub(sub(sub(raw, 13)?, 3)?, 4)?;
+    let mut out = CustomUserTheme::default();
+    for (tag, wt, v, d) in fields(custom) {
+        match (tag, wt) {
+            (1, 2) => out.colors.push(String::from_utf8_lossy(d).into_owned()),
+            (3, 0) => out.angle = v as i32,
+            (4, 0) => out.base_mix = v as i32,
+            _ => {}
+        }
+    }
+    (!out.colors.is_empty()).then_some(out)
+}
+
 pub fn with_custom_status(raw: &[u8], custom: Option<&CustomStatusProto>) -> Vec<u8> {
     let mut out = Vec::new();
     let mut status = Vec::new();
@@ -710,6 +732,25 @@ pub fn from_json(v: &Value) -> PreloadedUserSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_custom_user_theme() {
+        let mut custom = Vec::new();
+        field_bytes(1, b"#5865f2", &mut custom);
+        field_bytes(1, b"#121238", &mut custom);
+        field_varint(3, 45, &mut custom);
+        field_varint(4, 74, &mut custom);
+        let mut client = Vec::new();
+        field_bytes(4, &custom, &mut client);
+        let mut appearance = Vec::new();
+        field_bytes(3, &client, &mut appearance);
+        let mut raw = Vec::new();
+        field_bytes(13, &appearance, &mut raw);
+        let t = custom_user_theme(&raw).unwrap();
+        assert_eq!(t.colors, vec!["#5865f2".to_owned(), "#121238".to_owned()]);
+        assert_eq!((t.angle, t.base_mix), (45, 74));
+        assert!(custom_user_theme(&appearance).is_none());
+    }
 
     #[test]
     fn reads_the_custom_status_expiry() {

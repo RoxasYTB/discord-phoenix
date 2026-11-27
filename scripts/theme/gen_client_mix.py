@@ -19,7 +19,8 @@ def classify(body):
             continue
         color = "text" if "--custom-theme-text-color," in value else "base"
         amount = "text" if "--custom-theme-text-color-amount" in value else "base"
-        out.append((name.strip(), (color == "text") * 1 + (amount == "text") * 2))
+        border = "--custom-theme-border-color-amount" in value
+        out.append((name.strip(), (color == "text") * 1 + (amount == "text") * 2 + border * 4))
     return out
 
 

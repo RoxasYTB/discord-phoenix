@@ -1621,10 +1621,12 @@ fn panels_card(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoEleme
         .rounded(z(8.))
         .border_1()
         .border_color(t(idx::BORDER_MUTED))
-        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Highest, Some(crate::theme::client_theme::Level::AppFrame), crate::theme::tok(idx::BACKGROUND_BASE_LOW)))
+        .bg(crate::theme::client_theme::fixed_bg(crate::theme::tok(idx::BACKGROUND_BASE_LOW)))
         .overflow_hidden()
+        .relative()
         .flex()
         .flex_col()
+        .children(crate::theme::client_theme::fixed_layer(crate::theme::client_theme::Level::Highest, z(7.)))
         .when(app.voice_channel.is_some(), |d| d.child(crate::ui::voice_panel::voice_panel(app, cx)))
         .child(user_panel(app, cx))
 }

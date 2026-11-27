@@ -348,8 +348,9 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                     .rounded(z(8.))
                     .border_1()
                     .border_color(super::tk(idx::BORDER_MUTED))
-                    .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Highest, Some(crate::theme::client_theme::Level::Chat), crate::theme::tok(idx::CHAT_BACKGROUND_DEFAULT)))
+                    .bg(crate::theme::client_theme::fixed_bg(crate::theme::tok(idx::CHAT_BACKGROUND_DEFAULT)))
                     .relative()
+                    .children(crate::theme::client_theme::fixed_layer(crate::theme::client_theme::Level::Highest, z(7.)))
                     .when(crate::ui::focus_ring::tab_focused(&gpui::Focusable::focus_handle(app.composer.read(cx), cx), window), |d| {
                         d.child(crate::ui::focus_ring::ring_box(8., 0., 0.))
                     })

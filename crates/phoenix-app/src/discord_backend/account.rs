@@ -169,6 +169,7 @@ fn synced_raw(raw: &[u8]) -> Result<SyncedSettings, crate::backend::BackendError
         s.proto.insert(crate::ui::modals::custom_status::EXPIRES_KEY, e);
     }
     s.favorites = phoenix_api::rest::favorites::Favorites::from_settings(raw);
+    s.custom_theme = phoenix_api::rest::settings::custom_user_theme(raw).and_then(|t| crate::theme::client_theme::CustomTheme::parse(&t.colors, t.angle, t.base_mix));
     Ok(s)
 }
 
@@ -191,6 +192,7 @@ pub fn synced(p: &PreloadedUserSettings) -> SyncedSettings {
         rest: Default::default(),
         density: density_from_proto(p.ui_density()).unwrap_or(d.density),
         favorites: Default::default(),
+        custom_theme: None,
     }
 }
 

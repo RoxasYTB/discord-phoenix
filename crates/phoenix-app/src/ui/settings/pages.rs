@@ -1260,7 +1260,7 @@ static NOTIF: &[B] = &[
 
 fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let theme = crate::theme::active();
-    let gradient = super::client_preset(&app.prefs).is_some();
+    let gradient = super::client_source(&app.prefs).is_some();
     div()
         .flex()
         .flex_col()
@@ -1298,7 +1298,7 @@ fn theme_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
 }
 
 fn pick_theme(app: &mut PhoenixApp, t: AppTheme, cx: &mut Cx) {
-    if super::client_preset(&app.prefs).is_some() {
+    if super::client_source(&app.prefs).is_some() {
         update_local(app, |p| {
             p.ui.insert(super::LOCAL_CLIENT_THEME.into(), 0);
         }, cx);
@@ -1390,7 +1390,8 @@ fn time_left_label(t: TimeLeft) -> SharedString {
     }
 }
 
-fn limited_theme(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
+fn limited_theme(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
+    let selected = super::client_preset(&app.prefs).is_some_and(|p| p.id == crate::theme::client_theme::VICE_CITY.id);
     let end = if app.backend.premium_tier2() { LIMITED_THEME_END_NITRO } else { LIMITED_THEME_END_ALL };
     let left = limited_time_left(chrono::Utc::now().timestamp_millis(), end).map(time_left_label);
     div()
@@ -1438,6 +1439,7 @@ fn limited_theme(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
             div().pt(z(20.)).child(
                 div()
                     .id("theme-vice-city")
+                    .relative()
                     .size(z(48.))
                     .rounded(z(8.))
                     .cursor_pointer()
@@ -1448,7 +1450,14 @@ fn limited_theme(app: &PhoenixApp, _: &mut Cx) -> AnyElement {
                             .rounded(z(8.))
                             .bg(gpui::linear_gradient(135., gpui::linear_color_stop(gpui::rgba(0xaf01f380), 0.33), gpui::linear_color_stop(gpui::rgba(0xff669880), 0.67)))
                             .child(div().size_full().rounded(z(8.)).bg(gpui::rgba(0x00000033))),
-                    ),
+                    )
+                    .when(selected, |d| d.child(selected_ring()))
+                    .hover(|s| s.opacity(0.9))
+                    .on_click(cx.listener(|a, _, _, cx| {
+                        update_local(a, |p| {
+                            p.ui.insert(super::LOCAL_CLIENT_THEME.into(), u64::from(crate::theme::client_theme::VICE_CITY.id) + 1);
+                        }, cx)
+                    })),
             ),
         )
         .into_any_element()
@@ -2298,6 +2307,22 @@ const THEME_SWATCHES: [(f32, u32, f32, u32, f32); 22] = [
     (180., 0x2c3fe7, 0.11, 0x261d83, 0.65),
 ];
 
+fn selected_ring() -> gpui::Div {
+    div().absolute().top(z(-2.)).left(z(-2.)).size(z(52.)).child(div().size_full().rounded(z(8.)).border(z(4.)).border_color(c(tok(idx::BRAND_500)))).child(
+        div()
+            .absolute()
+            .top(z(-4.))
+            .right(z(-4.))
+            .size(z(20.))
+            .rounded_full()
+            .bg(c(tok(idx::BRAND_500)))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(gpui::svg().path(crate::icons::path("check")).size(z(14.)).text_color(gpui::white())),
+    )
+}
+
 fn nitro_themes(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let current = super::client_preset(&app.prefs).map(|p| p.id);
     let tile = |i: usize, (ang, a, pa, b, pb): (f32, u32, f32, u32, f32)| {
@@ -2315,21 +2340,7 @@ fn nitro_themes(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
             .size(z(48.))
             .cursor_pointer()
             .child(face)
-            .when(selected, |d| {
-                d.child(div().absolute().top(z(-2.)).left(z(-2.)).size(z(52.)).rounded(z(8.)).border(z(4.)).border_color(c(tok(idx::BRAND_500)))).child(
-                    div()
-                        .absolute()
-                        .top(z(-6.))
-                        .right(z(-6.))
-                        .size(z(20.))
-                        .rounded_full()
-                        .bg(c(tok(idx::BRAND_500)))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(gpui::svg().path(crate::icons::path("check")).size(z(14.)).text_color(gpui::white())),
-                )
-            })
+            .when(selected, |d| d.child(selected_ring()))
             .hover(|s| s.opacity(0.9))
             .when_some(preset, |d, id| {
                 d.on_click(cx.listener(move |a, _, _, cx| {
