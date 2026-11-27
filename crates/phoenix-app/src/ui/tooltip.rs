@@ -76,9 +76,28 @@ fn caret(down: bool) -> gpui::Div {
     col
 }
 
-fn card(text: SharedString) -> gpui::Div {
+#[derive(Clone)]
+pub enum Body {
+    Plain(SharedString),
+    Rich(SharedString, SharedString),
+}
+
+fn card(body: Body) -> gpui::Div {
+    let (max_w, content) = match body {
+        Body::Plain(text) => (200., div().child(text)),
+        Body::Rich(title, note) => (
+            272.,
+            div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .text_center()
+                .child(title)
+                .child(div().font_weight(FontWeight::NORMAL).text_color(c(tok(idx::TEXT_MUTED))).child(note)),
+        ),
+    };
     div()
-        .max_w(z(200.))
+        .max_w(z(max_w))
         .px(z(12.))
         .py(z(8.))
         .rounded(z(8.))
@@ -96,11 +115,10 @@ fn card(text: SharedString) -> gpui::Div {
         .line_height(z(18.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .child(text)
+        .child(content)
 }
 
-
-fn layer(text: SharedString, b: Bounds<Pixels>, side: Side, view_h: f32) -> gpui::AnyElement {
+fn layer(text: Body, b: Bounds<Pixels>, side: Side, view_h: f32) -> gpui::AnyElement {
     let top = f32::from(b.origin.y);
     let bottom = f32::from(b.origin.y + b.size.height);
     let mid = f32::from(b.origin.x + b.size.width / 2.);
@@ -162,8 +180,19 @@ pub trait Tipped: ParentElement + Styled + Sized {
     }
 
     fn tip_side(self, text: impl Into<SharedString>, side: Side) -> Self {
-        let text = text.into();
-        let key = crate::ui::states::key(("tip", text.to_string(), side == Side::Top));
+        self.tip_body(Body::Plain(text.into()), side)
+    }
+
+    fn tip_rich(self, title: impl Into<SharedString>, note: impl Into<SharedString>, side: Side) -> Self {
+        self.tip_body(Body::Rich(title.into(), note.into()), side)
+    }
+
+    fn tip_body(self, text: Body, side: Side) -> Self {
+        let id = match &text {
+            Body::Plain(t) => t.to_string(),
+            Body::Rich(t, n) => format!("{t}\n{n}"),
+        };
+        let key = crate::ui::states::key(("tip", id, side == Side::Top));
         let shown = TIPS.with(|t| t.borrow().get(&key).copied()).filter(|(_, h)| *h);
         let mut el = self.child(probe(key));
         if let Some((b, _)) = shown {

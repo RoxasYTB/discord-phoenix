@@ -1949,8 +1949,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 "addtodm" => {
                     if let Some(c) = app.selected_channel {
-                        let w = f32::from(window.viewport_size().width) / phoenix_app::theme::zoom();
-                        app.open_add_to_dm_at(c, Some((gpui::point(px(w - 140.), px(60.)), gpui::Anchor::TopRight)), cx);
+                        app.open_add_to_dm(c, cx);
                     }
                 }
                 "shoplook" => {

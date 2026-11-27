@@ -12,6 +12,9 @@ fn title(app: &PhoenixApp) -> Option<(Icon, SharedString)> {
     if crate::ui::discovery::current().is_some() {
         return Some((Icon::Compass, crate::t!("discovery.title")));
     }
+    if app.favorites_view {
+        return Some((Icon::Hash, crate::t!("fav.title")));
+    }
     if let Some(g) = app.selected_guild.and_then(|g| app.guilds.iter().find(|x| x.id == g)) {
         return Some((Icon::Hash, g.name.clone()));
     }
@@ -126,7 +129,8 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
     VIEWPORT_W_CSS.store(vw.to_bits(), std::sync::atomic::Ordering::Relaxed);
     DREW_WIN_BUTTONS.store(client_decorated(window), std::sync::atomic::Ordering::Relaxed);
     let heading = title(app);
-    let guild = app.selected_guild.filter(|_| crate::ui::discovery::current().is_none()).and_then(|g| app.guilds.iter().find(|x| x.id == g));
+    let favorites = app.favorites_view && crate::ui::discovery::current().is_none();
+    let guild = app.selected_guild.filter(|_| crate::ui::discovery::current().is_none() && !favorites).and_then(|g| app.guilds.iter().find(|x| x.id == g));
     crate::ui::window_chrome::drag_region(div().id("app-title-bar"))
         .h(z(m::TITLE_BAR_H))
         .flex_none()
@@ -154,6 +158,13 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(c(tok(idx::TEXT_DEFAULT)))
                         .map(|d| match guild {
+                            _ if favorites => d.child(
+                                gpui::svg()
+                                    .path(crate::icons::path("star"))
+                                    .size(z(18.))
+                                    .flex_none()
+                                    .text_color(c(tok(idx::INTERACTIVE_ICON_DEFAULT))),
+                            ),
                             Some(g) => d.child(
                                 div()
                                     .flex_none()

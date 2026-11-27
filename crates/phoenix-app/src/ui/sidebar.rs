@@ -968,7 +968,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                         .child(
                             btn("new-dm", gpui::svg().path(crate::icons::path("plus-medium")))
                                 .tip(crate::t!("groupdm.create"))
-                                .on_click(move |ev, _, cx| e.update(cx, |a, cx| a.open_group_dm_picker_at(Some((ev.position() + gpui::point(gpui::px(0.), z(16.)), gpui::Anchor::TopLeft)), cx))),
+                                .on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_group_dm_picker(cx))),
                         )
                 }),
         )

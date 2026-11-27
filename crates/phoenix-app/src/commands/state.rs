@@ -281,7 +281,6 @@ pub struct GroupDmPicker {
     pub sending: bool,
     pub channel: Option<Id>,
     pub with: Vec<Id>,
-    pub anchor: Option<(gpui::Point<gpui::Pixels>, gpui::Anchor)>,
     pub group: bool,
 }
 

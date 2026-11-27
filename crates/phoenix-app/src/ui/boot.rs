@@ -458,7 +458,7 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, _cx: &mut Context<Phoen
             div()
                 .flex()
                 .child(link(crate::t!("boot.tweet_us"), Some("x-neutral"), TWITTER_SUPPORT))
-                .child(div().ml(px(20.)).child(link(crate::t!("boot.server_status"), None, STATUS_PAGE))),
+                .child(div().ml(px(20.)).child(link(crate::t!("boot.server_status"), Some("boot/status"), STATUS_PAGE))),
         );
     Some(
         div()

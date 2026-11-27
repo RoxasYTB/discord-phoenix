@@ -133,6 +133,9 @@ impl PhoenixApp {
 
     pub fn toggle_category_saved(&mut self, id: Id, cx: &mut Context<Self>) {
         self.toggle_category(id, cx);
+        if self.favorites_view {
+            crate::ui::favorites::sync_collapsed(self, id, cx);
+        }
         self.save_nav_prefs();
     }
 

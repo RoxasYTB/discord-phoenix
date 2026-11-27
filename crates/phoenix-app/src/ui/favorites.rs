@@ -244,6 +244,16 @@ pub fn on_channel_opened(app: &mut PhoenixApp, channel: Id) {
     }
 }
 
+pub fn sync_collapsed(app: &mut PhoenixApp, id: Id, cx: &mut Context<PhoenixApp>) {
+    let collapsed = app.collapsed.contains(&id);
+    let mut fav = data(app).clone();
+    match fav.favorite_channels.get_mut(&id.0) {
+        Some(f) if f.is_category() && f.collapsed != collapsed => f.collapsed = collapsed,
+        _ => return,
+    }
+    save(app, fav, cx);
+}
+
 fn save(app: &mut PhoenixApp, fav: Favorites, cx: &mut Context<PhoenixApp>) {
     crate::ui::settings::save(app, SettingsPatch::Favorites(Box::new(fav)), cx);
     app.rebuild_sidebar();

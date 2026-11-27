@@ -346,22 +346,14 @@ impl PhoenixApp {
     }
 
     pub fn open_group_dm_picker(&mut self, cx: &mut Context<Self>) {
-        self.open_group_dm_picker_at(None, cx);
-    }
-
-    pub fn open_group_dm_picker_at(&mut self, anchor: Option<(gpui::Point<gpui::Pixels>, gpui::Anchor)>, cx: &mut Context<Self>) {
-        self.parity.group_dm = Some(GroupDmPicker { search: None, picked: Vec::new(), sending: false, channel: None, with: Vec::new(), anchor, group: false });
+        self.parity.group_dm = Some(GroupDmPicker { search: None, picked: Vec::new(), sending: false, channel: None, with: Vec::new(), group: false });
         cx.notify();
     }
 
     pub fn open_add_to_dm(&mut self, channel: Id, cx: &mut Context<Self>) {
-        self.open_add_to_dm_at(channel, None, cx);
-    }
-
-    pub fn open_add_to_dm_at(&mut self, channel: Id, anchor: Option<(gpui::Point<gpui::Pixels>, gpui::Anchor)>, cx: &mut Context<Self>) {
         let with = dm_recipients(self, channel);
         let group = crate::ui::dm_profile_panel::is_group_dm(self, channel);
-        self.parity.group_dm = Some(GroupDmPicker { search: None, picked: Vec::new(), sending: false, channel: Some(channel), with, anchor, group });
+        self.parity.group_dm = Some(GroupDmPicker { search: None, picked: Vec::new(), sending: false, channel: Some(channel), with, group });
         cx.notify();
     }
 
@@ -2161,35 +2153,6 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
                         .when(!can, |d| d.opacity(0.5).cursor_not_allowed()),
                 )
         });
-    if let Some((pos, corner)) = p.anchor {
-        let dismiss = close.clone();
-        return Some(
-            gpui::deferred(
-                div()
-                    .id("group-dm-popout-layer")
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .occlude()
-                    .on_mouse_down(gpui::MouseButton::Left, move |_, w, cx| dismiss(w, cx))
-                    .child(
-                        gpui::anchored().anchor(corner).position(pos).snap_to_window_with_margin(z(8.)).child(
-                            div()
-                                .id("group-dm-popout")
-                                .occlude()
-                                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .border_1()
-                                .border_color(tk(idx::BORDER_SUBTLE))
-                                .rounded(z(8.))
-                                .child(card),
-                        ),
-                    ),
-            )
-            .with_priority(3)
-            .into_any_element(),
-        );
-    }
     Some(crate::ui::modal::frame("group-dm-modal", close, card))
 }
 

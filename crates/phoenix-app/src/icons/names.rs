@@ -9,6 +9,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("friends/discovery-arrow", &["path:m5.41667 4.2625 5.66573 5.7375"]),
     ("link-external", &["LinkExternalSmallIcon"]),
     ("x-neutral", &["XNeutralIcon"]),
+    ("boot/status", &["path:M6.99471698,9.67522659 C8.47108874,9.67522659"]),
     ("crown", &["CrownIcon"]),
     ("connection-fine", &["ConnectionFineIcon"]),
     ("connection-average", &["ConnectionAverageIcon"]),

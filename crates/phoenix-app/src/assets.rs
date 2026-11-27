@@ -131,6 +131,7 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/chevron.svg" => s!(r#"<path d="m6 9 6 6 6-6"/>"#),
         "icons/friends/discovery-arrow.svg" => s!(r#"<path d="m9 6 6 6-6 6"/>"#),
         "icons/x-neutral.svg" => f!(r#"<path d="M13.9 10.6 21 2.5h-1.7l-6.2 7L8.2 2.5H2.5l7.5 10.6-7.5 8.4h1.7l6.5-7.4 5.2 7.4h5.7zm-2.3 2.6-.8-1.1L4.8 3.8h2.6l4.9 6.9.8 1.1 6.3 8.9h-2.6z"/>"#),
+        "icons/boot/status.svg" => s!(r#"<circle cx="12" cy="12" r="4"/><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7"/>"#),
         "icons/connection-fine.svg" => s!(r#"<path d="M4 4a16 16 0 0 1 16 16M4 9a11 11 0 0 1 11 11M4 14a6 6 0 0 1 6 6M4 20h.01"/>"#),
         "icons/connection-average.svg" => s!(r#"<path d="M4 9a11 11 0 0 1 11 11M4 14a6 6 0 0 1 6 6M4 20h.01"/>"#),
         "icons/connection-bad.svg" => s!(r#"<path d="M4 14a6 6 0 0 1 6 6M4 20h.01"/>"#),

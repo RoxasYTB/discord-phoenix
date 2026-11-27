@@ -230,7 +230,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
                             a.blocked_write(crate::actions::guard::GuardedWrite::wishlist_add_sku(crate::ui::extra_menus::NITRO_SKU), cx)
                         }))
                         .child(gpui::svg().path(crate::icons::path("heart")).size(z(16.)).text_color(gpui::white()))
-                        .tip_side(crate::t!("nitro.wishlist_tip"), crate::ui::tooltip::Side::Bottom),
+                        .tip_rich(crate::t!("nitro.wishlist_tip"), crate::t!("nitro.wishlist_tip_body"), crate::ui::tooltip::Side::Bottom),
                 )
                 .child(overlay_btn("nitro-gift").child(icon(Icon::Gift, 16., gpui::white())).child(crate::t!("nitro.gift")).on_click(cx.listener(|a, _, _, cx| a.open_gift_nitro(None, cx)))),
         );

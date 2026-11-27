@@ -299,7 +299,7 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                             .justify_center()
                             .cursor_pointer()
                             .tip(crate::t!("friends.new_group_dm"))
-                            .on_click(cx.listener(|a, ev: &gpui::ClickEvent, _, cx| a.open_group_dm_picker_at(Some((ev.position() + gpui::point(gpui::px(0.), z(20.)), gpui::Anchor::TopRight)), cx)))
+                            .on_click(cx.listener(|a, _, _, cx| a.open_group_dm_picker(cx)))
                             .child(
                                 gpui::svg()
                                     .path(crate::icons::path("new-group-dm"))
