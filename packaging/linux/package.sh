@@ -14,6 +14,9 @@ install -Dm755 "$BIN" "$FHS/bin/discord-phoenix"
 install -Dm644 "$HERE/discord-phoenix.desktop" "$FHS/share/applications/discord-phoenix.desktop"
 if [ -f "$ICON" ]; then
   install -Dm644 "$ICON" "$FHS/share/icons/hicolor/512x512/apps/io.github.RoxasYTB.DiscordPhoenix.png"
+  for f in "$HERE"/../icons/hicolor/*/apps/io.github.RoxasYTB.DiscordPhoenix.png; do
+    install -Dm644 "$f" "$FHS/share/icons/hicolor/${f#"$HERE"/../icons/hicolor/}"
+  done
 else
   echo "warning: $ICON missing; packages will have no icon" >&2
 fi

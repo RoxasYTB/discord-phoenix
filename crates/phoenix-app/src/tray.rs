@@ -149,32 +149,18 @@ fn load_png(path: &Path) -> Option<image::RgbaImage> {
 }
 
 fn app_pixmap() -> Pixmap {
-    let Ok(img) = image::load_from_memory_with_format(crate::assets::APP_ICON_PNG, image::ImageFormat::Png) else {
+    let Ok(img) = image::load_from_memory_with_format(crate::assets::WINDOW_ICON_PNG, image::ImageFormat::Png) else {
         return Vec::new();
     };
-    let rgba = img.to_rgba8();
-    [32u32, 64].iter().map(|&s| argb(&image::imageops::resize(&rgba, s, s, image::imageops::FilterType::Lanczos3))).collect()
+    vec![argb(&image::imageops::resize(&img.to_rgba8(), 24, 24, image::imageops::FilterType::Lanczos3))]
 }
 
-pub const TRAY_SCALES: [&str; 10] = ["1.25", "1.33", "1.4", "1.5", "1.8", "2", "2.5", "3", "4", "5"];
-
-pub fn tray_files(dir: &Path, name: &str) -> Vec<PathBuf> {
-    let win = dir.join("win32");
-    let mut files = vec![dir.join("linux").join(format!("{name}.png")), win.join(format!("{name}.png"))];
-    files.extend(TRAY_SCALES.iter().map(|s| win.join(format!("{name}@{s}x.png"))));
-    files
+pub fn tray_file(dir: &Path, name: &str) -> PathBuf {
+    dir.join("linux").join(format!("{name}.png"))
 }
 
 fn client_pixmaps(dir: &Path, name: &str) -> Pixmap {
-    let mut out: Pixmap = Vec::new();
-    for img in tray_files(dir, name).iter().filter_map(|f| load_png(f.as_path())) {
-        let px = argb(&img);
-        if !out.iter().any(|p| (p.0, p.1) == (px.0, px.1)) {
-            out.push(px);
-        }
-    }
-    out.sort_by_key(|p| p.0);
-    out
+    load_png(&tray_file(dir, name)).map(|img| vec![argb(&img)]).unwrap_or_default()
 }
 
 fn icons() -> HashMap<&'static str, Pixmap> {
@@ -570,12 +556,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tray_files_cover_every_client_scale() {
-        let files = tray_files(Path::new("/s"), "tray-unread");
-        assert_eq!(files[0], Path::new("/s/linux/tray-unread.png"));
-        assert_eq!(files[1], Path::new("/s/win32/tray-unread.png"));
-        assert_eq!(files.last().map(PathBuf::as_path), Some(Path::new("/s/win32/tray-unread@5x.png")));
-        assert_eq!(files.len(), 12);
+    fn tray_uses_the_linux_png_like_the_client() {
+        assert_eq!(tray_file(Path::new("/s"), "tray-unread"), Path::new("/s/linux/tray-unread.png"));
     }
 
     #[test]

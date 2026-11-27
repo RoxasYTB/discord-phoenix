@@ -62,7 +62,7 @@ use gpui_component::{Root, theme::{Theme, ThemeMode}};
 pub const APP_ID: &str = "discord-phoenix";
 
 fn window_icon() -> Option<Arc<image::RgbaImage>> {
-    image::load_from_memory_with_format(assets::APP_ICON_PNG, image::ImageFormat::Png)
+    image::load_from_memory_with_format(assets::WINDOW_ICON_PNG, image::ImageFormat::Png)
         .ok()
         .map(|i| Arc::new(i.to_rgba8()))
 }

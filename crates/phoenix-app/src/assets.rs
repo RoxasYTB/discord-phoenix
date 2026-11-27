@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use gpui::{AssetSource, SharedString};
 
 pub const APP_ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
+pub const WINDOW_ICON_PNG: &[u8] = include_bytes!("../../../packaging/icons/discord-phoenix.png");
 
 macro_rules! s {
     ($body:expr) => {
