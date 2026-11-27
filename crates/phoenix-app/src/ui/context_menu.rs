@@ -37,6 +37,7 @@ thread_local! {
     static HL_ROOT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     static HL_SUB: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     static ACTIVE: std::cell::RefCell<Option<ActiveMenu>> = const { std::cell::RefCell::new(None) };
+    static HOVER_TICKET: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 pub fn begin_frame() {
@@ -68,7 +69,41 @@ pub fn debug_open_submenu(ix: usize) {
     HL_ROOT.with(|c| c.set(Some(ix)));
 }
 
+fn cancel_hover_switch() -> u64 {
+    HOVER_TICKET.with(|ticket| {
+        let next = ticket.get().wrapping_add(1);
+        ticket.set(next);
+        next
+    })
+}
+
+fn hover_item(depth: u8, index: usize, submenu: bool, w: &mut Window, cx: &App) {
+    let ticket = cancel_hover_switch();
+    if depth != 0 {
+        set_hl(depth, Some(index), w);
+        return;
+    }
+    let select = move |w: &mut Window| {
+        set_hl(0, Some(index), w);
+        set_hl(1, None, w);
+        set_open_sub(submenu.then_some(index), w);
+    };
+    if OPEN_SUB.with(|open| open.get().is_some_and(|current| current != index)) {
+        w.spawn(cx, async move |cx| {
+            cx.background_executor().timer(std::time::Duration::from_millis(180)).await;
+            let _ = cx.update(|w, _| {
+                if HOVER_TICKET.with(|latest| latest.get() == ticket) {
+                    select(w);
+                }
+            });
+        }).detach();
+    } else {
+        select(w);
+    }
+}
+
 fn reset_state() {
+    cancel_hover_switch();
     OPEN_SUB.with(|c| c.set(None));
     HL_ROOT.with(|c| c.set(None));
     HL_SUB.with(|c| c.set(None));
@@ -137,12 +172,15 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
     let root = HL_ROOT.with(|c| c.get());
     let sub = HL_SUB.with(|c| c.get());
     let open = OPEN_SUB.with(|c| c.get());
-    let sub_list = open.and_then(|o| match &nav[o] {
-        Nav::Sub(v, _) => Some(v),
+    let sub_list = open.and_then(|o| match nav.get(o) {
+        Some(Nav::Sub(v, _)) => Some(v),
         _ => None,
     });
     let in_sub = sub.is_some() && sub_list.is_some();
     let root_ok: Vec<bool> = nav.iter().map(|n| !matches!(n, Nav::Skip)).collect();
+    if matches!(key, "down" | "up" | "tab" | "home" | "end" | "right" | "left" | "escape" | "enter" | "space") {
+        cancel_hover_switch();
+    }
     match key {
         "down" | "up" | "tab" => {
             let dir = if key == "up" { -1 } else { 1 };
@@ -167,19 +205,19 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
         }
         "right" if !in_sub => {
             if let Some(r) = root
-                && let Nav::Sub(v, _) = &nav[r]
+                && let Some(Nav::Sub(v, _)) = nav.get(r)
             {
                 set_open_sub(Some(r), w);
                 let ok: Vec<bool> = v.iter().map(Option::is_some).collect();
                 set_hl(1, step(&ok, None, 1), w);
             }
         }
-        "left" if in_sub => {
+        "left" if sub_list.is_some() => {
             set_hl(1, None, w);
             set_open_sub(None, w);
         }
         "escape" => {
-            if in_sub {
+            if sub_list.is_some() {
                 set_hl(1, None, w);
                 set_open_sub(None, w);
             } else {
@@ -192,8 +230,8 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
                     h(&keyboard_click(pos), w, cx);
                     dismiss(w, cx);
                 }
-            } else if let Some(r) = root {
-                match &nav[r] {
+            } else if let Some(item) = root.and_then(|r| nav.get(r)) {
+                match item {
                     Nav::Act(h) => {
                         h(&keyboard_click(pos), w, cx);
                         dismiss(w, cx);
@@ -424,6 +462,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
     let hl = if depth == 0 { HL_ROOT.with(|c| c.get()) } else { HL_SUB.with(|c| c.get()) };
     let open_sub = if depth == 0 { OPEN_SUB.with(|c| c.get()) } else { None };
     let max_h = VIEW_H.with(|v| v.get()) - VIEWPORT_PAD * 2.;
+    let scroll = crate::ui::chat::scrollbar::handle(id);
     let mut list = div()
         .id(SharedString::from(format!("{id}-scroller")))
         .flex()
@@ -432,7 +471,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
         .px(z(8.))
         .max_h(z(max_h - 2.))
         .overflow_y_scroll()
-        .track_scroll(&crate::ui::chat::scrollbar::handle(id));
+        .track_scroll(&scroll);
     let mut sub_panel = None;
     let mut y = 0.;
     for (ix, item) in items.into_iter().enumerate() {
@@ -449,7 +488,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                     sub_panel = Some(
                         div()
                             .absolute()
-                            .top(z(top))
+                            .top(z(top) + scroll.offset().y)
                             .map(|d| if flip { d.right(gpui::relative(1.)).mr(z(-SUB_OVERLAP)) } else { d.left_full().ml(z(-SUB_OVERLAP)) })
                             .child(
                                 gpui::anchored()
@@ -469,11 +508,9 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                             set_open_sub(Some(ix), w);
                         }
                     })
-                    .on_hover(move |h, w, _| {
+                    .on_hover(move |h, w, cx| {
                         if *h {
-                            set_open_sub(Some(ix), w);
-                            set_hl(0, Some(ix), w);
-                            set_hl(1, None, w);
+                            hover_item(depth, ix, true, w, cx);
                         }
                     })
                     .when_some(icon, |d, path| {
@@ -540,12 +577,9 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                 let lit = lit && !disabled;
                 row(("menu-check", ix), lit, danger)
                     .when(disabled, |d| d.opacity(0.5).cursor_default().hover(|s| s.bg(gpui::transparent_black())))
-                    .on_hover(move |h, w, _| {
+                    .on_hover(move |h, w, cx| {
                         if *h && !disabled {
-                            if depth == 0 {
-                                set_open_sub(None, w);
-                            }
-                            set_hl(depth, Some(ix), w);
+                            hover_item(depth, ix, false, w, cx);
                         }
                     })
                     .when_some(dot, |d, color| {
@@ -629,12 +663,9 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                 });
                 let el = if enabled { row(("menu-lead", ix), lit, false) } else { row(("menu-lead", ix), false, false).cursor_default().opacity(0.5) };
                 el.when(enabled, |d| {
-                    d.on_hover(move |h, w, _| {
+                    d.on_hover(move |h, w, cx| {
                         if *h {
-                            if depth == 0 {
-                                set_open_sub(None, w);
-                            }
-                            set_hl(depth, Some(ix), w);
+                            hover_item(depth, ix, false, w, cx);
                         } else if hl == Some(ix) {
                             set_hl(depth, None, w);
                         }
@@ -663,12 +694,9 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                 let shortcut = icon.as_ref().and_then(|n| n.strip_prefix(KBD)).map(|k| SharedString::from(k.to_owned()));
                 let icon = icon.filter(|n| !n.starts_with(KBD));
                 row(("menu-item", ix), lit, danger)
-                    .on_hover(move |h, w, _| {
+                    .on_hover(move |h, w, cx| {
                         if *h {
-                            if depth == 0 {
-                                set_open_sub(None, w);
-                            }
-                            set_hl(depth, Some(ix), w);
+                            hover_item(depth, ix, false, w, cx);
                         } else if hl == Some(ix) {
                             set_hl(depth, None, w);
                         }
@@ -721,6 +749,11 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
         .flex()
         .flex_col()
         .occlude()
+        .on_hover(move |hovered, _, _| {
+            if *hovered && depth != 0 {
+                cancel_hover_switch();
+            }
+        })
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
         .child(
@@ -782,4 +815,38 @@ pub fn render_anchored_at(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<M
     )
     .with_priority(priority)
     .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestMenu;
+
+    impl gpui::Render for TestMenu {
+        fn render(&mut self, _: &mut Window, _: &mut gpui::Context<Self>) -> impl IntoElement {
+            div()
+        }
+    }
+
+    #[gpui::test]
+    fn escape_closes_a_hovered_submenu_before_its_menu(cx: &mut gpui::TestAppContext) {
+        let window = cx.add_window(|_, _| TestMenu);
+        window.update(cx, |_, window, cx| {
+            reset_state();
+            let dismissed = Rc::new(std::cell::Cell::new(false));
+            let result = dismissed.clone();
+            let dismiss: Dismiss = Rc::new(move |_, _| result.set(true));
+            let nav = vec![Nav::Sub(vec![None], None)];
+            debug_open_submenu(0);
+
+            assert!(handle_key("escape", &nav, Point::default(), &dismiss, window, cx));
+            assert!(OPEN_SUB.with(|open| open.get().is_none()));
+            assert!(!dismissed.get());
+
+            assert!(handle_key("escape", &nav, Point::default(), &dismiss, window, cx));
+            assert!(dismissed.get());
+            reset_state();
+        }).unwrap();
+    }
 }
