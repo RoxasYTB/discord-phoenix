@@ -151,7 +151,7 @@ fn draw_cursor(frame: &mut RgbaImage, origin: (i32, i32), window: Option<u32>) {
         if !dib.is_null() && !bits.is_null() {
             let len = width as usize * height as usize * 4;
             let pixels = std::slice::from_raw_parts_mut(bits.cast::<u8>(), len);
-            for (i, bgra) in pixels.chunks_exact_mut(4).enumerate() {
+            for (i, bgra) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let [r, g, b, _] = frame.get_pixel(cx + i as u32 % width, cy + i as u32 / width).0;
                 bgra.copy_from_slice(&[b, g, r, 255]);
             }
@@ -160,7 +160,7 @@ fn draw_cursor(frame: &mut RgbaImage, origin: (i32, i32), window: Option<u32>) {
                 if DrawIconEx(dc, (left - i64::from(cx)) as i32, (top - i64::from(cy)) as i32, cursor.hCursor, icon_width, icon_height, 0, null_mut(), DI_NORMAL) != 0 {
                     GdiFlush();
                     let pixels = std::slice::from_raw_parts(bits.cast::<u8>(), len);
-                    for (i, bgra) in pixels.chunks_exact(4).enumerate() {
+                    for (i, bgra) in pixels.as_chunks::<4>().0.iter().enumerate() {
                         let dst = &mut frame.get_pixel_mut(cx + i as u32 % width, cy + i as u32 / width).0;
                         dst[..3].copy_from_slice(&[bgra[2], bgra[1], bgra[0]]);
                     }
@@ -175,6 +175,17 @@ fn draw_cursor(frame: &mut RgbaImage, origin: (i32, i32), window: Option<u32>) {
     }
 }
 
+fn letterbox(frame: &RgbaImage, width: u32, height: u32, filter: imageops::FilterType) -> RgbaImage {
+    let (fw, fh) = (frame.width().max(1), frame.height().max(1));
+    let scale = (f64::from(width) / f64::from(fw)).min(f64::from(height) / f64::from(fh));
+    let w = ((f64::from(fw) * scale).round() as u32).clamp(1, width);
+    let h = ((f64::from(fh) * scale).round() as u32).clamp(1, height);
+    let scaled = imageops::resize(frame, w, h, filter);
+    let mut out = RgbaImage::from_pixel(width, height, xcap::image::Rgba([0, 0, 0, 255]));
+    imageops::replace(&mut out, &scaled, i64::from((width - w) / 2), i64::from((height - h) / 2));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::clip_cursor;
@@ -185,15 +196,4 @@ mod tests {
         assert_eq!(clip_cursor(1278, 719, 32, 32, (1280, 720)), Some((1278, 719, 2, 1)));
         assert_eq!(clip_cursor(1280, 720, 32, 32, (1280, 720)), None);
     }
-}
-
-fn letterbox(frame: &RgbaImage, width: u32, height: u32, filter: imageops::FilterType) -> RgbaImage {
-    let (fw, fh) = (frame.width().max(1), frame.height().max(1));
-    let scale = (f64::from(width) / f64::from(fw)).min(f64::from(height) / f64::from(fh));
-    let w = ((f64::from(fw) * scale).round() as u32).clamp(1, width);
-    let h = ((f64::from(fh) * scale).round() as u32).clamp(1, height);
-    let scaled = imageops::resize(frame, w, h, filter);
-    let mut out = RgbaImage::from_pixel(width, height, xcap::image::Rgba([0, 0, 0, 255]));
-    imageops::replace(&mut out, &scaled, i64::from((width - w) / 2), i64::from((height - h) / 2));
-    out
 }
