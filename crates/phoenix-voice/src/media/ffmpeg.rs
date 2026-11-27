@@ -163,6 +163,13 @@ pub fn hwaccel() -> Option<String> {
     }
 }
 
+pub fn decoder_hwaccel(codec: Codec) -> Option<String> {
+    if codec == Codec::Av1 && std::env::var_os("PHOENIX_VIDEO_HWACCEL").is_none() {
+        return None;
+    }
+    hwaccel()
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DecoderSupport {
     pub codecs: Vec<Codec>,
@@ -253,12 +260,18 @@ pub fn ivf_frame(codec: Codec, frame: &[u8], pts: u64) -> Result<Vec<u8>> {
 
 pub fn decode_args(codec: Codec, max: (u32, u32), hwaccel: Option<&str>, dav1d: bool) -> Vec<String> {
     let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error"].map(String::from).to_vec();
+    let software_av1 = codec == Codec::Av1 && hwaccel.is_none();
     if let Some(h) = hwaccel {
         a.extend(["-hwaccel".into(), h.into()]);
     }
-    a.extend(["-filter_threads", "1", "-threads", "2", "-probesize", "32", "-analyzeduration", "0", "-flags", "low_delay"].map(String::from));
-    if codec == Codec::Av1 && dav1d {
-        a.extend(["-c:v", "libdav1d", "-max_frame_delay", "1"].map(String::from));
+    let threads = if software_av1 { "4" } else { "2" };
+    a.extend(["-filter_threads", "1", "-threads", threads, "-probesize", "32", "-analyzeduration", "0", "-flags", "low_delay"].map(String::from));
+    if codec == Codec::Av1 {
+        if hwaccel.is_some() {
+            a.extend(["-c:v", "av1"].map(String::from));
+        } else if dav1d {
+            a.extend(["-c:v", "libdav1d", "-max_frame_delay", "2"].map(String::from));
+        }
     }
     a.extend(["-f", "ivf", "-i", "-", "-vf"].map(String::from));
     a.push(format!(
@@ -354,7 +367,7 @@ pub struct FfmpegDecoder {
 
 impl FfmpegDecoder {
     pub fn spawn(codec: Codec, max: (u32, u32)) -> Result<Self> {
-        Self::spawn_with(codec, max, hwaccel().as_deref())
+        Self::spawn_with(codec, max, decoder_hwaccel(codec).as_deref())
     }
 
     pub fn spawn_with(codec: Codec, max: (u32, u32), hwaccel: Option<&str>) -> Result<Self> {
@@ -368,7 +381,8 @@ impl FfmpegDecoder {
             .map_err(|e| Error::Encoder(format!("ffmpeg decoder: {e}")))?;
         let mut stdin = child.stdin.take().ok_or(Error::Encoder("ffmpeg decoder stdin".into()))?;
         let stdout = child.stdout.take().ok_or(Error::Encoder("ffmpeg decoder stdout".into()))?;
-        let (input, pending) = mpsc::sync_channel::<Vec<u8>>(12);
+        let capacity = if codec == Codec::Av1 { 24 } else { 12 };
+        let (input, pending) = mpsc::sync_channel::<Vec<u8>>(capacity);
         let writer = std::thread::Builder::new().name("phoenix-video-out".into()).spawn(move || {
             if stdin.write_all(&header).is_ok() {
                 for packet in pending {
@@ -475,7 +489,11 @@ mod tests {
         let a = decode_args(Codec::Av1, (1280, 720), Some("auto"), true);
         let pos = |k: &str| a.iter().position(|x| x == k).unwrap();
         assert!(pos("-hwaccel") < pos("-i"));
-        assert!(pos("libdav1d") < pos("-i"));
+        assert!(pos("av1") < pos("-i"));
+        assert!(!a.iter().any(|x| x == "libdav1d"));
+        let software = decode_args(Codec::Av1, (1280, 720), None, true);
+        assert!(software.windows(2).any(|pair| pair == ["-c:v", "libdav1d"]));
+        assert!(software.windows(2).any(|pair| pair == ["-threads", "4"]));
         assert_eq!(a[pos("-f") + 1], "ivf");
         assert!(a.iter().any(|x| x.contains("min(iw,1280)") && x.contains("force_original_aspect_ratio=decrease")));
         assert!(!decode_args(Codec::Vp8, (640, 360), None, true).iter().any(|x| x == "-hwaccel" || x == "libdav1d"));
@@ -493,6 +511,28 @@ mod tests {
         let bare_last_obu = [(6 << 3), 9, 9];
         let a = ivf_frame(Codec::Av1, &bare_last_obu, 0).unwrap();
         assert_eq!(&a[12..], &[0x12, 0, (6 << 3) | 2, 2, 9, 9]);
+    }
+
+    #[test]
+    fn av1_decoder_accepts_a_full_hd_burst_without_blocking() {
+        use std::time::{Duration, Instant};
+
+        if !available() || !decoder_support().dav1d {
+            return;
+        }
+        let Some(frames) = synthetic_frames(Codec::Av1, "testsrc2=s=1920x1080:r=30", 24) else { return };
+        assert_eq!(frames.len(), 24);
+        let mut decoder = FfmpegDecoder::spawn_with(Codec::Av1, STREAM_MAX, None).unwrap();
+        for frame in &frames {
+            decoder.try_push(frame).unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while decoder.decoded() < 22 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(decoder.decoded() >= 22, "only {} AV1 frames decoded", decoder.decoded());
+        let latest = decoder.latest.lock().unwrap().clone().unwrap();
+        assert_eq!((latest.width, latest.height), STREAM_MAX);
     }
 
     #[test]

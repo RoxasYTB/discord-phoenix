@@ -195,12 +195,15 @@ pub fn watching(key: &str) -> bool {
 fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::codec::Codec, keyframe: bool, frame: &[u8], max: (u32, u32)) -> bool {
     use phoenix_voice::media::ffmpeg::FfmpegDecoder;
     let mut r = map.lock();
-    static SOFTWARE_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    use std::sync::atomic::{AtomicU8, Ordering};
+
+    static SOFTWARE_ONLY: AtomicU8 = AtomicU8::new(0);
+    let codec_bit = |codec: phoenix_voice::codec::Codec| 1u8 << (codec as u8);
     if let Some(d) = r.get_mut(&user) {
         let dead = !d.alive();
         if dead && d.hwaccel() {
             tracing::warn!("hardware video decoder stopped, using the software decoder");
-            SOFTWARE_ONLY.store(true, std::sync::atomic::Ordering::Relaxed);
+            SOFTWARE_ONLY.fetch_or(codec_bit(d.codec()), Ordering::Relaxed);
         }
         if d.codec() != codec || dead {
             r.remove(&user);
@@ -210,7 +213,11 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::co
         if !keyframe {
             return true;
         }
-        let hwaccel = if SOFTWARE_ONLY.load(std::sync::atomic::Ordering::Relaxed) { None } else { phoenix_voice::media::ffmpeg::hwaccel() };
+        let hwaccel = if SOFTWARE_ONLY.load(Ordering::Relaxed) & codec_bit(codec) == 0 {
+            phoenix_voice::media::ffmpeg::decoder_hwaccel(codec)
+        } else {
+            None
+        };
         match FfmpegDecoder::spawn_with(codec, max, hwaccel.as_deref()) {
             Ok(d) => {
                 v.insert(d);
@@ -224,9 +231,14 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::co
     if let Some(d) = r.get_mut(&user)
         && let Err(error) = d.try_push(frame)
     {
+        let decoded = d.decoded();
+        let hardware = d.hwaccel();
+        if hardware && decoded == 0 {
+            SOFTWARE_ONLY.fetch_or(codec_bit(codec), Ordering::Relaxed);
+        }
         let decoder = r.remove(&user);
         drop(r);
-        tracing::warn!(?codec, %error, "video decoder reset while receiving a frame");
+        tracing::warn!(?codec, %error, decoded, hardware, "video decoder reset while receiving a frame");
         drop(decoder);
         return true;
     }
