@@ -790,7 +790,8 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
 
 fn dm_intro_actions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, uid: Id) -> gpui::Div {
     use crate::ui::controls::{BtnKind, button_sm};
-    let mutual: Vec<Id> = app.people.profiles.get(&uid).map(|p| p.mutual_guild_ids.clone()).unwrap_or_default();
+    let profile = app.people.profiles.get(&uid);
+    let mutual = profile.map(|p| p.mutual_guild_ids.as_slice()).unwrap_or_default();
     let is_friend = app
         .nav
         .relationship(uid)
@@ -817,10 +818,7 @@ fn dm_intro_actions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, uid: Id) -> g
                 .items_center()
                 .gap(z(8.))
                 .cursor_pointer()
-                .on_click(move |ev, window, cx| {
-                    let at = ev.position();
-                    e.update(cx, |a, cx| a.open_profile(uid, None, at, window, cx));
-                })
+                .on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_profile_modal_at(uid, crate::ui::profile::TAB_SERVERS, cx)))
                 .child(div().flex().children(icons))
                 .child(
                     div()
@@ -830,6 +828,15 @@ fn dm_intro_actions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, uid: Id) -> g
                         .group_hover("dm-intro-mutual", |s| s.text_color(tk(idx::INTERACTIVE_TEXT_HOVER)))
                         .child(label),
                 )
+                .child(div().mx(z(4.)).size(z(4.)).rounded_full().bg(tk(idx::BORDER_STRONG))),
+        );
+    }
+    if mutual.is_empty() && profile.is_some() {
+        row = row.child(
+            div()
+                .flex()
+                .items_center()
+                .child(div().text_sm().text_color(tk(idx::TEXT_SUBTLE)).child(crate::t!("profile.tab_no_mutual_servers")))
                 .child(div().mx(z(4.)).size(z(4.)).rounded_full().bg(tk(idx::BORDER_STRONG))),
         );
     }
