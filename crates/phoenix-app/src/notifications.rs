@@ -443,7 +443,7 @@ pub enum Target {
     Channel(u64),
     Message(u64, u64),
     Voice(u64),
-    Guild(u64),
+    Event(u64, u64),
     Pending(u64),
     Dm(u64),
 }
@@ -628,7 +628,7 @@ pub fn scheduled_event_toast(cache: &Cache, me: api::Snowflake, data: &Value) ->
                 body: crate::t!("notif.event_body_external", topic = topic).to_string(),
                 icon: guild_icon_url(guild_id, guild.properties.icon.as_deref()),
                 round: false,
-                target: Target::Guild(guild_id),
+                target: Target::Event(guild_id, event_id),
             })
         }
         _ => None,
@@ -868,7 +868,11 @@ pub fn open_target(a: &mut crate::app::PhoenixApp, t: Target, cx: &mut gpui::Con
                 a.join_voice(Some(Id(ch)), cx);
             }
         }
-        Target::Guild(g) => a.select_guild(Some(Id(g)), cx),
+        Target::Event(g, event) => {
+            a.select_guild(Some(Id(g)), cx);
+            crate::ui::events::open(a, Id(g), cx);
+            crate::ui::events::open_detail(Id(event), cx);
+        }
         Target::Pending(user) => {
             a.parity.inbox.open = false;
             a.select_guild(None, cx);
@@ -1240,7 +1244,7 @@ mod tests {
         assert!(scheduled_event_toast(&cache, me, &not_start).is_none());
 
         let ext = scheduled_event_toast(&cache, me, &ev(3, None, None)).unwrap();
-        assert_eq!((ext.tag, ext.target), (400, Target::Guild(100)));
+        assert_eq!((ext.tag, ext.target), (400, Target::Event(100, 400)));
         assert_eq!(ext.body, crate::t!("notif.event_body_external", topic = "Town Hall").to_string());
         assert!(scheduled_event_toast(&cache, me, &ev(4, None, None)).is_none(), "prime time");
     }

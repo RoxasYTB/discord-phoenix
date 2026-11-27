@@ -128,7 +128,6 @@ Reste :
 |---|---|---|
 | composer | coller texte + image : GPUI lit le texte d'abord | patch du presse-papiers Wayland : `gpui-pre-linux` 0.3.12 n'est pas vendored (crates.io), voir plus bas |
 | report | ligne `share_with_parents` | `settings_upsells` construite par wt/remaining4 ; `share_with_parents` ne s'affiche que pour un compte ado relié au Centre familial (2e compte) |
-| notifications | clic sur la notification d'un événement programmé : ouvrir la modale de détails de l'événement | Phoenix n'a pas encore cette modale, il ouvre le serveur |
 | notifications | clic sur une notification sous Windows et macOS | notify-rust n'y remonte pas le clic ; à faire avec les API natives (toast activé, `UNUserNotificationCenter`) |
 | notifications | offres Nitro non vues dans la pastille de l'Accueil | Phoenix ne lit pas les offres (`getUnacknowledgedOffers`) |
 
