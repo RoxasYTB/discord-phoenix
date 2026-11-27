@@ -10,6 +10,9 @@ fn main() {
     phoenix_app::actions::guard::set_writes_enabled(phoenix_app::ui::settings::LocalPrefs::load().protected_writes());
     phoenix_app::perf::start();
     phoenix_app::autostart::refresh();
+    if phoenix_api::rest::guard::agent_session() {
+        phoenix_app::discord_backend::NO_ACKS.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     let mock = std::env::var("PHOENIX_MOCK").is_ok_and(|v| !v.is_empty() && v != "0");
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == phoenix_app::deeplink::REGISTER_FLAG) {

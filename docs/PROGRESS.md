@@ -253,7 +253,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | 83 | Partage d'écran : diffuser | important | présente, non vérifiée | paquets acceptés par le serveur (25/11), aucun spectateur |
 | 84 | Regarder un stream | important | présente, non vérifiée | call-view.md : aucune image décodée en direct |
 | 85 | Appel en MP (passer, recevoir, sonnerie) | important | présente, non vérifiée | boutons refusés par la garde, aucun appel |
-| 86 | Salons Stage (orateurs, public, lever la main) | important | absente | seulement l'icône et la ligne « public » dans la barre latérale |
+| 86 | Salons Stage (orateurs, public, lever la main) | important | présente, non vérifiée | vue orateurs / public, mains levées, modérateurs, sujet et barre codés (call-view.md, section Stage) ; aucun salon de conférence sur Aperture, donc démo `PHX_MOCK_STAGE=1` et requêtes testées sans envoi |
 | 87 | Activités (applications intégrées) | important | absente | le bouton existe, aucun lancement possible (pas de vue web) |
 | 88 | Arrière-plans et effets de caméra | détail | absente | rien dans le code |
 
@@ -309,7 +309,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 |---|---|---|---|---|
 | 115 | Mise à jour automatique | important | présente, non vérifiée | `updater.rs`, jamais vue passer en réel |
 | 116 | Zone de notification, démarrage automatique | détail | présente, non vérifiée | `tray.rs`, `autostart.rs` |
-| 117 | Liens discord:// et invitations ouvertes depuis le navigateur | important | absente | aucun `MimeType` dans le .desktop, pas de gestionnaire de schéma |
+| 117 | Liens discord:// et invitations ouvertes depuis le navigateur | important | vérifiée en vrai | 27/11 : `xdg-open discord://-/channels/…/#phoenix` dans un environnement XDG isolé ; la 2e instance transmet le lien par le socket et l'instance déjà lancée (Xvfb, vrai compte) passe de #général à #phoenix en 80 ms ; invitations et liens de message : tests unitaires seulement (docs/parity/links.md) |
 | 118 | Stabilité en usage long (mémoire, plantages) | critique | cassée connue | fuite mesurée : RSS de 423 à 875 Mio (perf.md) ; correctif 9bc58282 non remesuré ; 2 paniques le 26/11 |
 | 119 | Performance et démarrage | important | présente, non vérifiée | CPU au repos de 0,45 % en release (25/11) ; pas de mesure de démarrage comparée |
 | 120 | Lecteur d'écran | important | absente | aucune intégration AT-SPI ou accesskit |

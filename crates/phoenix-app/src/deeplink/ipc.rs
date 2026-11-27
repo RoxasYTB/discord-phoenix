@@ -9,9 +9,19 @@ use super::Message;
 const TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_LINE: u64 = 8192;
 
+const MAX_SOCKET_PATH: usize = 100;
+
 pub fn endpoint() -> Option<PathBuf> {
     let dir = crate::paths::config_dir()?;
-    Some(dir.join(if cfg!(unix) { "instance.sock" } else { "instance.port" }))
+    let path = dir.join(if cfg!(unix) { "instance.sock" } else { "instance.port" });
+    if !cfg!(unix) || path.as_os_str().len() < MAX_SOCKET_PATH {
+        return Some(path);
+    }
+    Some(std::env::temp_dir().join(format!("discord-phoenix-{:016x}.sock", fnv(path.as_os_str().as_encoded_bytes()))))
+}
+
+pub fn fnv(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 fn read_message(stream: impl std::io::Read) -> Option<Message> {
@@ -106,6 +116,13 @@ pub fn listen(tx: UnboundedSender<Message>) -> bool {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn long_profile_paths_get_a_short_stable_socket() {
+        assert_eq!(fnv(b"a"), fnv(b"a"));
+        assert_ne!(fnv(b"a"), fnv(b"b"));
+        assert!(endpoint().is_some_and(|p| p.as_os_str().len() < MAX_SOCKET_PATH + 40));
+    }
 
     #[test]
     fn a_second_launch_reaches_the_listening_instance() {
