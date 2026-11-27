@@ -1212,8 +1212,8 @@ fn tabs(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
             .items_center()
             .justify_between()
             .child(div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::SEMIBOLD).text_color(dim).child(crate::t!("pe.widgets")))
-            .child(controls::button_icon("pe-add-widget", "plus", crate::t!("pe.add_widget"), BtnKind::Secondary).h(z(31.)).min_w(z(0.)).px(z(11.)).text_size(z(14.)).line_height(z(18.)).on_click(cx.listener(|_, _, _, cx| {
-                super::widget_add::open();
+            .child(controls::button_icon("pe-add-widget", "plus", crate::t!("pe.add_widget"), BtnKind::Secondary).h(z(31.)).min_w(z(0.)).px(z(11.)).text_size(z(14.)).line_height(z(18.)).on_click(cx.listener(|a, _, _, cx| {
+                super::widget_add::open(a, cx);
                 cx.notify();
             }))),
         1 => {
@@ -1571,7 +1571,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> AnyElement 
                 .when(e.switcher_open, |d| d.child(switcher(app, e, cx))),
         )
         .children(super::collectible_picker::render(app, e, cx))
-        .children(super::widget_add::modal(e.widgets.iter().map(|w| w.app_id).collect(), cx))
+        .children(super::widget_add::modal(e.widgets.iter().map(|w| w.app_id).collect(), f32::from(window.viewport_size().height), cx))
         .into_any_element()
 }
 

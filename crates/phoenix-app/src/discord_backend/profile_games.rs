@@ -20,21 +20,35 @@ impl DiscordBackend {
                     all.push(*id);
                 }
             }
-            let mut found = std::collections::HashMap::new();
-            for chunk in all.chunks(20) {
-                let query = chunk.iter().map(|id| format!("game_ids={id}")).collect::<Vec<_>>().join("&");
-                let Ok(v) = s.rest.request_json(Method::GET, &format!("/games?{query}"), None).await else { continue };
-                for game in v.as_array().into_iter().flatten() {
-                    if let Some(id) = game.get("id").and_then(Value::as_str).and_then(|x| x.parse::<u64>().ok()) {
-                        found.insert(id, g::parse_game(id, game));
-                    }
-                }
-            }
+            let found = fetch_games(&s.rest, &all).await;
             let out = lists
                 .into_iter()
                 .map(|(order, kind, ids)| GameWidget { kind, games: ids.iter().filter_map(|id| found.get(id).cloned()).collect(), order })
                 .collect();
             Ok(out)
+        })
+    }
+}
+
+async fn fetch_games(rest: &phoenix_api::RestClient, ids: &[u64]) -> std::collections::HashMap<u64, g::Game> {
+    let mut found = std::collections::HashMap::new();
+    for chunk in ids.chunks(20) {
+        let query = chunk.iter().map(|id| format!("game_ids={id}")).collect::<Vec<_>>().join("&");
+        let Ok(v) = rest.request_json(Method::GET, &format!("/games?{query}"), None).await else { continue };
+        for game in v.as_array().into_iter().flatten() {
+            if let Some(id) = game.get("id").and_then(Value::as_str).and_then(|x| x.parse::<u64>().ok()) {
+                found.insert(id, g::parse_game(id, game));
+            }
+        }
+    }
+    found
+}
+
+impl DiscordBackend {
+    pub(super) fn games_impl(&self, ids: Vec<u64>) -> BoxFuture<Vec<g::Game>> {
+        self.with_session(move |_, s| async move {
+            let mut found = fetch_games(&s.rest, &ids).await;
+            Ok(ids.iter().filter_map(|id| found.remove(id)).collect())
         })
     }
 }

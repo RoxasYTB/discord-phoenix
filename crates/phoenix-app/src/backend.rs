@@ -339,6 +339,9 @@ pub trait Backend: Send + Sync + 'static {
     fn game_widgets(&self, _user: Id) -> BoxFuture<Vec<crate::ui::profile_games::GameWidget>> {
         Box::pin(async { Ok(Vec::new()) })
     }
+    fn games(&self, _ids: Vec<u64>) -> BoxFuture<Vec<crate::ui::profile_games::Game>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
     fn recent_activity(&self, _user: Id) -> BoxFuture<Vec<crate::ui::settings::profile_activity::RecentGame>> {
         Box::pin(async { Ok(Vec::new()) })
     }
