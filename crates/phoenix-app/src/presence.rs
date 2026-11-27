@@ -459,7 +459,7 @@ pub fn profile_from_api(p: &phoenix_api::rest::profile::UserProfile, note: Strin
         joined: gm.and_then(|m| m.joined_at.as_deref()).and_then(iso_to_unix),
         note: note.into(),
         mutual_guilds: p.mutual_guilds.len(),
-        mutual_friends_count: p.mutual_friends_count.map(|n| n as usize).unwrap_or(p.mutual_friends.len()),
+        mutual_friends_count: p.mutual_friends_count.unwrap_or(0).max(p.mutual_friends.len() as u32) as usize,
         mutual_friends: p.mutual_friends.iter().map(crate::discord_backend::convert::user).collect(),
         mutual_guild_ids: p.mutual_guilds.iter().map(|g| Id(g.id.0)).collect(),
         badges: p
@@ -525,11 +525,18 @@ pub struct TagPopout {
     pub error: Option<SharedString>,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ProfileRequestState {
+    Loading,
+    Failed(std::time::Instant),
+}
+
 #[derive(Default)]
 pub struct People {
     pub lists: HashMap<Id, Vec<ListEntry>>,
     pub activities: HashMap<Id, Vec<Activity>>,
     pub profiles: HashMap<Id, Profile>,
+    pub(crate) profile_requests: std::cell::RefCell<HashMap<Id, ProfileRequestState>>,
     pub popout: Option<Popout>,
     pub tag_popout: Option<TagPopout>,
     pub modal: Option<Id>,

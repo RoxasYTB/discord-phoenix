@@ -57,6 +57,13 @@ pub(crate) fn tk(i: usize) -> gpui::Hsla {
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>, in_voice_panel: bool) -> impl IntoElement {
     let entity = cx.entity();
     skeleton::set_window_height(f32::from(window.viewport_size().height));
+    if let Some(channel) = app.selected_channel.and_then(|id| app.channels.get(&id))
+        && channel.guild.is_none()
+        && !crate::ui::dm_profile_panel::is_group_dm(app, channel.id)
+        && let Some(&peer) = channel.voice_users.first()
+    {
+        crate::ui::dm_profile_panel::ensure_profile(app, peer, cx);
+    }
     let show_members = app.show_members && app.selected_guild.is_some();
     let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
     let show_members = show_members && !in_voice_panel && !crate::ui::call_view::active(app);

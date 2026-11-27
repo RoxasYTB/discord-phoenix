@@ -103,7 +103,7 @@ pub struct CustomStatus {
 }
 
 pub(crate) fn profile_path(user: UserId, guild: Option<GuildId>) -> String {
-    let mut p = format!("/users/{user}/profile?type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=false");
+    let mut p = format!("/users/{user}/profile?type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=true");
     if let Some(g) = guild {
         p.push_str(&format!("&guild_id={g}"));
     }
@@ -133,6 +133,10 @@ struct Note {
 impl RestClient {
     pub async fn get_user_profile(&self, user: UserId, guild: Option<GuildId>) -> Result<UserProfile> {
         self.call(Method::GET, &profile_path(user, guild), Body::None).await
+    }
+
+    pub async fn get_mutual_friends(&self, user: UserId) -> Result<Vec<User>> {
+        self.call(Method::GET, &format!("/users/{user}/relationships"), Body::None).await
     }
 
     pub async fn get_user_note(&self, user: UserId) -> Result<String> {
@@ -176,7 +180,7 @@ mod tests {
     fn paths() {
         assert_eq!(
             profile_path(Snowflake(7), None),
-            "/users/7/profile?type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=false"
+            "/users/7/profile?type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=true"
         );
         assert!(profile_path(Snowflake(7), Some(Snowflake(9))).ends_with("&guild_id=9"));
     }

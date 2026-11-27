@@ -1,19 +1,16 @@
-use std::cell::RefCell;
-use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, Styled, div, prelude::*};
 
 use crate::{
     app::PhoenixApp,
     model::Id,
-    presence::format_date,
+    presence::{ProfileRequestState, format_date},
     theme::{Palette, c, generated::idx, tok, z},
-    ui::profile::{avatar_block, banner, banner_buttons, ensure_avatar_colour, info, mutuals_row, name_block, section_title, theme_backdrop},
+    ui::profile::{avatar_block, banner, banner_buttons, ensure_avatar_colour, info, mutuals_row, name_block_clickable, section_title, theme_backdrop},
 };
 
-thread_local! {
-    static REQUESTED: RefCell<HashSet<Id>> = RefCell::new(HashSet::new());
-}
+const PROFILE_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 pub fn is_group_dm(app: &PhoenixApp, channel: Id) -> bool {
     app.nav.extras.get(&channel).is_some_and(|e| e.recipients > 1 || e.group_icon.is_some())
@@ -40,18 +37,56 @@ pub fn peer(app: &PhoenixApp) -> Option<Id> {
 }
 
 pub(crate) fn ensure_profile(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) {
-    if app.people.profiles.contains_key(&uid) || !REQUESTED.with(|r| r.borrow_mut().insert(uid)) {
+    if app.people.profiles.contains_key(&uid) {
         return;
     }
+    {
+        let mut requests = app.people.profile_requests.borrow_mut();
+        match requests.get(&uid) {
+            Some(ProfileRequestState::Loading) => return,
+            Some(ProfileRequestState::Failed(at)) if at.elapsed() < PROFILE_RETRY_DELAY => return,
+            _ => {}
+        }
+        requests.insert(uid, ProfileRequestState::Loading);
+    }
+    let owner = app.me.id;
     let fut = app.backend.user_profile(uid, None);
     cx.spawn(async move |this, cx| {
-        let Ok(p) = fut.await else { return };
-        let _ = this.update(cx, |a, cx| {
-            a.people.profiles.insert(uid, p);
+        let result = fut.await;
+        let failed = result.is_err();
+        let _ = this.update(cx, |app, cx| {
+            if app.me.id != owner || !matches!(app.people.profile_requests.borrow().get(&uid), Some(ProfileRequestState::Loading)) {
+                return;
+            }
+            match result {
+                Ok(profile) => {
+                    app.people.profile_requests.borrow_mut().remove(&uid);
+                    app.people.profiles.entry(uid).or_insert(profile);
+                }
+                Err(_) => {
+                    app.people.profile_requests.borrow_mut().insert(uid, ProfileRequestState::Failed(Instant::now()));
+                }
+            }
             cx.notify();
         });
-    })
-    .detach();
+        if failed {
+            cx.background_executor().timer(PROFILE_RETRY_DELAY).await;
+            let _ = this.update(cx, |app, cx| {
+                if app.me.id == owner {
+                    cx.notify();
+                }
+            });
+        }
+    }).detach();
+}
+
+pub(crate) fn retry_profile(app: &mut PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) {
+    if matches!(app.people.profile_requests.borrow().get(&uid), Some(ProfileRequestState::Loading)) {
+        return;
+    }
+    app.people.profile_requests.borrow_mut().remove(&uid);
+    ensure_profile(app, uid, cx);
+    cx.notify();
 }
 
 fn bio_lines(bio: &str) -> gpui::Div {
@@ -104,7 +139,11 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
                 .flex()
                 .flex_col()
                 .gap(z(8.))
-                .child(name_block(&i, false, (!hide_notes).then(|| crate::ui::profile_note::note_button(uid, cx))))
+                .child(name_block_clickable(
+                    &i, false,
+                    (!hide_notes).then(|| crate::ui::profile_note::note_button(uid, cx)),
+                    false, Some(e.clone()),
+                ))
                 .children(
                     if crate::ui::profile_note::shown(crate::ui::profile_note::Surface::Sidebar, uid == app.me.id, crate::ui::profile_note::editing(uid).is_some(), hide_notes) {
                         crate::ui::profile_note::note_section(i.prof.map(|p| p.note.clone()), uid, cx)
