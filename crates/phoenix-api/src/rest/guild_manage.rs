@@ -540,7 +540,7 @@ impl RestClient {
         match self.request_json(r.method.clone(), &r.path, r.body.clone()).await {
             Err(err) if admin_mfa_methods(&err).is_some_and(|methods| methods.contains(&method)) => {
                 let crate::Error::Api { raw, .. } = &err else { return Err(err) };
-                let ticket = serde_json::from_str::<Value>(&raw)
+                let ticket = serde_json::from_str::<Value>(raw)
                     .ok()
                     .and_then(|v| v.pointer("/mfa/ticket").and_then(Value::as_str).map(str::to_owned));
                 match ticket {
