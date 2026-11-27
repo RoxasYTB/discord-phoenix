@@ -441,6 +441,9 @@ pub trait Backend: Send + Sync + 'static {
     fn channel_permissions(&self, _channel: Id) -> Option<u64> {
         None
     }
+    fn overwrites_match(&self, _a: Id, _b: Id) -> Option<bool> {
+        None
+    }
     fn last_read(&self, _channel: Id) -> Option<Id> {
         None
     }

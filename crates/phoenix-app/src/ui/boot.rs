@@ -18,8 +18,54 @@ const EN_ONLY_TIP: usize = 58;
 const MAIN_CAP: Duration = Duration::from_secs(5);
 const TWITTER_SUPPORT: &str = "https://twitter.com/discord_support";
 const STATUS_PAGE: &str = "https://discordstatus.com";
+const STATUS_API: &str = "https://status.discord.com/api/v2";
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
+static INCIDENT_CHECKED: AtomicBool = AtomicBool::new(false);
+static INCIDENT: std::sync::Mutex<Option<Incident>> = std::sync::Mutex::new(None);
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Incident {
+    pub name: String,
+    pub body: String,
+}
+
+pub fn parse_incident(active: &Value, unresolved: &Value) -> Option<Incident> {
+    let first = |v: &Value, key: &str| v.get(key).and_then(Value::as_array).and_then(|a| a.first()).cloned();
+    let pick = first(unresolved, "incidents").or_else(|| first(active, "scheduled_maintenances"))?;
+    let name = pick.get("name").and_then(Value::as_str)?.to_owned();
+    let body = pick
+        .get("incident_updates")
+        .and_then(Value::as_array)
+        .and_then(|u| u.first())
+        .and_then(|u| u.get("body"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    Some(Incident { name, body })
+}
+
+fn check_incidents() {
+    if INCIDENT_CHECKED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    std::thread::spawn(|| {
+        let get = |path: &str| {
+            crate::ui::burst::http_get(&format!("{STATUS_API}/{path}")).and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        };
+        let (Some(active), Some(unresolved)) = (get("scheduled-maintenances/active.json"), get("incidents/unresolved.json")) else {
+            return;
+        };
+        if let Ok(mut slot) = INCIDENT.lock() {
+            *slot = parse_incident(&active, &unresolved);
+        }
+    });
+}
+
+fn incident() -> Option<Incident> {
+    INCIDENT.lock().ok()?.clone()
+}
+
 
 pub fn enable() {
     ENABLED.store(true, Ordering::Relaxed);
@@ -343,6 +389,10 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, _cx: &mut Context<Phoen
     }
     let f = f?;
     window.request_animation_frame();
+    if f.problems > 0. {
+        check_incidents();
+    }
+    let incident = incident();
     let spinner = match crate::splash::spinner() {
         Some(image) => img(image).size_full().into_any_element(),
         None => div().size_full().into_any_element(),
@@ -356,17 +406,42 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, _cx: &mut Context<Phoen
         .flex()
         .flex_col()
         .items_center()
-        .child(
-            div()
-                .max_w(px(300.))
-                .mb(px(8.))
-                .text_size(px(16.))
-                .line_height(px(21.33))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(c(tok(idx::TEXT_SUBTLE)))
-                .child(crate::t!("boot.did_you_know")),
-        )
-        .child(tip_line(&segs, c(tok(idx::TEXT_DEFAULT))));
+        .map(|d| match &incident {
+            Some(inc) => d
+                .text_center()
+                .child(
+                    div()
+                        .max_w(px(600.))
+                        .mb(px(10.))
+                        .text_size(px(16.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .italic()
+                        .text_color(c(tok(idx::TEXT_STRONG)))
+                        .child(SharedString::from(inc.name.clone())),
+                )
+                .child(
+                    div()
+                        .max_w(px(600.))
+                        .text_size(px(14.))
+                        .line_height(px(16.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_DEFAULT)))
+                        .child(SharedString::from(inc.body.clone())),
+                ),
+            None => d
+                .child(
+                    div()
+                        .max_w(px(300.))
+                        .mb(px(8.))
+                        .text_size(px(16.))
+                        .line_height(px(21.33))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(c(tok(idx::TEXT_SUBTLE)))
+                        .child(crate::t!("boot.did_you_know")),
+                )
+                .child(tip_line(&segs, c(tok(idx::TEXT_DEFAULT)))),
+        });
     let problems_h = 32. + 14. * 1.2 + 8. + 16.;
     let problems = div()
         .absolute()
@@ -467,6 +542,16 @@ mod tests {
         assert!(f.content.abs() < 1e-3 && (f.spinner_scale - 0.5).abs() < 1e-3 && f.container > 0.);
         assert!(b.frame(true, t0 + CONTAINER_FADE).is_none());
         assert!(!b.showing());
+    }
+
+    #[test]
+    fn an_unresolved_incident_wins_over_an_active_maintenance() {
+        let maint = serde_json::json!({"scheduled_maintenances":[{"name":"Maintenance","incident_updates":[{"body":"Planned"}]}]});
+        let none = serde_json::json!({"incidents":[]});
+        let inc = serde_json::json!({"incidents":[{"name":"API errors","incident_updates":[{"body":"Investigating"},{"body":"Older"}]}]});
+        assert_eq!(parse_incident(&maint, &inc), Some(Incident { name: "API errors".into(), body: "Investigating".into() }));
+        assert_eq!(parse_incident(&maint, &none), Some(Incident { name: "Maintenance".into(), body: "Planned".into() }));
+        assert_eq!(parse_incident(&serde_json::json!({"scheduled_maintenances":[]}), &none), None);
     }
 
     #[test]

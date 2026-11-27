@@ -311,7 +311,7 @@ pub fn extract_effect(js: &str) -> Option<String> {
     raw.contains("\"nm\":\"BurstReaction_").then_some(raw)
 }
 
-fn http_get(url: &str) -> Option<Vec<u8>> {
+pub(crate) fn http_get(url: &str) -> Option<Vec<u8>> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

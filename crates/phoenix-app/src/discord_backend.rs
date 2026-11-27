@@ -749,6 +749,23 @@ impl Backend for DiscordBackend {
         Some(s.cache.permissions_in(sf(channel)).bits())
     }
 
+    fn overwrites_match(&self, a: Id, b: Id) -> Option<bool> {
+        let s = self.inner.session().ok()?;
+        let norm = |id: Id| {
+            s.cache.channel(sf(id)).map(|c| {
+                let mut v: Vec<(u64, u8, u64, u64)> = c
+                    .permission_overwrites
+                    .iter()
+                    .filter(|o| !o.allow.is_empty() || !o.deny.is_empty())
+                    .map(|o| (o.id.0, o.kind.value(), o.allow.bits(), o.deny.bits()))
+                    .collect();
+                v.sort();
+                v
+            })
+        };
+        Some(norm(a)? == norm(b)?)
+    }
+
     fn last_read(&self, channel: Id) -> Option<Id> {
         let s = self.inner.session().ok()?;
         let r = s.adapter.lock().prefs.reads.get(&channel.0).map(|r| r.last_read)?;

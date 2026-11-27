@@ -69,6 +69,7 @@ pub fn flat_guild_order(app: &PhoenixApp) -> Vec<Id> {
 pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     if !cx.has_active_drag() {
         rail_dnd::set_over(None);
+        rail_dnd::set_dragging(None);
     }
     let entity = cx.entity();
     let scroll = RAIL_SCROLL.with(|h| h.clone());
@@ -816,6 +817,23 @@ impl PhoenixApp {
     }
 }
 
+fn drag_placeholder(folder: bool) -> gpui::Div {
+    div()
+        .size(z(ICON))
+        .when(folder, |d| d.m(z(FOLDER_PAD)))
+        .flex_none()
+        .rounded(z(ICON_RADIUS))
+        .border_1()
+        .border_dashed()
+        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .bg(c(tok(idx::BACKGROUND_MOD_NORMAL)))
+}
+
+fn start_drag(d: &DraggedGuild, cx: &mut App) -> Entity<DraggedGuild> {
+    rail_dnd::set_dragging(Some(d.node));
+    cx.new(|_| d.clone())
+}
+
 fn drop_line(top: f32) -> gpui::Div {
     div()
         .absolute()
@@ -861,6 +879,7 @@ fn drop_target(el: gpui::Stateful<gpui::Div>, node: RailNode, folder: Option<u64
     })
     .on_drop(move |d: &DraggedGuild, _, cx| {
         let at = rail_dnd::take_over();
+        rail_dnd::set_dragging(None);
         drop_e.update(cx, |a, cx| a.drop_on_rail(d.node, at, cx))
     })
     .children(drop_marks(node, folder, last, ICON))
@@ -889,10 +908,15 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, folder: Optio
         .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
             crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Guild(id), ev.position, w)
         })
-        .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| cx.new(|_| d.clone()))
-        .child(pill(id.0, selected, hover, g.unread))
-        .child(masked(ICON, false, icon_box, voice_badge(guild_media(app, g)), count(g.mentions)))
-        .when(hover, |d| d.child(right_tooltip(g.name.clone(), ICON)))
+        .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| start_drag(d, cx))
+        .map(|d| {
+            if rail_dnd::dragging() == Some(RailNode::Guild(id)) {
+                return d.child(drag_placeholder(false));
+            }
+            d.child(pill(id.0, selected, hover, g.unread))
+                .child(masked(ICON, false, icon_box, voice_badge(guild_media(app, g)), count(g.mentions)))
+                .when(hover, |d| d.child(right_tooltip(g.name.clone(), ICON)))
+        })
         .into_any_element()
 }
 
@@ -966,21 +990,26 @@ fn folder(
     };
     let drag = DraggedGuild { node: RailNode::Folder(id), icon: ImageRef::Default(0), acronym: SharedString::default(), folder: Some(color) };
     let header = drop_target(row(("folder", id), key, entity), RailNode::Folder(id), None, false, entity)
-        .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| cx.new(|_| d.clone()))
+        .on_drag(drag, |d: &DraggedGuild, _, _, cx: &mut App| start_drag(d, cx))
         .h(z(FOLDER))
         .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_folder(id, cx)))
         .on_mouse_down(gpui::MouseButton::Right, move |ev, w, _| {
             crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Folder(id), ev.position, w)
         })
-        .child(pill(key, !open && has_selected, hover, !open && unread))
-        .child(masked(
-            FOLDER,
-            true,
-            head_inner,
-            if open { None } else { voice_badge(folder_media(app, guilds)) },
-            count(mentions).filter(|_| !open),
-        ))
-        .when(hover, |d| d.child(right_tooltip(name.clone(), FOLDER)));
+        .map(|d| {
+            if rail_dnd::dragging() == Some(RailNode::Folder(id)) {
+                return d.child(drag_placeholder(true));
+            }
+            d.child(pill(key, !open && has_selected, hover, !open && unread))
+                .child(masked(
+                    FOLDER,
+                    true,
+                    head_inner,
+                    if open { None } else { voice_badge(folder_media(app, guilds)) },
+                    count(mentions).filter(|_| !open),
+                ))
+                .when(hover, |d| d.child(right_tooltip(name.clone(), FOLDER)))
+        });
     if !open {
         return header.into_any_element();
     }

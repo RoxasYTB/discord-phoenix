@@ -642,10 +642,13 @@ fn reorderable(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id, el: AnyEle
     if !crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4) {
         return el;
     }
-    let mark = crate::ui::channel_dnd::over()
-        .filter(|(_, target)| *target == id)
-        .map(|(dragged, _)| reorder_line(crate::ui::channel_dnd::lands_after(&reorder_slots(app, g), dragged, id)));
     let slots = reorder_slots(app, g);
+    let mark = crate::ui::channel_dnd::over().filter(|(_, target)| *target == id).map(|(dragged, _)| {
+        reorder_line(match crate::ui::channel_dnd::category_drop(&slots, dragged, id) {
+            Some(d) => d.after,
+            None => crate::ui::channel_dnd::lands_after(&slots, dragged, id),
+        })
+    });
     let drop_e = entity.clone();
     div()
         .id(("channel-dnd", id.0))
@@ -655,7 +658,8 @@ fn reorderable(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id, el: AnyEle
         .on_drag_move::<DraggedChannel>(move |ev, window, cx| {
             let dragged = ev.drag(cx).id;
             let next = if ev.bounds.contains(&ev.event.position) {
-                crate::ui::channel_dnd::can_drop(&slots, dragged, id).then_some((dragged, id))
+                (crate::ui::channel_dnd::can_drop(&slots, dragged, id) || crate::ui::channel_dnd::category_drop(&slots, dragged, id).is_some())
+                    .then_some((dragged, id))
             } else if crate::ui::channel_dnd::over().is_some_and(|(_, t)| t == id) {
                 None
             } else {
@@ -678,9 +682,103 @@ impl PhoenixApp {
     pub fn drop_channel(&mut self, dragged: Id, target: Id, cx: &mut gpui::Context<Self>) {
         cx.notify();
         let Some(g) = self.channels.get(&target).and_then(|c| c.guild) else { return };
-        let Some(body) = crate::ui::channel_dnd::reorder_body(&reorder_slots(self, g), dragged, target) else { return };
+        let slots = reorder_slots(self, g);
+        if let Some(d) = crate::ui::channel_dnd::category_drop(&slots, dragged, target) {
+            self.drop_into_category(g, dragged, d, &slots, cx);
+            return;
+        }
+        let Some(body) = crate::ui::channel_dnd::reorder_body(&slots, dragged, target) else { return };
         self.blocked_write(crate::actions::guard::GuardedWrite::batch_channel_update(g.0, body), cx);
     }
+
+    fn drop_into_category(&mut self, g: Id, dragged: Id, d: crate::ui::channel_dnd::CategoryDrop, slots: &[crate::ui::channel_dnd::Slot], cx: &mut gpui::Context<Self>) {
+        let old_parent = self.channels.get(&dragged).and_then(|c| c.parent);
+        let moved = old_parent != d.parent;
+        let perms = |c: Id| self.backend.channel_permissions(c);
+        if moved && let Some(cat) = d.parent {
+            let ok = perms(cat).is_none_or(|p| p & (1 << 10) != 0 && p & (1 << 4) != 0);
+            if !ok {
+                return;
+            }
+        }
+        let Some(body) = crate::ui::channel_dnd::move_body(slots, dragged, d.reference, d.parent) else { return };
+        let category = d.parent.filter(|_| moved);
+        let prompt = category.is_some_and(|cat| {
+            let roles = |c: Id| perms(c).is_some_and(|p| p & (1 << 28) != 0);
+            crate::ui::channel_dnd::wants_sync_prompt(
+                roles(dragged) && roles(cat),
+                self.backend.overwrites_match(dragged, cat),
+                old_parent,
+                old_parent.and_then(|p| self.backend.overwrites_match(dragged, p)),
+            )
+        });
+        match category {
+            Some(cat) if prompt => {
+                SYNC_PROMPT.with(|p| *p.borrow_mut() = Some(SyncPrompt { guild: g, channel: dragged, category: cat, body }));
+            }
+            _ => self.blocked_write(crate::actions::guard::GuardedWrite::batch_channel_update(g.0, body), cx),
+        }
+    }
+
+    fn finish_sync_prompt(&mut self, sync: bool, cx: &mut gpui::Context<Self>) {
+        let Some(mut p) = SYNC_PROMPT.with(|s| s.borrow_mut().take()) else { return };
+        if sync && let Some(items) = p.body.as_array_mut() {
+            let id = serde_json::json!(p.channel.0.to_string());
+            if let Some(m) = items.iter_mut().find(|m| m.get("id") == Some(&id)) {
+                m["lock_permissions"] = serde_json::json!(true);
+            }
+        }
+        self.blocked_write(crate::actions::guard::GuardedWrite::batch_channel_update(p.guild.0, p.body), cx);
+        cx.notify();
+    }
+}
+
+struct SyncPrompt {
+    guild: Id,
+    channel: Id,
+    category: Id,
+    body: serde_json::Value,
+}
+
+thread_local! {
+    static SYNC_PROMPT: std::cell::RefCell<Option<SyncPrompt>> = const { std::cell::RefCell::new(None) };
+}
+
+pub fn sync_prompt(app: &PhoenixApp, cx: &mut gpui::Context<PhoenixApp>) -> Option<AnyElement> {
+    let (channel, category) = SYNC_PROMPT.with(|p| p.borrow().as_ref().map(|p| (p.channel, p.category)))?;
+    let ch = app.channels.get(&channel)?;
+    let channel_name = if crate::ui::channel_dnd::class(ch.kind) == crate::ui::channel_dnd::Class::Text {
+        format!("#{}", ch.name)
+    } else {
+        ch.name.to_string()
+    };
+    let category_name = app.channels.get(&category).map(|c| c.name.to_string()).unwrap_or_default();
+    let text = crate::t!("dnd.sync_body", channel = channel_name.as_str(), category = category_name.as_str()).to_string();
+    let bold = gpui::HighlightStyle { font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() };
+    let mut ranges = Vec::new();
+    if let Some(a) = text.find(channel_name.as_str()) {
+        ranges.push((a..a + channel_name.len(), bold));
+        if let Some(b) = text[a + channel_name.len()..].find(category_name.as_str()).filter(|_| !category_name.is_empty()) {
+            let b = b + a + channel_name.len();
+            ranges.push((b..b + category_name.len(), bold));
+        }
+    }
+    let (ok, cancel, close) = (cx.entity(), cx.entity(), cx.entity());
+    Some(crate::ui::modal::confirm_labeled(
+        crate::ui::modal::Confirm {
+            title: crate::t!("dnd.sync_title"),
+            body: vec![gpui::StyledText::new(text).with_highlights(ranges).into_any_element()],
+            confirm_label: crate::t!("dnd.sync_confirm"),
+            danger: false,
+            on_confirm: std::rc::Rc::new(move |_, cx| ok.update(cx, |a, cx| a.finish_sync_prompt(true, cx))),
+            on_cancel: std::rc::Rc::new(move |_, cx| cancel.update(cx, |a, cx| a.finish_sync_prompt(false, cx))),
+        },
+        crate::t!("dnd.sync_keep"),
+        std::rc::Rc::new(move |_, cx| {
+            SYNC_PROMPT.with(|p| *p.borrow_mut() = None);
+            close.update(cx, |_, cx| cx.notify());
+        }),
+    ))
 }
 
 fn other_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, r: SidebarRow, ix: usize) -> AnyElement {
@@ -1005,7 +1103,12 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         let ex = extra.cloned().unwrap_or_default();
         match ex.group_icon {
             Some(crate::model::ImageRef::Url(u)) => {
-                gpui::img(u).size(z(32.)).rounded_full().flex_none().into_any_element()
+                let pic = gpui::img(u).size(z(32.)).rounded_full().flex_none();
+                if app.typing.get(&id).is_some_and(|v| v.iter().any(|(who, _)| *who != app.me.id)) {
+                    crate::ui::typing_cutout(pic, 32. * crate::theme::zoom(), crate::model::Presence::Online).into_any_element()
+                } else {
+                    pic.into_any_element()
+                }
             }
             _ if !ex.members.is_empty() => crate::ui::group_dm::group_avatar_with_status(
                 app,
@@ -1029,21 +1132,26 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         let p = ch.voice_users.first().map(|u| app.presence_of(*u)).unwrap_or_default();
         let g = SharedString::from(format!("chrow{}", id.0));
         let deco = crate::ui::avatar_deco::source(u, None);
-        crate::ui::avatar_with_status_deco(
-            u,
-            32.,
-            p,
-            c(Palette::BG_TERTIARY),
-            move |d| {
-                if selected {
-                    d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED))
-                } else {
-                    d.group_hover(g, |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)))
-                }
-            },
-            deco,
-        )
-        .into_any_element()
+        let typing = ch.voice_users.first().is_some_and(|r| app.typing.get(&id).is_some_and(|v| v.iter().any(|(who, _)| who == r)));
+        if typing {
+            crate::ui::avatar_typing(u, 32., p, deco).into_any_element()
+        } else {
+            crate::ui::avatar_with_status_deco(
+                u,
+                32.,
+                p,
+                c(Palette::BG_TERTIARY),
+                move |d| {
+                    if selected {
+                        d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED))
+                    } else {
+                        d.group_hover(g, |s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)))
+                    }
+                },
+                deco,
+            )
+            .into_any_element()
+        }
     } else {
         let col = t(if app.voice_channel == Some(id) {
             idx::TEXT_FEEDBACK_POSITIVE

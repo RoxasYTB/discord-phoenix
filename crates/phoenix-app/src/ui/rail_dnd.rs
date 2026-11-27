@@ -27,6 +27,15 @@ impl RailDrop {
 
 thread_local! {
     static OVER: Cell<Option<RailDrop>> = const { Cell::new(None) };
+    static DRAGGING: Cell<Option<RailNode>> = const { Cell::new(None) };
+}
+
+pub fn dragging() -> Option<RailNode> {
+    DRAGGING.get()
+}
+
+pub fn set_dragging(node: Option<RailNode>) {
+    DRAGGING.set(node);
 }
 
 pub fn over() -> Option<RailDrop> {

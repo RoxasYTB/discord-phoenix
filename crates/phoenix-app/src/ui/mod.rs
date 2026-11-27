@@ -113,7 +113,7 @@ pub mod shake;
 
 use crate::theme::z;
 use gpui::{
-    AnyElement, Div, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, div,
+    AnimationExt as _, AnyElement, Div, FontWeight, Hsla, IntoElement, ParentElement, SharedString, Styled, div,
     prelude::*, px, svg,
 };
 
@@ -204,6 +204,67 @@ pub fn avatar_with_status_deco_hover(
         .child(div().absolute().left(px(cx - s / 2.)).top(px(cx - s / 2.)).child(status_dot(p, s, ring)))
 }
 
+pub struct TypingGeometry {
+    pub hole: blob_mask::Hole,
+    pub pill: (f32, f32, f32, f32),
+    pub dots: (f32, f32, f32),
+}
+
+pub fn typing_geometry(size: f32) -> TypingGeometry {
+    let (_, r, st) = status_svg::geometry(size);
+    let k = r - st / 2.;
+    let h = st + 2. * k;
+    TypingGeometry {
+        hole: blob_mask::Hole { x: size - st - (1.5 * st + 2. * k) / 2., y: size - st - k, w: 2.5 * st + 2. * k, h, r: h / 2. },
+        pill: (size - 1.75 * st, size - st, 2.5 * st, st),
+        dots: (size - 1.375 * st, size - st / 1.333, st / 4.),
+    }
+}
+
+pub fn typing_dot_frame(i: usize, t: f32) -> (f32, f32) {
+    let x = (2. * t - 0.25 * i as f32).rem_euclid(2.);
+    let v = if x > 1. { 2. - x } else { x };
+    let k = ((v - 0.4) / 0.4).clamp(0., 1.);
+    (0.8 + 0.2 * k, 0.3 + 0.7 * k)
+}
+
+pub fn avatar_typing(user: Option<&User>, size: f32, p: Presence, deco: Option<SharedString>) -> Div {
+    typing_cutout(
+        div().relative().size(px(size)).child(avatar_hover(user, size, false)).when_some(deco, |d, src| d.child(avatar_deco::layer(src, size))),
+        size,
+        p,
+    )
+}
+
+pub fn typing_cutout(content: impl IntoElement, size: f32, p: Presence) -> Div {
+    let g = typing_geometry(size);
+    let (px_, py, pw, ph) = g.pill;
+    let (dx, dy, dr) = g.dots;
+    let mut dots = div().absolute().left(px(dx)).top(px(dy)).w(px(7. * dr)).h(px(2. * dr));
+    for i in 0..3 {
+        let cx = dr + dr * 2.5 * i as f32;
+        dots = dots.child(
+            div().absolute().left(px(cx - dr)).top_0().size(px(2. * dr)).flex().items_center().justify_center().child(
+                div().rounded_full().bg(gpui::white()).with_animation(
+                    ("avatar-typing-dot", i),
+                    gpui::Animation::new(std::time::Duration::from_millis(1200)).repeat(),
+                    move |d, t| {
+                        let (scale, opacity) = typing_dot_frame(i, t);
+                        d.size(px(2. * dr * scale)).opacity(opacity)
+                    },
+                ),
+            ),
+        );
+    }
+    div()
+        .relative()
+        .flex_none()
+        .size(px(size))
+        .child(blob_mask::cut(content, [g.hole]))
+        .child(div().absolute().left(px(px_)).top(px(py)).w(px(pw)).h(px(ph)).rounded(px(ph / 2.)).bg(presence_color(p)))
+        .child(dots)
+}
+
 pub fn status_dot(p: Presence, size: f32, _ring: Hsla) -> gpui::Svg {
     gpui::svg().path(status_svg::path(p, false)).size(px(size)).flex_none().text_color(presence_color(p))
 }
@@ -237,4 +298,26 @@ pub fn icon_button(id: &'static str, i: Icon, color: Hsla, size: f32) -> gpui::S
         .cursor_pointer()
         .hover(|s| s.bg(c(Palette::BG_MOD_HOVER)))
         .child(icon(i, size, color))
+}
+
+#[cfg(test)]
+mod typing_avatar_tests {
+    use super::*;
+
+    #[test]
+    fn typing_cutout_matches_the_client_mask_at_32() {
+        let g = typing_geometry(32.);
+        assert_eq!(g.hole, blob_mask::Hole { x: 11.5, y: 19., w: 31., h: 16., r: 8. });
+        assert_eq!(g.pill, (14.5, 22., 25., 10.));
+        assert!((g.dots.0 - 18.25).abs() < 1e-3 && (g.dots.1 - 24.5).abs() < 0.01 && g.dots.2 == 2.5);
+    }
+
+    #[test]
+    fn typing_dots_pulse_like_the_spring_cycle() {
+        assert_eq!(typing_dot_frame(0, 0.), (0.8, 0.3));
+        assert_eq!(typing_dot_frame(0, 0.5), (1., 1.));
+        assert_eq!(typing_dot_frame(0, 0.2), (0.8, 0.3));
+        let (s, o) = typing_dot_frame(1, 0.5);
+        assert!(s > 0.8 && s <= 1. && o > 0.3);
+    }
 }

@@ -50,8 +50,13 @@ pub fn frame(id: &'static str, on_cancel: Action, card: impl IntoElement) -> Any
 }
 
 pub fn confirm(m: Confirm) -> AnyElement {
+    let close = m.on_cancel.clone();
+    confirm_labeled(m, crate::t!("common.cancel"), close)
+}
+
+pub fn confirm_labeled(m: Confirm, cancel_label: SharedString, on_close: Action) -> AnyElement {
     use crate::ui::controls::{BtnKind, button};
-    let cancel = m.on_cancel.clone();
+    let cancel = on_close.clone();
     let cancel2 = m.on_cancel.clone();
     let ok = m.on_confirm.clone();
     let mut body = m.body.into_iter();
@@ -131,10 +136,7 @@ pub fn confirm(m: Confirm) -> AnyElement {
                     .justify_center()
                     .cursor_pointer()
                     .hover(|s| s.bg(c(tok(idx::CONTROL_ICON_ONLY_BACKGROUND_HOVER))))
-                    .on_click({
-                        let cancel = m.on_cancel.clone();
-                        move |_, w, cx| cancel(w, cx)
-                    })
+                    .on_click(move |_, w, cx| on_close(w, cx))
                     .child(gpui::svg().path(crate::icons::path("close")).size(z(20.)).text_color(c(tok(idx::CONTROL_ICON_ONLY_ICON_DEFAULT)))),
                 crate::ui::states::key("modal-close"),
                 8.,
@@ -149,7 +151,7 @@ pub fn confirm(m: Confirm) -> AnyElement {
                 .gap(z(8.))
                 .child(
                     crate::ui::focus_ring::ring(
-                        button("modal-cancel", crate::t!("common.cancel"), BtnKind::Secondary)
+                        button("modal-cancel", cancel_label, BtnKind::Secondary)
                             .relative()
                             .flex_1()
                             .on_click(move |_, w, cx| cancel2(w, cx)),

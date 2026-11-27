@@ -2196,6 +2196,7 @@ fn group_dm(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement
 pub fn dialogs(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement> {
     let mut out = Vec::new();
     out.extend(moderation_dialog(app, cx));
+    out.extend(crate::ui::sidebar::sync_prompt(app, cx));
     out.extend(crate::ui::events::modal(app, cx));
     out.extend(group_dm(app, cx));
     out.extend(crate::ui::chat::voice_message::draft_modal(app, cx));
