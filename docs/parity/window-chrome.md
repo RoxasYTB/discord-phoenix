@@ -21,6 +21,7 @@ CSS: ~/discord-phoenix-ref/current-client/css/300559.*.css. Dump: vanilla-guild-
 | close hover | `winButtonClose_:hover` | bg / color | `--control-critical-primary-background-default` / `-icon-default` | hover + group_hover | ✅ |
 | resize edges | Chromium frameless Linux | inner border | 5px, corners 16px, ns/ew/nwse/nesw cursors | window_chrome::resize_handles | ✅ (no CSS; compositor resize) |
 | maximized | — | resize strips | none when maximized/tiled/fullscreen | resize_handles | ✅ |
+| Windows buttons | Electron `frame: false` on win32, `winButton_` | min / max-restore / close | native caption actions | `cfg!(windows)`: buttons always drawn, each one is a `WindowControlArea` (`HTMINBUTTON` / `HTMAXBUTTON` / `HTCLOSE`), so gpui-pre-windows minimizes, toggles maximize and restore, and posts `WM_CLOSE` (tray rule in `on_window_should_close`); free bar = `WindowControlArea::Drag` (`HTCAPTION`). `Window::zoom_window` only maximizes on Windows, so it is not used there | ✅ code / ⚠ not run on Windows here (#14) |
 
 State coverage: default, hover, active (min/max), close hover. No focus/tooltip on window buttons in the client.
 | close button | client "Minimize to tray" (default on) | behaviour | hide to tray | title_bar win-close → minimize when tray is up; tray.rs SNI Open/Quit | ⚠ minimised, not hidden: see "Hide to tray on Wayland" below |

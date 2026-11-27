@@ -231,10 +231,12 @@ pub fn login_bar(window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> impl In
 }
 
 fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
-    let btn = |id: &'static str, close: bool| {
+    let btn = |id: &'static str, area: gpui::WindowControlArea| {
+        let close = area == gpui::WindowControlArea::Close;
         div()
             .id(id)
             .group(id)
+            .when(cfg!(windows), |d| d.window_control_area(area))
             .size(z(m::TITLE_BAR_H))
             .flex_none()
             .flex()
@@ -262,7 +264,7 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
         .gap(z(4.))
         .child(div().mx(z(4.)).w(z(1.)).h(z(m::TITLE_BAR_H - 12.)).bg(c(tok(idx::BORDER_SUBTLE))))
         .child(
-            btn("win-min", false)
+            btn("win-min", gpui::WindowControlArea::Min)
                 .child(glyph_box().child(
                     div()
                         .id("win-min-g")
@@ -275,10 +277,10 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .group_hover("win-min", |s| s.bg(fg_hover))
                         .group_active("win-min", |s| s.bg(fg_active)),
                 ))
-                .on_click(cx.listener(|_, _, w, _| w.minimize_window())),
+                .when(!cfg!(windows), |d| d.on_click(cx.listener(|_, _, w, _| w.minimize_window()))),
         )
         .child(
-            btn("win-max", false)
+            btn("win-max", gpui::WindowControlArea::Max)
                 .child(glyph_box().child(
                     div()
                         .id("win-max-g")
@@ -291,10 +293,10 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .group_hover("win-max", |s| s.border_color(fg_hover))
                         .group_active("win-max", |s| s.border_color(fg_active)),
                 ))
-                .on_click(cx.listener(|_, _, w, _| w.zoom_window())),
+                .when(!cfg!(windows), |d| d.on_click(cx.listener(|_, _, w, _| w.zoom_window()))),
         )
         .child(
-            btn("win-close", true)
+            btn("win-close", gpui::WindowControlArea::Close)
                 .child(
                     gpui::svg()
                         .path(crate::icons::path("window/close"))
@@ -303,13 +305,15 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                         .text_color(fg)
                         .group_hover("win-close", |s| s.text_color(c(tok(idx::CONTROL_CRITICAL_PRIMARY_ICON_DEFAULT)))),
                 )
-                .on_click(cx.listener(|a, _, w, _| {
-                    if a.prefs.local.minimize_to_tray && crate::tray::running() {
-                        w.minimize_window();
-                    } else {
-                        w.remove_window();
-                    }
-                })),
+                .when(!cfg!(windows), |d| {
+                    d.on_click(cx.listener(|a, _, w, _| {
+                        if a.prefs.local.minimize_to_tray && crate::tray::running() {
+                            w.minimize_window();
+                        } else {
+                            w.remove_window();
+                        }
+                    }))
+                }),
         )
 }
 
