@@ -297,6 +297,31 @@ fn pins_popout_closes_like_the_client(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn account_popout_closes_like_the_client(cx: &mut TestAppContext) {
+    let mut h = setup(cx);
+    let open = |h: &mut Harness| {
+        h.act(|a, w, cx| {
+            a.people.close_overlays();
+            a.toggle_status_picker(w, cx);
+        });
+        assert!(h.read(|a| a.people.status_picker));
+    };
+
+    open(&mut h);
+    let vp = h.vcx.update(|w, _| w.viewport_size());
+    h.click(point(vp.width / 2., vp.height / 2.));
+    assert!(!h.read(|a| a.people.status_picker), "press outside did not close the account popout");
+
+    open(&mut h);
+    h.escape();
+    assert!(!h.read(|a| a.people.status_picker), "Esc did not close the account popout");
+
+    open(&mut h);
+    h.act(|a, w, cx| a.toggle_status_picker(w, cx));
+    assert!(!h.read(|a| a.people.status_picker), "the trigger did not close the account popout");
+}
+
+#[gpui::test]
 fn one_header_popout_at_a_time(cx: &mut TestAppContext) {
     let mut h = setup(cx);
     h.act(|a, _, cx| a.toggle_inbox(cx));
