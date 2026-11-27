@@ -2676,6 +2676,40 @@ fn main() -> anyhow::Result<()> {
             trace.join(" ")
         };
         for (i, key) in keys.split_whitespace().enumerate() {
+            let wheel = match key {
+                "~wheel" => Some(gpui::ScrollDelta::Lines(gpui::point(0., 3.))),
+                "~wheeldown" => Some(gpui::ScrollDelta::Lines(gpui::point(0., -3.))),
+                "~pad" => Some(gpui::ScrollDelta::Pixels(gpui::point(px(0.), px(120.)))),
+                "~paddown" => Some(gpui::ScrollDelta::Pixels(gpui::point(px(0.), px(-120.)))),
+                _ => None,
+            };
+            if let Some(delta) = wheel {
+                let chat = cx.update(|cx| v.read(cx).message_list.viewport_bounds());
+                cx.update_window(win.into(), |_, window, cx| {
+                    let k = window.page_zoom();
+                    let c = chat.center();
+                    let position = gpui::point(c.x * k, c.y * k);
+                    window.dispatch_event(
+                        gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent { position, pressed_button: None, modifiers: gpui::Modifiers::default() }),
+                        cx,
+                    );
+                    window.dispatch_event(
+                        gpui::PlatformInput::Scroll(gpui::ScrollEvent {
+                            position,
+                            delta,
+                            modifiers: gpui::Modifiers::default(),
+                            touch_phase: gpui::TouchPhase::Moved,
+                            source: gpui::ScrollSource::Pointer,
+                        }),
+                        cx,
+                    );
+                })?;
+                let trace = frames(&mut cx, 600);
+                let (top, bottom) = cx.update(|cx| (v.read(cx).message_list.logical_scroll_top(), v.read(cx).chat.at_bottom));
+                println!("wheel {key}: list_top=({}, {}) at_bottom={bottom} trace={trace}", top.item_ix, f32::from(top.offset_in_item));
+                shoot(&mut cx, &format!("{stem}-k{i}.png"))?;
+                continue;
+            }
             let action: Option<Box<dyn gpui::Action>> = match key {
                 "!pageup" => Some(Box::new(phoenix_app::shortcuts::PageUp)),
                 "!pagedown" => Some(Box::new(phoenix_app::shortcuts::PageDown)),

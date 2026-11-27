@@ -661,3 +661,29 @@ fn own_full_profile_is_the_editor_from_every_entry_point(cx: &mut TestAppContext
         assert!(!editor, "{name}: someone else's full profile opened the editor");
     }
 }
+
+#[gpui::test]
+fn wheel_and_touchpad_scroll_the_chat_from_its_bottom(cx: &mut TestAppContext) {
+    let mut h = setup(cx);
+    let top = |h: &mut Harness| h.read(|a| -f32::from(a.message_list.scroll_px_offset_for_scrollbar().y));
+    assert_eq!(h.read(|a| a.message_list.is_scrolled_to_end()), Some(true), "the chat must open at its bottom with room to scroll");
+    let chat = h.read(|a| a.message_list.viewport_bounds());
+    let at = h.device(chat.center());
+    h.vcx.simulate_mouse_move(at, None::<gpui::MouseButton>, Modifiers::none());
+    h.vcx.run_until_parked();
+
+    let before = top(&mut h);
+    h.vcx.simulate_event(gpui::ScrollEvent { position: at, delta: gpui::ScrollDelta::Pixels(point(px(0.), px(120.))), ..Default::default() });
+    h.vcx.run_until_parked();
+    let after = top(&mut h);
+    assert!(after < before - 100., "touchpad scroll left the chat at {before} -> {after}");
+    assert_eq!(h.read(|a| a.message_list.is_scrolled_to_end()), Some(false));
+
+    h.act(|a, _, _| a.message_list.scroll_to_end());
+    let before = top(&mut h);
+    h.vcx.simulate_event(gpui::ScrollEvent { position: at, delta: gpui::ScrollDelta::Lines(point(0., 3.)), ..Default::default() });
+    h.vcx.run_until_parked();
+    let after = top(&mut h);
+    assert!(after < before - 40., "wheel notch left the chat at {before} -> {after}");
+    assert!(!h.read(|a| a.chat.at_bottom), "the jump to present bar must follow the wheel");
+}
