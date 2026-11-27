@@ -1,5 +1,8 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering::Relaxed};
 
+use gpui::{App, Global};
+use gpui_base::{ReduceMotionPreference, set_reduce_motion_preference};
+
 use crate::app::PhoenixApp;
 
 static SPOILERS_ALWAYS: AtomicBool = AtomicBool::new(false);
@@ -13,9 +16,32 @@ static STICKER_MODE: AtomicU8 = AtomicU8::new(0);
 static OS_REDUCED_MOTION: AtomicBool = AtomicBool::new(false);
 static SWITCH_ICONS: AtomicBool = AtomicBool::new(false);
 
-pub fn sync(app: &PhoenixApp, os_reduced_motion: bool) {
-    OS_REDUCED_MOTION.store(os_reduced_motion, Relaxed);
+struct AppliedMotion(ReduceMotionPreference);
+
+impl Global for AppliedMotion {}
+
+pub fn sync(app: &PhoenixApp, cx: &mut App) {
     let p = &app.prefs;
+    let motion = if p.local.flag("motion-sync", true) {
+        ReduceMotionPreference::System
+    } else if p.local.reduced_motion {
+        ReduceMotionPreference::Reduce
+    } else {
+        ReduceMotionPreference::Allow
+    };
+    let previous = cx.try_global::<AppliedMotion>().map(|state| state.0);
+    if previous.is_none() {
+        OS_REDUCED_MOTION.store(cx.reduce_motion(), Relaxed);
+    }
+    if previous != Some(motion) {
+        if previous.is_some() || motion != ReduceMotionPreference::System {
+            set_reduce_motion_preference(motion, cx);
+        }
+        cx.set_global(AppliedMotion(motion));
+    }
+    if motion == ReduceMotionPreference::System {
+        OS_REDUCED_MOTION.store(cx.reduce_motion(), Relaxed);
+    }
     let always = match p.synced.pick("spoilers") {
         1 => true,
         2 => {
@@ -31,7 +57,7 @@ pub fn sync(app: &PhoenixApp, os_reduced_motion: bool) {
         crate::theme::bump_style_generation();
     }
     GIF_AUTOPLAY.store(p.synced.flag("gifs"), Relaxed);
-    REDUCED_MOTION.store(effective_reduced_motion(&p.local, os_reduced_motion), Relaxed);
+    REDUCED_MOTION.store(cx.reduce_motion(), Relaxed);
     SWITCH_ICONS.store(p.local.flag("indicators", false), Relaxed);
     if crate::fonts::set_name_styles(p.local.flag("name-styles", true)) {
         crate::theme::bump_style_generation();

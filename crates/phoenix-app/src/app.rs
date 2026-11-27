@@ -1560,7 +1560,7 @@ impl Render for PhoenixApp {
         self.backend.set_activity(window.is_window_active(), self.voice.status == crate::voice::VoiceStatus::Connected);
         crate::notifications::sync_focus(window.is_window_active(), self.selected_channel.map(|c| c.0));
         crate::media::emoji::sync_motion(self.prefs.synced.flag("anim-emoji"), window.is_window_active());
-        crate::ui::settings::effects::sync(self, cx.reduce_motion());
+        crate::ui::settings::effects::sync(self, cx);
         crate::tts::sync(self);
         if ui::chat::rich_input::needs_sync(self, cx) {
             let e = cx.entity().downgrade();
