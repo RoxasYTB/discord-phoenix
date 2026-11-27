@@ -57,6 +57,21 @@ pub fn gif_preview(url: &str, w: u32, h: u32, play: bool) -> SharedString {
     format!("{base}{sep}format=webp&animated={play}").into()
 }
 
+pub fn gif_image_sources(url: &str, original: &str, w: u32, h: u32, play: bool) -> Vec<SharedString> {
+    let mut sources = Vec::new();
+    if play && original.starts_with("https://cdn.discordapp.com/attachments/") && is_animated(original) {
+        sources.push(original.into());
+    }
+    let preview = gif_preview(url, w, h, play);
+    if !sources.contains(&preview) {
+        sources.push(preview);
+    }
+    if play && !sources.iter().any(|source| source.as_ref() == url) {
+        sources.push(url.into());
+    }
+    sources
+}
+
 pub fn gifv_animated(url: &str, w: f32) -> Option<SharedString> {
     let url = url.split('?').next().unwrap_or(url);
     for host in ["media.tenor.com/", "media1.tenor.com/", "c.tenor.com/"] {
@@ -353,6 +368,22 @@ mod tests {
         );
         assert!(gif_preview(url, 100, 50, false).ends_with("format=webp&animated=false"));
         assert_eq!(gif_preview("https://media.tenor.com/id/a.gif", 100, 50, true).as_ref(), "https://media.tenor.com/id/a.gif");
+    }
+
+    #[test]
+    fn animated_attachment_falls_back_to_discords_signed_proxy() {
+        let original = "https://cdn.discordapp.com/attachments/1/2/a.gif?ex=1&is=2&hm=3";
+        let proxy = "https://media.discordapp.net/attachments/1/2/a.gif?ex=4&is=5&hm=6";
+        let sources = gif_image_sources(proxy, original, 480, 280, true);
+        assert_eq!(sources.iter().map(|url| url.as_ref()).collect::<Vec<_>>(), [
+            original,
+            "https://media.discordapp.net/attachments/1/2/a.gif?ex=4&is=5&hm=6&width=480&height=280&format=webp&animated=true",
+            proxy,
+        ]);
+        let still = gif_image_sources(proxy, original, 480, 280, false);
+        assert_eq!(still.len(), 1);
+        assert!(still[0].ends_with("animated=false"));
+        assert_eq!(gif_image_sources(original, original, 480, 280, true).len(), 2);
     }
 
     #[test]
