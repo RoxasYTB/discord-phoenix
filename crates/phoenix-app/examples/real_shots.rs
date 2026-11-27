@@ -1504,7 +1504,8 @@ fn main() -> anyhow::Result<()> {
                 }
                 "chanmenu" | "catmenu" => {
                     use phoenix_app::app::SidebarRow;
-                    let n: usize = arg.parse().unwrap_or(0);
+                    let (n, sub) = arg.split_once(',').unwrap_or((arg.as_str(), ""));
+                    let n: usize = n.parse().unwrap_or(0);
                     let cat = kind == "catmenu";
                     let id = app
                         .sidebar_rows
@@ -1517,6 +1518,9 @@ fn main() -> anyhow::Result<()> {
                         .nth(n);
                     if let Some(id) = id {
                         phoenix_app::ui::nav_menus::open(phoenix_app::ui::nav_menus::Target::Channel(id), gpui::point(px(300.), px(300.)), window);
+                        if let Ok(ix) = sub.parse::<usize>() {
+                            phoenix_app::ui::context_menu::debug_open_submenu(ix);
+                        }
                     }
                 }
                 "guildmenu" => {

@@ -145,6 +145,10 @@ Source: `~/discord-phoenix-ref/current-client/css/`, using the default density (
 | selected | f4b2 `modeSelected .link` / `.name` | bg / color / weight | `--interactive-background-selected` / `--interactive-text-active` / 500 | sidebar.rs `channel_row` | ✅ |
 | unread | f4b2 `modeUnreadImportant` | name / icon | `--interactive-text-active` 500 / `--icon-subtle` | sidebar.rs `channel_row` | ✅ |
 | muted | f4b2 `modeMuted` | name / icon | `--text-muted` / `--icon-muted`, opacity .5 | sidebar.rs `channel_row` | ✅ |
+| muted hover / selected (27/11) | CDP `modeMuted_TNyK-N`: hover only turns the name `--interactive-text-hover` (opacity stays .5), the icon keeps `--icon-muted` .5 (no `:hover .icon` rule outside custom themes); mode order selected > connected > locked > muted > unread, so selected muted rows look selected and muted unread rows look muted | sidebar.rs `channel_row` (no icon hover when muted) | ✅ ❌ unmuted icons still brighten on hover in Phoenix, the client keeps `--channel-icon` (measured 0.5847 at rest and hovered) |
+| muted category | `wrapper_yOdhm_.muted_yOdhm_` | colour / name+chevron | `--text-muted` / opacity .5, hover `--interactive-text-hover` | sidebar.rs `category_row` | ✅ |
+| muted DM | `muted_J1Adu_` (eX = muted/ignored/blocked and not selected or hovered) | name / avatar / clan tag | `--text-muted` / opacity .3 / opacity .3, all back to 1 on hover | sidebar.rs `channel_row` `dm_dim` | ✅ |
+| muted server in the rail | no dim rule in the client CSS; only the unread pill is dropped | server_bar.rs (unread already false when muted) | ✅ |
 | unread pill | f4b2 `unread_TNyK-N` / `unreadImportant` | size / inset / radius / color | 4x8 / `-(--space-xs)+1px` / `0 --radius-xs --radius-xs 0` / `--interactive-text-active` | sidebar.rs `channel_row` | ✅ |
 | hover action icon | f4b2 `iconItem_Wx6SnQ`, `actionIcon` | margin / size / color | 4px / 16 / `--interactive-text-default` | sidebar.rs `invite_hover` | ✅ |
 | thread row | f4b2 `typeThread.wrapper` | margin-start | `28px + --space-xs` = 36 | sidebar.rs `thread_row` | ✅ |

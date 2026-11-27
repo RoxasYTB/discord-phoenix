@@ -26,6 +26,7 @@ Renders: `PHX_OPEN=guildmenu|chanmenu[:n]|catmenu[:n]|usermenu[:n]|msgmenu int-b
 | panel | menu_M3qk4j | radius 8, 1px --border-subtle, --background-surface-higher, --shadow-high, min 188 / max 320, scroller 8px | ✅ |
 | rows | item_M3qk4j | 34 (text) / 36 (icon) / 52 (subtext), padding 8, 14/18 medium, icon 20 + mr 8 | ✅ |
 | edge nudging | web.*.js nudgeTopAlignment | 12px window margin, max-height = window − top − 12 (was 16) | ✅ |
+| submenu stacking (27/11) | CDP on `channel-context` → `channel-context-channel-notifications` hovered: menu and `submenu_M3qk4j` both 1px `--border-subtle` r8 + `0 12px 24px rgba(0,0,0,.24)`, no outline; the submenu is its own layer above the parent, so the parent's border never crosses it; parent row `focused_M3qk4j` bg `--interactive-background-hover` r4; keyboard focus only moves `focused_` (no focus ring, `:focus-visible` on the menu with outline none); submenu top = row top − 9, left = menu right − 5 | ✅ GPUI paints a div's border after its children, so the panel border is now an overlay drawn before the submenu (context_menu.rs `panel_at`), `SUB_OVERLAP` 5 |
 | keyboard | web.*.js list navigators | Up/Down wrap, Home/End, Right/Left submenu, Enter/Space, Esc | ✅ (type-ahead not seen in the client) |
 
 ## Button pass (wt/btn-home, 26/11)

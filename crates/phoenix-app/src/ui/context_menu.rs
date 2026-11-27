@@ -287,7 +287,7 @@ const MENU_MAX_W: f32 = 320.;
 const VIEWPORT_PAD: f32 = 12.;
 pub const EMOJI_ICON: &str = "emoji:";
 pub const KBD: &str = "kbd:";
-const SUB_OVERLAP: f32 = 4.;
+const SUB_OVERLAP: f32 = 5.;
 const CHEVRON: &str = "chevron-right";
 const CHECK: &str = "check";
 
@@ -588,8 +588,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
         .min_w(z(MENU_MIN_W))
         .max_w(z(MENU_MAX_W))
         .rounded(z(8.))
-        .border_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE)))
+        .p(gpui::px(1.))
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
         .shadow(vec![gpui::BoxShadow {
             color: gpui::hsla(0., 0., 0., 0.24),
@@ -608,6 +607,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                 .child(list)
                 .children(crate::ui::chat::scrollbar::bar_for(id, crate::ui::chat::scrollbar::Bar::Thin)),
         )
+        .child(div().absolute().top_0().left_0().size_full().rounded(z(8.)).border_1().border_color(c(tok(idx::BORDER_SUBTLE))))
         .children(sub_panel)
 }
 

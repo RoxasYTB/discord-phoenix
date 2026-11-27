@@ -515,6 +515,8 @@ fn category_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEle
     let manage = cat_guild.is_some_and(|g| crate::ui::inbox::has_perm(app.backend.guild_permissions(g), 1 << 4));
     let add_entity = entity.clone();
     let e = entity.clone();
+    let muted = ch.muted && !fav_cat;
+    let rest = if muted { idx::TEXT_MUTED } else { idx::CHANNELS_DEFAULT };
     div()
         .id(("cat", id.0))
         .group("cat")
@@ -527,7 +529,7 @@ fn category_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEle
         .items_center()
         .justify_between()
         .cursor_pointer()
-        .text_color(t(idx::CHANNELS_DEFAULT))
+        .text_color(t(rest))
         .hover(|s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
         .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_category_saved(id, cx)))
         .when(!fav_cat, |d| {
@@ -549,10 +551,12 @@ fn category_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyEle
                         .line_height(z(18.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_ellipsis()
+                        .when(muted, |d| d.opacity(0.5))
                         .child(crate::ui::emoji_text::label(ch.name.clone(), 14.)),
                 )
                 .child(
-                    icon(Icon::Chevron, 12., t(idx::CHANNELS_DEFAULT))
+                    icon(Icon::Chevron, 12., t(rest))
+                        .when(muted, |d| d.opacity(0.5))
                         .group_hover("cat", |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
                         .with_transformation(Transformation::rotate(gpui::radians(if collapsed {
                             -std::f32::consts::FRAC_PI_2
@@ -1093,6 +1097,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
     let is_group = extra.is_some_and(|e| e.recipients > 1 || e.group_icon.is_some());
     let unread = ch.unread && !ch.muted && (is_dm || app.backend.unreads_all(id));
     let guild_dim = !is_dm && ch.muted && !selected;
+    let dm_dim = is_dm && ch.muted && !selected;
     let fg = if (selected || connected) && !is_dm {
         tok(idx::TEXT_STRONG)
     } else if selected || connected || unread {
@@ -1177,7 +1182,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
             extra.is_some_and(|e| e.locked),
             extra.is_some_and(|e| e.nsfw),
             if selected { t(idx::INTERACTIVE_BACKGROUND_SELECTED) } else { c(Palette::BG_TERTIARY) },
-            (!selected && app.voice_channel != Some(id)).then(|| SharedString::from(format!("chrow{}", id.0))),
+            (!selected && !ch.muted && app.voice_channel != Some(id)).then(|| SharedString::from(format!("chrow{}", id.0))),
         )
     };
     let name: SharedString = extra
@@ -1353,13 +1358,9 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                 .gap(z(if is_dm { 12. } else { 10. }))
                 .cursor_pointer()
                 .text_color(c(fg))
-                .when(is_dm && ch.muted && !selected, |d| d.opacity(0.5))
                 .when(selected, |d| d.bg(t(idx::INTERACTIVE_BACKGROUND_SELECTED)))
                 .when(!selected, |d| {
-                    d.hover(|s| {
-                        let s = s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(idx::INTERACTIVE_TEXT_HOVER));
-                        if is_dm { s.opacity(1.) } else { s }
-                    })
+                    d.hover(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(idx::INTERACTIVE_TEXT_HOVER)))
                     .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)))
                 })
                 .on_hover({
@@ -1411,6 +1412,13 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                 .child(
                     if guild_dim {
                         div().flex_none().opacity(0.5).child(top_line(lead, status_line)).into_any_element()
+                    } else if dm_dim {
+                        div()
+                            .flex_none()
+                            .opacity(0.3)
+                            .group_hover(SharedString::from(format!("chrow{}", id.0)), |s| s.opacity(1.))
+                            .child(top_line(lead, status_line))
+                            .into_any_element()
                     } else {
                         top_line(lead, status_line)
                     },
@@ -1451,7 +1459,11 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                                     .child(crate::fonts::role_name_text_moving(name, dm_user, 16., false, None, effect, motion))
                                             },
                                         )
-                                        .when_some(dm_tag, |d, t| d.child(crate::ui::members::server_tag(&t).ml(z(4.))))
+                                        .when_some(dm_tag, |d, t| {
+                                            d.child(crate::ui::members::server_tag(&t).ml(z(4.)).when(dm_dim, |d| {
+                                                d.opacity(0.3).group_hover(SharedString::from(format!("chrow{}", id.0)), |s| s.opacity(1.))
+                                            }))
+                                        })
                                         .when(plated, |d| {
                                             d.child(crate::ui::nameplate::width_probe(crate::ui::nameplate::Place::Channel, id.0))
                                         }),
