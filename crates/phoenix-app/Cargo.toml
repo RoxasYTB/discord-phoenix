@@ -42,6 +42,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt", "registry", "env-filter", "tracing-log", "smallvec"] }
 regex = "1"
 cpal = "0.15"
+spellbook = "0.4.2"
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 notify-rust = "4.19"

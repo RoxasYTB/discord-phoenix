@@ -138,6 +138,7 @@ thread_local! {
 }
 
 pub fn open(target: Target, pos: Point<Pixels>, window: &mut Window) {
+    TEXTAREA.with(|t| *t.borrow_mut() = None);
     OPEN.with(|o| *o.borrow_mut() = Some((target, pos)));
     window.refresh();
 }
@@ -193,11 +194,10 @@ fn pref_check(app: &PhoenixApp, e: &Ent, label: SharedString, key: &'static str,
     })
 }
 
-fn edit(e: &Ent, label: SharedString, keys: &str, action: fn() -> Box<dyn gpui::Action>) -> MenuItem {
-    let e = e.clone();
+fn edit_in(area: &Area, label: SharedString, keys: &str, action: fn() -> Box<dyn gpui::Action>) -> MenuItem {
+    let area = area.clone();
     MenuItem::action(label, None, move |_, w, cx: &mut App| {
-        let composer = e.read(cx).composer.clone();
-        composer.update(cx, |s, cx| s.focus(w, cx));
+        area.update(cx, |s, cx| s.focus(w, cx));
         w.dispatch_action(action(), cx);
     })
     .with_shortcut(keys)
@@ -226,6 +226,9 @@ fn synced_check(app: &PhoenixApp, e: &Ent, label: SharedString, key: &'static st
 pub enum TextareaEntry {
     Suggestions,
     SendButton,
+    Correction(usize),
+    AddToDictionary,
+    RemoveFromDictionary,
     Spellcheck,
     Languages,
     Cut,
@@ -234,7 +237,14 @@ pub enum TextareaEntry {
     Separator,
 }
 
-pub fn textarea_layout(commands: bool, send_button: bool, spellcheck_on: bool, selection: bool) -> Vec<TextareaEntry> {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SpellMenu {
+    pub corrections: usize,
+    pub misspelled: bool,
+    pub learned: bool,
+}
+
+pub fn textarea_layout(commands: bool, send_button: bool, spell: SpellMenu, spellcheck_on: bool, selection: bool) -> Vec<TextareaEntry> {
     use TextareaEntry as T;
     let mut out = Vec::new();
     if commands {
@@ -243,7 +253,16 @@ pub fn textarea_layout(commands: bool, send_button: bool, spellcheck_on: bool, s
     if send_button {
         out.push(T::SendButton);
     }
+    if spell.corrections > 0 {
+        out.push(T::Separator);
+        out.extend((0..spell.corrections).map(T::Correction));
+    }
     out.push(T::Separator);
+    if spell.misspelled {
+        out.push(T::AddToDictionary);
+    } else if spell.learned {
+        out.push(T::RemoveFromDictionary);
+    }
     out.push(T::Spellcheck);
     if spellcheck_on {
         out.push(T::Languages);
@@ -257,19 +276,99 @@ pub fn textarea_layout(commands: bool, send_button: bool, spellcheck_on: bool, s
     out
 }
 
-pub fn textarea_items(app: &PhoenixApp, e: &Ent, selection: bool) -> Vec<MenuItem> {
+type Area = gpui::Entity<gpui_component::input::TextareaState>;
+
+thread_local! {
+    static TEXTAREA: RefCell<Option<gpui::WeakEntity<gpui_component::input::TextareaState>>> = const { RefCell::new(None) };
+}
+
+pub fn spellcheck_on(app: &PhoenixApp) -> bool {
+    app.prefs.local.flag(SPELLCHECK, true)
+}
+
+pub fn open_textarea(area: &Area, window: &mut Window) {
+    open(Target::Textarea, window.mouse_position(), window);
+    TEXTAREA.with(|t| *t.borrow_mut() = Some(area.downgrade()));
+}
+
+fn textarea_area(app: &PhoenixApp) -> Area {
+    TEXTAREA.with(|t| t.borrow().as_ref().and_then(|w| w.upgrade())).unwrap_or_else(|| app.composer.clone())
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SpellTarget {
+    pub word: Option<(std::ops::Range<usize>, String)>,
+    pub corrections: Vec<String>,
+    pub learned: Option<String>,
+}
+
+pub fn spell_target(text: &str, offset: usize, misspelled: impl Fn(&str) -> bool, corrections: impl Fn(&str) -> Option<Vec<String>>, learned: impl Fn(&str) -> Option<String>) -> SpellTarget {
+    let word = crate::spell::words::word_at(text, offset).map(|r| (r.clone(), text[r].to_owned())).filter(|(_, w)| misspelled(w));
+    let corrections = word.as_ref().and_then(|(_, w)| corrections(w)).unwrap_or_default();
+    let learned = if word.is_none() { learned(text) } else { None };
+    SpellTarget { word, corrections, learned }
+}
+
+fn replace_word(area: &Area, range: std::ops::Range<usize>, word: &str, with: &str, w: &mut Window, cx: &mut App) {
+    area.update(cx, |s, cx| {
+        let text = s.value().to_string();
+        let target = if text.get(range.clone()) == Some(word) { Some(range.clone()) } else { crate::spell::words::nearest(&text, word, s.cursor()) };
+        if let Some(r) = target {
+            s.set_selected_range(r, cx);
+            s.replace(with.to_owned(), w, cx);
+        }
+        s.focus(w, cx);
+    });
+}
+
+pub fn textarea_items(app: &PhoenixApp, e: &Ent, cx: &App) -> Vec<MenuItem> {
     use TextareaEntry as T;
-    let spell_on = app.prefs.local.flag(SPELLCHECK, true);
-    textarea_layout(true, true, spell_on, selection)
+    let spell_on = spellcheck_on(app);
+    let area = textarea_area(app);
+    let (text, offset, selection) = {
+        let st = area.read(cx);
+        let sel = st.selected_range();
+        (st.value().to_string(), st.context_menu_offset().unwrap_or(st.cursor()), !sel.is_empty())
+    };
+    let target = if spell_on {
+        spell_target(&text, offset, crate::spell::is_misspelled, crate::spell::suggestions, crate::spell::learned_in)
+    } else {
+        SpellTarget::default()
+    };
+    if let Some((_, w)) = &target.word {
+        crate::spell::request_suggestions(w, cx);
+    }
+    let spell = SpellMenu { corrections: target.corrections.len(), misspelled: target.word.is_some(), learned: target.learned.is_some() };
+    textarea_layout(true, true, spell, spell_on, selection)
         .into_iter()
         .map(|entry| match entry {
             T::Suggestions => MenuItem::submenu(crate::t!("ta.suggestions"), vec![synced_check(app, e, crate::t!("ta.slash_commands"), SLASH_SUGGEST)]),
             T::SendButton => pref_check(app, e, crate::t!("ta.send_button"), "send-btn", false),
+            T::Correction(i) => {
+                let with = target.corrections.get(i).cloned().unwrap_or_default();
+                let (range, word) = target.word.clone().unwrap_or_default();
+                let area = area.clone();
+                MenuItem::action(SharedString::from(with.clone()), None, move |_, w, cx: &mut App| replace_word(&area, range.clone(), &word, &with, w, cx))
+            }
+            T::AddToDictionary => {
+                let word = target.word.as_ref().map(|(_, w)| w.clone()).unwrap_or_default();
+                MenuItem::action(crate::t!("ta.add_to_dictionary"), None, move |_, w, _| {
+                    crate::spell::learn(&word);
+                    w.refresh();
+                })
+            }
+            T::RemoveFromDictionary => {
+                let word = target.learned.clone().unwrap_or_default();
+                MenuItem::action(crate::t!("ta.remove_from_dictionary"), None, move |_, w, _| {
+                    crate::spell::unlearn(&word);
+                    w.refresh();
+                })
+            }
             T::Spellcheck => pref_check(app, e, crate::t!("ta.spellcheck"), SPELLCHECK, true),
             T::Languages => MenuItem::action(crate::t!("ta.languages"), None, |_, _, cx: &mut App| cx.open_url(&spellcheck_article_url())),
-            T::Cut => edit(e, crate::t!("ta.cut"), "Ctrl+X", || Box::new(gpui_component::input::Cut)),
-            T::Copy => edit(e, crate::t!("ta.copy"), "Ctrl+C", || Box::new(gpui_component::input::Copy)),
-            T::Paste => edit(e, crate::t!("ta.paste"), "Ctrl+V", || Box::new(gpui_component::input::Paste)),
+            T::Cut => edit_in(&area, crate::t!("ta.cut"), "Ctrl+X", || Box::new(gpui_component::input::Cut)),
+            T::Copy => edit_in(&area, crate::t!("ta.copy"), "Ctrl+C", || Box::new(gpui_component::input::Copy)),
+            T::Paste => edit_in(&area, crate::t!("ta.paste"), "Ctrl+V", || Box::new(gpui_component::input::Paste)),
             T::Separator => MenuItem::Separator,
         })
         .collect()
@@ -405,10 +504,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     let (target, pos) = OPEN.with(|o| o.borrow().clone())?;
     let e = cx.entity();
     let items = match &target {
-        Target::Textarea => {
-            let sel = !app.composer.read(cx).selected_range().is_empty();
-            textarea_items(app, &e, sel)
-        }
+        Target::Textarea => textarea_items(app, &e, cx),
         Target::FriendRow(u) => friend_row_items(&e, *u),
         Target::ProfileOverflow { user, guild } => {
             crate::ui::shop_look::prefetch(app, *user, cx);
@@ -685,10 +781,47 @@ mod tests {
     fn textarea_menu_follows_the_client_order() {
         use TextareaEntry as T;
         assert_eq!(
-            textarea_layout(true, true, true, true),
+            textarea_layout(true, true, SpellMenu::default(), true, true),
             vec![T::Suggestions, T::SendButton, T::Separator, T::Spellcheck, T::Languages, T::Separator, T::Cut, T::Copy, T::Paste]
         );
-        assert_eq!(textarea_layout(false, false, false, false), vec![T::Separator, T::Spellcheck, T::Separator, T::Paste]);
+        assert_eq!(textarea_layout(false, false, SpellMenu::default(), false, false), vec![T::Separator, T::Spellcheck, T::Separator, T::Paste]);
+        let typo = SpellMenu { corrections: 2, misspelled: true, learned: false };
+        assert_eq!(
+            textarea_layout(true, false, typo, true, false),
+            vec![
+                T::Suggestions,
+                T::Separator,
+                T::Correction(0),
+                T::Correction(1),
+                T::Separator,
+                T::AddToDictionary,
+                T::Spellcheck,
+                T::Languages,
+                T::Separator,
+                T::Paste
+            ]
+        );
+        let learned = SpellMenu { corrections: 0, misspelled: false, learned: true };
+        assert_eq!(
+            textarea_layout(false, false, learned, true, false),
+            vec![T::Separator, T::RemoveFromDictionary, T::Spellcheck, T::Languages, T::Separator, T::Paste]
+        );
+        let unsure = SpellMenu { corrections: 0, misspelled: true, learned: true };
+        assert_eq!(textarea_layout(false, false, unsure, false, false), vec![T::Separator, T::AddToDictionary, T::Spellcheck, T::Separator, T::Paste]);
+    }
+
+    #[test]
+    fn spell_target_reads_the_word_under_the_pointer() {
+        let text = "salut fauxx ami";
+        let t = spell_target(text, 8, |w| w == "fauxx", |_| Some(vec!["faux".into()]), |_| Some("ami".into()));
+        assert_eq!(t.word, Some((6..11, "fauxx".to_owned())));
+        assert_eq!(t.corrections, vec!["faux".to_owned()]);
+        assert_eq!(t.learned, None);
+        let t = spell_target(text, 1, |w| w == "fauxx", |_| None, |_| Some("ami".into()));
+        assert_eq!(t.word, None);
+        assert_eq!(t.learned.as_deref(), Some("ami"));
+        let t = spell_target(text, 8, |w| w == "fauxx", |_| None, |_| None);
+        assert!(t.corrections.is_empty());
         assert!(spellcheck_article_url().ends_with("/articles/360000877191"));
     }
 

@@ -33,6 +33,7 @@ pub mod richtext;
 pub mod search_highlight;
 pub mod shortcuts;
 pub mod sounds;
+pub mod spell;
 pub mod splash;
 pub mod streamer;
 pub mod theme;

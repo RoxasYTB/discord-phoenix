@@ -295,6 +295,63 @@ thread_local! {
 }
 
 fn wanted_rich(app: &PhoenixApp, area: &Area, cx: &App) -> std::rc::Rc<Rich> {
+    let base = markdown_rich(app, area, cx);
+    let spell = spell_decorations(app, area, cx);
+    if spell.is_empty() {
+        return base;
+    }
+    let mut decorations = base.decorations.clone();
+    decorations.extend(spell.iter().cloned());
+    decorations.sort_by_key(|d| (d.range.start, d.range.end));
+    std::rc::Rc::new(Rich { decorations, spans: base.spans.clone(), lines: base.lines.clone() })
+}
+
+pub const SPELL_RED: u32 = 0xff0000;
+pub const SPELL_THICKNESS: f32 = 1.;
+
+pub fn spell_style() -> HighlightStyle {
+    HighlightStyle {
+        underline: Some(UnderlineStyle { thickness: px(SPELL_THICKNESS), color: Some(gpui::rgb(SPELL_RED).into()), wavy: true }),
+        ..Default::default()
+    }
+}
+
+type SpellCached = (String, Option<usize>, u64, std::rc::Rc<Vec<TextDecoration>>);
+
+thread_local! {
+    static SPELL: RefCell<Vec<SpellCached>> = const { RefCell::new(Vec::new()) };
+}
+
+const SPELL_CACHE: usize = 4;
+
+fn spell_decorations(app: &PhoenixApp, area: &Area, cx: &App) -> std::rc::Rc<Vec<TextDecoration>> {
+    if !crate::ui::extra_menus::spellcheck_on(app) || !crate::spell::has_dictionaries() {
+        return std::rc::Rc::new(Vec::new());
+    }
+    let (text, caret) = {
+        let st = area.read(cx);
+        let sel = st.selected_range();
+        (st.value().to_string(), sel.is_empty().then_some(sel.start))
+    };
+    let generation = crate::spell::generation();
+    if let Some(hit) = SPELL.with_borrow(|c| c.iter().find(|(t, k, g, _)| *t == text && *k == caret && *g == generation).map(|e| e.3.clone())) {
+        return hit;
+    }
+    let ranges = crate::spell::misspelled(&text, caret, cx);
+    let style = spell_style();
+    let list = std::rc::Rc::new(ranges.into_iter().map(|r| TextDecoration::new(r, style)).collect::<Vec<_>>());
+    let generation = crate::spell::generation();
+    SPELL.with_borrow_mut(|c| {
+        c.retain(|(t, k, _, _)| !(*t == text && *k == caret));
+        c.push((text, caret, generation, list.clone()));
+        if c.len() > SPELL_CACHE {
+            c.remove(0);
+        }
+    });
+    list
+}
+
+fn markdown_rich(app: &PhoenixApp, area: &Area, cx: &App) -> std::rc::Rc<Rich> {
     if !enabled(app) {
         return std::rc::Rc::new(Rich { decorations: Vec::new(), spans: Vec::new(), lines: Vec::new() });
     }

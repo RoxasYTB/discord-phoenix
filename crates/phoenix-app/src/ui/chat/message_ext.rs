@@ -555,6 +555,13 @@ pub fn edit_box(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cx
                             div().mx(z(-4.)).child(
                                 gpui_component::input::Textarea::new(&input)
                                     .token(super::rich_input::render_token)
+                                    .context_menu({
+                                        let area = input.clone();
+                                        move |_, w, _| {
+                                            crate::ui::extra_menus::open_textarea(&area, w);
+                                            gpui_component::native_menu::NativeMenu::new()
+                                        }
+                                    })
                                     .appearance(false)
                                     .bordered(false)
                                     .xsmall()

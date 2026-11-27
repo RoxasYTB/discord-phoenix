@@ -422,10 +422,12 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
                                         div().mx(z(-4.)).key_context("Composer").child(
                                             gpui_component::input::Textarea::new(&app.composer)
                                                 .token(super::rich_input::render_token)
-                                                .context_menu(|_, w, _| {
-                                                    let pos = w.mouse_position();
-                                                    crate::ui::extra_menus::open(crate::ui::extra_menus::Target::Textarea, pos, w);
-                                                    gpui_component::native_menu::NativeMenu::new()
+                                                .context_menu({
+                                                    let area = app.composer.clone();
+                                                    move |_, w, _| {
+                                                        crate::ui::extra_menus::open_textarea(&area, w);
+                                                        gpui_component::native_menu::NativeMenu::new()
+                                                    }
                                                 })
                                                 .on_paste({
                                                     let this = cx.entity().downgrade();
