@@ -120,6 +120,7 @@ pub fn strip_open() -> bool {
 }
 
 pub const FADE: Duration = Duration::from_millis(200);
+pub const CONTROLS_SLIDE: f32 = 8.;
 
 fn ease_in_out(x: f32) -> f32 {
     let x = x.clamp(0., 1.);
@@ -292,7 +293,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
 
     let vp = window.viewport_size();
     let side = if chat_open() { CHAT_W } else { 0. };
-    let gw = (f32::from(vp.width) / zoom - 72. - crate::ui::sidebar_resize::width() - side).max(100.);
+    let gw = (f32::from(vp.width) / zoom - crate::theme::m::SERVER_BAR_W - crate::ui::sidebar_resize::width() - side).max(100.);
     let gh = (f32::from(vp.height) / zoom - 32. - if crate::theme::frame_borders() { 1. } else { 0. }).max(60.);
     let focus = match FOCUS.with(|c| c.get()) {
         Focus::Grid => None,
@@ -330,11 +331,21 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .when(crate::theme::frame_borders(), |d| d.border_t_1().border_color(t(idx::APP_FRAME_BORDER)))
         .on_mouse_move(cx.listener(|_, _, _, cx| woke(cx)))
         .child(tiles_el)
-        .child(top_bar(app, crate::ui::dm_profile_panel::channel_name(app, ch), cx))
-        .children(header_status(app, ch_id, cx))
-        .child(div().h(z(8.)))
+        .child(
+            div()
+                .flex_none()
+                .flex()
+                .flex_col()
+                .relative()
+                .top(z(-CONTROLS_SLIDE * (1. - fade)))
+                .opacity(fade)
+                .pt(z(8.))
+                .child(top_bar(app, crate::ui::dm_profile_panel::channel_name(app, ch), cx))
+                .children(header_status(app, ch_id, cx))
+                .child(div().h(z(8.))),
+        )
         .child(div().flex_1().min_h_0())
-        .child(bottom_controls(app, collapse(gw), cx))
+        .child(div().flex_none().flex().flex_col().relative().top(z(CONTROLS_SLIDE * (1. - fade))).opacity(fade).child(bottom_controls(app, collapse(gw), cx)))
         .relative()
         .children(toasts);
 
@@ -377,7 +388,7 @@ pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, 
     let zoom = crate::theme::zoom();
     let vp = window.viewport_size();
     let column_h = f32::from(vp.height) / zoom - 32.;
-    let w = (f32::from(vp.width) / zoom - 72. - crate::ui::sidebar_resize::width() - 16.).max(100.);
+    let w = (f32::from(vp.width) / zoom - crate::theme::m::SERVER_BAR_W - crate::ui::sidebar_resize::width() - 16.).max(100.);
     let popped = crate::ui::call_popout::is_open();
     let tiles = call_tiles(app, ch_id, &ch.voice_users);
     let video = tiles.iter().any(|tile| tile.stream || crate::ui::voice_panel::flags(tile.user).video);
@@ -974,38 +985,9 @@ fn tile_fill(theme: Option<(u32, u32)>, dominant: Option<Hsla>) -> TileFill {
     }
 }
 
-type Theme = Option<(u32, u32)>;
-
-thread_local! {
-    static GUILD_THEMES: std::cell::RefCell<std::collections::HashMap<(Id, Id), Theme>> = Default::default();
-    static GUILD_THEME_REQUESTS: std::cell::RefCell<std::collections::HashSet<(Id, Id)>> = Default::default();
-}
-
-fn guild_theme(app: &PhoenixApp, guild: Id, user: Id, cx: &mut Context<PhoenixApp>) -> Option<Theme> {
-    if let Some(t) = GUILD_THEMES.with(|m| m.borrow().get(&(guild, user)).copied()) {
-        return Some(t);
-    }
-    if GUILD_THEME_REQUESTS.with(|r| r.borrow_mut().insert((guild, user))) {
-        let fut = app.backend.user_profile_without_note(user, Some(guild));
-        cx.spawn(async move |this, cx| {
-            let Ok(p) = fut.await else { return };
-            GUILD_THEMES.with(|m| m.borrow_mut().insert((guild, user), p.theme));
-            let _ = this.update(cx, |_, cx| cx.notify());
-        })
-        .detach();
-    }
-    None
-}
-
-fn tile_theme(global: Theme, guild: Option<Theme>) -> Theme {
-    guild.unwrap_or(global)
-}
-
 fn tile_background(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) -> gpui::Background {
     crate::ui::dm_profile_panel::ensure_profile(app, user, cx);
-    let guild = app.voice_channel.and_then(|ch| app.channels.get(&ch)).and_then(|c| c.guild);
-    let guild_theme = guild.and_then(|g| guild_theme(app, g, user, cx));
-    let theme = tile_theme(app.people.profiles.get(&user).and_then(|p| p.theme), guild_theme);
+    let theme = app.people.profiles.get(&user).and_then(|p| p.theme);
     let dominant = match app.users.get(&user).map(|u| &u.avatar) {
         Some(crate::model::ImageRef::Url(url)) => {
             crate::ui::avatar_color::ensure(url, cx);
@@ -1488,6 +1470,9 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                 )
             })
             .when(look.show_name, |d| {
+                let keep = state_icon.is_some();
+                let idle = fade < 0.5;
+                let user = tile.user;
                 d.child(
                     div()
                         .absolute()
@@ -1495,8 +1480,29 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                         .bottom(z(look.inset))
                         .right(z(look.inset))
                         .flex()
-                        .opacity(fade)
-                        .child(pill(state_icon, Some(name))),
+                        .items_center()
+                        .justify_between()
+                        .child(pill(state_icon, (!idle).then_some(name)).opacity(if keep { 1. } else { fade }))
+                        .when(!idle, |d| {
+                            d.child(
+                                div()
+                                    .id(SharedString::from(format!("call-tile-more-{}", user.0)))
+                                    .flex_none()
+                                    .size(z(32.))
+                                    .rounded(z(8.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .opacity(fade)
+                                    .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
+                                    .hover(|s| s.bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_HOVER)))
+                                    .child(named("more-horizontal", 16., t(idx::CONTROL_OVERLAY_SECONDARY_TEXT_DEFAULT)))
+                                    .on_click(move |ev, _, cx| {
+                                        cx.stop_propagation();
+                                        crate::ui::voice_panel::open_user_menu(user, ev.position(), cx);
+                                    }),
+                            )
+                        }),
                 )
             })
             .when(ring_alpha > 0.001, |d| {
@@ -1642,7 +1648,7 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, cx: &mut Context<PhoenixAp
     div()
         .h(z(49.))
         .mt(z(19.))
-        .mb(z(12.))
+        .mb(z(20.))
         .px(z(20.))
         .flex_none()
         .flex()
@@ -1807,15 +1813,6 @@ pub(crate) fn stream_empty_preview(light: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn tile_theme_uses_the_server_profile_once_loaded() {
-        use super::tile_theme;
-        assert_eq!(tile_theme(Some((1, 2)), None), Some((1, 2)));
-        assert_eq!(tile_theme(Some((1, 2)), Some(Some((3, 4)))), Some((3, 4)));
-        assert_eq!(tile_theme(None, Some(Some((3, 4)))), Some((3, 4)));
-        assert_eq!(tile_theme(Some((1, 2)), Some(None)), None);
-    }
-
     #[test]
     fn tile_background_prefers_the_profile_theme() {
         use super::{TileFill, tile_fill};
