@@ -1174,6 +1174,10 @@ impl PhoenixApp {
                 } else if prev.is_some() && self.selected_channel == prev {
                     crate::ui::call_view::set_chat_open(false);
                 }
+                if self.voice_channel != channel && !self.voice.hidden_cameras.is_empty() {
+                    self.voice.hidden_cameras.clear();
+                    crate::voice::call::set_hidden_cameras(&self.voice.hidden_cameras);
+                }
                 self.voice_channel = channel;
                 self.pending_own_voice = channel.filter(|c| !self.channels.contains_key(c));
             }

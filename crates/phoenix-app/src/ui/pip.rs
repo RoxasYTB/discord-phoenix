@@ -103,7 +103,7 @@ pub fn select_subject(app: &PhoenixApp, ch_id: Id) -> Option<(Id, bool)> {
     if let Some(&u) = users.iter().find(|&&u| crate::ui::voice_panel::flags(u).stream && crate::ui::call_view::stream_key(app, u).is_some_and(|k| app.voice.watching.contains(&k))) {
         return Some((u, true));
     }
-    if let Some(&u) = users.iter().find(|&&u| crate::ui::voice_panel::flags(u).video) {
+    if let Some(&u) = users.iter().find(|&&u| crate::ui::call_view::camera_visible(app, u)) {
         return Some((u, false));
     }
     if let Some(&u) = users.iter().find(|&&u| app.voice.is_speaking(u)) {
@@ -174,7 +174,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     };
 
     let me = user_id == app.me.id;
-    let flags = crate::ui::voice_panel::flags(user_id);
     let speaking = !is_stream && app.voice.is_speaking(user_id);
     let user = app.users.get(&user_id);
     let name = crate::ui::sidebar::voice_user_name(app, user_id);
@@ -186,7 +185,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         } else {
             None
         }
-    } else if flags.video {
+    } else if crate::ui::call_view::camera_visible(app, user_id) {
         if me {
             crate::ui::call_view::camera_image()
         } else {

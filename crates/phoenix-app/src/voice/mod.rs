@@ -143,6 +143,7 @@ pub struct VoiceUi {
     pub own_stream: Option<String>,
     pub watching: std::collections::BTreeSet<String>,
     pub stream_error: Option<String>,
+    pub hidden_cameras: HashSet<Id>,
 }
 
 impl VoiceUi {

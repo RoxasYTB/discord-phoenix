@@ -241,6 +241,19 @@ pub fn set_call_view(view: phoenix_voice::sink_wants::CallView) {
     st.call_view = Some(view);
 }
 
+pub fn set_hidden_cameras(hidden: &std::collections::HashSet<Id>) {
+    let mut view = {
+        let st = manager().state.lock();
+        st.call_view.clone().unwrap_or(phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() })
+    };
+    view.video_disabled = hidden.iter().map(|id| id.0).collect();
+    set_call_view(view);
+    for user in hidden {
+        let decoder = remote().lock().remove(&user.0);
+        drop(decoder);
+    }
+}
+
 pub fn set_pip_view() {
     let view = manager().state.lock().call_view.clone().unwrap_or(phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() });
     set_call_view(phoenix_voice::sink_wants::CallView { pip: true, ..view });
@@ -594,6 +607,9 @@ impl VoiceManager {
                         VoiceUiEvent::Status(VoiceStatus::Reconnecting)
                     }
                     VoiceEvent::Video { user_id, codec, keyframe, frame } => {
+                        if manager().state.lock().call_view.as_ref().is_some_and(|view| view.video_disabled.contains(&user_id)) {
+                            continue;
+                        }
                         if push_video(remote(), user_id, codec, keyframe, &frame, phoenix_voice::media::ffmpeg::CAMERA_MAX)
                             && let Some(r) = manager().state.lock().running.as_ref()
                         {

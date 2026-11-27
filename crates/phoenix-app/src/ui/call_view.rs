@@ -28,6 +28,17 @@ thread_local! {
     static DRAWN: std::cell::RefCell<Vec<(Id, bool, f32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+pub(crate) fn camera_visible(app: &PhoenixApp, user: Id) -> bool {
+    crate::ui::voice_panel::flags(user).video && !app.voice.hidden_cameras.contains(&user)
+}
+
+pub(crate) fn restore_camera(app: &mut PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) {
+    app.voice.hidden_cameras.remove(&user);
+    crate::voice::call::set_hidden_cameras(&app.voice.hidden_cameras);
+    set_focus(Focus::Tile(user, false));
+    cx.notify();
+}
+
 pub fn video_fit(in_strip: bool, aspect: Option<f32>) -> gpui::ObjectFit {
     match aspect {
         Some(a) if in_strip && a >= 1. => gpui::ObjectFit::Cover,
@@ -43,6 +54,7 @@ fn report_video_view(app: &PhoenixApp, voice_users: &[Id], focus: Option<&Tile>,
     let drawn = DRAWN.with(|d| std::mem::take(&mut *d.borrow_mut()));
     let mut view = phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() };
     view.others = voice_users.iter().filter(|u| **u != app.me.id).count();
+    view.video_disabled = app.voice.hidden_cameras.iter().map(|id| id.0).collect();
     view.selected = focus.filter(|t| !t.stream && t.user != app.me.id).map(|t| t.user.0);
     {
         let prefs = crate::voice::prefs::prefs().lock();
@@ -1721,17 +1733,31 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
             named(name, 16., color).into_any_element()
         });
         let (ring_alpha, _) = crate::ui::voice_panel::speaking_fade(tile.user, speaking || sb);
+        let user = tile.user;
+        let hidden = f.video && app.voice.hidden_cameras.contains(&user);
+        let camera_visible = f.video && !hidden;
         base.bg(tile_background(app, tile.user, cx))
             .flex()
             .items_center()
             .justify_center()
-            .map(|d| match f.video.then(|| if me { camera_image().filter(|_| !crate::ui::call_menus::self_video_hidden()) } else { remote_image(tile.user) }).flatten() {
+            .map(|d| match camera_visible.then(|| if me { camera_image().filter(|_| !crate::ui::call_menus::self_video_hidden()) } else { remote_image(tile.user) }).flatten() {
                 Some(img) => {
                     let aspect = if me { None } else { remote_aspect(tile.user) };
                     d.bg(t(idx::BACKGROUND_BASE_LOWER)).child(gpui::img(img).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect)))
                 }
-                None if f.video && !me && crate::voice::call::in_call() => d.bg(t(idx::BLACK)).child(video_loading()),
+                None if camera_visible && !me && crate::voice::call::in_call() => d.bg(t(idx::BLACK)).child(video_loading()),
                 None => d.child(avatar(u, look.avatar * crate::theme::zoom())),
+            })
+            .when(hidden, |d| {
+                d.child(
+                    div().absolute().bottom(z(36.)).child(
+                        crate::ui::controls::button("call-restore-camera", crate::t!("voice.watch_camera"), crate::ui::controls::BtnKind::Secondary)
+                            .on_click(cx.listener(move |app, _, _, cx| {
+                                cx.stop_propagation();
+                                restore_camera(app, user, cx);
+                            })),
+                    ),
+                )
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))
             .when(look.show_name, |d| {
@@ -1939,6 +1965,8 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, fullscreen: bool, cx: &mut
     };
     let live = crate::ui::call_menus::stream_live(app);
     let open_menu = crate::ui::call_menus::opened();
+    let hangup = crate::ui::go_live::HangupAction::current(app);
+    let hangup_fg = t(idx::CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT);
     let screen_look = if live { Look::Green } else { Look::Dark };
     let cam_look = if me.video { Look::Green } else { Look::Dark };
     div()
@@ -2078,15 +2106,19 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, fullscreen: bool, cx: &mut
                         .bg(t(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT))
                         .hover(|s| s.bg(t(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_HOVER)))
                         .cursor_pointer()
-                        .tip(crate::t!("voice.disconnect"))
-                        .child(anim(
-                            "call-disconnect",
-                            crate::icons::lottie_icons::Lottie::Disconnect,
-                            false,
-                            t(idx::CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT),
-                            crate::ui::icon(crate::assets::Icon::PhoneHangup, 20. * crate::theme::zoom(), t(idx::CONTROL_CRITICAL_PRIMARY_TEXT_DEFAULT)),
-                        ))
-                        .on_click(cx.listener(|a, _, _, cx| a.join_voice(None, cx))),
+                        .tip(hangup.label())
+                        .child(if hangup.disconnects() {
+                            anim(
+                                "call-disconnect",
+                                crate::icons::lottie_icons::Lottie::Disconnect,
+                                false,
+                                hangup_fg,
+                                crate::ui::icon(crate::assets::Icon::PhoneHangup, 20. * crate::theme::zoom(), hangup_fg),
+                            ).into_any_element()
+                        } else {
+                            glyph(hangup.icon(), 20., hangup_fg).into_any_element()
+                        })
+                        .on_click(cx.listener(move |a, _, _, cx| hangup.run(a, cx))),
                 ),
         )
         .child(

@@ -104,10 +104,12 @@ fn tile_color(app: &PhoenixApp, user: Id) -> Hsla {
     }
 }
 
-fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f32) -> AnyElement {
+fn render_popout_tile(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user_id: Id, stream: bool, w: f32, h: f32) -> AnyElement {
     let u = app.users.get(&user_id);
     let me = user_id == app.me.id;
-    let flags = crate::ui::voice_panel::flags(user_id);
+    let show_camera = !stream && crate::ui::call_view::camera_visible(app, user_id);
+    let hidden = !stream && crate::ui::voice_panel::flags(user_id).video && app.voice.hidden_cameras.contains(&user_id);
+    let entity = entity.clone();
     let speaking = !stream && app.voice.is_speaking(user_id);
     let name = crate::ui::sidebar::voice_user_name(app, user_id);
     let white = t(idx::WHITE);
@@ -115,7 +117,7 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
         let skey = crate::ui::call_view::stream_key(app, user_id);
         let watching = skey.as_ref().is_some_and(|k| app.voice.watching.contains(k));
         (if me || watching { crate::ui::call_view::stream_image(user_id, me) } else { None }).or_else(|| crate::ui::call_view::demo_still(user_id))
-    } else if flags.video {
+    } else if show_camera {
         if me {
             crate::ui::call_view::camera_image()
         } else {
@@ -126,9 +128,17 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
     };
 
     div()
+        .id(SharedString::from(format!("popout-tile-{}-{stream}", user_id.0)))
         .relative()
         .w(z(w))
         .h(z(h))
+        .when(show_camera, |d| d.cursor_pointer().on_click({
+            let entity = entity.clone();
+            move |_, _, cx| {
+                crate::ui::call_view::set_focus(crate::ui::call_view::Focus::Tile(user_id, false));
+                entity.update(cx, |_, cx| cx.notify());
+            }
+        }))
         .flex_none()
         .rounded(z(8.))
         .overflow_hidden()
@@ -144,6 +154,16 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
             Some(img) => d.child(gpui::img(img).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Contain)),
             None if stream => d.child(svg().path("icons/voice/screen.svg").size(z(40.)).text_color(white)),
             None => d.child(crate::ui::avatar(u, 72. * zoom())),
+        })
+        .when(hidden, |d| {
+            d.child(
+                div().absolute().bottom(z(36.)).child(
+                    crate::ui::controls::button_sm("popout-restore-camera", crate::t!("voice.watch_camera"), crate::ui::controls::BtnKind::Secondary)
+                        .on_click(move |_, _, cx| {
+                            entity.update(cx, |app, cx| crate::ui::call_view::restore_camera(app, user_id, cx));
+                        }),
+                ),
+            )
         })
         .when(stream, |d| {
             d.child(
@@ -188,7 +208,7 @@ fn render_popout_tile(app: &PhoenixApp, user_id: Id, stream: bool, w: f32, h: f3
         .into_any_element()
 }
 
-fn ctrl_btn(id: &'static str, icon: Icon, danger: bool, active: bool, tip: SharedString) -> gpui::Stateful<gpui::Div> {
+fn ctrl_btn(id: &'static str, icon: SharedString, danger: bool, active: bool, tip: SharedString) -> gpui::Stateful<gpui::Div> {
     let bg = if danger {
         t(idx::CONTROL_CRITICAL_PRIMARY_BACKGROUND_DEFAULT)
     } else if active {
@@ -216,7 +236,7 @@ fn ctrl_btn(id: &'static str, icon: Icon, danger: bool, active: bool, tip: Share
         .hover(move |s| s.bg(hover))
         .cursor_pointer()
         .tip(tip)
-        .child(crate::ui::icon(icon, 20. * zoom(), fg))
+        .child(svg().path(icon).size(z(20.)).text_color(fg))
 }
 
 impl gpui::Render for CallPopoutView {
@@ -252,12 +272,14 @@ impl gpui::Render for CallPopoutView {
         let h = (f32::from(vp.height) / k - m::TITLE_BAR_H - 72. - 16.).max(100.);
         let (_cols, tw) = crate::ui::call_view::grid(tiles.len(), w, h, 8.);
         let th = tw * 9. / 16.;
-        let rendered_tiles: Vec<AnyElement> = tiles.iter().map(|&(u, s)| render_popout_tile(app, u, s, tw, th)).collect();
+        let rendered_tiles: Vec<AnyElement> = tiles.iter().map(|&(u, s)| render_popout_tile(app, &self.app, u, s, tw, th)).collect();
         let muted = app.mic_muted || app.deafened;
         let deafened = app.deafened;
         let app_ent = self.app.clone();
         let app_ent_deaf = self.app.clone();
         let app_ent_hang = self.app.clone();
+        let hangup = crate::ui::go_live::HangupAction::current(app);
+        let hangup_icon = hangup.icon();
         let white = t(idx::WHITE);
 
         crate::fonts::ui_root(div())
@@ -354,7 +376,7 @@ impl gpui::Render for CallPopoutView {
                     .child(
                         ctrl_btn(
                             "popout-mic",
-                            if muted { Icon::MicOff } else { Icon::Mic },
+                            (if muted { Icon::MicOff } else { Icon::Mic }).path(),
                             false,
                             muted,
                             if muted { crate::t!("voice.unmute") } else { crate::t!("voice.mute") },
@@ -370,7 +392,7 @@ impl gpui::Render for CallPopoutView {
                     .child(
                         ctrl_btn(
                             "popout-deafen",
-                            if deafened { Icon::HeadphonesOff } else { Icon::Headphones },
+                            (if deafened { Icon::HeadphonesOff } else { Icon::Headphones }).path(),
                             false,
                             deafened,
                             if deafened { crate::t!("voice.undeafen") } else { crate::t!("voice.deafen") },
@@ -384,11 +406,15 @@ impl gpui::Render for CallPopoutView {
                         })),
                     )
                     .child(
-                        ctrl_btn("popout-hangup", Icon::PhoneHangup, true, false, crate::t!("voice.disconnect"))
+                        ctrl_btn("popout-hangup", hangup_icon, true, false, hangup.label())
                             .on_click(cx.listener(move |_, _, w, cx| {
-                                clear_handle();
-                                app_ent_hang.update(cx, |a, cx| a.join_voice(None, cx));
-                                w.remove_window();
+                                if hangup.disconnects() {
+                                    clear_handle();
+                                }
+                                app_ent_hang.update(cx, |a, cx| hangup.run(a, cx));
+                                if hangup.disconnects() {
+                                    w.remove_window();
+                                }
                             })),
                     )
                     .child(
