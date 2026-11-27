@@ -76,6 +76,18 @@ pub struct VoiceConfig {
     pub user_id: u64,
 }
 
+impl VoiceConfig {
+    fn dave_group_id(&self) -> Result<u64> {
+        if !self.info.stream {
+            return Ok(self.channel_id);
+        }
+        self.info.server_id.parse::<u64>().ok()
+            .and_then(|id| id.checked_sub(1))
+            .filter(|id| *id != 0)
+            .ok_or_else(|| Error::Protocol("invalid Go Live RTC server ID for DAVE".into()))
+    }
+}
+
 #[derive(Debug)]
 pub enum VideoOut {
     Start { width: u32, height: u32, fps: u32, bitrate: u32 },
@@ -582,8 +594,8 @@ async fn run(
     mut audio_in: Box<dyn FnMut(AudioIn) + Send>,
     events: &mpsc::UnboundedSender<VoiceEvent>,
 ) -> Result<()> {
+    let mls = OpenMlsSession::new(cfg.user_id, cfg.dave_group_id()?)?;
     let (gw, mut gev, _task) = gateway::spawn(cfg.info.clone(), None, ReconnectPolicy::default());
-    let mls = OpenMlsSession::new(cfg.user_id, cfg.channel_id)?;
     let mut dave = DaveSession::new(Box::new(mls), cfg.user_id);
     let mut media: Option<Media> = None;
     let mut rx = Receiver::default();
@@ -998,6 +1010,32 @@ async fn run(
 #[cfg(test)]
 mod video_tests {
     use super::*;
+
+    #[test]
+    fn go_live_uses_its_media_session_for_dave() {
+        let mut cfg = VoiceConfig {
+            info: VoiceConnectInfo {
+                endpoint: String::new(),
+                server_id: "500".into(),
+                user_id: "1".into(),
+                session_id: String::new(),
+                token: String::new(),
+                max_dave_protocol_version: 1,
+                stream: false,
+            },
+            channel_id: 42,
+            user_id: 1,
+        };
+        assert_eq!(cfg.dave_group_id().unwrap(), 42);
+        cfg.info.stream = true;
+        assert_eq!(cfg.dave_group_id().unwrap(), 499);
+        cfg.info.server_id = "502".into();
+        assert_eq!(cfg.dave_group_id().unwrap(), 501);
+        for invalid in ["0", "1", "invalid"] {
+            cfg.info.server_id = invalid.into();
+            assert!(cfg.dave_group_id().is_err());
+        }
+    }
 
     #[test]
     fn camera_op12_active_and_stopped() {
