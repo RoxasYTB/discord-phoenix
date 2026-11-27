@@ -1002,12 +1002,11 @@ mod tests {
     }
 
     #[test]
-    fn create_guild_goes_through_the_write_guard() {
-        let w = crate::actions::guard::GuardedWrite::create_guild(create_guild_body_for_locale("Lab", None, None, None, true));
-        assert_eq!((w.method.as_str(), w.path.as_str()), ("POST", "/guilds"));
-        assert_eq!(w.body.as_ref().and_then(|b| b.get("guild_template_code")), Some(&serde_json::json!(CREATE.code)));
-        assert!(!crate::actions::guard::read_only_write(&w));
-        assert!(w.refusal().is_write_blocked());
+    fn create_guild_is_a_normal_action_outside_the_write_guard() {
+        let src = include_str!("../discord_backend/nav.rs");
+        let arm = &src[src.find("NavRequest::CreateGuild {").unwrap()..src.find("NavRequest::FetchOnboarding").unwrap()];
+        assert!(!arm.contains("guarded_write"));
+        assert!(arm.contains("plain_create_guild_body"));
     }
 
     #[test]

@@ -172,7 +172,6 @@ mod tests {
             GuardedWrite::change_call_region(5, "rotterdam"),
             GuardedWrite::automod_alert_action(5, 6, 7, 3),
             GuardedWrite::automod_clear_mention_raid(5),
-            GuardedWrite::create_guild(serde_json::json!({ "name": "Lab" })),
         ] {
             assert!(!read_only_write(&w));
             assert!(w.refusal().is_write_blocked());
