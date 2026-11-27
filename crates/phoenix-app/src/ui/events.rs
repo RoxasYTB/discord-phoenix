@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use gpui::{AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*, px};
+use gpui::{AnyElement, App, Context, Entity, FontWeight, IntoElement, ParentElement, Pixels, SharedString, Styled, Window, div, prelude::*, px};
 use phoenix_api::rest::guild_manage::AdminCall;
 use serde_json::Value;
 
@@ -23,6 +23,7 @@ struct Events {
     error: Option<SharedString>,
     copied: Option<Id>,
     detail: Option<Detail>,
+    menu: Option<(Id, gpui::Point<Pixels>)>,
 }
 
 struct Detail {
@@ -124,7 +125,7 @@ pub fn not_shown(shown: usize, count: u32) -> u32 {
 }
 
 pub fn open(app: &mut PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) {
-    cx.set_global(Slot(Some(Events { guild, list: None, error: None, copied: None, detail: None })));
+    cx.set_global(Slot(Some(Events { guild, list: None, error: None, copied: None, detail: None, menu: None })));
     app.parity_request(ParityRequest::ScheduledEvents { guild }, cx, move |_, r, cx| {
         if guild_of(cx) != Some(guild) {
             return;
@@ -244,6 +245,146 @@ fn copy_link(guild: Id, event: Id, cx: &mut App) {
     .detach();
 }
 
+fn uri_component(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn query(pairs: &[(&str, &str)]) -> String {
+    pairs.iter().map(|(k, v)| format!("{}={}", uri_component(k), uri_component(v))).collect::<Vec<_>>().join("&")
+}
+
+fn local_stamp(ts: i64, fmt: &str) -> String {
+    chrono::DateTime::from_timestamp(ts, 0).map(|d| d.with_timezone(&chrono::Local).format(fmt).to_string()).unwrap_or_default()
+}
+
+const STAMP: &str = "%Y%m%dT%H%M%S";
+const ISO_LOCAL: &str = "%Y-%m-%dT%H:%M:%S";
+
+pub fn event_location(e: &GuildEvent, guild_name: &str, channel_name: Option<&str>) -> String {
+    match (&e.location, channel_name) {
+        (Some(l), _) => l.clone(),
+        (None, Some(ch)) => crate::t!("events.location_in_guild", guild = guild_name, channel = ch).to_string(),
+        (None, None) => "Discord".to_owned(),
+    }
+}
+
+pub fn google_calendar_url(e: &GuildEvent, location: &str) -> String {
+    let end = e.end.unwrap_or(e.start);
+    let dates = format!("{}/{}", local_stamp(e.start, STAMP), local_stamp(end, STAMP));
+    let q = query(&[("text", &e.name), ("dates", &dates), ("details", &e.description), ("action", "TEMPLATE"), ("location", location)]);
+    format!("https://calendar.google.com/calendar/render?{q}")
+}
+
+pub fn yahoo_calendar_url(e: &GuildEvent, location: &str) -> String {
+    let end = e.end.unwrap_or(e.start);
+    let (st, et) = (local_stamp(e.start, STAMP), local_stamp(end, STAMP));
+    let q = query(&[("v", "60"), ("title", &e.name), ("st", &st), ("et", &et), ("desc", &e.description), ("in_loc", location)]);
+    format!("https://calendar.yahoo.com/?{q}")
+}
+
+pub fn outlook_calendar_url(e: &GuildEvent, location: &str) -> String {
+    let end = e.end.unwrap_or(e.start);
+    let (st, et) = (local_stamp(e.start, ISO_LOCAL), local_stamp(end, ISO_LOCAL));
+    let q = query(&[
+        ("path", "/calendar/action/compose"),
+        ("rru", "addevent"),
+        ("startdt", &st),
+        ("enddt", &et),
+        ("subject", &e.name),
+        ("body", &e.description),
+        ("location", location),
+        ("allday", "false"),
+    ]);
+    format!("https://outlook.live.com/calendar/0/deeplink/compose?{q}")
+}
+
+fn ics_text(s: &str) -> String {
+    s.replace('\\', "\\\\").replace(';', "\\;").replace(',', "\\,").replace("\r\n", "\\n").replace('\n', "\\n")
+}
+
+fn utc_stamp(ts: i64) -> String {
+    chrono::DateTime::from_timestamp(ts, 0).map(|d| d.format("%Y%m%dT%H%M%SZ").to_string()).unwrap_or_default()
+}
+
+pub fn ics(e: &GuildEvent, location: &str, now: i64) -> String {
+    let end = e.end.unwrap_or(e.start);
+    let mut lines = vec![
+        "BEGIN:VCALENDAR".to_owned(),
+        "VERSION:2.0".to_owned(),
+        "PRODID:-//sebbo.net//ical-generator//EN".to_owned(),
+        "BEGIN:VEVENT".to_owned(),
+        format!("UID:{}@discord.com", e.id.0),
+        "SEQUENCE:0".to_owned(),
+        format!("DTSTAMP:{}", utc_stamp(now)),
+        format!("DTSTART:{}", utc_stamp(e.start)),
+        format!("DTEND:{}", utc_stamp(end)),
+        format!("SUMMARY:{}", ics_text(&e.name)),
+        format!("LOCATION:{}", ics_text(location)),
+    ];
+    if !e.description.is_empty() {
+        lines.push(format!("DESCRIPTION:{}", ics_text(&e.description)));
+    }
+    lines.push("END:VEVENT".to_owned());
+    lines.push("END:VCALENDAR".to_owned());
+    let mut out = lines.join("\r\n");
+    out.push_str("\r\n");
+    out
+}
+
+fn save_ics(text: String, cx: &mut App) {
+    let rx = cx.prompt_for_new_path(&crate::paths::downloads_dir(), Some("discord-event.ics"));
+    cx.spawn(async move |cx| {
+        let Ok(Ok(Some(path))) = rx.await else { return };
+        let _ = cx.background_executor().spawn(async move { std::fs::write(path, text) }).await;
+    })
+    .detach();
+}
+
+fn event_menu(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> Vec<crate::ui::context_menu::MenuItem> {
+    use crate::ui::context_menu::MenuItem;
+    let id = e.id;
+    let guild_name = app.guilds.iter().find(|g| g.id == guild).map(|g| g.name.to_string()).unwrap_or_default();
+    let channel_name = e.channel.and_then(|c| app.channels.get(&c)).map(|c| c.name.to_string());
+    let location = event_location(e, &guild_name, channel_name.as_deref());
+    let mut items = Vec::new();
+    if e.status != 2 {
+        let (g, y, o) = (google_calendar_url(e, &location), yahoo_calendar_url(e, &location), outlook_calendar_url(e, &location));
+        let text = ics(e, &location, chrono::Utc::now().timestamp());
+        let text2 = text.clone();
+        items.push(MenuItem::Submenu {
+            label: crate::t!("events.add_to_calendar"),
+            icon: None,
+            subtext: None,
+            on_click: Some(std::rc::Rc::new(move |_, _, cx| save_ics(text.clone(), cx))),
+            items: vec![
+                MenuItem::action(crate::t!("events.calendar_google"), None, move |_, _, cx| cx.open_url(&g)),
+                MenuItem::action(crate::t!("events.calendar_ics"), None, move |_, _, cx| save_ics(text2.clone(), cx)),
+                MenuItem::action(crate::t!("events.calendar_yahoo"), None, move |_, _, cx| cx.open_url(&y)),
+                MenuItem::action(crate::t!("events.calendar_outlook"), None, move |_, _, cx| cx.open_url(&o)),
+            ],
+        });
+    }
+    items.push(MenuItem::action(crate::t!("events.copy_event_link"), None, move |_, _, cx| {
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(format!("https://discord.com/events/{}/{}", guild.0, id.0)));
+    }));
+    if app.prefs.synced.developer_mode {
+        items.push(MenuItem::Separator);
+        items.push(
+            MenuItem::action(crate::t!("events.copy_event_id"), None, move |_, _, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.0.to_string())))
+                .with_icon("id"),
+        );
+    }
+    items
+}
+
 fn when_label(e: &GuildEvent) -> String {
     when_label_at(e.start)
 }
@@ -298,6 +439,14 @@ fn actions(app: &PhoenixApp, guild: Id, e: &GuildEvent, st: Option<(&Events, &En
     let live = e.status == 2;
     let copied = st.is_some_and(|(s, _)| s.copied == Some(id));
     let mut out = Vec::new();
+    if st.is_some() {
+        let more = sm_button(("event-more", id.0), Some("more-horizontal"), None, BtnKind::Secondary).on_click(move |ev, w, cx| {
+            cx.stop_propagation();
+            with(cx, |s| s.menu = Some((id, ev.position())));
+            w.refresh();
+        });
+        out.push(more.into_any_element());
+    }
     let link = sm_button(("event-link", id.0), Some(if copied { "check" } else { "chat/link" }), None, BtnKind::Secondary)
         .tooltip(crate::ui::tooltip::tip(if copied { crate::t!("events.copied") } else { crate::t!("events.copy_link") }))
         .on_click(move |_, _, cx| {
@@ -583,7 +732,16 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                 .child(div().flex_1().min_h_0().pt(z(8.)).pr(z(16.)).pb(z(16.)).pl(z(24.)).child(body))
                 .children(crate::ui::chat::scrollbar::bar_for("events-list", crate::ui::chat::scrollbar::Bar::Thin)),
         );
-    Some(crate::ui::modal::frame("events-modal", on_close, card))
+    let menu = s.menu.and_then(|(id, pos)| {
+        let ev = s.list.iter().flatten().find(|e| e.id == id)?;
+        let items = event_menu(app, guild, ev);
+        let dismiss: crate::ui::context_menu::Dismiss = std::rc::Rc::new(|w: &mut Window, cx: &mut App| {
+            with(cx, |s| s.menu = None);
+            w.refresh();
+        });
+        Some(crate::ui::context_menu::render(pos, items, dismiss))
+    });
+    Some(div().size_full().child(crate::ui::modal::frame("events-modal", on_close, card)).children(menu).into_any_element())
 }
 
 fn info_row(icon: AnyElement, content: impl IntoElement) -> gpui::Div {
@@ -838,6 +996,43 @@ fn detail_modal(app: &PhoenixApp, s: &Events, d: &Detail, ev: &GuildEvent, cx: &
 mod tests {
     use super::*;
 
+    fn sample() -> GuildEvent {
+        GuildEvent { id: Id(42), name: "Movie night".into(), description: "Bring snacks, please".into(), start: 1_700_000_000, end: Some(1_700_003_600), ..Default::default() }
+    }
+
+    #[test]
+    fn calendar_links_follow_the_client_queries() {
+        let e = sample();
+        let start = local_stamp(e.start, STAMP);
+        let end = local_stamp(1_700_003_600, STAMP);
+        assert_eq!(
+            google_calendar_url(&e, "Discord"),
+            format!("https://calendar.google.com/calendar/render?text=Movie%20night&dates={start}%2F{end}&details=Bring%20snacks%2C%20please&action=TEMPLATE&location=Discord")
+        );
+        assert!(yahoo_calendar_url(&e, "x").starts_with(&format!("https://calendar.yahoo.com/?v=60&title=Movie%20night&st={start}&et={end}&")));
+        let outlook = outlook_calendar_url(&e, "x");
+        assert!(outlook.starts_with("https://outlook.live.com/calendar/0/deeplink/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt="));
+        assert!(outlook.ends_with("&allday=false"));
+        assert_eq!(uri_component("a b'(c)~*!"), "a%20b'(c)~*!");
+    }
+
+    #[test]
+    fn ics_has_one_escaped_event() {
+        let ics = ics(&sample(), "Discord", 1_700_000_000);
+        assert!(ics.starts_with("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"));
+        assert!(ics.contains("\r\nDTSTART:20231114T221320Z\r\nDTEND:20231114T231320Z\r\n"));
+        assert!(ics.contains("\r\nDESCRIPTION:Bring snacks\\, please\r\n"));
+        assert!(ics.ends_with("END:VEVENT\r\nEND:VCALENDAR\r\n"));
+    }
+
+    #[test]
+    fn external_events_use_their_location() {
+        let mut e = sample();
+        assert_eq!(event_location(&e, "G", None), "Discord");
+        e.location = Some("Paris".into());
+        assert_eq!(event_location(&e, "G", Some("general")), "Paris");
+    }
+
     #[test]
     fn rsvps_keep_interested_base_events_only() {
         let v = serde_json::json!([
@@ -881,7 +1076,7 @@ mod tests {
 
     #[test]
     fn rsvp_toggle_moves_the_count_once() {
-        let mut e = Events { guild: Id(1), list: Some(vec![GuildEvent { id: Id(5), user_count: 2, ..Default::default() }]), error: None, copied: None, detail: None };
+        let mut e = Events { guild: Id(1), list: Some(vec![GuildEvent { id: Id(5), user_count: 2, ..Default::default() }]), error: None, copied: None, detail: None, menu: None };
         let mut set = HashSet::new();
         apply_rsvp(&mut set, Some(&mut e), Id(5), true);
         apply_rsvp(&mut set, Some(&mut e), Id(5), true);
