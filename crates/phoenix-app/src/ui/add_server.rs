@@ -8,7 +8,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use crate::{
     app::PhoenixApp,
     theme::{Palette, c, ca, generated::idx, tok, z},
-    ui::home::data::{NavRequest, Overlay},
+    ui::home::data::{NavReply, NavRequest, Overlay},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -325,7 +325,12 @@ impl PhoenixApp {
             |this, res, cx| {
                 this.nav.busy = false;
                 match res {
-                    Ok(_) => {
+                    Ok(reply) => {
+                        if let NavReply::Json(guild) = reply
+                            && let Some(id) = guild.get("id").and_then(serde_json::Value::as_str).and_then(|id| id.parse().ok())
+                        {
+                            crate::ui::chat::welcome::record_creation(this, crate::model::Id(id));
+                        }
                         reset();
                         this.close_overlay(cx);
                     }

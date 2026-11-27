@@ -860,6 +860,7 @@ impl PhoenixApp {
         if self.take_echo(&m, cx) {
             return;
         }
+        ui::chat::welcome::record_message(self, &m);
         let ch = m.channel;
         let selected = self.selected_channel == Some(ch);
         let mention = m.content.contains(&format!("<@{}>", self.me.id.0)) && !self.nav.is_blocked(m.author);

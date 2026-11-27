@@ -648,14 +648,13 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
         NavRequest::CreateGuild { name, icon, template, community } => {
             let body = crate::ui::add_server::create_guild_body(&name, icon.as_deref(), template.as_deref(), community);
             match rest.request_json(Method::POST, "/guilds", Some(body)).await {
-                Ok(_) => {}
+                Ok(guild) => NavReply::Json(guild),
                 Err(e) if template_refused(&e) => {
                     let plain = crate::ui::add_server::plain_create_guild_body(&name, icon.as_deref());
-                    call(Method::POST, "/guilds".into(), Some(plain)).await?;
+                    NavReply::Json(call(Method::POST, "/guilds".into(), Some(plain)).await?)
                 }
                 Err(e) => return Err(api_err(e)),
             }
-            NavReply::Done
         }
         NavRequest::FetchOnboarding(g) => {
             let v = call(Method::GET, format!("/guilds/{}/onboarding", sf(g)), None).await?;

@@ -484,6 +484,9 @@ pub trait Backend: Send + Sync + 'static {
     fn channel_last_message(&self, _channel: Id) -> Option<Id> {
         None
     }
+    fn guild_has_application(&self, _guild: Id) -> bool {
+        false
+    }
     fn guild_boosts(&self, _guild: Id) -> Option<(u32, bool)> {
         None
     }

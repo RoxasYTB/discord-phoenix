@@ -39,6 +39,7 @@ pub mod state;
 pub mod thread_banner;
 pub mod video_player;
 pub mod voice_message;
+pub(crate) mod welcome;
 pub mod blocked;
 pub mod burst_tip;
 pub mod command_msg;
@@ -97,10 +98,10 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                             a.add_paths(paths.paths().to_vec(), cx)
                         }))
                         .children(thread_banner::render(app, cx))
-                        .children(crate::ui::join_flow::lurker_banner(app, cx))
                         .children(crate::ui::join_flow::verification_banner(app, cx))
                         .children(discovery_notice(app, cx))
                         .children(crate::ui::join_flow::nsfw_gate(app, cx))
+                        .children(app.selected_channel.and_then(|channel| welcome::render(app, &cx.entity(), channel, window.viewport_size().height * 0.42)))
                         .child(
                             div()
                                 .flex_1()

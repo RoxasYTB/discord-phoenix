@@ -803,6 +803,8 @@ pub fn guild(g: &api::Guild, channels: &[model::Channel], muted: bool) -> model:
         boosts: g.properties.premium_subscription_count.unwrap_or(0),
         boost_tier: g.properties.premium_tier.unwrap_or(0),
         afk_channel: g.properties.afk_channel_id.map(id),
+        system_channel: g.properties.system_channel_id.map(id),
+        rules_channel: g.properties.rules_channel_id.map(id),
         member_count: g.member_count,
     }
 }

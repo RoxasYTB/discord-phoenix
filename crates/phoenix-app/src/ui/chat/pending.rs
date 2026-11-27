@@ -138,6 +138,7 @@ impl PhoenixApp {
         entry.rendered[ix] = self.render_msg(m, ix.checked_sub(1).map(|p| &entry.msgs[p]));
         entry.msgs[ix] = m.clone();
         self.messages.insert(ch, entry);
+        super::welcome::record_message(self, m);
         if self.selected_channel == Some(ch) {
             super::rows::refresh(&self.message_list, ix + 1);
         }

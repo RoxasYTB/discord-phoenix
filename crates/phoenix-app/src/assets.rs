@@ -357,6 +357,23 @@ fn svg_for(path: &str) -> Option<&'static str> {
     })
 }
 
+pub fn shortcut_icon(name: &'static str, size: f32) -> gpui::Div {
+    use gpui::{ParentElement, Styled};
+    use crate::theme::{c, generated::idx, tok, z};
+
+    let icon = match name {
+        "events" => "calendar",
+        "boosts" | "welcome-boost" => "boost",
+        "welcome-invite" => "invite",
+        "welcome-icon" => "image-plus",
+        "welcome-message" => "chat",
+        "welcome-app" => "game-controller",
+        other => other,
+    };
+    gpui::div().size(z(size)).flex_none().flex().items_center().justify_center()
+        .child(gpui::svg().path(crate::icons::path(icon)).size(z(size)).flex_none().text_color(c(tok(idx::ICON_MUTED))))
+}
+
 pub struct Assets;
 
 impl AssetSource for Assets {

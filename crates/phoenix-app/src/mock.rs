@@ -141,6 +141,8 @@ impl MockBackend {
                 boosts: [18, 3, 0, 7, 1, 14][gi % 6],
                 boost_tier: [2, 1, 0, 2, 0, 3][gi % 6],
                 afk_channel: None,
+                system_channel: None,
+                rules_channel: None,
                 member_count: None,
             });
             let layout: &[(&str, &[(&str, ChannelKind)])] = &[

@@ -48,6 +48,8 @@ pub struct Guild {
     pub boosts: u32,
     pub boost_tier: u8,
     pub afk_channel: Option<Id>,
+    pub system_channel: Option<Id>,
+    pub rules_channel: Option<Id>,
     pub member_count: Option<u32>,
 }
 

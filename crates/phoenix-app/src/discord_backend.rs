@@ -690,6 +690,12 @@ impl Backend for DiscordBackend {
         s.cache.channel(sf(channel))?.last_message_id.map(|m| Id(m.0))
     }
 
+    fn guild_has_application(&self, guild: Id) -> bool {
+        self.inner.session().ok().and_then(|s| s.cache.guild(sf(guild))).is_some_and(|g| {
+            g.roles.iter().any(|role| role.tags.as_ref().is_some_and(|tags| tags.bot_id.is_some() || tags.integration_id.is_some()))
+        })
+    }
+
     fn guild_boosts(&self, guild: Id) -> Option<(u32, bool)> {
         let s = self.inner.session().ok()?;
         let g = s.cache.guild(sf(guild))?;
