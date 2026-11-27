@@ -40,26 +40,27 @@ pub const LANGUAGES: &[Language] = &[
 ];
 
 pub fn normalize(code: &str) -> &'static str {
+    supported_code(code).unwrap_or("en-US")
+}
+
+pub(super) fn supported_code(code: &str) -> Option<&'static str> {
     let trimmed = code.trim();
     if let Some(l) = LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(trimmed)) {
-        return l.code;
+        return Some(l.code);
     }
     let norm = trimmed.replace('_', "-");
     if let Some(l) = LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(&norm)) {
-        return l.code;
+        return Some(l.code);
     }
     let primary = norm.split('-').next().unwrap_or("").to_ascii_lowercase();
     match primary.as_str() {
-        "en" => "en-US",
-        "es" => "es-ES",
-        "pt" => "pt-BR",
-        "zh" => "zh-CN",
-        "sv" => "sv-SE",
-        "nb" | "nn" => "no",
-        _ => LANGUAGES
-            .iter()
-            .find(|l| l.code.eq_ignore_ascii_case(&primary))
-            .map_or("en-US", |l| l.code),
+        "en" => Some("en-US"),
+        "es" => Some("es-ES"),
+        "pt" => Some("pt-BR"),
+        "zh" => Some("zh-CN"),
+        "sv" => Some("sv-SE"),
+        "nb" | "nn" => Some("no"),
+        _ => LANGUAGES.iter().find(|l| l.code == primary).map(|l| l.code),
     }
 }
 
@@ -86,6 +87,10 @@ mod tests {
         assert_eq!(normalize("ja"), "ja");
         assert_eq!(normalize("nb"), "no");
         assert_eq!(normalize("xx-YY"), "en-US");
+        assert_eq!(supported_code("fr-FR"), Some("fr"));
+        assert_eq!(supported_code("fr_CA"), Some("fr"));
+        assert_eq!(supported_code("en-US"), Some("en-US"));
+        assert_eq!(supported_code("xx-YY"), None);
     }
 
     #[test]

@@ -43,6 +43,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["s
 regex = "1"
 cpal = "0.15"
 spellbook = "0.4.2"
+sys-locale = "0.3"
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 notify-rust = "4.19"

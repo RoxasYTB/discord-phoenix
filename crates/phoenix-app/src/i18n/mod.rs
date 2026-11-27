@@ -12,7 +12,7 @@ use gpui::SharedString;
 const LOCAL_EN: &str = include_str!("../../locales/en.yml");
 const LOCAL_FR: &str = include_str!("../../locales/fr.yml");
 
-static CURRENT: AtomicUsize = AtomicUsize::new(3);
+static CURRENT: OnceLock<AtomicUsize> = OnceLock::new();
 
 type Table = HashMap<&'static str, &'static str>;
 
@@ -40,7 +40,7 @@ pub fn set_locale(code: &str) {
     let forced = env_locale();
     let target = forced.as_deref().unwrap_or(code);
     let idx = languages::index_of(target);
-    CURRENT.store(idx, Ordering::Relaxed);
+    current().store(idx, Ordering::Relaxed);
     let norm = languages::LANGUAGES[idx].code;
     if forced.is_some() {
         let _ = remote::load_blocking(norm);
@@ -56,20 +56,27 @@ fn env_locale() -> Option<String> {
     std::env::var("PHOENIX_LOCALE").ok().filter(|s| !s.is_empty())
 }
 
-fn current() -> usize {
-    static INIT: OnceLock<()> = OnceLock::new();
-    INIT.get_or_init(|| {
-        if let Some(l) = env_locale() {
-            let idx = languages::index_of(&l);
-            CURRENT.store(idx, Ordering::Relaxed);
-            let _ = remote::load_blocking(languages::LANGUAGES[idx].code);
+fn current() -> &'static AtomicUsize {
+    CURRENT.get_or_init(|| {
+        let forced = env_locale();
+        let code = match forced.as_deref() {
+            Some(code) => languages::normalize(code),
+            None if cfg!(test) => "en-US",
+            None => sys_locale::get_locales()
+                .find_map(|code| languages::supported_code(&code))
+                .unwrap_or("en-US"),
+        };
+        if forced.is_some() {
+            let _ = remote::load_blocking(code);
+        } else if code != "fr" {
+            remote::ensure_loaded(code);
         }
-    });
-    CURRENT.load(Ordering::Relaxed)
+        AtomicUsize::new(languages::index_of(code))
+    })
 }
 
 pub fn locale() -> &'static str {
-    languages::LANGUAGES[current()].code
+    languages::LANGUAGES[current().load(Ordering::Relaxed)].code
 }
 
 pub fn is_rtl() -> bool {
