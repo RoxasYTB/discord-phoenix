@@ -8,6 +8,8 @@ use crate::{
 
 pub const THUMB: f32 = 100.;
 pub const RING: f32 = 3.;
+pub const POPOUT_THUMB: f32 = 60.;
+pub const POPOUT_RING: f32 = 2.;
 pub const MAX_SHOWN: usize = 4;
 const CONNECT: u64 = 1 << 20;
 const SET_VOICE_CHANNEL_STATUS: u64 = 1 << 48;
@@ -30,8 +32,19 @@ pub const SLOTS: [&[Slot]; 4] = [
     &[s(10., 10., 36.), s(10., 57., 31.), s(57., 10., 31.), s(52., 52., 36.)],
 ];
 
+pub const POPOUT_SLOTS: [&[Slot]; 4] = [
+    &[s(15., 15., 28.)],
+    &[s(7., 7., 20.), s(25., 25., 26.)],
+    &[s(5., 10., 18.), s(15., 31., 22.), s(29., 5., 24.)],
+    &[s(5., 5., 22.), s(7., 33., 18.), s(33., 7., 18.), s(31., 31., 22.)],
+];
+
 pub fn slots(count: usize) -> &'static [Slot] {
     SLOTS[count.clamp(1, SLOTS.len()) - 1]
+}
+
+pub fn popout_slots(count: usize) -> &'static [Slot] {
+    POPOUT_SLOTS[count.clamp(1, POPOUT_SLOTS.len()) - 1]
 }
 
 pub fn overflow(count: usize) -> Option<(usize, usize)> {
@@ -52,9 +65,21 @@ pub struct Colors {
     pub subtle: Hsla,
     pub card: Hsla,
     pub themed: bool,
+    pub popout: bool,
 }
 
 impl Colors {
+    pub fn popout(themed: bool) -> Self {
+        Self {
+            header: c(tok(idx::TEXT_STRONG)),
+            strong: c(tok(idx::TEXT_DEFAULT)),
+            subtle: c(tok(idx::TEXT_SUBTLE)),
+            card: c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)),
+            themed,
+            popout: true,
+        }
+    }
+
     pub fn modal(themed: bool) -> Self {
         Self {
             header: c(tok(idx::TEXT_DEFAULT)),
@@ -62,11 +87,13 @@ impl Colors {
             subtle: c(tok(idx::TEXT_SUBTLE)),
             card: c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND)),
             themed,
+            popout: false,
         }
     }
 }
 
-fn thumbnail(app: &PhoenixApp, users: &[Id], themed: bool) -> AnyElement {
+fn thumbnail(app: &PhoenixApp, users: &[Id], themed: bool, popout: bool) -> AnyElement {
+    let (thumb, ring_w, set) = if popout { (POPOUT_THUMB, POPOUT_RING, popout_slots(users.len())) } else { (THUMB, RING, slots(users.len())) };
     let light = crate::ui::profile_theme::is_light();
     let (bg, ring, more_bg) = match (themed, light) {
         (true, false) => (tok(idx::BACKGROUND_MOD_STRONG), tok(idx::OPACITY_WHITE_24), tok(idx::OPACITY_WHITE_24)),
@@ -74,7 +101,7 @@ fn thumbnail(app: &PhoenixApp, users: &[Id], themed: bool) -> AnyElement {
         _ => (tok(idx::CARD_BACKGROUND_DEFAULT), tok(idx::BACKGROUND_SURFACE_HIGHEST), tok(idx::BACKGROUND_SURFACE_HIGHEST)),
     };
     let over = overflow(users.len());
-    let circles = slots(users.len()).iter().enumerate().filter_map(|(n, slot)| {
+    let circles = set.iter().enumerate().filter_map(|(n, slot)| {
         let u = *users.get(n)?;
         let inner = match over {
             Some((at, more)) if at == n => div()
@@ -95,10 +122,10 @@ fn thumbnail(app: &PhoenixApp, users: &[Id], themed: bool) -> AnyElement {
         Some(
             div()
                 .absolute()
-                .top(z(slot.top - RING))
-                .left(z(slot.left - RING))
-                .size(z(slot.size + 2. * RING))
-                .p(z(RING))
+                .top(z(slot.top - ring_w))
+                .left(z(slot.left - ring_w))
+                .size(z(slot.size + 2. * ring_w))
+                .p(z(ring_w))
                 .rounded_full()
                 .bg(c(ring))
                 .shadow(crate::ui::inbox::shadow_high())
@@ -107,7 +134,7 @@ fn thumbnail(app: &PhoenixApp, users: &[Id], themed: bool) -> AnyElement {
     });
     div()
         .relative()
-        .size(z(THUMB))
+        .size(z(thumb))
         .flex_none()
         .rounded(z(8.))
         .border_1()
@@ -205,7 +232,10 @@ pub fn card(app: &PhoenixApp, user: Id, col: Colors, entity: Entity<PhoenixApp>)
                 .text_size(z(12.))
                 .line_height(z(16.))
                 .text_color(col.subtle)
-                .child(div().min_w_0().text_ellipsis().whitespace_nowrap().child(status.clone().unwrap_or_else(|| crate::t!("voice.set_status").to_string())))
+                .child(div().min_w_0().text_ellipsis().whitespace_nowrap().child(match &status {
+                    Some(st) => crate::ui::emoji_text::voice_status(app, &entity, cid, st, 12.),
+                    None => crate::t!("voice.set_status").into_any_element(),
+                }))
                 .child(
                     svg()
                         .path(crate::icons::path("pen"))
@@ -221,21 +251,35 @@ pub fn card(app: &PhoenixApp, user: Id, col: Colors, entity: Entity<PhoenixApp>)
                 .into_any_element(),
         )
     } else {
-        status.map(|t| div().text_size(z(12.)).line_height(z(16.)).text_color(col.subtle).text_ellipsis().child(t).into_any_element())
-    };
-    let e_open = entity;
-    let action = can_connect.then(|| {
-        crate::ui::profile::mana_button(
-            ("profile-voice-open", user.0),
-            if joined { crate::t!("profile.voice_open") } else { crate::t!("profile.voice_join") },
-            false,
-            false,
-        )
-        .line_height(z(18.))
-        .on_click(move |_, _, cx| {
-            cx.stop_propagation();
-            e_open.update(cx, |a, cx| open_voice(a, cid, cx));
+        status.map(|t| {
+            div()
+                .min_w_0()
+                .text_size(z(12.))
+                .line_height(z(16.))
+                .text_color(col.subtle)
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .child(crate::ui::emoji_text::voice_status(app, &entity, cid, &t, 12.))
+                .into_any_element()
         })
+    };
+    let entity_card = entity.clone();
+    let e_open = entity;
+    let popout = col.popout;
+    let label = match (popout, joined) {
+        (false, true) => crate::t!("profile.voice_open"),
+        (false, false) => crate::t!("profile.voice_join"),
+        (true, true) => crate::t!("profile.open_voice"),
+        (true, false) => crate::t!("profile.join_voice"),
+    };
+    let action = can_connect.then(|| {
+        crate::ui::profile::mana_button(("profile-voice-open", user.0), label, false, false)
+            .when(popout, |b| b.flex_1())
+            .line_height(z(18.))
+            .on_click(move |_, _, cx| {
+                cx.stop_propagation();
+                e_open.update(cx, |a, cx| open_voice(a, cid, cx));
+            })
     });
 
     let details = div()
@@ -247,21 +291,31 @@ pub fn card(app: &PhoenixApp, user: Id, col: Colors, entity: Entity<PhoenixApp>)
         .flex_col()
         .gap(z(4.))
         .child(div().flex().flex_col().child(name).children(guild_row))
-        .children(status_row)
-        .children(action.map(|b| div().mt(z(4.)).flex().items_center().gap(z(8.)).child(b)));
+        .children(status_row);
+    let actions = action.map(|b| div().mt(z(4.)).flex().items_center().gap(z(8.)).child(b));
+    let (details, actions) = if popout { (details, actions) } else { (details.children(actions), None) };
 
+    let card = div()
+        .id(("profile-voice-card-large", user.0))
+        .flex()
+        .flex_col()
+        .gap(z(8.))
+        .p(z(if popout { 8. } else { 12. }))
+        .rounded(z(if popout { 8. } else { 12. }))
+        .bg(col.card)
+        .when(light, |d| d.border_1().border_color(c(tok(idx::BORDER_STRONG))))
+        .child(header)
+        .child(div().flex().gap(z(if popout { 8. } else { 12. })).child(thumbnail(app, &users, col.themed, popout)).child(details))
+        .children(actions);
+    if !popout {
+        return Some(card.into_any_element());
+    }
     Some(
-        div()
-            .id(("profile-voice-card-large", user.0))
-            .flex()
-            .flex_col()
-            .gap(z(8.))
-            .p(z(12.))
-            .rounded(z(12.))
-            .bg(col.card)
-            .when(light, |d| d.border_1().border_color(c(tok(idx::BORDER_STRONG))))
-            .child(header)
-            .child(div().flex().gap(z(12.)).child(thumbnail(app, &users, col.themed)).child(details))
+        card.hover(|s| s.bg(c(tok(idx::USER_PROFILE_OVERLAY_BACKGROUND_HOVER))))
+            .cursor_pointer()
+            .on_click(move |_, _, cx| {
+                entity_card.update(cx, |a, cx| a.open_profile_modal_at(user, 0, cx));
+            })
             .into_any_element(),
     )
 }
@@ -290,6 +344,17 @@ mod tests {
         for set in SLOTS {
             for sl in set {
                 assert!(sl.top + sl.size <= THUMB - 2. && sl.left + sl.size <= THUMB - 2.);
+            }
+        }
+    }
+
+    #[test]
+    fn popout_slots_fit_the_small_thumbnail() {
+        assert_eq!(popout_slots(1), &[s(15., 15., 28.)]);
+        assert_eq!(popout_slots(4)[3], s(31., 31., 22.));
+        for set in POPOUT_SLOTS {
+            for sl in set {
+                assert!(sl.top + sl.size <= POPOUT_THUMB - 2. && sl.left + sl.size <= POPOUT_THUMB - 2.);
             }
         }
     }

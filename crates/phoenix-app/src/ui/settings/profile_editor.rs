@@ -1217,7 +1217,7 @@ fn tabs(app: &PhoenixApp, e: &EditorState, cx: &mut Cx) -> Div {
                 cx.notify();
             }))),
         1 => {
-            let current = current_activity(app, e, crate::ui::profile_voice::Colors { header: strong, strong, subtle: dim, card: wcol.card, themed }, cx);
+            let current = current_activity(app, e, crate::ui::profile_voice::Colors { header: strong, strong, subtle: dim, card: wcol.card, themed, popout: false }, cx);
             let recent = (!e.recent.is_empty()).then(|| {
                 super::profile_activity::render(
                     &e.recent,
