@@ -2034,6 +2034,8 @@ fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
                 let alt = alt_text::description(a, false);
                 return div()
                     .mt(z(4.))
+                    .w(z(size.0))
+                    .max_w_full()
                     .relative()
                     .child(attach::video_card(a, size, cx))
                     .children(alt.map(|t| alt_text::video_badge(a.url.clone(), t, attach::video_group(&a.url))))
@@ -2043,6 +2045,8 @@ fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
             let alt = alt_text::description(a, false);
             return div()
                 .mt(z(4.))
+                .w(z(size.0))
+                .max_w_full()
                 .relative()
                 .on_mouse_down(gpui::MouseButton::Right, move |_, _, _| panels::set_menu_media(link.clone()))
                 .child({
@@ -2072,7 +2076,8 @@ fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
         return div()
             .mt(z(4.))
             .w(z(w))
-            .h(z(h))
+            .max_w_full()
+            .aspect_ratio(w / h.max(1.))
             .rounded(z(8.))
             .bg(c(Palette::BG_SECONDARY))
             .flex()
@@ -2249,7 +2254,7 @@ fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, emo
     if t.emoji.is_empty() {
         return div().child(embed_link_text(entity, key, bi, t, 0..t.text.len()));
     }
-    let mut row = div().flex().flex_wrap().items_center();
+    let mut row = div().min_w_0().max_w_full().flex().flex_wrap().items_center();
     let push = |mut row: gpui::Div, range: std::ops::Range<usize>| -> gpui::Div {
         let mut start = range.start;
         for (i, piece) in t.text[range.clone()].split('\n').enumerate() {
