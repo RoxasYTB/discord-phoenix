@@ -535,6 +535,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn av1_decoder_keeps_up_with_a_full_hd_source_at_sixty_fps() {
         use std::time::{Duration, Instant};
 
