@@ -162,10 +162,22 @@ fn slot() -> &'static Mutex<HashMap<u64, Arc<Parts>>> {
     S.get_or_init(Default::default)
 }
 
+const MAX_STORED: usize = 2048;
+
+fn insert_bounded<V>(map: &mut HashMap<u64, V>, id: u64, val: V) {
+    if map.len() >= MAX_STORED
+        && !map.contains_key(&id)
+        && let Some(&old) = map.keys().min()
+    {
+        map.remove(&old);
+    }
+    map.insert(id, val);
+}
+
 pub fn record(m: &api::Message) {
     let app = m.application_id.or(m.webhook_id).map(|s| s.0).unwrap_or(m.author.id.0);
     if let Some(info) = interaction_of(m) {
-        interactions().lock().insert(m.id.0, info);
+        insert_bounded(&mut interactions().lock(), m.id.0, info);
     }
     let components = m.components.clone();
     let poll = m.poll.as_ref().and_then(PollView::from_value);
@@ -173,7 +185,7 @@ pub fn record(m: &api::Message) {
         return;
     }
     let parts = Parts { app: Id(app), flags: m.flags, components, poll };
-    slot().lock().insert(m.id.0, Arc::new(parts));
+    insert_bounded(&mut slot().lock(), m.id.0, Arc::new(parts));
 }
 
 pub fn get(msg: Id) -> Option<Arc<Parts>> {
@@ -231,5 +243,16 @@ mod tests {
         assert_eq!(p.answers[0].count, 2);
         p.apply_gateway_vote(2, true, true);
         assert_eq!((p.answers[1].count, p.answers[1].me), (2, true));
+    }
+
+    #[test]
+    fn insert_bounded_evicts_oldest_snowflake() {
+        let mut map = HashMap::new();
+        for i in 1..=(MAX_STORED as u64 + 10) {
+            insert_bounded(&mut map, i, i);
+        }
+        assert_eq!(map.len(), MAX_STORED);
+        assert!(!map.contains_key(&1));
+        assert!(map.contains_key(&(MAX_STORED as u64 + 10)));
     }
 }

@@ -457,6 +457,28 @@ the build); `guild_media` returns early, before reading the notification setting
 channel of the guild has voice users and the guild has no live stage or event; `icons::path`
 and the Twemoji URL are memoised per thread (the emoji table is capped at 8,192 entries).
 
+## Long-run stability and resource leaks (2026-11-27)
+
+### Baseline (`int-bin/real_shots`, real account, read-only, offscreen, `PHX_SWITCH_BENCH=10`)
+
+Switching across 10 guilds, 10 channels and 10 DMs (dev build, under `phoenix-nice`):
+
+| metric | at rest (perf.md) | after 30 switches (before) |
+|---|---|---|
+| RSS | 423 MiB | 875 MiB (`895,808 KiB`) |
+| PSS | 342 MiB | 855 MiB (`875,883 KiB`) |
+| Private_Dirty | — | 626 MiB (`641,364 KiB`) |
+| Threads | 18 | 21 (bounded) |
+| Open FDs | — | 128 (bounded) |
+
+### Leaks and idle redraws fixed
+
+1. **GPU sprite atlas leaks on eviction**: `ui/profile_fx.rs`, `ui/squircle.rs`, `ui/nameplate.rs` and `media/lottie.rs` evicted `Arc<RenderImage>` entries from their global caches without calling `cx.drop_image(img, None)`, leaving evicted textures (including multi-frame APNG profile effects and Lottie stickers) in the GPU atlas for the lifetime of the process.
+2. **Unbounded channel message cache (`app.rs`)**: `PhoenixApp::messages` kept every visited channel forever and appended gateway `MESSAGE_CREATE` events without bound. Now capped at 32 channels (LRU eviction on channel switch) and 200 messages per background channel.
+3. **Failed image entries in `LruImageCache` (`media/lru.rs`)**: `Err(_)` entries were skipped by `evict()` and accumulated indefinitely; stale failed entries are now pruned once `items.len() > 512`.
+4. **Unbounded global caches**: capped `commands/store.rs` (`interactions` and `slot` at 2,048 entries, evicting oldest snowflake), `voice/soundboard.rs` (`decoded` PCM cache at 64 entries), and `ui/profile_board.rs` (`Store` at 128 entries).
+5. **Idle 60 fps redraws**: `ui/profile_fx.rs` now calls `window.request_animation_frame()` only while an effect is actively animating (stopped/reduced-motion effects no longer redraw continuously); `ui/voice_panel.rs` (`meter_row`) only requests animation frames while a live mic level is present.
+
 After (`baeb208d`, same command, two runs; frame times are noisy, the machine was loaded):
 
 | scenario | allocs / frame before → after | bytes / frame | change |

@@ -81,12 +81,17 @@ fn anim(src: &SharedString, still: bool, cx: &mut Context<PhoenixApp>) -> Option
         *used = Instant::now();
         return a.clone();
     }
-    if s.anims.len() >= MAX_ANIMS
+    let evicted = if s.anims.len() >= MAX_ANIMS
         && let Some(old) = s.anims.iter().min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
     {
-        s.anims.remove(&old);
-    }
+        s.anims.remove(&old).and_then(|(img, _)| img)
+    } else {
+        None
+    };
     s.anims.insert(url.clone(), (None, Instant::now()));
+    if let Some(img) = evicted {
+        cx.drop_image(img, None);
+    }
     let http = cx.http_client();
     let u = url.clone();
     let fetch_url = src.clone();
@@ -170,6 +175,7 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
         }
     };
     let mut layers: Vec<AnyElement> = Vec::new();
+    let mut animating = false;
     if c.effects.is_empty() || cx.reduce_motion() {
         let rest = c.persistent.then(|| c.static_frame.clone().zip(c.effects.first())).flatten();
         if let Some((src, l0)) = rest {
@@ -186,6 +192,7 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
         let t = el.saturating_sub(INTRO_MS);
         let loop_end = c.effects.iter().map(|l| l.start + l.duration).max().unwrap_or(0);
         let stopped = !c.effects.iter().any(|l| l.looping) && t >= loop_end;
+        animating = !stopped;
         for (i, l) in c.effects.iter().enumerate() {
             if i == 0
                 && c.persistent
@@ -222,7 +229,7 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
             .size_full()
             .overflow_hidden()
             .children(layers)
-            .child(canvas(|_, _, _| {}, |_, _, window, _| window.request_animation_frame()).absolute().size_0())
+            .when(animating, |d| d.child(canvas(|_, _, _| {}, |_, _, window, _| window.request_animation_frame()).absolute().size_0()))
             .into_any_element(),
     )
 }

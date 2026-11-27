@@ -35,6 +35,9 @@ pub fn get(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) -> Board {
     if let Some(b) = s.0.get(&user) {
         return b.clone();
     }
+    if s.0.len() >= 128 {
+        s.0.clear();
+    }
     s.0.insert(user, Board::default());
     fill(cx, user, app.backend.profile_widgets(user), |b, v| b.widgets = v);
     fill(cx, user, app.backend.game_widgets(user), |b, v: Vec<GameWidget>| b.games = v);

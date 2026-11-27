@@ -4,6 +4,7 @@ use gpui::{App, AppContext, Entity, Global, ImageCache, ImageCacheError, ImageCa
 
 pub const BUDGET_BYTES: u64 = 128 * 1024 * 1024;
 const KEEP_RECENT: u64 = 256;
+const MAX_FAILED_ITEMS: usize = 512;
 
 pub struct LruImageCache {
     items: HashMap<u64, (ImageCacheItem, u64)>,
@@ -58,6 +59,12 @@ impl LruImageCache {
             {
                 cx.drop_image(img, Some(window));
             }
+        }
+        if self.items.len() > MAX_FAILED_ITEMS {
+            let fresh = self.tick.saturating_sub(KEEP_RECENT);
+            self.items.retain(|k, (item, t)| {
+                *k == protected || *t >= fresh || !matches!(item.get(), Some(Err(_)))
+            });
         }
     }
 }

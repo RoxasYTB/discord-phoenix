@@ -115,7 +115,13 @@ pub fn load(id: Id) -> Option<Arc<Pcm>> {
         return Some(p.clone());
     }
     let p = Arc::new(decode(&download(id)?)?);
-    decoded().lock().insert(id, p.clone());
+    let mut cache = decoded().lock();
+    if cache.len() >= 64
+        && let Some(&old) = cache.keys().next()
+    {
+        cache.remove(&old);
+    }
+    cache.insert(id, p.clone());
     Some(p)
 }
 

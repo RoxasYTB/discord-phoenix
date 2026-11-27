@@ -153,11 +153,20 @@ fn load(url: &SharedString, px: u32, cx: &mut App) -> Option<Result<Arc<RenderIm
             State::Failed => Some(Err(ImageCacheError::Other(Arc::new(anyhow::anyhow!("squircle decode failed"))))),
         };
     }
-    if store.images.len() >= MAX_CACHED
+    let evicted = if store.images.len() >= MAX_CACHED
         && let Some(old) = store.images.iter().filter(|(_, (st, _))| !matches!(st, State::Loading)).min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
     {
-        store.images.remove(&old);
+        match store.images.remove(&old) {
+            Some((State::Ready(img), _)) => Some(img),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if let Some(img) = evicted {
+        cx.drop_image(img, None);
     }
+    let store = cx.default_global::<Store>();
     if url.starts_with('/') {
         let state = std::fs::read(url.as_ref()).ok().and_then(|b| bake(&b, px)).map(|i| State::Ready(Arc::new(i))).unwrap_or(State::Failed);
         let res = match &state {

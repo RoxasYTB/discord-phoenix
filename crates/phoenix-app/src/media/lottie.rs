@@ -674,12 +674,20 @@ fn load(url: &SharedString, px: u32, still: bool, cx: &mut App) -> Option<Result
             State::Failed => Some(Err(ImageCacheError::Other(Arc::new(anyhow::anyhow!("lottie sticker failed"))))),
         };
     }
-    if s.anims.len() >= MAX_ANIMS
+    let evicted = if s.anims.len() >= MAX_ANIMS
         && let Some(old) = s.anims.iter().filter(|(_, (st, _))| !matches!(st, State::Loading)).min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
     {
-        s.anims.remove(&old);
-    }
+        match s.anims.remove(&old) {
+            Some((State::Ready(img), _)) => Some(img),
+            _ => None,
+        }
+    } else {
+        None
+    };
     s.anims.insert(key.clone(), (State::Loading, Instant::now()));
+    if let Some(img) = evicted {
+        cx.drop_image(img, None);
+    }
     let http = cx.http_client();
     let renderer = cx.svg_renderer();
     let fetch = url.clone();
@@ -716,12 +724,20 @@ fn load_bytes(name: &SharedString, bytes: &Arc<Vec<u8>>, px: u32, still: bool, c
             State::Failed => Some(Err(ImageCacheError::Other(Arc::new(anyhow::anyhow!("lottie sticker failed"))))),
         };
     }
-    if s.anims.len() >= MAX_ANIMS
+    let evicted = if s.anims.len() >= MAX_ANIMS
         && let Some(old) = s.anims.iter().filter(|(_, (st, _))| !matches!(st, State::Loading)).min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
     {
-        s.anims.remove(&old);
-    }
+        match s.anims.remove(&old) {
+            Some((State::Ready(img), _)) => Some(img),
+            _ => None,
+        }
+    } else {
+        None
+    };
     s.anims.insert(key.clone(), (State::Loading, Instant::now()));
+    if let Some(img) = evicted {
+        cx.drop_image(img, None);
+    }
     let renderer = cx.svg_renderer();
     let bytes = bytes.clone();
     cx.spawn(async move |cx| {
