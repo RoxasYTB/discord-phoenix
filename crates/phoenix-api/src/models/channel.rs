@@ -182,8 +182,13 @@ pub struct Channel {
 }
 
 pub const CHANNEL_FLAG_GUILD_RESOURCE: u64 = 1 << 7;
+pub const CHANNEL_FLAG_OBFUSCATED: u64 = 1 << 17;
 
 impl Channel {
+    pub fn is_obfuscated(&self) -> bool {
+        self.flags & CHANNEL_FLAG_OBFUSCATED != 0
+    }
+
     pub fn is_guild_resource(&self) -> bool {
         self.flags & CHANNEL_FLAG_GUILD_RESOURCE != 0
     }
