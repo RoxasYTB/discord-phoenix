@@ -170,7 +170,9 @@ fn overview(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyEle
             div().size(z(48.)).rounded_full().bg(crate::theme::c(col)).flex().items_center().justify_center().child(icon(if n == 0 { "tv" } else { "play" }, 28., idx::WHITE)).into_any_element(),
             name.into(),
             text(12., 16., FontWeight::NORMAL, idx::TEXT_DEFAULT, crate::t!(desc)),
-            button_sm(("gs2-int-connect", n), crate::t!(cta), BtnKind::Primary).into_any_element(),
+            button_sm(("gs2-int-connect", n), crate::t!(cta), BtnKind::Primary)
+                .on_click(cx.listener(move |a, _, _, cx| crate::ui::settings::connections::connect(a, if n == 0 { "twitch" } else { "youtube" }, cx)))
+                .into_any_element(),
         ));
     }
     p = p.child(divider(32.)).child(div().mb(z(16.)).child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!("gs2.bots_apps"))));

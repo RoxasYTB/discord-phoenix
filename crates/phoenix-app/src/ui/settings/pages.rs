@@ -1786,7 +1786,7 @@ static ACTIVITY: &[B] = &[
     B::Switch("act-voice", "sp.at.voice", "sp.at.voice_d", Bind::Proto),
 ];
 
-fn connection_tiles(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
+fn connection_tiles(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let tile = |(name, url, app): (&'static str, String, bool)| {
         let logo = if app { 28. } else { 32. };
         div()
@@ -1799,6 +1799,7 @@ fn connection_tiles(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
             .justify_center()
             .cursor_pointer()
             .hover(|d| d.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
+            .on_click(cx.listener(move |a, _, _, cx| super::connections::connect(a, super::connections::platform_kind(name), cx)))
             .child(gpui::img(SharedString::from(url)).size(z(logo)).when(app, |i| i.rounded_full()).object_fit(gpui::ObjectFit::Contain))
     };
     div()

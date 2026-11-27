@@ -1493,6 +1493,8 @@ sp.at.voice_d: "Autorise tout le monde dans un salon vocal partagé à rejoindre
 sp.cn.t1: "Connexions"
 sp.cn.t1_d: "Ce sont les comptes des autres plateformes. Les connecter ici peut te permettre de déverrouiller de nouvelles fonctionnalités sur Discord, comme la possibilité de partager ce que tu écoutes actuellement, de recevoir des paiements de manière sûre et sécurisée, et plus encore."
 sp.cn.add: "Ajouter une nouvelle connexion"
+sp.cn.own_flow: "Cette plateforme se connecte avec sa propre fenêtre, pas encore disponible dans Phoenix."
+sp.cn.connect_error: "Impossible de lancer la connexion. Réessaie plus tard."
 sp.cn.t2: "Applications autorisées"
 sp.cn.t2_d: "Cela inclut les services tiers auxquels tu as donné la permission d'accéder à ton compte Discord. Tu peux consulter ce que chaque application peut faire et révoquer leur accès à tout moment."
 sp.cn.none: "La gestion des applications autorisées nécessite le client officiel."

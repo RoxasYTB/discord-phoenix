@@ -72,6 +72,59 @@ pub fn fetch(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     .detach();
 }
 
+pub fn platform_kind(label: &str) -> &'static str {
+    match label {
+        "Riot Games" | "League of Legends" => "riotgames",
+        "Battle.net" => "battlenet",
+        "Bluesky" => "bluesky",
+        "Letterboxd" => "letterboxd",
+        "PayPal" => "paypal",
+        "Reddit" => "reddit",
+        "Steam" => "steam",
+        "X" => "twitter",
+        "eBay" => "ebay",
+        "Crunchyroll" => "crunchyroll",
+        "PlayStation Network" => "playstation",
+        "Spotify" => "spotify",
+        "Xbox" => "xbox",
+        "Amazon Music" => "amazon-music",
+        "Bungie.net" => "bungie",
+        "Domain" => "domain",
+        "Epic Games" => "epicgames",
+        "Facebook" => "facebook",
+        "GitHub" => "github",
+        "Roblox" => "roblox",
+        "Twitch" => "twitch",
+        "YouTube" => "youtube",
+        _ => "",
+    }
+}
+
+pub fn own_flow(kind: &str) -> bool {
+    matches!(kind, "crunchyroll" | "xbox" | "playstation" | "playstation-stg" | "domain" | "bluesky" | "mastodon")
+}
+
+pub fn authorize_path(kind: &str) -> Option<String> {
+    let kind = if kind == "leagueoflegends" { "riotgames" } else { kind };
+    (!kind.is_empty() && !own_flow(kind)).then(|| format!("/connections/{kind}/authorize?"))
+}
+
+pub fn connect(app: &mut PhoenixApp, kind: &str, cx: &mut Context<PhoenixApp>) {
+    let Some(path) = authorize_path(kind) else {
+        app.parity_toast(crate::t!("sp.cn.own_flow"), cx);
+        return;
+    };
+    let fut = app.backend.connection_authorize(path);
+    cx.spawn(async move |this, cx| {
+        let res = fut.await;
+        let _ = this.update(cx, |a, cx| match res {
+            Ok(Some(url)) => cx.open_url(&url),
+            _ => a.parity_toast(crate::t!("sp.cn.connect_error"), cx),
+        });
+    })
+    .detach();
+}
+
 pub fn platform_label(kind: &str) -> &'static str {
     match kind {
         "riotgames" => "Riot Games",
@@ -249,6 +302,20 @@ pub fn render(_: &PhoenixApp, _: &mut Context<PhoenixApp>) -> AnyElement {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tiles_map_to_the_client_connect_flow() {
+        assert_eq!(authorize_path(platform_kind("Steam")).as_deref(), Some("/connections/steam/authorize?"));
+        assert_eq!(authorize_path(platform_kind("X")).as_deref(), Some("/connections/twitter/authorize?"));
+        assert_eq!(authorize_path("leagueoflegends").as_deref(), Some("/connections/riotgames/authorize?"));
+        assert_eq!(authorize_path(platform_kind("Xbox")), None);
+        assert_eq!(authorize_path(platform_kind("Bluesky")), None);
+        assert_eq!(authorize_path(platform_kind("Domain")), None);
+        assert_eq!(authorize_path(""), None);
+        for (name, _, _) in crate::ui::settings::art::connections() {
+            assert!(!platform_kind(name).is_empty(), "{name}");
+        }
+    }
     use serde_json::json;
 
     #[test]

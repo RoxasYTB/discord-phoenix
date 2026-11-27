@@ -379,6 +379,13 @@ impl DiscordBackend {
             Ok(Some(crate::ui::settings::connections::parse(&v)))
         })
     }
+
+    pub(super) fn connection_authorize_impl(&self, path: String) -> BoxFuture<Option<String>> {
+        self.with_session(move |_, s| async move {
+            let v = s.rest.request_json(reqwest::Method::GET, &path, None).await.map_err(api_err)?;
+            Ok(v.get("url").and_then(serde_json::Value::as_str).filter(|u| u.starts_with("https://")).map(str::to_owned))
+        })
+    }
 }
 
 pub(crate) fn parse_guild_affinities(v: &serde_json::Value) -> Vec<crate::model::Id> {

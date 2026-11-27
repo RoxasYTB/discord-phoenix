@@ -1493,6 +1493,8 @@ sp.at.voice_d: "Lets anyone in a shared voice channel join your game without a r
 sp.cn.t1: "Connections"
 sp.cn.t1_d: "These are accounts from other platforms. Connecting them here can unlock new features across Discord, like sharing what you are listening to, receiving payments safely and securely, and more."
 sp.cn.add: "Add a new connection"
+sp.cn.own_flow: "This platform connects through its own window, which Phoenix does not have yet."
+sp.cn.connect_error: "Could not start the connection. Try again later."
 sp.cn.t2: "Authorized Apps"
 sp.cn.t2_d: "These are third-party services you've given permission to access your Discord account. Review what each one can access and revoke it at any time."
 sp.cn.none: "Managing authorized apps requires the official client."
