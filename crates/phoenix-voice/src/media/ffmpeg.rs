@@ -261,25 +261,46 @@ pub fn ivf_frame(codec: Codec, frame: &[u8], pts: u64) -> Result<Vec<u8>> {
 pub fn decode_args(codec: Codec, max: (u32, u32), hwaccel: Option<&str>, dav1d: bool) -> Vec<String> {
     let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error"].map(String::from).to_vec();
     let software_av1 = codec == Codec::Av1 && hwaccel.is_none();
+    let max = if software_av1 { (max.0.min(1280), max.1.min(720)) } else { max };
     if let Some(h) = hwaccel {
         a.extend(["-hwaccel".into(), h.into()]);
     }
-    let threads = if software_av1 { "4" } else { "2" };
+    let threads = if software_av1 { "6" } else { "2" };
     a.extend(["-filter_threads", "1", "-threads", threads, "-probesize", "32", "-analyzeduration", "0", "-flags", "low_delay"].map(String::from));
     if codec == Codec::Av1 {
         if hwaccel.is_some() {
             a.extend(["-c:v", "av1"].map(String::from));
         } else if dav1d {
-            a.extend(["-c:v", "libdav1d", "-max_frame_delay", "2"].map(String::from));
+            a.extend(["-c:v", "libdav1d", "-max_frame_delay", "3"].map(String::from));
         }
     }
     a.extend(["-f", "ivf", "-i", "-", "-vf"].map(String::from));
     a.push(format!(
-        "scale=w='min(iw,{})':h='min(ih,{})':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "scale=w='min(iw,{})':h='min(ih,{})':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=fast_bilinear,format=bgra,vflip",
         max.0, max.1
     ));
-    a.extend(["-fps_mode", "passthrough", "-flush_packets", "1", "-f", "image2pipe", "-c:v", "pam", "-threads", "1", "-pix_fmt", "rgba", "-"].map(String::from));
+    a.extend(["-fps_mode", "passthrough", "-flush_packets", "1", "-f", "image2pipe", "-c:v", "bmp", "-threads", "1", "-pix_fmt", "bgra", "-"].map(String::from));
     a
+}
+
+fn read_video_bitmap(input: &mut impl Read) -> Option<(u32, u32, Vec<u8>)> {
+    let mut header = [0; 54];
+    input.read_exact(&mut header).ok()?;
+    if &header[..2] != b"BM" || header[26..34] != [1, 0, 32, 0, 0, 0, 0, 0] {
+        return None;
+    }
+    let field = |i| u32::from_le_bytes(header[i..i + 4].try_into().unwrap());
+    let (width, height) = (field(18), field(22));
+    if !(1..=8192).contains(&width) || !(1..=8192).contains(&height) {
+        return None;
+    }
+    let bytes = width as usize * height as usize * 4;
+    if field(10) != 54 || field(2) as usize != 54 + bytes {
+        return None;
+    }
+    let mut pixels = vec![0; bytes];
+    input.read_exact(&mut pixels).ok()?;
+    Some((width, height, pixels))
 }
 
 pub fn read_pam(r: &mut impl std::io::BufRead) -> Option<(u32, u32, Vec<u8>)> {
@@ -404,7 +425,7 @@ impl FfmpegDecoder {
             .name("phoenix-video-in".into())
             .spawn(move || {
                 let mut r = std::io::BufReader::with_capacity(1 << 20, stdout);
-                while let Some((w, h, buf)) = read_pam(&mut r) {
+                while let Some((w, h, buf)) = read_video_bitmap(&mut r) {
                     let serial = FRAME_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let frame = VideoFrame { width: w, height: h, pts_us: serial, data: std::sync::Arc::from(buf) };
                     if let Ok(mut s) = slot.lock() {
@@ -493,7 +514,7 @@ mod tests {
         assert!(!a.iter().any(|x| x == "libdav1d"));
         let software = decode_args(Codec::Av1, (1280, 720), None, true);
         assert!(software.windows(2).any(|pair| pair == ["-c:v", "libdav1d"]));
-        assert!(software.windows(2).any(|pair| pair == ["-threads", "4"]));
+        assert!(software.windows(2).any(|pair| pair == ["-threads", "6"]));
         assert_eq!(a[pos("-f") + 1], "ivf");
         assert!(a.iter().any(|x| x.contains("min(iw,1280)") && x.contains("force_original_aspect_ratio=decrease")));
         assert!(!decode_args(Codec::Vp8, (640, 360), None, true).iter().any(|x| x == "-hwaccel" || x == "libdav1d"));
@@ -514,25 +535,28 @@ mod tests {
     }
 
     #[test]
-    fn av1_decoder_accepts_a_full_hd_burst_without_blocking() {
+    fn av1_decoder_keeps_up_with_a_full_hd_source_at_sixty_fps() {
         use std::time::{Duration, Instant};
 
         if !available() || !decoder_support().dav1d {
             return;
         }
-        let Some(frames) = synthetic_frames(Codec::Av1, "testsrc2=s=1920x1080:r=30", 24) else { return };
-        assert_eq!(frames.len(), 24);
+        let Some(frames) = synthetic_frames(Codec::Av1, "testsrc2=s=1920x1080:r=60", 90) else { return };
+        assert_eq!(frames.len(), 90);
         let mut decoder = FfmpegDecoder::spawn_with(Codec::Av1, STREAM_MAX, None).unwrap();
-        for frame in &frames {
+        let start = Instant::now();
+        for (index, frame) in frames.iter().enumerate() {
+            let due = start + Duration::from_nanos(index as u64 * 1_000_000_000 / 60);
+            std::thread::sleep(due.saturating_duration_since(Instant::now()));
             decoder.try_push(frame).unwrap();
         }
-        let deadline = Instant::now() + Duration::from_secs(10);
-        while decoder.decoded() < 22 && Instant::now() < deadline {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while decoder.decoded() < 85 && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(decoder.decoded() >= 22, "only {} AV1 frames decoded", decoder.decoded());
+        assert!(decoder.decoded() >= 85, "only {} AV1 frames decoded", decoder.decoded());
         let latest = decoder.latest.lock().unwrap().clone().unwrap();
-        assert_eq!((latest.width, latest.height), STREAM_MAX);
+        assert_eq!((latest.width, latest.height), CAMERA_MAX);
     }
 
     #[test]
