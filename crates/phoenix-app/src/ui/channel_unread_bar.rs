@@ -6,14 +6,7 @@ use crate::theme::{c, generated::idx, tok, z};
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Mode {
     Unread,
-    Mentions(u32),
-}
-
-#[derive(Default)]
-struct Side {
-    unread: Option<usize>,
-    mention: Option<usize>,
-    mentions: u32,
+    Mentions,
 }
 
 type Bar = Option<(usize, Mode)>;
@@ -30,11 +23,12 @@ struct Item {
     ix: usize,
     place: Place,
     unread: bool,
-    mentions: u32,
+    mentioned: bool,
+    row: bool,
 }
 
-fn counts_as_unread(unread: bool, muted: bool, text: bool, unreads_all: bool) -> bool {
-    unread && !muted && text && unreads_all
+fn counts_as_unread(unread: bool, muted: bool, unreads_all: bool) -> bool {
+    unread && !muted && unreads_all
 }
 
 fn bars(app: &PhoenixApp) -> (Bar, Bar) {
@@ -46,14 +40,20 @@ fn bars(app: &PhoenixApp) -> (Bar, Bar) {
     let laid_out = list.item_is_above_viewport(0).is_some();
     let mut items = Vec::new();
     for (r, row) in app.sidebar_rows.iter().enumerate() {
-        let (SidebarRow::Channel(id) | SidebarRow::Thread(id)) = *row else { continue };
+        let (thread, id) = match *row {
+            SidebarRow::Channel(id) => (false, id),
+            SidebarRow::Thread(id) => (true, id),
+            _ => continue,
+        };
         let Some(ch) = app.channels.get(&id) else { continue };
-        let text = !matches!(ch.kind, crate::model::ChannelKind::Voice | crate::model::ChannelKind::Stage);
-        if !(ch.unread && !ch.muted && text) && ch.mentions == 0 {
+        if matches!(ch.kind, crate::model::ChannelKind::Voice | crate::model::ChannelKind::Stage) {
+            continue;
+        }
+        if !ch.unread && ch.mentions == 0 {
             continue;
         }
         let unreads_all = app.backend.unreads_all(id);
-        let unread = counts_as_unread(ch.unread, ch.muted, text, unreads_all);
+        let unread = counts_as_unread(ch.unread, ch.muted, unreads_all);
         let ix = r + 1;
         let place = match (list.item_is_above_viewport(ix), list.bounds_for_item(ix)) {
             (Some(true), _) => Some(Place::Above),
@@ -79,7 +79,7 @@ fn bars(app: &PhoenixApp) -> (Bar, Bar) {
         if let Some(place) = place
             && (unread || ch.mentions > 0)
         {
-            items.push(Item { ix, place, unread, mentions: ch.mentions });
+            items.push(Item { ix, place, unread, mentioned: ch.mentions > 0, row: !thread });
         }
     }
     let out = pick(&items);
@@ -98,40 +98,25 @@ fn place_of(top: f32, bottom: f32, view_top: f32, view_bottom: f32) -> Place {
 }
 
 fn pick(items: &[Item]) -> (Bar, Bar) {
-    let (mut above, mut below) = (Side::default(), Side::default());
-    let (mut unread_visible, mut mention_visible) = (false, false);
-    for it in items {
-        let (side, is_above) = match it.place {
-            Place::Above => (&mut above, true),
-            Place::Below => (&mut below, false),
-            Place::Visible => {
-                unread_visible |= it.unread;
-                mention_visible |= it.mentions > 0;
-                continue;
-            }
-        };
-        if it.unread && (is_above || side.unread.is_none()) {
-            side.unread = Some(it.ix);
-        }
-        if it.mentions > 0 {
-            if is_above || side.mention.is_none() {
-                side.mention = Some(it.ix);
-            }
-            side.mentions += it.mentions;
-        }
-    }
-    let pick = |s: &Side| -> Bar {
-        if !mention_visible && s.mentions > 0 {
-            return s.mention.map(|ix| (ix, Mode::Mentions(s.mentions)));
-        }
-        if !unread_visible { s.unread.map(|ix| (ix, Mode::Unread)) } else { None }
+    let first = |place: Place, rev: bool, f: fn(&Item) -> bool| {
+        let hit = |i: &&Item| i.place == place && f(i);
+        let found = if rev { items.iter().rev().find(hit) } else { items.iter().find(hit) };
+        found.map(|i| i.ix)
     };
-    let bottom = pick(&below);
-    let top = pick(&above);
-    let is_m = |b: &Bar| matches!(b, Some((_, Mode::Mentions(_))));
-    let show_top = top.is_some() && (bottom.is_none() || (!is_m(&bottom) && is_m(&top)));
-    let show_bottom = bottom.is_some() && (is_m(&bottom) || !show_top);
-    (top.filter(|_| show_top), bottom.filter(|_| show_bottom))
+    let top_mention = first(Place::Above, false, |i| i.mentioned);
+    let top_unread = first(Place::Above, false, |i| i.unread);
+    let bottom_mention = first(Place::Below, true, |i| i.mentioned);
+    let bottom_unread = first(Place::Below, true, |i| i.unread);
+    let unread_visible = items.iter().any(|i| i.place == Place::Visible && i.row && i.unread);
+    let bar = |mention: Option<usize>, unread: Option<usize>| -> Bar {
+        mention.map(|ix| (ix, Mode::Mentions)).or(unread.map(|ix| (ix, Mode::Unread)))
+    };
+    let hide_top = top_mention.is_none() && (unread_visible || bottom_unread.is_some() || bottom_mention.is_some());
+    let hide_bottom = bottom_mention.is_none() && unread_visible;
+    (
+        bar(top_mention, top_unread).filter(|_| !hide_top),
+        bar(bottom_mention, bottom_unread).filter(|_| !hide_bottom),
+    )
 }
 
 pub fn render(app: &PhoenixApp) -> Vec<gpui::AnyElement> {
@@ -147,11 +132,10 @@ pub fn render(app: &PhoenixApp) -> Vec<gpui::AnyElement> {
 
 fn bar_el(app: &PhoenixApp, ix: usize, mode: Mode, top: bool) -> gpui::AnyElement {
     let list = app.sidebar_list.clone();
-    let mention = matches!(mode, Mode::Mentions(_));
+    let mention = mode == Mode::Mentions;
     let label = match mode {
         Mode::Unread => crate::t!("channels.unread_bar"),
-        Mode::Mentions(1) => crate::t!("channels.mention_bar_one"),
-        Mode::Mentions(n) => crate::t!("channels.mention_bar", count = n),
+        Mode::Mentions => crate::t!("channels.mentions_bar"),
     };
     div()
         .absolute()
@@ -217,25 +201,38 @@ fn bar_el(app: &PhoenixApp, ix: usize, mode: Mode, top: bool) -> gpui::AnyElemen
 mod tests {
     use super::*;
 
-    fn it(ix: usize, place: Place, unread: bool, mentions: u32) -> Item {
-        Item { ix, place, unread, mentions }
+    fn it(ix: usize, place: Place, unread: bool, mentioned: bool) -> Item {
+        Item { ix, place, unread, mentioned, row: true }
     }
 
     #[test]
-    fn only_mentions_channels_do_not_count() {
-        assert!(counts_as_unread(true, false, true, true));
-        assert!(!counts_as_unread(true, false, true, false));
-        assert!(!counts_as_unread(true, true, true, true));
-        assert!(!counts_as_unread(true, false, false, true));
+    fn only_mentions_and_muted_channels_do_not_count() {
+        assert!(counts_as_unread(true, false, true));
+        assert!(!counts_as_unread(true, false, false));
+        assert!(!counts_as_unread(true, true, true));
     }
 
     #[test]
     fn top_bar_needs_no_unread_visible_or_below() {
-        let above = it(2, Place::Above, true, 0);
+        let above = it(2, Place::Above, true, false);
         assert_eq!(pick(&[above]), (Some((2, Mode::Unread)), None));
-        assert_eq!(pick(&[above, it(5, Place::Visible, true, 0)]), (None, None));
-        assert_eq!(pick(&[above, it(9, Place::Below, true, 0)]), (None, Some((9, Mode::Unread))));
-        assert_eq!(pick(&[above, it(5, Place::Visible, false, 0)]), (Some((2, Mode::Unread)), None));
+        assert_eq!(pick(&[above, it(5, Place::Visible, true, false)]), (None, None));
+        assert_eq!(pick(&[above, it(9, Place::Below, true, false)]), (None, Some((9, Mode::Unread))));
+        assert_eq!(pick(&[above, it(5, Place::Visible, false, true)]), (Some((2, Mode::Unread)), None));
+    }
+
+    #[test]
+    fn a_visible_unread_thread_does_not_hide_the_bars() {
+        let thread = Item { row: false, ..it(5, Place::Visible, true, false) };
+        assert_eq!(pick(&[it(2, Place::Above, true, false), thread]), (Some((2, Mode::Unread)), None));
+    }
+
+    #[test]
+    fn bars_jump_to_the_farthest_channel_like_the_client_walk() {
+        let r = pick(&[it(1, Place::Above, true, false), it(3, Place::Above, true, false)]);
+        assert_eq!(r, (Some((1, Mode::Unread)), None));
+        let r = pick(&[it(8, Place::Below, true, false), it(12, Place::Below, true, false)]);
+        assert_eq!(r, (None, Some((12, Mode::Unread))));
     }
 
     #[test]
@@ -248,10 +245,12 @@ mod tests {
     }
 
     #[test]
-    fn mentions_win_over_unreads() {
-        let r = pick(&[it(2, Place::Above, true, 2), it(9, Place::Below, true, 0)]);
-        assert_eq!(r, (Some((2, Mode::Mentions(2))), None));
-        let r = pick(&[it(2, Place::Above, true, 0), it(9, Place::Below, false, 1)]);
-        assert_eq!(r, (None, Some((9, Mode::Mentions(1)))));
+    fn mentions_win_over_unreads_and_show_even_when_an_unread_is_visible() {
+        let r = pick(&[it(2, Place::Above, true, true), it(9, Place::Below, true, false)]);
+        assert_eq!(r, (Some((2, Mode::Mentions)), Some((9, Mode::Unread))));
+        let r = pick(&[it(2, Place::Above, true, false), it(9, Place::Below, false, true)]);
+        assert_eq!(r, (None, Some((9, Mode::Mentions))));
+        let r = pick(&[it(4, Place::Visible, true, false), it(9, Place::Below, false, true)]);
+        assert_eq!(r, (None, Some((9, Mode::Mentions))));
     }
 }
