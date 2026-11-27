@@ -284,6 +284,9 @@ pub trait Backend: Send + Sync + 'static {
     fn member_permissions(&self, _channel: Id, _user: Id) -> Option<u64> {
         None
     }
+    fn member_timed_out(&self, _guild: Id, _user: Id) -> bool {
+        false
+    }
     fn premium_group_member(&self) -> bool {
         false
     }

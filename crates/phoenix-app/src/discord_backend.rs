@@ -812,6 +812,12 @@ impl Backend for DiscordBackend {
         s.cache.member_permissions_in(sf(channel), sf(user)).map(|p| p.bits())
     }
 
+    fn member_timed_out(&self, guild: Id, user: Id) -> bool {
+        let Ok(s) = self.inner.session() else { return false };
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        s.cache.member(sf(guild), sf(user)).is_some_and(|m| phoenix_api::models::timed_out(m.communication_disabled_until.as_deref(), now))
+    }
+
     fn member_can_view(&self, channel: Id, user: Id) -> bool {
         let Ok(s) = self.inner.session() else { return true };
         s.cache

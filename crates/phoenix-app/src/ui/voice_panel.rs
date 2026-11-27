@@ -1109,52 +1109,20 @@ pub fn voice_user_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, user: Id) -
         .into_any_element()
 }
 
-fn check_row(
-    id: &'static str,
-    label: SharedString,
-    on: bool,
-    f: impl Fn(&mut PhoenixApp) + 'static,
-    cx: &mut Context<PhoenixApp>,
-) -> AnyElement {
-    div()
-        .id(id)
-        .h(z(32.))
-        .px(z(8.))
-        .my(z(2.))
-        .rounded(z(2.))
-        .flex()
-        .items_center()
-        .justify_between()
-        .cursor_pointer()
-        .text_size(z(14.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(c(Palette::INTERACTIVE))
-        .hover(|s| s.bg(c(Palette::BLURPLE)).text_color(gpui::white()))
-        .child(label)
-        .child(
-            div()
-                .size(z(18.))
-                .rounded(z(4.))
-                .border_1()
-                .border_color(c(if on { Palette::BLURPLE } else { 0xB5BAC1 }))
-                .when(on, |d| d.bg(c(Palette::BLURPLE)))
-                .flex()
-                .items_center()
-                .justify_center()
-                .when(on, |d| d.child(div().size(z(8.)).rounded(z(1.)).bg(gpui::white()))),
-        )
-        .on_click(cx.listener(move |a, _, _, cx| {
+fn check_row(label: SharedString, on: bool, f: impl Fn(&mut PhoenixApp) + 'static, cx: &mut Context<PhoenixApp>) -> MenuItem {
+    let e = cx.entity();
+    MenuItem::check(label, on, move |_, _, cx: &mut App| {
+        e.update(cx, |a, cx| {
             f(a);
             cx.notify();
-        }))
-        .into_any_element()
+        })
+    })
 }
 
 pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>) -> Vec<MenuItem> {
     let mut items = Vec::new();
     if user == app.me.id {
-        items.push(MenuItem::Custom(check_row(
-            "vm-self-mute",
+        items.push(check_row(
             crate::t!("voice.mute"),
             app.mic_muted,
             |a| {
@@ -1162,9 +1130,8 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
                 crate::voice::sync_self_state(a);
             },
             cx,
-        )));
-        items.push(MenuItem::Custom(check_row(
-            "vm-self-deafen",
+        ));
+        items.push(check_row(
             crate::t!("voice.deafen"),
             app.deafened,
             |a| {
@@ -1172,7 +1139,7 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
                 crate::voice::sync_self_state(a);
             },
             cx,
-        )));
+        ));
         let e = cx.entity();
         items.push(MenuItem::Separator);
         items.push(MenuItem::action(crate::t!("voice.voice_settings"), None, move |_, _, cx| {
@@ -1209,8 +1176,7 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
             .into_any_element(),
     ));
     items.push(MenuItem::Separator);
-    items.push(MenuItem::Custom(check_row(
-        "vm-user-mute",
+    items.push(check_row(
         crate::t!("voice.mute"),
         ua.muted,
         move |_| {
@@ -1223,9 +1189,8 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
             );
         },
         cx,
-    )));
-    items.push(MenuItem::Custom(check_row(
-        "vm-user-sb-mute",
+    ));
+    items.push(check_row(
         crate::t!("voice.mute_soundboard"),
         ua.soundboard_muted,
         move |_| {
@@ -1238,9 +1203,8 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
             );
         },
         cx,
-    )));
-    items.push(MenuItem::Custom(check_row(
-        "vm-user-video-off",
+    ));
+    items.push(check_row(
         crate::t!("voice.disable_video"),
         ua.video_disabled,
         move |_| {
@@ -1253,7 +1217,7 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
             );
         },
         cx,
-    )));
+    ));
     items
 }
 
