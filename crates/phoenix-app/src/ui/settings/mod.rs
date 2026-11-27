@@ -74,6 +74,7 @@ pub struct SyncedSettings {
     pub rest: std::collections::HashMap<&'static str, bool>,
     pub favorites: phoenix_api::rest::favorites::Favorites,
     pub custom_theme: Option<crate::theme::client_theme::CustomTheme>,
+    pub raid_alerts: std::collections::HashMap<u64, phoenix_api::rest::settings::RaidAlerts>,
 }
 
 impl Default for SyncedSettings {
@@ -89,6 +90,7 @@ impl Default for SyncedSettings {
             rest: Default::default(),
             favorites: Default::default(),
             custom_theme: None,
+            raid_alerts: Default::default(),
         }
     }
 }
@@ -104,6 +106,7 @@ pub enum SettingsPatch {
     Density(crate::theme::Density),
     Rest(&'static str, bool),
     Favorites(Box<phoenix_api::rest::favorites::Favorites>),
+    RaidAlerts(u64, phoenix_api::rest::settings::RaidAlerts),
 }
 
 impl SyncedSettings {
@@ -131,6 +134,9 @@ impl SyncedSettings {
             }
             SettingsPatch::Density(d) => self.density = *d,
             SettingsPatch::Favorites(f) => self.favorites = (**f).clone(),
+            SettingsPatch::RaidAlerts(g, a) => {
+                self.raid_alerts.insert(*g, *a);
+            }
         }
     }
     pub fn flag(&self, id: &str) -> bool {

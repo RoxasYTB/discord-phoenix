@@ -121,6 +121,10 @@ impl DiscordBackend {
                 out.rest.insert(*id, *v);
                 return Ok(out);
             }
+            if let SettingsPatch::RaidAlerts(g, a) = &patch {
+                let raw = s.rest.save_guild_raid_alerts(*g, *a).await.map_err(api_err)?;
+                return synced_raw(&raw);
+            }
             if let SettingsPatch::Favorites(f) = &patch {
                 let raw = s.rest.patch_favorites(f).await.map_err(api_err)?;
                 return synced_raw(&raw);
@@ -131,7 +135,7 @@ impl DiscordBackend {
                 SettingsPatch::DeveloperMode(b) => SettingChange::DeveloperMode(*b),
                 SettingsPatch::Locale(l) => SettingChange::Locale(l.to_string()),
                 SettingsPatch::AllowServerDms(b) => SettingChange::DefaultGuildsRestricted(!*b),
-                SettingsPatch::Rest(..) | SettingsPatch::Favorites(..) => unreachable!("handled above"),
+                SettingsPatch::Rest(..) | SettingsPatch::Favorites(..) | SettingsPatch::RaidAlerts(..) => unreachable!("handled above"),
                 SettingsPatch::Proto(id, v) => {
                     crate::ui::settings::synced_map::change(id, *v).ok_or_else(|| err(format!("unknown setting {id}")))?
                 }
@@ -169,6 +173,7 @@ fn synced_raw(raw: &[u8]) -> Result<SyncedSettings, crate::backend::BackendError
         s.proto.insert(crate::ui::modals::custom_status::EXPIRES_KEY, e);
     }
     s.favorites = phoenix_api::rest::favorites::Favorites::from_settings(raw);
+    s.raid_alerts = phoenix_api::rest::settings::guild_raid_alerts(raw);
     s.custom_theme = phoenix_api::rest::settings::custom_user_theme(raw).and_then(|t| crate::theme::client_theme::CustomTheme::parse(&t.colors, t.angle, t.base_mix));
     Ok(s)
 }
@@ -193,6 +198,7 @@ pub fn synced(p: &PreloadedUserSettings) -> SyncedSettings {
         density: density_from_proto(p.ui_density()).unwrap_or(d.density),
         favorites: Default::default(),
         custom_theme: None,
+        raid_alerts: Default::default(),
     }
 }
 

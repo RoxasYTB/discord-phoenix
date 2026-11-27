@@ -14,7 +14,7 @@ thread_local! {
     static POST: RefCell<Option<(crate::commands::ForumPost, Id, Point<Pixels>)>> = const { RefCell::new(None) };
 }
 
-const MUTE_DURATIONS: [(i64, &str); 6] = [
+pub const MUTE_DURATIONS: [(i64, &str); 6] = [
     (900, "menu.mute.15m"),
     (3600, "menu.mute.1h"),
     (10_800, "menu.mute.3h"),

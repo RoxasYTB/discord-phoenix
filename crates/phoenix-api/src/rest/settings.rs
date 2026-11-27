@@ -387,6 +387,87 @@ fn field_fixed64(tag: u32, v: u64, out: &mut Vec<u8>) {
     out.extend_from_slice(&v.to_le_bytes());
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RaidAlerts {
+    pub push_off: bool,
+    pub nag_off: bool,
+}
+
+fn guild_entries(raw: &[u8]) -> Vec<(u64, Vec<u8>)> {
+    let mut out: Vec<(u64, Vec<u8>)> = Vec::new();
+    for (_, _, _, all) in fields(raw).into_iter().filter(|f| f.0 == 3 && f.1 == 2) {
+        for (_, _, _, entry) in fields(all).into_iter().filter(|f| f.0 == 1 && f.1 == 2) {
+            let mut key = None;
+            let mut value = Vec::new();
+            for (t, w, v, d) in fields(entry) {
+                match (t, w) {
+                    (1, 1) => key = Some(v),
+                    (2, 2) => value.extend_from_slice(d),
+                    _ => {}
+                }
+            }
+            let Some(k) = key else { continue };
+            match out.iter_mut().find(|e| e.0 == k) {
+                Some(e) => e.1.extend_from_slice(&value),
+                None => out.push((k, value)),
+            }
+        }
+    }
+    out
+}
+
+pub fn guild_raid_alerts(raw: &[u8]) -> std::collections::HashMap<u64, RaidAlerts> {
+    guild_entries(raw)
+        .into_iter()
+        .map(|(k, v)| {
+            let flag = |tag: u32| fields(&v).iter().rev().find(|f| f.0 == tag && f.1 == 0).is_some_and(|f| f.2 != 0);
+            (k, RaidAlerts { push_off: flag(8), nag_off: flag(9) })
+        })
+        .collect()
+}
+
+pub fn with_guild_raid_alerts(raw: &[u8], guild: u64, alerts: RaidAlerts) -> Vec<u8> {
+    let mut entries = guild_entries(raw);
+    if !entries.iter().any(|e| e.0 == guild) {
+        entries.push((guild, Vec::new()));
+    }
+    let mut all = Vec::new();
+    for (k, v) in entries {
+        let value = if k == guild {
+            let mut o = Vec::new();
+            for (t, w, x, d) in fields(&v) {
+                if !matches!(t, 8 | 9) {
+                    reencode(t, w, x, d, &mut o);
+                }
+            }
+            if alerts.push_off {
+                field_varint(8, 1, &mut o);
+            }
+            if alerts.nag_off {
+                field_varint(9, 1, &mut o);
+            }
+            o
+        } else {
+            v
+        };
+        let mut entry = Vec::new();
+        varint((1 << 3) | 1, &mut entry);
+        entry.extend_from_slice(&k.to_le_bytes());
+        field_bytes(2, &value, &mut entry);
+        field_bytes(1, &entry, &mut all);
+    }
+    let mut kept = Vec::new();
+    for (_, _, _, d) in fields(raw).into_iter().filter(|f| f.0 == 3 && f.1 == 2) {
+        for (t, w, x, dd) in fields(d) {
+            if t != 1 {
+                reencode(t, w, x, dd, &mut kept);
+            }
+        }
+    }
+    all.extend_from_slice(&kept);
+    replace_field(raw, 3, &all)
+}
+
 pub fn encode_custom_status(c: &CustomStatusProto) -> Vec<u8> {
     let mut o = Vec::new();
     if !c.text.is_empty() {
@@ -558,6 +639,10 @@ impl RestClient {
             .call(Method::PATCH, "/users/@me/settings-proto/1", Body::Json(json!({ "settings": STANDARD.encode(delta) })))
             .await?;
         STANDARD.decode(b.settings.trim()).map_err(|e| Error::Protocol(format!("settings base64: {e}")))
+    }
+
+    pub async fn save_guild_raid_alerts(&self, guild: u64, alerts: RaidAlerts) -> Result<Vec<u8>> {
+        self.edit_settings_proto(move |raw| with_guild_raid_alerts(&raw, guild, alerts)).await
     }
 
     pub async fn save_guild_folders(&self, folders: &[FolderProto]) -> Result<Vec<u8>> {
@@ -736,6 +821,32 @@ pub fn from_json(v: &Value) -> PreloadedUserSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raid_alert_flags_round_trip_inside_the_guild_map() {
+        let mut other = Vec::new();
+        field_varint(2, 7, &mut other);
+        let mut entry = Vec::new();
+        varint(9, &mut entry);
+        entry.extend_from_slice(&42u64.to_le_bytes());
+        field_bytes(2, &other, &mut entry);
+        let mut all = Vec::new();
+        field_bytes(1, &entry, &mut all);
+        let mut raw = Vec::new();
+        field_bytes(3, &all, &mut raw);
+        field_varint(20, 5, &mut raw);
+        assert_eq!(guild_raid_alerts(&raw).get(&42), Some(&RaidAlerts::default()));
+        let next = with_guild_raid_alerts(&raw, 42, RaidAlerts { push_off: true, nag_off: false });
+        assert_eq!(guild_raid_alerts(&next).get(&42), Some(&RaidAlerts { push_off: true, nag_off: false }));
+        let entry = guild_entries(&next).into_iter().find(|e| e.0 == 42).unwrap().1;
+        assert!(fields(&entry).iter().any(|f| f.0 == 2 && f.2 == 7));
+        assert_eq!(proto_read(&next, &[20], false, false), Some(ProtoValue::Int(5)));
+        let added = with_guild_raid_alerts(&next, 7, RaidAlerts { push_off: false, nag_off: true });
+        let map = guild_raid_alerts(&added);
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get(&7), Some(&RaidAlerts { push_off: false, nag_off: true }));
+        assert_eq!(map.get(&42), Some(&RaidAlerts { push_off: true, nag_off: false }));
+    }
 
     #[test]
     fn reads_the_custom_user_theme() {
