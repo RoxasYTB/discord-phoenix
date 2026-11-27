@@ -64,6 +64,7 @@ const SOUNDBOARD: &str = "icons/voice/soundboard.svg";
 const ACTIVITY: &str = "icons/voice/activity.svg";
 const SHIELD: &str = "icons/voice/shield.svg";
 const NOISE: &str = "icons/voice/noise.svg";
+const NOISE_OFF: &str = "icons/voice/noise-off.svg";
 const VIDEO: &str = "icons/voice/video-small.svg";
 
 pub fn svg_asset(path: &str) -> Option<&'static str> {
@@ -797,7 +798,7 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
                             panel_button(
                                 "voice-noise",
                                 lottie_glyph(panel_key("voice-noise", false), Lottie::Krisp, noise, false, || {
-                                    asset_icon(NOISE, 20. * crate::theme::zoom(), t(idx::ICON_SUBTLE)).into_any_element()
+                                    asset_icon(if noise { NOISE } else { NOISE_OFF }, 20. * crate::theme::zoom(), t(idx::ICON_SUBTLE)).into_any_element()
                                 }),
                                 false,
                             )

@@ -141,7 +141,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("voice/soundboard", &["SoundboardIcon"]),
     ("voice/activity", &["AppsIcon"]),
     ("voice/noise", &["WaveformIcon"]),
-    ("voice/noise-suppressed", &["WaveformSlashIcon", "WaveformOffIcon", "NoiseCancellationIcon"]),
+    ("voice/noise-off", &["WaveformSlashIcon"]),
     ("inbox/filter", &["SlidersHorizontalIcon", "FiltersHorizontalIcon", "SlidersIcon"]),
     ("inbox/read-all", &["DoubleCheckmarkIcon", "CheckmarkDoubleIcon", "ChatCheckIcon"]),
     ("inbox/jump", &["ChatArrowRightIcon"]),
