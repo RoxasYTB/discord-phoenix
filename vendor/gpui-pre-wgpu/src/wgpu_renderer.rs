@@ -3030,6 +3030,38 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn headless_renderer_cuts_round_holes_through_monochrome_sprites() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let mut scene = Scene::default();
+        let index = scene.push_cutouts(gpui::CutoutSet {
+            holes: [
+                gpui::CutoutHole {
+                    origin: [16.0, 16.0],
+                    size: [16.0, 16.0],
+                    radius: 8.0,
+                    radius_y: 8.0,
+                    pad: [0.; 2],
+                },
+                gpui::CutoutHole::default(),
+            ],
+        });
+        let mut icon = full_coverage_sprite(&renderer, "cut-icon", (0.0, 0.0), 32, 32, gpui::red())?;
+        icon.pad = gpui::poly_with_cutout(0, index);
+        scene.insert_primitive(icon);
+        let plain = full_coverage_sprite(&renderer, "plain-icon", (32.0, 0.0), 32, 32, gpui::red())?;
+        scene.insert_primitive(plain);
+        scene.finish();
+
+        let image = renderer.render_scene_to_image(&scene, device_size(64, 32))?;
+        assert_pixel(&image, 4, 4, RED);
+        assert_pixel(&image, 24, 24, BLACK);
+        assert_pixel(&image, 17, 17, RED);
+        assert_pixel(&image, 56, 24, RED);
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn headless_renderer_fills_gradient_glyphs_per_pixel() -> anyhow::Result<()> {
         let mut renderer = WgpuHeadlessRenderer::new()?;
         let mut scene = Scene::default();
