@@ -78,7 +78,7 @@ fn save_progress(app: &mut PhoenixApp, entries: impl IntoIterator<Item = (String
     for (key, value) in entries {
         changed |= app.prefs.local.ui.insert(key, value) != Some(value);
     }
-    if changed {
+    if changed && (crate::paths::is_sandboxed() || !crate::actions::guard::agent_session()) {
         app.prefs.local.save_blocking();
     }
 }
@@ -282,7 +282,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, panel_heigh
     }));
     let desc_el = InteractiveText::new("nsw-guide", styled)
         .on_click(link.into_iter().collect(), |_, _, cx| {
-            cx.open_url("https://support.discord.com/hc/fr/articles/360045138571")
+            cx.open_url("https://support.discord.com/hc/articles/360045138571")
         });
     Some(panel.child(
         div().id("nsw-checklist")
