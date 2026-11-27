@@ -407,7 +407,7 @@ pub fn upload_progress_card(
             .rounded(z(4.))
             .bg(tk(idx::PROGRESSBAR_TRACK_BACKGROUND))
             .overflow_hidden()
-            .child(div().h_full().bg(tk(idx::PROGRESSBAR_INDICATOR_BACKGROUND)).w(gpui::relative(frac)))
+            .child(div().h_full().rounded(z(4.)).bg(tk(idx::PROGRESSBAR_INDICATOR_BACKGROUND)).w(gpui::relative(frac)))
             .into_any_element()
     };
     Some(
@@ -439,7 +439,7 @@ pub fn upload_progress_card(
                                     .min_w_0()
                                     .truncate()
                                     .text_size(z(16.))
-                                    .line_height(z(20.))
+                                    .line_height(z(22.))
                                     .text_color(tk(idx::INTERACTIVE_TEXT_ACTIVE))
                                     .child(s.label.clone()),
                             )
@@ -449,7 +449,7 @@ pub fn upload_progress_card(
                                         .flex_none()
                                         .ml(z(4.))
                                         .text_size(z(16.))
-                                        .line_height(z(20.))
+                                        .line_height(z(22.))
                                         .text_color(tk(idx::TEXT_MUTED))
                                         .child(SharedString::from(format!("\u{2014} {}", human_size(s.size)))),
                                 )
@@ -467,7 +467,7 @@ pub fn upload_progress_card(
                         .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
                         .hover(|s| s.text_color(tk(idx::INTERACTIVE_TEXT_HOVER)))
                         .child(svg().path(crate::icons::path("close")).flex_none().size(z(24.)))
-                        .on_click(move |_, _, cx| e.update(cx, |a, cx| a.cancel_upload(key, cx))),
+                        .on_click(move |_, window, cx| e.update(cx, |a, cx| a.cancel_upload(key, window, cx))),
                 )
             })
             .into_any_element(),

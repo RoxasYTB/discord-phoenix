@@ -27,10 +27,21 @@ fn radius(outer: bool) -> gpui::Pixels {
     z(if outer { OUTER_R } else { INNER_R })
 }
 
-fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
+fn request_size(a: &Attachment, (bw, bh): (f32, f32)) -> (u32, u32) {
+    if a.width == 0 || a.height == 0 {
+        return ((bw * 2.).ceil() as u32, (bh * 2.).ceil() as u32);
+    }
+    let (w, h) = (a.width as f32, a.height as f32);
+    let s = ((bw / w).max(bh / h) * 2.).min(1.);
+    (((w * s).round() as u32).max(1), ((h * s).round() as u32).max(1))
+}
+
+fn cell(a: &Attachment, frame: (f32, f32), k: Corners, cx: &App) -> gpui::Div {
     let key = a.url.clone();
     let spoiler = a.is_spoiler() && !media::is_revealed(&key, cx);
-    let src = if a.kind == AttachmentKind::Video { media::video_poster(&a.url, 1100, 700) } else { media::resized(&a.url, 1100, 700) };
+    let (rw, rh) = request_size(a, frame);
+    let gif = a.kind == AttachmentKind::Image && a.filename.to_ascii_lowercase().ends_with(".gif");
+    let src = if a.kind == AttachmentKind::Video || (gif && !media::gif_plays(&a.url)) { media::video_poster(&a.url, rw, rh) } else { media::animated_media(&a.url, rw, rh) };
     let viewer = media::ViewerImage {
         url: media::resized(&a.url, a.width.min(2048), a.height.min(2048)),
         original: if a.original.is_empty() { a.url.clone() } else { a.original.clone() },
@@ -62,8 +73,15 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
         .rounded_bl(radius(k.bl))
         .rounded_br(radius(k.br))
         .bg(crate::ui::chat::tk(crate::theme::generated::idx::BACKGROUND_MOD_NORMAL))
-        .child(
-            div()
+        .when(gif && media::gif_plays(&a.url) && !media::lru::ready(&src), |d| {
+            let mut p = img(media::video_poster(&a.url, rw, rh));
+            if let Some(cache) = media::lru::chat() {
+                p = p.image_cache(&cache);
+            }
+            d.child(p.absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover))
+        })
+        .child({
+            let inner = div()
                 .id(gpui::ElementId::Name(format!("mosaic-{src}").into()))
                 .size_full()
                 .cursor_pointer()
@@ -85,8 +103,9 @@ fn cell(a: &Attachment, k: Corners, cx: &App) -> gpui::Div {
                     } else {
                         media::open_viewer(viewer.clone(), cx);
                     }
-                }),
-        )
+                });
+            if gif { media::gif_hover(a.url.clone(), inner).size_full().into_any_element() } else { inner.into_any_element() }
+        })
         .when(spoiler, |d| {
             let group: gpui::SharedString = format!("mosaic-spoiler-{}", a.url).into();
             d.group(group.clone())
@@ -250,7 +269,7 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
         let el: AnyElement = match r {
             Row::One => {
                 let k = Corners { tl: top, tr: top, bl: bottom, br: bottom };
-                ratio_box(max_w / g.content, g.cap).child(cell(its[0], k, cx).absolute().inset_0()).into_any_element()
+                ratio_box(max_w / g.content, g.cap).child(cell(its[0], (max_w, g.content.min(g.cap)), k, cx).absolute().inset_0()).into_any_element()
             }
             Row::Two => {
                 ratio_box(max_w / g.content, g.cap)
@@ -261,14 +280,14 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                             .flex()
                             .flex_row()
                             .gap(z(GAP))
-                            .child(cell(its[0], Corners { tl: top, bl: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full())
-                            .child(cell(its[1], Corners { tr: top, br: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full()),
+                            .child(cell(its[0], (half(max_w), g.content.min(g.cap)), Corners { tl: top, bl: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full())
+                            .child(cell(its[1], (half(max_w), g.content.min(g.cap)), Corners { tr: top, br: bottom, ..Default::default() }, cx).flex_1().min_w_0().h_full()),
                     )
                     .into_any_element()
             }
             Row::Three => ratio_box(max_w / g.content, g.cap)
                 .child(div().absolute().inset_0().flex().flex_row().gap(z(GAP)).child({
-                    let mut solo = cell(its[0], Corners { tl: true, bl: true, ..Default::default() }, cx).flex_basis(gpui::relative(0.)).min_w_0().h_full();
+                    let mut solo = cell(its[0], (two_thirds(max_w), g.content.min(g.cap)), Corners { tl: true, bl: true, ..Default::default() }, cx).flex_basis(gpui::relative(0.)).min_w_0().h_full();
                     solo.style().flex_grow = Some(2.);
                     solo
                 })
@@ -280,8 +299,8 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                         .flex()
                         .flex_col()
                         .gap(z(GAP))
-                        .child(cell(its[1], Corners { tr: true, ..Default::default() }, cx).w_full().flex_1().min_h_0())
-                        .child(cell(its[2], Corners { br: true, ..Default::default() }, cx).w_full().flex_1().min_h_0()),
+                        .child(cell(its[1], (two_thirds(max_w) / 2., (g.content.min(g.cap) - GAP) / 2.), Corners { tr: true, ..Default::default() }, cx).w_full().flex_1().min_h_0())
+                        .child(cell(its[2], (two_thirds(max_w) / 2., (g.content.min(g.cap) - GAP) / 2.), Corners { br: true, ..Default::default() }, cx).w_full().flex_1().min_h_0()),
                 ))
                 .into_any_element(),
             Row::Four => div()
@@ -291,7 +310,7 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                 .gap(z(GAP))
                 .children(its.iter().enumerate().map(|(i, a)| {
                     let k = Corners { tl: i == 0, tr: i == 1, bl: i == 2, br: i == 3 };
-                    cell(a, k, cx).w_full().aspect_ratio(half(max_w) / g.content).max_h(z(g.cap))
+                    cell(a, (half(max_w), g.content.min(g.cap)), k, cx).w_full().aspect_ratio(half(max_w) / g.content).max_h(z(g.cap))
                 }))
                 .into_any_element(),
             Row::Grid(n) => {
@@ -309,7 +328,7 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
                             bl: bottom && r + 1 == rows_n && cc == 0,
                             br: bottom && r + 1 == rows_n && cc == 2,
                         };
-                        cell(a, k, cx).w_full().aspect_ratio(1.)
+                        cell(a, (third(max_w), third(max_w)), k, cx).w_full().aspect_ratio(1.)
                     }))
                     .into_any_element()
             }
@@ -322,6 +341,14 @@ pub fn grid(items: &[&Attachment], max_w: f32, cx: &App) -> gpui::Div {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cells_ask_for_twice_their_cover_size_without_upscaling() {
+        let a = Attachment { width: 1000, height: 500, ..Default::default() };
+        assert_eq!(request_size(&a, (166., 128.)), (512, 256));
+        let small = Attachment { width: 240, height: 140, ..Default::default() };
+        assert_eq!(request_size(&small, (166., 128.)), (240, 140));
+    }
 
     #[test]
     fn row_shapes_cover_every_item() {

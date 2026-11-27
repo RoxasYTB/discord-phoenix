@@ -46,6 +46,17 @@ headless clock): bare `img` without id 0 frame changes, with an id 62–64. Ever
 | Sticker animations setting | Always / on hover / never | Always (0): plays; On interaction (1): first frame until hovered (`media::sticker_plays` / `sticker_hover`, APNG/GIF + Lottie); Never (2): first frame | ✅ |
 | GIF picker tiles | autoplay | the tile `img`s get ids (picker search itself belongs to another branch) | ✅ |
 
+### Frame timing and loading (27/11, wt/upload-gif)
+
+| case | client | Phoenix | status |
+|---|---|---|---|
+| Frames of 10 ms or less | Chromium plays them for 100 ms (`deferred_image_decoder.cc` `FrameDurationAtIndex`: "duration <= 10 ms → 100 ms", all formats) | GPUI advanced such a frame on every redraw. `media::frame_delay::normalize` rewrites the GIF Graphic Control Extension delays (≤ 1 cs → 10 cs) and the WebP `ANMF` durations (≤ 10 ms → 100 ms) of every image served by `CachingHttpClient` (disk and network) | ✅ measured offscreen on the real account (#phoenix, `real_shots` + 1×1 `px:` probes decoded back to the frame colour): the 100 ms test GIF advanced 92 frames in 9.2 s (exact); the 0 ms one advanced about 7 frames per 0.17 s probe (render rate) before the fix |
+| Playing GIF uploads | proxy `…/x.gif?…&format=webp&animated=true&width&height` (chunk `efc34e4425fa2af5.js`: `.gif` on the media proxy → `format=webp`, `animated=true`); still = `format=webp` without `animated` (fetched: 1.3 KB single frame); the proxy keeps the 0 ms durations in the WebP | `media::animated_media`; still unchanged (`video_poster`) | ✅ |
+| GIF uploads in a mosaic | proxy size ≈ the tile (`273×210` for a 166×128 tile in the live DOM) | was `1100×700` for every tile (whole frames decoded at that size); now twice the cover size of the tile, never above the original (`mosaic::request_size`); the tile also follows "Play GIFs" and hover like single uploads | ✅ |
+| Still → animated switch (hover, focus back, autoplay) | the still stays until the animation is decoded | avatars, server icons, custom emoji, single and mosaic GIF uploads keep the still under the animated image until `lru::ready` (decoded in the chat LRU cache), instead of an empty box for 200 ms then a grey placeholder | ✅ |
+| Animated server icons not hovered | not decoded or animated | the hidden `invisible()` GIF was decoded and requested an animation frame (full redraw) every frame while the rail was on screen; now only loaded while hovered (`media::hover_animated`) | ✅ |
+| Frame catch-up after a hitch | Chromium skips to the frame of the current time | GPUI plays the missed frames one per redraw (`img.rs` keeps `last_frame_time` debt) | ❌ needs a GPUI patch (vendor rev shared with the scroll work) |
+
 ## Account settings read (not changed)
 
 From the cached READY `user_settings_proto` (text_and_images): `gif_auto_play` = true,

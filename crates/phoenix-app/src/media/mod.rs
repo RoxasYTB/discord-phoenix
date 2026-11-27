@@ -48,6 +48,16 @@ pub fn video_poster(url: &str, w: u32, h: u32) -> SharedString {
     format!("{r}{sep}format=webp").into()
 }
 
+pub fn animated_media(url: &str, w: u32, h: u32) -> SharedString {
+    let r = resized(url, w, h);
+    let gif = r.split('?').next().is_some_and(|p| p.to_ascii_lowercase().ends_with(".gif"));
+    if !gif || !is_media_proxy(&r) {
+        return r;
+    }
+    let sep = if r.contains('?') { '&' } else { '?' };
+    format!("{r}{sep}format=webp&animated=true").into()
+}
+
 pub fn gifv_animated(url: &str, w: f32) -> Option<SharedString> {
     let url = url.split('?').next().unwrap_or(url);
     for host in ["media.tenor.com/", "media1.tenor.com/", "c.tenor.com/"] {
@@ -333,6 +343,13 @@ mod tests {
         assert_eq!(fit(1920, 1080, MAX_W, MAX_H), (550., 309.));
         assert_eq!(fit(1000, 2000, MAX_W, MAX_H), (175., 350.));
         assert_eq!(fit(100, 50, MAX_W, MAX_H), (100., 50.));
+    }
+
+    #[test]
+    fn playing_gifs_ask_the_proxy_for_animated_webp() {
+        let u = animated_media("https://cdn.discordapp.com/attachments/1/2/a.gif?ex=1&is=2&hm=3", 360, 210);
+        assert_eq!(u.as_ref(), "https://media.discordapp.net/attachments/1/2/a.gif?ex=1&is=2&hm=3&width=360&height=210&format=webp&animated=true");
+        assert_eq!(animated_media("https://cdn.discordapp.com/attachments/1/2/a.png", 10, 10).as_ref(), "https://media.discordapp.net/attachments/1/2/a.png?width=10&height=10");
     }
 
     #[test]

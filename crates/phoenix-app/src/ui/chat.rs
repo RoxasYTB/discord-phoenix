@@ -1806,7 +1806,7 @@ pub(crate) fn media_image_with(
     (w, h): (f32, f32),
     still: bool,
 ) -> gpui::Stateful<gpui::Img> {
-    let src = if still { media::video_poster(url, (w * 2.) as u32, (h * 2.) as u32) } else { media::resized(url, (w * 2.) as u32, (h * 2.) as u32) };
+    let src = if still { media::video_poster(url, (w * 2.) as u32, (h * 2.) as u32) } else { media::animated_media(url, (w * 2.) as u32, (h * 2.) as u32) };
     let viewer = media::ViewerImage {
         url: media::resized(url, ow.min(2048), oh.min(2048)),
         original: if original.is_empty() { url.to_owned().into() } else { original },
@@ -1957,7 +1957,7 @@ fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
                     let still = gif && !media::gif_plays(&a.url);
                     let im = media_image_with(&a.url, a.original.clone(), a.filename.clone(), (a.width, a.height), size, still);
                     if gif {
-                        let animated = media::resized(&a.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32);
+                        let animated = media::animated_media(&a.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32);
                         let poster = (!still && !media::lru::ready(&animated)).then(|| {
                             let mut p = img(media::video_poster(&a.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32));
                             if let Some(cache) = media::lru::chat() {

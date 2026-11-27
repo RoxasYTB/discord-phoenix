@@ -776,12 +776,19 @@ impl PhoenixApp {
         }))
     }
 
-    pub fn cancel_upload(&mut self, key: u64, cx: &mut Context<Self>) {
+    pub fn cancel_upload(&mut self, key: u64, window: &mut gpui::Window, cx: &mut Context<Self>) {
         let Some(ix) = self.chat.sending.iter().position(|s| s.key == key) else { return };
         let s = self.chat.sending.remove(ix);
         s.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(n) = s.nonce {
+            let content = self.messages.get(&s.channel).and_then(|e| e.index_of(Id(n)).map(|i| e.msgs[i].content.clone()));
             self.discard_local(s.channel, Id(n), cx);
+            if let Some(text) = content.filter(|t| !t.is_empty())
+                && self.selected_channel == Some(s.channel)
+                && self.composer.read(cx).value().is_empty()
+            {
+                self.composer.update(cx, |c, cx| super::rich_input::set_value_at_end(c, text.to_string(), window, cx));
+            }
         }
         cx.notify();
     }
@@ -991,7 +998,7 @@ impl PhoenixApp {
             let (label, icon_class): (SharedString, &'static str) = if files.len() == 1 {
                 (files[0].filename.clone().into(), super::attach::file_class(&files[0].filename))
             } else {
-                (crate::t!("chat.n_files", n = files.len()), "unknown")
+                (crate::t!("chat.uploading_n_files", n = files.len()), "unknown")
             };
             self.chat.sending.push(Sending { key, channel: ch, label, icon_class, size, started: Instant::now(), sent: Arc::new(0.into()), cancel: Arc::default(), nonce: None });
         }
