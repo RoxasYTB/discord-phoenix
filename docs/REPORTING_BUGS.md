@@ -14,7 +14,7 @@ Open a report from [New issue](https://github.com/RoxasYTB/project-phoenix/issue
 | 🔊 Voice or video | Audio, microphone, camera, screen share, soundboard |
 | ✨ Feature request | Something the official client has that Phoenix doesn't, or a new idea |
 
-Questions and help go to the [project Discord server](https://discord.gg/ffCe2RuBKt) (in French). Security problems, especially anything that could leak a token, go to [private vulnerability reporting](https://github.com/RoxasYTB/project-phoenix/security/advisories/new), never to a public issue.
+Questions and help go to the [project Discord server](https://discord.gg/uF3wtckHkN) (in English, French is welcome too). Security problems, especially anything that could leak a token, go to [private vulnerability reporting](https://github.com/RoxasYTB/project-phoenix/security/advisories/new), never to a public issue.
 
 ## 1. Find your version
 

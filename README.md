@@ -14,7 +14,10 @@
   <a href="https://github.com/RoxasYTB/project-phoenix/releases"><img src="https://img.shields.io/github/v/release/RoxasYTB/project-phoenix?include_prereleases&label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue" alt="License: Apache-2.0 OR MIT">
   <img src="https://img.shields.io/badge/status-beta-orange" alt="Status: beta">
+  <a href="https://discord.gg/uF3wtckHkN"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Join the community on Discord"></a>
 </p>
+
+<p align="center"><b><a href="https://discord.gg/uF3wtckHkN">Join the community on Discord</a></b></p>
 
 > [!WARNING]
 > **Discord Phoenix is not affiliated with, endorsed by, or sponsored by Discord Inc.**
@@ -374,6 +377,8 @@ Your token is only ever sent to Discord. The client has no telemetry and no anal
 See [SECURITY.md](SECURITY.md) for how credentials are handled and how to report a vulnerability.
 
 ## Contributing
+
+Questions, help and news are on the [project Discord server](https://discord.gg/uF3wtckHkN). Bugs are tracked only through GitHub issues.
 
 Found a bug? Read [how to report it](docs/REPORTING_BUGS.md) ([en français](docs/SIGNALER_UN_BUG.md)): version, debug info, logs and screenshots, and what never to post.
 

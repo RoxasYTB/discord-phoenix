@@ -4,8 +4,8 @@ contact_links:
     url: https://github.com/RoxasYTB/project-phoenix/blob/main/docs/REPORTING_BUGS.md
     about: "Read this first: version, debug info, logs, screenshots. Guide en français : docs/SIGNALER_UN_BUG.md"
   - name: "💬 Project Discord server / Serveur Discord du projet"
-    url: https://discord.gg/ffCe2RuBKt
-    about: "Questions, help and discussion (in French). Questions, aide et discussion."
+    url: https://discord.gg/uF3wtckHkN
+    about: "Questions, help and discussion (in English, French welcome). Questions, aide et discussion. Bugs go in an issue."
   - name: "🔒 Security vulnerability / Faille de sécurité"
     url: https://github.com/RoxasYTB/project-phoenix/security/advisories/new
     about: "Report privately, never in a public issue. Signalement privé, jamais dans une issue publique."

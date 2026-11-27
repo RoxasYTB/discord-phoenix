@@ -16,7 +16,7 @@ Ouvre un signalement depuis [New issue](https://github.com/RoxasYTB/project-phoe
 
 Les formulaires sont bilingues : tu peux les remplir en français.
 
-Pour les questions et l'aide, passe par le [serveur Discord du projet](https://discord.gg/ffCe2RuBKt). Les problèmes de sécurité, surtout tout ce qui pourrait faire fuiter un token, passent par le [signalement privé](https://github.com/RoxasYTB/project-phoenix/security/advisories/new), jamais par une issue publique.
+Pour les questions et l'aide, passe par le [serveur Discord du projet](https://discord.gg/uF3wtckHkN) (en anglais, le français reste bienvenu). Les problèmes de sécurité, surtout tout ce qui pourrait faire fuiter un token, passent par le [signalement privé](https://github.com/RoxasYTB/project-phoenix/security/advisories/new), jamais par une issue publique.
 
 ## 1. Trouver ta version
 
