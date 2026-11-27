@@ -113,42 +113,16 @@ pub fn render(app: &PhoenixApp, guild: Id, cx: &mut Context<PhoenixApp>) -> AnyE
     p.into_any_element()
 }
 
-fn progress_preview() -> gpui::Div {
-    let mut channels = div().mt(z(8.)).pt(z(12.)).border_t_1().border_color(t(idx::BORDER_SUBTLE)).flex().flex_col().gap(z(12.));
-    for name in ["general", "memes", "gaming"] {
-        channels = channels.child(div().flex().items_center().gap(z(8.)).child(icon("hash", 20., idx::CHANNEL_ICON)).child(text(16., 20., FontWeight::MEDIUM, idx::CHANNELS_DEFAULT, name)));
+pub fn progress_preview_url(light: bool) -> &'static str {
+    if light {
+        "https://cdn.discordapp.com/assets/content/05acf6b46b4f51bf327d5eebb8c689604b37656529247b6d9984131f1a8d286c.png"
+    } else {
+        "https://cdn.discordapp.com/assets/content/b8d65794b7cc0b9eeca2f0842d619d0da7f31312a984da6146429bc1570995fc.png"
     }
-    div()
-        .w(z(314.))
-        .h(z(312.))
-        .flex_none()
-        .rounded(z(8.))
-        .overflow_hidden()
-        .bg(t(idx::BACKGROUND_BASE_LOWER))
-        .flex()
-        .child(div().w(z(60.)).h_full().bg(t(idx::BACKGROUND_BASE_LOWEST)))
-        .child(
-            div()
-                .flex_1()
-                .p(z(12.))
-                .flex()
-                .flex_col()
-                .gap(z(12.))
-                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, "Xena\u{2019}s Lounge").truncate())
-                .child(
-                    div()
-                        .h(z(24.))
-                        .px(z(8.))
-                        .rounded(z(12.))
-                        .bg(t(idx::BACKGROUND_MOD_NORMAL))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(text(12., 16., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!("gs2.boost_goal")))
-                        .child(text(12., 16., FontWeight::SEMIBOLD, idx::TEXT_STRONG, crate::t!("gs2.boost_count", n = 9, of = 20))),
-                )
-                .child(channels),
-        )
+}
+
+fn progress_preview() -> gpui::Img {
+    gpui::img(progress_preview_url(crate::theme::is_light())).flex_none().w(z(314.)).h(z(314. * 975. / 981.)).object_fit(gpui::ObjectFit::Contain)
 }
 
 fn vanity_bar(guild: Id, code: &str, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
