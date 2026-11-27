@@ -2210,7 +2210,7 @@ fn main() -> anyhow::Result<()> {
             v.update(cx, |app, cx| {
                 let sec = app.selected_guild.map(|g| app.security_state(g));
                 if which == "widget-add" {
-                    phoenix_app::ui::settings::widget_add::open();
+                    phoenix_app::ui::settings::widget_add::open(app, cx);
                 }
                 if let Some(rest) = which.strip_prefix("role-") {
                     use phoenix_app::ui::modals::server_settings::roles::{Editor, IconTab, Tab};
