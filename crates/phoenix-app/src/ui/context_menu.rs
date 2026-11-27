@@ -16,7 +16,7 @@ pub enum MenuItem {
     Action { label: SharedString, icon: Option<SharedString>, subtext: Option<SharedString>, danger: bool, on_click: Handler },
     Separator,
     Custom(AnyElement),
-    Submenu { label: SharedString, items: Vec<MenuItem>, icon: Option<SharedString>, subtext: Option<SharedString> },
+    Submenu { label: SharedString, items: Vec<MenuItem>, icon: Option<SharedString>, subtext: Option<SharedString>, on_click: Option<Handler> },
     Check { label: SharedString, checked: bool, radio: bool, subtext: Option<SharedString>, icon: Option<SharedString>, on_click: Handler },
     Disabled { label: SharedString, icon: Option<SharedString> },
     Leading { label: SharedString, leading: AnyElement, subtext: Option<SharedString>, on_click: Option<Handler> },
@@ -67,7 +67,7 @@ fn reset_state() {
 enum Nav {
     Skip,
     Act(Handler),
-    Sub(Vec<Option<Handler>>),
+    Sub(Vec<Option<Handler>>, Option<Handler>),
 }
 
 fn nav_of(items: &[MenuItem]) -> Vec<Nav> {
@@ -76,7 +76,7 @@ fn nav_of(items: &[MenuItem]) -> Vec<Nav> {
         .map(|i| match i {
             MenuItem::Action { on_click, .. } | MenuItem::Check { on_click, .. } => Nav::Act(on_click.clone()),
             MenuItem::Leading { on_click: Some(h), .. } => Nav::Act(h.clone()),
-            MenuItem::Submenu { items, .. } => Nav::Sub(
+            MenuItem::Submenu { items, on_click, .. } => Nav::Sub(
                 items
                     .iter()
                     .map(|i| match i {
@@ -87,6 +87,7 @@ fn nav_of(items: &[MenuItem]) -> Vec<Nav> {
                         _ => None,
                     })
                     .collect(),
+                on_click.clone(),
             ),
             _ => Nav::Skip,
         })
@@ -124,7 +125,7 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
     let sub = HL_SUB.with(|c| c.get());
     let open = OPEN_SUB.with(|c| c.get());
     let sub_list = open.and_then(|o| match &nav[o] {
-        Nav::Sub(v) => Some(v),
+        Nav::Sub(v, _) => Some(v),
         _ => None,
     });
     let in_sub = sub.is_some() && sub_list.is_some();
@@ -153,7 +154,7 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
         }
         "right" if !in_sub => {
             if let Some(r) = root
-                && let Nav::Sub(v) = &nav[r]
+                && let Nav::Sub(v, _) = &nav[r]
             {
                 set_open_sub(Some(r), w);
                 let ok: Vec<bool> = v.iter().map(Option::is_some).collect();
@@ -184,7 +185,11 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
                         h(&keyboard_click(pos), w, cx);
                         dismiss(w, cx);
                     }
-                    Nav::Sub(_) => return handle_key("right", nav, pos, dismiss, w, cx),
+                    Nav::Sub(_, Some(h)) => {
+                        h(&keyboard_click(pos), w, cx);
+                        dismiss(w, cx);
+                    }
+                    Nav::Sub(_, None) => return handle_key("right", nav, pos, dismiss, w, cx),
                     Nav::Skip => {}
                 }
             }
@@ -268,11 +273,11 @@ impl MenuItem {
     }
 
     pub fn submenu(label: impl Into<SharedString>, items: Vec<MenuItem>) -> Self {
-        Self::Submenu { label: label.into(), items, icon: None, subtext: None }
+        Self::Submenu { label: label.into(), items, icon: None, subtext: None, on_click: None }
     }
 
     pub fn submenu_with_icon(label: impl Into<SharedString>, icon: &str, items: Vec<MenuItem>) -> Self {
-        Self::Submenu { label: label.into(), items, icon: Some(crate::icons::path(icon)), subtext: None }
+        Self::Submenu { label: label.into(), items, icon: Some(crate::icons::path(icon)), subtext: None, on_click: None }
     }
 }
 
@@ -356,7 +361,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
         list = list.child(match item {
             MenuItem::Separator => div().flex_none().my(z(8.)).h(z(1.)).bg(c(tok(idx::BORDER_SUBTLE))).into_any_element(),
             MenuItem::Custom(el) => el,
-            MenuItem::Submenu { label, items, icon, subtext } => {
+            MenuItem::Submenu { label, items, icon, subtext, on_click } => {
                 let open = open_sub == Some(ix);
                 if open {
                     sub_panel = Some(
@@ -368,7 +373,16 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                             .child(gpui::anchored().snap_to_window_with_margin(z(VIEWPORT_PAD)).child(panel_at("context-submenu", 1, items, dismiss.clone()))),
                     );
                 }
+                let dismiss_row = dismiss.clone();
                 row(("menu-sub", ix), open || lit, false)
+                    .on_click(move |ev, w, cx| {
+                        if let Some(action) = &on_click {
+                            action(ev, w, cx);
+                            dismiss_row(w, cx);
+                        } else {
+                            set_open_sub(Some(ix), w);
+                        }
+                    })
                     .on_hover(move |h, w, _| {
                         if *h {
                             set_open_sub(Some(ix), w);

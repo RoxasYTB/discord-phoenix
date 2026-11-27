@@ -306,6 +306,7 @@ fn device_submenu(kind: Audio, devices: Vec<String>) -> MenuItem {
         items: list,
         icon: None,
         subtext: Some(current.map(Into::into).unwrap_or_else(|| crate::t!("voice.default"))),
+        on_click: None,
     }
 }
 
@@ -331,7 +332,7 @@ fn profile_submenu() -> MenuItem {
             })
         })
         .collect();
-    MenuItem::Submenu { label: crate::t!("voice.input_profile_menu"), items, icon: None, subtext: Some(crate::t!(PROFILES[now as usize])) }
+    MenuItem::Submenu { label: crate::t!("voice.input_profile_menu"), items, icon: None, subtext: Some(crate::t!(PROFILES[now as usize])), on_click: None }
 }
 
 fn volume_row(kind: Audio, cx: &mut Context<PhoenixApp>) -> AnyElement {

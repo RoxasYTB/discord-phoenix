@@ -210,7 +210,7 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
     frequent.push(MenuItem::action(crate::t!("msg.view_more"), ic(ChatIcon::AddReaction), move |_, _, cx| {
         ee.update(cx, |a, cx| a.open_emoji_picker(EmojiTarget::Reaction { channel: ch, msg: id }, cx))
     }));
-    items.push(MenuItem::Submenu { label: crate::t!("msg.add_reaction"), items: frequent, icon: ic(ChatIcon::AddReaction), subtext: None });
+    items.push(MenuItem::Submenu { label: crate::t!("msg.add_reaction"), items: frequent, icon: ic(ChatIcon::AddReaction), subtext: None, on_click: None });
     if has_reactions {
         let ee = e.clone();
         items.push(MenuItem::action(crate::t!("msg.view_reactions"), Some(crate::icons::path("menu/view-reactions")), move |_, _, cx| {

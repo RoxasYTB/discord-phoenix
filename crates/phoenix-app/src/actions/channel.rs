@@ -159,6 +159,7 @@ impl PhoenixApp {
     }
 
     pub fn open_server_settings(&mut self, guild: Id, section: usize, cx: &mut Context<Self>) {
+        self.nav.guild_menu = false;
         open_modal(Modal::ServerSettings(Box::new(server_settings::State::new(guild, section))), None);
         server_settings::load(self, cx);
         cx.notify();
@@ -239,16 +240,27 @@ pub fn favorite_item(app: &PhoenixApp, e: &Ent, channel: Id) -> MenuItem {
     MenuItem::submenu_with_icon(crate::t!("menu.favorite"), "star", items)
 }
 
-pub fn server_settings_item(e: &Ent, guild: Id) -> MenuItem {
-    MenuItem::submenu(
-        crate::t!("menu.server_settings"),
-        server_settings::SECTIONS
-            .iter()
-            .enumerate()
-            .filter(|(_, k)| **k != "menu.gs.delete")
-            .map(|(i, k)| item(e, server_settings::section_label(k), move |a, cx| a.open_server_settings(guild, i, cx)))
-            .collect(),
-    )
+pub fn server_settings_item(app: &PhoenixApp, e: &Ent, guild: Id) -> MenuItem {
+    let items = server_settings::SECTIONS.iter().enumerate().filter(|(_, key)| server_settings::visible(app, guild, key))
+        .map(|(section, key)| item(e, server_settings::section_label(key), move |app, cx| {
+            if server_settings::opens_app_directory(section) {
+                server_settings::open_app_directory(cx);
+            } else {
+                app.open_server_settings(guild, section, cx);
+            }
+        }))
+        .collect();
+    let entity = e.clone();
+    MenuItem::Submenu {
+        label: crate::t!("menu.server_settings"),
+        items,
+        icon: Some(crate::icons::path("gear")),
+        subtext: None,
+        on_click: Some(std::rc::Rc::new(move |_, window, cx| {
+            entity.update(cx, |app, cx| app.open_server_settings(guild, 0, cx));
+            window.refresh();
+        })),
+    }
 }
 
 pub fn show_all_item(app: &PhoenixApp, e: &Ent, guild: Id) -> Option<MenuItem> {

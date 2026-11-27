@@ -171,11 +171,12 @@ pub struct Guild {
 impl From<RawGuild> for Guild {
     fn from(r: RawGuild) -> Self {
         let boosts = r.top.premium_subscription_count;
-        let (profile, incidents) = (r.top.profile.clone(), r.top.incidents_data.clone());
+        let (profile, incidents, owner) = (r.top.profile.clone(), r.top.incidents_data.clone(), r.top.owner_id);
         let mut properties = r.properties.unwrap_or(r.top);
         properties.premium_subscription_count = properties.premium_subscription_count.or(boosts);
         properties.profile = properties.profile.or(profile);
         properties.incidents_data = properties.incidents_data.or(incidents);
+        properties.owner_id = properties.owner_id.or(owner);
         let mut g = Guild {
             id: r.id,
             properties,
@@ -283,5 +284,15 @@ mod tests {
     fn rest_guild_with_null_profile_has_no_tag() {
         let g: Guild = serde_json::from_value(serde_json::json!({ "id": "5", "name": "G", "profile": null })).unwrap();
         assert!(g.properties.profile.is_none() && g.properties.incidents_data.is_none());
+    }
+
+    #[test]
+    fn guild_owner_is_preserved_when_properties_are_nested() {
+        let guild: Guild = serde_json::from_value(serde_json::json!({
+            "id": "1",
+            "owner_id": "2",
+            "properties": { "name": "Fixture" }
+        })).unwrap();
+        assert_eq!(guild.owner_id().map(|owner| owner.0), Some(2));
     }
 }

@@ -726,7 +726,7 @@ impl Backend for DiscordBackend {
 
     fn guild_permissions(&self, guild: Id) -> u64 {
         let Ok(s) = self.inner.session() else { return 0 };
-        s.cache.guild_channels(sf(guild)).first().map(|c| s.cache.permissions_in(c.id).bits()).unwrap_or(0)
+        s.cache.guild_permissions(sf(guild)).bits()
     }
 
     fn channel_permissions(&self, channel: Id) -> Option<u64> {

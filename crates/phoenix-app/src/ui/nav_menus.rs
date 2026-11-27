@@ -222,8 +222,11 @@ pub fn guild_dropdown(app: &PhoenixApp, g: Id, cx: &mut Context<PhoenixApp>) -> 
     }
     items.push(MenuItem::Separator);
     items.push(act(&e, crate::t!("menu.invite_to_server"), move |a, _, cx| a.open_invite_people(g, cx)).with_icon("add-to-dm"));
-    if manage_guild {
-        items.push(act(&e, crate::t!("menu.server_settings"), move |a, _, cx| a.open_server_settings(g, 0, cx)).with_icon("gear"));
+    if owner || manage_guild {
+        items.push(act(&e, crate::t!("menu.server_settings"), move |a, window, cx| {
+            a.open_server_settings(g, 0, cx);
+            window.refresh();
+        }).with_icon("gear"));
     }
     if crate::ui::modals::server_settings::visible(app, g, "menu.gs.analytics") {
         let section = crate::ui::modals::server_settings::section_index("menu.gs.analytics");
@@ -568,7 +571,7 @@ fn render_target(app: &PhoenixApp, target: Target, pos: Point<Pixels>, cx: &mut 
             items.extend(crate::actions::channel::show_all_item(app, &e, g));
             items.push(MenuItem::Separator);
             if manage_guild {
-                items.push(crate::actions::channel::server_settings_item(&e, g));
+                items.push(crate::actions::channel::server_settings_item(app, &e, g));
             }
             items.push(act(&e, crate::t!("menu.privacy_settings"), move |a, _, cx| a.open_privacy_settings(g, cx)));
             items.push(act(&e, crate::t!("menu.edit_server_profile"), move |a, _, cx| a.open_server_profile(g, cx)));

@@ -135,6 +135,15 @@ impl Cache {
         self.inner.state.read().read_state.clone()
     }
 
+    pub fn guild_permissions(&self, id: GuildId) -> Permissions {
+        let state = self.inner.state.read();
+        let (Some(me), Some(guild)) = (&state.me, state.guilds.get(&id)) else {
+            return Permissions::empty();
+        };
+        let member_roles = state.members.get(&(id, me.id)).map_or(&[][..], |member| member.roles.as_slice());
+        compute_base_permissions(id, guild.owner_id(), me.id, member_roles, &guild.roles)
+    }
+
     pub fn permissions_in(&self, channel: ChannelId) -> Permissions {
         let s = self.inner.state.read();
         let Some(ch) = s.channels.get(&channel) else { return Permissions::empty() };
