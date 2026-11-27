@@ -344,3 +344,23 @@ First real call with friends (build 8fc6cda5): everyone was heard, but some memb
 | own leave from another guild | ignored when our call is elsewhere | `apply_voice_state` ignores it (same fix as 766fa7ba for the call manager) ✅ |
 | members heard but without a voice state | the voice gateway (op 11 `CLIENTS_CONNECT`, op 5 speaking, op 13 `CLIENT_DISCONNECT`) is the real list of who is connected | `voice::roster`: users connected on the voice gateway are added to our channel, their member is requested (`request_feed_members`), they survive channel rebuilds and leave on op 13; a voice state always wins. ✅ test `members_heard_on_the_voice_gateway_join_the_list` |
 | READY_SUPPLEMENTAL | full list of voice states per guild | `AppEvent::GuildVoiceReset` clears the guild before re-adding, so rows from an old snapshot do not stay. ✅ test `ready_supplemental_replaces_stale_voice_rows` |
+
+## Call actions against the client (voice-actions, 27/11)
+
+Sources: `c76f31703f6181cd.js` (CallTile / CallTileOverlay 175203), CSS `655282` (`.overlayContainer_7NOr2f:not(:hover,:focus-within) .overlayButton_7NOr2f.hideWhenInactive_7NOr2f{display:none}`, `.titleIcon_7NOr2f` 16), `9cf4c852c9727cd1.js` (ChannelCallHeaderToolbar 416528), `web.b63d846b329d6470.js` (participants button 80051 + CSS `730393`, popout button `JzWezz`/`7Dwcnj`, fullscreen `OIDkcp`/`Z7MyNB`, panel mic/headset 9c90d6f3), dumps `compare/voice/pass1/1-call.json` and `solo3/1-solo-hover.json`, `fr.js`.
+
+| element | client | Phoenix before | status |
+|---|---|---|---|
+| header channel icon | `channelIcon_` = the channel's own icon (`VoiceLockIcon` for the private test channel, solo3 #1307) | always `VoiceNormalIcon` | ✅ `header_icon` (voice / voice-lock / stage / stage-lock) |
+| tile « … » | `hideWhenInactive`: only on the hovered tile (or while its menu is open), tooltip « Options » (`+1H47t`) | on every tile as soon as the call was not idle, tooltip « Plus d'options » | ✅ `HOVER_TILE`, `call.tile_options` |
+| camera badge on video tiles | none: `status_7NOr2f` only carries `VideoSlashIcon` (local video disabled) or connection warnings | round `VideoIcon` badge top right | ✅ removed |
+| stream tile title icon | `ScreenIcon` (`eQ`, `titleIcon_` 16) | `ScreenArrowIcon` | ✅ `golive/screen` |
+| tray side icons | colour `rgb(255,255,255)` (solo3 #1318, #1384, #1388) | `--interactive-text-default` | ✅ white |
+| tray invite tooltip | « Inviter » (aria of `leftTrayIcon_`) | « Inviter dans le salon vocal » | ✅ |
+| popout tooltip | « Passer en lecteur réduit » (`JzWezz`) | « Fenêtre séparée » | ✅ |
+| exit full screen | « Quitter le mode plein écran » (`Z7MyNB`) | « Quitter le plein écran » | ✅ |
+| mic / headset / disconnect tooltips | « Ne plus rendre muet » (`YqAjXy`), « Rétablir le son » (`2US872`), « Déconnecter » (`6vrfgt`) | « Réactiver le micro », « Désactiver la sourdine », « Se déconnecter » (none exist in fr.js) | ✅ |
+| participants button | `iconContainer_` flex, caret 24 + `GroupIcon` 24 with `margin-inline-end: 4`, padding 4 (box 60) | fixed 60 wide, icons centred | ✅ |
+| activity button | opens the activity shelf, which writes `settings-proto/1` | inert | ➖ kept inert (brief) |
+| stream tile mute button | `VoiceNormalIcon` / `VoiceXIcon` « Rendre muet » / « Ne plus rendre muet », shown on hover when the stream has video and the tile is wider than 220 | none | ❌ needs a local stream mute in the mixer |
+| header live indicator / stream warnings | `live-indicator` and `warning` in the header while a stream is focused | none | ❌ |

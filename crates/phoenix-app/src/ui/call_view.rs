@@ -300,7 +300,7 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
                 .flex()
                 .items_center()
                 .gap(z(10.))
-                .child(named("speaker", 20., t(idx::CHANNEL_ICON)))
+                .child(named(header_icon(app, ch_id, false), 20., t(idx::CHANNEL_ICON)))
                 .child(
                     div()
                         .flex_1()
@@ -976,6 +976,8 @@ fn woke(cx: &mut Context<PhoenixApp>) {
 
 thread_local! {
     static STREAM_MENU: Cell<Option<(Id, gpui::Point<gpui::Pixels>)>> = const { Cell::new(None) };
+    static HOVER_TILE: Cell<Option<(Id, bool)>> = const { Cell::new(None) };
+    static MORE_USER: Cell<Option<Id>> = const { Cell::new(None) };
     static STREAM_VOLUME: std::cell::RefCell<std::collections::HashMap<u64, u32>> = Default::default();
 }
 
@@ -1137,13 +1139,11 @@ fn strip_button(open: bool, top: f32, fade: f32, cx: &mut Context<PhoenixApp>) -
     div().absolute().left_0().right_0().top(z(top)).flex().justify_center().opacity(fade).child(
         div()
             .id("call-participants")
-            .w(z(60.))
             .h(z(32.))
             .p(z(4.))
             .rounded(z(48.))
             .flex()
             .items_center()
-            .justify_center()
             .bg(t(idx::PRIMARY_630))
             .hover(|s| s.bg(t(idx::PRIMARY_700)))
             .shadow(crate::ui::inbox::popout_shadow())
@@ -1154,7 +1154,7 @@ fn strip_button(open: bool, top: f32, fade: f32, cx: &mut Context<PhoenixApp>) -
                 crate::t!("call.show_members")
             })
             .child(named(if open { "chevron" } else { "chevron-up" }, 24., white))
-            .child(named("members", 24., white))
+            .child(named("members", 24., white).mr(z(4.)))
             .on_click(cx.listener(|_, _, _, cx| {
                 set_strip_open(!strip_open());
                 cx.notify();
@@ -1163,6 +1163,16 @@ fn strip_button(open: bool, top: f32, fade: f32, cx: &mut Context<PhoenixApp>) -
 }
 
 const CHAT_W: f32 = 480.;
+
+fn header_icon(app: &PhoenixApp, ch: Id, stage: bool) -> &'static str {
+    let locked = app.nav.extras.get(&ch).is_some_and(|e| e.locked);
+    match (stage, locked) {
+        (true, true) => "stage-lock",
+        (true, false) => "stage",
+        (false, true) => "voice-lock",
+        (false, false) => "speaker",
+    }
+}
 
 fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let open = chat_open();
@@ -1174,7 +1184,7 @@ fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -
         .flex()
         .items_center()
         .gap(z(10.))
-        .child(named(if stage.is_some() { "stage" } else { "speaker" }, 20., t(idx::CHANNEL_ICON)))
+        .children(app.voice_channel.map(|ch| named(header_icon(app, ch, stage.is_some()), 20., t(idx::CHANNEL_ICON))))
         .child(
             div()
                 .when(stage.is_none(), |d| d.flex_1())
@@ -1534,8 +1544,17 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
     let sb = !tile.stream && crate::voice::soundboard::is_user_playing(tile.user);
     let name = crate::ui::sidebar::voice_user_name(app, tile.user);
     let key = (tile.user, tile.stream);
+    let hovered = HOVER_TILE.with(Cell::get) == Some(key);
     let base = div()
         .id(SharedString::from(format!("call-tile-{}-{}", tile.user.0, tile.stream)))
+        .on_hover(move |h, w, _| {
+            let now = HOVER_TILE.with(Cell::get);
+            let next = if *h { Some(key) } else if now == Some(key) { None } else { now };
+            if next != now {
+                HOVER_TILE.with(|c| c.set(next));
+                w.refresh();
+            }
+        })
         .on_click(cx.listener(move |_, _, _, cx| {
             let cur = FOCUS.with(|c| c.get());
             let focused = matches!(cur, Focus::Tile(u, s) if (u, s) == key) || (cur == Focus::Auto && key.1);
@@ -1692,7 +1711,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                         .right(z(look.inset))
                         .flex()
                         .opacity(fade)
-                        .child(pill(Some(glyph("icons/voice/screen.svg", 16., white).into_any_element()), Some(name))),
+                        .child(pill(Some(named("golive/screen", 16., white).into_any_element()), Some(name))),
                 )
             })
     } else {
@@ -1715,21 +1734,6 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                 None => d.child(avatar(u, look.avatar * crate::theme::zoom())),
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))
-            .when(f.video, |d| {
-                d.child(
-                    div()
-                        .absolute()
-                        .top(z(8.))
-                        .right(z(8.))
-                        .p(z(6.))
-                        .rounded_full()
-                        .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(glyph("icons/voice/camera.svg", 16., t(idx::CONTROL_OVERLAY_SECONDARY_TEXT_DEFAULT))),
-                )
-            })
             .when(look.show_name, |d| {
                 let keep = state_icon.is_some();
                 let idle = fade < 0.5;
@@ -1744,7 +1748,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                         .items_center()
                         .justify_between()
                         .child(pill(state_icon, (!idle).then_some(name)).opacity(if keep { 1. } else { fade }))
-                        .when(!idle, |d| {
+                        .when(!idle && (hovered || (crate::ui::user_menu::is_open() && MORE_USER.with(Cell::get) == Some(user))), |d| {
                             d.child(
                                 div()
                                     .id(SharedString::from(format!("call-tile-more-{}", user.0)))
@@ -1757,10 +1761,11 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                                     .opacity(fade)
                                     .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
                                     .hover(|s| s.bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_HOVER)))
-                                    .tip(crate::t!("call.more"))
+                                    .tip(crate::t!("call.tile_options"))
                                     .child(named("more-horizontal", 16., t(idx::CONTROL_OVERLAY_SECONDARY_TEXT_DEFAULT)))
                                     .on_click(move |ev, window, cx| {
                                         cx.stop_propagation();
+                                        MORE_USER.with(|m| m.set(Some(user)));
                                         crate::ui::user_menu::open(user, tile_guild, ev.position(), window);
                                     }),
                             )
@@ -1923,7 +1928,7 @@ pub(crate) fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) ->
 
 fn bottom_controls(app: &PhoenixApp, level: Collapse, fullscreen: bool, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let white = t(idx::WHITE);
-    let tray = t(idx::INTERACTIVE_TEXT_DEFAULT);
+    let tray = t(idx::WHITE);
     let muted = app.mic_muted || app.deafened;
     let me = crate::ui::voice_panel::flags(app.me.id);
     let (mic_i, mic_look) = if muted { (crate::assets::Icon::MicOff, Look::Red) } else { (crate::assets::Icon::Mic, Look::Dark) };
