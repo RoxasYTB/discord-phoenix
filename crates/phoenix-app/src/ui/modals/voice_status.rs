@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, img, prelude::*};
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::input::{InputContent, InputEvent, InlineToken, Textarea, TextareaState};
 
 use crate::{
     actions::{close_modal, open_modal, with_modal},
@@ -23,7 +23,7 @@ pub struct State {
     pub channel: Id,
     pub channel_name: SharedString,
     pub initial: String,
-    pub input: Option<Entity<InputState>>,
+    pub input: Option<Entity<TextareaState>>,
     pub saving: bool,
     pub error: Option<SharedString>,
     _enter: Option<gpui::Subscription>,
@@ -51,21 +51,57 @@ pub fn prepare(s: &mut State, window: &mut Window, cx: &mut Context<PhoenixApp>)
         return;
     }
     let ph = crate::t!("vstatus.placeholder", channel = s.channel_name);
-    let input = cx.new(|cx| InputState::new(window, cx).placeholder(ph));
+    let rows = ((f32::from(window.viewport_size().height) * 0.5 / 22.).floor() as usize).max(1);
+    let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, rows).submit_on_enter(true).placeholder(ph));
     let initial = s.initial.clone();
     input.update(cx, |st, cx| {
         if !initial.is_empty() {
             st.set_value(initial, window, cx);
+            let end = st.value().len();
+            st.set_selected_range(end..end, cx);
         }
+        sync_tokens(st, cx);
         st.focus(window, cx);
     });
-    s._enter = Some(cx.subscribe_in(&input, window, |a, _, ev: &InputEvent, _, cx| {
-        if matches!(ev, InputEvent::PressEnter { .. }) {
-            a.submit_voice_status(cx);
+    s._enter = Some(cx.subscribe_in(&input, window, |a, input, ev: &InputEvent, window, cx| {
+        match ev {
+            InputEvent::PressEnter { .. } => a.submit_voice_status(cx),
+            InputEvent::Change => input.update(cx, |st, cx| {
+                let text = st.value().to_string();
+                if text.contains(['\n', '\r']) {
+                    let cursor = st.selected_range().end.min(text.len());
+                    let before = text[..cursor].chars().filter(|c| !matches!(c, '\n' | '\r')).map(char::len_utf8).sum::<usize>();
+                    st.set_value(single_line(&text), window, cx);
+                    st.set_selected_range(before..before, cx);
+                }
+                sync_tokens(st, cx);
+            }),
+            _ => {}
         }
         cx.notify();
     }));
     s.input = Some(input);
+}
+
+pub fn single_line(text: &str) -> String {
+    text.chars().filter(|c| !matches!(c, '\n' | '\r')).collect()
+}
+
+pub fn emoji_content(text: &str) -> InputContent {
+    let mut content = InputContent::new(text.to_owned());
+    for (range, k) in crate::ui::chat::rich_input::spans(text) {
+        let crate::ui::chat::rich_input::Kind::Emoji { name, .. } = k else { continue };
+        let raw = text[range.clone()].to_owned();
+        if let Ok(next) = content.clone().with_token(range, InlineToken::new(raw.clone(), raw).with_label(format!(":{name}:"))) {
+            content = next;
+        }
+    }
+    content
+}
+
+fn sync_tokens(st: &mut TextareaState, cx: &mut Context<TextareaState>) {
+    let content = emoji_content(&st.value());
+    let _ = st.set_tokens(content, cx);
 }
 
 pub fn insert(text: &str, window: &mut Window, cx: &mut gpui::App) {
@@ -79,6 +115,7 @@ pub fn insert(text: &str, window: &mut Window, cx: &mut gpui::App) {
             let (t, r) = crate::ui::modals::channel_settings::insert_at(&st.value(), st.selected_range(), &text);
             st.set_value(t, window, cx);
             st.set_selected_range(r, cx);
+            sync_tokens(st, cx);
             st.focus(window, cx);
         });
     }
@@ -214,7 +251,7 @@ pub fn render(s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
         .gap(z(4.))
         .text_size(z(16.))
         .text_color(c(tok(idx::TEXT_DEFAULT)))
-        .children(s.input.as_ref().map(|i| div().flex_1().min_w_0().child(Input::new(i).appearance(false).bordered(false))))
+        .children(s.input.as_ref().map(|i| div().flex_1().min_w_0().py(z(10.)).child(Textarea::new(i).token(crate::ui::chat::rich_input::render_token).appearance(false).bordered(false))))
         .child(emoji_button(cx))
         .children(left.map(|n| {
             div()
@@ -296,6 +333,19 @@ mod tests {
         assert_eq!(remaining(501), Some(-1));
         assert!(!too_long(500) && too_long(501));
         assert_eq!(utf16_len("😀a"), 3);
+    }
+
+    #[test]
+    fn custom_emoji_become_inline_tokens_on_one_line() {
+        let text = "on <:pepe:123> joue <a:dance:456>";
+        let c = emoji_content(text);
+        let t = c.tokens();
+        assert_eq!(t.len(), 2);
+        assert_eq!(t[0].range(), 3..14);
+        assert_eq!(t[0].token().label().as_ref(), ":pepe:");
+        assert_eq!(t[1].token().label().as_ref(), ":dance:");
+        assert!(emoji_content("<@123> <#4>").tokens().is_empty());
+        assert_eq!(single_line("a\nb\r\nc"), "abc");
     }
 
     #[test]
