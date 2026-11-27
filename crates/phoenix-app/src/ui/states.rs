@@ -187,6 +187,21 @@ pub fn fade_layer_pressed(
 
 pub const EASE_OUT_QUAD: gpui::CubicBezier = gpui::CubicBezier(0.25, 0.46, 0.45, 0.94);
 
+pub const EASE: gpui::CubicBezier = gpui::CubicBezier(0.25, 0.1, 0.25, 1.);
+
+pub fn opacity_fade(key: u64, ms: u64, el: Div) -> gpui::AnyElement {
+    use gpui::{IntoElement, PresentTransitionExt};
+    let state = state(key);
+    let on = state.is_some_and(|s| s.0);
+    let t = state.and_then(|(_, at)| {
+        let (from, to) = if on { (0., 1.) } else { (1., 0.) };
+        (at.elapsed().as_millis() < ms as u128)
+            .then(|| gpui::Transition::ease(crate::ui::settings::effects::motion(ms), EASE).start(at).opacity(from, to))
+    });
+    let shown = on || t.is_some();
+    el.opacity(if shown { 1. } else { 0. }).id("opacity-fade").present_transition(gpui::ElementId::NamedInteger("opacity-pt".into(), key), t).into_any_element()
+}
+
 pub fn ease_out(t: f32) -> f32 {
     1. - (1. - t) * (1. - t)
 }

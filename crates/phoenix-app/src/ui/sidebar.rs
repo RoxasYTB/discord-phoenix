@@ -836,6 +836,14 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
             div()
                 .id(id)
                 .when(id == "quests", |d| d.group("quests-row"))
+                .when(id == "quests" && hero.is_some(), |d| {
+                    let k = crate::ui::states::key("quests-hero-hover");
+                    d.on_hover(move |over, w, _| {
+                        if crate::ui::states::set_hover(k, *over) {
+                            w.refresh();
+                        }
+                    })
+                })
                 .relative()
                 .when(strong || hero.is_some(), |d| d.overflow_hidden())
                 .when(strong, |d| {
@@ -858,16 +866,11 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                 })
                 .when_some(hero.as_ref().and_then(|h| h.image.clone()), |d, src| {
                     d.child(
-                        div()
-                            .absolute()
-                            .top_0()
-                            .bottom_0()
-                            .right_0()
-                            .flex()
-                            .justify_end()
-                            .opacity(0.)
-                            .group_hover("quests-row", |s| s.opacity(1.))
-                            .child(gpui::img(src).h_full().object_fit(gpui::ObjectFit::Contain)),
+                        div().absolute().top_0().bottom_0().right_0().child(crate::ui::states::opacity_fade(
+                            crate::ui::states::key("quests-hero-hover"),
+                            125,
+                            div().h_full().flex().justify_end().child(gpui::img(src).h_full().object_fit(gpui::ObjectFit::Contain)),
+                        )),
                     )
                 })
                 .h(z(38.))
