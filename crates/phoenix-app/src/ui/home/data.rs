@@ -190,9 +190,21 @@ pub enum HomeView {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct InviteDialog {
+    pub guild: Id,
+    pub channel: Option<Id>,
+    pub request: u64,
+    pub link: Option<Result<SharedString, SharedString>>,
+    pub copied: bool,
+    pub sending: HashSet<Id>,
+    pub sent: HashSet<Id>,
+    pub send_error: Option<SharedString>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Overlay {
     JoinServer,
-    InviteLink { guild: Id, link: Option<SharedString> },
+    InviteLink(InviteDialog),
     LeaveGuild(Id),
     Stub(SharedString),
     Topic(Id),
@@ -219,6 +231,9 @@ pub struct NavState {
     pub home: HomeView,
     pub friends_tab: FriendsTab,
     pub guild_menu: bool,
+    pub invite_request: u64,
+    pub invite_friend_search: Option<gpui::Entity<gpui_component::input::InputState>>,
+    pub invite_friend_search_sub: Option<gpui::Subscription>,
     pub hide_muted: HashSet<Id>,
     pub overlay: Option<Overlay>,
     pub invite_input: Option<gpui::Entity<gpui_component::input::InputState>>,

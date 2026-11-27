@@ -72,12 +72,13 @@ fn page_content(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     }
 }
 
-pub fn overlay(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub fn overlay(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if let Some(screen) = crate::ui::join_flow::render_screen(app, cx) {
         return Some(screen);
     }
+    app.prepare_invite_dialog(window, cx);
     let ov = app.nav.overlay.clone()?;
-    let above_modal = matches!(ov, Overlay::InviteLink { .. }) && crate::actions::with_modal(|m| m.is_some());
+    let above_modal = matches!(ov, Overlay::InviteLink(_)) && crate::actions::with_modal(|m| m.is_some());
     let el = match ov {
         Overlay::Topic(ch) => topic::render(app, ch, cx),
         other => crate::ui::invite::render(app, &other, window, cx),
@@ -254,12 +255,16 @@ impl PhoenixApp {
 
     pub fn show_overlay(&mut self, ov: Overlay, cx: &mut Context<Self>) {
         self.nav.guild_menu = false;
+        self.nav.invite_friend_search = None;
+        self.nav.invite_friend_search_sub = None;
         self.nav.overlay = Some(ov);
         cx.notify();
     }
 
     pub fn close_overlay(&mut self, cx: &mut Context<Self>) {
         self.nav.overlay = None;
+        self.nav.invite_friend_search = None;
+        self.nav.invite_friend_search_sub = None;
         self.nav.invite_input = None;
         self.nav.invite_preview = None;
         self.nav.invite_code = None;

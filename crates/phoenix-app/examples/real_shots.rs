@@ -1917,7 +1917,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 "invite" => {
                     if let Some(guild) = app.selected_guild {
-                        app.show_overlay(phoenix_app::ui::home::data::Overlay::InviteLink { guild, link: None }, cx);
+                        app.open_invite_people(guild, cx);
                     }
                 }
                 "community" => {
