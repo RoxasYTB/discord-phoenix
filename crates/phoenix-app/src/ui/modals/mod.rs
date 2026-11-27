@@ -373,6 +373,7 @@ fn card_sized(
         .relative()
         .w(z(width))
         .max_h(z(max_h))
+        .min_h_0()
         .rounded(z(12.))
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
         .border_1()
@@ -390,6 +391,7 @@ fn card_sized(
         .flex_col()
         .child(
             div()
+                .flex_none()
                 .pt(z(16.))
                 .px(z(24.))
                 .pb(z(8.))
@@ -399,8 +401,8 @@ fn card_sized(
                 .child(div().pr(z(36.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(title))
                 .children(subtitle.map(|s| div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_SUBTLE))).child(s))),
         )
-        .child(div().px(z(24.)).pt(z(8.)).flex().flex_col().min_h_0().text_size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(body))
-        .children(footer.map(|f| div().pt(z(16.)).px(z(24.)).pb(z(8.)).flex().gap(z(8.)).justify_end().child(f)))
+        .child(div().id("amodal-body").px(z(24.)).pt(z(8.)).flex().flex_col().flex_shrink_1().min_h_0().overflow_y_scroll().text_size(z(16.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(body))
+        .children(footer.map(|f| div().flex_none().pt(z(16.)).px(z(24.)).pb(z(8.)).flex().gap(z(8.)).justify_end().child(f)))
         .child(
             div()
                 .id("amodal-close")
