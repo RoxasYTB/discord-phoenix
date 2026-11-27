@@ -1002,11 +1002,7 @@ fn lock_icon_name(kind: ChannelKind) -> Option<&'static str> {
 }
 
 pub(crate) fn channel_icon_override(kind: ChannelKind, rules: bool, locked: bool) -> Option<&'static str> {
-    if rules {
-        Some(if locked { "rules-lock" } else { "rules-channel" })
-    } else {
-        lock_icon_name(kind).filter(|_| locked)
-    }
+    if rules { Some("rules-channel") } else { lock_icon_name(kind).filter(|_| locked) }
 }
 
 pub(crate) fn is_rules_channel(app: &PhoenixApp, ch: &crate::model::Channel) -> bool {

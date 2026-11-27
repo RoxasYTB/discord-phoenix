@@ -212,6 +212,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("star-outline", &["StarOutlineIcon"]),
     ("discord", &["ClydeIcon"]),
     ("forum/book-check", &["BookCheckIcon"]),
+    ("rules-channel", &["BookCheckIcon"]),
     ("close-small", &["XSmallIcon"]),
     ("images", &["ImagesIcon"]),
     ("maximize", &["MaximizeIcon"]),
