@@ -707,15 +707,15 @@ bits = glyph gradient index of the text gradient patch, read through `poly_seque
 = cut-out set), `paint_glyph` / `paint_svg` stamp `self.cutouts`, `replay` remaps the set, and
 `vs_mono_sprite` passes `pad >> 16` as a flat varying that `fs_mono_sprite` multiplies into its
 alpha. This replaced the ring painted in `BG_TERTIARY` over the holes (959326aa), which showed a
-black ring over an open folder. Gradient text, paths, shadows and underlines are not cut. A
+black ring over an open folder; in the live app the logo still crossed the ring because the hole fill and the logo were not always drawn in tree order (present transitions of the hovered tile), while a cut on the sprite itself does not depend on the order. Gradient text, paths, shadows and underlines are not cut. A
 scene without cut-outs takes the old path.
 Search `PHOENIX PATCH (cut-outs)`.
-The pinned commit (4a3f89ec, the present transitions commit 4291d676 plus the per-axis radii) is kept on the `gpui-cutout-radii` branch of origin.
+The mono sprite cut is pinned at 29af93c0 (branch `gpui-mono-cutout`, on top of the page scroll pin 2143fc3c). The pinned commit (4a3f89ec, the present transitions commit 4291d676 plus the per-axis radii) is kept on the `gpui-cutout-radii` branch of origin.
 
 Tests: `scene::cutout_tests` (circle and pill distances, per-axis corners, empty hole, set reuse, full table, clear),
 `scene::image_sequence_tests::sequence_and_cutout_share_the_pad_word`,
 wgpu `headless_renderer_cuts_round_holes_through_quads` (round and pill holes, a neighbour quad
-untouched), and the existing WGSL validation tests for the storage, gradient, subpixel and WebGL
+untouched), `headless_renderer_cuts_round_holes_through_monochrome_sprites` (fails before the mono patch), and the existing WGSL validation tests for the storage, gradient, subpixel and WebGL
 shaders. App: `ui::blob_mask::tests`.
 
 ## 22. Present-time transitions and exit ghosts (`src/present_transition.rs`, `src/scene.rs` `transitions` / `*_transitions` / `ExitGroup` / `adopt_exits` / `replay`, `src/window.rs` `with_present_transition` / `with_exit_transition` / `draw`, wgpu `write_instances` / `write_gradient_sprites` / path batches)
