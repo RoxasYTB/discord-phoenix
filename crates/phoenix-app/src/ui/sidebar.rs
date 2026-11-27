@@ -908,7 +908,8 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
                 .child(div().flex_1().min_w_0().text_ellipsis().child(label))
                 .when(quest.onboarding, |d| d.child(text_badge(crate::t!("dm.quests_new"), idx::BADGE_PRIMARY_BACKGROUND, idx::BADGE_PRIMARY_TEXT)))
                 .when(quest.hero_badge, |d| d.child(text_badge(crate::t!("dm.quests_new"), idx::BADGE_EXPRESSIVE_BACKGROUND, idx::BADGE_EXPRESSIVE_TEXT)))
-                .when(count > 0, |d| d.child(badge(count).bg(c(Palette::NOTIFICATION)))),
+                .when(count > 0, |d| d.child(badge(count).bg(c(Palette::NOTIFICATION))))
+                .when_some(hero.as_ref().and_then(|h| h.tooltip.clone()), |d, (title, note)| d.tip_rich(title, note, crate::ui::tooltip::Side::Top)),
         )
     };
     let e = entity.clone();

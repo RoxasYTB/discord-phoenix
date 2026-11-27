@@ -304,6 +304,7 @@ pub struct HomeHero {
     pub id: String,
     pub image: Option<SharedString>,
     pub has_content: bool,
+    pub tooltip: Option<(SharedString, SharedString)>,
 }
 
 pub fn home_hero_path() -> String {
@@ -333,7 +334,9 @@ pub fn parse_home_hero(v: &Value) -> Option<HomeHero> {
     let image = asset(&e["image"]);
     let tooltip = filled(&e["tooltip_title"]) && filled(&e["tooltip_subtitle"]);
     let has_content = !e.is_null() && (image.is_some() || gradient(&e["linear_gradient"]) || gradient(&e["radial_gradient"]) || tooltip);
-    Some(HomeHero { id, image, has_content })
+    let text = |v: &Value| v.as_str().map(|s| SharedString::from(s.to_owned()));
+    let tooltip = text(&e["tooltip_title"]).map(|t| (t, text(&e["tooltip_subtitle"]).unwrap_or_default()));
+    Some(HomeHero { id, image, has_content, tooltip })
 }
 
 pub fn dismissed(contents: &[u8], id: usize) -> bool {
@@ -1315,7 +1318,7 @@ mod tests {
     fn home_hero_entrypoint_follows_the_client() {
         let v = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": "77", "quest_home_entrypoint": {"image": "quests/h/e.png"}}}}]});
         let h = parse_home_hero(&v).unwrap();
-        assert_eq!(h, HomeHero { id: "77".into(), image: Some("https://cdn.discordapp.com/quests/h/e.png".into()), has_content: true });
+        assert_eq!(h, HomeHero { id: "77".into(), image: Some("https://cdn.discordapp.com/quests/h/e.png".into()), has_content: true, tooltip: None });
         let tooltip_only = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": 5, "quest_home_entrypoint": {"tooltip_title": "a"}}}}]});
         assert!(!parse_home_hero(&tooltip_only).unwrap().has_content);
         let gradient = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": 5, "quest_home_entrypoint": {"linear_gradient": {"start": "#000", "end": "#fff"}}}}}]});
@@ -1338,7 +1341,7 @@ mod tests {
 
     #[test]
     fn quests_row_badges() {
-        let hero = HomeHero { id: "1".into(), image: None, has_content: true };
+        let hero = HomeHero { id: "1".into(), image: None, has_content: true, tooltip: None };
         assert!(entry_point(true, false, None, false).onboarding);
         assert!(!entry_point(true, true, None, false).onboarding);
         assert!(!entry_point(false, false, None, false).onboarding);
