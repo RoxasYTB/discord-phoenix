@@ -16,6 +16,100 @@ pub fn markup_label(text: SharedString, font_px: f32) -> AnyElement {
     label_inner(text, font_px, true, true, 0.)
 }
 
+#[derive(Clone)]
+enum StatusClick {
+    Link(String, String),
+    Spoiler(usize),
+}
+
+pub fn voice_status(
+    app: &crate::app::PhoenixApp,
+    entity: &gpui::Entity<crate::app::PhoenixApp>,
+    channel: crate::model::Id,
+    src: &str,
+    font_px: f32,
+) -> AnyElement {
+    let src = src.replace(['\r', '\n'], " ");
+    let inline = crate::markdown::parse_voice_status(&src, &app.resolver());
+    let always = crate::ui::settings::effects::spoilers_always();
+    let revealed = |sp: Option<usize>| sp.is_some_and(|i| always || app.revealed.contains(&(channel, i)));
+    let text = inline.text.as_str();
+    let segment = |range: std::ops::Range<usize>, last: bool| -> AnyElement {
+        let off = range.start;
+        let mut highlights = Vec::new();
+        let mut clicks: Vec<(std::ops::Range<usize>, StatusClick)> = Vec::new();
+        for s in &inline.spans {
+            let (a, b) = (s.range.start.max(range.start), s.range.end.min(range.end));
+            if a >= b {
+                continue;
+            }
+            let shown = revealed(s.spoiler);
+            highlights.push((a - off..b - off, crate::richtext::highlight_for(s.style, shown)));
+            let target = match (s.spoiler, &s.link) {
+                (Some(sp), _) if !shown => Some(StatusClick::Spoiler(sp)),
+                (_, Some(url)) => Some(StatusClick::Link(String::new(), url.clone())),
+                _ => None,
+            };
+            let Some(target) = target else { continue };
+            let merged = match (clicks.last_mut(), &target) {
+                (Some((r, StatusClick::Link(_, u))), StatusClick::Link(_, url)) if r.end == a - off && u.as_str() == url.as_str() => {
+                    r.end = b - off;
+                    true
+                }
+                (Some((r, StatusClick::Spoiler(p))), StatusClick::Spoiler(sp)) if r.end == a - off && *p == *sp => {
+                    r.end = b - off;
+                    true
+                }
+                _ => false,
+            };
+            if !merged {
+                clicks.push((a - off..b - off, target));
+            }
+        }
+        let piece = &text[range.clone()];
+        for (r, t) in &mut clicks {
+            if let StatusClick::Link(label, _) = t {
+                *label = piece[r.clone()].to_owned();
+            }
+        }
+        let styled = gpui::StyledText::new(SharedString::from(piece.to_owned())).with_highlights(highlights);
+        let wrap = if last { div().min_w_0().text_ellipsis() } else { div().flex_none() };
+        if clicks.is_empty() {
+            return wrap.child(styled).into_any_element();
+        }
+        let (ranges, targets): (Vec<_>, Vec<_>) = clicks.into_iter().unzip();
+        let e = entity.clone();
+        let id = channel.0.wrapping_mul(31).wrapping_add(off as u64);
+        wrap.child(gpui::InteractiveText::new(("vc-status-rt", id), styled).on_click(ranges, move |ix, w, cx| {
+            cx.stop_propagation();
+            match targets[ix].clone() {
+                StatusClick::Link(label, url) => e.update(cx, |a, cx| crate::ui::modals::leave_link::click(a, &label, &url, w, cx)),
+                StatusClick::Spoiler(sp) => e.update(cx, |a, cx| {
+                    a.revealed.insert((channel, sp));
+                    cx.notify();
+                }),
+            }
+        }))
+        .into_any_element()
+    };
+    let mut row = div().flex().items_center().min_w_0().overflow_hidden().whitespace_nowrap();
+    let mut at = 0;
+    for (r, tok) in crate::richtext::emoji_ranges(text) {
+        if r.start < at {
+            continue;
+        }
+        if r.start > at {
+            row = row.child(segment(at..r.start, false));
+        }
+        row = row.child(div().flex_none().child(crate::media::emoji::emoji_element(&tok, font_px * 1.375)));
+        at = r.end;
+    }
+    if at < text.len() {
+        row = row.child(segment(at..text.len(), true));
+    }
+    row.into_any_element()
+}
+
 pub fn status_wrapped(text: SharedString, _font_px: f32) -> AnyElement {
     let ranges = crate::richtext::emoji_ranges(&text);
     if ranges.is_empty() {

@@ -1473,7 +1473,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                                     })
                                     .map(|d| match text {
                                         Some(st) => d.child(
-                                            div().min_w_0().text_ellipsis().whitespace_nowrap().child(crate::ui::emoji_text::markup_label(st.into(), 12.)),
+                                            div().min_w_0().text_ellipsis().whitespace_nowrap().child(crate::ui::emoji_text::voice_status(app, entity, id, &st, 12.)),
                                         ),
                                         None => d
                                             .child(div().min_w_0().text_ellipsis().whitespace_nowrap().child(crate::t!("voice.set_status")))

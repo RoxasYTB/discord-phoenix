@@ -235,6 +235,19 @@ pub use link::title_for as link_title_attr;
 thread_local! {
     static EMOJI_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static NO_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static VOICE_STATUS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn voice_status() -> bool {
+    VOICE_STATUS.with(std::cell::Cell::get)
+}
+
+pub fn parse_voice_status(src: &str, r: &dyn MentionResolver) -> Inline {
+    let prev = VOICE_STATUS.with(|e| e.replace(true));
+    let mut sp = 0;
+    let out = parse_inline(src, r, &mut sp);
+    VOICE_STATUS.with(|e| e.set(prev));
+    out
 }
 
 fn no_links() -> bool {
@@ -333,7 +346,7 @@ impl Ctx<'_> {
                 continue;
             }
 
-            if c == b'`' {
+            if c == b'`' && !voice_status() {
                 let ticks = if rest.starts_with("``") { 2 } else { 1 };
                 let close = &rest[..ticks];
                 if let Some(end) = rest[ticks..].find(close)
@@ -352,10 +365,12 @@ impl Ctx<'_> {
                 && let Some(end) = rest.find('>')
             {
                 let inner = &rest[1..end];
+                let vs = voice_status();
                 if let Some((guild, sound)) = inner
                     .strip_prefix("sound:")
                     .and_then(|ids| ids.split_once(':'))
                     .and_then(|(guild, sound)| Some((guild.parse::<u64>().ok()?, sound.parse::<u64>().ok()?)))
+                    .filter(|_| !vs)
                     && let Some(sound) = self.r.soundboard(guild, sound)
                 {
                     self.push(&src[plain_start..i], style, spoiler);
@@ -383,7 +398,9 @@ impl Ctx<'_> {
                         continue;
                     }
                 }
-                let parsed = if let Some(id) = inner.strip_prefix("@&") {
+                let parsed = if vs && inner.starts_with('@') {
+                    None
+                } else if let Some(id) = inner.strip_prefix("@&") {
                     id.parse().ok().map(|id| {
                         let n = self.r.role(id).unwrap_or_else(|| "unknown-role".into());
                         (Mention::Role(id), format!("@{n}"))
@@ -408,7 +425,7 @@ impl Ctx<'_> {
                     plain_start = i;
                     continue;
                 }
-                if autolink(inner) {
+                if !vs && autolink(inner) {
                     self.push(&src[plain_start..i], style, spoiler);
                     match link::validate_url(inner) {
                         Some(target) => self.push_full(inner, style | Style::LINK, Some(target), None, spoiler),
@@ -419,7 +436,7 @@ impl Ctx<'_> {
                     continue;
                 }
             }
-            if c == b'@' {
+            if c == b'@' && !voice_status() {
                 let (tok, m) = if rest.starts_with("@everyone") {
                     ("@everyone", Some(Mention::Everyone))
                 } else if rest.starts_with("@here") {
@@ -464,6 +481,7 @@ impl Ctx<'_> {
             if matches!(c, b'h' | b's')
                 && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
                 && !no_links()
+                && !voice_status()
                 && let Some(url) = bare_url(rest)
             {
                 self.push(&src[plain_start..i], style, spoiler);
@@ -721,6 +739,23 @@ mod tests {
         assert!(i.spans.iter().all(|s| s.style.has(Style::BOLD) && s.style.has(Style::ITALIC)));
         let u = inline("__*under*__");
         assert_eq!(u.text, "under");
+    }
+
+    #[test]
+    fn voice_status_keeps_styles_links_and_timestamps_only() {
+        let i = parse_voice_status("**on** _air_ ||secret|| [site](https://example.com) <t:0:R>", &R);
+        let st = styled(&i);
+        assert!(st.iter().any(|(t, s)| *t == "on" && s.has(Style::BOLD)));
+        assert!(st.iter().any(|(t, s)| *t == "air" && s.has(Style::ITALIC)));
+        assert!(st.iter().any(|(t, s)| *t == "secret" && s.has(Style::SPOILER)));
+        assert!(i.spans.iter().any(|s| s.link.as_deref() == Some("https://example.com/") || s.link.as_deref() == Some("https://example.com")));
+        assert!(i.spans.iter().any(|s| s.style.has(Style::TIMESTAMP)));
+        let raw = parse_voice_status("`x` <@42> @everyone <@&1> https://a.com <https://b.com> <sound:9:77>", &R);
+        assert_eq!(raw.text, "`x` <@42> @everyone <@&1> https://a.com <https://b.com> <sound:9:77>");
+        assert!(raw.spans.iter().all(|s| s.style == Style::PLAIN && s.link.is_none() && s.mention.is_none()));
+        let ch = parse_voice_status("<#7>", &R);
+        assert_eq!(ch.text, "#general");
+        assert!(!inline("`x`").text.contains('`'));
     }
 
     fn inline(s: &str) -> Inline {

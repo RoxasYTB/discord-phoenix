@@ -3,7 +3,7 @@ use std::ops::Range;
 pub mod highlight;
 
 use gpui::{
-    Font, FontStyle, FontWeight, Hsla, SharedString, StrikethroughStyle, TextRun, UnderlineStyle,
+    Font, FontStyle, FontWeight, HighlightStyle, Hsla, SharedString, StrikethroughStyle, TextRun, UnderlineStyle,
     font, px,
 };
 
@@ -84,6 +84,42 @@ pub fn code_runs(code: &str, lang: Option<&str>) -> Vec<TextRun> {
 
 pub fn ui_font() -> Font {
     Font { fallbacks: Some(crate::fonts::ui_fallbacks()), ..font(FONT_UI()) }
+}
+
+pub fn highlight_for(style: Style, revealed: bool) -> HighlightStyle {
+    let mut h = HighlightStyle::default();
+    if style.has(Style::BOLD) {
+        h.font_weight = Some(FontWeight::BOLD);
+    }
+    if style.has(Style::ITALIC) {
+        h.font_style = Some(FontStyle::Italic);
+    }
+    if style.has(Style::MENTION) {
+        h.color = Some(c(Palette::MENTION_FG));
+        h.background_color = Some(ca(Palette::MENTION_BG));
+        h.font_weight = Some(FontWeight::MEDIUM);
+    }
+    if style.has(Style::TIMESTAMP) {
+        h.background_color = Some(c(tok(idx::BACKGROUND_MOD_NORMAL)));
+    }
+    if style.has(Style::LINK) {
+        h.color = Some(c(tok(idx::TEXT_LINK)));
+    }
+    if style.has(Style::UNDERLINE) || (style.has(Style::LINK) && crate::ui::settings::effects::underline_links()) {
+        h.underline = Some(UnderlineStyle { thickness: px(1.), color: h.color, wavy: false });
+    }
+    if style.has(Style::STRIKE) {
+        h.strikethrough = Some(StrikethroughStyle { thickness: px(1.), color: h.color });
+    }
+    if style.has(Style::SPOILER) {
+        if revealed {
+            h.background_color = Some(c(tok(idx::SPOILER_REVEALED_BACKGROUND)));
+        } else {
+            h.color = Some(c(tok(idx::SPOILER_HIDDEN_BACKGROUND)));
+            h.background_color = Some(c(tok(idx::SPOILER_HIDDEN_BACKGROUND)));
+        }
+    }
+    h
 }
 
 fn run_for(len: usize, style: Style, revealed: bool, base: Hsla, ui: &Font) -> TextRun {
