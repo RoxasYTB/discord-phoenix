@@ -877,6 +877,7 @@ fn main() -> anyhow::Result<()> {
         == Some("true");
     let show_members = env_or_cdp("PHX_MEMBERS", "(!!document.querySelector('[class*=membersWrap_]'))+''").as_deref() != Some("false");
     let wait: u64 = std::env::var("PHX_WAIT").ok().and_then(|v| v.parse().ok()).unwrap_or(15);
+    anyhow::ensure!(!channel.is_some_and(|c| phoenix_api::trap::is_trap(c.0)), "refusing to open a trap channel");
     println!("target guild={guild:?} channel={channel:?} size={w}x{h} theme={theme:?} compact={compact} density={density:?} font={font_px} mute={self_mute} deaf={self_deaf}");
 
     let t0 = std::time::Instant::now();
@@ -966,7 +967,7 @@ fn main() -> anyhow::Result<()> {
                     {
                         app.select_guild(Some(g), cx);
                         let first = app.guild_channels.get(&g).and_then(|l| {
-                            l.iter().copied().find(|id| app.channels.get(id).is_some_and(|c| c.kind == phoenix_app::model::ChannelKind::Text))
+                            l.iter().copied().find(|id| !app.is_trap_channel(*id) && app.channels.get(id).is_some_and(|c| c.kind == phoenix_app::model::ChannelKind::Text))
                         });
                         if let Some(c) = first {
                             app.open_channel_chat(c, cx);
@@ -1103,7 +1104,7 @@ fn main() -> anyhow::Result<()> {
             } else if let (Some(g), None) = (guild, channel) {
                 app.select_guild(Some(g), cx);
                 let first = app.guild_channels.get(&g).and_then(|l| {
-                    l.iter().copied().find(|id| app.channels.get(id).is_some_and(|c| c.kind == phoenix_app::model::ChannelKind::Text))
+                    l.iter().copied().find(|id| !app.is_trap_channel(*id) && app.channels.get(id).is_some_and(|c| c.kind == phoenix_app::model::ChannelKind::Text))
                 });
                 if let Some(c) = first {
                     app.open_channel_chat(c, cx);
@@ -1280,6 +1281,7 @@ fn main() -> anyhow::Result<()> {
             pump(&mut cx, 4000);
             let ok = cx.update(|cx| v.read(cx).selected_channel == Some(c));
             eprintln!("location: second try {}", if ok { "ok" } else { "failed" });
+            anyhow::ensure!(ok, "channel {} was not found on the account; stopping instead of falling back to another channel", c.0);
         }
     }
     if std::env::var("PHX_VIEW").as_deref() == Ok("inbox") {

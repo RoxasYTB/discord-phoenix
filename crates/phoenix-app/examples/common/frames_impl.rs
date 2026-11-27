@@ -387,7 +387,7 @@ pub fn run() -> anyhow::Result<()> {
             p.cx.update(|cx| {
                 v.update(cx, |app, cx| {
                     app.select_guild(Some(g), cx);
-                    let chans: Vec<_> = app.guild_channels.get(&g).cloned().unwrap_or_default();
+                    let chans: Vec<_> = app.guild_channels.get(&g).cloned().unwrap_or_default().into_iter().filter(|c| !app.is_trap_channel(*c)).collect();
                     if let Some(c) = chans.get(i / guilds.len() % chans.len().max(1)) {
                         app.select_channel(*c, cx);
                     }

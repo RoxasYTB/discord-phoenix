@@ -608,18 +608,33 @@ impl PhoenixApp {
     }
 
     pub(crate) fn guild_target(&self, guild: Option<Id>) -> Option<Id> {
-        self.last_channel.get(&guild).copied().or_else(|| match guild {
+        self.last_channel.get(&guild).copied().filter(|c| !self.is_trap_channel(*c)).or_else(|| match guild {
             Some(g) => self.guild_channels.get(&g).and_then(|l| {
-                l.iter().copied().find(|id| {
+                let open = |id: &Id| !self.is_trap_channel(*id);
+                l.iter().copied().filter(open).find(|id| {
                     matches!(self.channels[id].kind, ChannelKind::Text | ChannelKind::Announcement)
                         && self.channels[id].name.as_ref() == "general"
                 })
                 .or_else(|| {
-                    l.iter().copied().find(|id| self.channels[id].kind == ChannelKind::Text)
+                    l.iter().copied().filter(open).find(|id| self.channels[id].kind == ChannelKind::Text)
                 })
             }),
             None => None,
         })
+    }
+
+    pub fn is_trap_channel(&self, id: Id) -> bool {
+        phoenix_api::trap::is_trap(id.0)
+            || self.channels.get(&id).is_some_and(|c| phoenix_api::trap::trap_text(&c.name, c.topic.as_deref()))
+    }
+
+    pub(crate) fn refuse_trap_in_agent_session(&self, id: Id) {
+        if phoenix_api::rest::guard::agent_session() && self.is_trap_channel(id) {
+            let msg = format!("agent session tried to open the trap channel {}; stopping before anything is sent", id.0);
+            tracing::error!("{msg}");
+            eprintln!("{msg}");
+            std::process::exit(70);
+        }
     }
 
     fn refresh_guild_mentions(&mut self, guild: Option<Id>) {
@@ -631,6 +646,7 @@ impl PhoenixApp {
     }
 
     pub fn select_channel(&mut self, id: Id, cx: &mut Context<Self>) {
+        self.refuse_trap_in_agent_session(id);
         let Some(ch) = self.channels.get(&id) else { return };
         if matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage) {
             if self.voice_switch_needs_confirm(id) {
@@ -665,6 +681,7 @@ impl PhoenixApp {
     }
 
     pub fn open_channel_chat(&mut self, id: Id, cx: &mut Context<Self>) {
+        self.refuse_trap_in_agent_session(id);
         crate::ui::discovery::close();
         crate::ui::favorites::on_channel_opened(self, id);
         crate::commands::state::remember_read_mark(self, id);
@@ -1691,3 +1708,42 @@ impl Render for PhoenixApp {
             .children(ui::incoming_call::render(self, cx))
     }
 }
+
+#[cfg(test)]
+mod trap_tests {
+    use std::sync::Arc;
+
+    use super::PhoenixApp;
+    use crate::{backend::Backend, mock::MockBackend, model::ChannelKind};
+
+    #[gpui::test]
+    fn opening_a_server_never_lands_on_a_honeypot(cx: &mut gpui::TestAppContext) {
+        let backend = Arc::new(MockBackend::synchronous());
+        let ready = futures::executor::block_on(backend.login(crate::backend::Credentials::Token("x".into()))).unwrap();
+        cx.update(gpui_component::init);
+        let window = cx.add_window(|w, cx| PhoenixApp::new(backend.clone(), w, cx));
+        window
+            .update(cx, |app, _, cx| {
+                app.apply_ready(ready, cx);
+                let g = app.guilds[0].id;
+                let text: Vec<_> = app.guild_channels[&g].iter().copied().filter(|c| app.channels[c].kind == ChannelKind::Text).collect();
+                assert!(text.len() >= 2);
+                for c in &text {
+                    app.channels.get_mut(c).unwrap().name = "salon".into();
+                }
+                app.channels.get_mut(&text[0]).unwrap().name = "〢🍯・honeypot".into();
+                assert!(app.is_trap_channel(text[0]));
+                assert!(!app.is_trap_channel(text[1]));
+                assert_eq!(app.guild_target(Some(g)), Some(text[1]));
+                app.channels.get_mut(&text[1]).unwrap().topic = Some("Honeypot, do not post here".into());
+                assert!(app.is_trap_channel(text[1]));
+                assert_ne!(app.guild_target(Some(g)), Some(text[1]));
+                app.last_channel.insert(Some(g), text[0]);
+                assert_ne!(app.guild_target(Some(g)), Some(text[0]));
+                app.select_guild(Some(g), cx);
+                assert!(app.selected_channel.is_none_or(|c| !app.is_trap_channel(c)));
+            })
+            .unwrap();
+    }
+}
+

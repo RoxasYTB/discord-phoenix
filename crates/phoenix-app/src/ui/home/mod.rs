@@ -151,6 +151,7 @@ impl PhoenixApp {
     }
 
     pub fn select_thread(&mut self, id: Id, cx: &mut Context<Self>) {
+        self.refuse_trap_in_agent_session(id);
         if let Some(t) = self.nav.find_thread(id).cloned() {
             self.channels.entry(id).or_insert(t);
             self.select_channel(id, cx);

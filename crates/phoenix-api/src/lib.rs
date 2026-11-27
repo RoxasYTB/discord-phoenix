@@ -7,6 +7,7 @@ pub mod paths;
 pub mod props;
 pub mod remote_auth;
 pub mod rest;
+pub mod trap;
 
 pub use cache::Cache;
 pub use error::{Error, Result};

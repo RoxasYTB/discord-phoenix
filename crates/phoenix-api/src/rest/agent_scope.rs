@@ -84,7 +84,6 @@ fn channel(method: &Method, s: Scope, rest: &[&str], body: Option<&Value>) -> bo
         ["messages"] => m(&[Method::POST]) && s != Scope::Voice,
         ["typing"] | ["attachments"] => m(&[Method::POST]) && s != Scope::Voice,
         ["messages", msg] => m(&[Method::PATCH, Method::DELETE]) && sandboxed(s) && id(msg).is_some(),
-        ["messages", msg, "ack"] => m(&[Method::POST]) && id(msg).is_some(),
         ["messages", msg, "reactions", _, ..] => m(&[Method::PUT, Method::DELETE]) && sandboxed(s) && id(msg).is_some(),
         ["pins", msg] | ["messages", "pins", msg] => m(&[Method::PUT, Method::DELETE]) && sandboxed(s) && id(msg).is_some(),
         ["messages", msg, "threads"] => m(&[Method::POST]) && s == Scope::Sandbox && id(msg).is_some(),
@@ -217,7 +216,10 @@ mod tests {
         assert!(ok(Method::POST, &format!("{s}/typing")));
         assert!(ok(Method::POST, &format!("{s}/attachments")));
         assert!(ok(Method::PUT, &format!("{s}/polls/42/answers/@me")));
-        assert!(ok(Method::POST, &format!("{s}/messages/42/ack")));
+        assert!(!ok(Method::POST, &format!("{s}/messages/42/ack")));
+        assert!(!ok(Method::POST, &format!("{s}/pins/ack")));
+        assert!(!ok(Method::POST, "/guilds/1369382919948210248/ack"));
+        assert!(!ok(Method::POST, "/read-states/ack-bulk"));
     }
 
     #[test]

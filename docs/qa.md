@@ -39,6 +39,17 @@ invite and permission route, and every `/users/@me` setting. `real_shots`
 refuses to start with `PHX_WRITE`, `PHX_SEND` or `PHX_VOICE` unless
 `PHX_AGENT=1` is set. Requests to a loopback base (unit tests) are not scoped.
 
+Trap channels (a « honeypot » that mutes whoever posts in it) are blocked for
+every session, the user's included: `phoenix_api::trap` refuses any non-GET
+request whose path or `channel_id` points at one (messages, typing, acks,
+reactions, everything). They are recognised by id (Aperture's #honeypot,
+`1507838362562859119`) and by a name or topic containing "honeypot", noted when
+the channel enters the cache, threads of a trap included. Opening a server never
+picks a trap as its default channel, and an agent session that tries to open one
+stops the process (exit 70). `real_shots` stops with an error when the requested
+channel is not on the account instead of falling back to another one, and agent
+sessions never send acks.
+
 The test channel #phoenix was deleted on 27/11 at 19:35 from the account. No
 agent process could send that request at that time (the only `real_shots` run
 was a read-only one still loading), but nothing in Phoenix itself refused it

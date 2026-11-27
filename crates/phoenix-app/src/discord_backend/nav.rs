@@ -739,6 +739,8 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             call(Method::DELETE, format!("/channels/{}?silent=false", sf(ch)), None).await?;
             NavReply::Done
         }
+        NavRequest::AckChannel(ch) if !super::ack_allowed(ch.0) => NavReply::Done,
+        NavRequest::AckGuild(_) if super::acks_disabled() => NavReply::Done,
         NavRequest::AckChannel(ch) => {
             let v = call(Method::GET, format!("/channels/{}", sf(ch)), None).await?;
             if let Some(last) = v.get("last_message_id").and_then(snowflake) {

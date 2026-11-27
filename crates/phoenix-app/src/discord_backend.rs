@@ -484,12 +484,21 @@ fn activity() -> (bool, bool) {
 
 pub static NO_ACKS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-fn acks_disabled() -> bool {
-    NO_ACKS.load(std::sync::atomic::Ordering::Relaxed)
+fn acks_off(no_acks: bool, agent: bool) -> bool {
+    no_acks || agent
 }
 
+fn acks_disabled() -> bool {
+    acks_off(NO_ACKS.load(std::sync::atomic::Ordering::Relaxed), phoenix_api::rest::guard::agent_session())
+}
+
+fn ack_allowed(channel: u64) -> bool {
+    !acks_disabled() && !phoenix_api::trap::is_trap(channel)
+}
+
+
 fn schedule_ack(s: &Arc<Session>, channel: api::Snowflake, msg: api::Snowflake) {
-    if acks_disabled() {
+    if !ack_allowed(channel.0) {
         return;
     }
     s.adapter.lock().mark_read(channel.0, msg.0);
@@ -905,7 +914,7 @@ impl Backend for DiscordBackend {
                     a.mark_read(ch.0, last.0);
                     unread
                 };
-                if was_unread && !acks_disabled() {
+                if was_unread && ack_allowed(ch.0) {
                     s.rest.ack_message(ch, last).await.map_err(api_err)?;
                 }
             }
@@ -1212,7 +1221,7 @@ impl Backend for DiscordBackend {
     }
 
     fn ack_pins(&self, channel: Id) -> BoxFuture<()> {
-        let send = pins::mark_seen(channel.0) && !acks_disabled();
+        let send = pins::mark_seen(channel.0) && ack_allowed(channel.0);
         self.with_session(move |_, s| async move {
             if send {
                 s.rest.request_json(reqwest::Method::POST, &format!("/channels/{}/pins/ack", channel.0), None).await.map_err(api_err)?;
@@ -1224,6 +1233,9 @@ impl Backend for DiscordBackend {
     fn mark_unread(&self, channel: Id, last_read: Id) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
             s.adapter.lock().prefs.reads.entry(channel.0).or_default().last_read = last_read.0;
+            if !ack_allowed(channel.0) {
+                return Ok(());
+            }
             s.rest.ack_message_manual(sf(channel), sf(last_read), 0).await.map_err(api_err)
         })
     }
@@ -1494,5 +1506,19 @@ impl Backend for DiscordBackend {
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod ack_tests {
+    #[test]
+    fn agent_sessions_and_trap_channels_never_ack() {
+        assert!(super::acks_off(false, true));
+        assert!(super::acks_off(true, false));
+        assert!(!super::acks_off(false, false));
+        assert!(!super::ack_allowed(1507838362562859119));
+        if phoenix_api::rest::guard::agent_session() {
+            assert!(!super::ack_allowed(1403447573389381652));
+        }
     }
 }

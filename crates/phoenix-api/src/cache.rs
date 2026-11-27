@@ -603,6 +603,7 @@ fn insert_guild(s: &mut State, mut g: Guild) {
     for mut c in channels.into_iter().chain(threads) {
         c.guild_id = Some(id);
         ids.push(c.id);
+        crate::trap::note(&c);
         s.channels.insert(c.id, Arc::new(c));
     }
     s.guild_channels.insert(id, ids);
@@ -634,6 +635,7 @@ fn remove_guild(s: &mut State, id: GuildId) {
 }
 
 fn insert_channel(s: &mut State, c: Channel) {
+    crate::trap::note(&c);
     match c.guild_id {
         Some(g) => {
             let v = s.guild_channels.entry(g).or_default();

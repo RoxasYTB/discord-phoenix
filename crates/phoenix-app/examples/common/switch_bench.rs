@@ -95,7 +95,7 @@ pub fn run(cx: &mut HeadlessAppContext, win: AnyWindowHandle, v: &Entity<Phoenix
             .into_iter()
             .flatten()
             .copied()
-            .filter(|c| a.channels.get(c).is_some_and(|ch| matches!(ch.kind, ChannelKind::Text | ChannelKind::Announcement)))
+            .filter(|c| !a.is_trap_channel(*c) && a.channels.get(c).is_some_and(|ch| matches!(ch.kind, ChannelKind::Text | ChannelKind::Announcement)))
             .skip(1)
             .take(n)
             .collect();
