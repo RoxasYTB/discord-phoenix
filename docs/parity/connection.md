@@ -118,5 +118,6 @@ What changes with the client's set, measured on the same account (44 guilds, 220
 | PASSIVE_UPDATE_V2 (bit 14) | for guilds without an op 37 subscription, `{guild_id, updated_members, updated_channels:[{id, last_message_id, last_pin_timestamp}], updated_voice_states, removed_voice_states:[user ids]}` instead of separate events | `expand()` turns it into the events the client's stores apply: member updates, `ChannelUnreads` (new last message and pin, so the unread dots and pin badges move), voice state updates (removals as `channel_id: null`), with the guild id set on each; the session journal replays it the same way ✅ |
 | CALL_CREATE on connect (bit 12) | existing DM calls arrive after READY | handled like a live CALL_CREATE ✅ |
 
-No PASSIVE_UPDATE_V2 was seen during the 25 min probe, so its fields come from the dispatcher only
-(the unit tests use synthetic payloads).
+No PASSIVE_UPDATE_V2 was seen during a 25 min probe without any op 37 (MESSAGE_CREATE, VOICE_STATE_UPDATE,
+CHANNEL_UPDATE and GUILD_ROLE_UPDATE still came for large guilds), so its fields come from the dispatcher
+only and the unit tests use synthetic payloads.
