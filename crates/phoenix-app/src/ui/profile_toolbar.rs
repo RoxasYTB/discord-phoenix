@@ -40,6 +40,7 @@ thread_local! {
     static SIZES: RefCell<HashMap<(u64, Layout), (f32, f32)>> = RefCell::new(HashMap::new());
     static HEIGHTS: RefCell<HashMap<(u64, Layout), (f32, f32)>> = RefCell::new(HashMap::new());
     static PINNED: RefCell<HashMap<(u64, Layout), Instant>> = RefCell::new(HashMap::new());
+    static FOLD: RefCell<HashMap<(u64, Layout), Fold>> = RefCell::new(HashMap::new());
     static TOAST: RefCell<Option<Toast>> = const { RefCell::new(None) };
 }
 
@@ -48,6 +49,17 @@ pub struct Toast {
     pub user: Id,
     pub sent: Option<Interaction>,
     pub since: Instant,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Fold {
+    Open(Instant),
+    Closing { from: f32, at: Instant, ms: u64 },
+}
+
+fn collapse_from(open_ms: f32, delay: u64, dur: u64, clamped: f32, target: f32) -> Option<(f32, u64)> {
+    let p = ((open_ms - delay as f32) / dur.max(1) as f32).clamp(0., 1.);
+    (p > 0.).then(|| (clamped + (target - clamped) * p, (dur as f32 * p).round() as u64))
 }
 
 pub const FADE_MS: u64 = 150;
@@ -701,11 +713,51 @@ pub fn status(
     let probe_clamped = div().absolute().top_0().left_0().w_full().invisible().line_clamp(2).child(mk(&text)).child(measure_height(uid, layout, false));
     let probe_full = div().absolute().top_0().left_0().w_full().invisible().line_clamp(open_clamp).child(mk(&text)).child(measure_height(uid, layout, true));
     let target = expand_target(fh, cap, unclamped);
+    let fold_key = (uid.0, layout);
+    let delay = delay_ms(EXPAND_DELAY_MS);
+    let dur = crate::ui::settings::effects::motion(EXPAND_MS).as_millis() as u64;
+    let fold = FOLD.with(|f| {
+        let mut f = f.borrow_mut();
+        match (open_since, f.get(&fold_key).copied()) {
+            (Some(at), _) => {
+                f.insert(fold_key, Fold::Open(at));
+                None
+            }
+            (None, Some(Fold::Open(start))) => match collapse_from(start.elapsed().as_millis() as f32, delay, dur, ch, target) {
+                Some((from, ms)) if ms > 0 => {
+                    let at = Instant::now();
+                    f.insert(fold_key, Fold::Closing { from, at, ms });
+                    Some((from, at, ms))
+                }
+                _ => {
+                    f.remove(&fold_key);
+                    None
+                }
+            },
+            (None, Some(Fold::Closing { from, at, ms })) if at.elapsed() < Duration::from_millis(ms) => Some((from, at, ms)),
+            (None, Some(_)) => {
+                f.remove(&fold_key);
+                None
+            }
+            (None, None) => None,
+        }
+    });
     let visible_text = match open_since {
-        None => div().line_clamp(2).child(mk(&text)).into_any_element(),
+        None => match fold {
+            Some((from, at, ms)) => div()
+                .overflow_hidden()
+                .child(mk(&text))
+                .line_clamp(open_clamp)
+                .max_h(z(from))
+                .with_animation(
+                    gpui::ElementId::Name(format!("ptb-fold-{}-{lk}-{at:?}", uid.0).into()),
+                    gpui::Animation::new(Duration::from_millis(ms)),
+                    move |d, t| if t >= 1. { d.line_clamp(2) } else { d.max_h(z(from + (ch - from) * t)) },
+                )
+                .into_any_element(),
+            None => div().line_clamp(2).child(mk(&text)).into_any_element(),
+        },
         Some(at) => {
-            let delay = delay_ms(EXPAND_DELAY_MS);
-            let dur = crate::ui::settings::effects::motion(EXPAND_MS).as_millis() as u64;
             let total = delay + dur;
             let start = ch;
             let el = div().overflow_hidden().child(mk(&text));
@@ -888,6 +940,14 @@ pub fn edit_profile_button(uid: Id, guild: Option<Id>, cx: &mut Context<PhoenixA
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn collapse_runs_back_from_where_the_expansion_was() {
+        assert_eq!(collapse_from(200., 300, 150, 36., 90.), None);
+        assert_eq!(collapse_from(1000., 300, 150, 36., 90.), Some((90., 150)));
+        let (from, ms) = collapse_from(375., 300, 150, 36., 90.).unwrap();
+        assert!((from - 63.).abs() < 1e-3 && ms == 75, "{from} {ms}");
+    }
 
     #[test]
     fn toolbar_sits_eight_pixels_from_the_end_or_centres_on_small_bubbles() {
