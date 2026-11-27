@@ -23,6 +23,9 @@ pub struct TrayState {
     pub muted: bool,
     pub deafened: bool,
     pub speaking: bool,
+    pub server_mute: bool,
+    pub suppress: bool,
+    pub server_deaf: bool,
     pub unread: bool,
     pub count: u32,
 }
@@ -30,9 +33,9 @@ pub struct TrayState {
 impl TrayState {
     pub fn icon(&self) -> &'static str {
         if self.connected {
-            if self.deafened {
+            if self.deafened || self.server_deaf {
                 "tray-deafened"
-            } else if self.muted {
+            } else if self.muted || self.server_mute || self.suppress {
                 "tray-muted"
             } else if self.speaking {
                 "tray-speaking"
@@ -52,11 +55,15 @@ impl TrayState {
         let mentions = a.guilds.iter().map(|g| g.mentions).sum::<u32>() + dms().map(|c| c.mentions).sum::<u32>();
         let pending = a.nav.pending_requests();
         let any_unread = a.guilds.iter().any(|g| g.unread) || dms().any(|c| c.unread);
+        let f = if connected { crate::ui::voice_panel::flags(a.me.id) } else { Default::default() };
         Self {
             connected,
             muted: a.mic_muted || a.deafened,
             deafened: a.deafened,
             speaking: connected && crate::voice::call::manager().control().transmitting(),
+            server_mute: f.server_mute,
+            suppress: f.suppress,
+            server_deaf: f.server_deaf,
             unread: unread_icon(a.prefs.local.flag("badge", true), any_unread, mentions, pending),
             count: mentions + pending,
         }
@@ -103,6 +110,9 @@ struct Labels {
     open: String,
     mute: String,
     deafen: String,
+    suppressed: String,
+    server_muted: String,
+    server_deafened: String,
     voice_settings: String,
     acknowledgements: String,
     quit: String,
@@ -189,6 +199,9 @@ pub fn spawn(cx: &mut App) {
         open: crate::t!("tray.open").to_string(),
         mute: crate::t!("tray.mute").to_string(),
         deafen: crate::t!("tray.deafen").to_string(),
+        suppressed: crate::t!("tray.suppressed").to_string(),
+        server_muted: crate::t!("tray.server_muted").to_string(),
+        server_deafened: crate::t!("tray.server_deafened").to_string(),
         voice_settings: crate::t!("tray.voice_settings").to_string(),
         acknowledgements: crate::t!("tray.acknowledgements").to_string(),
         quit: crate::t!("tray.quit").to_string(),
@@ -419,6 +432,33 @@ fn props(pairs: &[(&str, zbus::zvariant::Value<'_>)]) -> Props {
         .collect()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MuteLabel {
+    Mute,
+    Suppressed,
+    ServerMuted,
+    Deafen,
+    ServerDeafened,
+}
+
+pub fn mute_item(s: &TrayState) -> (MuteLabel, bool) {
+    if s.suppress {
+        (MuteLabel::Suppressed, false)
+    } else if s.server_mute {
+        (MuteLabel::ServerMuted, false)
+    } else {
+        (MuteLabel::Mute, true)
+    }
+}
+
+pub fn deafen_item(s: &TrayState) -> (MuteLabel, bool) {
+    if s.server_deaf {
+        (MuteLabel::ServerDeafened, false)
+    } else {
+        (MuteLabel::Deafen, true)
+    }
+}
+
 pub fn menu_ids(state: &TrayState) -> Vec<i32> {
     let mut ids = vec![ID_OPEN];
     if state.connected {
@@ -431,14 +471,33 @@ pub fn menu_ids(state: &TrayState) -> Vec<i32> {
 impl Menu {
     fn item_props(&self, id: i32) -> Props {
         use zbus::zvariant::Value;
-        let check = |label: &str, on: bool| {
-            props(&[("label", Value::from(label)), ("toggle-type", Value::from("checkmark")), ("toggle-state", Value::from(i32::from(on)))])
+        let check = |label: &str, on: bool, enabled: bool| {
+            props(&[
+                ("label", Value::from(label)),
+                ("enabled", Value::from(enabled)),
+                ("toggle-type", Value::from("checkmark")),
+                ("toggle-state", Value::from(i32::from(on))),
+            ])
         };
         match id {
             ID_OPEN => props(&[("label", Value::from(self.labels.open.as_str()))]),
             ID_SEP_VOICE | ID_SEP_META | ID_SEP_QUIT => props(&[("type", Value::from("separator"))]),
-            ID_MUTE => check(&self.labels.mute, self.state.muted),
-            ID_DEAFEN => check(&self.labels.deafen, self.state.deafened),
+            ID_MUTE => {
+                let (label, enabled) = mute_item(&self.state);
+                let label = match label {
+                    MuteLabel::Suppressed => &self.labels.suppressed,
+                    MuteLabel::ServerMuted => &self.labels.server_muted,
+                    MuteLabel::ServerDeafened => &self.labels.server_deafened,
+                    MuteLabel::Mute => &self.labels.mute,
+                    MuteLabel::Deafen => &self.labels.deafen,
+                };
+                check(label, self.state.muted || self.state.server_mute || self.state.suppress, enabled)
+            }
+            ID_DEAFEN => {
+                let (label, enabled) = deafen_item(&self.state);
+                let label = if label == MuteLabel::ServerDeafened { &self.labels.server_deafened } else { &self.labels.deafen };
+                check(label, self.state.deafened || self.state.server_deaf, enabled)
+            }
             ID_VOICE_SETTINGS => props(&[("label", Value::from(self.labels.voice_settings.as_str()))]),
             ID_ACK => props(&[("label", Value::from(self.labels.acknowledgements.as_str()))]),
             ID_QUIT => props(&[("label", Value::from(self.labels.quit.as_str()))]),
@@ -533,6 +592,19 @@ mod tests {
         assert_eq!(s.icon(), "tray-muted");
         s.deafened = true;
         assert_eq!(s.icon(), "tray-deafened");
+    }
+
+    #[test]
+    fn server_mute_and_suppress_drive_the_icon_and_lock_the_rows() {
+        let base = TrayState { connected: true, ..Default::default() };
+        assert_eq!(TrayState { server_mute: true, ..base }.icon(), "tray-muted");
+        assert_eq!(TrayState { suppress: true, speaking: true, ..base }.icon(), "tray-muted");
+        assert_eq!(TrayState { server_deaf: true, ..base }.icon(), "tray-deafened");
+        assert_eq!(mute_item(&base), (MuteLabel::Mute, true));
+        assert_eq!(mute_item(&TrayState { server_mute: true, ..base }), (MuteLabel::ServerMuted, false));
+        assert_eq!(mute_item(&TrayState { server_mute: true, suppress: true, ..base }), (MuteLabel::Suppressed, false));
+        assert_eq!(deafen_item(&base), (MuteLabel::Deafen, true));
+        assert_eq!(deafen_item(&TrayState { server_deaf: true, ..base }), (MuteLabel::ServerDeafened, false));
     }
 
     #[test]
