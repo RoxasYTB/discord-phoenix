@@ -1707,11 +1707,9 @@ pub fn call_volume(user: Id, stream: bool, cx: &App) -> AnyElement {
                     }
                     window.refresh();
                 }
-                "escape" => {
-                    if store(cx).vol_keys.take().is_some() {
-                        cx.stop_propagation();
-                        window.refresh();
-                    }
+                "escape" if store(cx).vol_keys.take().is_some() => {
+                    cx.stop_propagation();
+                    window.refresh();
                 }
                 _ => {}
             }
