@@ -1728,9 +1728,12 @@ mod trap_tests {
                 let g = app.guilds[0].id;
                 let text: Vec<_> = app.guild_channels[&g].iter().copied().filter(|c| app.channels[c].kind == ChannelKind::Text).collect();
                 assert!(text.len() >= 2);
-                for c in &text {
-                    app.channels.get_mut(c).unwrap().name = "salon".into();
+                for c in app.guild_channels[&g].clone() {
+                    if let Some(ch) = app.channels.get_mut(&c) {
+                        ch.name = "salon".into();
+                    }
                 }
+                app.last_channel.clear();
                 app.channels.get_mut(&text[0]).unwrap().name = "〢🍯・honeypot".into();
                 assert!(app.is_trap_channel(text[0]));
                 assert!(!app.is_trap_channel(text[1]));
