@@ -30,7 +30,7 @@ pub(crate) fn schedule_video_refresh(window: &Window, cx: &gpui::App) {
 
 thread_local! {
     static SHOWN: Cell<Option<Id>> = const { Cell::new(None) };
-    static CHAT_OPEN: Cell<bool> = const { Cell::new(false) };
+    static CHAT_OPEN: std::cell::RefCell<std::collections::HashSet<Id>> = std::cell::RefCell::new(std::collections::HashSet::new());
     static FOCUS: Cell<Focus> = const { Cell::new(Focus::Auto) };
     static LAST_MOVE: Cell<Option<Instant>> = const { Cell::new(None) };
     static WAKE: Cell<Option<Instant>> = const { Cell::new(None) };
@@ -201,19 +201,25 @@ pub fn show(ch: Id) {
     SHOWN.with(|s| s.set(Some(ch)));
 }
 
-pub fn set_chat_open(open: bool) {
-    CHAT_OPEN.with(|c| c.set(open));
+pub fn set_chat_open(channel: Id, open: bool) {
+    CHAT_OPEN.with_borrow_mut(|c| if open { c.insert(channel) } else { c.remove(&channel) });
 }
 
-pub fn chat_open() -> bool {
-    CHAT_OPEN.with(|c| c.get())
+pub fn chat_open(channel: Id) -> bool {
+    CHAT_OPEN.with_borrow(|c| c.contains(&channel))
+}
+
+pub fn toggle_chat(channel: Id) {
+    set_chat_open(channel, !chat_open(channel));
 }
 
 pub fn active(app: &PhoenixApp) -> bool {
-    let Some(ch) = SHOWN.with(|s| s.get()) else { return false };
-    app.selected_channel == Some(ch)
-        && app.voice_channel == Some(ch)
-        && app.channels.get(&ch).is_some_and(|c| c.guild.is_none() || matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage))
+    let Some(ch) = app.selected_channel.filter(|c| app.voice_channel == Some(*c)) else { return false };
+    match app.channels.get(&ch) {
+        Some(c) if c.guild.is_some() => matches!(c.kind, ChannelKind::Voice | ChannelKind::Stage),
+        Some(_) => SHOWN.with(|s| s.get()) == Some(ch),
+        None => false,
+    }
 }
 
 fn lobby_channel(app: &PhoenixApp) -> Option<Id> {
@@ -303,7 +309,7 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
         col
     });
 
-    let open = chat_open();
+    let open = chat_open(ch_id);
     let header = div()
         .flex_none()
         .pt(z(8.))
@@ -346,8 +352,8 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
                             24.,
                             t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT }),
                         ))
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            set_chat_open(!chat_open());
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            toggle_chat(ch_id);
                             cx.notify();
                         })),
                 ),
@@ -364,26 +370,30 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
         .children(tiles_el)
         .child(
             div()
+                .my(z(8.))
+                .max_w(gpui::relative(0.75))
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
                 .text_size(z(28.))
                 .line_height(z(34.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(t(idx::WHITE))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t(idx::TEXT_STRONG))
                 .child(crate::ui::emoji_text::label(name, 28.)),
         )
         .child(
             div()
-                .mt(z(8.))
                 .text_size(z(14.))
                 .line_height(z(20.))
-                .text_color(gpui::hsla(0., 0., 1., 0.72))
+                .text_color(t(idx::TEXT_DEFAULT))
                 .child(lobby_subtitle(&names)),
         )
         .child(
             div()
                 .id("lobby-join-voice")
-                .mt(z(20.))
-                .h(z(38.))
-                .px(z(20.))
+                .mt(z(24.))
+                .h(z(40.))
+                .px(z(16.))
                 .rounded(z(8.))
                 .bg(t(idx::WHITE))
                 .hover(|s| s.bg(gpui::rgba(0xe3e5e8ff)))
@@ -391,10 +401,11 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .text_size(z(14.))
-                .font_weight(FontWeight::SEMIBOLD)
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
                 .text_color(gpui::rgba(0x060607ff))
-                .child(crate::t!("call.join_voice"))
+                .child(crate::t!("call.lobby_join"))
                 .on_click(cx.listener(move |a, _, _, cx| a.enter_voice_channel(ch_id, cx))),
         );
 
@@ -418,6 +429,7 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
         .child(div().relative().size_full().flex().flex_col().child(header).child(center));
 
     let root = div()
+        .relative()
         .flex_1()
         .min_w_0()
         .size_full()
@@ -427,23 +439,24 @@ fn render_lobby(app: &PhoenixApp, ch_id: Id, window: &mut Window, cx: &mut Conte
         .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
         .child(lobby);
 
-    Some(if open {
-        root.child(
-            div()
-                .w(z(CHAT_W))
-                .flex_none()
-                .min_w_0()
-                .h_full()
-                .flex()
-                .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
-                .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(c(tok(idx::APP_FRAME_BORDER))))
-                .overflow_hidden()
-                .child(div().w(z(CHAT_W)).h_full().flex().flex_col().child(crate::ui::chat::render(app, window, cx, true))),
-        )
-        .into_any_element()
-    } else {
-        root.into_any_element()
-    })
+    Some(
+        root.when(open, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .right_0()
+                    .bottom_0()
+                    .w(z(CHAT_W))
+                    .flex()
+                    .bg(c(tok(idx::BACKGROUND_BASE_LOWEST)))
+                    .when(crate::theme::frame_borders(), |d| d.border_l_1().border_color(c(tok(idx::APP_FRAME_BORDER))))
+                    .overflow_hidden()
+                    .child(div().w(z(CHAT_W)).h_full().flex().flex_col().child(crate::ui::chat::render(app, window, cx, true))),
+            )
+        })
+        .into_any_element(),
+    )
 }
 
 pub(crate) const POPOUT: &str = "icons/call/popout.svg";
@@ -544,7 +557,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     }
 
     let vp = window.viewport_size();
-    let side = (if chat_open() { CHAT_W } else { 0. }) + (if crate::ui::stage::sidebar_open(ch_id) { crate::ui::stage::SIDEBAR_W } else { 0. });
+    let side = (if chat_open(ch_id) { CHAT_W } else { 0. }) + (if crate::ui::stage::sidebar_open(ch_id) { crate::ui::stage::SIDEBAR_W } else { 0. });
     let gw = (f32::from(vp.width) / zoom - crate::theme::m::SERVER_BAR_W - crate::ui::sidebar_resize::width() - side).max(100.);
     let gh = (f32::from(vp.height) / zoom - 32. - if crate::theme::frame_borders() { 1. } else { 0. }).max(60.);
     let focus = match FOCUS.with(|c| c.get()) {
@@ -624,7 +637,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .children(crate::ui::stage::leave_menu(ch_id, cx))
         .children(stream_menu(app, cx))
         .children(crate::ui::call_menus::render(app, ch_id, cx));
-    Some(if chat_open() {
+    Some(if chat_open(ch_id) {
         root.child(
             div()
                 .w(z(CHAT_W))
@@ -1194,7 +1207,8 @@ fn header_icon(app: &PhoenixApp, ch: Id, stage: bool) -> &'static str {
 }
 
 fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
-    let open = chat_open();
+    let chat_ch = app.voice_channel.unwrap_or(Id(0));
+    let open = chat_open(chat_ch);
     let stage = app.voice_channel.filter(|c| crate::ui::stage::stage_channel(app, *c).is_some());
     div()
         .h(z(33.))
@@ -1245,8 +1259,8 @@ fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -
                             24.,
                             t(if open { idx::INTERACTIVE_TEXT_ACTIVE } else { idx::INTERACTIVE_TEXT_DEFAULT }),
                         ))
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            set_chat_open(!chat_open());
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            toggle_chat(chat_ch);
                             cx.notify();
                         })),
                 ),
@@ -2146,6 +2160,19 @@ pub(crate) fn stream_empty_preview(light: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chat_drawer_state_is_kept_per_channel_and_starts_closed() {
+        use super::{chat_open, set_chat_open, toggle_chat};
+        use crate::model::Id;
+        assert!(!chat_open(Id(10)));
+        toggle_chat(Id(10));
+        assert!(chat_open(Id(10)));
+        assert!(!chat_open(Id(11)));
+        set_chat_open(Id(11), true);
+        set_chat_open(Id(10), false);
+        assert!(!chat_open(Id(10)) && chat_open(Id(11)));
+    }
+
     #[test]
     fn tile_background_prefers_the_profile_theme() {
         use super::{TileFill, tile_fill};

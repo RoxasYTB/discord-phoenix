@@ -119,7 +119,7 @@ fn main() -> anyhow::Result<()> {
                 app.voice.apply(phoenix_app::voice::VoiceUiEvent::Status(phoenix_app::voice::VoiceStatus::Connected));
                 app.open_channel_chat(lounge, cx);
                 phoenix_app::ui::call_view::show(lounge);
-                phoenix_app::ui::call_view::set_chat_open(with_chat);
+                phoenix_app::ui::call_view::set_chat_open(lounge, with_chat);
                 if focus_grid {
                     phoenix_app::ui::call_view::set_focus(phoenix_app::ui::call_view::Focus::Grid);
                 }

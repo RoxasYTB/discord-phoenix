@@ -182,17 +182,6 @@ pub fn count_badge(n: u32) -> Div {
         .child(count_label(n))
 }
 
-fn hole_fill(h: Hole) -> Div {
-    div()
-        .absolute()
-        .left(z(h.x))
-        .top(z(h.y))
-        .w(z(h.w))
-        .h(z(h.h))
-        .rounded(z(h.r))
-        .bg(c(Palette::BG_TERTIARY))
-}
-
 pub fn masked(view: f32, folder: bool, icon: impl IntoElement, upper: Option<AnyElement>, lower: Option<u32>) -> Div {
     let mut holes: Vec<Hole> = Vec::new();
     if upper.is_some() {
@@ -201,13 +190,11 @@ pub fn masked(view: f32, folder: bool, icon: impl IntoElement, upper: Option<Any
     if let Some(n) = lower {
         holes.push(lower_hole(view, count_width(n), COUNT_HEIGHT));
     }
-    let fills: Vec<Div> = holes.iter().copied().map(hole_fill).collect();
     div()
         .relative()
         .flex_none()
         .size(z(view))
         .child(cut(icon, holes))
-        .children(fills)
         .when_some(lower, |d, n| d.child(div().absolute().right_0().bottom_0().child(count_badge(n))))
         .when_some(upper, |d, b| d.child(div().absolute().right_0().top_0().child(b)))
 }

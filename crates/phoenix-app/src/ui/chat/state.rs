@@ -603,8 +603,16 @@ impl PhoenixApp {
 
     pub fn jump_to_message(&mut self, channel: Id, id: Id, cx: &mut Context<Self>) {
         self.chat.pins = None;
+        let vocal = self.channels.get(&channel).is_some_and(|c| c.guild.is_some() && matches!(c.kind, crate::model::ChannelKind::Voice | crate::model::ChannelKind::Stage));
+        if vocal {
+            crate::ui::call_view::set_chat_open(channel, true);
+        }
         if self.selected_channel != Some(channel) {
-            self.select_channel(channel, cx);
+            if vocal {
+                self.open_channel_chat(channel, cx);
+            } else {
+                self.select_channel(channel, cx);
+            }
         }
         self.jump_reveal(channel, id, JUMP_MAX_PAGES, cx);
         cx.notify();

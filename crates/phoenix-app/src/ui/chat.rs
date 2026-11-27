@@ -357,7 +357,54 @@ fn header_search_w(pad_start: f32) -> f32 {
     if w <= 0. { 244. } else { (w - pad_start - 8. - 320.).clamp(64., 244.) }
 }
 
+fn call_chat_header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
+    let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
+    let name = ch.map(|c| crate::ui::dm_profile_panel::channel_name(app, c)).unwrap_or_default();
+    let ic = tk(idx::ICON_MUTED);
+    div()
+        .h(z(m::HEADER_H + 1.))
+        .flex_none()
+        .pl(z(space::md()))
+        .pr(z(8.))
+        .py(z(8.))
+        .flex()
+        .items_center()
+        .gap(z(8.))
+        .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::Chat), Palette::BG_PRIMARY))
+        .border_t_1()
+        .border_b_1()
+        .border_color(tk(idx::BORDER_SUBTLE))
+        .child(gpui::svg().path(crate::icons::path("chat")).size(z(24.)).flex_none().text_color(ic))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(tk(idx::TEXT_STRONG))
+                .child(crate::ui::emoji_text::label(name, 16.)),
+        )
+        .child(
+            hdr_named("close-voice-chat", "close", ic)
+                .flex_none()
+                .tip(crate::t!("call.hide_chat"))
+                .on_click(cx.listener(|a, _, _, cx| {
+                    if let Some(ch) = a.selected_channel {
+                        crate::ui::call_view::set_chat_open(ch, false);
+                    }
+                    cx.notify();
+                })),
+        )
+}
+
 fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>, in_voice_panel: bool) -> gpui::Div {
+    if in_voice_panel {
+        return call_chat_header(app, cx);
+    }
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
     let is_dm = ch.is_some_and(|c| c.guild.is_none());
     let name = ch.map(|c| crate::ui::dm_profile_panel::channel_name(app, c)).unwrap_or_default();
@@ -658,17 +705,6 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>, in_voice_panel: bool) 
                         .child(div().size(z(24.)).p(z(4.)).flex().items_center().child(icon(Icon::Search, 16. * crate::theme::zoom(), tk(idx::ICON_MUTED)))),
                 ),
         )
-        .when(in_voice_panel, |d| {
-            d.child(
-                hdr_named("close-voice-chat", "close", ic)
-                    .flex_none()
-                    .tip(crate::t!("call.hide_chat"))
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        crate::ui::call_view::set_chat_open(false);
-                        cx.notify();
-                    })),
-            )
-        })
 }
 
 fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {

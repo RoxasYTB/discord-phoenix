@@ -700,8 +700,15 @@ flat varying) and `fs_poly_sprite` multiply their alpha by `saturate(distance + 
 the signed distance of a rounded rectangle, the same half-pixel ramp as a rounded quad. The
 radius is clamped to half of each side on its own (`radius`, `radius_y`), like SVG `<rect rx>`
 without `ry`: the BlobMask lower hole of a folder with 10+ mentions (26 × 20, rx 12) keeps
-12 × 10 elliptical corners, whose distance is `(|q / r| − 1) · min(r)`, exact for a circle. Glyphs,
-SVG icons, paths, shadows and underlines are not cut. A scene without cut-outs takes the old path.
+12 × 10 elliptical corners, whose distance is `(|q / r| − 1) · min(r)`, exact for a circle.
+Monochrome sprites (glyphs and SVG icons: the Home logo, the star of Favorites, guild acronyms)
+are cut too since wt/voice-lobby2: `MonochromeSprite::pad` uses the same split as images (low 16
+bits = glyph gradient index of the text gradient patch, read through `poly_sequence`; high 16 bits
+= cut-out set), `paint_glyph` / `paint_svg` stamp `self.cutouts`, `replay` remaps the set, and
+`vs_mono_sprite` passes `pad >> 16` as a flat varying that `fs_mono_sprite` multiplies into its
+alpha. This replaced the ring painted in `BG_TERTIARY` over the holes (959326aa), which showed a
+black ring over an open folder. Gradient text, paths, shadows and underlines are not cut. A
+scene without cut-outs takes the old path.
 Search `PHOENIX PATCH (cut-outs)`.
 The pinned commit (4a3f89ec, the present transitions commit 4291d676 plus the per-axis radii) is kept on the `gpui-cutout-radii` branch of origin.
 

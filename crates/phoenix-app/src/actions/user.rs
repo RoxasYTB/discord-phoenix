@@ -66,7 +66,7 @@ impl PhoenixApp {
         } else {
             self.open_channel_chat(channel, cx);
         }
-        crate::ui::call_view::set_chat_open(true);
+        crate::ui::call_view::set_chat_open(channel, true);
         cx.notify();
     }
 

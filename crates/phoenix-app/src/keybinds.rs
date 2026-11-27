@@ -362,7 +362,7 @@ fn trigger(app: &mut PhoenixApp, b: &Keybind, cx: &mut Context<PhoenixApp>) {
             }, cx);
         }
         Action::ToggleVoiceChannelChat if app.voice_channel.is_some() => {
-            crate::ui::call_view::set_chat_open(!crate::ui::call_view::chat_open());
+            crate::ui::call_view::toggle_chat(app.voice_channel.unwrap_or_default());
         }
         Action::ToggleCamera if app.voice_channel.is_some() => {
             let on = !crate::ui::voice_panel::flags(app.me.id).video;

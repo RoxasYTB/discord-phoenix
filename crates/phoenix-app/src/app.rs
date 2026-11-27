@@ -1192,8 +1192,6 @@ impl PhoenixApp {
                 }
                 if channel.is_some() {
                     crate::ui::voice_effects::prewarm();
-                } else if prev.is_some() && self.selected_channel == prev {
-                    crate::ui::call_view::set_chat_open(false);
                 }
                 self.voice_channel = channel;
                 self.pending_own_voice = channel.filter(|c| !self.channels.contains_key(c));
@@ -1359,8 +1357,6 @@ impl PhoenixApp {
         crate::voice::soundboard::stop_all();
         if ch.is_some() {
             crate::ui::voice_effects::prewarm();
-        } else if self.voice_channel.is_some() && self.selected_channel == self.voice_channel {
-            crate::ui::call_view::set_chat_open(false);
         }
         self.backend.join_voice(ch).detach_ok();
         crate::voice::on_join_clicked(self, ch);

@@ -5450,7 +5450,7 @@ impl Window {
                 self.next_frame.scene.insert_animated_gradient_sprite(
                     MonochromeSprite {
                         order: 0,
-                        pad: 0,
+                        pad: crate::poly_with_cutout(0, self.cutouts),
                         bounds,
                         content_mask,
                         color: color.opacity(element_opacity),
@@ -5464,7 +5464,7 @@ impl Window {
             } else {
                 self.next_frame.scene.insert_primitive(MonochromeSprite {
                     order: 0,
-                    pad: 0,
+                    pad: crate::poly_with_cutout(0, self.cutouts),
                     bounds,
                     content_mask,
                     color: color.opacity(element_opacity),
@@ -5611,7 +5611,7 @@ impl Window {
 
         let sprite = MonochromeSprite {
             order: 0,
-            pad: 0,
+            pad: crate::poly_with_cutout(0, self.cutouts),
             bounds: final_bounds,
             content_mask,
             color: color.opacity(element_opacity),

@@ -323,14 +323,14 @@ fn toast(app: &PhoenixApp, m: &Message, opacity: f32, cx: &mut Context<PhoenixAp
                 .child(div().flex_none().ml(z(8.)).size(z(32.)).rounded_full().shadow(shadow).child(crate::ui::avatar(app.users.get(&m.author), 32. * crate::theme::zoom()))),
         )
         .on_click(cx.listener(move |a, _, _, cx| {
-            crate::ui::call_view::set_chat_open(true);
+            crate::ui::call_view::set_chat_open(channel, true);
             a.jump_to_message(channel, id, cx);
         }))
         .into_any_element()
 }
 
 pub fn render(app: &PhoenixApp, channel: Id, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    if crate::ui::call_view::chat_open() || !crate::ui::call_menus::chat_toasts(channel) {
+    if crate::ui::call_view::chat_open(channel) || !crate::ui::call_menus::chat_toasts(channel) {
         return None;
     }
     let now = Instant::now();

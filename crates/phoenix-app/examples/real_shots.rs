@@ -2432,6 +2432,7 @@ fn main() -> anyhow::Result<()> {
         pump(&mut cx, 300);
     }
     if let Ok(spec) = std::env::var("PHX_RAIL_MENTIONS") {
+        let home: Option<u64> = spec.split(',').filter_map(|p| p.split_once(':')).find(|(g, _)| *g == "home").and_then(|(_, n)| n.trim().parse().ok());
         let counts: Vec<(Id, u32)> = spec
             .split(',')
             .filter_map(|p| p.split_once(':'))
@@ -2448,6 +2449,9 @@ fn main() -> anyhow::Result<()> {
                     if let Some(ch) = app.channels.get_mut(id).filter(|c| c.guild.is_none()) {
                         ch.mentions = *n;
                     }
+                }
+                if let Some(n) = home {
+                    app.nav.message_requests = (1..=n).map(Id).collect();
                 }
                 cx.notify();
             })

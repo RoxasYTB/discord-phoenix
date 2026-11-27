@@ -491,7 +491,7 @@ impl Scene {
         self.glyph_gradients.push(gradient);
         self.glyph_gradient_scrolls.push(scroll);
         self.glyph_animations.push(animation);
-        sprite.pad = self.glyph_gradients.len() as u32;
+        sprite.pad = poly_with_sequence(sprite.pad, self.glyph_gradients.len() as u32);
         self.insert_primitive(sprite);
     }
 
@@ -520,8 +520,7 @@ impl Scene {
     }
 
     pub fn glyph_animation(&self, sprite: &MonochromeSprite) -> Option<&std::sync::Arc<crate::GlyphAnimation>> {
-        sprite
-            .pad
+        poly_sequence(sprite.pad)
             .checked_sub(1)
             .and_then(|index| self.glyph_animations.get(index as usize))
             .and_then(Option::as_ref)
@@ -544,8 +543,7 @@ impl Scene {
     }
 
     pub fn glyph_gradient_scroll(&self, sprite: &MonochromeSprite) -> GlyphGradientScroll {
-        sprite
-            .pad
+        poly_sequence(sprite.pad)
             .checked_sub(1)
             .and_then(|index| self.glyph_gradient_scrolls.get(index as usize))
             .copied()
@@ -568,8 +566,7 @@ impl Scene {
     }
 
     pub fn glyph_gradient(&self, sprite: &MonochromeSprite) -> Option<&GlyphGradient> {
-        sprite
-            .pad
+        poly_sequence(sprite.pad)
             .checked_sub(1)
             .and_then(|index| self.glyph_gradients.get(index as usize))
     }
@@ -604,14 +601,18 @@ impl Scene {
             self.current_transition = self.import_transition(prev_scene, tag, root, &mut memo);
             match operation {
                 PaintOperation::Primitive(Primitive::MonochromeSprite(sprite)) if sprite.pad != 0 => {
+                    let cutout = prev_scene
+                        .cutout_set(poly_cutout(sprite.pad))
+                        .map_or(0, |set| self.push_cutouts(*set));
+                    let plain = MonochromeSprite { pad: poly_with_cutout(0, cutout), ..*sprite };
                     match prev_scene.glyph_gradient(sprite) {
                         Some(gradient) => self.insert_animated_gradient_sprite(
-                            *sprite,
+                            plain,
                             *gradient,
                             prev_scene.glyph_gradient_scroll(sprite),
                             prev_scene.glyph_animation(sprite).cloned(),
                         ),
-                        None => self.insert_primitive(MonochromeSprite { pad: 0, ..*sprite }),
+                        None => self.insert_primitive(plain),
                     }
                 }
                 PaintOperation::Primitive(Primitive::Quad(quad)) if quad.background.pad != 0 => {
