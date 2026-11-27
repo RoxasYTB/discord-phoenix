@@ -56,6 +56,20 @@ pub enum Feedback {
     Other(u8),
 }
 
+pub fn build_rr(sender_ssrc: u32, sources: &[(u32, u16)]) -> Vec<u8> {
+    let sources = &sources[..sources.len().min(31)];
+    let mut v = vec![0x80 | sources.len() as u8, PT_RR];
+    v.extend_from_slice(&(1 + 6 * sources.len() as u16).to_be_bytes());
+    v.extend_from_slice(&sender_ssrc.to_be_bytes());
+    for &(ssrc, seq) in sources {
+        v.extend_from_slice(&ssrc.to_be_bytes());
+        v.extend_from_slice(&[0; 4]);
+        v.extend_from_slice(&u32::from(seq).to_be_bytes());
+        v.extend_from_slice(&[0; 12]);
+    }
+    v
+}
+
 pub fn build_pli(sender_ssrc: u32, media_ssrc: u32) -> Vec<u8> {
     let mut v = vec![0x81, PT_PSFB, 0, 2];
     v.extend_from_slice(&sender_ssrc.to_be_bytes());
@@ -178,6 +192,17 @@ mod tests {
         v.extend_from_slice(&[0, 0, 0, 42, 64, 0, 0, 3]);
         v.extend_from_slice(&[0; 16]);
         assert_eq!(report_blocks(&v), vec![(42, 64)]);
+    }
+
+    #[test]
+    fn receiver_report_keeps_the_path_open() {
+        let rr = build_rr(7, &[(42, 9), (43, 10)]);
+        assert_eq!(rr.len(), 8 + 2 * 24);
+        assert_eq!(&rr[..8], &[0x82, PT_RR, 0, 13, 0, 0, 0, 7]);
+        assert_eq!(report_blocks(&rr), vec![(42, 0), (43, 0)]);
+        assert_eq!(&rr[16..20], &[0, 0, 0, 9]);
+        assert_eq!(build_rr(7, &[]), vec![0x80, PT_RR, 0, 1, 0, 0, 0, 7]);
+        assert_eq!(parse(&rr).unwrap(), vec![Feedback::Other(PT_RR)]);
     }
 
     #[test]

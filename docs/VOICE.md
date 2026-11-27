@@ -35,6 +35,14 @@ Testing video live: someone joins `〢🔊・phoenix-vocal` with their camera on
 
 Automated tests: `video_rx::tests` (order, NACK, RTX, loss, simulcast, H.264/AV1 frames), `sink_wants::tests` (ladder, focus, 1:1 size, Go Live), `media::ffmpeg::tests` (generated H.264 / VP8 / AV1 frames sent through RTP, the receiver and ffmpeg; ratio kept), `rtp::rtcp::tests` (NACK, FIR), `rtp::av1::tests`.
 
+## Joining, switching and reconnecting
+
+`voice::call::VoiceManager` keeps one target (guild, channel). Own VOICE_STATE_UPDATEs are matched against it (`own_voice_state`): the null state the gateway sends for the old guild when you join a channel of another guild, and the late leave of a quick leave-then-join, are ignored (they used to reset the target, so every later join of the session waited forever for a VOICE_SERVER_UPDATE it then dropped). The connection starts once the target has a session id (own voice state) and a server (VOICE_SERVER_UPDATE with an endpoint); a new endpoint or token restarts it, a null endpoint stops it until the next one.
+
+Voice gateway: close codes other than 1000, 4003-4006, 4009, 4011, 4012, 4014, 4016, 4021, 4022 are resumed (op 7 with `seq_ack`, up to 5 tries). When the connection still fails and the error is transient (`connection::retryable`: no close code, 4009, 4015, socket or IP discovery failure), the manager identifies again with the same session and server after 1, 2 then 4 s, with a new DAVE session. 4014 (moved, channel deleted, server change) waits for the next VOICE_SERVER_UPDATE. An ICMP port unreachable on the media socket is ignored. Every 5 s an RTCP receiver report (one block per heard audio SSRC) keeps the UDP path open while the mic is muted.
+
+DAVE: op 11 adds recognized users, op 13 removes the user and its decryptor; op 27 proposals are committed by every member (op 28), the server announces one commit (op 29) or sends the newcomer a welcome (op 30), each answers op 23, and op 22 installs the new epoch's keys. The previous key of each sender is kept 10 s so frames sent during the transition still open (`dave::session::tests::a_third_member_joins_then_one_leaves`).
+
 ## Volumes
 
 Sliders hold the value the client shows (perceptual, 0–200). The engine gets `voice::prefs::amplitude(value)`, the inverse of the client's module 792251: `n<1 ? n^2.8 : 10^((n-1)·6/20)` with `n = value/100`.
@@ -45,7 +53,8 @@ Sliders hold the value the client shows (perceptual, 0–200). The engine gets `
 2. Start Phoenix on the account with `PHOENIX_SOUND_LOG=1` (add `PHOENIX_VOICE_TRACE=1` for gateway events), join the same channel, mic muted.
 3. You should hear them, see their speaking ring, and stderr should print once per second:
    `voice-recv: user=<id> ssrc=<n> received=… decoded=… fec=… plc=… late=… level_db=-2x.x` and `voice-recv: mixer out_db=… queue_ms=60 underruns=0`.
-   `decoded` must grow by ~50 per second while they speak; `level_db` above −60 means real audio.
+   `decoded` must grow by ~50 per second while they speak; `peak_db` (loudest frame of the last second) above −60 means real audio, `level_db` is only the last frame.
+   The first frame of each sender prints `voice-recv: first frame user=… dave_frame=true bytes=… opus_toc=0x…`; a frame that cannot be opened prints `voice-recv: decrypt failed user=… dave_frame=… keys=[…]: <reason>` (1st, 2nd, 4th, 8th… failure).
 4. Check the user menu: the volume slider and "Mute" change only that person; the headset button silences everything (`deafened=true`, `out_db=-100`).
 
 `PHOENIX_SOUND_LOG=1` also prints `voice-audio: engine input=… output=…` when the audio engine starts (or `audio engine failed: …`) and, once per second, `voice-net: … dave=… rtp_audio=… lost=… mapped=[ssrc:user] unmapped=[ssrc:held] decrypt_errors=…`. Reading it: `rtp_audio` stuck at 0 means no audio reaches the socket; `unmapped` growing means the SSRC was never named by op 5 / op 12; `decrypt_errors` growing means DAVE keys are missing; `output=None` means no speakers were opened.

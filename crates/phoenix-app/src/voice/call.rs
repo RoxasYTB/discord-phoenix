@@ -65,6 +65,8 @@ struct State {
     server: Option<(String, String)>,
     running: Option<Running>,
     generation: u64,
+    retries: u32,
+    joining: bool,
     input: Option<String>,
     output: Option<String>,
     muted: bool,
@@ -335,6 +337,8 @@ impl VoiceManager {
 
     pub fn join(&self, emit: &Emit, gw: &GatewayHandle, cache: &Cache, channel: Option<u64>) -> Result<(), String> {
         let mut st = self.state.lock();
+        st.retries = 0;
+        st.joining = false;
         st.emit = Some(emit.clone());
         st.gw = Some(gw.clone());
         if channel.is_some() && st.target.map(|t| t.channel) == channel && st.running.is_some() {
@@ -355,6 +359,7 @@ impl VoiceManager {
         };
         let guild = cache.channel(Snowflake(ch)).and_then(|c| c.guild_id).map(|g| g.0);
         st.target = Some(Target { guild, channel: ch });
+        st.joining = true;
         gw.update_voice_state(guild.map(Snowflake), Some(Snowflake(ch)), st.muted, st.deafened).map_err(|e| e.to_string())?;
         ui(emit, VoiceUiEvent::Status(VoiceStatus::AwaitingEndpoint));
         Ok(())
@@ -390,25 +395,37 @@ impl VoiceManager {
         }
         let Some(target) = st.target else { return };
         match ev {
-            GatewayEvent::VoiceStateUpdate(v) if v.user_id.0 == me => match v.channel_id {
-                None => {
-                    stop(&mut st);
-                    st.target = None;
-                    st.generation += 1;
-                    ui(emit, VoiceUiEvent::Status(VoiceStatus::Idle));
+            GatewayEvent::VoiceStateUpdate(v) if v.user_id.0 == me => {
+                let action = own_voice_state(target, st.joining, v.guild_id.map(|g| g.0), v.channel_id.map(|c| c.0));
+                if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
+                    eprintln!("voice-trace: own voice state target={} action={action:?}", target.channel);
                 }
-                Some(c) => {
-                    if c.0 != target.channel {
-                        st.target = Some(Target { guild: target.guild, channel: c.0 });
+                match action {
+                    OwnVoice::Ignore => {}
+                    OwnVoice::Left => {
+                        stop(&mut st);
+                        st.target = None;
+                        st.generation += 1;
+                        ui(emit, VoiceUiEvent::Status(VoiceStatus::Idle));
+                    }
+                    OwnVoice::Moved(t) => {
+                        st.target = Some(t);
+                        st.joining = false;
                         stop(&mut st);
                         st.generation += 1;
-                    }
-                    if st.session_id.as_deref() != Some(v.session_id.as_str()) {
                         st.session_id = Some(v.session_id.clone());
+                        self.try_start(&mut st, emit, me);
                     }
-                    self.try_start(&mut st, emit, me);
+                    OwnVoice::Joined(t) => {
+                        st.target = Some(t);
+                        st.joining = false;
+                        if st.session_id.as_deref() != Some(v.session_id.as_str()) {
+                            st.session_id = Some(v.session_id.clone());
+                        }
+                        self.try_start(&mut st, emit, me);
+                    }
                 }
-            },
+            }
             GatewayEvent::VoiceServerUpdate(s) => {
                 let ours = match target.guild {
                     Some(g) => s.guild_id.is_some_and(|x| x.0 == g),
@@ -423,6 +440,7 @@ impl VoiceManager {
                         if st.server != new || st.running.is_none() {
                             stop(&mut st);
                             st.generation += 1;
+                            st.retries = 0;
                             st.server = new;
                             self.try_start(&mut st, emit, me);
                         }
@@ -439,6 +457,15 @@ impl VoiceManager {
     }
 
     fn try_start(&self, st: &mut State, emit: &Emit, me: u64) {
+        if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
+            eprintln!(
+                "voice-trace: try_start target={:?} session={} server={} running={}",
+                st.target.map(|t| t.channel),
+                st.session_id.is_some(),
+                st.server.is_some(),
+                st.running.is_some()
+            );
+        }
         if st.running.is_some() {
             return;
         }
@@ -487,6 +514,7 @@ impl VoiceManager {
                     VoiceEvent::Connected { mode, .. } => {
                         {
                             let mut st = manager().state.lock();
+                            st.retries = 0;
                             if let Some(k) = st.pending_watch.take() {
                                 start_watch(&mut st, k);
                             }
@@ -517,12 +545,35 @@ impl VoiceManager {
                         }
                         continue;
                     }
-                    VoiceEvent::Disconnected { reason } => {
-                        {
+                    VoiceEvent::Disconnected { reason, retry } => {
+                        let again = {
                             let mut st = manager().state.lock();
-                            if st.generation == generation {
-                                stop(&mut st);
+                            if st.generation != generation {
+                                return;
                             }
+                            stop(&mut st);
+                            let delay = retry_delay(retry, st.retries);
+                            if delay.is_some() {
+                                st.retries += 1;
+                                st.generation += 1;
+                            }
+                            delay.map(|d| (d, st.generation))
+                        };
+                        if let Some((delay, next)) = again {
+                            if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
+                                eprintln!("voice-trace: reconnecting in {}ms after: {reason}", delay.as_millis());
+                            }
+                            ui(&emit, VoiceUiEvent::Status(VoiceStatus::Reconnecting));
+                            let emit = emit.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(delay).await;
+                                let m = manager();
+                                let mut st = m.state.lock();
+                                if st.generation == next {
+                                    m.try_start(&mut st, &emit, me);
+                                }
+                            });
+                            return;
                         }
                         let status = VoiceStatus::from_disconnect(&reason);
                         ui(&emit, VoiceUiEvent::Error(reason));
@@ -942,7 +993,7 @@ async fn own_stream_events(generation: u64, key: String, mut events: mpsc::Unbou
                     drop(gw.stream_ping(&key));
                 }
             }
-            VoiceEvent::Disconnected { reason } => {
+            VoiceEvent::Disconnected { reason, .. } => {
                 stop_own_stream(&mut st, Some(reason.clone()));
                 stream_ui(&st, super::StreamUiEvent::Failed(reason));
                 return;
@@ -1114,6 +1165,29 @@ async fn watch_events(generation: u64, key: String, owner: u64, mut events: mpsc
     }
 }
 
+const MAX_RETRIES: u32 = 3;
+
+fn retry_delay(retryable: bool, retries: u32) -> Option<std::time::Duration> {
+    (retryable && retries < MAX_RETRIES).then(|| std::time::Duration::from_millis(1000 << retries))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OwnVoice {
+    Ignore,
+    Left,
+    Joined(Target),
+    Moved(Target),
+}
+
+fn own_voice_state(target: Target, joining: bool, guild: Option<u64>, channel: Option<u64>) -> OwnVoice {
+    match channel {
+        Some(c) if c == target.channel => OwnVoice::Joined(Target { guild: guild.or(target.guild), channel: c }),
+        Some(c) if guild == target.guild && !joining => OwnVoice::Moved(Target { guild, channel: c }),
+        None if guild == target.guild && !joining => OwnVoice::Left,
+        _ => OwnVoice::Ignore,
+    }
+}
+
 pub fn devices() -> (Vec<String>, Vec<String>) {
     (phoenix_voice::audio::device::input_devices(), phoenix_voice::audio::device::output_devices())
 }
@@ -1230,5 +1304,74 @@ mod tests {
             assert_eq!(remote().lock().get(&user).map(|d| d.codec()), Some(Codec::H264));
         }
         remote().lock().remove(&user);
+    }
+}
+
+#[cfg(test)]
+mod voice_state_tests {
+    use super::*;
+
+    const A: Target = Target { guild: Some(10), channel: 100 };
+    const B: Target = Target { guild: Some(20), channel: 200 };
+
+    #[test]
+    fn leaving_the_old_guild_keeps_the_new_target() {
+        assert_eq!(own_voice_state(B, false, Some(10), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(B, false, Some(20), Some(200)), OwnVoice::Joined(B));
+        assert_eq!(own_voice_state(A, false, Some(20), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(A, false, Some(10), Some(100)), OwnVoice::Joined(A));
+    }
+
+    #[test]
+    fn a_late_state_of_another_guild_is_ignored() {
+        assert_eq!(own_voice_state(B, false, Some(10), Some(100)), OwnVoice::Ignore);
+    }
+
+    #[test]
+    fn leaving_and_moving_in_the_same_guild() {
+        assert_eq!(own_voice_state(A, false, Some(10), None), OwnVoice::Left);
+        assert_eq!(own_voice_state(A, false, Some(10), Some(101)), OwnVoice::Moved(Target { guild: Some(10), channel: 101 }));
+    }
+
+    #[test]
+    fn the_old_state_of_a_quick_rejoin_is_ignored() {
+        let a2 = Target { guild: Some(10), channel: 101 };
+        assert_eq!(own_voice_state(a2, true, Some(10), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(a2, true, Some(10), Some(100)), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(a2, true, Some(10), Some(101)), OwnVoice::Joined(a2));
+    }
+
+    #[test]
+    fn private_calls_have_no_guild() {
+        let dm = Target { guild: None, channel: 300 };
+        assert_eq!(own_voice_state(dm, false, None, Some(300)), OwnVoice::Joined(dm));
+        assert_eq!(own_voice_state(dm, false, None, None), OwnVoice::Left);
+        assert_eq!(own_voice_state(dm, false, Some(10), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(Target { guild: None, channel: 100 }, false, Some(10), Some(100)), OwnVoice::Joined(A));
+    }
+
+    #[test]
+    fn a_dropped_connection_is_retried_three_times() {
+        let d: Vec<_> = (0..4).map(|n| retry_delay(true, n).map(|d| d.as_millis())).collect();
+        assert_eq!(d, [Some(1000), Some(2000), Some(4000), None]);
+        assert_eq!(retry_delay(false, 0), None);
+    }
+
+    #[test]
+    fn switching_guilds_reaches_a_startable_state() {
+        let mut st = State { target: Some(B), ..Default::default() };
+        for (g, c) in [(Some(10), None), (Some(20), Some(200))] {
+            match own_voice_state(st.target.unwrap(), true, g, c) {
+                OwnVoice::Joined(t) | OwnVoice::Moved(t) => {
+                    st.target = Some(t);
+                    st.session_id = Some("s2".into());
+                }
+                OwnVoice::Left => st.target = None,
+                OwnVoice::Ignore => {}
+            }
+        }
+        st.server = Some(("new".into(), "t2".into()));
+        assert_eq!(st.target, Some(B));
+        assert!(st.session_id.is_some() && st.server.is_some() && st.running.is_none());
     }
 }

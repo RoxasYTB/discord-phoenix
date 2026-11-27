@@ -290,40 +290,128 @@ pub(crate) mod tests {
         assert!(!s.is_active());
     }
 
-    pub(crate) fn paired_sessions() -> (DaveSession, DaveSession) {
+    mod harness {
+        use crate::dave::openmls_session::OpenMlsSession;
+        use crate::dave::session::{DaveAction, DaveSession};
+        use crate::gateway::DaveServerMessage;
         use openmls::prelude::tls_codec::{Deserialize as _, Serialize as _};
         use openmls::prelude::*;
         use openmls_basic_credential::SignatureKeyPair;
         use openmls_rust_crypto::OpenMlsRustCrypto;
-        let cs = crate::dave::openmls_session::CIPHERSUITE;
-        let sp = OpenMlsRustCrypto::default();
-        let ss = SignatureKeyPair::new(cs.signature_algorithm()).unwrap();
-        let es = ExternalSender::new(ss.public().into(), BasicCredential::new(b"v".to_vec()).into()).tls_serialize_detached().unwrap();
 
-        let mut a = DaveSession::new(Box::new(OpenMlsSession::new(1, 9).unwrap()), 1);
-        let mut b = DaveSession::new(Box::new(OpenMlsSession::new(2, 9).unwrap()), 2);
+        pub(crate) struct VoiceServer {
+            ss: SignatureKeyPair,
+            sp: OpenMlsRustCrypto,
+            es: Vec<u8>,
+        }
+
+        impl VoiceServer {
+            pub(crate) fn new() -> Self {
+                let cs = crate::dave::openmls_session::CIPHERSUITE;
+                let ss = SignatureKeyPair::new(cs.signature_algorithm()).unwrap();
+                let es = ExternalSender::new(ss.public().into(), BasicCredential::new(b"v".to_vec()).into()).tls_serialize_detached().unwrap();
+                Self { ss, sp: OpenMlsRustCrypto::default(), es }
+            }
+
+            pub(crate) fn client(&self, id: u64) -> (DaveSession, Vec<u8>) {
+                let mut c = DaveSession::new(Box::new(OpenMlsSession::new(id, 9).unwrap()), id);
+                c.handle(&DaveServerMessage::ExternalSender(self.es.clone()));
+                let DaveAction::KeyPackage(kp) = c.on_session_description(1).remove(0) else { panic!() };
+                (c, kp)
+            }
+
+            fn wrap(prop: Vec<u8>) -> Vec<u8> {
+                let mut payload = vec![0u8];
+                payload.extend_from_slice(&((prop.len() as u16) | 0x4000).to_be_bytes());
+                payload.extend_from_slice(&prop);
+                payload
+            }
+
+            pub(crate) fn add(&self, kp: &[u8], epoch: u64) -> Vec<u8> {
+                let kp = KeyPackageIn::tls_deserialize_exact(kp).unwrap().validate(self.sp.crypto(), ProtocolVersion::Mls10).unwrap();
+                let gid = GroupId::from_slice(&9u64.to_be_bytes());
+                Self::wrap(ExternalProposal::new_add::<OpenMlsRustCrypto>(kp, gid, GroupEpoch::from(epoch), &self.ss, SenderExtensionIndex::new(0)).unwrap().to_bytes().unwrap())
+            }
+
+            pub(crate) fn remove(&self, leaf: u32, epoch: u64) -> Vec<u8> {
+                let gid = GroupId::from_slice(&9u64.to_be_bytes());
+                Self::wrap(
+                    ExternalProposal::new_remove::<OpenMlsRustCrypto>(LeafNodeIndex::new(leaf), gid, GroupEpoch::from(epoch), &self.ss, SenderExtensionIndex::new(0))
+                        .unwrap()
+                        .to_bytes()
+                        .unwrap(),
+                )
+            }
+        }
+    }
+
+    use harness::VoiceServer;
+
+    pub(crate) fn paired_sessions() -> (DaveSession, DaveSession) {
+        let (a, b, _) = paired_with_server();
+        (a, b)
+    }
+
+    fn paired_with_server() -> (DaveSession, DaveSession, VoiceServer) {
+        let server = VoiceServer::new();
+        let (mut a, _) = server.client(1);
+        let (mut b, kb) = server.client(2);
         a.add_users([2]);
         b.add_users([1]);
-        a.handle(&DaveServerMessage::ExternalSender(es.clone()));
-        b.handle(&DaveServerMessage::ExternalSender(es));
-        a.on_session_description(1);
-        let DaveAction::KeyPackage(kb) = b.on_session_description(1).remove(0) else { panic!() };
-        let kp = KeyPackageIn::tls_deserialize_exact(&kb).unwrap().validate(sp.crypto(), ProtocolVersion::Mls10).unwrap();
-        let prop = ExternalProposal::new_add::<OpenMlsRustCrypto>(kp, GroupId::from_slice(&9u64.to_be_bytes()), GroupEpoch::from(0), &ss, SenderExtensionIndex::new(0))
-            .unwrap()
-            .to_bytes()
-            .unwrap();
-        let mut payload = vec![0u8];
-        payload.extend_from_slice(&((prop.len() as u16) | 0x4000).to_be_bytes());
-        payload.extend_from_slice(&prop);
-        let DaveAction::CommitWelcome(cw) = a.handle(&DaveServerMessage::Proposals(payload)).remove(0) else { panic!() };
+        let DaveAction::CommitWelcome(cw) = a.handle(&DaveServerMessage::Proposals(server.add(&kb, 0))).remove(0) else { panic!() };
         assert_eq!(a.handle(&DaveServerMessage::AnnounceCommit { transition_id: 3, commit: cw.commit.clone() }), vec![DaveAction::TransitionReady(3)]);
         assert_eq!(b.handle(&DaveServerMessage::Welcome { transition_id: 3, welcome: cw.welcome.unwrap() }), vec![DaveAction::TransitionReady(3)]);
         assert!(!a.is_active());
         a.handle(&DaveServerMessage::ExecuteTransition { transition_id: 3 });
         b.handle(&DaveServerMessage::ExecuteTransition { transition_id: 3 });
         assert!(a.is_active() && b.is_active());
-        (a, b)
+        (a, b, server)
+    }
+
+    #[test]
+    fn a_third_member_joins_then_one_leaves() {
+        let (mut a, mut b, server) = paired_with_server();
+        let before = a.encrypt(Codec::Opus, &[0x78, 1, 1]).unwrap();
+        let (mut c, kc) = server.client(3);
+        a.add_users([3]);
+        b.add_users([3]);
+        c.add_users([1, 2]);
+        let add = server.add(&kc, 1);
+        let DaveAction::CommitWelcome(cw) = a.handle(&DaveServerMessage::Proposals(add.clone())).remove(0) else { panic!() };
+        assert!(matches!(b.handle(&DaveServerMessage::Proposals(add))[..], [DaveAction::CommitWelcome(_)]));
+        for s in [&mut a, &mut b] {
+            assert_eq!(s.handle(&DaveServerMessage::AnnounceCommit { transition_id: 4, commit: cw.commit.clone() }), vec![DaveAction::TransitionReady(4)]);
+        }
+        assert_eq!(c.handle(&DaveServerMessage::Welcome { transition_id: 4, welcome: cw.welcome.unwrap() }), vec![DaveAction::TransitionReady(4)]);
+        let in_flight = a.encrypt(Codec::Opus, &[0x78, 2, 2]).unwrap();
+        for s in [&mut a, &mut b, &mut c] {
+            s.handle(&DaveServerMessage::ExecuteTransition { transition_id: 4 });
+            assert!(s.is_active());
+        }
+        assert_eq!(a.epoch_authenticator(), c.epoch_authenticator());
+        assert_eq!(b.key_users(), vec![1, 3]);
+        assert_eq!(b.decrypt(1, &before).unwrap(), [0x78, 1, 1]);
+        assert_eq!(b.decrypt(1, &in_flight).unwrap(), [0x78, 2, 2]);
+        let f = a.encrypt(Codec::Opus, &[0x78, 3, 3]).unwrap();
+        assert_eq!(b.decrypt(1, &f).unwrap(), [0x78, 3, 3]);
+        assert_eq!(c.decrypt(1, &f).unwrap(), [0x78, 3, 3]);
+        let g = c.encrypt(Codec::Opus, &[0x78, 4, 4]).unwrap();
+        assert_eq!(a.decrypt(3, &g).unwrap(), [0x78, 4, 4]);
+
+        a.remove_user(2);
+        c.remove_user(2);
+        let rm = server.remove(1, 2);
+        let DaveAction::CommitWelcome(cw) = c.handle(&DaveServerMessage::Proposals(rm.clone())).remove(0) else { panic!() };
+        assert!(cw.welcome.is_none());
+        a.handle(&DaveServerMessage::Proposals(rm));
+        for s in [&mut a, &mut c] {
+            assert_eq!(s.handle(&DaveServerMessage::AnnounceCommit { transition_id: 5, commit: cw.commit.clone() }), vec![DaveAction::TransitionReady(5)]);
+            s.handle(&DaveServerMessage::ExecuteTransition { transition_id: 5 });
+        }
+        assert_eq!(a.key_users(), vec![3]);
+        let h = a.encrypt(Codec::Opus, &[0x78, 5, 5]).unwrap();
+        assert_eq!(c.decrypt(1, &h).unwrap(), [0x78, 5, 5]);
+        assert!(b.decrypt(1, &h).is_err());
     }
 
     #[test]

@@ -43,7 +43,7 @@ pub enum VoiceEvent {
     PrivacyCode(Option<String>),
     Stats(ConnStats),
     Reconnecting,
-    Disconnected { reason: String },
+    Disconnected { reason: String, retry: bool },
     VideoState { user_id: u64, active: bool },
     Video { user_id: u64, codec: Codec, keyframe: bool, frame: Vec<u8> },
 }
@@ -123,13 +123,23 @@ pub fn connect(
     let (tx, rx) = mpsc::unbounded_channel();
     let (etx, erx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
-        let reason = match run(cfg, rx, audio_out, audio_in, &etx).await {
-            Ok(()) => "disconnected".to_string(),
-            Err(e) => e.to_string(),
+        let (reason, retry) = match run(cfg, rx, audio_out, audio_in, &etx).await {
+            Ok(()) => ("disconnected".to_string(), false),
+            Err(e) => (e.to_string(), retryable(&e)),
         };
-        let _ = etx.send(VoiceEvent::Disconnected { reason });
+        let _ = etx.send(VoiceEvent::Disconnected { reason, retry });
     });
     (VoiceConnection { tx }, erx)
+}
+
+const RECEIVER_REPORT_TICKS: u32 = 50;
+
+pub fn retryable(e: &Error) -> bool {
+    match e {
+        Error::Closed { code: Some(c), .. } => !matches!(*c, 1000 | 4004 | 4006 | 4011 | 4014 | 4021 | 4022),
+        Error::Closed { code: None, .. } | Error::WebSocket(_) | Error::Io(_) | Error::Timeout(_) | Error::Protocol(_) => true,
+        _ => false,
+    }
 }
 
 struct Media {
@@ -314,6 +324,7 @@ pub struct Receiver {
     unmapped: HashMap<u32, std::collections::VecDeque<RxPacket>>,
     last_heard: HashMap<u64, Instant>,
     decrypt_errors: u32,
+    opened: std::collections::HashSet<u64>,
 }
 
 impl Receiver {
@@ -343,6 +354,7 @@ impl Receiver {
 
     pub fn remove_user(&mut self, uid: u64, events: &mpsc::UnboundedSender<VoiceEvent>) {
         self.ssrc_users.retain(|_, u| *u != uid);
+        self.opened.remove(&uid);
         if self.last_heard.remove(&uid).is_some() {
             let _ = events.send(VoiceEvent::Speaking { user_id: uid, speaking: false });
         }
@@ -362,10 +374,28 @@ impl Receiver {
                 self.decrypt_errors += 1;
                 if self.decrypt_errors.is_power_of_two() {
                     tracing::debug!(error = %e, user = uid, "voice: frame decrypt failed");
+                    if std::env::var_os("PHOENIX_SOUND_LOG").is_some() {
+                        eprintln!(
+                            "voice-recv: decrypt failed user={uid} ssrc={} errors={} dave_frame={} keys={:?}: {e}",
+                            p.ssrc,
+                            self.decrypt_errors,
+                            crate::dave::frame::is_encrypted(&p.payload),
+                            dave.key_users()
+                        );
+                    }
                 }
                 return;
             }
         };
+        if self.opened.insert(uid) && std::env::var_os("PHOENIX_SOUND_LOG").is_some() {
+            eprintln!(
+                "voice-recv: first frame user={uid} ssrc={} dave_frame={} bytes={} opus_toc=0x{:02x}",
+                p.ssrc,
+                crate::dave::frame::is_encrypted(&p.payload),
+                opus.len(),
+                opus.first().copied().unwrap_or(0)
+            );
+        }
         if opus != OPUS_SILENCE && self.last_heard.insert(uid, Instant::now()).is_none() {
             let _ = events.send(VoiceEvent::Speaking { user_id: uid, speaking: true });
         }
@@ -622,6 +652,13 @@ async fn run(
                         }
                         continue;
                     }
+                    Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
+                        recv_buf_errors += 1;
+                        if recv_buf_errors.is_power_of_two() {
+                            tracing::debug!(error = %e, "voice: udp port unreachable, still listening");
+                        }
+                        continue;
+                    }
                     Err(Error::Io(e)) => return Err(Error::Io(e)),
                     Err(e) => {
                         recv_buf_errors += 1;
@@ -719,6 +756,16 @@ async fn run(
                     }
                 }
                 ticks += 1;
+                if connected
+                    && ticks.is_multiple_of(RECEIVER_REPORT_TICKS)
+                    && let Some(m) = media.as_mut()
+                {
+                    let mut sources: Vec<(u32, u16)> = last_seq.iter().map(|(s, q)| (*s, *q)).collect();
+                    sources.sort_unstable();
+                    if let Err(e) = m.socket.send_rtcp(&rtp::rtcp::build_rr(m.ssrc, &sources)).await {
+                        tracing::debug!(error = %e, "voice: receiver report failed");
+                    }
+                }
                 if ticks.is_multiple_of(10) && media.is_some() {
                     let _ = events.send(VoiceEvent::Stats(stats));
                     if sound_log {
@@ -933,6 +980,17 @@ mod receive_tests {
             assert_eq!(erx.try_recv().ok(), Some(VoiceEvent::Speaking { user_id: 1, speaking: true }));
         }
         assert!(erx.try_recv().is_err());
+    }
+
+    #[test]
+    fn transient_failures_are_retried_but_not_kicks() {
+        let closed = |code| Error::Closed { code, reason: String::new() };
+        assert!(retryable(&closed(Some(4015))) && retryable(&closed(Some(4009))) && retryable(&closed(None)));
+        assert!(retryable(&Error::Timeout("ip discovery")) && retryable(&Error::Io(std::io::ErrorKind::BrokenPipe.into())));
+        for code in [1000, 4004, 4006, 4014, 4022] {
+            assert!(!retryable(&closed(Some(code))));
+        }
+        assert!(!retryable(&Error::Mls("x".into())));
     }
 
     #[test]

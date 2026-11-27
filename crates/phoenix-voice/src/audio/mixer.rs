@@ -25,6 +25,7 @@ pub struct TrackStats {
     pub dropped: u64,
     pub resets: u64,
     pub level_db: f32,
+    pub peak_db: f32,
 }
 
 struct Track {
@@ -48,7 +49,7 @@ impl Track {
             plc_run: 0,
             conceal_left: 0,
             last_push: Instant::now(),
-            stats: TrackStats { ssrc, level_db: -100.0, ..Default::default() },
+            stats: TrackStats { ssrc, level_db: -100.0, peak_db: -100.0, ..Default::default() },
         })
     }
 
@@ -134,10 +135,16 @@ impl Track {
     }
 }
 
-#[derive(Default)]
 pub struct Mixer {
     tracks: HashMap<u64, Track>,
     output_level_db: f32,
+    output_peak_db: f32,
+}
+
+impl Default for Mixer {
+    fn default() -> Self {
+        Self { tracks: HashMap::new(), output_level_db: -100.0, output_peak_db: -100.0 }
+    }
 }
 
 impl Mixer {
@@ -173,6 +180,17 @@ impl Mixer {
         self.output_level_db
     }
 
+    pub fn output_peak_db(&self) -> f32 {
+        self.output_peak_db
+    }
+
+    pub fn reset_peaks(&mut self) {
+        self.output_peak_db = -100.0;
+        for t in self.tracks.values_mut() {
+            t.stats.peak_db = -100.0;
+        }
+    }
+
     pub fn mix_frame(&mut self, control: &AudioControl) -> Vec<f32> {
         let mut acc = vec![0f32; FRAME_SAMPLES * 2];
         let now = Instant::now();
@@ -187,6 +205,7 @@ impl Mixer {
             let mut track = vec![0f32; pcm.len()];
             mix_into(&mut track, &pcm, 1.0);
             t.stats.level_db = level_db(&track);
+            t.stats.peak_db = t.stats.peak_db.max(t.stats.level_db);
             if gain > 0.0 {
                 mix_into(&mut acc, &pcm, gain);
             }
@@ -194,6 +213,7 @@ impl Mixer {
         let g = control.output_gain();
         acc.iter_mut().for_each(|s| *s = (*s * g).clamp(-1.0, 1.0));
         self.output_level_db = level_db(&acc);
+        self.output_peak_db = self.output_peak_db.max(self.output_level_db);
         acc
     }
 }
@@ -236,6 +256,12 @@ mod tests {
         c.set_deafened(true);
         assert!(m.mix_frame(&c).iter().all(|s| *s == 0.0));
         assert!(m.stats()[0].1.level_db > -40.0);
+        for _ in 0..8 {
+            m.mix_frame(&c);
+        }
+        assert!(m.output_level_db() < -90.0 && m.output_peak_db() > -40.0);
+        m.reset_peaks();
+        assert_eq!((m.output_peak_db(), m.stats()[0].1.peak_db), (-100.0, -100.0));
     }
 
     #[test]

@@ -528,20 +528,22 @@ fn mix_loop(
         }
         if log && last_log.elapsed() >= Duration::from_secs(1) {
             last_log = Instant::now();
-            let m = lock(&mixer);
+            let mut m = lock(&mixer);
             for (user, s) in m.stats() {
                 eprintln!(
-                    "voice-recv: user={user} ssrc={} received={} decoded={} fec={} plc={} late={} dropped={} resets={} level_db={:.1}",
-                    s.ssrc, s.received, s.decoded, s.recovered, s.concealed, s.late, s.dropped, s.resets, s.level_db
+                    "voice-recv: user={user} ssrc={} received={} decoded={} fec={} plc={} late={} dropped={} resets={} level_db={:.1} peak_db={:.1}",
+                    s.ssrc, s.received, s.decoded, s.recovered, s.concealed, s.late, s.dropped, s.resets, s.level_db, s.peak_db
                 );
             }
             eprintln!(
-                "voice-recv: mixer out_db={:.1} queue_ms={} underruns={underruns} deafened={} output_gain={:.2}",
+                "voice-recv: mixer out_db={:.1} peak_db={:.1} queue_ms={} underruns={underruns} deafened={} output_gain={:.2}",
                 m.output_level_db(),
+                m.output_peak_db(),
                 pending * 1000 / (rate as usize * ch).max(1),
                 control.deafened(),
                 control.output_gain()
             );
+            m.reset_peaks();
         }
         std::thread::sleep(Duration::from_millis(5));
     }
