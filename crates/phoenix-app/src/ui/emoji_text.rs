@@ -1,4 +1,4 @@
-use gpui::{AnyElement, IntoElement, ParentElement, SharedString, Styled, div};
+use gpui::{AnyElement, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px};
 
 pub fn label(text: SharedString, font_px: f32) -> AnyElement {
     label_impl(text, font_px, false, false)
@@ -101,7 +101,32 @@ pub fn voice_status(
         if r.start > at {
             row = row.child(segment(at..r.start, false));
         }
-        row = row.child(div().flex_none().child(crate::media::emoji::emoji_element(&tok, font_px * 1.375)));
+        let hidden = inline
+            .spans
+            .iter()
+            .find(|s| s.spoiler.is_some() && s.range.start <= r.start && r.end <= s.range.end && !revealed(s.spoiler))
+            .and_then(|s| s.spoiler);
+        let size = font_px * 1.375;
+        row = row.child(match hidden {
+            Some(sp) => {
+                let e = entity.clone();
+                div()
+                    .id(("vc-status-spoiler-emoji", channel.0.wrapping_mul(31).wrapping_add(r.start as u64)))
+                    .flex_none()
+                    .size(px(size))
+                    .bg(crate::theme::c(crate::theme::tok(crate::theme::generated::idx::SPOILER_HIDDEN_BACKGROUND)))
+                    .cursor_pointer()
+                    .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
+                        e.update(cx, |a, cx| {
+                            a.revealed.insert((channel, sp));
+                            cx.notify();
+                        });
+                    })
+                    .into_any_element()
+            }
+            None => div().flex_none().child(crate::media::emoji::emoji_element(&tok, size)).into_any_element(),
+        });
         at = r.end;
     }
     if at < text.len() {
