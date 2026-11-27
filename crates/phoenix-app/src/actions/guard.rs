@@ -1,4 +1,5 @@
 use phoenix_api::rest::guild_manage::AdminCall;
+use phoenix_api::rest::guild_server::ServerCall;
 use reqwest::Method;
 
 pub use phoenix_api::rest::guard::{GuardedWrite, agent_session, blocked, permitted, read_only, set_writes_enabled, writes_enabled};
@@ -15,12 +16,13 @@ fn moderation_call(c: &AdminCall) -> bool {
             | AdminCall::AddRoleMember { .. }
             | AdminCall::RemoveRoleMember { .. }
             | AdminCall::IncidentActions { .. }
+            | AdminCall::Server(ServerCall::DeleteGuild { .. })
     )
 }
 
 fn moderation_action(req: &ActionRequest) -> Option<(Method, String)> {
     match req {
-        ActionRequest::Admin(c) if moderation_call(c) => {
+        ActionRequest::Admin(c) | ActionRequest::AdminMfa(c, _) if moderation_call(c) => {
             let r = phoenix_api::rest::guild_manage::build(c);
             Some((r.method, r.path))
         }
@@ -120,6 +122,16 @@ mod tests {
         let emoji = crate::model::Reaction { emoji: "👍".into(), ..Default::default() };
         for burst in [false, true] {
             assert!(read_only_action(&ActionRequest::Reactors { channel: Id(1), msg: Id(2), emoji: emoji.clone(), burst }));
+        }
+    }
+
+    #[test]
+    fn server_deletion_is_protected_with_or_without_the_two_factor_code() {
+        let call = || AdminCall::Server(ServerCall::DeleteGuild { guild: G });
+        for req in [ActionRequest::Admin(call()), ActionRequest::AdminMfa(call(), "123456".into())] {
+            assert!(!read_only_action(&req));
+            assert!(refuse_action(false, &req).is_some());
+            assert!(refuse_action(true, &req).is_none());
         }
     }
 
