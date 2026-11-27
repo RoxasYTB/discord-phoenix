@@ -665,7 +665,9 @@ fn own_full_profile_is_the_editor_from_every_entry_point(cx: &mut TestAppContext
 #[gpui::test]
 fn wheel_and_touchpad_scroll_the_chat_from_its_bottom(cx: &mut TestAppContext) {
     let mut h = setup(cx);
-    let top = |h: &mut Harness| h.read(|a| -f32::from(a.message_list.scroll_px_offset_for_scrollbar().y));
+    let from_end = |h: &mut Harness| {
+        h.read(|a| f32::from(a.message_list.max_offset_for_scrollbar().y) + f32::from(a.message_list.scroll_px_offset_for_scrollbar().y))
+    };
     let (max, open_top, count, anchor) = h.read(|a| {
         let l = &a.message_list;
         (f32::from(l.max_offset_for_scrollbar().y), -f32::from(l.scroll_px_offset_for_scrollbar().y), l.item_count(), l.logical_scroll_top().item_ix)
@@ -677,15 +679,14 @@ fn wheel_and_touchpad_scroll_the_chat_from_its_bottom(cx: &mut TestAppContext) {
     h.vcx.simulate_mouse_move(at, None::<gpui::MouseButton>, Modifiers::none());
     h.vcx.run_until_parked();
 
-    let before = top(&mut h);
     h.vcx.simulate_event(gpui::ScrollEvent { position: at, delta: gpui::ScrollDelta::Pixels(point(px(0.), px(120.))), ..Default::default() });
     h.vcx.run_until_parked();
-    let after = top(&mut h);
-    assert!(after < before - 100., "touchpad scroll left the chat at {before} -> {after}");
+    let after = from_end(&mut h);
+    assert!(after > 100. && after < 140., "a 120 px touchpad scroll left the chat {after} px from its end");
     assert!(h.read(|a| a.message_list.logical_scroll_top().item_ix) < count, "the chat went back to its end");
 
     h.act(|a, _, _| a.message_list.scroll_to_end());
-    let before = top(&mut h);
+    assert!(from_end(&mut h) < 0.5);
     h.vcx.simulate_event(gpui::ScrollEvent { position: at, delta: gpui::ScrollDelta::Lines(point(0., 3.)), ..Default::default() });
     h.vcx.run_until_parked();
     for _ in 0..25 {
@@ -696,7 +697,7 @@ fn wheel_and_touchpad_scroll_the_chat_from_its_bottom(cx: &mut TestAppContext) {
         });
         h.vcx.run_until_parked();
     }
-    let after = top(&mut h);
-    assert!(after < before - 40., "wheel notch left the chat at {before} -> {after}");
+    let after = from_end(&mut h);
+    assert!(after > 40., "a wheel notch left the chat {after} px from its end");
     assert!(!h.read(|a| a.chat.at_bottom), "the jump to present bar must follow the wheel");
 }
