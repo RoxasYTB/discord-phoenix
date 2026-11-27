@@ -914,7 +914,8 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
 }
 
 pub fn jump_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    let scrolled_up = (!app.chat.at_bottom && app.message_list.is_scrolled_to_end() == Some(false))
+    let from_end = app.message_list.max_offset_for_scrollbar().y + app.message_list.scroll_px_offset_for_scrollbar().y;
+    let scrolled_up = (!app.chat.at_bottom && (app.message_list.is_scrolled_to_end() == Some(false) || f32::from(from_end) > 40.))
         || crate::history_detached::is_detached(app);
     if !scrolled_up {
         return None;
