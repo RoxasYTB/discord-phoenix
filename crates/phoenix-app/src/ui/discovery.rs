@@ -121,7 +121,7 @@ fn language_name(code: &str) -> SharedString {
 pub const APP_SEARCH_PAGE_SIZE: u32 = 24;
 
 pub fn app_search_path(query: &str, page: u32, locale: &str) -> String {
-    format!("/application-directory-static/search?query={}&page={}&page_size={}&locale={}", encode(query), page, APP_SEARCH_PAGE_SIZE, encode(locale))
+    format!("/application-directory-static/search?query={}&page={}&page_size={}&locale={}&source=0", encode(query), page, APP_SEARCH_PAGE_SIZE, encode(locale))
 }
 
 pub fn lurk_path(guild: u64, session_id: &str) -> String {
@@ -1659,7 +1659,7 @@ fn app_search_page(window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElem
     let mut grid = div().px(z(32.)).py(z(24.)).grid().grid_cols(cols as u16).gap(z(16.));
     if loading && apps.is_empty() {
         for _ in 0..cols * 2 {
-            grid = grid.child(div().h(z(275.)).rounded(z(8.)).bg(tk(idx::BACKGROUND_BASE_LOWEST)));
+            grid = grid.child(div().h(z(275.)).rounded(z(8.)).bg(tk(idx::BACKGROUND_BASE_LOW)).border_1().border_color(tk(idx::BORDER_SUBTLE)));
         }
     } else {
         for a in &apps {
@@ -1767,7 +1767,7 @@ mod tests {
         assert!(!directory_path_allowed("/application-directory-static/applications/abc"));
         assert!(!directory_path_allowed("/users/@me/settings-proto/1"));
         assert!(!directory_path_allowed("/guilds/1/members/@me"));
-        assert_eq!(app_search_path("word game", 2, "fr"), "/application-directory-static/search?query=word%20game&page=2&page_size=24&locale=fr");
+        assert_eq!(app_search_path("word game", 2, "fr"), "/application-directory-static/search?query=word%20game&page=2&page_size=24&locale=fr&source=0");
         assert_eq!(CATEGORIES.len(), 7);
         assert_eq!(category_text(Category::Id(1)).section, Some("discovery.cat_popular.gaming"));
         assert!(category_text(Category::Hubs).section.is_none());
