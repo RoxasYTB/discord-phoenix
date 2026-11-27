@@ -1548,6 +1548,12 @@ impl Render for PhoenixApp {
             .on_action(cx.listener(|this, _: &QuickSwitcher, w, cx| this.open_switcher(w, cx)))
             .on_action(cx.listener(Self::on_escape))
             .on_action(cx.listener(ui::settings::open_action))
+            .on_modifiers_changed(cx.listener(|this, ev: &gpui::ModifiersChangedEvent, _, cx| {
+                if this.chat.shift_held != ev.modifiers.shift {
+                    this.chat.shift_held = ev.modifiers.shift;
+                    cx.notify();
+                }
+            }))
             .capture_key_down(cx.listener(|this, ev, _, cx| {
                 if !crate::keybinds::on_key_down(this, ev, cx) {
                     crate::voice::ptt::on_key_down(this, ev, cx)

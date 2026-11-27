@@ -67,12 +67,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex_col()
         .when(mod_view.is_some(), |d| d.border_r_1().border_color(c(tok(idx::BORDER_SUBTLE))).rounded_tr(z(12.)).overflow_hidden())
         .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_PRIMARY))
-        .on_modifiers_changed(cx.listener(|a, ev: &gpui::ModifiersChangedEvent, _, cx| {
-            if a.chat.shift_held != ev.modifiers.shift {
-                a.chat.shift_held = ev.modifiers.shift;
-                cx.notify();
-            }
-        }))
         .map(|d| {
             if crate::ui::call_view::private_split(app) {
                 d.children(crate::ui::call_view::render_private(app, header(app, cx), window, cx))
