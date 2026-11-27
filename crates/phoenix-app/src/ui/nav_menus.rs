@@ -715,8 +715,13 @@ fn render_target(app: &PhoenixApp, target: Target, pos: Point<Pixels>, cx: &mut 
                 }));
             }
             if let Some(info) = copy_server_info(app, g, false) {
-                items.push(MenuItem::Separator);
+                if !matches!(items.last(), Some(MenuItem::Separator)) {
+                    items.push(MenuItem::Separator);
+                }
                 items.push(info);
+            }
+            if matches!(items.last(), Some(MenuItem::Separator)) {
+                items.pop();
             }
         }
         Target::ChannelBell(id) | Target::InboxBell(id) if app.backend.thread_info(id).is_some() => {

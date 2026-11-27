@@ -254,7 +254,7 @@ pub fn server_settings_item(app: &PhoenixApp, e: &Ent, guild: Id) -> MenuItem {
     MenuItem::Submenu {
         label: crate::t!("menu.server_settings"),
         items,
-        icon: Some(crate::icons::path("gear")),
+        icon: None,
         subtext: None,
         danger: false,
         on_click: Some(std::rc::Rc::new(move |_, window, cx| {
