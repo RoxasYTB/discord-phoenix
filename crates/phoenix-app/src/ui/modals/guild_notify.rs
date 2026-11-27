@@ -68,20 +68,21 @@ pub fn sees_raid_alerts(perms: u64) -> bool {
 }
 
 pub fn override_targets(app: &PhoenixApp, guild: Id) -> Vec<Id> {
-    let all: Vec<&crate::model::Channel> = app.guild_channels.get(&guild).into_iter().flatten().filter_map(|id| app.channels.get(id)).collect();
+    use crate::model::Channel;
+    let all: Vec<&Channel> = app.guild_channels.get(&guild).into_iter().flatten().filter_map(|id| app.channels.get(id)).collect();
     let selectable = |k: ChannelKind| matches!(k, ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Forum);
-    let key = |c: &&crate::model::Channel| (c.position, c.id);
-    let mut top: Vec<_> = all.iter().filter(|c| c.parent.is_none() && c.kind != ChannelKind::Category && selectable(c.kind)).collect();
-    top.sort_by_key(|c| key(c));
-    let mut cats: Vec<_> = all.iter().filter(|c| c.kind == ChannelKind::Category).collect();
-    cats.sort_by_key(|c| key(c));
+    let key = |c: &&Channel| (c.position, c.id);
+    let mut top: Vec<&Channel> = all.iter().copied().filter(|c| c.parent.is_none() && c.kind != ChannelKind::Category && selectable(c.kind)).collect();
+    top.sort_by_key(key);
+    let mut cats: Vec<&Channel> = all.iter().copied().filter(|c| c.kind == ChannelKind::Category).collect();
+    cats.sort_by_key(key);
     let mut out: Vec<Id> = top.into_iter().map(|c| c.id).collect();
     for cat in cats {
-        let mut kids: Vec<_> = all.iter().filter(|c| c.parent == Some(cat.id)).collect();
+        let mut kids: Vec<&Channel> = all.iter().copied().filter(|c| c.parent == Some(cat.id)).collect();
         if kids.is_empty() {
             continue;
         }
-        kids.sort_by_key(|c| key(c));
+        kids.sort_by_key(key);
         out.push(cat.id);
         out.extend(kids.into_iter().filter(|c| selectable(c.kind)).map(|c| c.id));
     }
@@ -343,12 +344,12 @@ fn option_list(app: &PhoenixApp, guild: Id, q: &str, cx: &mut Context<PhoenixApp
                 .text_color(c(tok(idx::TEXT_SUBTLE)))
                 .hover(|d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))).text_color(c(tok(idx::INTERACTIVE_TEXT_HOVER))))
                 .child(gpui::svg().path(crate::icons::path(super::create_channel::icon_for(ch.kind))).flex_none().min_w(z(16.)).size(z(16.)).opacity(0.3).text_color(c(tok(idx::TEXT_DEFAULT))))
-                .child(div().mx(z(4.)).flex_shrink().min_w_0().truncate().child(ch.name.clone()))
+                .child(div().mx(z(4.)).flex_shrink(1.).min_w_0().truncate().child(ch.name.clone()))
                 .children(category.map(|n| {
                     div()
                         .ml(z(8.))
                         .min_w(z(48.))
-                        .flex_shrink()
+                        .flex_shrink(1.)
                         .truncate()
                         .text_size(z(14.))
                         .font_weight(FontWeight::MEDIUM)
