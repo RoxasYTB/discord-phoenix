@@ -456,3 +456,19 @@ keyboard-selected one (it keeps its `invisible` + group-hover style, so a stale 
 the build); `guild_media` returns early, before reading the notification settings, when no
 channel of the guild has voice users and the guild has no live stage or event; `icons::path`
 and the Twemoji URL are memoised per thread (the emoji table is capped at 8,192 entries).
+
+After (`baeb208d`, same command, two runs; frame times are noisy, the machine was loaded):
+
+| scenario | allocs / frame before → after | bytes / frame | change |
+|---|---|---|---|
+| `idle` | 7,241 → 7,191 | 3.30 → 3.30 MB | −1 % |
+| `scroll_chat_wheel` | 26,060 → 23,040 | 11.2 → 10.5 MB | −12 % |
+| `scroll_chat_fast` (`scroll_by` 600 px, no pointer) | 22,467 → 7,811 | 9.2 → 3.6 MB | **−65 %** |
+| `hover_messages` | 12,739 → 9,909 | 5.5 → 4.5 MB | −22 % |
+| `scroll_members` | 12,864 → 12,714 | 5.8 → 5.8 MB | −1 % |
+
+`scroll_chat_fast` p50 went from 32.6–37.7 ms to 16.8–17.3 ms. `scroll_chat_wheel` keeps most of its
+cost because the pointer sits on the chat: each frame a new message comes under it, its hover
+state changes and the toolbar is built for it; the rest is GPUI layout of the visible rows.
+Next step for this target: fewer elements per row (the reply and author lines, the per-row
+tooltips and listeners), measured with `PHX_ALLOC_SITES`.
