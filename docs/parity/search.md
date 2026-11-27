@@ -50,3 +50,9 @@ No search was run in the client and no `…/search/tabs` request was sent for th
 | search all DMs | `DX` fetcher: `POST /users/@me/messages/search/tabs` with the single `messages` tab, limit 25 | same | ✅ |
 | tab filters (module 768570 `B7`/`su`) | `messages {}`, `media {has:[image,video]}`, `links {has:[link]}`, `files {has:[file]}`, `pins {pinned:true}`, `us = {sort_by:"timestamp", sort_order:"desc"}`; on desktop only used by the Mod View member panel (counts of messages, links and media through `POST /guilds/{id}/messages/search/tabs`) | the results panel has no tabs, like the client; the Mod View counts are not built (a GET `…/messages/search?author_id=…&has=link` gives the same totals) | ⚠ |
 
+
+## Results in threads
+
+| Element | Client | Phoenix | State |
+|---|---|---|---|
+| group header of a hit in a thread | `SEARCH_MESSAGES_SUCCESS` carries `threads: body.threads ?? []` (classic reply) or `tab.threads` (tabs reply), chunk `fb74ed8e7dc14b59.js`; the channel store then knows archived threads too | `SearchResponse.threads` (lenient parse), `SearchPage.threads`, `search::adopt_threads` adds them to `app.channels`; a hit whose channel is still unknown gets one `GET /channels/{id}` (at most 5 per page); the header falls back to `nav.find_thread` | ✅ unit test `replies_keep_the_threads_of_their_hits`; was `# inconnu` before (QA 27/11) |

@@ -56,6 +56,7 @@ pub struct SearchPage {
     pub total: u32,
     pub messages: Vec<Message>,
     pub indexing: Option<f64>,
+    pub threads: Vec<crate::model::Channel>,
 }
 
 pub struct SearchState {
@@ -402,7 +403,10 @@ fn run_attempt(app: &mut PhoenixApp, req: SearchRequest, attempts: u32, cx: &mut
     cx.spawn(async move |this, cx| {
         let res = fut.await;
         let retry = this
-            .update(cx, |_, cx| {
+            .update(cx, |app, cx| {
+                if let Ok(p) = &res {
+                    adopt_threads(app, p, cx);
+                }
                 let s = cx.global_mut::<Search>().0.as_mut()?;
                 if s.seq != seq {
                     return None;
@@ -923,6 +927,24 @@ fn results_panel(
     div().absolute().top_0().left_0().right_0().bottom_0().child(live_bar(&input, false, cx)).child(panel).children(modal).into_any_element()
 }
 
+pub(crate) fn adopt_threads(app: &mut PhoenixApp, page: &SearchPage, cx: &mut Context<PhoenixApp>) {
+    for t in &page.threads {
+        app.channels.entry(t.id).or_insert_with(|| t.clone());
+    }
+    let mut missing: Vec<Id> = page.messages.iter().map(|m| m.channel).filter(|c| !app.channels.contains_key(c) && app.nav.find_thread(*c).is_none()).collect();
+    missing.sort_unstable();
+    missing.dedup();
+    missing.truncate(5);
+    for id in missing {
+        app.parity_request(crate::commands::ParityRequest::FetchThread { id }, cx, move |a, r, cx| {
+            if let Ok(crate::commands::ParityReply::Thread(ch)) = r {
+                a.channels.entry(id).or_insert(ch);
+                cx.notify();
+            }
+        });
+    }
+}
+
 pub(crate) fn grouped_results(app: &PhoenixApp, messages: &[Message], cx: &mut Context<PhoenixApp>) -> gpui::Div {
     let hl = Highlighter::new("", false);
     let mut out = div().flex().flex_col();
@@ -940,7 +962,7 @@ pub(crate) fn grouped_results(app: &PhoenixApp, messages: &[Message], cx: &mut C
 }
 
 fn channel_group_header(app: &PhoenixApp, ch: Id, hl: &Highlighter) -> gpui::Div {
-    let channel = app.channels.get(&ch);
+    let channel = app.channels.get(&ch).or_else(|| app.nav.find_thread(ch));
     let private = channel.is_some_and(|c| c.guild.is_none());
     let name: SharedString = match channel {
         Some(_) if private => dm_label(app, ch),

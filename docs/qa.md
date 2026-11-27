@@ -85,6 +85,15 @@ A bottom-aligned list that sits at its end anchors past its last item, and GPUI'
 not laid out`). Point at the newest message from the list edge (`@chat.b+0,-60`)
 instead of `@chat#-2` while the chat is at the bottom.
 
+Each step drains the offscreen window's task queue with `input_script::settle`, which stops after
+1.5 s of queued work and prints `QA note settle stopped ...`. Before 27/11 it was a plain
+`run_until_parked`: the GIF picker's animated previews kept queueing decodes and repaints, so the
+mouse-up of the GIF button never returned (no output for 15 min). `real_shots`' own pump uses the
+same budget.
+
+`text` keeps everything after the first space as typed (trailing spaces and `;` included), and
+`@chat#-1.tl` (item then corner) is parsed as item `-1`, corner `tl`.
+
 Every check prints `QA OK [step] ...` or `QA KO [step] ...`, then
 `QA summary ok=N ko=M` and the list of shots (`qa-<name>.png`).
 `PHX_SCRIPT_STRICT=1` turns a failed check into a failed run.

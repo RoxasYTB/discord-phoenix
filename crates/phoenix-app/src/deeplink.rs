@@ -226,9 +226,29 @@ impl PhoenixApp {
         match t {
             Target::Other(_) => {}
             Target::Invite { code, event } => self.open_invite_link(code, event, cx),
+            Target::Channel { guild, channel: Some(c), message } => self.open_channel_link(guild, c, message, cx),
             t @ Target::Channel { .. } => self.route_when_ready(t, cx),
         }
         true
+    }
+
+    pub fn open_channel_link(&mut self, guild: Option<Id>, channel: Id, message: Option<Id>, cx: &mut Context<Self>) {
+        let target = Target::Channel { guild, channel: Some(channel), message };
+        if !self.channels.contains_key(&channel)
+            && let Some(t) = self.nav.find_thread(channel).cloned()
+        {
+            self.channels.insert(channel, t);
+        }
+        let fetch = !self.channels.contains_key(&channel) && guild.is_some_and(|g| self.guilds.iter().any(|x| x.id == g));
+        if !fetch {
+            return self.route_when_ready(target, cx);
+        }
+        self.parity_request(crate::commands::ParityRequest::FetchThread { id: channel }, cx, move |a, r, cx| {
+            if let Ok(crate::commands::ParityReply::Thread(ch)) = r {
+                a.channels.entry(channel).or_insert(ch);
+            }
+            a.route_when_ready(target, cx);
+        });
     }
 
     pub fn open_in_app_link(&mut self, url: &str, cx: &mut Context<Self>) -> bool {

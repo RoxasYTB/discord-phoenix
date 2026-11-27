@@ -163,6 +163,8 @@ pub(crate) struct Resolver<'a> {
     soundboard_sounds: &'a [crate::model::SoundboardSound],
     me: Id,
     guild: Option<Id>,
+    guilds: &'a [Guild],
+    nav: &'a crate::ui::home::data::NavState,
 }
 impl Resolver<'_> {
     fn find_role(&self, id: u64) -> Option<&Role> {
@@ -192,6 +194,41 @@ impl MentionResolver for Resolver<'_> {
     }
     fn channel(&self, id: u64) -> Option<String> {
         self.channels.get(&Id(id)).map(|c| c.name.to_string())
+    }
+    fn current_guild(&self) -> Option<u64> {
+        self.guild.map(|g| g.0)
+    }
+    fn link_channel(&self, id: u64) -> Option<crate::markdown::LinkChannel> {
+        let ch = self.channels.get(&Id(id)).or_else(|| self.nav.find_thread(Id(id)))?;
+        let parent = ch.parent.and_then(|p| self.channels.get(&p)).filter(|p| p.kind != ChannelKind::Category);
+        let thread = parent.is_some() || self.nav.thread_parent(ch.id).is_some();
+        let icon = if thread {
+            "threads"
+        } else {
+            match ch.kind {
+                ChannelKind::Text | ChannelKind::Category => "hash",
+                ChannelKind::Voice => "speaker",
+                ChannelKind::Announcement => "megaphone",
+                ChannelKind::Forum => "forum",
+                ChannelKind::Stage => "stage",
+            }
+        };
+        let dm = ch.guild.is_none();
+        let name = if dm && ch.name.is_empty() {
+            ch.voice_users.first().and_then(|u| self.users.get(u)).map(|u| u.display_name.to_string()).unwrap_or_default()
+        } else {
+            ch.name.to_string()
+        };
+        let forum_post = parent.filter(|p| p.kind == ChannelKind::Forum).map(|p| (p.name.to_string(), "forum"));
+        Some(crate::markdown::LinkChannel { name, guild: ch.guild.map(|g| g.0), icon, dm, forum_post })
+    }
+    fn link_guild(&self, id: u64) -> Option<crate::markdown::LinkGuild> {
+        let g = self.guilds.iter().find(|g| g.id.0 == id)?;
+        let icon = match &g.icon {
+            ImageRef::Url(u) => Some(crate::media::with_cdn_size(u, 32).to_string()),
+            ImageRef::Default(_) => None,
+        };
+        Some(crate::markdown::LinkGuild { name: g.name.to_string(), icon, acronym: g.acronym.to_string() })
     }
     fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<crate::markdown::SoundboardMention> {
         let sound = self.soundboard_sounds.iter().find(|s| {
@@ -782,12 +819,12 @@ impl PhoenixApp {
     }
 
     pub(crate) fn resolver(&self) -> Resolver<'_> {
-        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: &[], me: self.me.id, guild: self.selected_guild }
+        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: &[], me: self.me.id, guild: self.selected_guild, guilds: &self.guilds, nav: &self.nav }
     }
 
     pub(crate) fn resolver_with_sounds<'a>(&'a self, sounds: &'a [crate::model::SoundboardSound], channel: Id) -> Resolver<'a> {
         let guild = self.channels.get(&channel).or_else(|| self.nav.find_thread(channel)).and_then(|c| c.guild).or(self.selected_guild);
-        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: sounds, me: self.me.id, guild }
+        Resolver { users: &self.users, channels: &self.channels, roles: &self.roles, members: &self.members, soundboard_sounds: sounds, me: self.me.id, guild, guilds: &self.guilds, nav: &self.nav }
     }
 
     pub(crate) fn render_msg(&self, m: &Message, prev: Option<&Message>) -> RenderedMessage {

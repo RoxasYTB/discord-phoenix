@@ -14,6 +14,34 @@ use crate::{
 };
 
 pub const CHANNEL_ICON_TOKEN: &str = "\u{1}channel-icon";
+pub const LINK_TOKEN: &str = "\u{1}link:";
+
+pub fn link_token(icon: &markdown::LinkIcon) -> String {
+    match icon {
+        markdown::LinkIcon::Channel(name) => format!("{LINK_TOKEN}icon:{name}"),
+        markdown::LinkIcon::Chevron => format!("{LINK_TOKEN}chevron"),
+        markdown::LinkIcon::Guild(url) => format!("{LINK_TOKEN}guild:{url}"),
+        markdown::LinkIcon::GuildText(acronym) => format!("{LINK_TOKEN}text:{acronym}"),
+    }
+}
+
+pub fn parse_link_token(token: &str) -> Option<markdown::LinkIcon> {
+    let t = token.strip_prefix(LINK_TOKEN)?;
+    if t == "chevron" {
+        return Some(markdown::LinkIcon::Chevron);
+    }
+    if let Some(name) = t.strip_prefix("icon:") {
+        return Some(markdown::LinkIcon::Channel(link_icon_name(name)));
+    }
+    if let Some(u) = t.strip_prefix("guild:") {
+        return Some(markdown::LinkIcon::Guild(u.to_owned()));
+    }
+    t.strip_prefix("text:").map(|a| markdown::LinkIcon::GuildText(a.to_owned()))
+}
+
+fn link_icon_name(name: &str) -> &'static str {
+    ["hash", "speaker", "megaphone", "forum", "stage", "threads", "chat", "lock"].into_iter().find(|n| *n == name).unwrap_or("hash")
+}
 
 #[derive(Clone, Debug)]
 pub enum ClickTarget {
@@ -209,6 +237,11 @@ pub fn rich_inline(inline: &Inline, revealed: &dyn Fn(usize) -> bool, base: Hsla
     for s in &inline.spans {
         if matches!(s.mention, Some(Mention::Channel(_))) && inline.text[s.range.clone()].starts_with('#') {
             emoji.push((s.range.start..s.range.start + 1, CHANNEL_ICON_TOKEN.into()));
+        }
+        if let Some(Mention::Link(l)) = &s.mention {
+            for (r, icon) in &l.icons {
+                emoji.push((s.range.start + r.start..s.range.start + r.end, link_token(icon).into()));
+            }
         }
     }
     emoji.sort_by_key(|(r, _)| r.start);

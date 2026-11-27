@@ -8,6 +8,52 @@ use phoenix_app::app::PhoenixApp;
 
 const SANDBOX: u64 = 1574797385463496724;
 
+pub const SETTLE_BUDGET: Duration = Duration::from_millis(1500);
+
+thread_local! {
+    static SETTLE_CUT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+pub fn settle(cx: &HeadlessAppContext) {
+    let t0 = std::time::Instant::now();
+    while cx.background_executor().tick() {
+        if t0.elapsed() >= SETTLE_BUDGET {
+            let n = SETTLE_CUT.with(|c| {
+                c.set(c.get() + 1);
+                c.get()
+            });
+            if n == 1 || n.is_power_of_two() {
+                println!("QA note settle stopped after {} ms with tasks still queued ({n} times so far)", t0.elapsed().as_millis());
+            }
+            break;
+        }
+    }
+}
+
+pub fn script_lines(script: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for raw in script.lines() {
+        let raw = raw.trim_end_matches('\r');
+        let lead = raw.trim_start();
+        if lead.starts_with("text ") || lead == "text" {
+            out.push(lead.to_string());
+            continue;
+        }
+        out.extend(raw.split(';').map(str::trim).map(str::to_string));
+    }
+    out
+}
+
+fn split_item(a: &str) -> anyhow::Result<(&str, Option<i64>, &str)> {
+    let Some((name, rest)) = a.split_once('#') else {
+        let (name, corner) = a.split_once('.').unwrap_or((a, "c"));
+        return Ok((name, None, corner));
+    };
+    let (item, corner) = rest.split_once('.').unwrap_or((rest, "c"));
+    let item = item.parse().map_err(|_| anyhow::anyhow!("bad item #{item}"))?;
+    Ok((name, Some(item), corner))
+}
+
 fn last(a: &PhoenixApp) -> Option<&phoenix_app::model::Message> {
     a.selected_channel.and_then(|c| a.messages.get(&c)).and_then(|e| e.msgs.last())
 }
@@ -55,7 +101,7 @@ pub fn run(cx: &mut HeadlessAppContext, env: &Env, script: &str) -> anyhow::Resu
     r.frames(cx, 200);
     let (zoom, vp) = cx.update_window(env.win, |_, window, _| (window.page_zoom(), window.viewport_size()))?;
     println!("QA window scale={scale} zoom={zoom} viewport={vp:?}");
-    for (n, line) in script.lines().flat_map(|l| l.split(';')).map(str::trim).enumerate() {
+    for (n, line) in script_lines(script).iter().map(String::as_str).enumerate() {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
@@ -112,7 +158,7 @@ impl Run<'_, '_> {
             cx.advance_clock(now - last);
             last = now;
             cx.simulate_frame_request(self.env.win);
-            cx.run_until_parked();
+            settle(cx);
             if t0.elapsed() >= Duration::from_millis(ms) {
                 break;
             }
@@ -125,7 +171,7 @@ impl Run<'_, '_> {
             window.dispatch_event(ev, cx);
         })?;
         cx.simulate_frame_request(self.env.win);
-        cx.run_until_parked();
+        settle(cx);
         Ok(())
     }
 
@@ -172,11 +218,7 @@ impl Run<'_, '_> {
             None => (spec, None),
         };
         let mut p = if let Some(a) = base.strip_prefix('@') {
-            let (a, item) = match a.split_once('#') {
-                Some((a, i)) => (a, Some(i.parse::<i64>().map_err(|_| anyhow::anyhow!("bad item in {spec}"))?)),
-                None => (a, None),
-            };
-            let (a, c) = a.split_once('.').unwrap_or((a, "c"));
+            let (a, item, c) = split_item(a).map_err(|e| anyhow::anyhow!("{e} in {spec}"))?;
             let p = corner(self.anchor(cx, a, item)?, c);
             let k = cx.update_window(self.env.win, |_, window, _| window.page_zoom())?;
             point(p.x * k, p.y * k)
@@ -219,7 +261,7 @@ impl Run<'_, '_> {
             window.dispatch_keystroke(ks, cx);
         })?;
         cx.simulate_frame_request(self.env.win);
-        cx.run_until_parked();
+        settle(cx);
         Ok(())
     }
 
@@ -227,7 +269,7 @@ impl Run<'_, '_> {
         let [x, y, w, h] = *self.regions.get(name).ok_or_else(|| anyhow::anyhow!("unknown region {name}"))?;
         cx.update_window(self.env.win, |_, window, _| window.refresh())?;
         cx.simulate_frame_request(self.env.win);
-        cx.run_until_parked();
+        settle(cx);
         let img = cx.capture_screenshot(self.env.win)?;
         let s = cx.update_window(self.env.win, |_, window, _| window.scale_factor())?;
         let (x0, y0) = ((x * s) as u32, (y * s) as u32);
@@ -378,8 +420,8 @@ impl Run<'_, '_> {
     }
 
     fn exec(&mut self, cx: &mut HeadlessAppContext, line: &str) -> anyhow::Result<()> {
-        let (cmd, rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
-        let rest = rest.trim();
+        let (cmd, raw) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+        let rest = raw.trim();
         let args: Vec<&str> = rest.split_whitespace().collect();
         match cmd {
             "step" => {
@@ -540,7 +582,7 @@ impl Run<'_, '_> {
                 self.verdict(ok, format!("{detail} after {} ms", t0.elapsed().as_millis()));
             }
             "text" => {
-                let text = rest.replace("\\n", "\n");
+                let text = raw.replace("\\n", "\n");
                 let v = self.env.app.clone();
                 cx.update_window(self.env.win, |_, window, cx| {
                     v.update(cx, |app, cx| {

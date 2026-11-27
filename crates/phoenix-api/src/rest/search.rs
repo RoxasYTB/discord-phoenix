@@ -4,7 +4,7 @@ use url::form_urlencoded::Serializer;
 
 use super::{Body, RestClient};
 use crate::error::Result;
-use crate::models::{ChannelId, GuildId, Message, Snowflake, UserId};
+use crate::models::{Channel, ChannelId, GuildId, Message, Snowflake, UserId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HasFilter {
@@ -239,7 +239,8 @@ pub fn parse_tabs_reply(status: StatusCode, bytes: &[u8]) -> Result<SearchOutcom
             messages.push(g);
         }
     }
-    Ok(SearchOutcome::Results(SearchResponse { total_results, messages, doing_deep_historical_index: v.get("doing_deep_historical_index").and_then(serde_json::Value::as_bool).unwrap_or(false) }))
+    let threads = tab.get("threads").and_then(serde_json::Value::as_array).into_iter().flatten().filter_map(|t| serde_json::from_value::<Channel>(t.clone()).ok()).collect();
+    Ok(SearchOutcome::Results(SearchResponse { total_results, messages, doing_deep_historical_index: v.get("doing_deep_historical_index").and_then(serde_json::Value::as_bool).unwrap_or(false), threads }))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -562,6 +563,13 @@ pub struct SearchResponse {
     pub messages: Vec<Vec<Message>>,
     #[serde(default)]
     pub doing_deep_historical_index: bool,
+    #[serde(default, deserialize_with = "lenient_channels")]
+    pub threads: Vec<Channel>,
+}
+
+fn lenient_channels<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<Channel>, D::Error> {
+    let v: Option<Vec<serde_json::Value>> = Option::deserialize(d)?;
+    Ok(v.unwrap_or_default().into_iter().filter_map(|t| serde_json::from_value(t).ok()).collect())
 }
 
 impl SearchResponse {
@@ -941,8 +949,26 @@ mod tests {
             SearchOutcome::Results(r) => {
                 assert_eq!(r.total_results, 4);
                 assert_eq!(r.hits().count(), 2);
+                assert!(r.threads.is_empty());
             }
             _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn replies_keep_the_threads_of_their_hits() {
+        let t = r#"{"id":"5","type":11,"guild_id":"2","parent_id":"3","name":"old thread","thread_metadata":{"archived":true,"archive_timestamp":"2024-01-01T00:00:00+00:00","auto_archive_duration":1440,"locked":false}}"#;
+        let tabs = format!(r#"{{"tabs":{{"messages":{{"total_results":0,"messages":[],"threads":[{t}]}}}}}}"#);
+        let classic = format!(r#"{{"total_results":0,"messages":[],"threads":[{t}]}}"#);
+        for out in [parse_tabs_reply(StatusCode::OK, tabs.as_bytes()), parse_search_reply(StatusCode::OK, classic.as_bytes())] {
+            match out.unwrap() {
+                SearchOutcome::Results(r) => {
+                    assert_eq!(r.threads.len(), 1);
+                    assert_eq!(r.threads[0].name.as_deref(), Some("old thread"));
+                    assert_eq!(r.threads[0].parent_id.map(|p| p.0), Some(3));
+                }
+                _ => panic!(),
+            }
         }
     }
 

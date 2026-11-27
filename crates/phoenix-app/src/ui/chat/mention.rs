@@ -240,6 +240,11 @@ pub fn click(entity: &Entity<PhoenixApp>, m: &Mention, window: &mut Window, cx: 
                 a.open_channel_chat(Id(ch), cx);
             }
         }),
+        Mention::Link(ref l) => {
+            let (guild, channel, message) = (l.guild.map(Id), Id(l.channel), l.message.map(Id));
+            entity.update(cx, |a, cx| a.open_channel_link(guild, channel, message, cx));
+            window.refresh();
+        }
         Mention::Role(_) | Mention::Everyone | Mention::Here => {}
     }
 }

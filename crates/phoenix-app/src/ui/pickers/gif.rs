@@ -94,9 +94,23 @@ fn show_favorites(cx: &mut Context<PhoenixApp>) {
     cx.notify();
 }
 
+const GIF_HOSTS: [&str; 5] = ["klipy.com", "tenor.com", "giphy.com", "media.tenor.com", "static.klipy.com"];
+
+pub fn picked_gif_content(gif: &GifItem) -> String {
+    gif.url.trim().to_string()
+}
+
+pub fn is_picked_gif(content: &str) -> bool {
+    let c = content.trim();
+    let Some(rest) = c.strip_prefix("https://") else { return false };
+    let host = rest.split(['/', '?']).next().unwrap_or_default().to_ascii_lowercase();
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    !c.contains(char::is_whitespace) && (GIF_HOSTS.contains(&host) || c.ends_with(".gif"))
+}
+
 fn send(app: &mut PhoenixApp, gif: &GifItem, window: &mut gpui::Window, cx: &mut Context<PhoenixApp>) {
     let Some(ch) = app.selected_channel else { return };
-    let fut = app.backend.send_message(ch, gif.url.to_string(), None);
+    let fut = app.backend.send_message(ch, picked_gif_content(gif), None);
     super::detach(fut, cx);
     close(app, window, cx);
 }
@@ -259,4 +273,30 @@ pub fn render_body(_app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElemen
         .child(div().id("gif-scroll").size_full().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("gif-scroll")).p(px(PAD)).child(content))
         .children(crate::ui::chat::scrollbar::bar_for("gif-scroll", crate::ui::chat::scrollbar::Bar::ThinFade))
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use phoenix_api::rest::{CreateMessage, agent_scope};
+    use reqwest::Method;
+
+    #[test]
+    fn picked_gif_message_is_built_and_kept_inside_the_test_channels() {
+        let gif = GifItem { url: "https://klipy.com/gifs/scuba-scuba-cat".into(), preview: "https://static.klipy.com/ii/k/4f/0f/x.gif".into(), width: 498, height: 280 };
+        let content = picked_gif_content(&gif);
+        assert_eq!(content, "https://klipy.com/gifs/scuba-scuba-cat");
+        assert!(is_picked_gif(&content));
+        assert!(is_picked_gif("https://tenor.com/view/x-123"));
+        assert!(!is_picked_gif("https://example.com/a b"));
+        assert!(!is_picked_gif("https://klipy.com.evil.example/x"));
+        let body = serde_json::to_value(CreateMessage::text(format!("[Test Phoenix] envoyé depuis le client Rust (Phoenix) — GIF du sélecteur\n{content}"))).unwrap();
+        assert!(body["content"].as_str().is_some_and(|c| c.starts_with("[Test Phoenix]") && c.ends_with(&content)));
+        let path = |c: u64| format!("/channels/{c}/messages");
+        assert!(agent_scope::allows(&Method::POST, &path(agent_scope::SANDBOX), Some(&body)));
+        assert!(agent_scope::allows(&Method::POST, &path(agent_scope::GENERAL), Some(&body)));
+        assert!(!agent_scope::allows(&Method::POST, &path(1507838362562859119), Some(&body)));
+        assert!(!agent_scope::allows(&Method::POST, &path(agent_scope::VOICE), Some(&body)));
+        assert!(phoenix_api::trap::refusal(&Method::POST, &path(1507838362562859119), Some(&body)).is_some());
+    }
 }

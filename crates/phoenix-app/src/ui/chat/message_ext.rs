@@ -1059,6 +1059,13 @@ pub fn rich_with_emoji_scaled(
             last = r.end;
             continue;
         }
+        if let Some(icon) = crate::richtext::parse_link_token(token) {
+            let el = div().h(z(22. * k)).flex().items_center().child(link_icon(&icon, 16. * k, runs_fg_at(runs, r.end)));
+            seg += 1;
+            row = row.child(pill(el.into_any_element(), r, seg as u64));
+            last = r.end;
+            continue;
+        }
         let target = crate::media::emoji::parse_custom(token).map(|e| super::panels::MenuItemTarget { sticker: false, id: e.id, image: Some(e.url(44)) });
         row = row.child(
             div()
@@ -1086,6 +1093,39 @@ pub(crate) fn mention_box(child: AnyElement, bg: Option<gpui::Hsla>, first: bool
 
 const MENTION_BOX_EM: f32 = 1.3;
 
+pub(crate) fn link_icon(icon: &crate::markdown::LinkIcon, em: f32, fg: gpui::Hsla) -> AnyElement {
+    use crate::markdown::LinkIcon;
+    match icon {
+        LinkIcon::Channel(name) => {
+            div().flex_none().mr(z(4.)).child(gpui::svg().path(crate::icons::path(name)).size(z(em)).text_color(fg)).into_any_element()
+        }
+        LinkIcon::Chevron => div()
+            .flex_none()
+            .ml(z(4.))
+            .mr(z(2.))
+            .child(gpui::svg().path(crate::icons::path("chevron-right")).size(z(em * 0.5)).text_color(fg))
+            .into_any_element(),
+        LinkIcon::Guild(url) => div()
+            .flex_none()
+            .mr(z(3.))
+            .child(gpui::img(SharedString::from(url.clone())).size(z(em)).rounded_full())
+            .into_any_element(),
+        LinkIcon::GuildText(acronym) => div()
+            .flex_none()
+            .mr(z(3.))
+            .size(z(em * 1.05))
+            .rounded_full()
+            .bg(c(crate::theme::tok(idx::BACKGROUND_MOD_STRONG)))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(z(8.))
+            .line_height(z(em * 1.05))
+            .child(SharedString::from(acronym.clone()))
+            .into_any_element(),
+    }
+}
+
 fn run_bg_at(runs: &[gpui::TextRun], ix: usize) -> Option<gpui::Hsla> {
     let mut at = 0;
     runs.iter().find(|r| {
@@ -1095,7 +1135,7 @@ fn run_bg_at(runs: &[gpui::TextRun], ix: usize) -> Option<gpui::Hsla> {
     .background_color
 }
 
-fn runs_fg_at(runs: &[gpui::TextRun], ix: usize) -> gpui::Hsla {
+pub(crate) fn runs_fg_at(runs: &[gpui::TextRun], ix: usize) -> gpui::Hsla {
     let mut at = 0;
     runs.iter()
         .find(|r| {

@@ -191,11 +191,28 @@ pub(super) async fn search(inner: Arc<Inner>, s: Arc<Session>, req: SearchReques
                 }
                 inner.emit(AppEvent::Users(users));
                 super::ensure_message_authors(&inner, &s, &hits);
-                return Ok(SearchPage { total: r.total_results, messages: hits.iter().map(convert::message).collect(), indexing: None });
+                let threads = r.threads.iter().filter_map(search_thread).collect();
+                return Ok(SearchPage { total: r.total_results, messages: hits.iter().map(convert::message).collect(), indexing: None, threads });
             }
             SearchOutcome::Indexing { retry_after } if req.report_indexing => return Ok(SearchPage { indexing: Some(retry_after), ..Default::default() }),
             SearchOutcome::Indexing { retry_after } => tokio::time::sleep(Duration::from_secs_f64(retry_after)).await,
         }
     }
     Err(BackendError(crate::t!("search.indexing").to_string()))
+}
+
+fn search_thread(c: &phoenix_api::models::Channel) -> Option<crate::model::Channel> {
+    c.kind.is_thread().then(|| crate::model::Channel {
+        id: convert::id(c.id),
+        guild: c.guild_id.map(convert::id),
+        parent: c.parent_id.map(convert::id),
+        name: c.display_name().into(),
+        topic: None,
+        kind: crate::model::ChannelKind::Text,
+        position: 0,
+        unread: false,
+        muted: false,
+        mentions: 0,
+        voice_users: Vec::new(),
+    })
 }

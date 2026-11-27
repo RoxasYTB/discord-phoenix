@@ -204,6 +204,13 @@ pub fn rich_static(t: &crate::richtext::RichText, font_px: f32, emoji_px: f32) -
         if r.start < last || token.as_ref() == crate::richtext::CHANNEL_ICON_TOKEN {
             continue;
         }
+        if let Some(icon) = crate::richtext::parse_link_token(token) {
+            row = words(row, last..r.start);
+            let fg = crate::ui::chat::message_ext::runs_fg_at(&t.runs, r.end);
+            row = row.child(div().flex_none().h(crate::theme::fz(font_px * 1.375)).flex().items_center().child(crate::ui::chat::message_ext::link_icon(&icon, font_px, fg)));
+            last = r.end;
+            continue;
+        }
         row = words(row, last..r.start);
         row = row.child(div().flex_none().mx(gpui::px(zoom)).child(crate::media::emoji::emoji_element(token, emoji_px * zoom * crate::theme::font_scale())));
         last = r.end;

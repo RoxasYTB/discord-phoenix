@@ -99,10 +99,6 @@ fn sandbox_action(req: &phoenix_app::actions::ActionRequest) -> bool {
     }
 }
 
-fn picked_gif(content: &str) -> bool {
-    let c = content.trim();
-    !c.contains(char::is_whitespace) && c.starts_with("https://") && (c.contains("tenor") || c.contains("giphy") || c.ends_with(".gif"))
-}
 
 fn sandbox_write(ch: Id, msg: Id) -> bool {
     std::env::var_os("PHX_WRITE").is_some() && ch.0 == SANDBOX_CHANNEL && WRITABLE.lock().is_ok_and(|w| w.contains(&msg.0))
@@ -196,7 +192,7 @@ impl Backend for ReadOnly {
         }
         let content = if content.starts_with(TEST_MARK) {
             content
-        } else if picked_gif(&content) {
+        } else if phoenix_app::ui::pickers::is_picked_gif(&content) {
             format!("{SEND_PREFIX}GIF du sélecteur\n{}", content.trim())
         } else {
             return denied();
@@ -925,7 +921,7 @@ fn main() -> anyhow::Result<()> {
         while std::time::Instant::now() < end {
             std::thread::sleep(Duration::from_millis(50));
             let t = std::time::Instant::now();
-            cx.run_until_parked();
+            input_script::settle(cx);
             if std::env::var_os("PHX_TRACE").is_some() && t.elapsed() > Duration::from_millis(300) {
                 eprintln!("slow parked run: {:?}", t.elapsed());
             }
@@ -2781,7 +2777,7 @@ fn main() -> anyhow::Result<()> {
             let mut trace = Vec::new();
             while t0.elapsed() < Duration::from_millis(ms) {
                 cx.simulate_frame_request(win.into());
-                cx.run_until_parked();
+                input_script::settle(cx);
                 let y = cx.update(|cx| v.read(cx).message_list.scroll_px_offset_for_scrollbar().y);
                 trace.push(format!("{}:{:.0}", t0.elapsed().as_millis(), -f32::from(y)));
                 std::thread::sleep(Duration::from_millis(16));

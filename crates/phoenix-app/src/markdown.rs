@@ -35,6 +35,7 @@ pub enum Mention {
     Role(u64),
     Everyone,
     Here,
+    Link(Box<ChannelLink>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,6 +136,15 @@ pub trait MentionResolver {
         false
     }
     fn soundboard(&self, _guild_id: u64, _sound_id: u64) -> Option<SoundboardMention> {
+        None
+    }
+    fn current_guild(&self) -> Option<u64> {
+        None
+    }
+    fn link_channel(&self, _id: u64) -> Option<LinkChannel> {
+        None
+    }
+    fn link_guild(&self, _id: u64) -> Option<LinkGuild> {
         None
     }
 }
@@ -250,8 +260,10 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
     blocks
 }
 
+pub mod channel_link;
 pub mod input;
 mod link;
+pub use channel_link::{ChannelLink, LinkChannel, LinkGuild, LinkIcon};
 pub use link::title_for as link_title_attr;
 
 thread_local! {
@@ -497,6 +509,21 @@ impl Ctx<'_> {
                 } else {
                     i += m.len;
                 }
+                continue;
+            }
+
+            if c == b'h'
+                && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+                && !no_links()
+                && !voice_status()
+                && let Some(m) = channel_link::match_url(rest)
+                && let Some(l) = channel_link::resolve(self.r, &m)
+            {
+                self.push(&src[plain_start..i], style, spoiler);
+                let st = if l.italic { style | Style::MENTION | Style::ITALIC } else { style | Style::MENTION };
+                self.push_full(&l.text, st, None, Some(l.mention), spoiler);
+                i += m.len;
+                plain_start = i;
                 continue;
             }
 

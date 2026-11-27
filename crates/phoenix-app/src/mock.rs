@@ -854,7 +854,7 @@ impl Backend for MockBackend {
             hits.sort_by_key(|m| std::cmp::Reverse(m.id.0));
             let total = hits.len() as u32;
             hits.truncate(25);
-            crate::ui::search::SearchPage { total, messages: hits, indexing: None }
+            crate::ui::search::SearchPage { total, messages: hits, indexing: None, threads: Vec::new() }
         })
     }
 
