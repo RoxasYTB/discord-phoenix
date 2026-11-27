@@ -31,6 +31,7 @@ pub mod panels;
 pub mod page_scroll;
 pub mod pending;
 pub mod rich_input;
+pub mod rows;
 pub mod scheduled;
 pub mod scrollbar;
 pub mod alt_text;
@@ -106,10 +107,12 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                                 .min_h_0()
                                 .relative()
                                 .pr(z(16.))
+                                .child(rows::keep_anchor(entity.clone(), row))
                                 .child(
                                     list(app.message_list.clone(), move |ix, _w, cx| row(&entity, ix, cx))
                                         .size_full(),
                                 )
+                                .child(rows::load_when_visible(cx.entity()))
                                 .children(scrollbar::auto_scrollbar(&app.message_list))
                                 .children(panels::new_messages_bar(app, cx))
                                 .children(panels::jump_bar(app, cx)),

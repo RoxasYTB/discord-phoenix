@@ -382,10 +382,7 @@ fn insert_older(app: &mut PhoenixApp, ch: Id, page: Vec<Message>, mut rendered: 
     let len = entry.msgs.len();
     app.messages.insert(ch, entry);
     if app.selected_channel == Some(ch) {
-        app.message_list.splice(1..1, n);
-        if n < len {
-            app.message_list.splice(n + 1..n + 2, 1);
-        }
+        crate::ui::chat::rows::prepend(&app.message_list, ch, n, len);
     }
     app.resume_pending_jump(ch, cx);
     cx.notify();

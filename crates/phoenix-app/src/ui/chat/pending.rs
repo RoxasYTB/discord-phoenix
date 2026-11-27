@@ -139,7 +139,7 @@ impl PhoenixApp {
         entry.msgs[ix] = m.clone();
         self.messages.insert(ch, entry);
         if self.selected_channel == Some(ch) {
-            self.message_list.splice(ix + 1..ix + 2, 1);
+            super::rows::refresh(&self.message_list, ix + 1);
         }
         cx.notify();
         true
@@ -152,7 +152,7 @@ impl PhoenixApp {
             entry.msgs[ix].send_state = state;
             entry.rendered[ix] = self.render_msg(&entry.msgs[ix], ix.checked_sub(1).map(|p| &entry.msgs[p]));
             if self.selected_channel == Some(ch) {
-                self.message_list.splice(ix + 1..ix + 2, 1);
+                super::rows::refresh(&self.message_list, ix + 1);
             }
         }
         self.messages.insert(ch, entry);
@@ -197,7 +197,7 @@ impl PhoenixApp {
         entry.rendered.insert(at, r);
         self.messages.insert(ch, entry);
         if self.selected_channel == Some(ch) {
-            self.message_list.splice(at + 1..at + 1, 1);
+            super::rows::insert(&self.message_list, at + 1, 1);
         }
         cx.notify();
     }

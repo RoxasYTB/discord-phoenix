@@ -57,6 +57,13 @@ opacities .08 / .10–.19 / .06, 16px top margin on each group. The Phoenix rend
 are random on both sides, so only the geometry is compared. When the channel is empty, the
 placeholder now keeps the 20px gap above the composer like the last message does.
 
+## Chat scroll range and older pages (`ui/chat/rows.rs`)
+
+| item | client | ours | status |
+|---|---|---|---|
+| scroll range | every loaded message is in the DOM (CDP 27/11 on the user's open channel: 38 `li[id^=chat-messages-]` rows, `scrollHeight` 5 232 for a 567 px scroller), so the thumb is exact and only changes when messages are added | the message list measures every row (`ListState::measure_all`); each insertion re-arms the measure (`rows::insert`), a changed row keeps its height until it is measured again (`rows::refresh`). Before: only the rows within 800 px of the viewport were measured, the range grew 856 → 1 704 → 2 270 → 3 042 px while scrolling up through the same 50 messages of #général | ✅ test `the_thumb_keeps_its_size_while_scrolling_through_loaded_messages` |
+| older page | loaded while the top placeholder is on screen; the scroller keeps its distance from the bottom, so the messages on screen stay put and the new ones fill the space of the placeholder | `rows::load_when_visible` asks for the older page after any frame where row 0 is on screen (not only on a scroll event); `rows::prepend` keeps the first old message at the same height on screen (the new rows above it are laid out once in `rows::keep_anchor`, before the list). Before: the anchor stayed in row 0, so the placeholders stayed on screen above 1 200 loaded messages until the next scroll | ✅ tests `an_older_page_replaces_the_placeholders_and_keeps_the_view`, `placeholders_on_screen_load_the_older_page_without_a_scroll` |
+
 ## Start-up frames (`real_shots`, `PHX_BOOT_FRAMES`)
 
 `PHX_BOOT_FRAMES=<prefix>` saves one frame every `PHX_BOOT_EVERY` ms (100 by default) from the moment the

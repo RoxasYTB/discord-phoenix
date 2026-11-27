@@ -354,7 +354,7 @@ impl PhoenixApp {
         self.chat.menu = None;
         self.chat.edit = Some(EditState { id, channel, input, _sub: sub });
         if let Some(ix) = self.messages.get(&channel).and_then(|e| e.msgs.iter().position(|m| m.id == id)) {
-            self.message_list.splice(ix + 1..ix + 2, 1);
+            super::rows::refresh(&self.message_list, ix + 1);
         }
         cx.notify();
     }
@@ -407,7 +407,7 @@ impl PhoenixApp {
         if self.selected_channel == Some(channel)
             && let Some(ix) = self.messages.get(&channel).and_then(|e| e.msgs.iter().position(|m| m.id == id))
         {
-            self.message_list.splice(ix + 1..ix + 2, 1);
+            super::rows::refresh(&self.message_list, ix + 1);
         }
     }
 

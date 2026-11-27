@@ -235,6 +235,15 @@ pub fn auto_scrollbar(state: &ListState) -> Option<AnyElement> {
     auto(Target::List(state.clone()), vh, max, off, f32::from(z(36.)))
 }
 
+pub fn auto_thumb(state: &ListState) -> f32 {
+    let vh = f32::from(state.viewport_bounds().size.height);
+    let max = f32::from(state.max_offset_for_scrollbar().y);
+    if vh <= 0. || max <= 0. {
+        return 0.;
+    }
+    Geom::new(vh, (vh - f32::from(z(36.))).max(0.), max, 0.).thumb
+}
+
 pub const AUTO_FADE_GROUP: &str = "auto-fade-scroller";
 
 pub fn auto_fade_scrollbar_div(scroll: &ScrollHandle) -> Option<AnyElement> {

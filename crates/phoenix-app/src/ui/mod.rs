@@ -37,6 +37,8 @@ mod popout_tests;
 #[cfg(test)]
 mod input_qa_tests;
 #[cfg(test)]
+mod chat_list_tests;
+#[cfg(test)]
 mod settings_fx_tests;
 pub mod context_menu;
 pub mod controls;

@@ -104,7 +104,7 @@ impl PhoenixApp {
         let added = e.msgs.len() - start;
         self.messages.insert(ch, e);
         if self.selected_channel == Some(ch) && added > 0 {
-            self.message_list.splice(start + 1..start + 1, added);
+            crate::ui::chat::rows::insert(&self.message_list, start + 1, added);
         }
         cx.notify();
     }

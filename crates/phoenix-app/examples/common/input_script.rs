@@ -261,6 +261,8 @@ impl Run<'_, '_> {
                 "chat_end" => format!("{:.1}", f32::from(a.message_list.max_offset_for_scrollbar().y) + f32::from(a.message_list.scroll_px_offset_for_scrollbar().y)),
                 "chat_item" => a.message_list.logical_scroll_top().item_ix.to_string(),
                 "chat_items" => a.message_list.item_count().to_string(),
+                "chat_thumb" => format!("{:.1}", phoenix_app::ui::chat::scrollbar::auto_thumb(&a.message_list)),
+                "chat_skeleton" => b(phoenix_app::ui::chat::rows::skeleton_shown(a)),
                 "at_bottom" => b(a.chat.at_bottom),
                 "sidebar_y" => y(a.sidebar_list.scroll_px_offset_for_scrollbar()),
                 "members_y" => y(a.member_list.scroll_px_offset_for_scrollbar()),

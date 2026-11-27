@@ -298,7 +298,7 @@ impl PhoenixApp {
             .detach();
         }
 
-        let message_list = ListState::new(0, ListAlignment::Bottom, px(800.));
+        let message_list = ListState::new(0, ListAlignment::Bottom, px(800.)).measure_all();
         let weak = cx.entity().downgrade();
         message_list.set_scroll_handler(move |ev: &gpui::ListScrollEvent, _w, cx: &mut App| {
             if ev.visible_range.start == 0 {
@@ -800,10 +800,7 @@ impl PhoenixApp {
         self.messages.insert(ch, entry);
         if self.selected_channel == Some(ch) {
             if older {
-                self.message_list.splice(1..1, n);
-                if n < len {
-                    self.message_list.splice(n + 1..n + 2, 1);
-                }
+                ui::chat::rows::prepend(&self.message_list, ch, n, len);
             } else {
                 self.message_list.reset(len + 1);
             }
@@ -856,7 +853,7 @@ impl PhoenixApp {
         let len = entry.msgs.len();
         self.messages.insert(ch, entry);
         if selected {
-            self.message_list.splice(len..len, 1);
+            ui::chat::rows::insert(&self.message_list, len, 1);
             self.chat_note_incoming(own, ts);
         } else if let Some(c) = self.channels.get_mut(&ch) {
             c.unread = true;
@@ -872,7 +869,7 @@ impl PhoenixApp {
             entry.rendered[ix] = self.render_msg(&m, ix.checked_sub(1).map(|p| &entry.msgs[p]));
             entry.msgs[ix] = m;
             if self.selected_channel == Some(ch) {
-                self.message_list.splice(ix + 1..ix + 2, 1);
+                ui::chat::rows::refresh(&self.message_list, ix + 1);
             }
         }
         self.messages.insert(ch, entry);
@@ -891,7 +888,7 @@ impl PhoenixApp {
                 if pats.iter().any(|p| entry.msgs[ix].content.contains(p.as_str())) {
                     entry.rendered[ix] = self.render_msg(&entry.msgs[ix], ix.checked_sub(1).map(|p| &entry.msgs[p]));
                     if self.selected_channel == Some(ch) {
-                        self.message_list.splice(ix + 1..ix + 2, 1);
+                        ui::chat::rows::refresh(&self.message_list, ix + 1);
                     }
                 }
             }
@@ -942,7 +939,7 @@ impl PhoenixApp {
                         if ix < e.msgs.len() {
                             e.rendered[ix] = self.render_msg(&e.msgs[ix], ix.checked_sub(1).map(|p| &e.msgs[p]));
                             if selected {
-                                self.message_list.splice(ix + 1..ix + 2, 1);
+                                ui::chat::rows::refresh(&self.message_list, ix + 1);
                             }
                         }
                     }
