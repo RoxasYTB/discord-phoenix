@@ -60,7 +60,7 @@ fn primary_channel(app: &PhoenixApp, guild: &Guild) -> Option<Id> {
                 .clone()
                 .find(|ch| Some(ch.id) == guild.system_channel)
         })
-        .or_else(|| candidates.into_iter().next())
+        .or_else(|| candidates.clone().next())
         .map(|ch| ch.id)
 }
 
@@ -162,7 +162,7 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, panel_heigh
             .messages
             .get(&ch)
             .is_some_and(|entry| entry.msgs.iter().any(|message| own_message(app, message)));
-    let app_added = app.backend.guild_has_application(g) || people.into_iter().any(|user| user.bot);
+    let app_added = app.backend.guild_has_application(g) || people.clone().any(|user| user.bot);
     let boosted = guild.boosts > 0
         || app
             .backend
