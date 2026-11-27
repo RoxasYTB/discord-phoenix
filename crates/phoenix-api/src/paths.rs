@@ -72,7 +72,9 @@ fn absolute_env(name: &str) -> Option<PathBuf> {
 }
 
 pub fn config_home() -> Option<PathBuf> {
-    absolute_env("XDG_CONFIG_HOME").or_else(|| Some(home()?.join(".config")))
+    absolute_env("XDG_CONFIG_HOME")
+        .or_else(|| Some(home()?.join(".config")))
+        .or_else(|| if cfg!(windows) { absolute_env("APPDATA") } else { None })
 }
 
 pub fn cache_home() -> Option<PathBuf> {
