@@ -186,7 +186,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         } else {
             None
         }
-    } else if flags.video {
+    } else if flags.video && !crate::voice::prefs::prefs().lock().user(user_id).video_disabled {
         if me {
             crate::ui::call_view::camera_image()
         } else {

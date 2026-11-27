@@ -67,7 +67,7 @@ fn close_popouts(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> bool {
     if app.chat.menu.take().is_some() || app.chat.emoji_target.take().is_some() || std::mem::take(&mut app.chat.attach_menu) {
         return true;
     }
-    if ui::voice_panel::close_popout() {
+    if ui::user_menu::close() || ui::voice_panel::close_popout() {
         return true;
     }
     app.escape_header_popouts(cx)

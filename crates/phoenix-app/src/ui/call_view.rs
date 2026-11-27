@@ -1740,16 +1740,17 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
             named(name, 16., color).into_any_element()
         });
         let (ring_alpha, _) = crate::ui::voice_panel::speaking_fade(tile.user, speaking || sb);
+        let show_video = f.video && !crate::voice::prefs::prefs().lock().user(tile.user).video_disabled;
         base.bg(tile_background(app, tile.user, cx))
             .flex()
             .items_center()
             .justify_center()
-            .map(|d| match f.video.then(|| if me { camera_image().filter(|_| !crate::ui::call_menus::self_video_hidden()) } else { remote_image(tile.user) }).flatten() {
+            .map(|d| match show_video.then(|| if me { camera_image().filter(|_| !crate::ui::call_menus::self_video_hidden()) } else { remote_image(tile.user) }).flatten() {
                 Some(img) => {
                     let aspect = if me { None } else { remote_aspect(tile.user) };
                     d.bg(t(idx::BACKGROUND_BASE_LOWER)).child(gpui::img(img).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect)))
                 }
-                None if f.video && !me && crate::voice::call::in_call() => d.bg(t(idx::BLACK)).child(video_loading()),
+                None if show_video && !me && crate::voice::call::in_call() => d.bg(t(idx::BLACK)).child(video_loading()),
                 None => d.child(avatar(u, look.avatar * crate::theme::zoom())),
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))

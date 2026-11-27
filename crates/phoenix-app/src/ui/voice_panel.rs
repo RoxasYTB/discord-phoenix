@@ -1161,7 +1161,7 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
             .flex()
             .flex_col()
             .gap(z(8.))
-            .child(div().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(c(Palette::INTERACTIVE)).child(crate::t!("voice.user_volume")))
+            .child(div().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::TEXT_DEFAULT)).child(crate::t!("voice.user_volume")))
             .child(crate::ui::settings::voice::slider(
                 "user-volume",
                 vol as f32 / 200.,
@@ -1215,9 +1215,31 @@ pub fn user_menu_items(app: &PhoenixApp, user: Id, cx: &mut Context<PhoenixApp>)
                 },
                 true,
             );
+            crate::voice::call::refresh_video_preferences();
         },
         cx,
     ));
+    if let Some(channel) = app.voice_channel
+        && app.channels.get(&channel).is_some_and(|ch| ch.voice_users.contains(&user))
+    {
+        if app.voice.e2ee && app.voice.privacy_code.is_some() {
+            let entity = cx.entity();
+            items.push(MenuItem::action(crate::t!("voice.show_call_code"), None, move |_, _, cx| {
+                POPOUT.with(|p| p.set(Some(Tab::Privacy)));
+                entity.update(cx, |_, cx| cx.notify());
+            }));
+        }
+        let entity = cx.entity();
+        items.push(MenuItem::action(crate::t!("voice.focus_participant"), None, move |_, _, cx| {
+            entity.update(cx, |app, cx| {
+                if app.voice_channel == Some(channel) {
+                    app.select_channel(channel, cx);
+                    crate::ui::call_view::show(channel);
+                    crate::ui::call_view::set_focus(crate::ui::call_view::Focus::Tile(user, false));
+                }
+            });
+        }));
+    }
     items
 }
 

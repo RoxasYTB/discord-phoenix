@@ -245,7 +245,10 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::co
     false
 }
 
-pub fn set_call_view(view: phoenix_voice::sink_wants::CallView) {
+pub fn set_call_view(mut view: phoenix_voice::sink_wants::CallView) {
+    view.video_disabled = super::prefs::prefs().lock().users.iter()
+        .filter_map(|(&id, audio)| audio.video_disabled.then_some(id))
+        .collect();
     let mut st = manager().state.lock();
     if st.call_view.as_ref() == Some(&view) {
         return;
@@ -254,6 +257,16 @@ pub fn set_call_view(view: phoenix_voice::sink_wants::CallView) {
         r.conn.set_view(connection::VideoView::Call(view.clone()));
     }
     st.call_view = Some(view);
+}
+
+pub fn refresh_video_preferences() {
+    let view = manager().state.lock().call_view.clone();
+    set_call_view(view.unwrap_or(phoenix_voice::sink_wants::CallView { incoming_video: true, ..Default::default() }));
+    let disabled = manager().state.lock().call_view.as_ref().map(|view| view.video_disabled.clone()).unwrap_or_default();
+    for id in disabled {
+        let decoder = remote().lock().remove(&id);
+        drop(decoder);
+    }
 }
 
 pub fn set_pip_view() {
@@ -609,6 +622,9 @@ impl VoiceManager {
                         VoiceUiEvent::Status(VoiceStatus::Reconnecting)
                     }
                     VoiceEvent::Video { user_id, codec, keyframe, frame } => {
+                        if super::prefs::prefs().lock().user(Id(user_id)).video_disabled {
+                            continue;
+                        }
                         if push_video(remote(), user_id, codec, keyframe, &frame, phoenix_voice::media::ffmpeg::CAMERA_MAX)
                             && let Some(r) = manager().state.lock().running.as_ref()
                         {

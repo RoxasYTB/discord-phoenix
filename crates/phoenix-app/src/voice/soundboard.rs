@@ -132,7 +132,7 @@ fn log(what: &str, sound: Id, user: Id, volume: f32) {
 }
 
 pub fn play(app: &PhoenixApp, sound: Id, sound_volume: f32, user: Id, cx: &mut Context<PhoenixApp>) {
-    if app.voice_channel.is_none() {
+    if app.voice_channel.is_none() || crate::voice::prefs::prefs().lock().user(user).soundboard_muted {
         return;
     }
     play_locally(app, sound, sound_volume, user, cx);
