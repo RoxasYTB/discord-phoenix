@@ -284,6 +284,28 @@ pub struct GuildMemberListUpdate {
     pub ops: Vec<MemberListOp>,
 }
 
+#[derive(Debug, Clone, Deserialize, Default, PartialEq)]
+pub struct PassiveChannel {
+    pub id: ChannelId,
+    #[serde(default)]
+    pub last_message_id: Option<MessageId>,
+    #[serde(default)]
+    pub last_pin_timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct PassiveUpdateV2 {
+    pub guild_id: GuildId,
+    #[serde(default, deserialize_with = "null_default")]
+    pub updated_members: Vec<Member>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub updated_channels: Vec<PassiveChannel>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub updated_voice_states: Vec<VoiceState>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub removed_voice_states: Vec<UserId>,
+}
+
 #[derive(Debug, Clone)]
 pub enum GatewayEvent {
     Connected { heartbeat_interval: Duration },
@@ -341,8 +363,31 @@ pub enum GatewayEvent {
     StreamCreate(Box<StreamCreate>),
     StreamServerUpdate(Box<StreamServerUpdate>),
     StreamDelete(Box<StreamDelete>),
+    PassiveUpdate(Box<PassiveUpdateV2>),
+    ChannelUnreads { guild_id: GuildId, channels: Vec<PassiveChannel> },
 
     Unknown { name: String, data: Value },
+}
+
+pub fn expand(ev: GatewayEvent) -> Vec<GatewayEvent> {
+    let GatewayEvent::PassiveUpdate(p) = ev else { return vec![ev] };
+    let PassiveUpdateV2 { guild_id, updated_members, updated_channels, updated_voice_states, removed_voice_states } = *p;
+    let mut out = Vec::with_capacity(updated_members.len() + updated_voice_states.len() + removed_voice_states.len() + 1);
+    for mut m in updated_members {
+        m.guild_id = Some(guild_id);
+        out.push(GatewayEvent::GuildMemberUpdate(Box::new(m)));
+    }
+    if !updated_channels.is_empty() {
+        out.push(GatewayEvent::ChannelUnreads { guild_id, channels: updated_channels });
+    }
+    for mut v in updated_voice_states {
+        v.guild_id = Some(guild_id);
+        out.push(GatewayEvent::VoiceStateUpdate(Box::new(v)));
+    }
+    for user_id in removed_voice_states {
+        out.push(GatewayEvent::VoiceStateUpdate(Box::new(VoiceState { guild_id: Some(guild_id), user_id, ..Default::default() })));
+    }
+    out
 }
 
 macro_rules! parse_events {
@@ -401,6 +446,7 @@ pub fn parse_dispatch(name: &str, raw: &str) -> GatewayEvent {
         "RELATIONSHIP_REMOVE" => RelationshipRemove(Box::new),
         "VOICE_STATE_UPDATE" => VoiceStateUpdate(Box::new),
         "VOICE_SERVER_UPDATE" => VoiceServerUpdate,
+        "PASSIVE_UPDATE_V2" => PassiveUpdate(Box::new),
     });
     match res {
         Ok(ev) => ev,
@@ -538,22 +584,34 @@ pub struct GuildSubscription {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activities: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<UserId>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub member_updates: Option<bool>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub members: Vec<UserId>,
-    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub channels: std::collections::BTreeMap<ChannelId, Ranges>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub thread_member_lists: Vec<ChannelId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channels: Option<std::collections::BTreeMap<ChannelId, Ranges>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_member_lists: Option<Vec<ChannelId>>,
 }
 
 impl GuildSubscription {
     pub fn focused(channel: Option<ChannelId>) -> Self {
         let mut s = Self { typing: Some(true), threads: Some(true), activities: Some(true), ..Default::default() };
         if let Some(c) = channel {
-            s.channels.insert(c, vec![[0, 99]]);
+            s.channels = Some([(c, vec![[0, 99]])].into_iter().collect());
         }
         s
+    }
+
+    pub fn cleared(threads: bool) -> Self {
+        Self {
+            typing: Some(false),
+            threads: Some(threads),
+            activities: Some(false),
+            members: Some(Vec::new()),
+            member_updates: Some(false),
+            channels: Some(Default::default()),
+            thread_member_lists: Some(Vec::new()),
+        }
     }
 }
 
@@ -569,5 +627,34 @@ mod voice_effect_tests {
         assert_eq!(e.sound_volume, Some(0.5));
         assert_eq!(e.emoji.and_then(|e| e.name).as_deref(), Some("🦆"));
         assert_eq!(e.channel_id, Snowflake(5));
+    }
+}
+
+#[cfg(test)]
+mod passive_tests {
+    use super::*;
+
+    #[test]
+    fn passive_update_v2_expands_like_the_client_dispatcher() {
+        let raw = r#"{"guild_id":"9","updated_members":[{"user":{"id":"7","username":"a"},"roles":["3"]}],"updated_channels":[{"id":"5","last_message_id":"50","last_pin_timestamp":null}],"updated_voice_states":[{"user_id":"7","channel_id":"6","session_id":"x","self_stream":true}],"removed_voice_states":["8"]}"#;
+        let GatewayEvent::PassiveUpdate(p) = parse_dispatch("PASSIVE_UPDATE_V2", raw) else { panic!("not parsed") };
+        assert_eq!(p.updated_channels, vec![PassiveChannel { id: Snowflake(5), last_message_id: Some(Snowflake(50)), last_pin_timestamp: None }]);
+        let evs = expand(GatewayEvent::PassiveUpdate(p));
+        assert_eq!(evs.len(), 4);
+        let GatewayEvent::GuildMemberUpdate(m) = &evs[0] else { panic!("member first") };
+        assert_eq!((m.guild_id, m.user_id()), (Some(Snowflake(9)), Some(Snowflake(7))));
+        let GatewayEvent::ChannelUnreads { guild_id, channels } = &evs[1] else { panic!("channels second") };
+        assert_eq!((*guild_id, channels.len()), (Snowflake(9), 1));
+        let GatewayEvent::VoiceStateUpdate(v) = &evs[2] else { panic!("voice third") };
+        assert_eq!((v.guild_id, v.channel_id, v.self_stream), (Some(Snowflake(9)), Some(Snowflake(6)), Some(true)));
+        let GatewayEvent::VoiceStateUpdate(gone) = &evs[3] else { panic!("removal last") };
+        assert_eq!((gone.guild_id, gone.user_id, gone.channel_id), (Some(Snowflake(9)), Snowflake(8), None));
+    }
+
+    #[test]
+    fn passive_update_v2_tolerates_null_lists() {
+        let raw = r#"{"guild_id":"9","updated_members":null,"updated_channels":null,"updated_voice_states":null,"removed_voice_states":null}"#;
+        assert!(expand(parse_dispatch("PASSIVE_UPDATE_V2", raw)).is_empty());
+        assert_eq!(expand(GatewayEvent::Resumed).len(), 1);
     }
 }

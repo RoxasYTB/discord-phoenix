@@ -74,6 +74,11 @@ pub fn on_gateway(ev: &GatewayEvent) {
                 set_last(id, last);
             }
         }
+        GatewayEvent::ChannelUnreads { channels, .. } => {
+            for c in channels.iter().filter(|c| c.last_pin_timestamp.is_some()) {
+                set_last(c.id.0, ts(c.last_pin_timestamp.as_deref()));
+            }
+        }
         GatewayEvent::Unknown { name, data } if name == "CHANNEL_PINS_UPDATE" => {
             if let Some(c) = snowflake(data.get("channel_id")) {
                 set_last(c, ts(data.get("last_pin_timestamp").and_then(Value::as_str)));

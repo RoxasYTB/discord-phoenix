@@ -1180,6 +1180,18 @@ impl Adapter {
                     out.push(AppEvent::DmUpsert(dm));
                 }
             }
+            GatewayEvent::ChannelUnreads { guild_id, channels } => {
+                let ctx = self.prefs.ctx();
+                for c in channels.iter().filter_map(|p| cache.channel(p.id)) {
+                    let (unread, mentions) = ctx.unread(&c);
+                    out.push(AppEvent::ChannelUnread { channel: id(c.id), unread, mentions });
+                }
+                if let Some(gg) = cache.guild(*guild_id) {
+                    let chs = guild_channels(cache, *guild_id, &ctx);
+                    let mg = guild_with_threads(cache, &gg, &chs, &ctx);
+                    out.push(AppEvent::GuildUnread { guild: mg.id, unread: mg.unread, mentions: mg.mentions });
+                }
+            }
             GatewayEvent::MessageUpdate(v) => {
                 let cid = v.get("channel_id").and_then(snowflake_value);
                 let mid = v.get("id").and_then(snowflake_value);

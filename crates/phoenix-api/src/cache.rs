@@ -509,6 +509,21 @@ impl Cache {
                 let Some(e) = &r.emoji else { return false };
                 return modify_message(&mut s, r.channel_id, r.message_id, |m| m.reactions.retain(|x| !x.emoji.same_as(e)));
             }
+            GatewayEvent::ChannelUnreads { channels, .. } => {
+                let mut changed = false;
+                for p in channels {
+                    let Some(c) = s.channels.get(&p.id) else { continue };
+                    if c.last_message_id == p.last_message_id && c.last_pin_timestamp == p.last_pin_timestamp {
+                        continue;
+                    }
+                    let mut c = (**c).clone();
+                    c.last_message_id = p.last_message_id;
+                    c.last_pin_timestamp = p.last_pin_timestamp.clone();
+                    s.channels.insert(c.id, Arc::new(c));
+                    changed = true;
+                }
+                return changed;
+            }
             GatewayEvent::VoiceStateUpdate(v) => {
                 let key = (v.guild_id, v.user_id);
                 if v.channel_id.is_some() {

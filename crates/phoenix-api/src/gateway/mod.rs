@@ -38,16 +38,10 @@ pub mod capabilities {
     pub const AUTO_CALL_CONNECT: u64 = 1 << 12;
     pub const DEBOUNCE_MESSAGE_REACTIONS: u64 = 1 << 13;
     pub const PASSIVE_GUILD_UPDATE_V2: u64 = 1 << 14;
+    pub const CHANNEL_OBFUSCATION: u64 = 1 << 15;
+    pub const AUTO_LOBBY_CONNECT: u64 = 1 << 16;
 
-    pub const DEFAULT: u64 = LAZY_USER_NOTES
-        | NO_AFFINE_USER_IDS
-        | PRIORITIZED_READY_PAYLOAD
-        | VERSIONED_READ_STATES
-        | VERSIONED_USER_GUILD_SETTINGS
-        | DEDUPE_USER_OBJECTS
-        | NON_CHANNEL_READ_STATES
-        | AUTH_TOKEN_REFRESH
-        | DEBOUNCE_MESSAGE_REACTIONS;
+    pub const DEFAULT: u64 = 1_767_421;
 }
 
 mod op {
@@ -69,7 +63,6 @@ mod op {
 }
 
 pub const QOS_VERSION: u32 = 31;
-pub const CONNECT_REASONS: &str = "AppSkeleton";
 
 pub fn qos_token(active: bool, derived: Option<&str>) -> String {
     use base64::Engine;
@@ -94,6 +87,7 @@ pub fn qos_token(active: bool, derived: Option<&str>) -> String {
 }
 pub const RESUME_WINDOW: Duration = Duration::from_secs(180);
 pub const EXPEDITED_HEARTBEAT: Duration = Duration::from_secs(5);
+pub const OFFLINE_HEARTBEAT: Duration = Duration::from_secs(15);
 pub const HEARTBEAT_GRACE: Duration = Duration::from_secs(5);
 pub const RESET_AFTER_FAILS: u32 = 4;
 const WAKE_CHECK: Duration = Duration::from_secs(5);
@@ -202,6 +196,7 @@ pub struct GatewayConfig {
     pub qos: QosPayload,
     pub raw_dispatch: Option<RawDispatchHook>,
     pub resume: Option<ResumeState>,
+    pub derived_qos: Option<String>,
 }
 
 pub type RawDispatchHook = std::sync::Arc<dyn Fn(&str, &str, Option<u64>) + Send + Sync>;
@@ -239,6 +234,7 @@ impl GatewayConfig {
             qos: QosPayload::new(true, false),
             raw_dispatch: None,
             resume: None,
+            derived_qos: None,
         }
     }
 
@@ -262,7 +258,7 @@ pub enum GatewayCommand {
     GuildSubscriptionsBulk(std::collections::BTreeMap<GuildId, GuildSubscription>),
     Raw { op: u8, d: Value },
     Activity { foregrounded: bool, rtc_connected: bool },
-    ExpeditedHeartbeat { timeout: Duration },
+    ExpeditedHeartbeat { timeout: Duration, reconnect: bool },
     Shutdown,
 }
 
@@ -362,7 +358,12 @@ impl GatewayHandle {
     }
 
     pub fn expedited_heartbeat(&self, timeout: Duration) -> crate::Result<()> {
-        self.send(GatewayCommand::ExpeditedHeartbeat { timeout })
+        self.send(GatewayCommand::ExpeditedHeartbeat { timeout, reconnect: true })
+    }
+
+    pub fn network_changed(&self, online: bool) -> crate::Result<()> {
+        let timeout = if online { EXPEDITED_HEARTBEAT } else { OFFLINE_HEARTBEAT };
+        self.send(GatewayCommand::ExpeditedHeartbeat { timeout, reconnect: online })
     }
 
     pub fn shutdown(&self) {
@@ -501,6 +502,7 @@ impl Runner {
         let backoff = Backoff::new(config.initial_backoff, config.max_backoff);
         let mut qos = QosState::default();
         qos.update(config.qos.clone());
+        let derived_qos = config.derived_qos.clone();
         Runner {
             config,
             cmd_rx,
@@ -511,7 +513,7 @@ impl Runner {
             backoff,
             last_ack: None,
             qos,
-            derived_qos: None,
+            derived_qos,
         }
     }
 
@@ -534,10 +536,11 @@ impl Runner {
                     Some(GatewayCommand::Activity { foregrounded, rtc_connected }) => {
                         self.qos.update(QosPayload::new(foregrounded, rtc_connected));
                     }
-                    Some(GatewayCommand::ExpeditedHeartbeat { .. }) => {
+                    Some(GatewayCommand::ExpeditedHeartbeat { reconnect: true, .. }) => {
                         self.backoff.succeed();
                         return true;
                     }
+                    Some(GatewayCommand::ExpeditedHeartbeat { reconnect: false, .. }) => {}
                     Some(c) => self.queue(c),
                 }
             }
@@ -592,7 +595,7 @@ impl Runner {
         let mut properties = self.config.properties.to_value(crate::props::client_app_state());
         if let Some(m) = properties.as_object_mut() {
             m.insert("is_fast_connect".into(), false.into());
-            m.insert("gateway_connect_reasons".into(), CONNECT_REASONS.into());
+            m.insert("gateway_connect_reasons".into(), crate::props::gateway_connect_reasons().into());
         }
         json!({
             "op": op::IDENTIFY,
@@ -768,7 +771,7 @@ impl Runner {
                     Some(GatewayCommand::Activity { foregrounded, rtc_connected }) => {
                         beat_now = self.qos.update(QosPayload::new(foregrounded, rtc_connected)) && self.healthy;
                     }
-                    Some(GatewayCommand::ExpeditedHeartbeat { timeout }) => {
+                    Some(GatewayCommand::ExpeditedHeartbeat { timeout, .. }) => {
                         acked = false;
                         beat_now = true;
                         expedited = Some(Instant::now() + timeout);
@@ -818,7 +821,9 @@ impl Runner {
                                 }
                                 _ => {}
                             }
-                            self.emit(ev);
+                            for ev in expand(ev) {
+                                self.emit(ev);
+                            }
                         }
                         op::HEARTBEAT => {
                             beat_now = true;
@@ -904,6 +909,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_capabilities_are_the_client_ones() {
+        use crate::gateway::capabilities::*;
+        let named = LAZY_USER_NOTES
+            | VERSIONED_READ_STATES
+            | VERSIONED_USER_GUILD_SETTINGS
+            | DEDUPE_USER_OBJECTS
+            | PRIORITIZED_READY_PAYLOAD
+            | MULTIPLE_GUILD_EXPERIMENT_POPULATIONS
+            | NON_CHANNEL_READ_STATES
+            | AUTH_TOKEN_REFRESH
+            | USER_SETTINGS_PROTO
+            | CLIENT_STATE_V2
+            | AUTO_CALL_CONNECT
+            | DEBOUNCE_MESSAGE_REACTIONS
+            | PASSIVE_GUILD_UPDATE_V2
+            | CHANNEL_OBFUSCATION;
+        assert_eq!(DEFAULT, named | (1 << 17) | (1 << 19) | (1 << 20));
+        assert_eq!(DEFAULT & (NO_AFFINE_USER_IDS | PASSIVE_GUILD_UPDATE | AUTO_LOBBY_CONNECT), 0);
+    }
+
+    #[test]
     fn default_capabilities_request_ready_supplemental() {
         assert_ne!(capabilities::DEFAULT & capabilities::PRIORITIZED_READY_PAYLOAD, 0);
     }
@@ -925,7 +951,7 @@ mod tests {
         assert_eq!(v["d"]["capabilities"], capabilities::DEFAULT);
         assert_eq!(v["d"]["properties"]["browser"], "Discord Client");
         assert_eq!(v["d"]["properties"]["is_fast_connect"], false);
-        assert_eq!(v["d"]["properties"]["gateway_connect_reasons"], "AppSkeleton");
+        assert_eq!(v["d"]["properties"]["gateway_connect_reasons"], "COLD_START");
         assert!(v["d"]["properties"]["client_app_state"].is_string());
         assert_eq!(v["d"]["qos_token"], "CgIIAQ==");
         assert!(v["d"].get("intents").is_none());

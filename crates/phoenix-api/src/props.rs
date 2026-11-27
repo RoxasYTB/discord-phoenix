@@ -44,6 +44,29 @@ pub fn client_app_state() -> &'static str {
     if APP_FOCUSED.load(Ordering::Relaxed) { "focused" } else { "unfocused" }
 }
 
+static COLD_START: AtomicBool = AtomicBool::new(true);
+static APP_SKELETON: AtomicBool = AtomicBool::new(false);
+
+pub fn set_app_skeleton(mounted: bool) {
+    if mounted {
+        COLD_START.store(false, Ordering::Relaxed);
+    }
+    APP_SKELETON.store(mounted, Ordering::Relaxed);
+}
+
+pub fn connect_reasons(cold_start: bool, app_skeleton: bool) -> &'static str {
+    match (cold_start, app_skeleton) {
+        (true, true) => "AppSkeleton,COLD_START",
+        (true, false) => "COLD_START",
+        (false, true) => "AppSkeleton",
+        (false, false) => "NO_REASONS",
+    }
+}
+
+pub fn gateway_connect_reasons() -> &'static str {
+    connect_reasons(COLD_START.load(Ordering::Relaxed), APP_SKELETON.load(Ordering::Relaxed))
+}
+
 fn env_or(key: &str, fallback: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| fallback.to_owned())
 }
@@ -222,6 +245,14 @@ pub fn os_timezone() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connect_reasons_follow_the_app_skeleton() {
+        assert_eq!(connect_reasons(true, false), "COLD_START");
+        assert_eq!(connect_reasons(false, true), "AppSkeleton");
+        assert_eq!(connect_reasons(false, false), "NO_REASONS");
+        assert_eq!(connect_reasons(true, true), "AppSkeleton,COLD_START");
+    }
 
     #[test]
     fn locale_headers() {

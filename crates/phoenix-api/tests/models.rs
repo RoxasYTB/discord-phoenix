@@ -191,3 +191,50 @@ fn snowflake_time() {
     let id = Snowflake(700000000000000051);
     assert_eq!(Snowflake::from_timestamp_ms(id.timestamp_ms()).timestamp_ms(), id.timestamp_ms());
 }
+
+#[test]
+fn ready_with_the_client_capabilities_parses() {
+    let raw = r#"{
+        "v": 9, "_trace": ["[\"gateway-prd\",{}]"], "session_id": "s1", "session_type": "normal", "static_client_session_id": "c1",
+        "resume_gateway_url": "wss://gateway-us-east1-c.discord.gg",
+        "user": {"id": "100", "username": "phoenix", "global_name": null, "discriminator": "0", "avatar": null},
+        "users": [{"id": "101", "username": "alice", "global_name": "Alice", "discriminator": "0", "avatar": null}],
+        "user_settings_proto": "WgIKAA==",
+        "guild_experiments": [[1, null, 0, [[[[1000, [{"s": 0, "e": 10000}]]]]], [], [], null, 0, 0]],
+        "guilds": [{
+            "id": "300", "data_mode": "full", "version": 1, "lazy": true, "large": true, "member_count": 1234,
+            "premium_subscription_count": 7, "joined_at": "2024-01-01T00:00:00+00:00",
+            "channel_settings": {}, "application_command_counts": {}, "experiments": {},
+            "properties": {"id": "300", "name": "Aperture", "icon": null, "owner_id": "101", "features": ["COMMUNITY"],
+                "max_members": null, "max_video_channel_users": 25, "premium_tier": 2, "verification_level": 1,
+                "profile": {"tag": "APT", "badge": "b"}, "incidents_data": {"invites_disabled_until": null},
+                "afk_channel_id": null, "system_channel_id": "401", "preferred_locale": "fr"},
+            "roles": [{"id": "300", "name": "@everyone", "permissions": "1024", "position": 0, "color": 0, "hoist": false, "managed": false, "mentionable": false, "flags": 0}],
+            "channels": [
+                {"id": "401", "type": 0, "name": "general", "position": 0, "parent_id": null, "flags": 0, "permission_overwrites": [], "last_message_id": "900", "rate_limit_per_user": 0, "nsfw": false},
+                {"id": "402", "type": 2, "name": "voice", "position": 1, "parent_id": null, "flags": 0, "permission_overwrites": [], "bitrate": 64000, "user_limit": 0, "rtc_region": null}
+            ],
+            "threads": [], "emojis": [], "stickers": [], "guild_scheduled_events": [], "stage_instances": []
+        }],
+        "merged_members": [[{"user_id": "100", "roles": [], "joined_at": "2024-01-01T00:00:00+00:00", "deaf": false, "mute": false, "flags": 0, "nick": null}]],
+        "private_channels": [], "relationships": [], "connected_accounts": [],
+        "read_state": {"version": 1, "partial": false, "entries": []},
+        "user_guild_settings": {"version": 1, "partial": false, "entries": []},
+        "sessions": [], "qos_token": "CgEB", "country_code": "FR", "geo_ordered_rtc_regions": ["rotterdam"],
+        "consents": {}, "tutorial": null, "notification_settings": {"flags": 0}, "game_relationships": [], "linked_users": []
+    }"#;
+    let GatewayEvent::Ready(r) = parse_dispatch("READY", raw) else { panic!("not ready") };
+    assert!(r.user_settings.is_none());
+    assert_eq!(r.user_settings_proto.as_deref(), Some("WgIKAA=="));
+    assert_eq!(r.qos_token.as_deref(), Some("CgEB"));
+    let g = &r.guilds[0];
+    assert_eq!(g.name(), "Aperture");
+    assert_eq!(g.owner_id(), Some(Snowflake(101)));
+    assert_eq!(g.properties.premium_subscription_count, Some(7));
+    assert_eq!(g.properties.max_members, None);
+    assert_eq!(g.properties.profile.as_ref().and_then(|p| p.tag.as_deref()), Some("APT"));
+    assert_eq!(g.channels.len(), 2);
+    assert!(g.channels.iter().all(|c| c.guild_id == Some(Snowflake(300))));
+    assert_eq!(r.merged_members[0][0].user_id(), Some(Snowflake(100)));
+    assert_eq!(r.users[0].username, "alice");
+}

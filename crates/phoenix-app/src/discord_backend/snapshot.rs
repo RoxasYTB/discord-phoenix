@@ -10,7 +10,7 @@ use std::{
 
 use phoenix_api::{
     Cache, GatewayEvent,
-    gateway::{RawDispatchHook, ResumeState, events::Ready, parse_dispatch},
+    gateway::{RawDispatchHook, ResumeState, events::Ready, expand, parse_dispatch},
 };
 
 use crate::backend::{AppEvent, ReadyData};
@@ -251,12 +251,13 @@ fn replay(cache: &Cache, adapter: &mut Adapter, people: &mut Vec<AppEvent>) -> (
         let Ok(line) = line else { break };
         let mut parts = line.splitn(3, '\t');
         let (Some(seq), Some(name), Some(raw)) = (parts.next(), parts.next(), parts.next()) else { break };
-        let ev = parse_dispatch(name, raw);
-        cache.apply(&ev);
-        let mapped = adapter.map(cache, &ev);
-        if matches!(ev, GatewayEvent::PresenceUpdate(_)) {
-            people.extend(presence_events(nav::on_gateway(cache, &ev)));
-            people.extend(presence_events(mapped));
+        for ev in expand(parse_dispatch(name, raw)) {
+            cache.apply(&ev);
+            let mapped = adapter.map(cache, &ev);
+            if matches!(ev, GatewayEvent::PresenceUpdate(_)) {
+                people.extend(presence_events(nav::on_gateway(cache, &ev)));
+                people.extend(presence_events(mapped));
+            }
         }
         if let Ok(s) = seq.parse::<u64>()
             && s > 0

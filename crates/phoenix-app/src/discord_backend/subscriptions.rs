@@ -8,12 +8,14 @@ use phoenix_api::models::{ChannelId, GuildId};
 
 pub(super) const FIRST_RANGE: [u32; 2] = [0, 99];
 const MAX_CHANNELS: usize = 5;
-const MAX_THREAD_LISTS: usize = 5;
+const MAX_THREAD_LISTS: usize = 3;
 const FLUSH_DELAY: Duration = Duration::from_millis(10);
 
 #[derive(Default, Clone)]
 struct Guild {
-    features: bool,
+    typing: bool,
+    activities: bool,
+    threads: bool,
     channels: Vec<(ChannelId, Ranges)>,
     thread_lists: Vec<ChannelId>,
 }
@@ -21,18 +23,20 @@ struct Guild {
 impl Guild {
     fn full(&self) -> GuildSubscription {
         GuildSubscription {
-            typing: Some(self.features),
-            threads: Some(self.features),
-            activities: Some(self.features),
-            channels: self.channels.iter().cloned().collect(),
-            thread_member_lists: self.thread_lists.clone(),
-            ..Default::default()
+            typing: Some(self.typing),
+            threads: Some(self.threads),
+            activities: Some(self.activities),
+            members: Some(Vec::new()),
+            member_updates: Some(false),
+            channels: Some(self.channels.iter().cloned().collect()),
+            thread_member_lists: Some(self.thread_lists.clone()),
         }
     }
 }
 
 #[derive(Default)]
 struct State {
+    selected: Option<GuildId>,
     guilds: HashMap<GuildId, Guild>,
     pending: BTreeMap<GuildId, GuildSubscription>,
     scheduled: bool,
@@ -43,15 +47,9 @@ fn merge(into: &mut GuildSubscription, d: GuildSubscription) {
     into.threads = d.threads.or(into.threads);
     into.activities = d.activities.or(into.activities);
     into.member_updates = d.member_updates.or(into.member_updates);
-    if !d.members.is_empty() {
-        into.members = d.members;
-    }
-    if !d.channels.is_empty() {
-        into.channels = d.channels;
-    }
-    if !d.thread_member_lists.is_empty() {
-        into.thread_member_lists = d.thread_member_lists;
-    }
+    into.members = d.members.or(into.members.take());
+    into.channels = d.channels.or(into.channels.take());
+    into.thread_member_lists = d.thread_member_lists.or(into.thread_member_lists.take());
 }
 
 impl State {
@@ -61,11 +59,17 @@ impl State {
 
     fn guild(&mut self, g: GuildId) -> bool {
         let e = self.guilds.entry(g).or_default();
-        if e.features {
+        let d = GuildSubscription {
+            typing: (!e.typing).then_some(true),
+            activities: (!e.activities).then_some(true),
+            threads: (!e.threads).then_some(true),
+            ..Default::default()
+        };
+        (e.typing, e.activities, e.threads) = (true, true, true);
+        if d == GuildSubscription::default() {
             return false;
         }
-        e.features = true;
-        self.enqueue(g, GuildSubscription { typing: Some(true), threads: Some(true), activities: Some(true), ..Default::default() });
+        self.enqueue(g, d);
         true
     }
 
@@ -82,17 +86,21 @@ impl State {
             e.channels.insert(0, (ch, ranges));
             e.channels.truncate(MAX_CHANNELS);
         }
-        let channels = e.channels.iter().cloned().collect();
+        let channels = Some(e.channels.iter().cloned().collect());
         self.enqueue(g, GuildSubscription { channels, ..Default::default() });
         true
     }
 
     fn thread_list(&mut self, g: GuildId, thread: ChannelId) -> bool {
         let e = self.guilds.entry(g).or_default();
-        e.thread_lists.retain(|t| *t != thread);
+        if e.thread_lists.contains(&thread) {
+            e.thread_lists.retain(|t| *t != thread);
+            e.thread_lists.insert(0, thread);
+            return false;
+        }
         e.thread_lists.insert(0, thread);
         e.thread_lists.truncate(MAX_THREAD_LISTS);
-        let lists = e.thread_lists.clone();
+        let lists = Some(e.thread_lists.clone());
         self.enqueue(g, GuildSubscription { thread_member_lists: lists, ..Default::default() });
         true
     }
@@ -103,6 +111,26 @@ impl State {
         if let Some(full) = keep.and_then(|g| self.guilds.get(&g).map(|e| (g, e.full()))) {
             self.pending.insert(full.0, full.1);
         }
+    }
+
+    fn idle(&mut self, keep: &[GuildId]) -> bool {
+        let mut queued = false;
+        let mut gone = Vec::new();
+        for (g, e) in &mut self.guilds {
+            if keep.contains(g) || self.selected == Some(*g) {
+                continue;
+            }
+            self.pending.insert(*g, GuildSubscription::cleared(e.threads));
+            *e = Guild { threads: e.threads, ..Default::default() };
+            if !e.threads {
+                gone.push(*g);
+            }
+            queued = true;
+        }
+        for g in gone {
+            self.guilds.remove(&g);
+        }
+        queued
     }
 }
 
@@ -132,6 +160,15 @@ impl Subscriptions {
             let a = s.guild(g);
             s.thread_list(g, thread) || a
         };
+        self.schedule(gw, queued);
+    }
+
+    pub fn select(&self, g: Option<GuildId>) {
+        self.state.lock().selected = g;
+    }
+
+    pub fn idle(&self, gw: &GatewayHandle, keep: &[GuildId]) {
+        let queued = self.state.lock().idle(keep);
         self.schedule(gw, queued);
     }
 
@@ -225,7 +262,52 @@ mod tests {
         s.guild(Snowflake(1));
         take(&mut s);
         s.new_session(Some(Snowflake(2)));
-        assert_eq!(take(&mut s), json!({ "2": { "typing": false, "threads": false, "activities": false, "channels": { "20": [[0, 99]] } } }));
+        assert_eq!(
+            take(&mut s),
+            json!({ "2": { "typing": false, "threads": false, "activities": false, "members": [], "member_updates": false, "channels": { "20": [[0, 99]] }, "thread_member_lists": [] } })
+        );
         assert!(s.guild(Snowflake(1)));
+    }
+
+    #[test]
+    fn going_idle_clears_every_guild_but_the_kept_ones() {
+        let mut s = State::default();
+        let (a, b, c) = (Snowflake(1), Snowflake(2), Snowflake(3));
+        s.guild(a);
+        s.channel(a, Snowflake(10), vec![FIRST_RANGE], true);
+        s.guild(b);
+        s.channel(b, Snowflake(20), vec![FIRST_RANGE], true);
+        s.thread_list(b, Snowflake(21));
+        s.channel(c, Snowflake(30), vec![FIRST_RANGE], true);
+        take(&mut s);
+        assert!(s.idle(&[a]));
+        assert_eq!(
+            take(&mut s),
+            json!({
+                "2": { "typing": false, "threads": true, "activities": false, "members": [], "member_updates": false, "channels": {}, "thread_member_lists": [] },
+                "3": { "typing": false, "threads": false, "activities": false, "members": [], "member_updates": false, "channels": {}, "thread_member_lists": [] }
+            })
+        );
+        assert!(s.guilds.contains_key(&b) && !s.guilds.contains_key(&c));
+        assert!(s.guild(b));
+        assert_eq!(take(&mut s), json!({ "2": { "typing": true, "activities": true } }));
+        assert!(s.channel(b, Snowflake(20), vec![FIRST_RANGE], true));
+        assert_eq!(take(&mut s)["2"]["channels"], json!({ "20": [[0, 99]] }));
+        assert!(!s.guild(a));
+        assert!(!s.channel(a, Snowflake(10), vec![FIRST_RANGE], true));
+    }
+
+    #[test]
+    fn thread_member_lists_keep_the_three_most_recent() {
+        let mut s = State::default();
+        let g = Snowflake(1);
+        for t in 1..=4 {
+            assert!(s.thread_list(g, Snowflake(100 + t)));
+        }
+        assert_eq!(take(&mut s)["1"]["thread_member_lists"], json!(["104", "103", "102"]));
+        assert!(!s.thread_list(g, Snowflake(102)));
+        assert!(s.pending.is_empty());
+        assert!(s.thread_list(g, Snowflake(101)));
+        assert_eq!(take(&mut s)["1"]["thread_member_lists"], json!(["101", "102", "104"]));
     }
 }

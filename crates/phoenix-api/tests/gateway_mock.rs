@@ -356,3 +356,15 @@ async fn hello_timeout_reconnects() {
     c.hello(60_000).await;
     assert_eq!(c.recv_non_heartbeat(true).await["op"], 2);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn network_changes_send_an_expedited_heartbeat() {
+    let (l, addr) = bind().await;
+    let (h, mut rx) = Gateway::spawn(fast_config(&addr));
+    let mut c = ready_conn(&l, "s1", &addr).await;
+    wait_for(&mut rx, |e| matches!(e, GatewayEvent::Ready(_))).await;
+    h.network_changed(false).unwrap();
+    assert_eq!(c.recv_any().await.unwrap()["op"], 40);
+    h.network_changed(true).unwrap();
+    assert_eq!(c.recv_any().await.unwrap()["op"], 40);
+}

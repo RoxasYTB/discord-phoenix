@@ -314,6 +314,7 @@ pub trait Backend: Send + Sync + 'static {
         Box::pin(async { Ok(Vec::new()) })
     }
     fn set_activity(&self, _foregrounded: bool, _rtc_connected: bool) {}
+    fn set_members_shown(&self, _shown: bool) {}
     fn user_profile(&self, _user: Id, _guild: Option<Id>) -> BoxFuture<crate::presence::Profile> {
         Box::pin(async { Err(BackendError(crate::t!("backend.profiles_unavailable").to_string())) })
     }

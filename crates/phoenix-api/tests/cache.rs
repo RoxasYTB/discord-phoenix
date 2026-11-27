@@ -183,3 +183,31 @@ fn thread_membership_follows_member_events() {
     cache.apply(&parse_dispatch("THREAD_MEMBER_UPDATE", r#"{"id":"800000000000000001","guild_id":"300000000000000001","flags":4,"muted":true}"#));
     assert_eq!(cache.channel(t).unwrap().member.as_ref().unwrap()["flags"], 4);
 }
+
+#[test]
+fn passive_update_v2_moves_unreads_voice_and_members() {
+    use phoenix_api::gateway::expand;
+    let cache = Cache::default();
+    cache.apply(&parse_dispatch("READY", &fixture("ready_user.json")));
+    let (g, ch, u) = (Snowflake(300000000000000001), Snowflake(400000000000000001), Snowflake(200000000000000009));
+    let raw = r#"{"guild_id":"300000000000000001","updated_members":[{"user":{"id":"200000000000000009","username":"zed"},"roles":[],"joined_at":"2026-01-01T00:00:00+00:00","deaf":false,"mute":false,"flags":0}],"updated_channels":[{"id":"400000000000000001","last_message_id":"700000000000000123","last_pin_timestamp":"2026-11-20T10:00:00+00:00"},{"id":"999","last_message_id":"5","last_pin_timestamp":null}],"updated_voice_states":[{"user_id":"200000000000000009","channel_id":"400000000000000003","session_id":"s","self_mute":true,"self_deaf":false,"mute":false,"deaf":false,"suppress":false,"self_video":false,"request_to_speak_timestamp":null,"discoverable":true,"connected_at":1}],"removed_voice_states":[]}"#;
+    let evs = expand(parse_dispatch("PASSIVE_UPDATE_V2", raw));
+    assert_eq!(evs.len(), 3);
+    assert!(evs.iter().all(|e| cache.apply(e)));
+    let c = cache.channel(ch).unwrap();
+    assert_eq!(c.last_message_id, Some(Snowflake(700000000000000123)));
+    assert_eq!(c.last_pin_timestamp.as_deref(), Some("2026-11-20T10:00:00+00:00"));
+    assert!(cache.channel(Snowflake(999)).is_none());
+    let vs = cache.voice_states(Some(g));
+    assert_eq!(vs.len(), 1);
+    assert!(vs[0].self_mute && vs[0].channel_id == Some(Snowflake(400000000000000003)));
+    assert_eq!(cache.member(g, u).unwrap().user.as_ref().unwrap().username, "zed");
+    assert_eq!(cache.user(u).unwrap().username, "zed");
+    assert!(!cache.apply(&evs[1]));
+
+    let gone = r#"{"guild_id":"300000000000000001","updated_members":[],"updated_channels":[],"updated_voice_states":[],"removed_voice_states":["200000000000000009"]}"#;
+    for e in expand(parse_dispatch("PASSIVE_UPDATE_V2", gone)) {
+        cache.apply(&e);
+    }
+    assert!(cache.voice_states(Some(g)).is_empty());
+}

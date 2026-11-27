@@ -17,6 +17,8 @@ mod msg_cache;
 mod snapshot;
 mod preupload;
 mod self_presence;
+mod qos_store;
+mod network;
 mod subscriptions;
 #[cfg(test)]
 pub(crate) use profile_edit::bodies as profile_edit_bodies;
@@ -214,6 +216,7 @@ async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<Rea
     let mut cfg = GatewayConfig::new(token.expose());
     cfg.properties = inner.props.clone();
     cfg.raw_dispatch = Some(snapshot::hook());
+    cfg.derived_qos = qos_store::load(token.expose());
     let (foregrounded, rtc_connected) = activity();
     cfg.qos = phoenix_api::gateway::QosPayload::new(foregrounded, rtc_connected);
     let core = if remember { None } else { tokio::task::spawn_blocking(snapshot::take_core).await.ok().flatten() };
@@ -263,6 +266,7 @@ async fn connect(inner: Arc<Inner>, token: Secret, remember: bool) -> Result<Rea
         tracing_warn(&format!("could not save token to the keyring: {e}"));
     }
 
+    qos_store::save(ready.user.id.0, ready.qos_token.as_deref());
     let prefs = Prefs::from_ready(&ready);
     let data = convert::build_ready(&cache, &ready, &prefs);
     crate::perf::span("ready_built", t0);
@@ -308,6 +312,7 @@ fn start_session(
     *inner.session.lock() = Some(session.clone());
     let afk_timeout = session.presence.lock().afk_timeout;
     self_presence::watch_idle(inner, afk_timeout);
+    network::watch(inner);
     for page in std::mem::take(&mut *inner.pre_session_pages.lock()) {
         ensure_message_authors(inner, &session, &page);
     }
@@ -411,6 +416,7 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
                 crate::notifications::reminders::run(cache, run_id).await;
             });
             crate::commands::set_session_id(&r.session_id);
+            qos_store::save(r.user.id.0, r.qos_token.as_deref());
             let prefs = Prefs::from_ready(r);
             let data = convert::build_ready(&s.cache, r, &prefs);
             let authors = {
@@ -461,6 +467,15 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
 }
 
 static ACTIVITY: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(1);
+static MEMBERS_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+fn idle_unsubscribe(s: &Session) {
+    let me = s.adapter.lock().me;
+    let mut keep: Vec<api::Snowflake> = s.cache.guilds().iter().map(|g| g.id).filter(|g| s.cache.voice_states(Some(*g)).iter().any(|v| v.user_id == me)).collect();
+    let selected = *s.selected_channel.lock();
+    keep.extend(selected.and_then(|c| s.cache.channel(c)).and_then(|c| c.guild_id));
+    s.subs.idle(&s.gateway, &keep);
+}
 
 fn activity() -> (bool, bool) {
     let v = ACTIVITY.load(std::sync::atomic::Ordering::Relaxed);
@@ -852,6 +867,7 @@ impl Backend for DiscordBackend {
 
     fn select_guild(&self, guild: Option<Id>) -> BoxFuture<()> {
         self.with_session(move |_, s| async move {
+            s.subs.select(guild.map(sf));
             if let Some(g) = guild {
                 s.subs.guild(&s.gateway, sf(g));
                 if let Some((op, d)) = crate::voice::start_time::request(g.0) {
@@ -868,7 +884,11 @@ impl Backend for DiscordBackend {
             *s.selected_channel.lock() = Some(ch);
             let c = s.cache.channel(ch);
             if let Some(g) = c.as_ref().and_then(|c| c.guild_id) {
-                s.subs.channel(&s.gateway, g, ch, vec![subscriptions::FIRST_RANGE], true);
+                if MEMBERS_SHOWN.load(std::sync::atomic::Ordering::Relaxed) {
+                    s.subs.channel(&s.gateway, g, ch, vec![subscriptions::FIRST_RANGE], true);
+                } else {
+                    s.subs.guild(&s.gateway, g);
+                }
             }
             let shown = s.adapter.lock().show_list(&s.cache, ch);
             shown.into_iter().for_each(|e| inner.emit(e));
@@ -1219,6 +1239,17 @@ impl Backend for DiscordBackend {
         }
         if let Some(s) = self.inner.session.lock().as_ref() {
             let _ = s.gateway.set_activity(foregrounded, rtc_connected);
+        }
+    }
+    fn set_members_shown(&self, shown: bool) {
+        if MEMBERS_SHOWN.swap(shown, std::sync::atomic::Ordering::Relaxed) == shown || !shown {
+            return;
+        }
+        let Some(s) = self.inner.session.lock().clone() else { return };
+        let Some(ch) = *s.selected_channel.lock() else { return };
+        if let Some(g) = s.cache.channel(ch).and_then(|c| c.guild_id) {
+            let _guard = self.inner.rt.enter();
+            s.subs.channel(&s.gateway, g, ch, vec![subscriptions::FIRST_RANGE], true);
         }
     }
     fn thread_members(&self, thread: Id) -> BoxFuture<Vec<crate::model::Member>> {

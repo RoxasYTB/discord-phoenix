@@ -59,6 +59,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
     let show_members = show_members && !in_voice_panel && !crate::ui::call_view::active(app);
     let search_results = crate::ui::search::results_shown(cx);
+    app.backend.set_members_shown(app.show_members && app.chat.thread.is_none() && !search_results);
     let mod_view = crate::ui::mod_view::render(app, window, cx);
     let main = div()
         .flex_1()
