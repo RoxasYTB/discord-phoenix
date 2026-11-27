@@ -241,7 +241,7 @@ Sources: `web.b63d846b329d6470.js` module 889558 (link click handler `Y`, `Maske
 | chat scrollbar thumb | `.auto_tqapBM` without `fade_`: thumb always visible (`scroller_8AE1Qq … auto_tqapBM`, dumps) | was shown only on hover, now always | ✅ |
 | thumb drag | linear, immediate: Δscroll = Δpointer × (content − view) / (track − thumb), measured | `scrollbar::interact` | ✅ |
 | track click | page of 0.875 × view height (490 px for 560), animated ~95 ms; held: repeats after 250 ms every 50 ms until the thumb reaches the pointer (measured, Chrome 158) | same, for every `scrollbar` bar (chat, channels, members, settings, pickers) | ✅ |
-| wheel bursts into an edge | Chromium clamps the target, eases into the edge | stops at the edge on the next frame | ❌ |
+| wheel bursts into an edge | `cc::ScrollOffsetAnimationsImpl::ScrollAnimationCreate` / `ScrollAnimationUpdateTarget` clamp the new target to `[0, max_scroll_offset]` before retargeting, so the curve is built for the clamped distance and decelerates into the edge; notches past the edge leave the running curve alone | `Window::smooth_wheel_scroll` takes the room left on each side (div: offset and `scroll_max`, `ScrollHandle::max_offset`, list: `wheel_room`, unbounded while some item height is unknown) and clamps the target the same way, for wheel notches and scrollbar track pages | ✅ unit test `a_burst_into_an_edge_eases_into_it` |
 
 ## Keyboard page scrolling (2026-11-27)
 

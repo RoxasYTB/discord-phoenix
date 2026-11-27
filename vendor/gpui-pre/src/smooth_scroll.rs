@@ -199,6 +199,24 @@ impl WheelCurve {
         self.time(now) >= self.total
     }
 
+    /// The part of `delta` that keeps the target inside `lo..=hi`, offsets from the start.
+    fn clamped(&self, delta: Point<Pixels>, lo: Point<Pixels>, hi: Point<Pixels>) -> Point<Pixels> {
+        let target = self.target();
+        let clamp = |t: Pixels, d: Pixels, lo: Pixels, hi: Pixels| {
+            if d > px(0.) {
+                (t + d).min(hi.max(t)) - t
+            } else if d < px(0.) {
+                (t + d).max(lo.min(t)) - t
+            } else {
+                d
+            }
+        };
+        point(
+            clamp(target.x, delta.x, lo.x, hi.x),
+            clamp(target.y, delta.y, lo.y, hi.y),
+        )
+    }
+
     /// Adds `delta` pixels to the target at `now`.
     pub fn add(&mut self, delta: Point<Pixels>, now: Instant) {
         let delta = (f64::from(f32::from(delta.x)), f64::from(f32::from(delta.y)));
@@ -253,25 +271,44 @@ impl Window {
     /// Scrolls the container identified by `key` by `delta` pixels over the next frames,
     /// calling `apply` on each frame with the part of the delta for that frame. Further
     /// calls with the same key while it runs retarget the same animation.
+    ///
+    /// `room` is how far the content can move from where it is now, as the most negative
+    /// and the most positive delta. Like Chromium's `ScrollOffsetAnimationsImpl`, the
+    /// target is clamped to it, so a burst of notches eases into an edge instead of
+    /// stopping there at full speed.
     pub fn smooth_wheel_scroll(
         &mut self,
         key: usize,
         delta: Point<Pixels>,
+        room: (Point<Pixels>, Point<Pixels>),
         apply: impl FnMut(Point<Pixels>, &mut Window, &mut App) + 'static,
     ) {
         let now = Instant::now();
+        let (lo, hi) = room;
         let mut scrolls = self.smooth_scrolls.borrow_mut();
         match scrolls.iter_mut().find(|s| s.key == key) {
             Some(scroll) => {
-                scroll.curve.add(delta, now);
+                let delta = scroll
+                    .curve
+                    .clamped(delta, scroll.applied + lo, scroll.applied + hi);
+                if delta != Point::default() {
+                    scroll.curve.add(delta, now);
+                }
                 scroll.apply = Box::new(apply);
             }
-            None => scrolls.push(SmoothScroll {
-                key,
-                curve: WheelCurve::new(delta, now),
-                applied: Point::default(),
-                apply: Box::new(apply),
-            }),
+            None => {
+                let origin = WheelCurve::new(Point::default(), now);
+                let delta = origin.clamped(delta, lo, hi);
+                if delta == Point::default() {
+                    return;
+                }
+                scrolls.push(SmoothScroll {
+                    key,
+                    curve: WheelCurve::new(delta, now),
+                    applied: Point::default(),
+                    apply: Box::new(apply),
+                })
+            }
         }
         drop(scrolls);
         if !self.smooth_scroll_ticking.replace(true) {
@@ -368,6 +405,32 @@ mod tests {
         assert!(v_after > 0.0 && (v_after * 2.0 - v_before).abs() < v_before * 0.5, "{v_before} {v_after}");
         assert!(!c.done(at(t0, 200)));
         assert_eq!(c.value(at(t0, 1000)).y, px(120.));
+    }
+
+    #[test]
+    fn a_burst_into_an_edge_eases_into_it() {
+        let t0 = Instant::now();
+        let lo = point(px(0.), px(-1000.));
+        let hi = point(px(0.), px(150.));
+        let mut c = WheelCurve::new(point(px(0.), px(120.)), t0);
+        let extra = c.clamped(point(px(0.), px(120.)), lo, hi);
+        assert_eq!(extra.y, px(30.));
+        c.add(extra, at(t0, 40));
+        assert_eq!(c.target().y, px(150.));
+        assert_eq!(c.clamped(point(px(0.), px(120.)), lo, hi).y, px(0.));
+        assert_eq!(c.clamped(point(px(0.), px(-120.)), lo, hi).y, px(-120.));
+        let mut last = 0.0;
+        let mut last_step = f32::MAX;
+        for ms in (40..400).step_by(8) {
+            let v = f32::from(c.value(at(t0, ms)).y);
+            assert!(v <= 150.0 && v >= last, "{ms} {v}");
+            if v < 150.0 {
+                last_step = 150.0 - v;
+            }
+            last = v;
+        }
+        assert!(last_step < 5.0, "{last_step}");
+        assert_eq!(c.value(at(t0, 1000)).y, px(150.));
     }
 
     #[test]

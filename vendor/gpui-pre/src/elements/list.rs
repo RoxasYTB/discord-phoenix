@@ -597,9 +597,13 @@ impl ListState {
         }
         let state = self.clone();
         let key = Rc::as_ptr(&state.0) as *const () as usize;
-        window.smooth_wheel_scroll(key, point(px(0.), -distance), move |step, window, cx| {
-            state.0.borrow_mut().scroll_by(step, view, window, cx)
-        });
+        let room = state.0.borrow().wheel_room();
+        window.smooth_wheel_scroll(
+            key,
+            point(px(0.), -distance),
+            room,
+            move |step, window, cx| state.0.borrow_mut().scroll_by(step, view, window, cx),
+        );
     }
 
     /// PHOENIX PATCH (page scroll): scrolls by `distance` pixels now (positive moves toward
@@ -993,6 +997,24 @@ impl StateInner {
             delta.y = current - scroll_max;
         }
         self.scroll(&top, height, delta, current_view, window, cx);
+    }
+
+    // PHOENIX PATCH (smooth wheel): how far a wheel animation may move the content from
+    // where it is drawn, see `Window::smooth_wheel_scroll`.
+    fn wheel_room(&self) -> (Point<Pixels>, Point<Pixels>) {
+        let unbounded = (point(px(0.), px(f32::MIN)), point(px(0.), px(f32::MAX)));
+        let Some(bounds) = self.last_layout_bounds else {
+            return unbounded;
+        };
+        if self.items.summary().has_unknown_height {
+            return unbounded;
+        }
+        let padding = self.last_padding.unwrap_or_default();
+        let scroll_max = (self.items.summary().height + padding.top + padding.bottom
+            - bounds.size.height)
+            .max(px(0.));
+        let current = self.scroll_top(&self.logical_scroll_top()).min(scroll_max);
+        (point(px(0.), current - scroll_max), point(px(0.), current))
     }
 
     fn logical_scroll_top(&self) -> ListOffset {
@@ -1714,7 +1736,8 @@ impl Element for List {
                     if delta.y != px(0.) {
                         let state = list_state.clone();
                         let key = Rc::as_ptr(&state.0) as *const () as usize;
-                        window.smooth_wheel_scroll(key, delta, move |step, window, cx| {
+                        let room = state.0.borrow().wheel_room();
+                        window.smooth_wheel_scroll(key, delta, room, move |step, window, cx| {
                             state.0.borrow_mut().scroll_by(step, current_view, window, cx)
                         });
                     }

@@ -2504,6 +2504,34 @@ impl Interactivity {
             || window.is_inspector_picking(cx)
     }
 
+    fn scroll_max(&self, bounds: Bounds<Pixels>, style: &Style, window: &Window) -> Point<Pixels> {
+        fn round_to_two_decimals(pixels: Pixels) -> Pixels {
+            const ROUNDING_FACTOR: f32 = 100.0;
+            (pixels * ROUNDING_FACTOR).round() / ROUNDING_FACTOR
+        }
+
+        let rem_size = window.rem_size();
+        // Taffy lays the box out with the padding snapped to the device pixel
+        // grid (`to_taffy`); recomputed unsnapped, e.g. py_1 at a fractional
+        // rem size, it exceeds `bounds` and leaves the box scrollable by the
+        // sub-pixel difference.
+        let padding = style
+            .padding
+            .to_pixels(bounds.size.into(), rem_size)
+            .map(|edge| window.pixel_snap(*edge));
+        let padding_size = size(padding.left + padding.right, padding.top + padding.bottom);
+        // The floating point values produced by Taffy and ours often vary
+        // slightly after ~5 decimal places. This can lead to cases where after
+        // subtracting these, the container becomes scrollable for less than
+        // 0.00000x pixels. As we generally don't benefit from a precision that
+        // high for the maximum scroll, we round the scroll max to 2 decimal
+        // places here.
+        let padded_content_size = self.content_size + padding_size;
+        Point::from(padded_content_size - bounds.size)
+            .map(round_to_two_decimals)
+            .max(&Default::default())
+    }
+
     fn clamp_scroll_position(
         &self,
         bounds: Bounds<Pixels>,
@@ -2511,11 +2539,6 @@ impl Interactivity {
         window: &mut Window,
         _cx: &mut App,
     ) -> Point<Pixels> {
-        fn round_to_two_decimals(pixels: Pixels) -> Pixels {
-            const ROUNDING_FACTOR: f32 = 100.0;
-            (pixels * ROUNDING_FACTOR).round() / ROUNDING_FACTOR
-        }
-
         if let Some(scroll_offset) = self.scroll_offset.as_ref() {
             let mut scroll_to_bottom = false;
             let mut tracked_scroll_handle = self
@@ -2527,26 +2550,7 @@ impl Interactivity {
                 scroll_to_bottom = mem::take(&mut scroll_handle_state.scroll_to_bottom);
             }
 
-            let rem_size = window.rem_size();
-            // Taffy lays the box out with the padding snapped to the device pixel
-            // grid (`to_taffy`); recomputed unsnapped, e.g. py_1 at a fractional
-            // rem size, it exceeds `bounds` and leaves the box scrollable by the
-            // sub-pixel difference.
-            let padding = style
-                .padding
-                .to_pixels(bounds.size.into(), rem_size)
-                .map(|edge| window.pixel_snap(*edge));
-            let padding_size = size(padding.left + padding.right, padding.top + padding.bottom);
-            // The floating point values produced by Taffy and ours often vary
-            // slightly after ~5 decimal places. This can lead to cases where after
-            // subtracting these, the container becomes scrollable for less than
-            // 0.00000x pixels. As we generally don't benefit from a precision that
-            // high for the maximum scroll, we round the scroll max to 2 decimal
-            // places here.
-            let padded_content_size = self.content_size + padding_size;
-            let scroll_max = Point::from(padded_content_size - bounds.size)
-                .map(round_to_two_decimals)
-                .max(&Default::default());
+            let scroll_max = self.scroll_max(bounds, style, window);
             // Clamp scroll offset in case scroll max is smaller now (e.g., if children
             // were removed or the bounds became larger).
             let mut scroll_offset = scroll_offset.borrow_mut();
@@ -3418,6 +3422,7 @@ impl Interactivity {
             let current_view = window.current_view();
             let smooth_offset = scroll_offset.clone();
             let page_zoom = window.page_zoom();
+            let scroll_max = self.scroll_max(hitbox.bounds, style, window);
             window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble && hitbox.should_handle_scroll(window) {
                     let mut scroll_offset = scroll_offset.borrow_mut();
@@ -3473,12 +3478,17 @@ impl Interactivity {
                         && !event.delta.precise()
                         && event.source == crate::ScrollSource::Pointer
                     {
+                        let room = (
+                            point(-scroll_max.x - scroll_offset.x, -scroll_max.y - scroll_offset.y),
+                            point(-scroll_offset.x, -scroll_offset.y),
+                        );
                         drop(scroll_offset);
                         let target = smooth_offset.clone();
                         let key = Rc::as_ptr(&target) as *const () as usize;
                         window.smooth_wheel_scroll(
                             key,
                             point(delta_x, delta_y),
+                            room,
                             move |step, _, cx| {
                                 let mut offset = target.borrow_mut();
                                 offset.x += step.x;
@@ -4522,9 +4532,17 @@ impl ScrollHandle {
         if delta == Point::default() {
             return;
         }
-        let target = self.0.borrow().offset.clone();
+        let (target, max) = {
+            let state = self.0.borrow();
+            (state.offset.clone(), state.max_offset)
+        };
+        let offset = *target.borrow();
+        let room = (
+            point(-max.x - offset.x, -max.y - offset.y),
+            point(-offset.x, -offset.y),
+        );
         let key = Rc::as_ptr(&target) as *const () as usize;
-        window.smooth_wheel_scroll(key, delta, move |step, _, cx| {
+        window.smooth_wheel_scroll(key, delta, room, move |step, _, cx| {
             let mut offset = target.borrow_mut();
             offset.x += step.x;
             offset.y += step.y;
