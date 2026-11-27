@@ -363,6 +363,7 @@ pub enum GatewayEvent {
     SoundboardSounds(Box<SoundboardSounds>),
     VoiceChannelEffectSend(Box<VoiceChannelEffectSend>),
     StreamCreate(Box<StreamCreate>),
+    StreamUpdate(Box<StreamCreate>),
     StreamServerUpdate(Box<StreamServerUpdate>),
     StreamDelete(Box<StreamDelete>),
     PassiveUpdate(Box<PassiveUpdateV2>),
@@ -424,6 +425,7 @@ pub fn parse_dispatch(name: &str, raw: &str) -> GatewayEvent {
         "SOUNDBOARD_SOUNDS" => SoundboardSounds(Box::new),
         "VOICE_CHANNEL_EFFECT_SEND" => VoiceChannelEffectSend(Box::new),
         "STREAM_CREATE" => StreamCreate(Box::new),
+        "STREAM_UPDATE" => StreamUpdate(Box::new),
         "STREAM_SERVER_UPDATE" => StreamServerUpdate(Box::new),
         "STREAM_DELETE" => StreamDelete(Box::new),
         "CHANNEL_CREATE" => ChannelCreate(Box::new),
@@ -651,6 +653,13 @@ mod passive_tests {
         assert_eq!((v.guild_id, v.channel_id, v.self_stream), (Some(Snowflake(9)), Some(Snowflake(6)), Some(true)));
         let GatewayEvent::VoiceStateUpdate(gone) = &evs[3] else { panic!("removal last") };
         assert_eq!((gone.guild_id, gone.user_id, gone.channel_id), (Some(Snowflake(9)), Snowflake(8), None));
+    }
+
+    #[test]
+    fn stream_update_carries_viewers_and_pause() {
+        let raw = r#"{"stream_key":"guild:1:2:3","viewer_ids":["4","5"],"paused":true,"region":"rotterdam"}"#;
+        let GatewayEvent::StreamUpdate(u) = parse_dispatch("STREAM_UPDATE", raw) else { panic!("not parsed") };
+        assert_eq!((u.stream_key.as_str(), u.viewer_ids.len(), u.paused), ("guild:1:2:3", 2, true));
     }
 
     #[test]

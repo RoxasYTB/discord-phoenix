@@ -34,6 +34,7 @@ fn store_f32(a: &AtomicU32, v: f32) {
 
 pub const PRIORITY_SPEAKER_DUCKING: f32 = 0.1;
 pub const STREAM_USER_BIT: u64 = 1 << 63;
+pub const STREAM_DEFAULT_VOLUME: f32 = 0.18;
 
 pub struct AudioControl {
     muted: AtomicBool,
@@ -44,6 +45,8 @@ pub struct AudioControl {
     gate_threshold_db: AtomicU32,
     input_level_db: AtomicU32,
     user_volume: Mutex<HashMap<u64, f32>>,
+    stream_volume: Mutex<HashMap<u64, f32>>,
+    stream_muted: Mutex<HashSet<u64>>,
     priority_speakers: Mutex<HashSet<u64>>,
     noise_suppression: AtomicBool,
     noise_cancellation: AtomicBool,
@@ -69,6 +72,8 @@ impl Default for AudioControl {
             gate_threshold_db: AtomicU32::new((-50.0f32).to_bits()),
             input_level_db: AtomicU32::new((-100.0f32).to_bits()),
             user_volume: Mutex::new(HashMap::new()),
+            stream_volume: Mutex::new(HashMap::new()),
+            stream_muted: Mutex::new(HashSet::new()),
             priority_speakers: Mutex::new(HashSet::new()),
             noise_suppression: AtomicBool::new(false),
             noise_cancellation: AtomicBool::new(true),
@@ -133,6 +138,30 @@ impl AudioControl {
     }
     pub fn set_user_volume(&self, user: u64, v: f32) {
         lock(&self.user_volume).insert(user, v.clamp(0.0, 2.0));
+    }
+    pub fn stream_volume(&self, owner: u64) -> f32 {
+        lock(&self.stream_volume).get(&owner).copied().unwrap_or(STREAM_DEFAULT_VOLUME)
+    }
+    pub fn set_stream_volume(&self, owner: u64, v: f32) {
+        lock(&self.stream_volume).insert(owner, v.clamp(0.0, 2.0));
+    }
+    pub fn stream_muted(&self, owner: u64) -> bool {
+        lock(&self.stream_muted).contains(&owner)
+    }
+    pub fn set_stream_muted(&self, owner: u64, muted: bool) {
+        let mut s = lock(&self.stream_muted);
+        if muted {
+            s.insert(owner);
+        } else {
+            s.remove(&owner);
+        }
+    }
+    pub fn track_gain(&self, track: u64) -> f32 {
+        if track & STREAM_USER_BIT != 0 {
+            let owner = track & !STREAM_USER_BIT;
+            return if self.stream_muted(owner) { 0.0 } else { self.stream_volume(owner) };
+        }
+        self.user_volume(track) * self.priority_gain(track)
     }
     pub fn set_priority_speaker(&self, user: u64, on: bool) {
         let mut s = lock(&self.priority_speakers);

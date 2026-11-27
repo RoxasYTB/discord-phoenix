@@ -280,7 +280,7 @@ fn lobby_tile(app: &PhoenixApp, user: Id, zoom: f32, cx: &mut Context<PhoenixApp
         .flex()
         .items_center()
         .justify_center()
-        .child(avatar(app.users.get(&user), 48. * zoom))
+        .child(deco_avatar(app.users.get(&user), 48. * zoom))
         .into_any_element()
 }
 
@@ -578,6 +578,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
 
     DRAWN.with(|d| d.borrow_mut().clear());
     let focused = focus.filter(|_| tiles.len() > 1);
+    let selected = focused.and_then(|i| tiles.get(i)).map(|t| (t.user, t.stream));
     let stage_layer = |el: AnyElement| div().absolute().top_0().left_0().w(z(gw)).h(z(gh)).child(el).into_any_element();
     let tiles_el = if stage && crate::ui::stage::show_start(app, ch) {
         stage_layer(crate::ui::stage::start_screen(app, ch_id, cx).unwrap_or_else(|| div().into_any_element()))
@@ -612,14 +613,14 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .top(z(-CONTROLS_SLIDE * (1. - fade)))
                 .opacity(fade)
                 .pt(z(8.))
-                .child(top_bar(app, crate::ui::dm_profile_panel::channel_name(app, ch), cx))
+                .child(top_bar(app, crate::ui::dm_profile_panel::channel_name(app, ch), selected, cx))
                 .children(header_status(app, ch_id, cx))
                 .child(div().h(z(8.))),
         )
         .child(div().flex_1().min_h_0())
         .child(div().flex_none().flex().flex_col().relative().top(z(CONTROLS_SLIDE * (1. - fade))).opacity(fade).child(match crate::ui::stage::bottom(app, ch_id, cx) {
             Some(b) => b,
-            None => bottom_controls(app, collapse(gw), window.is_fullscreen(), cx).into_any_element(),
+            None => bottom_controls(app, collapse(gw), window.is_fullscreen(), selected, cx).into_any_element(),
         }))
         .relative()
         .children(toasts);
@@ -724,7 +725,7 @@ pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, 
         .on_mouse_move(cx.listener(|_, _, _, cx| woke(cx)))
         .child(header)
         .child(body)
-        .when(!popped, |d| d.child(bottom_controls(app, collapse(w + 16.), window.is_fullscreen(), cx)));
+        .when(!popped, |d| d.child(bottom_controls(app, collapse(w + 16.), window.is_fullscreen(), None, cx)));
     Some(
         div()
             .id("dm-call")
@@ -1010,11 +1011,82 @@ thread_local! {
     static STREAM_MENU: Cell<Option<(Id, gpui::Point<gpui::Pixels>)>> = const { Cell::new(None) };
     static HOVER_TILE: Cell<Option<(Id, bool)>> = const { Cell::new(None) };
     static MORE_USER: Cell<Option<Id>> = const { Cell::new(None) };
-    static STREAM_VOLUME: std::cell::RefCell<std::collections::HashMap<u64, u32>> = Default::default();
 }
 
-pub fn stream_volume(owner: Id) -> u32 {
-    STREAM_VOLUME.with(|v| v.borrow().get(&owner.0).copied().unwrap_or(100))
+pub fn stream_audio(owner: Id) -> crate::voice::prefs::StreamAudio {
+    crate::voice::prefs::prefs().lock().stream(owner)
+}
+
+pub fn stream_slider(owner: Id) -> f32 {
+    let s = stream_audio(owner);
+    if s.muted { 0. } else { crate::voice::soundboard::perceptual(s.volume) / 200. }
+}
+
+pub fn set_stream_slider(owner: Id, frac: f32, save: bool) {
+    let pct = (frac.clamp(0., 1.) * 200.).round();
+    let volume = crate::voice::prefs::amplitude(pct) * 100.;
+    crate::voice::prefs::update(
+        move |p| {
+            let s = p.streams.entry(owner.0).or_default();
+            if pct > 0. {
+                s.muted = false;
+            }
+            s.volume = volume;
+        },
+        save,
+    );
+}
+
+pub fn toggle_stream_mute(owner: Id) {
+    crate::voice::prefs::update(
+        move |p| {
+            let s = p.streams.entry(owner.0).or_default();
+            s.muted = !s.muted;
+        },
+        true,
+    );
+}
+
+pub fn participant_muted(user: Id, stream: bool) -> bool {
+    if stream { stream_audio(user).muted } else { crate::voice::prefs::prefs().lock().user(user).muted }
+}
+
+pub fn participant_slider(user: Id, stream: bool) -> f32 {
+    if stream {
+        return stream_slider(user);
+    }
+    let u = crate::voice::prefs::prefs().lock().user(user);
+    if u.muted { 0. } else { u.volume as f32 / 200. }
+}
+
+pub fn set_participant_slider(user: Id, stream: bool, frac: f32) {
+    if stream {
+        return set_stream_slider(user, frac, true);
+    }
+    let v = (frac.clamp(0., 1.) * 200.).round() as u32;
+    crate::voice::prefs::update(
+        move |p| {
+            let u = p.users.entry(user.0).or_default();
+            if v > 0 {
+                u.muted = false;
+            }
+            u.volume = v;
+        },
+        true,
+    );
+}
+
+pub fn toggle_participant_mute(user: Id, stream: bool) {
+    if stream {
+        return toggle_stream_mute(user);
+    }
+    crate::voice::prefs::update(
+        move |p| {
+            let u = p.users.entry(user.0).or_default();
+            u.muted = !u.muted;
+        },
+        true,
+    );
 }
 
 fn stream_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
@@ -1022,52 +1094,72 @@ fn stream_menu(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElem
     let (owner, pos) = STREAM_MENU.with(Cell::get)?;
     let key = stream_key(app, owner)?;
     let watching = app.voice.watching.contains(&key);
+    let own = owner == app.me.id;
     let e = cx.entity();
     let dismiss: Dismiss = std::rc::Rc::new(move |_, cx| {
         STREAM_MENU.with(|m| m.set(None));
         e.update(cx, |_, cx| cx.notify());
     });
-    let vol = stream_volume(owner);
-    let mut items = vec![
-        MenuItem::Custom(
+    let e = cx.entity();
+    let k = key.clone();
+    let watch_label = if own {
+        crate::t!("call.stop_streaming")
+    } else if watching {
+        crate::t!("voice.stop_watching")
+    } else {
+        crate::t!("voice.watch_stream")
+    };
+    let mut items = vec![MenuItem::action(watch_label, None, move |_, _, cx| {
+        let k = k.clone();
+        e.update(cx, |a, cx| {
+            let c = if own {
+                crate::voice::VoiceControl::StopStream
+            } else if watching {
+                crate::voice::VoiceControl::StopWatching(k)
+            } else {
+                crate::voice::VoiceControl::WatchStream(k)
+            };
+            drop(a.backend.voice_control(c));
+            cx.notify();
+        });
+    })];
+    if watching && !own {
+        let e = cx.entity();
+        items.push(MenuItem::check(crate::t!("call.stream_menu_mute"), stream_audio(owner).muted, move |_, _, cx| {
+            toggle_stream_mute(owner);
+            e.update(cx, |_, cx| cx.notify());
+        }));
+        let vol = (stream_slider(owner) * 200.).round() as u32;
+        items.push(MenuItem::Separator);
+        items.push(MenuItem::Custom(
             div()
                 .px(z(8.))
                 .py(z(6.))
                 .flex()
                 .flex_col()
                 .gap(z(8.))
-                .child(div().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::INTERACTIVE_TEXT_DEFAULT)).child(crate::t!("voice.stream_volume")))
+                .child(div().text_size(z(14.)).font_weight(FontWeight::MEDIUM).text_color(t(idx::INTERACTIVE_TEXT_DEFAULT)).child(crate::t!("call.stream_volume")))
                 .child(crate::ui::settings::voice::slider(
                     "stream-volume",
                     vol as f32 / 200.,
                     format!("{vol}%").into(),
                     None,
-                    std::rc::Rc::new(move |app: &mut PhoenixApp, f: f32, _: bool, cx: &mut Context<PhoenixApp>| {
-                        let v = (f * 200.).round() as u32;
-                        STREAM_VOLUME.with(|m| m.borrow_mut().insert(owner.0, v));
-                        drop(app.backend.voice_control(crate::voice::VoiceControl::SetStreamVolume(owner, v as f32 / 100.)));
+                    std::rc::Rc::new(move |_: &mut PhoenixApp, f: f32, done: bool, cx: &mut Context<PhoenixApp>| {
+                        set_stream_slider(owner, f, done);
                         cx.notify();
                     }),
                     cx,
                 ))
                 .into_any_element(),
-        ),
-        MenuItem::Separator,
-    ];
-    let e = cx.entity();
-    let k = key.clone();
-    items.push(MenuItem::action(if watching { crate::t!("voice.stop_watching") } else { crate::t!("voice.watch_stream") }, None, move |_, _, cx| {
-        let k = k.clone();
-        e.update(cx, |a, cx| {
-            let c = if watching { crate::voice::VoiceControl::StopWatching(k) } else { crate::voice::VoiceControl::WatchStream(k) };
-            drop(a.backend.voice_control(c));
-            cx.notify();
-        });
-    }));
-    items.push(MenuItem::action(crate::t!("call.fullscreen"), None, move |_, w, _| {
-        set_focus(Focus::Tile(owner, true));
-        w.toggle_fullscreen();
-    }));
+        ));
+    }
+    if watching {
+        items.push(MenuItem::Separator);
+        items.push(MenuItem::action(crate::t!("call.fullscreen"), None, move |_, w, _| {
+            set_focus(Focus::Tile(owner, true));
+            w.toggle_fullscreen();
+        }));
+    }
     Some(crate::ui::context_menu::render(pos, items, dismiss))
 }
 
@@ -1195,6 +1287,7 @@ fn strip_button(open: bool, top: f32, fade: f32, cx: &mut Context<PhoenixApp>) -
 }
 
 const CHAT_W: f32 = 480.;
+const STREAM_PREVIEW_OPACITY: f32 = 0.15;
 
 fn header_icon(app: &PhoenixApp, ch: Id, stage: bool) -> &'static str {
     let locked = app.nav.extras.get(&ch).is_some_and(|e| e.locked);
@@ -1206,9 +1299,10 @@ fn header_icon(app: &PhoenixApp, ch: Id, stage: bool) -> &'static str {
     }
 }
 
-fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn top_bar(app: &PhoenixApp, name: SharedString, selected: Option<(Id, bool)>, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let chat_ch = app.voice_channel.unwrap_or(Id(0));
     let open = chat_open(chat_ch);
+    let streamer = selected.filter(|s| s.1).map(|s| s.0);
     let stage = app.voice_channel.filter(|c| crate::ui::stage::stage_channel(app, *c).is_some());
     div()
         .h(z(33.))
@@ -1220,7 +1314,7 @@ fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -
         .children(app.voice_channel.map(|ch| named(header_icon(app, ch, stage.is_some()), 20., t(idx::CHANNEL_ICON))))
         .child(
             div()
-                .when(stage.is_none(), |d| d.flex_1())
+                .when(stage.is_none() && streamer.is_none(), |d| d.flex_1())
                 .min_w_0()
                 .text_size(z(16.))
                 .line_height(z(20.))
@@ -1229,6 +1323,7 @@ fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -
                 .text_ellipsis()
                 .child(name),
         )
+        .when_some(streamer.filter(|_| stage.is_none()), |d, owner| d.child(header_stream_title(app, owner)).child(div().flex_1()))
         .when_some(stage, |d, ch| {
             d.children(crate::ui::stage::header_summary(app, ch))
                 .children(crate::ui::stage::header_topic(app, ch, cx))
@@ -1240,6 +1335,9 @@ fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -
                 .items_center()
                 .gap(z(20.))
                 .children(stage.and_then(|ch| crate::ui::stage::audience_toggle(app, ch, cx)))
+                .children(streamer.and_then(|o| header_viewers(app, o)))
+                .children(streamer.and_then(|o| header_warning(app, o)))
+                .children(streamer.map(|o| live_indicator(app, o)))
                 .child(
                     div()
                         .id("call-chat")
@@ -1265,6 +1363,146 @@ fn top_bar(app: &PhoenixApp, name: SharedString, cx: &mut Context<PhoenixApp>) -
                         })),
                 ),
         )
+}
+
+fn header_stream_title(app: &PhoenixApp, owner: Id) -> impl IntoElement {
+    let name = crate::ui::sidebar::voice_user_name(app, owner);
+    div()
+        .flex_none()
+        .min_w_0()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(z(10.))
+        .mr(z(10.))
+        .overflow_hidden()
+        .child(
+            div()
+                .flex_none()
+                .mx(z(4.))
+                .size(z(4.))
+                .bg(t(idx::PRIMARY_700))
+                .child(div().size_full().rounded_full().bg(gpui::rgba(HEADER_DOT))),
+        )
+        .child(div().flex_none().child(avatar(app.users.get(&owner), 24. * crate::theme::zoom())))
+        .child(
+            div()
+                .min_w_0()
+                .text_size(z(16.))
+                .line_height(z(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(t(idx::TEXT_STRONG))
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .child(crate::t!("call.stream_title", u = name)),
+        )
+}
+
+const HEADER_DOT: u32 = 0x97979f3d;
+const MAX_VISIBLE_VIEWERS: usize = 5;
+
+pub fn visible_viewers(viewers: usize) -> (usize, Option<usize>) {
+    if viewers > MAX_VISIBLE_VIEWERS { (MAX_VISIBLE_VIEWERS - 1, Some(viewers - MAX_VISIBLE_VIEWERS + 1)) } else { (viewers, None) }
+}
+
+fn header_viewers(app: &PhoenixApp, owner: Id) -> Option<AnyElement> {
+    let key = stream_key(app, owner)?;
+    let users: Vec<&crate::model::User> = crate::voice::call::stream_meta(&key)?.viewers.iter().filter_map(|v| app.users.get(&Id(*v))).collect();
+    if users.is_empty() {
+        return None;
+    }
+    let (shown, overflow) = visible_viewers(users.len());
+    let names: Vec<String> = users.iter().map(|u| crate::ui::sidebar::voice_user_name(app, u.id).to_string()).collect();
+    Some(
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .relative()
+            .tip_side(format!("{}\n{}", crate::t!("call.stream_viewers", n = users.len()), names.join("\n")), crate::ui::tooltip::Side::Bottom)
+            .children(users.iter().take(shown).map(|u| div().flex_none().ml(z(-2.)).child(avatar(Some(*u), 24. * crate::theme::zoom()))))
+            .children(overflow.map(|n| {
+                div()
+                    .flex_none()
+                    .ml(z(-4.))
+                    .size(z(25.))
+                    .rounded(z(15.))
+                    .bg(t(idx::PRIMARY_600))
+                    .shadow(vec![gpui::BoxShadow {
+                        color: t(idx::BLACK),
+                        offset: gpui::point(z(-1.), z(0.)),
+                        blur_radius: z(0.),
+                        spread_radius: z(1.),
+                        inset: false,
+                    }])
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(z(12.))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(t(idx::PRIMARY_300))
+                    .child(format!("+{n}"))
+            }))
+            .into_any_element(),
+    )
+}
+
+fn header_warning(app: &PhoenixApp, owner: Id) -> Option<AnyElement> {
+    if owner == app.me.id || !crate::voice::call::stream_view_low_fps(owner.0) {
+        return None;
+    }
+    let text = format!("{} {}", crate::t!("call.warn_view_quality"), crate::t!("call.warn_code", n = STREAM_VIEW_LOW_FPS_CODE));
+    Some(div().relative().flex_none().size(z(20.)).tip_side(text, crate::ui::tooltip::Side::Bottom).child(named("warning", 20., t(idx::INTERACTIVE_TEXT_DEFAULT))).into_any_element())
+}
+
+const STREAM_VIEW_LOW_FPS_CODE: u32 = 2002;
+
+pub fn premium_quality(q: crate::voice::call::StreamQuality) -> bool {
+    q.fps > 30 || q.height.is_none_or(|h| h > 720)
+}
+
+pub fn quality_label(q: crate::voice::call::StreamQuality) -> (SharedString, SharedString) {
+    let res = match q.height {
+        Some(h) => crate::t!("call.quality_res", n = h),
+        None => crate::t!("call.quality_source"),
+    };
+    (res, crate::t!("call.quality_fps", n = q.fps))
+}
+
+fn live_indicator(app: &PhoenixApp, owner: Id) -> AnyElement {
+    let quality = crate::voice::call::stream_quality(owner.0, app.me.id.0);
+    let reduced = owner != app.me.id && crate::voice::call::stream_view_low_fps(owner.0);
+    let pill = |d: gpui::Div| d.h(z(16.)).px(z(6.)).flex().items_center().text_size(z(14.)).line_height(z(15.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::WHITE));
+    let live = pill(div()).bg(t(idx::STATUS_DANGER)).map(|d| if quality.is_some() { d.rounded_r(z(16.)) } else { d.rounded(z(16.)) }).child(crate::t!("voice.live").to_uppercase());
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .overflow_hidden()
+        .children(quality.map(|q| {
+            let premium = premium_quality(q);
+            let (res, fps) = quality_label(q);
+            let tip = if reduced {
+                crate::t!("call.quality_reduced")
+            } else if premium {
+                crate::t!("call.quality_nitro")
+            } else {
+                crate::t!("call.quality")
+            };
+            let fg = t(if reduced { idx::PRIMARY_300 } else { idx::WHITE });
+            pill(div())
+                .relative()
+                .bg(t(idx::PRIMARY_500))
+                .rounded_l(z(16.))
+                .text_color(fg)
+                .tip_side(tip, crate::ui::tooltip::Side::Bottom)
+                .when(premium, |d| d.child(div().flex_none().mr(z(4.)).child(named("nitro", 14., fg))))
+                .child(div().mr(z(4.)).child(res))
+                .child(fps)
+        }))
+        .child(live)
+        .into_any_element()
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -1625,7 +1863,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
 
     let owner = tile.user;
     let tile_guild = app.selected_guild;
-    let base = if tile.stream && !me {
+    let base = if tile.stream {
         base.on_mouse_down(
             gpui::MouseButton::Right,
             cx.listener(move |_, ev: &gpui::MouseDownEvent, _, cx| {
@@ -1655,7 +1893,8 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
         };
         let still: Option<gpui::ImageSource> = video.map(Into::into).or_else(|| preview.map(Into::into));
         let has_still = still.is_some();
-        base.bg(t(idx::BACKGROUND_BASE_LOWER))
+        let idle_preview = !me && !watching;
+        base.bg(t(if idle_preview { idx::PRIMARY_700 } else { idx::BACKGROUND_BASE_LOWER }))
             .flex()
             .items_center()
             .justify_center()
@@ -1663,23 +1902,31 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                 let aspect = if me { crate::voice::call::own_stream_frame() } else { crate::voice::call::stream_frame(tile.user.0) }
                     .filter(|f| f.height > 0)
                     .map(|f| f.width as f32 / f.height as f32);
-                gpui::img(src).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect))
+                gpui::img(src).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect)).when(idle_preview, |i| i.opacity(STREAM_PREVIEW_OPACITY))
             }))
             .map(|d| {
-                if !me && !watching {
+                if idle_preview {
+                    let small = w < 195.;
+                    let label = if w < 175. { crate::t!("call.watch_short") } else { crate::t!("voice.watch_stream") };
                     d.child(
                     div()
                         .id(SharedString::from(format!("call-watch-{}", tile.user.0)))
-                        .px(z(16.))
-                        .py(z(8.))
+                        .relative()
+                        .flex_none()
                         .rounded(z(8.))
-                        .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
-                        .hover(|s| s.bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_HOVER)))
-                        .text_size(z(14.))
-                        .line_height(z(18.))
+                        .border_1()
+                        .border_color(t(idx::CONTROL_SECONDARY_BORDER_DEFAULT))
+                        .bg(t(idx::CONTROL_SECONDARY_BACKGROUND_DEFAULT))
+                        .hover(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_HOVER)).border_color(t(idx::CONTROL_SECONDARY_BORDER_HOVER)).text_color(t(idx::CONTROL_SECONDARY_TEXT_HOVER)))
+                        .active(|s| s.bg(t(idx::CONTROL_SECONDARY_BACKGROUND_ACTIVE)).border_color(t(idx::CONTROL_SECONDARY_BORDER_ACTIVE)).text_color(t(idx::CONTROL_SECONDARY_TEXT_ACTIVE)))
+                        .when(small, |d| d.min_w(z(60.)).min_h(z(30.)).px(z(11.)).py(z(3.)).text_size(z(14.)).line_height(z(18.)))
+                        .when(!small, |d| d.min_w(z(100.)).min_h(z(38.)).px(z(15.)).py(z(7.)).text_size(z(16.)).line_height(z(20.)))
+                        .flex()
+                        .items_center()
+                        .justify_center()
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(t(idx::CONTROL_OVERLAY_SECONDARY_TEXT_DEFAULT))
-                        .child(crate::t!("voice.watch_stream"))
+                        .text_color(t(idx::CONTROL_SECONDARY_TEXT_DEFAULT))
+                        .child(label)
                         .on_click(cx.listener({
                             let skey = skey.clone();
                             move |a, _, _, cx| {
@@ -1736,6 +1983,33 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                     .child(crate::t!("voice.live")),
             )
             .when(look.show_name, |d| {
+                let idle = fade < 0.5;
+                let muted = !me && stream_audio(owner).muted;
+                let menu_open = STREAM_MENU.with(Cell::get).is_some_and(|(o, _)| o == owner);
+                let show_mute = stream_mute_shown(me, watching, w, muted);
+                let more = !idle && (hovered || menu_open);
+                let mute_btn = (!idle && show_mute && (hovered || muted || menu_open)).then(|| {
+                    tile_overlay_button(
+                        SharedString::from(format!("call-stream-mute-{}", owner.0)),
+                        if muted { "volume-off" } else { "speaker" },
+                        if muted { crate::t!("call.stream_tile_unmute") } else { crate::t!("call.stream_tile_mute") },
+                        fade,
+                    )
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        cx.stop_propagation();
+                        toggle_stream_mute(owner);
+                        cx.notify();
+                    }))
+                });
+                let more_btn = more.then(|| {
+                    tile_overlay_button(SharedString::from(format!("call-stream-more-{}", owner.0)), "more-horizontal", crate::t!("call.tile_options"), fade).on_click(cx.listener(
+                        move |_, ev: &gpui::ClickEvent, _, cx| {
+                            cx.stop_propagation();
+                            STREAM_MENU.with(|m| m.set(Some((owner, ev.position()))));
+                            cx.notify();
+                        },
+                    ))
+                });
                 d.child(
                     div()
                         .absolute()
@@ -1743,8 +2017,10 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                         .bottom(z(look.inset))
                         .right(z(look.inset))
                         .flex()
-                        .opacity(fade)
-                        .child(pill(Some(named("golive/screen", 16., white).into_any_element()), Some(name))),
+                        .items_end()
+                        .justify_between()
+                        .child(pill(Some(named("golive/screen", 16., white).into_any_element()), Some(name)).opacity(fade))
+                        .child(div().flex().flex_none().items_end().gap(z(8.)).children(more_btn).children(mute_btn)),
                 )
             })
     } else {
@@ -1765,7 +2041,7 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
                     d.bg(t(idx::BACKGROUND_BASE_LOWER)).child(gpui::img(img).absolute().inset_0().size_full().object_fit(video_fit(in_strip, aspect)))
                 }
                 None if show_video && !me && crate::voice::call::in_call() => d.bg(t(idx::BLACK)).child(video_loading()),
-                None => d.child(avatar(u, look.avatar * crate::theme::zoom())),
+                None => d.child(deco_avatar(u, look.avatar * crate::theme::zoom())),
             })
             .children(crate::ui::voice_effects::overlay(tile.user, w, h))
             .when(look.show_name, |d| {
@@ -1820,6 +2096,34 @@ fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade:
             })
     };
     inner.into_any_element()
+}
+
+fn deco_avatar(user: Option<&crate::model::User>, size: f32) -> AnyElement {
+    let face = avatar(user, size);
+    match crate::ui::avatar_deco::source(user, None) {
+        Some(src) => div().relative().flex_none().size(gpui::px(size)).child(face).child(crate::ui::avatar_deco::layer(src, size)).into_any_element(),
+        None => face,
+    }
+}
+
+pub fn stream_mute_shown(own: bool, has_video: bool, width: f32, muted: bool) -> bool {
+    !own && has_video && (width > 220. || muted)
+}
+
+fn tile_overlay_button(id: SharedString, icon: &str, tip: SharedString, fade: f32) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .flex_none()
+        .size(z(32.))
+        .rounded(z(8.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .opacity(fade)
+        .bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_DEFAULT))
+        .hover(|s| s.bg(t(idx::CONTROL_OVERLAY_SECONDARY_BACKGROUND_HOVER)))
+        .tip(tip)
+        .child(named(icon, 16., t(idx::CONTROL_OVERLAY_SECONDARY_TEXT_DEFAULT)))
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1960,7 +2264,7 @@ pub(crate) fn tray_icon(id: &'static str, icon: gpui::Svg, tip: SharedString) ->
         .child(icon)
 }
 
-fn bottom_controls(app: &PhoenixApp, level: Collapse, fullscreen: bool, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn bottom_controls(app: &PhoenixApp, level: Collapse, fullscreen: bool, selected: Option<(Id, bool)>, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let white = t(idx::WHITE);
     let tray = t(idx::WHITE);
     let muted = app.mic_muted || app.deafened;
@@ -2136,6 +2440,7 @@ fn bottom_controls(app: &PhoenixApp, level: Collapse, fullscreen: bool, cx: &mut
                 .flex()
                 .justify_end()
                 .gap(z(24.))
+                .children(selected.filter(|(u, _)| *u != app.me.id).map(|(u, stream)| crate::ui::chat::voice_message::call_volume(u, stream, cx)))
                 .child(
                     tray_icon("call-popout", glyph(POPOUT, 24., tray), crate::t!("call.popout")).on_click(cx.listener(|_, _, _, cx| {
                         let app_entity = cx.entity();
@@ -2171,6 +2476,25 @@ mod tests {
         set_chat_open(Id(11), true);
         set_chat_open(Id(10), false);
         assert!(!chat_open(Id(10)) && chat_open(Id(11)));
+    }
+
+    #[test]
+    fn stream_tile_mute_and_header_quality_follow_the_client() {
+        use super::{premium_quality, stream_mute_shown, visible_viewers};
+        use crate::voice::call::StreamQuality;
+        assert!(stream_mute_shown(false, true, 221., false));
+        assert!(!stream_mute_shown(false, true, 220., false));
+        assert!(stream_mute_shown(false, true, 200., true));
+        assert!(!stream_mute_shown(true, true, 400., true));
+        assert!(!stream_mute_shown(false, false, 400., false));
+        assert_eq!(visible_viewers(3), (3, None));
+        assert_eq!(visible_viewers(5), (5, None));
+        assert_eq!(visible_viewers(6), (4, Some(2)));
+        assert_eq!(visible_viewers(9), (4, Some(5)));
+        assert!(!premium_quality(StreamQuality { height: Some(720), fps: 30 }));
+        assert!(premium_quality(StreamQuality { height: Some(1080), fps: 30 }));
+        assert!(premium_quality(StreamQuality { height: Some(720), fps: 60 }));
+        assert!(premium_quality(StreamQuality { height: None, fps: 15 }));
     }
 
     #[test]

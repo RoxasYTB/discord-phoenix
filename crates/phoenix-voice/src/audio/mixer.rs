@@ -201,7 +201,7 @@ impl Mixer {
                 t.stats.level_db = -100.0;
                 continue;
             };
-            let gain = if deaf { 0.0 } else { control.user_volume(*uid) * control.priority_gain(*uid) };
+            let gain = if deaf { 0.0 } else { control.track_gain(*uid) };
             let mut track = vec![0f32; pcm.len()];
             mix_into(&mut track, &pcm, 1.0);
             t.stats.level_db = level_db(&track);
@@ -298,6 +298,82 @@ mod tests {
         let st = m.stats();
         assert_eq!(st.len(), 2);
         assert!(st.iter().all(|(_, s)| s.decoded >= 6 && s.level_db > -40.0));
+    }
+
+    fn voice_and_stream(c: &AudioControl) -> (f32, f32) {
+        let mut va = OpusEncoder::new(true, 64_000).unwrap();
+        let mut sa = OpusEncoder::new(true, 64_000).unwrap();
+        let voice = tone(300.0, 9000.0);
+        let stream = tone(700.0, 9000.0);
+        let owner = 42;
+        let solo = |track: u64, enc: &mut OpusEncoder, pcm: &[i16]| {
+            let mut m = Mixer::default();
+            for s in 0..8 {
+                m.push(packet(enc, pcm, track, 30, s));
+            }
+            (0..6).map(|_| energy(&m.mix_frame(c))).sum::<f32>()
+        };
+        (solo(owner, &mut va, &voice), solo(owner | crate::audio::STREAM_USER_BIT, &mut sa, &stream))
+    }
+
+    #[test]
+    fn stream_audio_has_its_own_volume_and_mute() {
+        let reference = AudioControl::default();
+        reference.set_stream_volume(42, 1.0);
+        let (voice_full, stream_full) = voice_and_stream(&reference);
+        assert!(voice_full > 1.0 && stream_full > 1.0);
+
+        let c = AudioControl::default();
+        assert_eq!(c.stream_volume(42), crate::audio::STREAM_DEFAULT_VOLUME);
+        let (voice, stream) = voice_and_stream(&c);
+        assert!((voice / voice_full - 1.0).abs() < 0.01, "{voice} vs {voice_full}");
+        let want = crate::audio::STREAM_DEFAULT_VOLUME.powi(2);
+        assert!((stream / stream_full - want).abs() < want * 0.1, "{stream} vs {stream_full}");
+
+        c.set_stream_muted(42, true);
+        let (voice, stream) = voice_and_stream(&c);
+        assert_eq!(stream, 0.0);
+        assert!((voice / voice_full - 1.0).abs() < 0.01);
+
+        c.set_stream_muted(42, false);
+        c.set_user_volume(42, 0.0);
+        c.set_stream_volume(42, 0.5);
+        let (voice, stream) = voice_and_stream(&c);
+        assert_eq!(voice, 0.0);
+        assert!((stream / stream_full - 0.25).abs() < 0.03, "{stream} vs {stream_full}");
+
+        c.set_stream_volume(42, 9.0);
+        assert_eq!(c.stream_volume(42), 2.0);
+        c.set_priority_speaker(7, true);
+        assert_eq!(c.track_gain(42 | crate::audio::STREAM_USER_BIT), 2.0);
+        assert_eq!(c.track_gain(43), crate::audio::PRIORITY_SPEAKER_DUCKING);
+        c.set_deafened(true);
+        assert_eq!(voice_and_stream(&c), (0.0, 0.0));
+    }
+
+    #[test]
+    fn muting_a_stream_keeps_the_rest_of_the_mix() {
+        let mut v = OpusEncoder::new(true, 64_000).unwrap();
+        let mut s = OpusEncoder::new(true, 64_000).unwrap();
+        let pv = tone(300.0, 9000.0);
+        let ps = tone(900.0, 9000.0);
+        let stream = 5 | crate::audio::STREAM_USER_BIT;
+        let c = AudioControl::default();
+        c.set_stream_volume(5, 1.0);
+        let mut m = Mixer::default();
+        for q in 0..8 {
+            m.push(packet(&mut v, &pv, 5, 1, q));
+            m.push(packet(&mut s, &ps, stream, 2, q));
+        }
+        m.mix_frame(&c);
+        let both: f32 = (0..3).map(|_| energy(&m.mix_frame(&c))).sum();
+        c.set_stream_muted(5, true);
+        let voice_only: f32 = (0..3).map(|_| energy(&m.mix_frame(&c))).sum();
+        assert!(both > voice_only * 1.5, "{both} vs {voice_only}");
+        assert!(voice_only > 1.0);
+        let st = m.stats();
+        assert_eq!(st.len(), 2);
+        assert!(st.iter().all(|(_, t)| t.level_db > -40.0));
     }
 
     #[test]

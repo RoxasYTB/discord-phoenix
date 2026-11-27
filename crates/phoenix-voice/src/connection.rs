@@ -48,6 +48,7 @@ pub enum VoiceEvent {
     Reconnecting,
     Disconnected { reason: String, retry: bool },
     VideoState { user_id: u64, active: bool },
+    VideoQuality { user_id: u64, quality: video_rx::DeclaredQuality },
     Clients { user_ids: Vec<u64>, connected: bool },
     Video { user_id: u64, codec: Codec, keyframe: bool, frame: Vec<u8> },
 }
@@ -700,6 +701,9 @@ async fn run(
                                 }
                                 wants_due = Some(Instant::now());
                                 let _ = events.send(VoiceEvent::VideoState { user_id: uid, active: !layers.is_empty() });
+                                if let Some(quality) = video_rx::declared_quality(&v) {
+                                    let _ = events.send(VoiceEvent::VideoQuality { user_id: uid, quality });
+                                }
                             }
                         }
                         ServerMessage::ClientsConnect { user_ids } => {

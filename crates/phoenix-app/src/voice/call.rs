@@ -49,6 +49,78 @@ struct Watch {
     conn: Option<VoiceConnection>,
     stats: connection::ConnStats,
     view: Option<(u32, u32)>,
+    quality: Option<StreamQuality>,
+    frames: std::collections::VecDeque<(std::time::Instant, u64)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamQuality {
+    pub height: Option<u32>,
+    pub fps: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StreamMeta {
+    pub viewers: Vec<u64>,
+    pub paused: bool,
+}
+
+const FPS_DATAPOINTS: usize = 15;
+const FPS_LONG: usize = 30;
+
+pub fn low_fps_threshold(max_fps: u32) -> f32 {
+    match max_fps {
+        0..=5 => 3.,
+        6..=15 => 8.,
+        16..=30 => 15.,
+        _ => 30.,
+    }
+}
+
+fn window_fps(samples: &[(std::time::Instant, u64)]) -> Option<f32> {
+    let (first, last) = (samples.first()?, samples.last()?);
+    let secs = last.0.duration_since(first.0).as_secs_f32();
+    (secs > 0.).then(|| last.1.saturating_sub(first.1) as f32 / secs)
+}
+
+pub fn view_low_fps(samples: &std::collections::VecDeque<(std::time::Instant, u64)>, max_fps: u32) -> bool {
+    if samples.len() <= FPS_DATAPOINTS {
+        return false;
+    }
+    let all: Vec<_> = samples.iter().copied().collect();
+    let short = window_fps(&all[all.len() - FPS_DATAPOINTS - 1..]);
+    let long = window_fps(&all[all.len().saturating_sub(FPS_LONG + 1)..]);
+    let thr = low_fps_threshold(max_fps);
+    short.is_some_and(|f| f < thr) || long.is_some_and(|f| f < thr)
+}
+
+fn stream_meta_map() -> &'static Mutex<std::collections::HashMap<String, StreamMeta>> {
+    static M: OnceLock<Mutex<std::collections::HashMap<String, StreamMeta>>> = OnceLock::new();
+    M.get_or_init(Default::default)
+}
+
+pub fn stream_meta(key: &str) -> Option<StreamMeta> {
+    stream_meta_map().lock().get(key).cloned()
+}
+
+fn record_stream_meta(sc: &phoenix_api::gateway::events::StreamCreate) {
+    let meta = StreamMeta { viewers: sc.viewer_ids.iter().map(|u| u.0).collect(), paused: sc.paused };
+    stream_meta_map().lock().insert(sc.stream_key.clone(), meta);
+}
+
+pub fn stream_quality(owner: u64, me: u64) -> Option<StreamQuality> {
+    let st = manager().state.lock();
+    if owner == me {
+        return st.own.as_ref().map(|o| StreamQuality { height: (o.resolution != 0).then_some(o.resolution), fps: o.fps });
+    }
+    st.watches.values().find(|w| w.owner == owner)?.quality
+}
+
+pub fn stream_view_low_fps(owner: u64) -> bool {
+    let st = manager().state.lock();
+    let Some(w) = st.watches.values().find(|w| w.owner == owner) else { return false };
+    let paused = stream_meta_map().lock().iter().any(|(k, m)| m.paused && super::stream::parse_key(k).is_some_and(|p| p.owner == owner));
+    !paused && w.quality.is_some_and(|q| view_low_fps(&w.frames, q.fps))
 }
 
 struct Running {
@@ -465,9 +537,14 @@ impl VoiceManager {
         let mut st = self.state.lock();
         st.emit = Some(emit.clone());
         match ev {
-            GatewayEvent::StreamCreate(sc) => return on_stream_create(&mut st, me, sc),
+            GatewayEvent::StreamCreate(sc) => {
+                record_stream_meta(sc);
+                return on_stream_create(&mut st, me, sc);
+            }
+            GatewayEvent::StreamUpdate(sc) => return record_stream_meta(sc),
             GatewayEvent::StreamServerUpdate(su) => return on_stream_server(&mut st, me, su),
             GatewayEvent::StreamDelete(sd) => {
+                stream_meta_map().lock().remove(&sd.stream_key);
                 if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
                     eprintln!("voice-trace: STREAM_DELETE key={} reason={:?}", sd.stream_key, sd.reason);
                 }
@@ -638,6 +715,7 @@ impl VoiceManager {
                         }
                         continue;
                     }
+                    VoiceEvent::VideoQuality { .. } => continue,
                     VoiceEvent::Disconnected { reason, retry } => {
                         let again = {
                             let mut st = manager().state.lock();
@@ -743,7 +821,8 @@ impl VoiceManager {
             VoiceControl::WatchStream(key) => start_watch(&mut st, key),
             VoiceControl::WatchAfterJoin(key) => st.pending_watch = Some(key),
             VoiceControl::StopWatching(key) => stop_watch(&mut st, &key),
-            VoiceControl::SetStreamVolume(u, v) => self.control.set_user_volume(u.0 | STREAM_AUDIO_BIT, v),
+            VoiceControl::SetStreamVolume(u, v) => self.control.set_stream_volume(u.0, v),
+            VoiceControl::SetStreamMute(u, m) => self.control.set_stream_muted(u.0, m),
             VoiceControl::SetPttKey(k) => {
                 if st.ptt_key != k {
                     st.ptt_key = k;
@@ -1226,7 +1305,7 @@ fn start_watch(st: &mut State, key: String) {
         eprintln!("voice-trace: op 20 STREAM_WATCH {key}");
     }
     st.stream_generation += 1;
-    st.watches.insert(key.clone(), Watch { generation: st.stream_generation, owner: k.owner, rtc_server_id: None, conn: None, stats: Default::default(), view: None });
+    st.watches.insert(key.clone(), Watch { generation: st.stream_generation, owner: k.owner, rtc_server_id: None, conn: None, stats: Default::default(), view: None, quality: None, frames: Default::default() });
     if let Err(e) = gw.stream_watch(&key) {
         st.watches.remove(&key);
         stream_ui(st, super::StreamUiEvent::Failed(e.to_string()));
@@ -1273,6 +1352,15 @@ async fn watch_events(generation: u64, key: String, owner: u64, mut events: mpsc
             VoiceEvent::Stats(s) => {
                 if let Some(w) = manager().state.lock().watches.get_mut(&key) {
                     w.stats = s;
+                    w.frames.push_back((std::time::Instant::now(), s.video_frames_received));
+                    while w.frames.len() > FPS_LONG + 1 {
+                        w.frames.pop_front();
+                    }
+                }
+            }
+            VoiceEvent::VideoQuality { user_id, quality } if user_id == owner => {
+                if let Some(w) = manager().state.lock().watches.get_mut(&key) {
+                    w.quality = Some(StreamQuality { height: quality.height, fps: quality.fps });
                 }
             }
             VoiceEvent::VideoState { active: false, .. } => {
@@ -1319,6 +1407,23 @@ pub fn devices() -> (Vec<String>, Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::{push_video, remote, remote_frame, stream_frame, streams};
+
+    #[test]
+    fn low_fps_warning_follows_the_client_thresholds() {
+        use super::{low_fps_threshold, view_low_fps};
+        assert_eq!([5, 15, 30, 60].map(low_fps_threshold), [3., 8., 15., 30.]);
+        let t0 = std::time::Instant::now();
+        let series = |fps: u64, n: u64| -> std::collections::VecDeque<_> { (0..n).map(|i| (t0 + std::time::Duration::from_secs(i), i * fps)).collect() };
+        assert!(!view_low_fps(&series(5, 15), 30));
+        assert!(view_low_fps(&series(10, 16), 30));
+        assert!(!view_low_fps(&series(20, 16), 30));
+        assert!(view_low_fps(&series(20, 31), 60));
+        let mut s = series(30, 16);
+        for i in 16..31u64 {
+            s.push_back((t0 + std::time::Duration::from_secs(i), 15 * 30 + (i - 15) * 2));
+        }
+        assert!(view_low_fps(&s, 30));
+    }
     use crate::model::Id;
     use phoenix_voice::codec::Codec;
     use phoenix_voice::media::ffmpeg;

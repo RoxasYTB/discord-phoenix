@@ -33,6 +33,19 @@ pub fn layers(v: &VideoPayload) -> Vec<Layer> {
     out
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeclaredQuality {
+    pub height: Option<u32>,
+    pub fps: u32,
+}
+
+pub fn declared_quality(v: &VideoPayload) -> Option<DeclaredQuality> {
+    let s = v.streams.iter().filter(|s| s.active && s.ssrc != 0).max_by_key(|s| if s.quality == 0 { 100 } else { s.quality })?;
+    let fps = s.max_framerate?;
+    let r = s.max_resolution.as_ref()?;
+    Some(DeclaredQuality { height: (r.kind != "source").then_some(r.height), fps })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodedFrame {
     pub user_id: u64,
@@ -457,6 +470,16 @@ mod tests {
         assert_eq!(layers(&v), vec![Layer { ssrc: 4, rtx_ssrc: 5, quality: 50 }, Layer { ssrc: 2, rtx_ssrc: 3, quality: 100 }]);
         let bare = VideoPayload { streams: vec![], ..v.clone() };
         assert_eq!(layers(&bare), vec![Layer { ssrc: 2, rtx_ssrc: 3, quality: 100 }]);
+        assert_eq!(declared_quality(&v), None);
+        let res = |kind: &str, height| Some(crate::gateway::protocol::Resolution { kind: kind.into(), width: 0, height });
+        let mut q = v.clone();
+        q.streams[0].max_framerate = Some(15);
+        q.streams[0].max_resolution = res("fixed", 360);
+        q.streams[1].max_framerate = Some(60);
+        q.streams[1].max_resolution = res("fixed", 1080);
+        assert_eq!(declared_quality(&q), Some(DeclaredQuality { height: Some(1080), fps: 60 }));
+        q.streams[1].max_resolution = res("source", 0);
+        assert_eq!(declared_quality(&q), Some(DeclaredQuality { height: None, fps: 60 }));
         let off = VideoPayload { video_ssrc: 0, streams: vec![], ..v };
         assert!(layers(&off).is_empty());
     }

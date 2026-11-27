@@ -383,6 +383,7 @@ async fn pump(inner: Arc<Inner>, s: Arc<Session>, mut rx: UnboundedReceiver<Gate
             GatewayEvent::VoiceStateUpdate(_)
                 | GatewayEvent::VoiceServerUpdate(_)
                 | GatewayEvent::StreamCreate(_)
+                | GatewayEvent::StreamUpdate(_)
                 | GatewayEvent::StreamServerUpdate(_)
                 | GatewayEvent::StreamDelete(_)
         ) {

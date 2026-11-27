@@ -29,6 +29,20 @@ impl Default for UserAudio {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StreamAudio {
+    pub volume: f32,
+    pub muted: bool,
+}
+
+pub const STREAM_DEFAULT_VOLUME: f32 = 18.;
+
+impl Default for StreamAudio {
+    fn default() -> Self {
+        Self { volume: STREAM_DEFAULT_VOLUME, muted: false }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoicePrefs {
     pub input_device: Option<String>,
@@ -49,6 +63,7 @@ pub struct VoicePrefs {
     pub attenuate_self: bool,
     pub attenuate_others: bool,
     pub users: HashMap<u64, UserAudio>,
+    pub streams: HashMap<u64, StreamAudio>,
     pub self_mute: bool,
     pub self_deaf: bool,
     pub audio_profile: u32,
@@ -91,6 +106,7 @@ impl Default for VoicePrefs {
             attenuate_self: false,
             attenuate_others: true,
             users: HashMap::new(),
+            streams: HashMap::new(),
             self_mute: false,
             self_deaf: false,
             audio_profile: PROFILE_CUSTOM,
@@ -124,6 +140,20 @@ impl VoicePrefs {
                     .collect()
             })
             .unwrap_or_default();
+        let streams = v
+            .get("streams")
+            .and_then(Value::as_object)
+            .map(|m| {
+                m.iter()
+                    .filter_map(|(k, u)| {
+                        let id = k.parse().ok()?;
+                        let volume = u.get("volume").and_then(Value::as_f64).map_or(STREAM_DEFAULT_VOLUME, |x| x.clamp(0., 200.) as f32);
+                        let muted = u.get("muted").and_then(Value::as_bool).unwrap_or(false);
+                        Some((id, StreamAudio { volume, muted }))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         Self {
             input_device: s("input_device"),
             output_device: s("output_device"),
@@ -143,6 +173,7 @@ impl VoicePrefs {
             attenuate_self: b("attenuate_self", d.attenuate_self),
             attenuate_others: b("attenuate_others", d.attenuate_others),
             users,
+            streams,
             self_mute: b("self_mute", false),
             self_deaf: b("self_deaf", false),
             audio_profile: n("audio_profile").map(|x| x.clamp(0., 2.) as u32).unwrap_or(d.audio_profile),
@@ -166,6 +197,12 @@ impl VoicePrefs {
                 )
             })
             .collect();
+        let streams: Map<String, Value> = self
+            .streams
+            .iter()
+            .filter(|(_, s)| **s != StreamAudio::default())
+            .map(|(id, s)| (id.to_string(), json!({ "volume": s.volume, "muted": s.muted })))
+            .collect();
         json!({
             "input_device": self.input_device,
             "output_device": self.output_device,
@@ -185,6 +222,7 @@ impl VoicePrefs {
             "attenuate_self": self.attenuate_self,
             "attenuate_others": self.attenuate_others,
             "users": users,
+            "streams": streams,
             "self_mute": self.self_mute,
             "self_deaf": self.self_deaf,
             "audio_profile": self.audio_profile,
@@ -217,6 +255,10 @@ impl VoicePrefs {
 
     pub fn user(&self, id: Id) -> UserAudio {
         self.users.get(&id.0).copied().unwrap_or_default()
+    }
+
+    pub fn stream(&self, owner: Id) -> StreamAudio {
+        self.streams.get(&owner.0).copied().unwrap_or_default()
     }
 
     pub fn user_gain(&self, id: Id) -> f32 {
@@ -277,6 +319,10 @@ impl VoicePrefs {
             VoiceControl::SetPttKey(if e.push_to_talk { self.ptt_key.clone() } else { None }),
         ];
         v.extend(self.users.keys().map(|u| VoiceControl::SetUserVolume(Id(*u), self.user_gain(Id(*u)))));
+        for (owner, s) in &self.streams {
+            v.push(VoiceControl::SetStreamVolume(Id(*owner), s.volume / 100.));
+            v.push(VoiceControl::SetStreamMute(Id(*owner), s.muted));
+        }
         v
     }
 }
@@ -335,6 +381,25 @@ mod tests {
         assert_eq!(amplitude(0.), 0.);
         assert!((amplitude(100.) - 1.).abs() < 1e-6);
         assert!((crate::voice::soundboard::perceptual(amplitude(73.) * 100.) - 73.).abs() < 1e-3);
+    }
+
+    #[test]
+    fn stream_audio_is_kept_apart_from_the_member_voice() {
+        let mut p = VoicePrefs::default();
+        assert_eq!(p.stream(Id(5)), StreamAudio { volume: 18., muted: false });
+        p.streams.insert(5, StreamAudio { volume: 40., muted: true });
+        p.users.insert(5, UserAudio { volume: 120, ..Default::default() });
+        let back = VoicePrefs::from_json(&p.to_json());
+        assert_eq!(back, p);
+        assert!(p.to_json()["streams"]["5"]["muted"].as_bool().unwrap());
+        let c = p.controls();
+        assert!(c.contains(&VoiceControl::SetStreamVolume(Id(5), 0.4)));
+        assert!(c.contains(&VoiceControl::SetStreamMute(Id(5), true)));
+        assert!(c.contains(&VoiceControl::SetUserVolume(Id(5), amplitude(120.))));
+        p.streams.insert(5, StreamAudio::default());
+        assert!(p.to_json()["streams"].as_object().unwrap().is_empty());
+        let c = VoicePrefs::from_json(&json!({"streams": {"9": {"volume": 900}}}));
+        assert_eq!(c.stream(Id(9)).volume, 200.);
     }
 
     #[test]

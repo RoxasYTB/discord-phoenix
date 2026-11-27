@@ -828,7 +828,23 @@ fn persist_volume(cx: &mut App) {
     });
 }
 
+pub const CALL_VOLUME_PREFIX: &str = "call-volume:";
+
+pub fn call_volume_key(user: Id, stream: bool) -> SharedString {
+    format!("{CALL_VOLUME_PREFIX}{}:{}", user.0, u8::from(stream)).into()
+}
+
+fn call_target(key: &SharedString) -> Option<(Id, bool)> {
+    let (u, s) = key.strip_prefix(CALL_VOLUME_PREFIX)?.split_once(':')?;
+    Some((Id(u.parse().ok()?), s == "1"))
+}
+
 fn toggle_mute(key: &SharedString, cx: &mut App) {
+    if let Some((user, stream)) = call_target(key) {
+        crate::ui::call_view::toggle_participant_mute(user, stream);
+        cx.refresh_windows();
+        return;
+    }
     let st = store(cx);
     if !st.muted.remove(key) {
         st.muted.insert(key.clone());
@@ -837,6 +853,11 @@ fn toggle_mute(key: &SharedString, cx: &mut App) {
 }
 
 fn set_slider(key: &SharedString, value: f32, cx: &mut App) {
+    if let Some((user, stream)) = call_target(key) {
+        crate::ui::call_view::set_participant_slider(user, stream, value);
+        cx.refresh_windows();
+        return;
+    }
     let amp = amplitude(value.clamp(0., 1.));
     let st = store(cx);
     st.volume = amp;
@@ -860,6 +881,9 @@ pub fn set_media_volume(v: f32, cx: &mut App) {
 }
 
 fn slider_value(cx: &App, key: &SharedString) -> f32 {
+    if let Some((user, stream)) = call_target(key) {
+        return crate::ui::call_view::participant_slider(user, stream);
+    }
     cx.try_global::<Store>().map_or(1., |s| if s.muted.contains(key) { 0. } else { perceptual(s.volume) })
 }
 
@@ -1637,6 +1661,66 @@ fn volume_slider(key: SharedString, left: f32, cx: &App) -> AnyElement {
     .with_priority(5)
     .into_any_element()
 }
+
+pub fn call_volume(user: Id, stream: bool, cx: &App) -> AnyElement {
+    let key = call_volume_key(user, stream);
+    let value = slider_value(cx, &key);
+    let muted = crate::ui::call_view::participant_muted(user, stream);
+    let vol_open = cx.try_global::<Store>().is_some_and(|s| {
+        let open = s.vol_open.as_ref() == Some(&key) && s.vol_hide_at.is_none_or(|t| Instant::now() < t);
+        open || s.vol_drag.as_ref().is_some_and(|(k, _)| *k == key) || s.vol_keys.as_ref() == Some(&key)
+    });
+    let (k_click, k_enter, k_keys) = (key.clone(), key.clone(), key.clone());
+    let id = |s: &str| gpui::ElementId::Name(format!("{s}-{key}").into());
+    div()
+        .id(id("callvol"))
+        .relative()
+        .flex_none()
+        .size(z(24.))
+        .child(
+            div()
+                .id(id("callvolbtn"))
+                .size(z(24.))
+                .cursor_pointer()
+                .child(svg().path(crate::icons::path(volume_icon(muted, value))).size(z(24.)).flex_none().text_color(c(tok(idx::WHITE))))
+                .on_click(move |_, window, cx| {
+                    toggle_mute(&k_click, cx);
+                    window.refresh();
+                }),
+        )
+        .on_hover(move |over, window, cx| {
+            vol_hover(&k_enter, Some(*over), None, cx);
+            window.refresh();
+        })
+        .on_key_down(move |e: &KeyDownEvent, window, cx| {
+            let k = e.keystroke.key.as_str();
+            match k {
+                "up" | "down" => {
+                    cx.stop_propagation();
+                    let st = store(cx);
+                    if st.vol_keys.as_ref() != Some(&k_keys) {
+                        st.vol_keys = Some(k_keys.clone());
+                    } else {
+                        let cur = slider_value(cx, &k_keys);
+                        let next = if k == "up" { (cur + 0.05).min(1.) } else { (cur - 0.05).max(0.) };
+                        set_slider(&k_keys, next, cx);
+                    }
+                    window.refresh();
+                }
+                "escape" => {
+                    if store(cx).vol_keys.take().is_some() {
+                        cx.stop_propagation();
+                        window.refresh();
+                    }
+                }
+                _ => {}
+            }
+        })
+        .when(vol_open, |d| d.child(volume_slider(key.clone(), CALL_SLIDER_LEFT, cx)))
+        .into_any_element()
+}
+
+const CALL_SLIDER_LEFT: f32 = slider_left(0.);
 
 fn vol_hover(key: &SharedString, button: Option<bool>, slider: Option<bool>, cx: &mut App) {
     let st = store(cx);

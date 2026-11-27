@@ -124,6 +124,7 @@ pub enum VoiceControl {
     WatchAfterJoin(String),
     StopWatching(String),
     SetStreamVolume(Id, f32),
+    SetStreamMute(Id, bool),
 }
 
 pub const PING_HISTORY: usize = 40;
