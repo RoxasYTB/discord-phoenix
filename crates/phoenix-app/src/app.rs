@@ -516,6 +516,9 @@ impl PhoenixApp {
         })
         .detach();
         self.clear_session();
+        self.nav.relationships.clear();
+        self.nav.pending_friend_actions.clear();
+        self.nav.relationship_revision = self.nav.relationship_revision.wrapping_add(1);
         self.login_mfa_step = false;
         self.login_error = None;
         self.screen = Screen::Login;
@@ -587,6 +590,7 @@ impl PhoenixApp {
         self.guild_list.reset(self.guilds.len() + 5);
         self.screen = Screen::Main;
         self.nav_after_ready();
+        self.refresh_relationships(cx);
         let first = self.guilds.first().map(|g| g.id);
         self.select_guild(first, cx);
         ui::settings::on_ready(self, cx);

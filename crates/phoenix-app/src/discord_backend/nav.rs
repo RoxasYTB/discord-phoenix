@@ -607,7 +607,7 @@ fn enc(code: &str) -> String {
     code.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect()
 }
 
-pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, BackendError> {
+pub async fn request(rest: RestClient, cache: Cache, req: NavRequest) -> Result<NavReply, BackendError> {
     let call = |m: Method, p: String, b: Option<Value>| {
         let rest = rest.clone();
         async move { rest.request_json(m, &p, b).await.map_err(api_err) }
@@ -697,6 +697,22 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             call(Method::DELETE, format!("/users/@me/guilds/{}", sf(g)), Some(json!({ "lurking": false }))).await?;
             NavReply::Done
         }
+        NavRequest::FetchRelationships => {
+            let records = rest.get_relationships().await.map_err(api_err)?;
+            NavReply::Relationships {
+                users: records.iter().filter_map(|r| r.user.as_ref().map(convert::user)).collect(),
+                records: records.iter().filter_map(relationship).collect(),
+            }
+        }
+        NavRequest::SendFriendRequest(user) => {
+            let user = match cache.user(sf(user)) {
+                Some(user) => user,
+                None => std::sync::Arc::new(rest.get_user(sf(user)).await.map_err(api_err)?),
+            };
+            let (method, path, body) = friend_request(&user);
+            rest.request_json(method, &path, body).await.map_err(|error| BackendError(add_friend_failure(&error).encode()))?;
+            NavReply::Done
+        }
         NavRequest::Relationship { user, action } => {
             let (m, path, body) = rel_request(user.0, &action);
             if matches!(action, RelAction::AddByTag { .. } | RelAction::Accept) {
@@ -771,6 +787,15 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
     })
 }
 
+fn friend_request(user: &api::User) -> (Method, String, Option<Value>) {
+    let tag = if user.discriminator.is_empty() || user.discriminator == "0" {
+        user.username.clone()
+    } else {
+        format!("{}#{}", user.username, user.discriminator)
+    };
+    rel_request(user.id.0, &RelAction::AddByTag { tag, note: None })
+}
+
 pub(crate) fn rel_request(user: u64, action: &RelAction) -> (Method, String, Option<Value>) {
     let one = format!("/users/@me/relationships/{user}");
     let all = "/users/@me/relationships".to_owned();
@@ -830,6 +855,18 @@ fn settings_body(channel: Option<Id>, fields: Value) -> Value {
 #[cfg(test)]
 mod rel_tests {
     use super::*;
+
+    #[test]
+    fn sending_a_friend_request_uses_the_account_handle_and_not_accept() {
+        let mut user = api::User { id: api::Snowflake(5), username: "testuser".into(), discriminator: "0".into(), ..Default::default() };
+        let (method, path, body) = friend_request(&user);
+        assert_eq!(method, Method::POST);
+        assert_eq!(path, "/users/@me/relationships");
+        assert_eq!(body.unwrap(), json!({ "username": "testuser", "discriminator": null }));
+        user.discriminator = "0042".into();
+        let (_, _, body) = friend_request(&user);
+        assert_eq!(body.unwrap(), json!({ "username": "testuser", "discriminator": 42 }));
+    }
 
     #[test]
     fn relationship_requests_match_the_client() {

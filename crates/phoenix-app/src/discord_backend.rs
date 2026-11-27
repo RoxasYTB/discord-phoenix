@@ -852,7 +852,7 @@ impl Backend for DiscordBackend {
     }
 
     fn nav(&self, req: crate::ui::home::data::NavRequest) -> BoxFuture<crate::ui::home::data::NavReply> {
-        self.with_session(move |_, s| nav::request(s.rest.clone(), req))
+        self.with_session(move |_, s| nav::request(s.rest.clone(), s.cache.clone(), req))
     }
 
     fn logout(&self) -> BoxFuture<()> {

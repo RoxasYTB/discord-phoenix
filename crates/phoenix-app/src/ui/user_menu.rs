@@ -7,7 +7,7 @@ use crate::{
     model::Id,
     ui::{
         context_menu::{self, MenuItem},
-        home::data::{NavRequest, RelAction},
+        home::data::{NavEvent, NavReply, NavRequest, RelAction, Relationship, RelationshipKind},
     },
 };
 
@@ -120,10 +120,16 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 items.push(MenuItem::submenu(crate::t!("menu.invite_to_server"), invites));
             }
         }
-        if friend {
-            items.push(act(crate::t!("menu.remove_friend"), Rc::new(move |a, _, _, cx| a.confirm_remove_friend(u, cx))));
-        } else if rel.is_none() && !bot {
-            items.push(act(crate::t!("friends.add"), Rc::new(move |a, _, _, cx| a.relationship_action(u, RelAction::Accept, cx))));
+        if app.nav.pending_friend_actions.contains(&u) {
+            items.push(MenuItem::disabled(crate::t!("friends.request_in_progress"), None));
+        } else if !bot {
+            match rel.unwrap_or(RelationshipKind::None) {
+                RelationshipKind::Friend => items.push(act(crate::t!("menu.remove_friend"), Rc::new(move |a, _, _, cx| a.confirm_remove_friend(u, cx)))),
+                RelationshipKind::Incoming => items.push(act(crate::t!("friends.accept"), Rc::new(move |a, _, _, cx| a.friend_menu_action(u, cx)))),
+                RelationshipKind::Outgoing => items.push(act(crate::t!("friends.cancel_outgoing"), Rc::new(move |a, _, _, cx| a.friend_menu_action(u, cx)))),
+                RelationshipKind::None => items.push(act(crate::t!("friends.add"), Rc::new(move |a, _, _, cx| a.friend_menu_action(u, cx)))),
+                RelationshipKind::Blocked => {}
+            }
         }
         let ign = if crate::actions::user::is_ignored(u) { "menu.unignore" } else { "menu.ignore" };
         items.push(act(crate::t!(ign), Rc::new(move |a, _, _, cx| a.request_ignore(u, cx))));
@@ -196,6 +202,59 @@ fn act_owned(e: &gpui::Entity<PhoenixApp>, label: gpui::SharedString, f: Act) ->
 }
 
 impl PhoenixApp {
+    pub(crate) fn friend_menu_action(&mut self, user: Id, cx: &mut Context<Self>) {
+        if user == self.me.id || self.users.get(&user).is_some_and(|u| u.bot) {
+            return;
+        }
+        let previous = self.nav.relationship(user).map(|r| r.kind).unwrap_or(RelationshipKind::None);
+        let request = match previous {
+            RelationshipKind::None => NavRequest::SendFriendRequest(user),
+            RelationshipKind::Incoming => NavRequest::Relationship { user, action: RelAction::Accept },
+            RelationshipKind::Outgoing => NavRequest::Relationship { user, action: RelAction::Remove },
+            _ => return,
+        };
+        if !self.nav.pending_friend_actions.insert(user) {
+            return;
+        }
+        let account = self.me.id;
+        self.nav_request(request, cx, move |app, result, cx| {
+            if app.me.id != account || !app.nav.pending_friend_actions.remove(&user) {
+                return;
+            }
+            match result {
+                Ok(NavReply::Done) => {
+                    let existing = app.nav.relationship(user).cloned();
+                    if existing.as_ref().map(|r| r.kind).unwrap_or(RelationshipKind::None) == previous {
+                        if previous == RelationshipKind::Outgoing {
+                            app.nav.apply(NavEvent::RelationshipRemove(user));
+                        } else {
+                            let kind = if previous == RelationshipKind::Incoming { RelationshipKind::Friend } else { RelationshipKind::Outgoing };
+                            app.nav.apply(NavEvent::RelationshipUpsert(Relationship {
+                                kind,
+                                ..existing.unwrap_or(Relationship {
+                                    user, kind, nickname: None, since: None, ignored: false, spam: false, note: None,
+                                })
+                            }));
+                        }
+                    }
+                    if previous == RelationshipKind::None {
+                        app.parity_toast(crate::t!("notif.friend_request"), cx);
+                    }
+                    app.refresh_relationships(cx);
+                }
+                Err(error) => {
+                    let tag = app.users.get(&user).map_or("", |u| u.name.as_ref());
+                    let msg = crate::ui::home::add_friend::Failure::decode(&error.0)
+                        .map_or_else(|| error.0.into(), |failure| crate::ui::home::add_friend::inline_error(&failure, tag));
+                    app.parity_toast(msg, cx);
+                    app.refresh_relationships(cx);
+                }
+                _ => {}
+            }
+        });
+        cx.notify();
+    }
+
     pub(crate) fn relationship_action(&mut self, user: Id, action: RelAction, cx: &mut Context<Self>) {
         self.nav_request(NavRequest::Relationship { user, action }, cx, |_, _, _| {});
         cx.notify();

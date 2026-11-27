@@ -10,7 +10,7 @@ use crate::{
     model::Id,
     presence::ActivityKind,
     theme::{c, generated::idx, tok, z},
-    ui::home::data::{NavRequest, RelAction, RelationshipKind},
+    ui::home::data::RelationshipKind,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -882,7 +882,7 @@ pub fn relationship_button(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixAp
             .opacity(0.5)
             .cursor_default(),
         RelationshipKind::None => b("profile-add-friend", "invite").tooltip(crate::ui::tooltip::tip(crate::t!("ptb.add_friend"))).on_click(cx.listener(
-            move |a, _, _, cx| a.nav_request(NavRequest::Relationship { user: uid, action: RelAction::Accept }, cx, |_, _, _| {}),
+            move |a, _, _, cx| a.friend_menu_action(uid, cx),
         )),
     })
 }
@@ -896,7 +896,7 @@ pub fn friend_action_items(app: &PhoenixApp, e: &Entity<PhoenixApp>, uid: Id) ->
             e.update(cx, |a, cx| a.confirm_remove_friend(uid, cx))
         })],
         Some(RelationshipKind::Incoming) => vec![MenuItem::action(crate::t!("ptb.accept_request"), None, move |_, _, cx: &mut gpui::App| {
-            e.update(cx, |a, cx| a.relationship_action(uid, RelAction::Accept, cx))
+            e.update(cx, |a, cx| a.friend_menu_action(uid, cx))
         })],
         _ => Vec::new(),
     }

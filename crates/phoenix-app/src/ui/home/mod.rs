@@ -86,6 +86,30 @@ impl PhoenixApp {
         }
     }
 
+    pub fn refresh_relationships(&mut self, cx: &mut Context<Self>) {
+        self.fetch_relationships(true, cx);
+    }
+
+    fn fetch_relationships(&mut self, retry: bool, cx: &mut Context<Self>) {
+        let account = self.me.id;
+        let revision = self.nav.relationship_revision;
+        self.nav_request(NavRequest::FetchRelationships, cx, move |app, reply, cx| {
+            if app.me.id != account || app.screen != crate::app::Screen::Main {
+                return;
+            }
+            if let Ok(NavReply::Relationships { records, users }) = reply {
+                if app.nav.relationship_revision == revision {
+                    for user in users {
+                        app.users.entry(user.id).or_insert(user);
+                    }
+                    app.nav.replace_relationships(records);
+                } else if retry {
+                    app.fetch_relationships(false, cx);
+                }
+            }
+        });
+    }
+
     pub fn nav_after_ready(&mut self) {
         if self.nav.prefs_loaded {
             return;

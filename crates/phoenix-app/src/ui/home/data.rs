@@ -145,6 +145,8 @@ pub enum NavRequest {
     CreateInvite(Id),
     LeaveGuild(Id),
     Relationship { user: Id, action: RelAction },
+    FetchRelationships,
+    SendFriendRequest(Id),
     OpenDm(Id),
     CloseDm(Id),
     MessageRequest { channel: Id, accept: bool },
@@ -164,6 +166,7 @@ pub enum NavReply {
     Text(SharedString),
     Channel(Channel),
     Json(serde_json::Value),
+    Relationships { records: Vec<Relationship>, users: Vec<crate::model::User> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -199,6 +202,8 @@ pub enum Overlay {
 #[derive(Default)]
 pub struct NavState {
     pub relationships: Vec<Relationship>,
+    pub relationship_revision: u64,
+    pub pending_friend_actions: HashSet<Id>,
     pub game_requests: Vec<(Id, Id)>,
     pub folders: Vec<GuildFolder>,
     pub sounds_seen: HashMap<Id, u64>,
@@ -264,11 +269,16 @@ impl NavState {
         self.threads.values().flatten().find(|t| t.id == id)
     }
 
+    pub fn replace_relationships(&mut self, relationships: Vec<Relationship>) {
+        self.relationships = relationships;
+        self.relationship_revision = self.relationship_revision.wrapping_add(1);
+    }
+
     pub fn apply(&mut self, ev: NavEvent) {
         match ev {
             NavEvent::Snapshot { relationships, folders, threads, extras, message_requests, spam_requests } => {
                 self.spam_requests = spam_requests;
-                self.relationships = relationships;
+                self.replace_relationships(relationships);
                 self.folders = folders;
                 self.threads.clear();
                 for t in threads {
@@ -284,8 +294,12 @@ impl NavState {
             NavEvent::RelationshipUpsert(r) => {
                 self.relationships.retain(|x| x.user != r.user);
                 self.relationships.push(r);
+                self.relationship_revision = self.relationship_revision.wrapping_add(1);
             }
-            NavEvent::RelationshipRemove(u) => self.relationships.retain(|x| x.user != u),
+            NavEvent::RelationshipRemove(u) => {
+                self.relationships.retain(|x| x.user != u);
+                self.relationship_revision = self.relationship_revision.wrapping_add(1);
+            }
             NavEvent::GameRequests(g) => self.game_requests = g,
             NavEvent::GameRequest { user, app, incoming } => {
                 self.game_requests.retain(|k| *k != (user, app));
