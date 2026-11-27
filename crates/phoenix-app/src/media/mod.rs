@@ -47,6 +47,16 @@ pub fn video_poster(url: &str, w: u32, h: u32) -> SharedString {
     format!("{r}{sep}format=webp").into()
 }
 
+pub fn gif_preview(url: &str, w: u32, h: u32, play: bool) -> SharedString {
+    let resized = resized(url, w, h);
+    if !is_media_proxy(&resized) {
+        return resized;
+    }
+    let base = strip_params(&resized, &["format", "animated"]);
+    let sep = if base.contains('?') { '&' } else { '?' };
+    format!("{base}{sep}format=webp&animated={play}").into()
+}
+
 pub fn gifv_animated(url: &str, w: f32) -> Option<SharedString> {
     let url = url.split('?').next().unwrap_or(url);
     for host in ["media.tenor.com/", "media1.tenor.com/", "c.tenor.com/"] {
@@ -98,7 +108,9 @@ pub fn static_variant(url: &str) -> SharedString {
 }
 
 pub fn is_animated(url: &str) -> bool {
-    url.contains(".gif")
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    path.rsplit_once('.').is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("gif"))
+        || url.split(['?', '&', '#']).skip(1).any(|param| param == "animated=true")
 }
 
 pub fn with_cdn_size(url: &str, size: u32) -> SharedString {
@@ -146,7 +158,9 @@ thread_local! {
 }
 
 pub fn gif_plays(key: &SharedString) -> bool {
-    emoji::window_focused() && (crate::ui::settings::effects::gif_autoplay() || HOVERED_GIF.with(|h| h.borrow().as_ref() == Some(key)))
+    emoji::window_focused()
+        && !crate::ui::settings::effects::reduced_motion()
+        && (crate::ui::settings::effects::gif_autoplay() || HOVERED_GIF.with(|h| h.borrow().as_ref() == Some(key)))
 }
 
 pub fn gif_hover(key: SharedString, child: impl IntoElement) -> gpui::Stateful<gpui::Div> {
@@ -326,6 +340,19 @@ mod tests {
             "https://media.discordapp.net/attachments/1/2/a.png?ex=1&width=100&height=50"
         );
         assert!(video_poster("https://cdn.discordapp.com/attachments/1/2/a.mp4", 10, 10).ends_with("format=webp"));
+    }
+
+    #[test]
+    fn animated_previews_request_frames_and_preserve_attachment_signatures() {
+        let url = "https://cdn.discordapp.com/attachments/1/2/a.GIF?ex=1&is=2&hm=3&format=png&animated=false";
+        assert!(is_animated(url));
+        assert!(!is_animated("https://example.com/preview.png?name=file.gif"));
+        assert_eq!(
+            gif_preview(url, 100, 50, true).as_ref(),
+            "https://media.discordapp.net/attachments/1/2/a.GIF?ex=1&is=2&hm=3&width=100&height=50&format=webp&animated=true"
+        );
+        assert!(gif_preview(url, 100, 50, false).ends_with("format=webp&animated=false"));
+        assert_eq!(gif_preview("https://media.tenor.com/id/a.gif", 100, 50, true).as_ref(), "https://media.tenor.com/id/a.gif");
     }
 
     #[test]

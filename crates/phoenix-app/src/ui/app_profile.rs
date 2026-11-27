@@ -638,7 +638,9 @@ pub fn page(app: &PhoenixApp, id: u64, _window: &mut Window, cx: &mut Context<Ph
         return div().size_full().relative().bg(tk(idx::BACKGROUND_BASE_LOWEST)).child(header(None, cx)).into_any_element();
     };
     let tab = STATE.with(|s| s.borrow().tab);
-    let banner = div().w_full().h(z(BANNER_H)).overflow_hidden().bg(tk(idx::BACKGROUND_BASE_LOWER)).children(p.banner.clone().map(|b| img(b).size_full().object_fit(gpui::ObjectFit::Cover)));
+    let banner = div().w_full().h(z(BANNER_H)).overflow_hidden().bg(tk(idx::BACKGROUND_BASE_LOWER)).children(p.banner.clone().map(|b| {
+        img(b.clone()).id(crate::media::anim_id(&b)).size_full().object_fit(gpui::ObjectFit::Cover)
+    }));
     let avatar = div()
         .absolute()
         .top(z(BANNER_H - 52.))

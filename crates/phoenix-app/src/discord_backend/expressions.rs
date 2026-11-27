@@ -75,9 +75,14 @@ pub(super) async fn sticker_packs(s: Arc<Session>) -> Result<Vec<StickerPackData
 }
 
 fn gif(g: &Gif) -> GifItem {
-    let video = g.src.is_empty() || g.src.split('?').next().is_some_and(|u| u.ends_with(".mp4") || u.ends_with(".webm"));
-    let preview = if video && !g.gif_src.is_empty() { g.gif_src.clone() } else { g.src.clone() };
-    GifItem { url: g.url.clone().into(), preview: preview.into(), width: g.width, height: g.height }
+    let preview = if crate::media::is_animated(&g.src) {
+        g.src.clone().into()
+    } else if !g.gif_src.is_empty() {
+        g.gif_src.clone().into()
+    } else {
+        crate::media::gifv_animated(&g.src, 200.).unwrap_or_else(|| g.src.clone().into())
+    };
+    GifItem { url: g.url.clone().into(), preview, width: g.width, height: g.height }
 }
 
 const PREVIEW: GifFormat = GifFormat::TinyGif;

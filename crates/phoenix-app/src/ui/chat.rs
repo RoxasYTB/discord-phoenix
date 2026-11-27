@@ -1841,9 +1841,17 @@ pub(crate) fn media_image_with(
     (w, h): (f32, f32),
     still: bool,
 ) -> gpui::Stateful<gpui::Img> {
-    let src = if still { media::video_poster(url, (w * 2.) as u32, (h * 2.) as u32) } else { media::resized(url, (w * 2.) as u32, (h * 2.) as u32) };
+    let animated = media::is_animated(url) || media::is_animated(&filename) || media::is_animated(&original);
+    let source = |width, height, play| {
+        if animated {
+            media::gif_preview(url, width, height, play)
+        } else {
+            media::resized(url, width, height)
+        }
+    };
+    let src = source((w * 2.) as u32, (h * 2.) as u32, !still);
     let viewer = media::ViewerImage {
-        url: media::resized(url, ow.min(2048), oh.min(2048)),
+        url: source(ow.min(2048), oh.min(2048), true),
         original: if original.is_empty() { url.to_owned().into() } else { original },
         filename,
         width: ow,
@@ -1988,7 +1996,7 @@ fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
                 .relative()
                 .on_mouse_down(gpui::MouseButton::Right, move |_, _, _| panels::set_menu_media(link.clone()))
                 .child({
-                    let gif = a.filename.to_ascii_lowercase().ends_with(".gif");
+                    let gif = media::is_animated(&a.filename) || media::is_animated(&a.url) || media::is_animated(&a.original);
                     let still = gif && !media::gif_plays(&a.url);
                     let im = media_image_with(&a.url, a.original.clone(), a.filename.clone(), (a.width, a.height), size, still);
                     if gif { media::gif_hover(a.url.clone(), im).into_any_element() } else { im.into_any_element() }
@@ -2276,7 +2284,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
             .then(|| e.video.iter().chain(e.thumbnail.iter()).find_map(|v| media::gifv_animated(&v.url, size.0)))
             .flatten();
         let Some(src) = animated else {
-            let still = media_image(&m.url, original.clone(), "".into(), (m.width, m.height), size);
+            let still = media_image_with(&m.url, original.clone(), "".into(), (m.width, m.height), size, !media::gif_plays(&original));
             return div().mt(z(4.)).child(media::gif_hover(original, still)).into_any_element();
         };
         let still = media::video_poster(&m.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32);

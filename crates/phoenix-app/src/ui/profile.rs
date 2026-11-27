@@ -492,7 +492,10 @@ pub(crate) fn banner(i: &Info, h: f32, radius: f32) -> Div {
         .overflow_hidden()
         .border_b_1()
         .border_color(c(tok(idx::BORDER_MUTED)))
-        .when_some(i.prof.and_then(|p| p.banner.clone()), |d, b| d.child(img(b.clone()).w_full().h(z(h)).rounded_t(z(radius))).on_mouse_down(gpui::MouseButton::Right, image_menu(b)))
+        .when_some(i.prof.and_then(|p| p.banner.clone()), |d, b| {
+            d.child(img(b.clone()).id(crate::media::anim_id(&b)).w_full().h(z(h)).rounded_t(z(radius)))
+                .on_mouse_down(gpui::MouseButton::Right, image_menu(b))
+        })
 }
 
 pub(crate) fn image_menu(url: SharedString) -> impl Fn(&gpui::MouseDownEvent, &mut Window, &mut gpui::App) + 'static {
@@ -512,13 +515,14 @@ pub(crate) fn avatar_block(i: &Info, size: f32, ring: f32, ring_color: u32) -> D
         .p(z(ring))
         .rounded_full()
         .bg(c(ring_color))
-        .child(crate::ui::avatar_with_status_deco(
+        .child(crate::ui::avatar_with_status_deco_hover(
             i.user.as_deref(),
             size,
             i.presence,
             c(ring_color),
             |d| d,
             i.prof.and_then(|p| p.decoration.clone()).map(|deco| crate::ui::avatar_deco::src(&deco, true)),
+            !crate::ui::settings::effects::reduced_motion(),
         ))
 }
 
