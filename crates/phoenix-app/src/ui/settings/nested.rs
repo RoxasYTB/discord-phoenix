@@ -578,7 +578,7 @@ fn family_hero(cx: &mut Cx) -> Div {
 
 fn family_feature(icon: &'static str, title: &str, desc: &str) -> Div {
     family_box()
-        .flex_1()
+        .flex_initial()
         .min_w_0()
         .p(z(20.))
         .flex()
