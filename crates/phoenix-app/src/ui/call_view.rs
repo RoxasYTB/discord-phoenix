@@ -1056,7 +1056,7 @@ pub fn camera_image() -> Option<std::sync::Arc<gpui::RenderImage>> {
 
 const SOLO_ART: &str = "https://discord.com/assets/664390de11a80444.svg";
 
-fn solo_button(id: &'static str, icon: &str, label: SharedString) -> AnyElement {
+fn solo_button(id: &'static str, icon: &str, label: SharedString) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .flex_none()
@@ -1077,7 +1077,6 @@ fn solo_button(id: &'static str, icon: &str, label: SharedString) -> AnyElement 
         .font_weight(FontWeight::MEDIUM)
         .child(named(icon, 20., t(idx::CONTROL_SECONDARY_TEXT_DEFAULT)))
         .child(label)
-        .into_any_element()
 }
 
 pub fn solo_veil_alpha(x: f32, y: f32) -> f32 {
@@ -1107,7 +1106,7 @@ fn solo_veil(rgb: u32) -> std::sync::Arc<gpui::RenderImage> {
     arc
 }
 
-fn solo_tile(w: f32, h: f32) -> AnyElement {
+fn solo_tile(w: f32, h: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let lower = t(idx::BACKGROUND_BASE_LOWER);
     div()
         .relative()
@@ -1143,7 +1142,7 @@ fn solo_tile(w: f32, h: f32) -> AnyElement {
                     div()
                         .flex()
                         .gap(z(8.))
-                        .child(solo_button("call-solo-invite", "invite", crate::t!("call.invite_voice")))
+                        .child(solo_button("call-solo-invite", "invite", crate::t!("call.invite_voice")).on_click(cx.listener(|a, _, _, cx| invite(a, cx))))
                         .child(solo_button("call-solo-activity", "apps", crate::t!("call.choose_activity"))),
                 ),
         )
@@ -1284,7 +1283,7 @@ pub fn stream_key(app: &PhoenixApp, owner: Id) -> Option<String> {
 
 fn render_tile(app: &PhoenixApp, tile: &Tile, w: f32, h: f32, rule_w: f32, fade: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
     if tile.invite {
-        return solo_tile(w, h);
+        return solo_tile(w, h, cx);
     }
     let u = app.users.get(&tile.user);
     let me = tile.user == app.me.id;
@@ -1607,7 +1606,7 @@ fn section() -> gpui::Div {
 fn invite(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let Some(ch) = a.voice_channel else { return };
     match a.channels.get(&ch).and_then(|c| c.guild) {
-        Some(g) => a.open_invite_people(g, cx),
+        Some(g) => a.open_invite_to(g, Some(ch), cx),
         None => a.open_add_to_dm(ch, cx),
     }
 }

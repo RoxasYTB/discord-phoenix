@@ -275,7 +275,7 @@ fn more_items(app: &PhoenixApp, channel: Id, cx: &mut Context<PhoenixApp>) -> Ve
             match entry {
                 M::InviteFriends => MenuItem::action(crate::t!("call.invite_voice"), Some(crate::icons::path("invite")), move |_, _, cx: &mut App| {
                     if let Some(g) = guild {
-                        e.update(cx, |a, cx| a.open_invite_people(g, cx));
+                        e.update(cx, |a, cx| a.open_invite_to(g, Some(channel), cx));
                     }
                 }),
                 M::GridView => {
