@@ -171,23 +171,12 @@ fn quest_items(e: &Ent, q: &crate::ui::quests_page::Quest) -> Vec<MenuItem> {
         share.update(cx, |a, cx| a.parity_toast(crate::t!("viewer.link_copied"), cx));
     }));
     items.push(MenuItem::Separator);
-    let more = e.clone();
-    items.push(MenuItem::action(crate::t!("quests.view_more"), Some(crate::icons::path("quests")), move |_, _, cx: &mut App| {
-        more.update(cx, |a, cx| a.open_home_view(crate::ui::home::data::HomeView::Quests, cx))
-    }));
     let why = e.clone();
     let detail = q.clone();
     items.push(MenuItem::action(crate::t!("quests.why"), None, move |_, _, cx: &mut App| {
         let d = detail.clone();
         why.update(cx, |a, cx| a.open_quest_disclosure(d, cx))
     }));
-    let hide = e.clone();
-    items.push(
-        MenuItem::action(crate::t!("quests.hide"), None, move |_, _, cx: &mut App| {
-            hide.update(cx, |a, cx| a.blocked_write(crate::actions::guard::GuardedWrite::quest_dismiss(quest, crate::ui::quests_page::QUEST_HOME_DESKTOP), cx))
-        })
-        .with_subtext(crate::t!("quests.hide_hint")),
-    );
     items
 }
 
