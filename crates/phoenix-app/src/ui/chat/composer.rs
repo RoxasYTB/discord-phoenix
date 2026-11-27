@@ -319,7 +319,7 @@ fn render_text_area(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     let placeholder = placeholder(app);
     let ic = c(Palette::INTERACTIVE);
     let placeholder_empty = app.composer.read(cx).value().is_empty();
-    let (remaining, show_count) = char_count(app.backend.has_premium(), app.composer.read(cx).value().chars().count() as i64);
+    let (remaining, show_count) = char_count(app.backend.premium_tier2(), app.composer.read(cx).value().chars().count() as i64);
     let reply = reply_bar(app, cx);
     let sched = if reply.is_none() { super::scheduled::bar(app, cx) } else { None };
     let has_banner = reply.is_some() || sched.is_some();

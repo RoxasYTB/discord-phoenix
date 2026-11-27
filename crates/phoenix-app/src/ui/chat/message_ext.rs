@@ -500,7 +500,7 @@ pub fn edit_box(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, cx
     let ed = app.chat.edit.as_ref().filter(|e| e.id == msg.id)?;
     let input = ed.input.clone();
     let len = input.read(cx).value().chars().count() as i64;
-    let (remaining, show_count) = super::composer::char_count(app.backend.has_premium(), len);
+    let (remaining, show_count) = super::composer::char_count(app.backend.premium_tier2(), len);
     let emoji_open = matches!(crate::ui::pickers::open_tab(cx), Some((_, crate::ui::pickers::EmojiTarget::Edit)));
     let fz = |v: f32| z(v * crate::theme::font_scale());
     let pad_y = ((56. - 22. * crate::theme::font_scale()) / 2.).max(0.);

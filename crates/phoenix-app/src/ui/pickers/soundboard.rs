@@ -386,7 +386,7 @@ pub fn build_rows(sections: &[Section], collapsed: &HashSet<String>) -> Vec<Row>
 }
 
 pub fn rebuild(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
-    let nitro = app.backend.has_premium();
+    let nitro = app.backend.premium_tier2();
     let (favorites, played) = cx
         .global::<Pickers>()
         .frecency
