@@ -165,7 +165,7 @@ targets the last such message (or `PHX_TARGET=<id>`), `PHX_EDIT_SAVE=1` saves it
 and `PHX_DELETE=1` opens the delete confirmation (`<out>-confirm.png`) and confirms (`<out>-deleted.png`).
 `PHX_KEYS="ctrl-k up escape"` dispatches each keystroke in turn (after focusing the composer with
 `PHX_KEYS_COMPOSER=1`), prints the selected channel, the composer and the edit box, and shoots
-`<out>-k<i>.png`; the read-only backend still refuses every write.
+`<out>-k<i>.png`; `!pageup` and `!pagedown` dispatch the actions directly. The read-only backend still refuses every write.
 These steps (and the edit itself when `PHX_EDIT_SAVE` is set) run after `PHX_SEND`, so one run can send, edit, react and delete the same message.
 
 ## `screenshot`

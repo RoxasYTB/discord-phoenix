@@ -2636,6 +2636,18 @@ fn main() -> anyhow::Result<()> {
             pump(&mut cx, 200);
         }
         for (i, key) in keys.split_whitespace().enumerate() {
+            let action: Option<Box<dyn gpui::Action>> = match key {
+                "!pageup" => Some(Box::new(phoenix_app::shortcuts::PageUp)),
+                "!pagedown" => Some(Box::new(phoenix_app::shortcuts::PageDown)),
+                _ => None,
+            };
+            if let Some(action) = action {
+                cx.update_window(win.into(), |_, window, cx| window.dispatch_action(action, cx))?;
+                pump(&mut cx, 400);
+                let top = cx.update(|cx| v.read(cx).message_list.logical_scroll_top());
+                println!("action {key}: list_top=({}, {})", top.item_ix, f32::from(top.offset_in_item));
+                continue;
+            }
             let Ok(ks) = gpui::Keystroke::parse_with_os(key, gpui::OperatingSystem::Linux) else {
                 eprintln!("real_shots: bad keystroke {key:?}");
                 continue;
