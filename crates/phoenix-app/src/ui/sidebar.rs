@@ -53,7 +53,11 @@ pub fn build_rows(app: &mut PhoenixApp) {
         None => {
             let (reqs, spam) = (&app.nav.message_requests, &app.nav.spam_requests);
             let rows: Vec<SidebarRow> =
-                app.dms.iter().filter(|d| !reqs.contains(d) && !spam.contains(d)).map(|id| SidebarRow::Channel(*id)).collect();
+                app.dms.iter().copied()
+                    .filter(|id| !reqs.contains(id) && !spam.contains(id))
+                    .filter(|id| app.channels.get(id).is_some_and(|channel| channel.guild.is_none()))
+                    .map(SidebarRow::Channel)
+                    .collect();
             let mut rows = rows;
             crate::actions::pins::apply(&mut rows);
             app.sidebar_rows = rows;

@@ -100,7 +100,9 @@ impl Cache {
 
     pub fn private_channels(&self) -> Vec<Arc<Channel>> {
         let s = self.inner.state.read();
-        let mut v: Vec<_> = s.private_channels.iter().filter_map(|id| s.channels.get(id).cloned()).collect();
+        let mut v: Vec<_> = s.private_channels.iter().filter_map(|id| s.channels.get(id))
+            .filter(|channel| channel.kind.is_private() && channel.guild_id.is_none())
+            .cloned().collect();
         v.sort_by_key(|c| std::cmp::Reverse(c.last_message_id.unwrap_or(c.id)));
         v
     }
@@ -224,6 +226,9 @@ impl Cache {
                     }
                 }
                 for c in &r.private_channels {
+                    if !c.kind.is_private() || c.guild_id.is_some() {
+                        continue;
+                    }
                     let mut c = c.clone();
                     if c.recipients.is_empty() {
                         c.recipients = c.recipient_ids.iter().filter_map(|id| s.users.get(id).map(|u| (**u).clone())).collect();
@@ -416,9 +421,9 @@ impl Cache {
                 }
             }
             GatewayEvent::ChannelDelete(c) | GatewayEvent::ThreadDelete(c) => {
-                s.channels.remove(&c.id);
+                let cached = s.channels.remove(&c.id);
                 s.messages.remove(&c.id);
-                if let Some(g) = c.guild_id {
+                if let Some(g) = c.guild_id.or_else(|| cached.and_then(|channel| channel.guild_id)) {
                     if let Some(v) = s.guild_channels.get_mut(&g) {
                         v.retain(|x| *x != c.id);
                     }
@@ -634,7 +639,15 @@ fn remove_guild(s: &mut State, id: GuildId) {
     s.voice_states.retain(|(g, _), _| *g != Some(id));
 }
 
-fn insert_channel(s: &mut State, c: Channel) {
+fn insert_channel(s: &mut State, mut c: Channel) {
+    if c.guild_id.is_none()
+        && let Some(previous) = s.channels.get(&c.id)
+    {
+        c.guild_id = previous.guild_id;
+        if c.kind == ChannelType::GuildText && previous.kind.is_private() {
+            c.kind = previous.kind;
+        }
+    }
     crate::trap::note(&c);
     match c.guild_id {
         Some(g) => {
@@ -643,7 +656,7 @@ fn insert_channel(s: &mut State, c: Channel) {
                 v.push(c.id);
             }
         }
-        None => {
+        None if c.kind.is_private() => {
             if !s.private_channels.contains(&c.id) {
                 s.private_channels.push(c.id);
             }
@@ -651,6 +664,7 @@ fn insert_channel(s: &mut State, c: Channel) {
                 s.users.entry(u.id).or_insert_with(|| Arc::new(u.clone()));
             }
         }
+        None => {}
     }
     s.channels.insert(c.id, Arc::new(c));
 }

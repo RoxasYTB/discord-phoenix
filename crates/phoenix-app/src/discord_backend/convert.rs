@@ -729,10 +729,11 @@ pub fn guild_channels(cache: &Cache, guild: api::Snowflake, rc: &ReadCtx) -> Vec
 }
 
 pub fn dm_channel(c: &api::Channel, rc: &ReadCtx) -> Option<model::Channel> {
+    if !c.kind.is_private() || c.guild_id.is_some() {
+        return None;
+    }
     let recip = c.recipient_user_ids().first().copied().map(id).into_iter().collect();
-    let mut ch = channel(c, 0, rc, recip)?;
-    ch.guild = None;
-    Some(ch)
+    channel(c, 0, rc, recip)
 }
 
 pub fn dm_channels(cache: &Cache, rc: &ReadCtx) -> Vec<model::Channel> {
@@ -983,13 +984,14 @@ impl Adapter {
         if m.author.id == self.me || self.prefs.blocked.contains(&m.author.id.0) {
             return false;
         }
-        let g = m.guild_id.map(|g| g.0);
+        let guild = m.guild_id.or_else(|| cache.channel(m.channel_id).and_then(|channel| channel.guild_id));
+        let g = guild.map(|g| g.0);
         let sup_every = g.is_some_and(|g| self.prefs.mutes.suppress_everyone.contains(&g));
         let sup_roles = g.is_some_and(|g| self.prefs.mutes.suppress_roles.contains(&g));
         m.mentions_user(self.me)
             || (m.mention_everyone && !sup_every)
             || (!sup_roles
-                && m.guild_id.and_then(|g| cache.member(g, self.me)).is_some_and(|me| m.mention_roles.iter().any(|r| me.roles.contains(r))))
+                && guild.and_then(|g| cache.member(g, self.me)).is_some_and(|me| m.mention_roles.iter().any(|r| me.roles.contains(r))))
     }
 
     pub fn recount_mentions(&mut self, cache: &Cache, channel: u64, latest_page: &[api::Message]) -> Option<AppEvent> {
@@ -1150,8 +1152,11 @@ impl Adapter {
                 let mut users = Vec::new();
                 message_users(m, &mut users);
                 out.push(AppEvent::Users(users));
+                let channel = cache.channel(m.channel_id);
+                let guild = m.guild_id.or_else(|| channel.as_ref().and_then(|c| c.guild_id));
+                let is_dm = guild.is_none() && channel.as_ref().is_some_and(|c| c.kind.is_private());
                 let mentioned = self.mentions_me(cache, m)
-                    || (m.guild_id.is_none()
+                    || (is_dm
                         && m.author.id != self.me
                         && !self.prefs.blocked.contains(&m.author.id.0)
                         && !self.prefs.mutes.channels.contains(&m.channel_id.0));
@@ -1161,21 +1166,20 @@ impl Adapter {
                     self.prefs.reads.entry(m.channel_id.0).or_default().mentions += 1;
                 }
                 out.push(AppEvent::MessageCreate(message(m)));
-                if let Some(c) = cache.channel(m.channel_id)
-                    && c.guild_id.is_some()
+                if let Some(c) = channel.as_deref()
+                    && guild.is_some()
                 {
-                    let (unread, mentions) = self.prefs.ctx().unread(&c);
+                    let (unread, mentions) = self.prefs.ctx().unread(c);
                     out.push(AppEvent::ChannelUnread { channel: id(m.channel_id), unread, mentions });
                 }
-                if let Some(g) = m.guild_id
+                if let Some(g) = guild
                     && let Some(gg) = cache.guild(g)
                 {
                     let chs = guild_channels(cache, g, &self.prefs.ctx());
                     let mg = guild_with_threads(cache, &gg, &chs, &self.prefs.ctx());
                     out.push(AppEvent::GuildUnread { guild: mg.id, unread: mg.unread, mentions: mg.mentions });
-                } else if m.guild_id.is_none()
-                    && let Some(c) = cache.channel(m.channel_id)
-                    && let Some(dm) = dm_channel(&c, &self.prefs.ctx())
+                } else if is_dm
+                    && let Some(dm) = channel.as_deref().and_then(|c| dm_channel(c, &self.prefs.ctx()))
                 {
                     out.push(AppEvent::DmUpsert(dm));
                 }
@@ -1395,15 +1399,16 @@ impl Adapter {
                 }
             }
             GatewayEvent::ChannelCreate(c) | GatewayEvent::ChannelUpdate(c) | GatewayEvent::ChannelDelete(c) => {
-                match c.guild_id {
-                    Some(g) => self.guild_state(cache, g, &mut out),
-                    None if matches!(ev, GatewayEvent::ChannelDelete(_)) => out.push(AppEvent::DmDelete(id(c.id))),
-                    None => {
-                        out.push(AppEvent::Users(c.recipients.iter().map(user).collect()));
-                        let c = cache.channel(c.id).unwrap_or_else(|| std::sync::Arc::new((**c).clone()));
-                        if let Some(dm) = dm_channel(&c, &self.prefs.ctx()) {
-                            out.push(AppEvent::DmUpsert(dm));
-                        }
+                let cached = cache.channel(c.id);
+                let current = cached.as_deref().unwrap_or(c);
+                if let Some(guild) = c.guild_id.or(current.guild_id) {
+                    self.guild_state(cache, guild, &mut out);
+                } else if let Some(dm) = dm_channel(current, &self.prefs.ctx()) {
+                    if matches!(ev, GatewayEvent::ChannelDelete(_)) {
+                        out.push(AppEvent::DmDelete(dm.id));
+                    } else {
+                        out.push(AppEvent::Users(current.recipients.iter().map(user).collect()));
+                        out.push(AppEvent::DmUpsert(dm));
                     }
                 }
             }

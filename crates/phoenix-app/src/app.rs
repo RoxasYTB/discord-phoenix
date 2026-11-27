@@ -584,8 +584,10 @@ impl PhoenixApp {
             crate::ui::voice_effects::prewarm();
         }
         for ch in r.dm_channels {
-            self.dms.push(ch.id);
-            self.channels.insert(ch.id, ch);
+            if ch.guild.is_none() && !self.channels.contains_key(&ch.id) {
+                self.dms.push(ch.id);
+                self.channels.insert(ch.id, ch);
+            }
         }
         self.guild_list.reset(self.guilds.len() + 5);
         self.screen = Screen::Main;
@@ -1119,6 +1121,9 @@ impl PhoenixApp {
                 }
             }
             AppEvent::DmDelete(id) => {
+                if self.channels.get(&id).is_some_and(|channel| channel.guild.is_some()) {
+                    return;
+                }
                 self.dms.retain(|d| *d != id);
                 self.channels.remove(&id);
                 if self.selected_guild.is_none() {
