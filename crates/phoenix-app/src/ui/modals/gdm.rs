@@ -64,7 +64,7 @@ pub fn group_patch(initial: &str, name: &str, icon: &Option<Option<String>>) -> 
 }
 
 pub fn parse_invites(v: &serde_json::Value) -> Vec<Invite> {
-    let mut out: Vec<Invite> = v
+    let mut out: Vec<(String, Invite)> = v
         .as_array()
         .into_iter()
         .flatten()
@@ -81,11 +81,12 @@ pub fn parse_invites(v: &serde_json::Value) -> Vec<Invite> {
                 .and_then(|e| e.as_str())
                 .and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok())
                 .map(|d| d.timestamp());
-            Some(Invite { code: code.into(), inviter: name.into(), avatar, expires })
+            let username = inv.and_then(|u| u.get("username")).and_then(|n| n.as_str()).unwrap_or_default().to_lowercase();
+            Some((username, Invite { code: code.into(), inviter: name.into(), avatar, expires }))
         })
         .collect();
-    out.sort_by_key(|i| i.inviter.to_lowercase());
-    out
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out.into_iter().map(|(_, i)| i).collect()
 }
 
 pub fn countdown(expires: Option<i64>, now: i64) -> String {
@@ -456,51 +457,60 @@ pub fn render_invites(s: &Invites, cx: &mut Context<PhoenixApp>) -> AnyElement {
             .into_any_element(),
         Some(l) => {
             let now = chrono::Utc::now().timestamp();
-            let head = |t: SharedString| div().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(muted).child(t);
-            let mut col = div().flex().flex_col().child(
-                div()
-                    .flex()
-                    .pb(z(8.))
-                    .border_b_1()
-                    .border_color(c(tok(idx::BORDER_SUBTLE)))
-                    .child(div().flex_1().child(head(crate::t!("gdm.host"))))
-                    .child(div().w(z(100.)).child(head(crate::t!("gdm.code"))))
-                    .child(div().w(z(140.)).child(head(crate::t!("gdm.expires")))),
-            );
+            let border = c(tok(idx::BORDER_SUBTLE));
+            let head = |t: SharedString| div().flex_1().min_w_0().p(z(16.)).font_weight(FontWeight::MEDIUM).child(t);
+            let mut table = div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .bg(c(tok(idx::BACKGROUND_MOD_MUTED)))
+                .border_1()
+                .border_color(border)
+                .rounded(z(crate::theme::generated::global::RADIUS_SM))
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .text_color(c(tok(idx::TEXT_DEFAULT)))
+                .child(
+                    div()
+                        .flex()
+                        .border_b_1()
+                        .border_color(border)
+                        .child(head(crate::t!("gdm.host")))
+                        .child(head(crate::t!("gdm.code")))
+                        .child(head(crate::t!("gdm.expires"))),
+                );
+            let last = l.len().saturating_sub(1);
             for (n, i) in l.iter().enumerate() {
                 let code = i.code.clone();
-                col = col.child(
+                let cell = || div().flex_1().min_w_0().p(z(16.));
+                table = table.child(
                     div()
                         .id(("gdm-inv", n))
                         .flex()
                         .items_center()
-                        .py(z(8.))
-                        .border_b_1()
-                        .border_color(c(tok(idx::BORDER_SUBTLE)))
-                        .text_size(z(14.))
-                        .line_height(z(18.))
+                        .when(n < last, |d| d.border_b_1().border_color(border))
+                        .when(n == last, |d| d.rounded_b(z(crate::theme::generated::global::RADIUS_SM)))
+                        .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
                         .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
+                            cell()
                                 .flex()
                                 .items_center()
                                 .gap(z(8.))
                                 .child(crate::ui::avatar(i.avatar.as_ref(), 24.))
-                                .child(div().min_w_0().text_ellipsis().font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_STRONG))).child(i.inviter.clone())),
+                                .child(div().min_w_0().text_ellipsis().font_weight(FontWeight::MEDIUM).child(i.inviter.clone())),
                         )
-                        .child(div().w(z(100.)).min_w_0().text_ellipsis().font_family(crate::fonts::mono_family()).opacity(0.6).text_color(c(tok(idx::TEXT_STRONG))).child(i.code.clone()))
+                        .child(cell().child(div().text_ellipsis().font_family(crate::fonts::mono_family()).opacity(0.6).child(i.code.clone())))
                         .child(
-                            div()
-                                .w(z(140.))
+                            cell()
                                 .flex()
                                 .items_center()
                                 .gap(z(8.))
-                                .child(div().flex_1().flex().justify_end().font_family(crate::fonts::mono_family()).text_color(c(tok(idx::TEXT_STRONG))).child(countdown(i.expires, now)))
+                                .child(div().font_family(crate::fonts::mono_family()).child(countdown(i.expires, now)))
                                 .child(
                                     div()
                                         .id(("gdm-inv-del", n))
                                         .size(z(32.))
+                                        .flex_none()
                                         .rounded(z(8.))
                                         .flex()
                                         .items_center()
@@ -519,7 +529,7 @@ pub fn render_invites(s: &Invites, cx: &mut Context<PhoenixApp>) -> AnyElement {
                         ),
                 );
             }
-            col.into_any_element()
+            table.into_any_element()
         }
     };
     let close = close_action(cx);
