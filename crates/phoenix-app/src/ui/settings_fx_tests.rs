@@ -229,3 +229,76 @@ fn voice_switch_warning_follows_the_setting(cx: &mut TestAppContext) {
     });
     assert!(!h.act(|a, _, _| a.voice_switch_needs_confirm(there)));
 }
+
+#[gpui::test]
+fn server_preview_opens_a_readable_channel_and_returns_to_discovery(cx: &mut TestAppContext) {
+    use crate::{backend::AppEvent, ui::{discovery, join_flow}};
+
+    let mut h = setup(cx);
+    h.act(|app, _, cx| {
+        let guild = app.selected_guild.unwrap();
+        let channel = app.channels[&app.selected_channel.unwrap()].clone();
+        join_flow::mark_lurking(guild);
+        app.handle_event(AppEvent::GuildChannels { guild, channels: vec![] }, cx);
+        assert_eq!(app.selected_channel, None);
+
+        let channel_id = channel.id;
+        app.handle_event(AppEvent::GuildChannels { guild, channels: vec![channel] }, cx);
+        assert_eq!(app.selected_channel, Some(channel_id));
+        assert!(crate::ui::chat::composer::channel_read_only(app));
+
+        app.handle_event(AppEvent::GuildDelete(guild), cx);
+        assert!(!join_flow::is_lurking(guild));
+        assert!(!app.guilds.iter().any(|g| g.id == guild));
+        assert_eq!(discovery::current(), Some(discovery::Tab::Servers));
+        discovery::close();
+    });
+}
+
+#[gpui::test]
+fn server_tag_opens_from_the_full_profile(cx: &mut TestAppContext) {
+    let mut h = setup(cx);
+    let guild_id = h.act(|app, _, cx| {
+        let guild_id = app.selected_guild.unwrap();
+        let user = app.users.values_mut().find(|u| !u.bot && u.id != app.me.id).unwrap();
+        user.tag = Some(("TEST".into(), None));
+        user.tag_guild = Some(guild_id);
+        let user_id = user.id;
+        app.open_profile_modal(user_id, cx);
+        guild_id
+    });
+    let center = h.vcx.debug_bounds("profile-server-tag").expect("profile tag is visible").center();
+    let zoom = h.vcx.update(|window, _| window.page_zoom());
+    let position = gpui::point(center.x * zoom, center.y * zoom);
+    let modifiers = gpui::Modifiers::none();
+    h.vcx.simulate_mouse_move(position, None::<gpui::MouseButton>, modifiers);
+    h.vcx.run_until_parked();
+    h.vcx.simulate_click(position, modifiers);
+    assert!(h.act(|app, _, _| app.people.tag_popout.as_ref().is_some_and(|popout| popout.guild_id == guild_id)));
+}
+
+#[gpui::test]
+fn server_navigation_restores_its_last_channel_and_message_position(cx: &mut TestAppContext) {
+    let mut h = setup(cx);
+    let channel = h.channels[0];
+    let (guild, other_guild, position) = h.act(|app, _, _| {
+        let guild = app.selected_guild.unwrap();
+        let other_guild = app.guilds.iter().find(|g| g.id != guild).unwrap().id;
+        assert_eq!(app.selected_channel, Some(channel));
+        assert!(app.message_list.viewport_bounds().size.height > gpui::px(0.));
+        let item_ix = 4;
+        let message = app.messages[&channel].msgs[item_ix - 1].id;
+        app.message_list.scroll_to(gpui::ListOffset { item_ix, offset_in_item: gpui::px(7.) });
+        (guild, other_guild, crate::ui::home::data::ScrollPosition { message, offset: 7 })
+    });
+    h.act(|app, _, cx| app.select_guild(Some(other_guild), cx));
+    assert_eq!(h.act(|app, _, _| app.nav.scroll_positions.get(&channel).copied()), Some(position));
+    h.act(|app, _, cx| app.select_guild(Some(guild), cx));
+    h.act(|app, _, _| {
+        assert_eq!(app.selected_channel, Some(channel));
+        assert!(!app.chat.at_bottom);
+        let top = app.message_list.logical_scroll_top();
+        assert_eq!(app.messages[&channel].msgs[top.item_ix - 1].id, position.message);
+        assert_eq!(top.offset_in_item, gpui::px(7.));
+    });
+}

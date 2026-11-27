@@ -254,6 +254,11 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     render_text_area(app, window, cx).into_any_element()
 }
 
+pub(crate) fn channel_read_only(app: &PhoenixApp) -> bool {
+    app.selected_guild.is_some_and(crate::ui::join_flow::is_lurking)
+        || app.selected_channel.and_then(|c| app.nav.extras.get(&c)).is_some_and(|extra| extra.send_blocked)
+}
+
 pub(super) fn placeholder(app: &PhoenixApp) -> SharedString {
     match app.selected_channel.and_then(|c| app.channels.get(&c)) {
         Some(c) if c.guild.is_none() && crate::ui::dm_profile_panel::is_group_dm(app, c.id) => crate::t!("chat.placeholder_thread", name = c.name),

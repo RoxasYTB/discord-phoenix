@@ -5,7 +5,7 @@ pub mod nitro;
 pub mod requests;
 pub mod topic;
 
-use gpui::{AnyElement, Context, IntoElement, SharedString, Window};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, SharedString, Styled, Window, div};
 
 use crate::{
     app::PhoenixApp,
@@ -17,8 +17,7 @@ use crate::{
 pub fn main_pane(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let page = page_content(app, window, cx);
     if crate::theme::frame_borders() {
-        use gpui::{ParentElement, Styled};
-        return gpui::div()
+        return div()
             .flex_1()
             .min_w_0()
             .h_full()
@@ -43,6 +42,16 @@ fn page_content(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     }
     if let Some(page) = crate::ui::community::render(app, window, cx) {
         return page;
+    }
+    if app.selected_channel.is_none() && app.selected_guild.is_some_and(crate::ui::join_flow::is_lurking) {
+        return div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p(crate::theme::z(16.))
+            .child(crate::t!("join_flow.preview_no_channels"))
+            .into_any_element();
     }
     if app.selected_guild.is_none() && app.nav.home == HomeView::Shop {
         return crate::ui::shop_page::render(app, window, cx);

@@ -64,6 +64,7 @@ pub enum ActiveScreen {
 #[derive(Default)]
 struct JoinFlowState {
     lurking: HashSet<Id>,
+    lurking_pending: HashSet<Id>,
     nsfw_accepted_channels: HashSet<Id>,
     nsfw_accepted_guilds: HashSet<Id>,
     verification_levels: HashMap<Id, u8>,
@@ -90,7 +91,9 @@ pub fn mark_lurking(guild: Id) {
 
 pub fn clear_lurking(guild: Id) {
     STATE.with(|s| {
-        s.borrow_mut().lurking.remove(&guild);
+        let mut state = s.borrow_mut();
+        state.lurking.remove(&guild);
+        state.lurking_pending.remove(&guild);
     });
 }
 
@@ -309,53 +312,78 @@ pub fn close_screen(cx: &mut Context<PhoenixApp>) {
     cx.notify();
 }
 
+pub fn finish_lurking(app: &mut PhoenixApp, guild: Id, join: bool, cx: &mut Context<PhoenixApp>) {
+    if !is_lurking(guild) || !STATE.with(|s| s.borrow_mut().lurking_pending.insert(guild)) {
+        return;
+    }
+    let request = if join { NavRequest::JoinGuild(guild) } else { NavRequest::LeaveGuild { guild, lurking: true } };
+    app.nav_request(request, cx, move |app, result, cx| {
+        STATE.with(|s| s.borrow_mut().lurking_pending.remove(&guild));
+        match result {
+            Ok(_) => {
+                if !join && app.guilds.iter().any(|g| g.id == guild) {
+                    app.handle_event(crate::backend::AppEvent::GuildDelete(guild), cx);
+                } else {
+                    clear_lurking(guild);
+                }
+            }
+            Err(error) if is_lurking(guild) => {
+                app.parity_toast(crate::t!("join_flow.preview_action_failed", error = error.0), cx);
+            }
+            Err(_) => {}
+        }
+    });
+    cx.notify();
+}
+
 pub fn lurker_banner(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    if crate::ui::discovery::current().is_some() {
+        return None;
+    }
     let gid = app.selected_guild?;
     if !is_lurking(gid) {
         return None;
     }
     let name = app.guilds.iter().find(|g| g.id == gid).map(|g| g.name.clone()).unwrap_or_default();
+    let pending = STATE.with(|s| s.borrow().lurking_pending.contains(&gid));
+    let button = |id: &'static str| {
+        div().id(id).flex_none().px(z(10.)).py(z(3.)).rounded(z(6.))
+            .border_1().border_color(gpui::white()).text_size(z(13.)).font_weight(FontWeight::SEMIBOLD)
+            .when(pending, |d| d.opacity(0.6))
+            .when(!pending, |d| d.cursor_pointer().hover(|s| s.bg(ca(0xFFFFFF26))))
+    };
     Some(
         div()
             .id("lurker-preview-banner")
-            .flex_none()
-            .px(z(16.))
-            .py(z(8.))
+            .absolute()
+            .top_0()
+            .left(z(crate::theme::m::server_bar_w()))
+            .right_0()
+            .h(z(crate::streamer::NOTICE_H))
+            .rounded_tl(z(8.))
+            .px(z(10.))
             .bg(c(Palette::BLURPLE))
+            .text_color(gpui::white())
             .flex()
             .items_center()
-            .justify_between()
             .gap(z(12.))
+            .child(button("lurker-back-btn")
+                .on_click(cx.listener(move |app, _, _, cx| finish_lurking(app, gid, false, cx)))
+                .child(crate::t!("join_flow.preview_back")))
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
+                    .truncate()
+                    .text_center()
                     .text_size(z(14.))
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(gpui::white())
-                    .child(crate::t!("join_flow.preview_banner", name = name)),
+                    .child(crate::t!("join_flow.preview_banner")),
             )
             .child(
-                div()
-                    .id("lurker-join-btn")
-                    .px(z(14.))
-                    .py(z(6.))
-                    .rounded(z(4.))
-                    .bg(gpui::white())
-                    .text_color(c(Palette::BLURPLE))
-                    .text_size(z(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.9))
-                    .on_click(cx.listener(move |a, _, _, cx| {
-                        a.nav_request(NavRequest::JoinGuild(gid), cx, move |_, res, cx| {
-                            if res.is_ok() {
-                                clear_lurking(gid);
-                                cx.notify();
-                            }
-                        });
-                    }))
-                    .child(crate::t!("join_flow.join_btn")),
+                button("lurker-join-btn")
+                    .on_click(cx.listener(move |app, _, _, cx| finish_lurking(app, gid, true, cx)))
+                    .child(crate::t!("join_flow.preview_join", name = name)),
             )
             .into_any_element(),
     )

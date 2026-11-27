@@ -143,7 +143,7 @@ pub enum NavRequest {
     SubmitMemberVerification { guild: Id, version: String, rules: Vec<String> },
     JoinGuild(Id),
     CreateInvite(Id),
-    LeaveGuild(Id),
+    LeaveGuild { guild: Id, lurking: bool },
     Relationship { user: Id, action: RelAction },
     FetchRelationships,
     OpenDm(Id),

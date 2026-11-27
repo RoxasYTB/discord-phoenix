@@ -623,15 +623,20 @@ impl PhoenixApp {
     }
 
     pub(crate) fn guild_target(&self, guild: Option<Id>) -> Option<Id> {
-        self.last_channel.get(&guild).copied().filter(|c| !self.is_trap_channel(*c)).or_else(|| match guild {
+        if let Some(g) = guild.filter(|g| ui::join_flow::is_lurking(*g)) {
+            return self.guild_channels.get(&g)?.iter().copied().filter(|c| !self.is_trap_channel(*c)).find(|id| {
+                self.channels.get(id).is_some_and(|c| matches!(c.kind, ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Forum))
+            });
+        }
+        self.last_channel.get(&guild).copied().filter(|id| !self.is_trap_channel(*id) && self.channels.get(id).is_some_and(|c| c.guild == guild)).or_else(|| match guild {
             Some(g) => self.guild_channels.get(&g).and_then(|l| {
                 let open = |id: &Id| !self.is_trap_channel(*id);
                 l.iter().copied().filter(open).find(|id| {
                     matches!(self.channels[id].kind, ChannelKind::Text | ChannelKind::Announcement)
-                        && self.channels[id].name.as_ref() == "general"
+                        && matches!(self.channels[id].name.to_lowercase().as_str(), "general" | "général")
                 })
                 .or_else(|| {
-                    l.iter().copied().filter(open).find(|id| self.channels[id].kind == ChannelKind::Text)
+                    l.iter().copied().filter(open).find(|id| matches!(self.channels[id].kind, ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Forum))
                 })
             }),
             None => None,
@@ -664,6 +669,10 @@ impl PhoenixApp {
         self.refuse_trap_in_agent_session(id);
         let Some(ch) = self.channels.get(&id) else { return };
         if matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage) {
+            if ch.guild.is_some_and(ui::join_flow::is_lurking) {
+                self.open_channel_chat(id, cx);
+                return;
+            }
             if self.voice_switch_needs_confirm(id) {
                 self.confirm_voice_switch(id, cx);
                 return;
@@ -714,8 +723,10 @@ impl PhoenixApp {
         self.selected_channel = Some(id);
         crate::notifications::clear(id.0);
         crate::ui::chat::voice_message::on_channel_change(self, cx);
-        self.last_channel.insert(guild, id);
-        self.nav_channel_selected(guild);
+        if !guild.is_some_and(ui::join_flow::is_lurking) {
+            self.last_channel.insert(guild, id);
+            self.nav_channel_selected(guild);
+        }
         self.replying_to = None;
         self.editing = None;
         self.chat_on_select(id);
@@ -1075,9 +1086,7 @@ impl PhoenixApp {
             }
             AppEvent::GuildChannels { guild, channels } => {
                 self.set_guild_channels(guild, channels);
-                if self.selected_guild == Some(guild) {
-                    self.rebuild_sidebar();
-                }
+                self.refresh_selected_guild_channels(guild, cx);
             }
             AppEvent::GuildRoles { guild, roles } => {
                 self.roles.insert(guild, roles);
@@ -1102,11 +1111,11 @@ impl PhoenixApp {
                 }
                 self.roles.insert(gid, roles);
                 self.set_guild_channels(gid, channels);
-                if self.selected_guild == Some(gid) {
-                    self.rebuild_sidebar();
-                }
+                self.refresh_selected_guild_channels(gid, cx);
             }
             AppEvent::GuildDelete(gid) => {
+                let was_preview = ui::join_flow::is_lurking(gid);
+                ui::join_flow::clear_lurking(gid);
                 self.guilds.retain(|g| g.id != gid);
                 self.guild_list.reset(self.guilds.len() + 5);
                 self.set_guild_channels(gid, Vec::new());
@@ -1114,10 +1123,16 @@ impl PhoenixApp {
                 self.members.remove(&gid);
                 if self.selected_guild == Some(gid) {
                     self.select_guild(None, cx);
+                    if was_preview {
+                        ui::discovery::open(ui::discovery::Tab::Servers);
+                    }
                 }
             }
             AppEvent::DmUpsert(ch) => {
                 let id = ch.id;
+                if ch.guild.is_some() || self.channels.get(&id).is_some_and(|existing| existing.guild.is_some()) {
+                    return;
+                }
                 let keep_unread = self.selected_channel == Some(id);
                 let mut ch = ch;
                 if keep_unread {
@@ -1215,6 +1230,20 @@ impl PhoenixApp {
         }
     }
 
+    fn refresh_selected_guild_channels(&mut self, guild: Id, cx: &mut Context<Self>) {
+        if self.selected_guild != Some(guild) {
+            return;
+        }
+        if ui::join_flow::is_lurking(guild) && self.selected_channel.is_none() && ui::discovery::current().is_none() {
+            if let Some(channel) = self.guild_target(Some(guild)) {
+                self.open_channel_chat(channel, cx);
+            } else {
+                self.message_list.reset(0);
+            }
+        }
+        self.rebuild_sidebar();
+    }
+
     fn set_guild_channels(&mut self, guild: Id, channels: Vec<crate::model::Channel>) {
         if let Some(old) = self.guild_channels.remove(&guild) {
             for id in old {
@@ -1297,6 +1326,9 @@ impl PhoenixApp {
     }
 
     pub fn submit_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.editing.is_none() && ui::chat::composer::channel_read_only(self) {
+            return;
+        }
         if self.editing.is_none() {
             let announce = ui::chat::announce::is_active(self);
             if announce && !ui::chat::announce::prepare_submit(self, window, cx) {
@@ -1606,7 +1638,9 @@ impl Render for PhoenixApp {
             Screen::Main => {
                 let title = ui::title_bar::render(self, window, cx).into_any_element();
                 let rail = ui::server_bar::render(self, cx).into_any_element();
-                let notice = crate::streamer::notice(self, cx).or_else(|| ui::view_as::notice(self, cx));
+                let notice = ui::join_flow::lurker_banner(self, cx)
+                    .or_else(|| crate::streamer::notice(self, cx))
+                    .or_else(|| ui::view_as::notice(self, cx));
                 let shift = notice.is_some();
                 let below_notice = |el: gpui::AnyElement, grow: bool| {
                     if !shift {

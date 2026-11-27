@@ -693,8 +693,8 @@ pub async fn request(rest: RestClient, req: NavRequest) -> Result<NavReply, Back
             let code = v.get("code").and_then(Value::as_str).unwrap_or_default();
             NavReply::Text(format!("https://discord.gg/{code}").into())
         }
-        NavRequest::LeaveGuild(g) => {
-            call(Method::DELETE, format!("/users/@me/guilds/{}", sf(g)), Some(json!({ "lurking": false }))).await?;
+        NavRequest::LeaveGuild { guild, lurking } => {
+            call(Method::DELETE, format!("/users/@me/guilds/{}", sf(guild)), Some(json!({ "lurking": lurking }))).await?;
             NavReply::Done
         }
         NavRequest::FetchRelationships => {
