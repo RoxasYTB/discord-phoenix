@@ -120,6 +120,16 @@ fn item_ex(title: SharedString, desc: Option<AnyElement>, trailing: Option<AnyEl
         }))
 }
 
+fn select_width(opts: &[SharedString], cx: &gpui::App) -> f32 {
+    let ts = cx.text_system();
+    let font = ts.resolve_font(&crate::richtext::ui_font());
+    let longest = opts
+        .iter()
+        .map(|o| o.chars().map(|ch| ts.advance(font, gpui::px(16.), ch).map(|a| f32::from(a.width)).unwrap_or(0.)).sum::<f32>())
+        .fold(0., f32::max);
+    (longest + 16. + 24. + 8.).max(200.) + 48.
+}
+
 fn get_bool(app: &PhoenixApp, id: &str, b: Bind) -> bool {
     match b {
         Bind::Ui(d) => app.settings.as_ref().and_then(|s| s.toggles.get(id).copied()).unwrap_or(d),
@@ -532,9 +542,10 @@ fn render_block(app: &PhoenixApp, b: &'static B, out: &mut Vec<AnyElement>, cx: 
             let cur = get_pick(app, id, *p);
             let (id, p) = (*id, *p);
             let opts: Vec<SharedString> = opts.iter().map(|o| tr(o)).collect();
-            let dd = dropdown(app, id, opts, cur, 280., move |a, i, cx| set_pick(a, id, p, i, cx), cx);
+            let width = select_width(&opts, cx);
+            let dd = dropdown(app, id, opts, cur, width, move |a, i, cx| set_pick(a, id, p, i, cx), cx);
             let desc = (!d.is_empty()).then(|| desc_text(tr(d)).into_any_element());
-            out.push(item(tr(t), desc, Some(dd), false).into_any_element());
+            out.push(item(tr(t), desc, Some(dd), false).gap(z(24.)).into_any_element());
         }
         B::Action(t, d, label, danger) => {
             let kind = BtnKind::Secondary;
