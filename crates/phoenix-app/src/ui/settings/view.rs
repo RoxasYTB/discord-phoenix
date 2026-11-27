@@ -470,6 +470,15 @@ fn subnav(rows: Vec<SharedString>, active: usize, cx: &mut Cx) -> Div {
         })))
 }
 
+fn scrolled_section(s: &super::SettingsState, total: usize) -> usize {
+    let max = s.scroll.max_offset().y;
+    if total <= 1 || max <= gpui::px(1.) {
+        return s.active_section;
+    }
+    let frac = ((-s.scroll.offset().y) / max).clamp(0., 1.);
+    (frac * (total - 1) as f32).round() as usize
+}
+
 static DEBUG_COPIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn copy_debug_info(app: &mut PhoenixApp, window: &mut Window, cx: &mut Cx) {
@@ -782,7 +791,7 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
             if p == cur && !searching {
                 let rows = subnav_rows(p);
                 if rows.len() > 1 {
-                    let active = app.settings.as_ref().map_or(0, |s| s.nested.map_or(s.active_section, super::nested::Nested::sub_index));
+                    let active = app.settings.as_ref().map_or(0, |s| s.nested.map_or_else(|| scrolled_section(s, rows.len()), super::nested::Nested::sub_index));
                     sec = sec.child(subnav(rows, active, cx));
                 }
             }
