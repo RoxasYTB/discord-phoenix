@@ -278,7 +278,9 @@ mod tests {
         }
     }
 
-    fn label(url: &str) -> Option<(String, Vec<LinkIcon>, Option<u64>, Option<u64>)> {
+    type Parts = (String, Vec<LinkIcon>, Option<u64>, Option<u64>);
+
+    fn label(url: &str) -> Option<Parts> {
         let m = match_url(url)?;
         let r = resolve(&R, &m)?;
         let Mention::Link(l) = r.mention else { return None };
