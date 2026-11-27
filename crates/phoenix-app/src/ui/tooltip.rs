@@ -286,7 +286,7 @@ pub trait Tipped: ParentElement + Styled + Sized {
         let mut el = self.child(probe(key, delay));
         if let Some((b, _)) = shown {
             let view_h = VIEW_H.with(|v| v.get());
-            el = el.child(layer(text, b, side, view_h));
+            el = el.child(crate::ui::profile_theme::scoped(None, || layer(text, b, side, view_h)));
         }
         el
     }
