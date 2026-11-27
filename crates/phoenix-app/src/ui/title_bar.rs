@@ -70,7 +70,7 @@ fn nav_arrow(id: &'static str, name: &'static str, back: bool, enabled: bool) ->
 pub static FORCE_CLIENT_DECORATIONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn client_decorated(window: &gpui::Window) -> bool {
-    FORCE_CLIENT_DECORATIONS.load(std::sync::atomic::Ordering::Relaxed)
+    cfg!(windows) || FORCE_CLIENT_DECORATIONS.load(std::sync::atomic::Ordering::Relaxed)
         || matches!(window.window_decorations(), gpui::Decorations::Client { .. })
 }
 
@@ -166,6 +166,7 @@ pub fn render(app: &PhoenixApp, window: &gpui::Window, cx: &mut Context<PhoenixA
                         .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(text)),
                 )),
         )
+        .when(cfg!(windows), |d| d.child(div().absolute().top_0().bottom_0().left(z(80.)).right(z(260.)).window_control_area(gpui::WindowControlArea::Drag)))
         .child(
             div()
                 .relative()
@@ -225,6 +226,7 @@ pub fn login_bar(window: &gpui::Window, cx: &mut Context<PhoenixApp>) -> impl In
         .flex()
         .items_center()
         .justify_end()
+        .when(cfg!(windows), |d| d.child(div().absolute().inset_0().right(z(120.)).window_control_area(gpui::WindowControlArea::Drag)))
         .when(client_decorated(window), |d| d.child(win_buttons(cx)))
 }
 
