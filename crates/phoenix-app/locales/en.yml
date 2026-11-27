@@ -4159,6 +4159,7 @@ settings.mfa.keys_d: "Use your fingerprint, face, screenlock, or security key wh
 settings.mfa.add_key: "Add Security Key"
 settings.mfa.key_error: "An error occurred. Please try again."
 settings.mfa.key_last_used: "Last used {last_used}"
+settings.mfa.under_hour: "less than an hour ago"
 settings.mfa.app: "Authenticator App"
 settings.mfa.app_d: "Use an app to generate a one-time code when logging in. This adds an extra layer of security to your Discord account, making sure that only you have the ability to log in."
 settings.mfa.remove: "Remove"

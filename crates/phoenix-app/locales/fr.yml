@@ -4159,6 +4159,7 @@ settings.mfa.keys_d: "Utilise ton empreinte digitale, ton visage, le verrouillag
 settings.mfa.add_key: "Ajouter une clé de sécurité"
 settings.mfa.key_error: "Une erreur s'est produite, merci d'essayer à nouveau."
 settings.mfa.key_last_used: "Dernière utilisation : {last_used}"
+settings.mfa.under_hour: "il y a moins d'une heure"
 settings.mfa.app: "Application d'authentification"
 settings.mfa.app_d: "Utilise une application pour générer un code à usage unique lors de la connexion. Cela ajoute une couche supplémentaire de sécurité à ton compte Discord pour t'assurer que personne d'autre ne peut s'y connecter."
 settings.mfa.remove: "Supprimer"

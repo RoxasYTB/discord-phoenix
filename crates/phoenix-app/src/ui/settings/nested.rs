@@ -801,6 +801,38 @@ pub struct SecurityKey {
     pub last_used: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+pub fn from_now_bucket(secs: i64) -> Option<(i64, i64)> {
+    if secs < 3600 {
+        return None;
+    }
+    let (m, h, d) = (secs as f64 / 60., secs as f64 / 3600., secs as f64 / 86400.);
+    let r = |x: f64| x.round() as i64;
+    Some(if m < 90. {
+        (1, 3600)
+    } else if h < 22. {
+        (r(h), 3600)
+    } else if h < 36. {
+        (1, 86_400)
+    } else if d < 26. {
+        (r(d), 86_400)
+    } else if d < 45. {
+        (1, 2_592_000)
+    } else if d < 319. {
+        (r(d / 30.4375).max(2), 2_592_000)
+    } else if d < 548. {
+        (1, 31_536_000)
+    } else {
+        (r(d / 365.25).max(2), 31_536_000)
+    })
+}
+
+pub fn last_used_label(secs: i64) -> SharedString {
+    match from_now_bucket(secs) {
+        None => crate::t!("settings.mfa.under_hour"),
+        Some((n, unit)) => crate::i18n::relative_long(-(n * unit)).into(),
+    }
+}
+
 pub fn parse_keys(v: &serde_json::Value) -> Vec<SecurityKey> {
     v.as_array()
         .into_iter()
@@ -839,7 +871,7 @@ fn security_keys(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
         .children(list.into_iter().map(|k| {
             let target = crate::ui::extra_menus::Target::SecurityKey { id: k.id.clone(), name: k.name.clone(), last };
             let open = crate::ui::extra_menus::opened().as_ref() == Some(&target);
-            let used = k.last_used.map(|d| crate::t!("settings.mfa.key_last_used", last_used = crate::i18n::calendar(d.with_timezone(&chrono::Local), chrono::Local::now())));
+            let used = k.last_used.map(|d| crate::t!("settings.mfa.key_last_used", last_used = last_used_label((chrono::Utc::now() - d).num_seconds())));
             div()
                 .flex()
                 .flex_row()
@@ -886,6 +918,19 @@ pub fn reset() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn last_used_follows_moment_from_now() {
+        assert_eq!(from_now_bucket(1_200), None);
+        assert_eq!(from_now_bucket(4_000), Some((1, 3600)));
+        assert_eq!(from_now_bucket(5 * 3600), Some((5, 3600)));
+        assert_eq!(from_now_bucket(30 * 3600), Some((1, 86_400)));
+        assert_eq!(from_now_bucket(3 * 86_400), Some((3, 86_400)));
+        assert_eq!(from_now_bucket(30 * 86_400), Some((1, 2_592_000)));
+        assert_eq!(from_now_bucket(100 * 86_400), Some((3, 2_592_000)));
+        assert_eq!(from_now_bucket(400 * 86_400), Some((1, 31_536_000)));
+        assert_eq!(from_now_bucket(1_000 * 86_400), Some((3, 31_536_000)));
+    }
 
     #[test]
     fn family_center_follows_the_client_breakpoints() {
