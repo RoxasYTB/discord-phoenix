@@ -757,6 +757,15 @@ fn start_own_stream(st: &mut State, source: super::StreamSource, resolution: u32
         soundshare: None,
     });
     match source {
+        super::StreamSource::Camera(name) => {
+            if let Some(o) = st.own.as_mut() { o.input = Some(phoenix_voice::media::camera::Input::Device(name)); }
+            send_stream_create(st);
+        }
+        #[cfg(any(windows, target_os = "macos"))]
+        super::StreamSource::Selected(target) => {
+            if let Some(o) = st.own.as_mut() { o.input = Some(phoenix_voice::media::camera::Input::Selected(target)); }
+            send_stream_create(st);
+        }
         super::StreamSource::TestPattern => {
             if let Some(o) = st.own.as_mut() {
                 o.input = Some(phoenix_voice::media::camera::Input::TestPattern);
@@ -794,7 +803,19 @@ fn start_own_stream(st: &mut State, source: super::StreamSource, resolution: u32
                 }
             });
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(windows)]
+        super::StreamSource::Portal(super::stream::SourceKind::Screen) => {
+            if let Some(o) = st.own.as_mut() {
+                o.input = Some(phoenix_voice::media::camera::Input::Desktop);
+            }
+            send_stream_create(st);
+        }
+        #[cfg(windows)]
+        super::StreamSource::Portal(_) => {
+            st.own = None;
+            stream_ui(st, super::StreamUiEvent::Failed("Select the entire desktop to share on Windows".into()));
+        }
+        #[cfg(not(any(target_os = "linux", windows)))]
         super::StreamSource::Portal(_) => {
             st.own = None;
             stream_ui(st, super::StreamUiEvent::Failed("screen capture is only available on Linux".into()));

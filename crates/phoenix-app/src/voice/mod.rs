@@ -70,10 +70,13 @@ pub enum StreamUiEvent {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamSource {
     TestPattern,
     Portal(stream::SourceKind),
+    Camera(String),
+    #[cfg(any(windows, target_os = "macos"))]
+    Selected(phoenix_voice::media::desktop::Target),
 }
 
 #[derive(Debug, Clone, PartialEq)]

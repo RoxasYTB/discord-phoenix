@@ -1,4 +1,6 @@
 pub mod camera;
+#[cfg(any(windows, target_os = "macos"))]
+pub mod desktop;
 pub mod ffmpeg;
 pub mod mock;
 pub mod testsrc;

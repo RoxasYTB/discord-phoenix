@@ -890,6 +890,12 @@ fn camera_preview(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
+#[cfg(windows)]
+pub(crate) fn cameras() -> Vec<String> {
+    phoenix_voice::media::camera::windows_cameras()
+}
+
+#[cfg(not(windows))]
 pub(crate) fn cameras() -> Vec<String> {
     let mut nodes: Vec<(u32, String)> = std::fs::read_dir("/sys/class/video4linux")
         .into_iter()

@@ -10,12 +10,28 @@ use crate::theme::{c, generated::idx, tok, z};
 use crate::ui::context_menu::MenuItem;
 use crate::ui::controls::{BtnKind, button};
 use crate::ui::tooltip::Tipped as _;
-use crate::voice::stream::{self, Preset, Quality, SourceKind};
+use crate::voice::stream::{self, Preset, Quality};
+#[cfg(target_os = "linux")]
+use crate::voice::stream::SourceKind;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ShareTab { #[default] Applications, Screens, Devices }
+
+#[derive(Debug, Clone)]
+struct Choice {
+    label: String,
+    source: crate::voice::StreamSource,
+    preview: Option<std::sync::Arc<gpui::RenderImage>>,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct State {
-    pub devices_tab: bool,
-    pub kind: Option<SourceKind>,
+    pub tab: ShareTab,
+    choices: Vec<Choice>,
+    selected: Option<usize>,
+    requested: Rc<Cell<bool>>,
+    loaded: bool,
+    error: Option<String>,
     pub menu: bool,
     pub viewport: Option<Size<Pixels>>,
 }
@@ -48,7 +64,7 @@ pub fn height(viewport_h: f32) -> f32 {
     if viewport_h <= 820. { HEIGHT.min(viewport_h - 90.).min(550.) } else { HEIGHT }
 }
 
-fn tab(id: &'static str, icon: &'static str, label: SharedString, selected: bool, devices: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn tab(id: &'static str, icon: &'static str, label: SharedString, selected: bool, dest: ShareTab, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let fg = if selected { t(idx::INTERACTIVE_TEXT_ACTIVE) } else { t(idx::TEXT_SUBTLE) };
     div()
         .id(id)
@@ -74,46 +90,58 @@ fn tab(id: &'static str, icon: &'static str, label: SharedString, selected: bool
                 .child(svg().path(crate::icons::path(icon)).flex_none().size(z(16.)).text_color(t(idx::INTERACTIVE_ICON_DEFAULT)))
                 .child(label),
         )
-        .on_click(cx.listener(move |_, _, _, cx| update(cx, |s| s.devices_tab = devices)))
+        .on_click(cx.listener(move |_, _, _, cx| update(cx, |s| {
+            if s.tab != dest { *s = State { tab: dest, viewport: s.viewport, ..Default::default() }; }
+        })))
         .into_any_element()
 }
 
-fn source_card(id: &'static str, icon: &'static str, label: SharedString, kind: SourceKind, selected: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let (bg, fg) = if selected {
-        (t(idx::INTERACTIVE_BACKGROUND_ACTIVE), t(idx::INTERACTIVE_TEXT_ACTIVE))
-    } else {
-        (t(idx::BACKGROUND_BASE_LOWER), t(idx::INTERACTIVE_TEXT_DEFAULT))
-    };
-    div()
-        .id(id)
-        .group(id)
-        .w(z(227.6))
-        .h(z(165.6))
-        .p(z(32.))
-        .rounded(z(4.))
-        .border_1()
-        .border_color(if selected { t(idx::BRAND_500) } else { t(idx::BORDER_SUBTLE) })
-        .bg(bg)
-        .text_color(fg)
-        .when(!selected, |d| d.hover(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_HOVER)).text_color(t(idx::INTERACTIVE_TEXT_HOVER))))
-        .active(|s| s.bg(t(idx::INTERACTIVE_BACKGROUND_ACTIVE)).text_color(t(idx::INTERACTIVE_TEXT_ACTIVE)))
-        .cursor_pointer()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            div()
-                .size_full()
-                .p(z(16.))
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_around()
-                .child(svg().path(crate::icons::path(icon)).flex_none().size(z(32.)).text_color(t(idx::INTERACTIVE_ICON_DEFAULT)))
-                .child(div().max_w(z(130.)).text_center().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).child(label)),
-        )
-        .on_click(cx.listener(move |_, _, _, cx| update(cx, |s| s.kind = Some(kind))))
-        .into_any_element()
+fn discover(tab: ShareTab) -> Result<Vec<Choice>, String> {
+    use crate::voice::StreamSource;
+    let item = |label: String, source| Choice { label, source, preview: None };
+    if tab == ShareTab::Devices {
+        #[cfg(windows)]
+        let names: Vec<_> = phoenix_voice::media::camera::windows_cameras().into_iter().map(|n| (n.clone(), n)).collect();
+        #[cfg(target_os = "linux")]
+        let names: Vec<_> = std::fs::read_dir("/sys/class/video4linux").into_iter().flatten().flatten().filter_map(|entry| {
+            let dir = entry.path();
+            if std::fs::read_to_string(dir.join("index")).ok()?.trim() != "0" { return None; }
+            let label = std::fs::read_to_string(dir.join("name")).ok()?;
+            Some((label.trim().to_owned(), format!("/dev/{}", entry.file_name().to_string_lossy())))
+        }).collect();
+        #[cfg(target_os = "macos")]
+        let names = {
+            let out = phoenix_voice::media::ffmpeg::ffmpeg_command().args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""]).output().map_err(|e| e.to_string())?;
+            String::from_utf8_lossy(&out.stderr).lines().skip_while(|l| !l.contains("video devices:")).skip(1)
+                .take_while(|l| !l.contains("audio devices:")).filter_map(|l| {
+                    let (_, tail) = l.rsplit_once('[')?;
+                    let (id, name) = tail.split_once("] ")?;
+                    id.parse::<u32>().ok()?;
+                    (!name.starts_with("Capture screen")).then(|| (name.to_owned(), id.to_owned()))
+                }).collect::<Vec<_>>()
+        };
+        return Ok(names.into_iter().map(|(name, id)| item(name, StreamSource::Camera(id))).collect());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let (label, kind) = match tab {
+            ShareTab::Screens => (crate::t!("golive.screen"), SourceKind::Screen),
+            _ => (crate::t!("golive.window"), SourceKind::Window),
+        };
+        Ok(vec![item(label.to_string(), StreamSource::Portal(kind))])
+    }
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        use phoenix_voice::media::desktop::Capture;
+        let entries = Capture::list(tab == ShareTab::Applications).map_err(|e| e.to_string())?;
+        Ok(entries.into_iter().map(|(id, label, capture)| {
+            let preview = capture.thumbnail().map(|mut pixels| {
+                for p in pixels.pixels_mut() { p.0.swap(0, 2); }
+                std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(pixels)]))
+            });
+            Choice { label, preview, source: StreamSource::Selected(id) }
+        }).collect())
+    }
 }
 
 pub fn preset_name(q: Quality) -> SharedString {
@@ -246,35 +274,43 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
     let w = WIDTH.min(vw - 48.);
     let h = height(vh);
     let close = super::close_action(cx);
-    let kind = s.kind;
-    let body = if s.devices_tab {
-        div().size_full().flex().items_center().justify_center().text_size(z(14.)).text_color(t(idx::TEXT_MUTED)).child(crate::t!("golive.no_devices")).into_any_element()
-    } else {
-        div()
-            .size_full()
-            .pt(z(16.))
-            .px(z(40.))
-            .pb(z(40.))
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .child(div().mb(z(8.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(t(idx::TEXT_DEFAULT)).child(crate::t!("golive.title")))
-            .child(
-                div()
-                    .mt(z(32.))
-                    .flex()
-                    .gap(z(16.))
-                    .child(source_card("golive-screen", "golive/screen", crate::t!("golive.screen"), SourceKind::Screen, kind == Some(SourceKind::Screen), cx))
-                    .child(source_card("golive-window", "golive/window", crate::t!("golive.window"), SourceKind::Window, kind == Some(SourceKind::Window), cx)),
-            )
-            .into_any_element()
-    };
+    if !s.requested.replace(true) {
+        let tab = s.tab;
+        let current = s.requested.clone();
+        let job = cx.background_executor().spawn(async move { discover(tab) });
+        cx.spawn(async move |this, cx| {
+            let result = job.await;
+            let _ = this.update(cx, |_, cx| update(cx, |state| {
+                if !Rc::ptr_eq(&state.requested, &current) { return; }
+                state.loaded = true;
+                match result { Ok(rows) => state.choices = rows, Err(err) => state.error = Some(err) }
+            }));
+        }).detach();
+    }
+    let body = div().id("share-sources").size_full().overflow_y_scroll().p(z(12.)).child(
+        div().flex().flex_wrap().gap(z(10.))
+            .when(s.choices.is_empty(), |d| d.child(if let Some(err) = &s.error { SharedString::from(err.clone()) }
+                else if !s.loaded { crate::t!("golive.loading_sources") }
+                else if s.tab == ShareTab::Devices { crate::t!("golive.no_devices") }
+                else { crate::t!("golive.no_sources") }))
+            .children(s.choices.iter().enumerate().map(|(i, choice)| {
+                div().id(("share-source", i)).w(z(250.)).p(z(8.)).rounded(z(6.)).border_1()
+                    .border_color(t(if s.selected == Some(i) { idx::BRAND_500 } else { idx::BORDER_SUBTLE }))
+                    .cursor_pointer().flex().flex_col().gap(z(6.))
+                    .when_some(choice.preview.clone(), |d, img| d.child(gpui::img(img).w_full().h(z(125.))))
+                    .child(div().text_ellipsis().whitespace_nowrap().overflow_hidden().child(choice.label.clone()))
+                    .on_click(cx.listener(move |_, _, _, cx| update(cx, |s| s.selected = Some(i))))
+            }))
+    );
     let entity = cx.entity();
+    let source = s.selected.and_then(|i| s.choices.get(i)).map(|row| row.source.clone());
+    let ready = source.is_some();
     let go = cx.listener(move |a, _, _, cx| {
-        close_modal();
-        crate::ui::go_live::start(a, kind.unwrap_or(SourceKind::Any));
-        cx.notify();
+        if let Some(source) = source.clone() {
+            close_modal();
+            crate::ui::go_live::start(a, source);
+            cx.notify();
+        }
     });
     let card = div()
         .w(z(w))
@@ -307,8 +343,9 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                             .gap(z(4.))
                             .rounded(z(12.))
                             .bg(t(idx::BACKGROUND_BASE_LOWEST))
-                            .child(tab("golive-tab-apps", "golive/window", crate::t!("golive.applications"), !s.devices_tab, false, cx))
-                            .child(tab("golive-tab-devices", "video-call", crate::t!("golive.devices"), s.devices_tab, true, cx)),
+                            .child(tab("golive-tab-apps", "golive/window", crate::t!("golive.applications"), s.tab == ShareTab::Applications, ShareTab::Applications, cx))
+                            .child(tab("golive-tab-screens", "golive/screen", crate::t!("golive.screens"), s.tab == ShareTab::Screens, ShareTab::Screens, cx))
+                            .child(tab("golive-tab-devices", "video-call", crate::t!("golive.devices"), s.tab == ShareTab::Devices, ShareTab::Devices, cx)),
                     ),
                 )
                 .child(div().flex_1().min_h_0().px(z(24.)).pt(z(8.)).child(body))
@@ -326,7 +363,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyE
                                     .flex()
                                     .items_center()
                                     .gap(z(8.))
-                                    .child(button("golive-go", crate::t!("golive.choose"), BtnKind::Primary).on_click(go))
+                                    .child(button("golive-go", crate::t!("golive.choose"), BtnKind::Primary).when(ready, |d| d.on_click(go)).when(!ready, |d| d.opacity(0.5)))
                                     .child(
                                         div()
                                             .id("golive-options")

@@ -3,7 +3,7 @@ use std::cell::Cell;
 use gpui::Context;
 
 use crate::app::PhoenixApp;
-use crate::voice::stream::{Perks, Quality, SourceKind};
+use crate::voice::stream::{Perks, Quality};
 use crate::voice::{StreamSource, VoiceControl};
 
 thread_local! {
@@ -56,10 +56,10 @@ pub fn live(app: &PhoenixApp) -> bool {
     app.voice.own_stream.is_some() || crate::voice::call::own_stream_pending()
 }
 
-pub fn start(app: &PhoenixApp, kind: SourceKind) {
+pub fn start(app: &PhoenixApp, source: StreamSource) {
     let q = quality();
     let (resolution, fps) = crate::voice::stream::resolve(q, perks(app));
-    drop(app.backend.voice_control(VoiceControl::StartStream { source: StreamSource::Portal(kind), resolution, fps, sound: q.sound }));
+    drop(app.backend.voice_control(VoiceControl::StartStream { source, resolution, fps, sound: q.sound }));
 }
 
 pub fn stop(app: &PhoenixApp) {
