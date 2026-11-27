@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use gpui::{AnyElement, Bounds, Context, DispatchPhase, IntoElement, MouseButton, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, SharedString, Styled, canvas, div, prelude::*};
+use gpui::{AnyElement, Bounds, Context, DispatchPhase, Focusable, IntoElement, MouseButton, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, SharedString, Styled, Window, canvas, div, prelude::*};
 use phoenix_api::rest::guild_server::{ProfilePatch, ServerCall};
 
 use super::{sf, t, text, write};
@@ -221,8 +221,122 @@ fn hue(i: usize, c: Hsv) -> AnyElement {
         .into_any_element()
 }
 
-fn hex_field(c: Hsv) -> AnyElement {
+fn hex_key(i: usize) -> String {
+    format!("tag-hex-{i}")
+}
+
+pub fn parse_hex_input(v: &str) -> Option<[u8; 3]> {
+    let v = v.trim().trim_start_matches('#');
+    (v.len() == 6).then(|| hex_to_rgb(&format!("#{v}"))).flatten()
+}
+
+fn current(i: usize, colors: [Option<Hsv>; 2]) -> Hsv {
+    colors[i].unwrap_or_else(|| rgb_to_hsv(hex_to_rgb(if i == 0 { crate::icons::clan_badges::PALETTES[0].0 } else { crate::icons::clan_badges::PALETTES[0].1 }).unwrap_or([0; 3])))
+}
+
+pub fn sync_hex(window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    let Some((guild, colors)) = POP.with_borrow(|p| if p.open { p.guild.map(|g| (g, p.colors)) } else { None }) else { return };
+    for i in 0..2 {
+        let Some(e) = super::existing_input(guild, &hex_key(i)) else { continue };
+        let shown = rgb_to_hex(hsv_to_rgb(current(i, colors)))[1..].to_owned();
+        let typed = e.read(cx).value().to_string();
+        if e.focus_handle(cx).is_focused(window) {
+            if let Some(rgb) = parse_hex_input(&typed)
+                && !typed.trim().trim_start_matches('#').eq_ignore_ascii_case(&shown)
+            {
+                POP.with_borrow_mut(|p| {
+                    p.colors[i] = Some(rgb_to_hsv(rgb));
+                    p.dirty = true;
+                });
+                cx.notify();
+            }
+        } else if !typed.eq_ignore_ascii_case(&shown) {
+            e.update(cx, |st, cx| st.set_value(shown, window, cx));
+        }
+    }
+}
+
+fn set_picked(i: usize, rgb: [u8; 3]) {
+    POP.with_borrow_mut(|p| {
+        if p.open {
+            p.colors[i] = Some(rgb_to_hsv(rgb));
+            p.dirty = true;
+        }
+    });
+}
+
+pub fn portal_rgb(color: (f64, f64, f64)) -> [u8; 3] {
+    let ch = |v: f64| (v.clamp(0., 1.) * 255.).round() as u8;
+    [ch(color.0), ch(color.1), ch(color.2)]
+}
+
+#[cfg(target_os = "linux")]
+async fn pick_screen_color() -> Option<[u8; 3]> {
+    use futures::StreamExt;
+    use zbus::zvariant::Value;
+    const PORTAL: &str = "org.freedesktop.portal.Desktop";
+    let conn = zbus::Connection::session().await.ok()?;
+    let token = format!("phoenix_pick_{}", std::process::id());
+    let sender = conn.unique_name()?.as_str().trim_start_matches(':').replace('.', "_");
+    let path = format!("/org/freedesktop/portal/desktop/request/{sender}/{token}");
+    let request = zbus::Proxy::new(&conn, PORTAL, path.as_str(), "org.freedesktop.portal.Request").await.ok()?;
+    let mut responses = request.receive_signal("Response").await.ok()?;
+    let screenshot = zbus::Proxy::new(&conn, PORTAL, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Screenshot").await.ok()?;
+    let mut options: std::collections::HashMap<&str, Value<'_>> = std::collections::HashMap::new();
+    options.insert("handle_token", Value::from(token.as_str()));
+    let _: zbus::zvariant::OwnedObjectPath = screenshot.call("PickColor", &("", options)).await.ok()?;
+    let msg = responses.next().await?;
+    let body = msg.body();
+    let (code, results): (u32, std::collections::HashMap<String, Value<'_>>) = body.deserialize().ok()?;
+    if code != 0 {
+        return None;
+    }
+    let Some(Value::Structure(s)) = results.get("color") else { return None };
+    let f: Vec<f64> = s.fields().iter().filter_map(|v| if let Value::F64(x) = v { Some(*x) } else { None }).collect();
+    (f.len() == 3).then(|| portal_rgb((f[0], f[1], f[2])))
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn pick_screen_color() -> Option<[u8; 3]> {
+    None
+}
+
+fn dropper(i: usize, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    div()
+        .id(("tag-hex-dropper", i))
+        .flex_none()
+        .cursor_pointer()
+        .child(super::icon("server/dropper", 20., idx::INTERACTIVE_ICON_DEFAULT))
+        .on_click(cx.listener(move |_, _, _, cx| {
+            cx.stop_propagation();
+            let job = cx.background_executor().spawn(async move { zbus_block(pick_screen_color()) });
+            cx.spawn(async move |this, cx| {
+                if let Some(rgb) = job.await {
+                    set_picked(i, rgb);
+                    let _ = this.update(cx, |_, cx| cx.notify());
+                }
+            })
+            .detach();
+        }))
+        .into_any_element()
+}
+
+#[cfg(target_os = "linux")]
+fn zbus_block<F: std::future::Future>(f: F) -> F::Output {
+    zbus::block_on(f)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn zbus_block<F: std::future::Future>(f: F) -> F::Output {
+    futures::executor::block_on(f)
+}
+
+fn hex_field(guild: Id, i: usize, c: Hsv, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let hex = rgb_to_hex(hsv_to_rgb(c));
+    let value: AnyElement = match super::input(guild, &hex_key(i), &hex[1..], cx) {
+        Some(e) => gpui_component::input::Input::new(&e).appearance(false).bordered(false).px(z(0.)).text_size(z(16.)).line_height(z(20.)).into_any_element(),
+        None => div().text_color(t(idx::TEXT_DEFAULT)).child(SharedString::from(hex[1..].to_owned())).into_any_element(),
+    };
     div()
         .h(z(40.))
         .px(z(12.))
@@ -235,12 +349,12 @@ fn hex_field(c: Hsv) -> AnyElement {
         .gap(z(4.))
         .text_size(z(16.))
         .child(div().text_color(t(idx::TEXT_MUTED)).child("#"))
-        .child(div().flex_1().min_w_0().text_color(t(idx::TEXT_DEFAULT)).child(SharedString::from(hex[1..].to_owned())))
-        .child(super::icon("server/dropper", 20., idx::INTERACTIVE_ICON_DEFAULT))
+        .child(div().flex_1().min_w_0().child(value))
+        .child(dropper(i, cx))
         .into_any_element()
 }
 
-fn column(i: usize, c: Hsv, label: SharedString) -> AnyElement {
+fn column(guild: Id, i: usize, c: Hsv, label: SharedString, cx: &mut Context<PhoenixApp>) -> AnyElement {
     div()
         .w(z(PICKER_W))
         .flex()
@@ -249,7 +363,7 @@ fn column(i: usize, c: Hsv, label: SharedString) -> AnyElement {
         .gap(z(8.))
         .child(div().w_full().h(z(50.)).rounded(z(3.)).bg(rgba(hsv_to_rgb(c))))
         .child(text(12., 16., gpui::FontWeight::MEDIUM, idx::TEXT_DEFAULT, label))
-        .child(div().w_full().rounded(z(4.)).bg(t(idx::BACKGROUND_BASE_LOW)).flex().flex_col().gap(z(16.)).child(div().flex().flex_col().child(saturation(i, c)).child(hue(i, c))).child(hex_field(c)))
+        .child(div().w_full().rounded(z(4.)).bg(t(idx::BACKGROUND_BASE_LOW)).flex().flex_col().gap(z(16.)).child(div().flex().flex_col().child(saturation(i, c)).child(hue(i, c))).child(hex_field(guild, i, c, cx)))
         .into_any_element()
 }
 
@@ -259,7 +373,7 @@ pub fn render(guild: Id, badge: u32, cx: &mut Context<PhoenixApp>) -> Option<Any
     }
     let colors = POP.with_borrow(|p| p.colors);
     let two = crate::icons::clan_badges::colors(badge) >= 2;
-    let fallback = |i: usize| colors[i].unwrap_or_else(|| rgb_to_hsv(hex_to_rgb(if i == 0 { crate::icons::clan_badges::PALETTES[0].0 } else { crate::icons::clan_badges::PALETTES[0].1 }).unwrap_or([0; 3])));
+    let fallback = |i: usize| current(i, colors);
     let weak = cx.entity().downgrade();
     let tracker = canvas(
         |_, _, _| {},
@@ -289,8 +403,8 @@ pub fn render(guild: Id, badge: u32, cx: &mut Context<PhoenixApp>) -> Option<Any
         .items_center()
         .justify_center()
         .gap(z(16.))
-        .child(column(0, fallback(0), crate::t!("gs2.tag_color_primary")))
-        .when(two, |d| d.child(column(1, fallback(1), crate::t!("gs2.tag_color_secondary"))));
+        .child(column(guild, 0, fallback(0), crate::t!("gs2.tag_color_primary"), cx))
+        .when(two, |d| d.child(column(guild, 1, fallback(1), crate::t!("gs2.tag_color_secondary"), cx)));
     let pop = div()
         .id("tag-color-popout")
         .occlude()
@@ -344,6 +458,16 @@ mod tests {
         assert_eq!(pick((1., 0.), Part::Saturation, c), Hsv { h: 200., s: 1., v: 1. });
         assert_eq!(pick((-1., 2.), Part::Saturation, c), Hsv { h: 200., s: 0., v: 0. });
         assert_eq!(pick((0.5, 0.3), Part::Hue, c), Hsv { h: 180., s: 0.5, v: 0.5 });
+    }
+
+    #[test]
+    fn typed_hex_and_portal_colors_are_parsed() {
+        assert_eq!(parse_hex_input("FF1C90"), Some([255, 28, 144]));
+        assert_eq!(parse_hex_input("#ff1c90"), Some([255, 28, 144]));
+        assert_eq!(parse_hex_input("ff1c9"), None);
+        assert_eq!(parse_hex_input("zzzzzz"), None);
+        assert_eq!(portal_rgb((1., 0., 0.5)), [255, 0, 128]);
+        assert_eq!(portal_rgb((2., -1., 0.)), [255, 0, 0]);
     }
 
     #[test]

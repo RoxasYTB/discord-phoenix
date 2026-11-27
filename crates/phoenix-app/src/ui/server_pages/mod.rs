@@ -189,7 +189,12 @@ pub fn field(guild: Id, key: &str, initial: &str, cx: &mut Context<PhoenixApp>) 
     }
 }
 
+pub fn existing_input(guild: Id, key: &str) -> Option<Entity<InputState>> {
+    with(|s| s.inputs.get(&(guild, key.to_owned())).cloned())
+}
+
 pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
+    tag_colors::sync_hex(window, cx);
     let areas = with(|s| std::mem::take(&mut s.want_area));
     for (g, k, init, rows) in areas {
         let e = cx.new(|cx| TextareaState::new(window, cx).auto_grow(rows.max(1), 12).default_value(init));
