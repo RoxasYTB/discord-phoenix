@@ -107,12 +107,13 @@ pub fn section_label(key: &str) -> SharedString {
 
 pub fn visible_for(perms: u64, owner: bool, community: bool, key: &str) -> bool {
     use crate::actions::{ADMINISTRATOR, MANAGE_GUILD, MANAGE_ROLES, MODERATE_MEMBERS};
-    if perms & ADMINISTRATOR != 0 && key != "menu.gs.delete" {
+    if !SECTIONS.contains(&key) { return false; }
+    if key == "menu.gs.delete" { return owner; }
+    if owner || perms & ADMINISTRATOR != 0 {
         return community || !matches!(key, "menu.gs.onboarding" | "menu.gs.analytics" | "menu.gs.discovery");
     }
     let has = |b: u64| perms & b != 0;
     match key {
-        "menu.gs.delete" => owner,
         "menu.gs.emoji" | "menu.gs.stickers" | "menu.gs.soundboard" => has(MANAGE_GUILD_EXPRESSIONS | CREATE_GUILD_EXPRESSIONS),
         "menu.gs.members" => has(MANAGE_GUILD | KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS | MANAGE_ROLES),
         "menu.gs.roles" => has(MANAGE_ROLES),
@@ -124,10 +125,16 @@ pub fn visible_for(perms: u64, owner: bool, community: bool, key: &str) -> bool 
 }
 
 pub fn visible(app: &PhoenixApp, guild: Id, key: &str) -> bool {
-    let g = app.guilds.iter().find(|g| g.id == guild);
-    let owner = g.and_then(|g| g.owner) == Some(app.me.id);
-    let community = g.is_some_and(|g| g.community);
-    visible_for(app.backend.guild_permissions(guild), owner, community, key)
+    let Some(g) = app.guilds.iter().find(|g| g.id == guild) else { return false };
+    visible_for(app.backend.guild_permissions(guild), g.owner == Some(app.me.id), g.community, key)
+}
+
+pub(crate) fn available_section(app: &PhoenixApp, guild: Id, preferred: usize) -> Option<usize> {
+    if SECTIONS.get(preferred).is_some_and(|key| visible(app, guild, key)) {
+        Some(preferred)
+    } else {
+        SECTIONS.iter().position(|key| visible(app, guild, key))
+    }
 }
 
 pub fn side_items(app: &PhoenixApp, guild: Id) -> Vec<SideItem> {
@@ -317,7 +324,10 @@ pub fn call_for(key: &str, guild: Id, s: &State) -> Option<AdminCall> {
 }
 
 pub fn load(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
-    let Some(todo) = with_state(|s| {
+    let Some((guild, todo)) = with_state(|s| {
+        if !visible(a, s.guild, s.key()) {
+            return (s.guild, Vec::new());
+        }
         let extra: &[&'static str] = if s.key() == "menu.gs.access" { access::extra_needs(s) } else { &[] };
         let keys: Vec<&'static str> = needs(s.key()).iter().chain(extra).copied().filter(|k| !s.data.contains_key(k) && !s.pending.contains(k)).collect();
         let mut out = Vec::new();
@@ -327,15 +337,17 @@ pub fn load(a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
                 out.push((k, c));
             }
         }
-        out
+        (s.guild, out)
     }) else {
         return;
     };
     for (k, call) in todo {
         a.admin(call, cx, move |a, r, cx| {
             with_state(|s| {
-                s.pending.remove(k);
-                s.data.insert(k, r.unwrap_or(Value::Null));
+                if s.guild == guild {
+                    s.pending.remove(k);
+                    s.data.insert(k, r.unwrap_or(Value::Null));
+                }
             });
             load(a, cx);
             cx.notify();
@@ -365,6 +377,9 @@ pub fn preselect_access(sub: &str) {
 }
 
 pub fn pick(i: usize, a: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
+    if with_state(|s| SECTIONS.get(i).is_some_and(|key| visible(a, s.guild, key))) != Some(true) {
+        return;
+    }
     if opens_app_directory(i) {
         open_app_directory(cx);
         return;
@@ -488,6 +503,9 @@ fn reset(a: &mut PhoenixApp, w: &mut Window, cx: &mut Context<PhoenixApp>) {
 }
 
 fn save(a: &mut PhoenixApp, _w: &mut Window, cx: &mut Context<PhoenixApp>) {
+    if with_state(|s| visible(a, s.guild, s.key())) != Some(true) {
+        return;
+    }
     if with_state(|s| s.key() == "menu.gs.access").unwrap_or(false) {
         let writes = with_state(access::submit).flatten();
         for w in writes.into_iter().flatten() {
@@ -566,6 +584,21 @@ fn page(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> (AnyElemen
 }
 
 pub fn render(app: &PhoenixApp, s: &State, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    if !visible(app, s.guild, s.key()) {
+        let guild = s.guild;
+        let entity = cx.entity();
+        cx.defer(move |cx| entity.update(cx, |app, cx| {
+            let still_selected = with_state(|state| state.guild == guild && !visible(app, guild, state.key())) == Some(true);
+            if still_selected {
+                crate::actions::close_modal();
+                if available_section(app, guild, 0).is_some() {
+                    app.open_server_settings(guild, 0, cx);
+                }
+                cx.notify();
+            }
+        }));
+        return div().into_any_element();
+    }
     let pick_fn: settings_layout::Pick = Rc::new(pick);
     let side = side_items(app, s.guild);
     let (content, wide) = match crate::ui::server_pages::content(app, s.guild, s.key(), cx) {
@@ -616,6 +649,29 @@ mod tests {
     use super::*;
     use crate::actions::{ADMINISTRATOR, MANAGE_GUILD, MANAGE_ROLES};
 
+    #[gpui::test]
+    fn member_without_permissions_gets_no_server_settings(cx: &mut gpui::TestAppContext) {
+        use crate::{backend::{Backend, Credentials}, mock::MockBackend};
+        let mock = MockBackend::synchronous();
+        let ready = futures::executor::block_on(mock.login(Credentials::Token("test".into()))).unwrap();
+        let guild = ready.guilds[0].id;
+        cx.update(gpui_component::init);
+        let window = cx.add_window(|w, cx| PhoenixApp::new(std::sync::Arc::new(mock), w, cx));
+        window.update(cx, |app, _, cx| {
+            app.apply_ready(ready, cx);
+            let profile = section_index("menu.gs.profile");
+            assert_eq!(available_section(app, guild, profile), None);
+            app.open_server_settings(guild, profile, cx);
+            assert!(with_modal(|m| m.is_none()));
+
+            app.guilds[0].owner = Some(app.me.id);
+            assert_eq!(available_section(app, guild, profile), Some(profile));
+            app.open_server_settings(guild, profile, cx);
+            assert!(with_modal(|m| matches!(m, Some(Modal::ServerSettings(s)) if s.guild == guild)));
+            crate::actions::close_modal();
+        }).unwrap();
+    }
+
     #[test]
     fn app_directory_entry_leaves_the_settings() {
         assert!(opens_app_directory(section_index("menu.gs.app_directory")));
@@ -648,6 +704,7 @@ mod tests {
         assert!(visible_for(ADMINISTRATOR, false, true, "menu.gs.audit_log"));
         assert!(!visible_for(ADMINISTRATOR, false, true, "menu.gs.delete"));
         assert!(visible_for(0, true, true, "menu.gs.delete"));
+        assert!(visible_for(0, true, false, "menu.gs.profile"));
         assert!(!visible_for(ADMINISTRATOR, false, false, "menu.gs.onboarding"));
         assert!(visible_for(MANAGE_ROLES, false, true, "menu.gs.roles"));
         assert!(visible_for(MANAGE_ROLES, false, true, "menu.gs.members"));

@@ -159,7 +159,11 @@ impl PhoenixApp {
     }
 
     pub fn open_server_settings(&mut self, guild: Id, section: usize, cx: &mut Context<Self>) {
+        if !self.guilds.iter().any(|g| g.id == guild) {
+            return;
+        }
         self.nav.guild_menu = false;
+        let Some(section) = server_settings::available_section(self, guild, section) else { return };
         open_modal(Modal::ServerSettings(Box::new(server_settings::State::new(guild, section))), None);
         server_settings::load(self, cx);
         cx.notify();
