@@ -35,6 +35,7 @@ const AFK_DEFAULT_S: u32 = 60;
 
 static IDLE_SINCE: AtomicU64 = AtomicU64::new(0);
 static AFK: AtomicBool = AtomicBool::new(false);
+static LOCKED_SINCE: AtomicU64 = AtomicU64::new(0);
 static WATCH: Once = Once::new();
 const PRESENCE_LIMIT: usize = 5;
 const PRESENCE_WINDOW: Duration = Duration::from_secs(20);
@@ -206,8 +207,7 @@ pub(super) fn resend(s: &Arc<super::Session>) {
 fn send_with(s: &Arc<super::Session>, force: bool) {
     let p = {
         let mut l = s.presence.lock();
-        l.idle_since = IDLE_SINCE.load(Ordering::Relaxed);
-        l.afk = AFK.load(Ordering::Relaxed);
+        (l.idle_since, l.afk) = effective_idle(IDLE_SINCE.load(Ordering::Relaxed), AFK.load(Ordering::Relaxed), LOCKED_SINCE.load(Ordering::Relaxed));
         l.payload(now_ms(), |e| emoji_animated(&s.cache, e))
     };
     let gate = SENT.lock().gate(&p, force, Instant::now());
@@ -234,8 +234,17 @@ pub(crate) fn afk_ms(afk_timeout: Option<u32>) -> Option<u32> {
     }
 }
 
+pub(crate) fn effective_idle(idle_since: u64, afk: bool, locked_since: u64) -> (u64, bool) {
+    let locked = locked_since != 0;
+    (if idle_since == 0 && locked { locked_since } else { idle_since }, afk || locked)
+}
+
 pub(crate) fn on_idle(which: usize, idle: bool, now: u64) -> bool {
     match which {
+        crate::idle::LOCK => {
+            let since = if idle { now.max(1) } else { 0 };
+            (LOCKED_SINCE.swap(since, Ordering::Relaxed) != 0) != idle
+        }
         0 => {
             let since = if idle { now.saturating_sub(u64::from(IDLE_MS)) } else { 0 };
             IDLE_SINCE.swap(since, Ordering::Relaxed) != since
@@ -404,6 +413,14 @@ mod tests {
         fb(5, &[0x32, 0x02, 0x08, 0x78], &mut raw);
         assert_eq!(Local::from_proto(&raw).afk_timeout, Some(120));
         assert_eq!(Local::from_proto(&[]).afk_timeout, None);
+    }
+
+    #[test]
+    fn a_locked_screen_is_idle_and_afk_at_once() {
+        assert_eq!(effective_idle(0, false, 0), (0, false));
+        assert_eq!(effective_idle(0, false, 5_000), (5_000, true));
+        assert_eq!(effective_idle(1_000, false, 5_000), (1_000, true));
+        assert_eq!(effective_idle(1_000, true, 0), (1_000, true));
     }
 
     #[test]
