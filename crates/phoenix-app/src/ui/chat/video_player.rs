@@ -788,6 +788,7 @@ fn tick(cx: &mut App) -> bool {
             continue;
         }
         busy = true;
+        dirty = true;
         if !matches!(p.load, Load::Ready(..)) {
             continue;
         }
