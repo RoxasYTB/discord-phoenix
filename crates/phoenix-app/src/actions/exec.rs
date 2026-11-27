@@ -49,8 +49,18 @@ pub(crate) async fn request_with(allowed: bool, rest: RestClient, req: ActionReq
     }
     use ActionRequest as R;
     Ok(match req {
-        R::Admin(c) => ActionReply::Json(rest.admin(&c).await.map_err(e)?),
-        R::AdminMfa(c, code) => ActionReply::Json(rest.admin_with_mfa(&c, &code).await.map_err(e)?),
+        R::Admin(c) => match rest.admin(&c).await {
+            Ok(value) => ActionReply::Json(value),
+            Err(err) if matches!(c, phoenix_api::rest::guild_manage::AdminCall::Server(phoenix_api::rest::guild_server::ServerCall::DeleteGuild { .. })) => {
+                ActionReply::AdminMfaRequired(phoenix_api::rest::guild_manage::admin_mfa_methods(&err).ok_or_else(|| e(err))?)
+            }
+            Err(err) => return Err(e(err)),
+        },
+        R::AdminMfa(c, method, code) => match rest.admin_with_mfa(&c, method, code.expose()).await {
+            Ok(value) => ActionReply::Json(value),
+            Err(phoenix_api::Error::Api { body, .. }) if matches!(body.code, 60008 | 60011 | 50035) => ActionReply::AdminMfaRejected,
+            Err(err) => ActionReply::AdminMfaRequired(phoenix_api::rest::guild_manage::admin_mfa_methods(&err).ok_or_else(|| e(err))?),
+        },
         R::SaveFolders(folders) => {
             rest.save_guild_folders(&folder_protos(&folders)).await.map_err(e)?;
             ActionReply::Done

@@ -48,7 +48,7 @@ pub enum ActionRequest {
     MoveChannels { guild: Id, entries: Vec<(Id, i32, Option<Option<Id>>)> },
     CreateEvent { guild: Id, name: String, description: String, start_unix: u64, end_unix: Option<u64>, place: EventPlace, recurrence: Option<serde_json::Value>, image: Option<String> },
     Admin(phoenix_api::rest::guild_manage::AdminCall),
-    AdminMfa(phoenix_api::rest::guild_manage::AdminCall, String),
+    AdminMfa(phoenix_api::rest::guild_manage::AdminCall, phoenix_api::rest::guild_manage::AdminMfaMethod, crate::discord_backend::store::Secret),
     SaveFolders(Vec<crate::ui::home::data::GuildFolder>),
     Stage(phoenix_api::rest::stage::StageCall),
 }
@@ -61,6 +61,8 @@ pub enum ActionReply {
     Messages(Vec<Message>),
     ReportMenu(Box<ReportMenu>),
     Json(serde_json::Value),
+    AdminMfaRequired(Vec<phoenix_api::rest::guild_manage::AdminMfaMethod>),
+    AdminMfaRejected,
 }
 
 pub use crate::ui::modals::Modal;

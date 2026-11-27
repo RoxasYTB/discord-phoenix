@@ -209,7 +209,7 @@ pub fn prepare(window: &mut Window, cx: &mut Context<PhoenixApp>) {
         return;
     }
     for (g, k, init) in want {
-        let e = cx.new(|cx| InputState::new(window, cx));
+        let e = cx.new(|cx| InputState::new(window, cx).masked(k == "delete-mfa-code"));
         if !init.is_empty() {
             e.update(cx, |s, cx| s.set_value(init, window, cx));
         }
@@ -393,6 +393,10 @@ pub fn close_modal() {
 }
 
 pub fn escape() -> bool {
+    if let Some((guild, "delete")) = with(|s| s.modal) {
+        delete::cancel(guild);
+        return true;
+    }
     with(|s| s.menu.take().is_some() || s.modal.take().is_some())
 }
 

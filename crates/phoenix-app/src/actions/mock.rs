@@ -22,7 +22,7 @@ pub fn reply(req: ActionRequest, users: Vec<User>) -> Result<ActionReply, Backen
         R::Reminders => ActionReply::Messages(Vec::new()),
         R::CreateThread { channel, .. } | R::CloneChannel { channel, .. } => ActionReply::Channel(channel),
         R::CreateStandaloneThread { channel, .. } => ActionReply::Channel(channel),
-        R::Admin(c) | R::AdminMfa(c, _) => ActionReply::Json(super::admin::mock_reply(&c)),
+        R::Admin(c) | R::AdminMfa(c, _, _) => ActionReply::Json(super::admin::mock_reply(&c)),
         _ => ActionReply::Done,
     })
 }

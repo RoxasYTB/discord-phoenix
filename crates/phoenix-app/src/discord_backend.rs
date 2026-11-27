@@ -654,7 +654,7 @@ impl Backend for DiscordBackend {
             use phoenix_api::rest::{guild_manage::AdminCall, guild_server::ServerCall};
 
             if let ActionRequest::Admin(AdminCall::Server(ServerCall::DeleteGuild { guild }))
-            | ActionRequest::AdminMfa(AdminCall::Server(ServerCall::DeleteGuild { guild }), _) = &req
+            | ActionRequest::AdminMfa(AdminCall::Server(ServerCall::DeleteGuild { guild }), _, _) = &req
             {
                 let owner = s.cache.guild(*guild).and_then(|g| g.owner_id());
                 let current_user = s.cache.current_user().map(|user| user.id);

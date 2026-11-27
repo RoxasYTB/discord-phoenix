@@ -452,13 +452,13 @@ impl RestClient {
         Ok(serde_json::from_slice(&bytes)?)
     }
 
-    pub async fn mfa_finish(&self, ticket: &str, code: &str) -> Result<String> {
+    pub async fn mfa_finish(&self, ticket: &str, method: guild_manage::AdminMfaMethod, code: &str) -> Result<String> {
         #[derive(Deserialize)]
         struct T {
             token: String,
         }
         let code: String = code.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
-        let t: T = self.call(Method::POST, "/mfa/finish", Body::Json(json!({ "ticket": ticket, "mfa_type": "totp", "data": code }))).await?;
+        let t: T = self.call(Method::POST, "/mfa/finish", Body::Json(json!({ "ticket": ticket, "mfa_type": method.api_name(), "data": code }))).await?;
         Ok(t.token)
     }
 

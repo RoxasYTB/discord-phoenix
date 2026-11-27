@@ -30,7 +30,7 @@ fn stage_moderation(c: &StageCall) -> bool {
 
 fn moderation_action(req: &ActionRequest) -> Option<(Method, String)> {
     match req {
-        ActionRequest::Admin(c) | ActionRequest::AdminMfa(c, _) if moderation_call(c) => {
+        ActionRequest::Admin(c) | ActionRequest::AdminMfa(c, _, _) if moderation_call(c) => {
             let r = phoenix_api::rest::guild_manage::build(c);
             Some((r.method, r.path))
         }
@@ -73,7 +73,7 @@ pub fn refuse_parity(allowed: bool, req: &ParityRequest) -> Option<phoenix_api::
 
 fn action_method(req: &ActionRequest) -> Option<Method> {
     match req {
-        ActionRequest::Admin(c) | ActionRequest::AdminMfa(c, _) => Some(phoenix_api::rest::guild_manage::build(c).method),
+        ActionRequest::Admin(c) | ActionRequest::AdminMfa(c, _, _) => Some(phoenix_api::rest::guild_manage::build(c).method),
         ActionRequest::Reminders | ActionRequest::ReportMenu(_) | ActionRequest::Reactors { .. } => Some(Method::GET),
         _ => None,
     }
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn server_deletion_is_protected_with_or_without_the_two_factor_code() {
         let call = || AdminCall::Server(ServerCall::DeleteGuild { guild: G });
-        for req in [ActionRequest::Admin(call()), ActionRequest::AdminMfa(call(), "123456".into())] {
+        for req in [ActionRequest::Admin(call()), ActionRequest::AdminMfa(call(), phoenix_api::rest::guild_manage::AdminMfaMethod::Authenticator, crate::discord_backend::store::Secret::new("123456"))] {
             assert!(!read_only_action(&req));
             assert!(refuse_action(false, &req).is_some());
             assert!(refuse_action(true, &req).is_none());

@@ -491,29 +491,69 @@ fn role_body(e: &RoleEdit) -> Value {
     b
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdminMfaMethod {
+    Authenticator,
+    Backup,
+}
+
+impl AdminMfaMethod {
+    pub fn api_name(self) -> &'static str {
+        match self {
+            Self::Authenticator => "totp",
+            Self::Backup => "backup",
+        }
+    }
+
+    pub fn normalize(self, input: &str) -> Option<String> {
+        let code: String = input.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+        let valid = match self {
+            Self::Authenticator => code.len() == 6 && code.bytes().all(|c| c.is_ascii_digit()),
+            Self::Backup => code.len() == 8 && code.bytes().all(|c| c.is_ascii_alphanumeric()),
+        };
+        valid.then_some(code)
+    }
+}
+
+pub fn admin_mfa_methods(error: &crate::Error) -> Option<Vec<AdminMfaMethod>> {
+    let crate::Error::Api { body, raw, .. } = error else { return None };
+    if body.code != 60003 {
+        return None;
+    }
+    let response = serde_json::from_str::<Value>(raw).ok();
+    let Some(methods) = response.as_ref().and_then(|v| v.pointer("/mfa/methods")).and_then(Value::as_array) else {
+        return Some(vec![AdminMfaMethod::Authenticator]);
+    };
+    Some([AdminMfaMethod::Authenticator, AdminMfaMethod::Backup].into_iter()
+        .filter(|method| methods.iter().any(|entry| entry.get("type").and_then(Value::as_str) == Some(method.api_name())))
+        .collect())
+}
+
 impl RestClient {
     pub async fn admin(&self, call: &AdminCall) -> Result<Value> {
         let r = build(call);
         self.request_json(r.method, &r.path, r.body).await
     }
 
-    pub async fn admin_with_mfa(&self, call: &AdminCall, code: &str) -> Result<Value> {
+    pub async fn admin_with_mfa(&self, call: &AdminCall, method: AdminMfaMethod, code: &str) -> Result<Value> {
         let r = build(call);
         match self.request_json(r.method.clone(), &r.path, r.body.clone()).await {
-            Err(crate::error::Error::Api { body, raw, .. }) if body.code == 60003 => {
+            Err(err) if admin_mfa_methods(&err).is_some_and(|methods| methods.contains(&method)) => {
+                let crate::Error::Api { raw, .. } = &err else { return Err(err) };
                 let ticket = serde_json::from_str::<Value>(&raw)
                     .ok()
                     .and_then(|v| v.pointer("/mfa/ticket").and_then(Value::as_str).map(str::to_owned));
                 match ticket {
                     Some(ticket) => {
-                        let token = self.mfa_finish(&ticket, code).await?;
+                        let token = self.mfa_finish(&ticket, method, code).await?;
                         self.request_json_mfa(r.method, &r.path, r.body, &token).await
                     }
-                    None => {
+                    None if method == AdminMfaMethod::Authenticator => {
                         let mut b = r.body.unwrap_or_else(|| serde_json::json!({}));
                         b["code"] = Value::String(code.trim().to_owned());
                         self.request_json(r.method, &r.path, Some(b)).await
                     }
+                    None => Err(err),
                 }
             }
             other => other,
@@ -527,6 +567,67 @@ mod tests {
 
     const G: Snowflake = Snowflake(1);
     const C: Snowflake = Snowflake(2);
+
+    #[test]
+    fn administrative_mfa_uses_the_methods_discord_offers() {
+        let challenge = |raw: &str| crate::Error::Api {
+            status: 401,
+            body: Box::new(crate::error::ApiErrorBody { code: 60003, ..Default::default() }),
+            raw: raw.to_owned(),
+        };
+        let both = challenge(r#"{"mfa":{"ticket":"test","methods":[{"type":"webauthn"},{"type":"totp"},{"type":"backup"}]}}"#);
+        assert_eq!(admin_mfa_methods(&both), Some(vec![AdminMfaMethod::Authenticator, AdminMfaMethod::Backup]));
+        let security_key = challenge(r#"{"mfa":{"methods":[{"type":"webauthn"}]}}"#);
+        assert_eq!(admin_mfa_methods(&security_key), Some(vec![]));
+        assert_eq!(admin_mfa_methods(&challenge("{}")), Some(vec![AdminMfaMethod::Authenticator]));
+        assert_eq!(AdminMfaMethod::Authenticator.normalize("123 456").as_deref(), Some("123456"));
+        assert_eq!(AdminMfaMethod::Backup.normalize("ab12-cd34").as_deref(), Some("ab12cd34"));
+        assert_eq!(AdminMfaMethod::Authenticator.normalize("1234"), None);
+    }
+
+    #[tokio::test]
+    async fn administrative_mfa_retries_with_the_verified_token() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let responses = [
+                ("401 Unauthorized", r#"{"code":60003,"mfa":{"ticket":"test-ticket","methods":[{"type":"backup"}]}}"#),
+                ("200 OK", r#"{"token":"verified-token"}"#),
+                ("204 No Content", ""),
+            ];
+            let mut requests = Vec::new();
+            for (status, response) in responses {
+                let (socket, _) = listener.accept().await.unwrap();
+                let mut socket = BufReader::new(socket);
+                let mut head = String::new();
+                loop {
+                    let mut line = String::new();
+                    assert_ne!(socket.read_line(&mut line).await.unwrap(), 0);
+                    if line == "\r\n" { break; }
+                    head.push_str(&line);
+                }
+                let len = head.lines().find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:")?.trim().parse::<usize>().ok()).unwrap_or(0);
+                let mut body = vec![0; len];
+                socket.read_exact(&mut body).await.unwrap();
+                requests.push((head, body));
+                let reply = format!("HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{response}", response.len());
+                socket.get_mut().write_all(reply.as_bytes()).await.unwrap();
+            }
+            requests
+        });
+        let rest = RestClient::with_base(Some("test-token".into()), crate::ClientProperties::linux_desktop(), format!("http://{addr}"));
+        let call = AdminCall::Server(crate::rest::guild_server::ServerCall::DeleteGuild { guild: G });
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), rest.admin_with_mfa(&call, AdminMfaMethod::Backup, "ab12-cd34")).await.unwrap();
+        assert_eq!(result.unwrap(), Value::Null);
+        let requests = server.await.unwrap();
+        assert!(requests[0].0.starts_with("POST /guilds/1/delete "));
+        assert!(requests[1].0.starts_with("POST /mfa/finish "));
+        assert_eq!(serde_json::from_slice::<Value>(&requests[1].1).unwrap(), json!({"ticket":"test-ticket","mfa_type":"backup","data":"ab12cd34"}));
+        assert!(requests[2].0.starts_with("POST /guilds/1/delete "));
+        assert!(requests[2].0.to_ascii_lowercase().contains("x-discord-mfa-authorization: verified-token\r\n"));
+    }
 
     #[test]
     fn event_rsvp_calls_match_the_client() {
