@@ -136,7 +136,6 @@ Reste :
 | fichier | ligne | pourquoi |
 |---|---|---|
 | window-chrome | icône du rail : état activité (AppsIcon) | le store des activités intégrées ne se remplit qu'avec une activité lancée dans un vocal ; rien en GET |
-| settings | select « Quelqu'un réagit » : `max-content` + la moitié de l'espace libre (316 px mesurés) | la largeur intrinsèque du select n'est connue que mesurée ; Phoenix met 280 |
 | real-compare | barre « Nouveaux non lus » en haut (#bienvenue) | rejouer avec `RUST_LOG=phoenix::unread_bar=debug` sur un serveur avec des non-lus |
 | real-compare | coupe du placeholder du compositeur, position verticale du compositeur | zone de wt/placeholder-cut |
 | text | soulignement du nom sans émoji | survol en direct |
