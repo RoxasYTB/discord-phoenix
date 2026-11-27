@@ -1064,6 +1064,8 @@ mod tests {
             start: None,
             application_id: app_id.map(|s| s.to_owned().into()),
             party: None,
+            platform: None,
+            flags: 0,
         }
     }
 

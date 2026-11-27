@@ -1971,6 +1971,8 @@ mod activity_header_tests {
             start: None,
             application_id: None,
             party: None,
+            platform: None,
+            flags: 0,
         }
     }
 

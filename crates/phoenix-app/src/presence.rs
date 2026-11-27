@@ -17,6 +17,9 @@ pub enum ActivityKind {
     Competing,
 }
 
+pub const XBOX_APPLICATION_ID: &str = "438122941302046720";
+pub const EMBEDDED_FLAG: u64 = 1 << 8;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Activity {
     pub kind: ActivityKind,
@@ -30,9 +33,19 @@ pub struct Activity {
     pub start: Option<i64>,
     pub application_id: Option<SharedString>,
     pub party: Option<SharedString>,
+    pub platform: Option<SharedString>,
+    pub flags: u64,
 }
 
 impl Activity {
+    pub fn is_xbox(&self) -> bool {
+        self.application_id.as_deref() == Some(XBOX_APPLICATION_ID) || self.platform.as_deref() == Some("xbox")
+    }
+
+    pub fn is_embedded(&self) -> bool {
+        self.flags & EMBEDDED_FLAG != 0
+    }
+
     pub fn is_spotify(&self) -> bool {
         self.kind == ActivityKind::Listening && self.name.as_ref() == "Spotify"
     }
@@ -110,6 +123,8 @@ pub fn parse_activity(a: &Value) -> Option<Activity> {
         start: a.get("timestamps").and_then(|t| t.get("start")).and_then(Value::as_i64),
         application_id: a.get("application_id").and_then(|v| v.as_str().map(str::to_owned).or_else(|| v.as_u64().map(|n| n.to_string()))).map(Into::into),
         party: a.get("party").and_then(|p| s(p, "id")),
+        platform: s(a, "platform"),
+        flags: a.get("flags").and_then(Value::as_u64).unwrap_or(0),
     };
     let empty = match kind {
         ActivityKind::Custom => act.state.is_none() && act.emoji.is_none(),

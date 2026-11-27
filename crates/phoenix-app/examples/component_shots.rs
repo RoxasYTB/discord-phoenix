@@ -97,6 +97,8 @@ fn main() -> anyhow::Result<()> {
                     start: Some(now_ms - 463_000),
                     application_id: None,
                     party: None,
+                    platform: None,
+                    flags: 0,
                 }],
             );
             if let Some(u) = app.users.get_mut(&Id(5)) {

@@ -1179,6 +1179,7 @@ pub struct NowGame {
     pub party: Option<SharedString>,
     pub start: Option<i64>,
     pub spotify: bool,
+    pub xbox: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1211,6 +1212,7 @@ pub struct NowCtx<'a> {
     pub party_members: &'a dyn Fn(&str) -> Vec<Id>,
     pub is_friend: &'a dyn Fn(Id) -> bool,
     pub blocked: &'a dyn Fn(Id) -> bool,
+    pub undiscoverable: &'a dyn Fn(Id) -> bool,
     pub weight: Option<&'a dyn Fn(Id) -> f64>,
 }
 
@@ -1273,23 +1275,32 @@ pub fn now_cards(friends: &[NowFriend], ctx: &NowCtx) -> Vec<NowCard> {
             None => groups.push((key, vec![f])),
         }
     }
-    let mut keyed: Vec<(NowCard, bool, String)> = groups
+    let hidden = |c: &NowCard| -> (bool, bool) {
+        let Some(v) = c.voice else { return (false, false) };
+        let states = (ctx.voice_members)(v);
+        let n = states.iter().filter(|u| (ctx.undiscoverable)(**u)).count();
+        (n > 0, n > 0 && n == states.len())
+    };
+    let mut keyed: Vec<(NowCard, bool, String, bool)> = groups
         .into_iter()
         .map(|(key, members)| card_of(if let GroupKey::Voice(v) = key { Some(v) } else { None }, members, ctx))
-        .filter(|(c, _, _)| {
-            (c.voice.is_some() || !c.games.is_empty() || !c.streams.is_empty()) && !c.partied.iter().any(|u| (ctx.blocked)(*u))
+        .filter_map(|(c, sp, names)| {
+            let (some_hidden, all_hidden) = hidden(&c);
+            let shown = (c.voice.is_some() || !c.games.is_empty() || !c.streams.is_empty()) && !c.partied.iter().any(|u| (ctx.blocked)(*u)) && !all_hidden;
+            shown.then_some((c, sp, names, some_hidden))
         })
         .collect();
-    keyed.sort_by(|(a, asp, an), (b, bsp, bn)| {
-        let k = |c: &NowCard, sp: bool| (c.partied.len() <= 1, c.streams.is_empty(), c.voice.is_none(), c.games.is_empty(), sp);
-        k(a, *asp).cmp(&k(b, *bsp)).then_with(|| an.cmp(bn))
+    keyed.sort_by(|(a, asp, an, ah), (b, bsp, bn, bh)| {
+        let k = |c: &NowCard, sp: bool, h: bool| (h, c.partied.len() <= 1, c.streams.is_empty(), c.voice.is_none(), c.games.is_empty(), sp);
+        k(a, *asp, *ah).cmp(&k(b, *bsp, *bh)).then_with(|| an.cmp(bn))
     });
-    keyed.into_iter().map(|(c, _, _)| c).collect()
+    keyed.into_iter().map(|(c, ..)| c).collect()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum HeaderLine {
     Timer,
+    Xbox,
     Twitch,
     Listening,
     Watching,
@@ -1304,6 +1315,7 @@ pub fn header_line(card: &NowCard) -> HeaderLine {
         && let Some(g) = card.games.first()
     {
         return match g.game.kind {
+            K::Playing if g.game.xbox => HeaderLine::Xbox,
             K::Playing => HeaderLine::Timer,
             K::Streaming => HeaderLine::Twitch,
             K::Listening => HeaderLine::Listening,
@@ -1374,6 +1386,7 @@ fn now_friends(app: &PhoenixApp) -> Vec<NowFriend> {
                 party: a.party.clone(),
                 start: a.start,
                 spotify: a.is_spotify(),
+                xbox: a.is_xbox(),
             });
             Some(NowFriend { user: id, name: u.name.clone(), voice: voice_of(id), game, stream: crate::ui::voice_panel::flags(id).stream })
         })
@@ -1405,11 +1418,13 @@ fn cards_for(app: &PhoenixApp) -> Vec<NowCard> {
         let (vc, comm) = weights.get(&u).copied().unwrap_or_default();
         if sort == Some(AffinitySort::Voice) { vc } else { comm }
     };
+    let undiscoverable = |u: Id| crate::ui::voice_panel::flags(u).undiscoverable;
     let ctx = NowCtx {
         voice_members: &voice_members,
         party_members: &party_members,
         is_friend: &is_friend,
         blocked: &blocked,
+        undiscoverable: &undiscoverable,
         weight: sort.map(|_| &weight as &dyn Fn(Id) -> f64),
     };
     now_cards(&friends, &ctx)
@@ -1513,6 +1528,7 @@ fn now_card(app: &PhoenixApp, card_info: NowCard, cx: &mut Context<PhoenixApp>) 
     let game_name = first.map(|g| g.game.name.to_string()).unwrap_or_default();
     let sub: Option<SharedString> = match line {
         HeaderLine::Timer => Some(timer()),
+        HeaderLine::Xbox => Some(crate::t!("friends.now_xbox")),
         HeaderLine::Twitch => Some(crate::t!("friends.now_twitch")),
         HeaderLine::Listening => Some(crate::t!("friends.now_listening", name = game_name)),
         HeaderLine::Watching => Some(crate::t!("friends.now_watching", name = game_name)),
@@ -1522,6 +1538,9 @@ fn now_card(app: &PhoenixApp, card_info: NowCard, cx: &mut Context<PhoenixApp>) 
     };
     let icon: Option<AnyElement> = match line {
         HeaderLine::Multiple => Some(multiple_icon()),
+        HeaderLine::Xbox => platform_icon("xbox", 24.),
+        HeaderLine::Listening if first.is_some_and(|g| g.game.spotify) => platform_icon("spotify", 24.),
+        HeaderLine::Timer if first.is_some_and(|g| g.game.xbox) => platform_icon("xbox", 24.),
         HeaderLine::Timer | HeaderLine::Twitch | HeaderLine::Listening | HeaderLine::Watching => {
             first_act.and_then(|a| a.image.clone()).map(|i| game_thumb(Some(i), 24.).into_any_element())
         }
@@ -1538,7 +1557,7 @@ fn now_card(app: &PhoenixApp, card_info: NowCard, cx: &mut Context<PhoenixApp>) 
         sections.push(go_live_section(app, *owner, cx));
     }
     for g in &card_info.games {
-        if let Some(s) = game_section(app, g, card_info.games.len()) {
+        if let Some(s) = game_section(app, g, card_info.games.len(), card_info.partied.len() == 1, card_info.voice, cx) {
             sections.push(s);
         }
     }
@@ -1624,13 +1643,28 @@ fn party_pile(app: &PhoenixApp, members: &[Id]) -> gpui::Div {
     pile
 }
 
-fn game_section(app: &PhoenixApp, g: &CardGame, games: usize) -> Option<AnyElement> {
+fn platform_icon(kind: &str, size: f32) -> Option<AnyElement> {
+    let (url, _) = crate::ui::settings::art::connection_icon(kind)?;
+    Some(gpui::img(SharedString::from(url)).size(z(size)).flex_none().object_fit(gpui::ObjectFit::Contain).into_any_element())
+}
+
+fn game_section(app: &PhoenixApp, g: &CardGame, games: usize, solo: bool, voice: Option<Id>, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     use crate::presence::ActivityKind as K;
     let a = activity_of(app, g)?;
     let lead = app.users.get(&g.user);
     let rich = a.details.is_some() || a.state.is_some();
     if a.kind == K::Streaming {
         return Some(twitch_section(app, g.user, a));
+    }
+    if a.kind == K::Listening && a.is_spotify() {
+        return Some(spotify_section(app, g, a, solo));
+    }
+    if a.kind == K::Playing
+        && a.is_embedded()
+        && !(games > 1 && !rich)
+        && let Some(v) = voice
+    {
+        return Some(embedded_section(app, g, a, v, cx));
     }
     if a.kind == K::Playing && (!rich || games > 1) {
         let people = if g.playing.len() == 1 {
@@ -1671,6 +1705,93 @@ fn game_section(app: &PhoenixApp, g: &CardGame, games: usize) -> Option<AnyEleme
             .child(crate::ui::avatar(lead, 24.))
             .into_any_element(),
     )
+}
+
+pub fn spotify_artists(state: &str) -> String {
+    state.replace("; ", ", ")
+}
+
+fn spotify_section(app: &PhoenixApp, g: &CardGame, a: &crate::presence::Activity, solo: bool) -> AnyElement {
+    let art = div()
+        .relative()
+        .size(z(32.))
+        .flex_none()
+        .when_some(a.image.clone(), |d, url| d.child(gpui::img(url).size_full().object_fit(gpui::ObjectFit::Cover)))
+        .when(!solo, |d| d.children(platform_icon("spotify", 16.).map(|i| div().absolute().right(z(-4.)).bottom(z(-4.)).size(z(16.)).rounded_full().child(i))));
+    div()
+        .p(z(16.))
+        .flex()
+        .items_start()
+        .gap(z(12.))
+        .child(art)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .when_some(a.details.clone(), |d, t| d.child(section_text(t, true)))
+                .when_some(a.state.clone(), |d, t| d.child(section_text(spotify_artists(&t).into(), false))),
+        )
+        .child(party_pile(app, &g.playing))
+        .into_any_element()
+}
+
+fn embedded_section(app: &PhoenixApp, g: &CardGame, a: &crate::presence::Activity, voice: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let now = crate::mock::now();
+    let others: Vec<Id> = g.playing.iter().copied().filter(|u| *u != app.me.id).collect();
+    div()
+        .p(z(16.))
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .mb(z(8.))
+                .child(div().mr(z(8.)).child(game_thumb(a.image.clone(), 24.)))
+                .child(div().flex_1().min_w_0().child(section_text(a.name.clone(), true)))
+                .when_some(a.start, |d, st| {
+                    d.child(
+                        div()
+                            .flex_none()
+                            .text_size(z(14.))
+                            .line_height(z(18.))
+                            .text_color(c(Palette::TEXT_MUTED))
+                            .child(crate::ui::members::elapsed(st, now)),
+                    )
+                }),
+        )
+        .child(
+            div()
+                .relative()
+                .w_full()
+                .h(z(165.))
+                .rounded(z(12.))
+                .bg(c(tok(idx::BLACK)))
+                .overflow_hidden()
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .rounded(z(12.))
+                        .bg(c(tok(idx::OPACITY_BLACK_60)))
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .child(party_pile(app, &others))
+                        .child(
+                            div().mt(z(8.)).child(
+                                crate::ui::profile::mana_button(("now-embedded-join", voice.0), crate::t!("profile.voice_join"), true, false).on_click(
+                                    cx.listener(move |a, _, _, cx| {
+                                        cx.stop_propagation();
+                                        a.select_channel(voice, cx);
+                                    }),
+                                ),
+                            ),
+                        ),
+                ),
+        )
+        .into_any_element()
 }
 
 fn twitch_section(app: &PhoenixApp, user: Id, s: &crate::presence::Activity) -> AnyElement {
@@ -1814,6 +1935,20 @@ pub fn stream_action(own: bool, watching: bool) -> &'static str {
     }
 }
 
+pub const HOVER_TEXT_MS: u64 = 170;
+
+fn hover_text_fade(el: gpui::Div, key: u64) -> AnyElement {
+    use gpui::PresentTransitionExt;
+    let state = crate::ui::states::state(key);
+    let on = state.is_some_and(|s| s.0);
+    let (from, to) = if on { (0., 1.) } else { (1., 0.) };
+    let ms = crate::ui::settings::effects::motion(HOVER_TEXT_MS);
+    let t = state
+        .filter(|(_, at)| at.elapsed() < ms)
+        .map(|(_, at)| gpui::Transition::ease(ms, gpui::CubicBezier(0.25, 0.1, 0.25, 1.)).start(at).opacity(from, to));
+    el.opacity(to).present_transition(gpui::ElementId::NamedInteger("active-stream-hover-pt".into(), key), t).into_any_element()
+}
+
 fn go_live_section(app: &PhoenixApp, owner: Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let u = app.users.get(&owner);
     let key = crate::ui::call_view::stream_key_in(app, owner);
@@ -1825,9 +1960,10 @@ fn go_live_section(app: &PhoenixApp, owner: Id, cx: &mut Context<PhoenixApp>) ->
     let own = owner == app.me.id;
     let watching = key.as_deref().is_some_and(crate::voice::call::watching);
     let action: SharedString = crate::t!(stream_action(own, watching));
-    let group: SharedString = format!("active-stream-{}", owner.0).into();
+    let allowed = key.as_deref().is_some_and(|k| crate::ui::voice_row::preview_allowed(app, k));
+    let hover_key = crate::ui::states::key(("active-stream-hover", owner.0));
     let empty = if loading {
-        div().into_any_element()
+        div().absolute().inset_0().flex().items_center().justify_center().child(crate::ui::spinner::spinner()).into_any_element()
     } else {
         div()
             .absolute()
@@ -1851,7 +1987,7 @@ fn go_live_section(app: &PhoenixApp, owner: Id, cx: &mut Context<PhoenixApp>) ->
                     .line_height(z(18.))
                     .text_color(c(tok(idx::TEXT_DEFAULT)))
                     .text_center()
-                    .child(crate::t!("friends.now_stream_started")),
+                    .child(if allowed { crate::t!("friends.now_stream_started") } else { crate::t!("friends.now_no_permission") }),
             )
             .into_any_element()
     };
@@ -1889,9 +2025,7 @@ fn go_live_section(app: &PhoenixApp, owner: Id, cx: &mut Context<PhoenixApp>) ->
                 ),
         )
         .child(
-            div()
-                .id(("active-stream-preview", owner.0))
-                .group(group.clone())
+            crate::ui::states::track(div().id(("active-stream-preview", owner.0)), hover_key)
                 .relative()
                 .mt(z(12.))
                 .w_full()
@@ -1924,9 +2058,8 @@ fn go_live_section(app: &PhoenixApp, owner: Id, cx: &mut Context<PhoenixApp>) ->
                         .line_height(z(18.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(c(tok(idx::TEXT_OVERLAY_LIGHT)))
-                        .opacity(0.)
-                        .group_hover(group, |s| s.opacity(1.))
-                        .child(action),
+                        .child(action)
+                        .map(|d| hover_text_fade(d, hover_key)),
                 ),
         )
         .into_any_element()
@@ -1948,6 +2081,7 @@ mod tests {
             party: party.map(Into::into),
             start: Some(start),
             spotify: false,
+            xbox: false,
         }
     }
 
@@ -1956,7 +2090,14 @@ mod tests {
     }
 
     fn cards(friends: &[NowFriend], voice: &dyn Fn(Id) -> Vec<Id>, party: &dyn Fn(&str) -> Vec<Id>) -> Vec<NowCard> {
-        let ctx = NowCtx { voice_members: voice, party_members: party, is_friend: &|u: Id| u.0 < 100, blocked: &|u: Id| u.0 == 666, weight: None };
+        let ctx = NowCtx {
+            voice_members: voice,
+            party_members: party,
+            is_friend: &|u: Id| u.0 < 100,
+            blocked: &|u: Id| u.0 == 666,
+            undiscoverable: &|u: Id| u.0 >= 800 && u.0 < 900,
+            weight: None,
+        };
         now_cards(friends, &ctx)
     }
 
@@ -2033,6 +2174,27 @@ mod tests {
         let mut a = nf(1, "amy", None, false);
         a.game = Some(NowGame { kind: crate::presence::ActivityKind::Listening, ..game("spotify", None, 0) });
         assert_eq!(header_line(&cards(&[a], &|_| vec![], &|_| vec![])[0]), HeaderLine::Listening);
+    }
+
+    #[test]
+    fn undiscoverable_voice_states_sink_the_card_or_drop_it() {
+        let friends = [nf(1, "amy", Some(50), false), nf(2, "bob", Some(60), false), nf(3, "cat", Some(70), false)];
+        let voice = |v: Id| match v.0 {
+            50 => vec![Id(1), Id(801)],
+            60 => vec![Id(2)],
+            _ => vec![Id(801), Id(802)],
+        };
+        let cards = cards(&friends, &voice, &|_| vec![]);
+        let voices: Vec<Option<Id>> = cards.iter().map(|c| c.voice).collect();
+        assert_eq!(voices, vec![Some(Id(60)), Some(Id(50))]);
+    }
+
+    #[test]
+    fn a_single_xbox_player_reads_playing_on_xbox() {
+        let mut a = nf(1, "amy", None, false);
+        a.game = Some(NowGame { xbox: true, ..game("xbox", None, 0) });
+        assert_eq!(header_line(&cards(&[a], &|_| vec![], &|_| vec![])[0]), HeaderLine::Xbox);
+        assert_eq!(spotify_artists("A; B; C"), "A, B, C");
     }
 
     #[test]

@@ -169,6 +169,8 @@ fn main() -> anyhow::Result<()> {
                                             start: None,
                                             application_id: None,
                                             party: None,
+                                            platform: None,
+                                            flags: 0,
                                         }],
                                     );
                                 }
