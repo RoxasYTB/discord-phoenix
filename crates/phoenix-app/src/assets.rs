@@ -302,6 +302,8 @@ fn svg_for(path: &str) -> Option<&'static str> {
         "icons/discovery-badge-fg.svg" => f!(r#"<path d="M12 6.5 13.6 10.4 17.5 12 13.6 13.6 12 17.5 10.4 13.6 6.5 12 10.4 10.4z"/>"#),
         "icons/lock-unlocked.svg" => f!(r#"<path d="M7 10V7a5 5 0 0 1 9.6-2l-1.8.9A3 3 0 0 0 9 7v3h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1z"/>"#),
         "icons/lock.svg" | "icons/text-lock.svg" | "icons/forum-lock.svg" | "icons/announcement-lock.svg" | "icons/stage-lock.svg" => f!(r#"<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/>"#),
+        "icons/rules-channel.svg" => s!(r#"<path d="M18 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11v-3H8a2 2 0 0 0-2 2m12-2V4M8 10l2 2 4-4"/>"#),
+        "icons/rules-lock.svg" => s!(r#"<path d="M13 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11v-3H8a2 2 0 0 0-2 2m12-2v-5M8 10l2 2 3-3m4-4V4a1.5 1.5 0 0 1 3 0v1"/><rect x="16" y="5" width="5" height="4" rx=".8" fill="black"/>"#),
         "icons/quests.svg" => s!(r#"<path d="M5 4h14v6a7 7 0 0 1-14 0zM9 21h6M12 17v4M8 9h8"/>"#),
         "icons/note.svg" => s!(r#"<path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7M7 8h6M7 12h8M7 16h4M19 14v8M15 18h8"/>"#),
         "icons/user-check.svg" => s!(r#"<circle cx="11" cy="7" r="4"/><path d="M3 21a8 8 0 0 1 11-7.4M15 18l2 2 4-4"/>"#),

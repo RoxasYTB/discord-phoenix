@@ -174,12 +174,13 @@ pub struct Guild {
 impl From<RawGuild> for Guild {
     fn from(r: RawGuild) -> Self {
         let boosts = r.top.premium_subscription_count;
-        let (profile, incidents, owner) = (r.top.profile.clone(), r.top.incidents_data.clone(), r.top.owner_id);
+        let (profile, incidents, owner, rules_channel) = (r.top.profile.clone(), r.top.incidents_data.clone(), r.top.owner_id, r.top.rules_channel_id);
         let mut properties = r.properties.unwrap_or(r.top);
         properties.premium_subscription_count = properties.premium_subscription_count.or(boosts);
         properties.profile = properties.profile.or(profile);
         properties.incidents_data = properties.incidents_data.or(incidents);
         properties.owner_id = properties.owner_id.or(owner);
+        properties.rules_channel_id = properties.rules_channel_id.or(rules_channel);
         let mut g = Guild {
             id: r.id,
             properties,
@@ -298,5 +299,17 @@ mod tests {
             "properties": { "name": "Fixture" }
         })).unwrap();
         assert_eq!(guild.owner_id().map(|owner| owner.0), Some(2));
+    }
+
+    #[test]
+    fn guild_rules_channel_is_preserved_when_properties_are_nested() {
+        let guild: Guild = serde_json::from_value(serde_json::json!({
+            "id": "1",
+            "owner_id": "2",
+            "rules_channel_id": "3",
+            "properties": { "name": "Fixture" }
+        })).unwrap();
+        assert_eq!(guild.owner_id().map(|owner| owner.0), Some(2));
+        assert_eq!(guild.properties.rules_channel_id.map(|channel| channel.0), Some(3));
     }
 }

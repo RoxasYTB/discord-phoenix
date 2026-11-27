@@ -990,7 +990,7 @@ fn dm_top(entity: &Entity<PhoenixApp>, cx: &App) -> impl IntoElement {
         )
 }
 
-pub(crate) fn lock_icon_name(kind: ChannelKind) -> Option<&'static str> {
+fn lock_icon_name(kind: ChannelKind) -> Option<&'static str> {
     Some(match kind {
         ChannelKind::Text => "text-lock",
         ChannelKind::Voice => "voice-lock",
@@ -1001,7 +1001,19 @@ pub(crate) fn lock_icon_name(kind: ChannelKind) -> Option<&'static str> {
     })
 }
 
-fn decorated_icon(kind: ChannelKind, color: gpui::Hsla, locked: bool, nsfw: bool, bg: gpui::Hsla, hover: Option<SharedString>) -> AnyElement {
+pub(crate) fn channel_icon_override(kind: ChannelKind, rules: bool, locked: bool) -> Option<&'static str> {
+    if rules {
+        Some(if locked { "rules-lock" } else { "rules-channel" })
+    } else {
+        lock_icon_name(kind).filter(|_| locked)
+    }
+}
+
+pub(crate) fn is_rules_channel(app: &PhoenixApp, ch: &crate::model::Channel) -> bool {
+    app.guilds.iter().any(|guild| Some(guild.id) == ch.guild && guild.rules_channel == Some(ch.id))
+}
+
+fn decorated_icon(kind: ChannelKind, rules: bool, color: gpui::Hsla, locked: bool, nsfw: bool, bg: gpui::Hsla, hover: Option<SharedString>) -> AnyElement {
     let hov = move |g: gpui::Svg| match hover.clone() {
         Some(h) => g.group_hover(h, |s| s.text_color(t(idx::INTERACTIVE_TEXT_HOVER))),
         None => g,
@@ -1010,7 +1022,7 @@ fn decorated_icon(kind: ChannelKind, color: gpui::Hsla, locked: bool, nsfw: bool
         .relative()
         .size(z(20.))
         .flex_none()
-        .map(|d| match lock_icon_name(kind).filter(|_| locked && !nsfw) {
+        .map(|d| match channel_icon_override(kind, rules, locked && !nsfw) {
             Some(name) => d.child(hov(gpui::svg().path(crate::icons::path(name)).size(z(20.)).flex_none().text_color(color))),
             None => d.child(hov(icon(channel_icon(kind), 20., color))),
         })
@@ -1186,6 +1198,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
         });
         decorated_icon(
             ch.kind,
+            is_rules_channel(app, ch),
             col,
             extra.is_some_and(|e| e.locked),
             extra.is_some_and(|e| e.nsfw),

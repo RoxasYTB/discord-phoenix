@@ -503,7 +503,11 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>, in_voice_panel: bool) 
                         .h(z(32.))
                         .flex()
                         .items_center()
-                        .map(|d| match crate::ui::sidebar::lock_icon_name(kind).filter(|_| locked && thread_parent.is_none()) {
+                        .map(|d| match crate::ui::sidebar::channel_icon_override(
+                            kind,
+                            ch.is_some_and(|ch| crate::ui::sidebar::is_rules_channel(app, ch)),
+                            locked && thread_parent.is_none(),
+                        ) {
                             Some(n) => d.child(gpui::svg().path(crate::icons::path(n)).size(z(20.)).flex_none().text_color(tk(idx::CHANNEL_ICON))),
                             None => d.child(icon(channel_icon(kind), 20. * crate::theme::zoom(), tk(idx::CHANNEL_ICON))),
                         })
