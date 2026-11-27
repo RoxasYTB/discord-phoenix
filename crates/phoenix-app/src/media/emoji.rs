@@ -57,6 +57,10 @@ pub fn sync_motion(animate_emoji: bool, focused: bool) {
     WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
 }
 
+pub fn window_focused() -> bool {
+    WINDOW_FOCUSED.load(Ordering::Relaxed)
+}
+
 pub fn animate_emoji() -> bool {
     ANIMATE_EMOJI.load(Ordering::Relaxed)
 }

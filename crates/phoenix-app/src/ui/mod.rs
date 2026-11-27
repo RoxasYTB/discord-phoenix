@@ -240,21 +240,21 @@ pub fn typing_cutout(content: impl IntoElement, size: f32, p: Presence) -> Div {
     let g = typing_geometry(size);
     let (px_, py, pw, ph) = g.pill;
     let (dx, dy, dr) = g.dots;
+    let focused = crate::media::emoji::window_focused();
     let mut dots = div().absolute().left(px(dx)).top(px(dy)).w(px(7. * dr)).h(px(2. * dr));
     for i in 0..3 {
         let cx = dr + dr * 2.5 * i as f32;
-        dots = dots.child(
-            div().absolute().left(px(cx - dr)).top_0().size(px(2. * dr)).flex().items_center().justify_center().child(
-                div().rounded_full().bg(gpui::white()).with_animation(
-                    ("avatar-typing-dot", i),
-                    gpui::Animation::new(std::time::Duration::from_millis(1200)).repeat(),
-                    move |d, t| {
-                        let (scale, opacity) = typing_dot_frame(i, t);
-                        d.size(px(2. * dr * scale)).opacity(opacity)
-                    },
-                ),
-            ),
-        );
+        let dot = div().rounded_full().bg(gpui::white());
+        let dot = if focused {
+            dot.with_animation(("avatar-typing-dot", i), gpui::Animation::new(std::time::Duration::from_millis(1200)).repeat(), move |d, t| {
+                let (scale, opacity) = typing_dot_frame(i, t);
+                d.size(px(2. * dr * scale)).opacity(opacity)
+            })
+            .into_any_element()
+        } else {
+            dot.size(px(2. * dr)).into_any_element()
+        };
+        dots = dots.child(div().absolute().left(px(cx - dr)).top_0().size(px(2. * dr)).flex().items_center().justify_center().child(dot));
     }
     div()
         .relative()

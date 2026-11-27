@@ -1110,12 +1110,15 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     pic.into_any_element()
                 }
             }
-            _ if !ex.members.is_empty() => crate::ui::group_dm::group_avatar_with_status(
-                app,
-                id,
-                32. * crate::theme::zoom(),
-                if selected { t(idx::INTERACTIVE_BACKGROUND_SELECTED) } else { c(Palette::BG_TERTIARY) },
-            ),
+            _ if !ex.members.is_empty() => {
+                let size = 32. * crate::theme::zoom();
+                let ring = if selected { t(idx::INTERACTIVE_BACKGROUND_SELECTED) } else { c(Palette::BG_TERTIARY) };
+                if app.typing.get(&id).is_some_and(|v| v.iter().any(|(who, _)| *who != app.me.id)) {
+                    crate::ui::typing_cutout(crate::ui::group_dm::group_avatar(app, id, size, ring), size, crate::model::Presence::Online).into_any_element()
+                } else {
+                    crate::ui::group_dm::group_avatar_with_status(app, id, size, ring)
+                }
+            }
             _ => div()
                 .size(z(32.))
                 .flex_none()
