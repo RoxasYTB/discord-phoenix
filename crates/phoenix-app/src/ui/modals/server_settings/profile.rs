@@ -337,6 +337,15 @@ fn dot(color: Hsla) -> gpui::Div {
 }
 
 pub fn preview(s: &State, guild: u64) -> AnyElement {
+    card(s, guild, None)
+}
+
+pub fn preview_with_cta(s: &State, guild: u64, cta: AnyElement) -> AnyElement {
+    card(s, guild, Some(cta))
+}
+
+fn card(s: &State, guild: u64, cta: Option<AnyElement>) -> AnyElement {
+    let wide = cta.is_some();
     let p = s.get("profile").cloned().unwrap_or(Value::Null);
     let g = s.guild_json();
     let name = {
@@ -421,7 +430,8 @@ pub fn preview(s: &State, guild: u64) -> AnyElement {
                 .child(text(l, 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT))
         })));
     div()
-        .w(z(300.))
+        .when(wide, |d| d.w_full())
+        .when(!wide, |d| d.w(z(300.)))
         .flex_none()
         .rounded(z(16.))
         .border_1()
@@ -434,6 +444,7 @@ pub fn preview(s: &State, guild: u64) -> AnyElement {
         .child(div().px(z(16.)).mt(z(-34.)).child(div().w(z(70.)).rounded(z(24.)).border_4().border_color(c(tok(idx::BACKGROUND_SURFACE_HIGH))).child(icon)))
         .child(header)
         .child(body)
+        .children(cta.map(|b| div().px(z(16.)).pb(z(16.)).child(b)))
         .into_any_element()
 }
 

@@ -1541,28 +1541,13 @@ fn add_question_menu(allow_terms: bool, cx: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-fn profile_preview(app: &PhoenixApp, s: &State) -> AnyElement {
-    let name = app.guilds.iter().find(|g| g.id == s.guild).map(|g| g.name.clone()).unwrap_or_default();
+fn profile_preview(s: &State) -> AnyElement {
+    let cta = crate::ui::controls::button("gs-access-apply-preview", crate::t!("gs.access.apply_btn"), crate::ui::controls::BtnKind::Active).h(z(32.)).w_full().into_any_element();
     div()
         .relative()
         .h(z(100.))
         .overflow_hidden()
-        .child(
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .bottom_0()
-                .p(z(16.))
-                .rounded_tl(z(8.))
-                .rounded_tr(z(8.))
-                .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
-                .flex()
-                .flex_col()
-                .gap(z(12.))
-                .child(text(name, 16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG).truncate())
-                .child(crate::ui::controls::button("gs-access-apply-preview", crate::t!("gs.access.apply_btn"), crate::ui::controls::BtnKind::Primary).h(z(32.)).w_full()),
-        )
+        .child(div().absolute().left_0().right_0().bottom_0().child(super::profile::preview_with_cta(s, s.guild.0, cta)))
         .child(div().absolute().top_0().left_0().right_0().bottom_0().bg(gpui::linear_gradient(
             180.,
             gpui::linear_color_stop(c(tok(idx::BACKGROUND_BASE_LOW)), 0.),
@@ -1571,7 +1556,7 @@ fn profile_preview(app: &PhoenixApp, s: &State) -> AnyElement {
         .into_any_element()
 }
 
-fn apply_block(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
+fn apply_block(s: &State, cx: &mut Cx) -> AnyElement {
     let Some(d) = s.access.draft.as_ref() else { return div().into_any_element() };
     let full = d.fields.len() >= MAX_FIELDS;
     let profile_vis = s.get("profile").and_then(|p| p.get("visibility")).and_then(Value::as_u64).map(|v| v as u8);
@@ -1634,7 +1619,7 @@ fn apply_block(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                         .child(text(crate::t!("gs.access.from_profile_desc"), 14., 18., FontWeight::NORMAL, idx::TEXT_SUBTLE))
                         .when(!visible, |d| d.child(text(crate::t!("gs.access.from_profile_off"), 12., 16., FontWeight::NORMAL, idx::TEXT_MUTED))),
                 )
-                .child(div().flex_1().min_w_0().child(profile_preview(app, s))),
+                .child(div().flex_1().min_w_0().child(profile_preview(s))),
         )
         .into_any_element()
 }
@@ -2999,7 +2984,7 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     );
     let below = match active {
         JoinType::Invite => rules_block(s, cx),
-        JoinType::Apply => apply_block(app, s, cx),
+        JoinType::Apply => apply_block(s, cx),
         JoinType::Discoverable => discoverable_block(app, s, cx),
     };
     div()
