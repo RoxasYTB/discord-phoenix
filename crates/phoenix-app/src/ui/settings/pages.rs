@@ -276,25 +276,26 @@ fn dropdown_with(
             .border_1()
             .border_color(c(tok(idx::BORDER_SUBTLE)))
             .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
-            .shadow_lg()
+            .shadow(vec![gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.16), offset: gpui::point(z(0.), z(2.)), blur_radius: z(8.), spread_radius: z(0.), inset: false }])
             .occlude()
             .children(opts.into_iter().enumerate().map(|(i, o)| {
                 let f = on_pick.clone();
                 div()
                     .id(eid(format!("sel-{id}-{i}")))
                     .h(z(40.))
-                    .px(z(8.))
+                    .pl(z(8.))
+                    .pr(z(4.))
+                    .gap(z(4.))
                     .rounded(z(4.))
                     .flex()
                     .items_center()
                     .justify_between()
                     .cursor_pointer()
-                    .when(i == cur, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
-                    .hover(|s| s.bg(c(tok(idx::INTERACTIVE_BACKGROUND_HOVER))))
+                    .hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_NORMAL))))
                     .on_click(cx.listener(move |a, _, _, cx| f(a, i, cx)))
                     .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_STRONG))).child(o))
                     .when(i == cur, |d| {
-                        d.child(gpui::svg().path(crate::icons::path("check")).size(z(16.)).text_color(c(tok(idx::CONTROL_BRAND_FOREGROUND_NEW))))
+                        d.child(gpui::svg().path(crate::icons::path("check")).size(z(20.)).flex_none().text_color(c(tok(idx::TEXT_STRONG))))
                     })
             }));
         wrap = wrap.child(gpui::deferred(list).with_priority(2));
