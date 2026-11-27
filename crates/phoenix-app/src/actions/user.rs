@@ -60,6 +60,16 @@ impl PhoenixApp {
         cx.notify();
     }
 
+    pub fn open_voice_chat(&mut self, channel: Id, cx: &mut Context<Self>) {
+        if self.voice_channel == Some(channel) {
+            self.open_voice_channel(cx);
+            crate::ui::call_view::set_chat_open(true);
+            cx.notify();
+        } else {
+            self.open_channel_chat(channel, cx);
+        }
+    }
+
     pub fn open_call_ui(&mut self, user: Id, cx: &mut Context<Self>) {
         self.open_dm_with(user, cx);
         let ch = self.selected_channel.unwrap_or(Id(0));

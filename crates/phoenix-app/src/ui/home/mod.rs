@@ -59,7 +59,7 @@ fn page_content(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoe
     if app.selected_guild.is_none() && app.nav.home != HomeView::Dm {
         friends::render(app, window, cx).into_any_element()
     } else {
-        crate::ui::chat::render(app, window, cx).into_any_element()
+        crate::ui::chat::render(app, window, cx, false).into_any_element()
     }
 }
 

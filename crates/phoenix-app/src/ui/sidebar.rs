@@ -1174,7 +1174,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         .cursor_pointer()
                         .on_click(move |_, _, cx| {
                             cx.stop_propagation();
-                            chat_entity.update(cx, |a, cx| a.open_channel_chat(id, cx));
+                            chat_entity.update(cx, |a, cx| a.open_voice_chat(id, cx));
                         })
                         .tooltip(crate::ui::tooltip::tip(crate::t!("channel.open_chat")))
                         .child(action(Icon::Members, Some("chat"))),

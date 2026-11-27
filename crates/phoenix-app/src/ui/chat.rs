@@ -50,12 +50,12 @@ pub(crate) fn tk(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
 
-pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>, in_voice_panel: bool) -> impl IntoElement {
     let entity = cx.entity();
     skeleton::set_window_height(f32::from(window.viewport_size().height));
     let show_members = app.show_members && app.selected_guild.is_some();
     let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
-    let show_members = show_members && !crate::ui::call_view::active(app);
+    let show_members = show_members && !in_voice_panel && !crate::ui::call_view::active(app);
     let search_results = crate::ui::search::results_shown(cx);
     let mod_view = crate::ui::mod_view::render(app, window, cx);
     let main = div()
@@ -69,9 +69,9 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_PRIMARY))
         .map(|d| {
             if crate::ui::call_view::private_split(app) {
-                d.children(crate::ui::call_view::render_private(app, header(app, cx), window, cx))
+                d.children(crate::ui::call_view::render_private(app, header(app, cx, false), window, cx))
             } else {
-                d.child(header(app, cx)).children(crate::ui::dm_call::render(app, cx))
+                d.child(header(app, cx, in_voice_panel)).children(crate::ui::dm_call::render(app, cx))
             }
         })
         .child(
@@ -352,7 +352,7 @@ fn header_search_w(pad_start: f32) -> f32 {
     if w <= 0. { 244. } else { (w - pad_start - 8. - 320.).clamp(64., 244.) }
 }
 
-fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
+fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>, in_voice_panel: bool) -> gpui::Div {
     let ch = app.selected_channel.and_then(|c| app.channels.get(&c));
     let is_dm = ch.is_some_and(|c| c.guild.is_none());
     let name = ch.map(|c| crate::ui::dm_profile_panel::channel_name(app, c)).unwrap_or_default();
@@ -653,6 +653,17 @@ fn header(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> gpui::Div {
                         .child(div().size(z(24.)).p(z(4.)).flex().items_center().child(icon(Icon::Search, 16. * crate::theme::zoom(), tk(idx::ICON_MUTED)))),
                 ),
         )
+        .when(in_voice_panel, |d| {
+            d.child(
+                hdr_named("close-voice-chat", "close", ic)
+                    .flex_none()
+                    .tip(crate::t!("call.hide_chat"))
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        crate::ui::call_view::set_chat_open(false);
+                        cx.notify();
+                    })),
+            )
+        })
 }
 
 fn row(entity: &Entity<PhoenixApp>, ix: usize, cx: &mut App) -> AnyElement {
