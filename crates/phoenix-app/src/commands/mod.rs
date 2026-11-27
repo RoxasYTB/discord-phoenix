@@ -391,97 +391,7 @@ mod tests {
             })
             .unwrap();
     }
-}
 
-pub fn parse_event(v: &serde_json::Value) -> Option<GuildEvent> {
-    let sid = |k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
-    let time = |k: &str| {
-        v.get(k).and_then(|x| x.as_str()).and_then(|x| chrono::DateTime::parse_from_rfc3339(x).ok()).map(|d| d.timestamp())
-    };
-    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_owned);
-    Some(GuildEvent {
-        id: sid("id")?,
-        name: s("name").unwrap_or_default(),
-        description: s("description").unwrap_or_default(),
-        start: time("scheduled_start_time").unwrap_or(0),
-        end: time("scheduled_end_time"),
-        status: v.get("status").and_then(|x| x.as_u64()).unwrap_or(1) as u8,
-        channel: sid("channel_id"),
-        location: v.get("entity_metadata").and_then(|m| m.get("location")).and_then(|x| x.as_str()).map(str::to_owned),
-        user_count: v.get("user_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
-        creator: sid("creator_id"),
-        image: s("image"),
-    })
-}
-
-#[cfg(test)]
-mod event_tests {
-    #[test]
-    fn parses_scheduled_event() {
-        let v = serde_json::json!({
-            "id": "12", "name": "Game night", "description": "", "status": 1,
-            "scheduled_start_time": "2026-11-30T20:00:00+00:00", "scheduled_end_time": null,
-            "channel_id": null, "entity_metadata": { "location": "Paris" }, "user_count": 3
-        });
-        let ev = super::parse_event(&v).unwrap();
-        assert_eq!(ev.id, super::Id(12));
-        assert_eq!(ev.location.as_deref(), Some("Paris"));
-        assert_eq!(ev.user_count, 3);
-        assert_eq!(ev.start, 1_796_068_800);
-        assert!(ev.end.is_none());
-    }
-}
-
-pub fn parse_onboarding(v: &serde_json::Value) -> Vec<OnboardingPrompt> {
-    let sid = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
-    let s = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_owned();
-    let Some(prompts) = v.get("prompts").and_then(|p| p.as_array()) else { return Vec::new() };
-    prompts
-        .iter()
-        .filter_map(|p| {
-            let options = p
-                .get("options")
-                .and_then(|o| o.as_array())
-                .map(|o| {
-                    o.iter()
-                        .filter_map(|o| {
-                            let emoji = o.get("emoji");
-                            Some(OnboardingOption {
-                                id: sid(o, "id")?,
-                                title: s(o, "title"),
-                                description: s(o, "description"),
-                                emoji_id: emoji.and_then(|e| sid(e, "id")),
-                                emoji_name: emoji.and_then(|e| e.get("name")).and_then(|x| x.as_str()).map(str::to_owned),
-                                animated: emoji.and_then(|e| e.get("animated")).and_then(|x| x.as_bool()).unwrap_or(false),
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(OnboardingPrompt {
-                id: sid(p, "id")?,
-                title: s(p, "title"),
-                single_select: p.get("single_select").and_then(|x| x.as_bool()).unwrap_or(false),
-                options,
-            })
-        })
-        .collect()
-}
-
-#[cfg(test)]
-mod onboarding_tests {
-    #[test]
-    fn parses_prompts() {
-        let v = serde_json::json!({ "prompts": [{ "id": "1", "title": "Topics", "single_select": false, "options": [
-            { "id": "2", "title": "AI", "description": "", "emoji": { "id": null, "name": "🧠" } },
-            { "id": "3", "title": "Games", "description": "Fun", "emoji": { "id": "44", "name": "pad", "animated": true } }
-        ]}]});
-        let p = super::parse_onboarding(&v);
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0].options[0].emoji_name.as_deref(), Some("🧠"));
-        assert_eq!(p[0].options[1].emoji_id, Some(super::Id(44)));
-        assert!(p[0].options[1].animated);
-    }
     fn voice_app(cx: &mut gpui::TestAppContext) -> gpui::WindowHandle<App> {
         let backend = std::sync::Arc::new(MockBackend::synchronous());
         let first = futures::executor::block_on(backend.login(crate::backend::Credentials::Token("x".into()))).unwrap();
@@ -581,5 +491,96 @@ mod onboarding_tests {
                 assert!(app.channels[&vc].voice_users.contains(&here));
             })
             .unwrap();
+    }
+}
+
+pub fn parse_event(v: &serde_json::Value) -> Option<GuildEvent> {
+    let sid = |k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
+    let time = |k: &str| {
+        v.get(k).and_then(|x| x.as_str()).and_then(|x| chrono::DateTime::parse_from_rfc3339(x).ok()).map(|d| d.timestamp())
+    };
+    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_owned);
+    Some(GuildEvent {
+        id: sid("id")?,
+        name: s("name").unwrap_or_default(),
+        description: s("description").unwrap_or_default(),
+        start: time("scheduled_start_time").unwrap_or(0),
+        end: time("scheduled_end_time"),
+        status: v.get("status").and_then(|x| x.as_u64()).unwrap_or(1) as u8,
+        channel: sid("channel_id"),
+        location: v.get("entity_metadata").and_then(|m| m.get("location")).and_then(|x| x.as_str()).map(str::to_owned),
+        user_count: v.get("user_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
+        creator: sid("creator_id"),
+        image: s("image"),
+    })
+}
+
+#[cfg(test)]
+mod event_tests {
+    #[test]
+    fn parses_scheduled_event() {
+        let v = serde_json::json!({
+            "id": "12", "name": "Game night", "description": "", "status": 1,
+            "scheduled_start_time": "2026-11-30T20:00:00+00:00", "scheduled_end_time": null,
+            "channel_id": null, "entity_metadata": { "location": "Paris" }, "user_count": 3
+        });
+        let ev = super::parse_event(&v).unwrap();
+        assert_eq!(ev.id, super::Id(12));
+        assert_eq!(ev.location.as_deref(), Some("Paris"));
+        assert_eq!(ev.user_count, 3);
+        assert_eq!(ev.start, 1_796_068_800);
+        assert!(ev.end.is_none());
+    }
+}
+
+pub fn parse_onboarding(v: &serde_json::Value) -> Vec<OnboardingPrompt> {
+    let sid = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).and_then(|x| x.parse::<u64>().ok()).map(Id);
+    let s = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_owned();
+    let Some(prompts) = v.get("prompts").and_then(|p| p.as_array()) else { return Vec::new() };
+    prompts
+        .iter()
+        .filter_map(|p| {
+            let options = p
+                .get("options")
+                .and_then(|o| o.as_array())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|o| {
+                            let emoji = o.get("emoji");
+                            Some(OnboardingOption {
+                                id: sid(o, "id")?,
+                                title: s(o, "title"),
+                                description: s(o, "description"),
+                                emoji_id: emoji.and_then(|e| sid(e, "id")),
+                                emoji_name: emoji.and_then(|e| e.get("name")).and_then(|x| x.as_str()).map(str::to_owned),
+                                animated: emoji.and_then(|e| e.get("animated")).and_then(|x| x.as_bool()).unwrap_or(false),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(OnboardingPrompt {
+                id: sid(p, "id")?,
+                title: s(p, "title"),
+                single_select: p.get("single_select").and_then(|x| x.as_bool()).unwrap_or(false),
+                options,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod onboarding_tests {
+    #[test]
+    fn parses_prompts() {
+        let v = serde_json::json!({ "prompts": [{ "id": "1", "title": "Topics", "single_select": false, "options": [
+            { "id": "2", "title": "AI", "description": "", "emoji": { "id": null, "name": "🧠" } },
+            { "id": "3", "title": "Games", "description": "Fun", "emoji": { "id": "44", "name": "pad", "animated": true } }
+        ]}]});
+        let p = super::parse_onboarding(&v);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].options[0].emoji_name.as_deref(), Some("🧠"));
+        assert_eq!(p[0].options[1].emoji_id, Some(super::Id(44)));
+        assert!(p[0].options[1].animated);
     }
 }
