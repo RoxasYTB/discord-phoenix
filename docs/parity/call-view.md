@@ -279,3 +279,15 @@ Before, every end of the voice connection showed « Aucun chemin de connexion »
 | item | client | Phoenix | status |
 |---|---|---|---|
 | grid and strip order | ChannelRTC participant index (web 568598 `w`): activities `\x01`+sortKey; streams `\x02` (owner camera on) or `\x03` + name + `\x03`; users `\x03` camera, `\x04` streaming, `\x05` others, + name; name = `nick.toLowerCase().padEnd(32, "!") + userId` (90575); speaking and join order do not move tiles | `call_view::sort_key` / `name_key`, `call_tiles` sorts both the grid and the focused strip | ✅ test `tiles_sort_like_the_rtc_store` |
+
+## Windows capture, camera errors and invites (issues #8 #10 #11 #12 #13, 27/11)
+
+| item | client | Phoenix | status |
+|---|---|---|---|
+| Krisp button at rest | `Tz` (web f7cab82d chunk) plays `t = noiseCancellationActive ? "disable" : "enable"` on the `Lottie_HoverOnOff_NoiseSuppression` Lottie; its `slash` precomp (ip −22, st −22, bar layers 23–69 and 69–1331) is hidden at frame 0 (`disable` start, Krisp on) and drawn at frame 100 (`enable` start, Krisp off), same layout as the mic Lottie | Lottie unchanged; without the Lottie the fallback is `WaveformIcon` when on and `WaveformSlashIcon` (`voice/noise-off`) when off. `WaveformSlashIcon` alone is the client's error state (disabled button) | ✅ |
+| no camera | `8jSzSe` "Camera Unavailable" / `bhqSWl` "Uh oh, we can't detect any camera." / `BddRzS` "Okay" confirm modal | `media_failure_modal`: missing V4L2 node, empty DirectShow list, or no frame within 8 s | ✅ |
+| camera start error | `z+mxvo` "Failed to start camera" | same title, the error (or FFmpeg missing) as body | ✅ |
+| Go Live error | `GFr0GR` "Screen Sharing Unavailable" | modal when FFmpeg is missing or the capture fails to open | ✅ |
+| Windows Go Live picker | tabs `tHoi7u` Applications, `/iX8uz` Screens, `MhJ43A` Devices; monitors `y/R7n4` "Screen {index}" | windows and monitors from xcap (GDI, no default features), cameras from FFmpeg DirectShow; Linux keeps the portal cards | ❌ not measured (no Windows client here) |
+| invite from the call | "Invite to Voice" targets the voice channel | tray button, empty-call button and More menu open the invite for the voice channel (the empty-call button had no handler) | ✅ |
+| V4L2 camera pick | camera menu by name | the name maps to its `/dev/videoN` (index 0 node) instead of always `/dev/video0` | ✅ |

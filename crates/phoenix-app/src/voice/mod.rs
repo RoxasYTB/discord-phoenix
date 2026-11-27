@@ -60,6 +60,15 @@ pub enum VoiceUiEvent {
     Server { endpoint: String, mode: String },
     Error(String),
     Stream(StreamUiEvent),
+    CameraFailed(MediaFailure),
+    ScreenFailed(MediaFailure),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaFailure {
+    NoDevice,
+    NoFfmpeg,
+    Other(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,9 +83,10 @@ pub enum StreamUiEvent {
 pub enum StreamSource {
     TestPattern,
     Portal(stream::SourceKind),
+    #[cfg(windows)]
     Camera(String),
-    #[cfg(any(windows, target_os = "macos"))]
-    Selected(phoenix_voice::media::desktop::Target),
+    #[cfg(windows)]
+    Selected { target: phoenix_voice::media::desktop::Target, size: Option<(u32, u32)> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -175,6 +185,7 @@ impl VoiceUi {
                 }
             }
             VoiceUiEvent::Error(e) => self.last_error = Some(e),
+            VoiceUiEvent::CameraFailed(_) | VoiceUiEvent::ScreenFailed(_) => {}
             VoiceUiEvent::Stream(e) => match e {
                 StreamUiEvent::Live(k) => {
                     self.own_stream = k;

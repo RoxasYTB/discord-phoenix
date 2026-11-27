@@ -280,22 +280,78 @@ fn stop_camera(st: &mut State) {
     }
 }
 
+fn camera_failed(st: &State, failure: super::MediaFailure) {
+    tracing::warn!(?failure, "camera unavailable");
+    if let Some(emit) = st.emit.as_ref() {
+        ui(emit, VoiceUiEvent::CameraFailed(failure));
+    }
+}
+
+fn screen_failed(st: &State, failure: super::MediaFailure) {
+    tracing::warn!(?failure, "screen capture unavailable");
+    if let Some(emit) = st.emit.as_ref() {
+        ui(emit, VoiceUiEvent::ScreenFailed(failure));
+    }
+}
+
+const CAMERA_FIRST_FRAME: std::time::Duration = std::time::Duration::from_secs(8);
+
 fn start_camera(st: &mut State) {
     if st.camera.is_some() {
         return;
     }
     let Some(r) = st.running.as_ref() else { return };
     let conn = r.conn.clone();
+    let input = phoenix_voice::media::camera::Input::from_name(st.camera_device.as_deref());
+    if !phoenix_voice::media::ffmpeg::available() {
+        camera_failed(st, super::MediaFailure::NoFfmpeg);
+        return;
+    }
+    #[cfg(not(windows))]
+    if let phoenix_voice::media::camera::Input::Device(dev) = &input
+        && !std::path::Path::new(dev).exists()
+    {
+        camera_failed(st, super::MediaFailure::NoDevice);
+        return;
+    }
     let (w, h, fps) = CAMERA_SIZE;
     conn.video(phoenix_voice::connection::VideoOut::Start { width: w, height: h, fps, bitrate: phoenix_voice::connection::CAMERA_MAX_BITRATE });
-    let input = phoenix_voice::media::camera::Input::from_name(st.camera_device.as_deref());
     let sink = conn.clone();
     match phoenix_voice::media::camera::Camera::start(input, w, h, fps, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
-        Ok(c) => st.camera = Some(c),
-        Err(e) => {
-            tracing::warn!("camera unavailable: {e}");
-            conn.video(phoenix_voice::connection::VideoOut::Stop);
+        Ok(c) => {
+            watch_first_frame(c.preview.clone());
+            st.camera = Some(c);
         }
+        Err(e) => {
+            conn.video(phoenix_voice::connection::VideoOut::Stop);
+            let failure = if e.to_string().contains("no video capture device") { super::MediaFailure::NoDevice } else { super::MediaFailure::Other(e.to_string()) };
+            camera_failed(st, failure);
+        }
+    }
+}
+
+fn watch_first_frame(preview: phoenix_voice::media::camera::Preview) {
+    let spawned = std::thread::Builder::new().name("phoenix-camera-watch".into()).spawn(move || {
+        let deadline = std::time::Instant::now() + CAMERA_FIRST_FRAME;
+        while std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            if preview.lock().is_ok_and(|p| p.is_some()) {
+                return;
+            }
+        }
+        let mut st = manager().state.lock();
+        if !st.camera.as_ref().is_some_and(|c| Arc::ptr_eq(&c.preview, &preview)) {
+            return;
+        }
+        st.camera_on = false;
+        stop_camera(&mut st);
+        if let (Some(gw), Some(t)) = (st.gw.as_ref(), st.target) {
+            let _ = gw.update_voice_state_video(t.guild.map(Snowflake), Some(Snowflake(t.channel)), st.muted, st.deafened, false);
+        }
+        camera_failed(&st, super::MediaFailure::NoDevice);
+    });
+    if let Err(e) = spawned {
+        tracing::warn!(error = %e, "camera watch thread");
     }
 }
 
@@ -727,6 +783,10 @@ fn start_own_stream(st: &mut State, source: super::StreamSource, resolution: u32
         stream_ui(st, super::StreamUiEvent::Failed("Go Live needs a server voice channel".into()));
         return;
     }
+    if !phoenix_voice::media::ffmpeg::available() {
+        screen_failed(st, super::MediaFailure::NoFfmpeg);
+        return;
+    }
     st.stream_generation += 1;
     let generation = st.stream_generation;
     st.own = Some(OwnStream {
@@ -757,13 +817,19 @@ fn start_own_stream(st: &mut State, source: super::StreamSource, resolution: u32
         soundshare: None,
     });
     match source {
+        #[cfg(windows)]
         super::StreamSource::Camera(name) => {
-            if let Some(o) = st.own.as_mut() { o.input = Some(phoenix_voice::media::camera::Input::Device(name)); }
+            if let Some(o) = st.own.as_mut() {
+                o.input = Some(phoenix_voice::media::camera::Input::Device(name));
+            }
             send_stream_create(st);
         }
-        #[cfg(any(windows, target_os = "macos"))]
-        super::StreamSource::Selected(target) => {
-            if let Some(o) = st.own.as_mut() { o.input = Some(phoenix_voice::media::camera::Input::Selected(target)); }
+        #[cfg(windows)]
+        super::StreamSource::Selected { target, size } => {
+            if let Some(o) = st.own.as_mut() {
+                o.input = Some(phoenix_voice::media::camera::Input::Selected(target));
+                o.size = size;
+            }
             send_stream_create(st);
         }
         super::StreamSource::TestPattern => {
@@ -803,19 +869,7 @@ fn start_own_stream(st: &mut State, source: super::StreamSource, resolution: u32
                 }
             });
         }
-        #[cfg(windows)]
-        super::StreamSource::Portal(super::stream::SourceKind::Screen) => {
-            if let Some(o) = st.own.as_mut() {
-                o.input = Some(phoenix_voice::media::camera::Input::Desktop);
-            }
-            send_stream_create(st);
-        }
-        #[cfg(windows)]
-        super::StreamSource::Portal(_) => {
-            st.own = None;
-            stream_ui(st, super::StreamUiEvent::Failed("Select the entire desktop to share on Windows".into()));
-        }
-        #[cfg(not(any(target_os = "linux", windows)))]
+        #[cfg(not(target_os = "linux"))]
         super::StreamSource::Portal(_) => {
             st.own = None;
             stream_ui(st, super::StreamUiEvent::Failed("screen capture is only available on Linux".into()));
@@ -1044,8 +1098,8 @@ fn start_capture(st: &mut State) {
     match phoenix_voice::media::camera::Camera::start_with(input, w, h, fps, bitrate, false, move |e| sink.video(phoenix_voice::connection::VideoOut::Frame(e))) {
         Ok(c) => o.capture = Some(c),
         Err(e) => {
-            tracing::warn!("screen capture unavailable: {e}");
             conn.video(phoenix_voice::connection::VideoOut::Stop);
+            screen_failed(st, super::MediaFailure::Other(e.to_string()));
         }
     }
 }

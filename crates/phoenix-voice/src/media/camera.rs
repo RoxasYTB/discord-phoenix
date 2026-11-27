@@ -18,11 +18,9 @@ pub const TEST_PATTERN: &str = "phoenix-test-pattern";
 #[derive(Debug)]
 pub enum Input {
     TestPattern,
-    #[cfg(any(windows, target_os = "macos"))]
-    Selected(super::desktop::Target),
     Device(String),
     #[cfg(windows)]
-    Desktop,
+    Selected(super::desktop::Target),
     #[cfg(unix)]
     PipeWire { fd: std::os::fd::OwnedFd, node: u32 },
 }
@@ -30,12 +28,10 @@ pub enum Input {
 impl PartialEq for Input {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            #[cfg(windows)]
-            (Self::Desktop, Self::Desktop) => true,
-            #[cfg(any(windows, target_os = "macos"))]
-            (Self::Selected(a), Self::Selected(b)) => a == b,
             (Self::TestPattern, Self::TestPattern) => true,
             (Self::Device(a), Self::Device(b)) => a == b,
+            #[cfg(windows)]
+            (Self::Selected(a), Self::Selected(b)) => a == b,
             #[cfg(unix)]
             (Self::PipeWire { node: a, .. }, Self::PipeWire { node: b, .. }) => a == b,
             _ => false,
@@ -51,12 +47,35 @@ impl Input {
             other => Self::Device(other.map(str::to_owned).unwrap_or_default()),
             #[cfg(not(windows))]
             Some(d) if d.starts_with("/dev/video") => Self::Device(d.to_owned()),
-            #[cfg(target_os = "macos")]
-            other => Self::Device(other.unwrap_or("0").to_owned()),
-            #[cfg(not(any(windows, target_os = "macos")))]
+            #[cfg(target_os = "linux")]
+            Some(label) => Self::Device(v4l2_node(std::path::Path::new("/sys/class/video4linux"), label).unwrap_or_else(|| "/dev/video0".into())),
+            #[cfg(not(windows))]
             _ => Self::Device("/dev/video0".into()),
         }
     }
+
+    fn reads_device(&self) -> bool {
+        #[cfg(windows)]
+        if matches!(self, Self::Selected(_)) {
+            return false;
+        }
+        !matches!(self, Self::TestPattern)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn v4l2_node(sysfs: &std::path::Path, label: &str) -> Option<String> {
+    std::fs::read_dir(sysfs)
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let n: u32 = e.file_name().to_str()?.strip_prefix("video")?.parse().ok()?;
+            let index = std::fs::read_to_string(e.path().join("index")).ok().and_then(|s| s.trim().parse::<u32>().ok()).unwrap_or(0);
+            let name = std::fs::read_to_string(e.path().join("name")).ok()?;
+            (index == 0 && name.trim() == label).then_some(n)
+        })
+        .min()
+        .map(|n| format!("/dev/video{n}"))
 }
 
 #[cfg(windows)]
@@ -64,11 +83,41 @@ pub fn windows_cameras() -> Vec<String> {
     let Ok(output) = super::ffmpeg::ffmpeg_command()
         .args(["-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"])
         .stdin(Stdio::null())
-        .output() else { return Vec::new() };
-    String::from_utf8_lossy(&output.stderr).lines().filter_map(|line| {
-        let name = line.trim_end().strip_suffix("\" (video)")?;
-        Some(name.split_once('"')?.1.to_owned())
-    }).collect()
+        .stdout(Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+    parse_dshow_devices(&String::from_utf8_lossy(&output.stderr))
+}
+
+pub fn parse_dshow_devices(stderr: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut video_section = false;
+    for line in stderr.lines() {
+        let line = line.trim_end();
+        if line.contains("DirectShow video devices") {
+            video_section = true;
+            continue;
+        }
+        if line.contains("DirectShow audio devices") {
+            video_section = false;
+            continue;
+        }
+        if line.contains("Alternative name") {
+            continue;
+        }
+        let quoted = match (line.strip_suffix("\" (video)"), line.strip_suffix('"')) {
+            (Some(rest), _) => rest,
+            (None, Some(rest)) if video_section => rest,
+            _ => continue,
+        };
+        let Some((_, name)) = quoted.split_once('"') else { continue };
+        if !name.is_empty() && !out.iter().any(|n| n == name) {
+            out.push(name.to_owned());
+        }
+    }
+    out
 }
 
 pub type Preview = Arc<Mutex<Option<VideoFrame>>>;
@@ -101,27 +150,19 @@ impl DeviceReader {
         }
         let mut cmd = super::ffmpeg::ffmpeg_command();
         cmd.args(["-hide_banner", "-loglevel", "error"]);
-        match input {
-            #[cfg(windows)]
-            Input::Desktop => { cmd.args(["-f", "gdigrab", "-framerate", &fps.to_string(), "-i", "desktop"]); }
-            #[cfg(windows)]
-            Input::Device(name) => {
-                let name = if name.is_empty() {
-                    windows_cameras().into_iter().next().ok_or_else(|| Error::Encoder("No video capture device found".into()))?
-                } else { name.clone() };
-                cmd.args(["-f", "dshow", "-i", &format!("video={name}")]);
-            }
-            #[cfg(target_os = "macos")]
-            Input::Device(dev) => { cmd.args(["-f", "avfoundation", "-framerate", &fps.to_string(), "-i", &format!("{dev}:none")]); }
-            #[cfg(not(any(windows, target_os = "macos")))]
-            Input::Device(dev) => { cmd.args(["-f", "v4l2", "-framerate", &fps.to_string(), "-i", dev]); }
-            _ => return Err(Error::Encoder("Invalid capture source".into())),
+        let Input::Device(dev) = input else { return Err(Error::Encoder("invalid capture source".into())) };
+        #[cfg(windows)]
+        {
+            let name = if dev.is_empty() { windows_cameras().into_iter().next().ok_or_else(|| Error::Encoder("no video capture device".into()))? } else { dev.clone() };
+            cmd.args(["-f", "dshow", "-i", &format!("video={name}")]);
         }
-        let filter = match input {
-            #[cfg(windows)]
-            Input::Desktop => format!("scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"),
-            _ => format!("scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"),
-        };
+        #[cfg(not(windows))]
+        cmd.args(["-f", "v4l2", "-framerate", &fps.to_string(), "-i", dev]);
+        let fit = format!("scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}");
+        #[cfg(windows)]
+        let filter = format!("fps={fps},{fit}");
+        #[cfg(not(windows))]
+        let filter = fit;
         let mut child = cmd
             .args(["-vf", &filter])
             .args(["-f", "rawvideo", "-pix_fmt", "rgba", "-"])
@@ -209,28 +250,29 @@ impl Camera {
         let preview: Preview = Arc::new(Mutex::new(None));
         let cfg = VideoEncoderConfig::new(Codec::H264, width, height, fps, bitrate, screen);
         let mut enc = factory(&cfg)?;
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(windows)]
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
-        let needs_reader = match &input {
-            Input::TestPattern => false,
-            #[cfg(any(windows, target_os = "macos"))]
-            Input::Selected(_) => false,
-            _ => true,
-        };
-        let initial_reader = if !needs_reader { None } else { Some(DeviceReader::open(&input, width, height, fps)?) };
+        let needs_reader = input.reads_device();
+        let initial_reader = if needs_reader { Some(DeviceReader::open(&input, width, height, fps)?) } else { None };
         let (s2, r2, p2) = (stop.clone(), reconfig.clone(), preview.clone());
         let thread = std::thread::Builder::new()
             .name("phoenix-camera".into())
             .spawn(move || {
-                #[cfg(any(windows, target_os = "macos"))]
+                #[cfg(windows)]
                 let selected = {
                     let source = match &input {
                         Input::Selected(id) => super::desktop::Capture::open(*id).map(Some),
                         _ => Ok(None),
                     };
                     match source {
-                        Ok(handle) => { let _ = ready_tx.send(Ok(())); handle }
-                        Err(error) => { let _ = ready_tx.send(Err(error)); return; }
+                        Ok(handle) => {
+                            let _ = ready_tx.send(Ok(()));
+                            handle
+                        }
+                        Err(error) => {
+                            let _ = ready_tx.send(Err(error));
+                            return;
+                        }
                     }
                 };
                 let mut current = params;
@@ -268,9 +310,12 @@ impl Camera {
                             Some(data) => VideoFrame { width: current.width, height: current.height, pts_us: started.elapsed().as_micros() as u64, data: Arc::from(data) },
                             None => break,
                         },
-                        #[cfg(any(windows, target_os = "macos"))]
+                        #[cfg(windows)]
                         (true, None) if selected.is_some() => {
-                            let Some(data) = selected.as_ref().and_then(|source| source.frame(current.width, current.height)) else { break };
+                            let Some(data) = selected.as_ref().and_then(|source| source.frame(current.width, current.height)) else {
+                                std::thread::sleep(period);
+                                continue;
+                            };
                             VideoFrame { width: current.width, height: current.height, pts_us: started.elapsed().as_micros() as u64, data: Arc::from(data) }
                         }
                         (true, None) => break,
@@ -300,7 +345,7 @@ impl Camera {
                 }
             })
             .map_err(Error::Io)?;
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(windows)]
         ready_rx.recv().map_err(|e| Error::Encoder(e.to_string()))??;
         Ok(Self { stop, reconfig, thread: Some(thread), preview })
     }
@@ -337,13 +382,37 @@ mod tests {
     fn input_names() {
         assert_eq!(Input::from_name(Some(TEST_PATTERN)), Input::TestPattern);
         assert_eq!(Input::from_name(Some("/dev/video2")), Input::Device("/dev/video2".into()));
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(windows))]
         assert_eq!(Input::from_name(None), Input::Device("/dev/video0".into()));
         #[cfg(windows)]
         {
             assert_eq!(Input::from_name(None), Input::Device(String::new()));
             assert_eq!(Input::from_name(Some("USB Camera")), Input::Device("USB Camera".into()));
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn v4l2_names_map_to_their_capture_node() {
+        let root = std::env::temp_dir().join(format!("phoenix-v4l2-{}", std::process::id()));
+        for (node, name, index) in [("video0", "Integrated Camera", 0), ("video1", "Integrated Camera", 1), ("video2", "USB Camera", 0), ("video3", "USB Camera", 1)] {
+            let dir = root.join(node);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("name"), format!("{name}\n")).unwrap();
+            std::fs::write(dir.join("index"), format!("{index}\n")).unwrap();
+        }
+        assert_eq!(v4l2_node(&root, "USB Camera").as_deref(), Some("/dev/video2"));
+        assert_eq!(v4l2_node(&root, "Integrated Camera").as_deref(), Some("/dev/video0"));
+        assert_eq!(v4l2_node(&root, "Missing"), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn dshow_device_lists_keep_video_inputs_only() {
+        let modern = "[dshow @ 000001] \"Integrated Camera\" (video)\n[dshow @ 000001]   Alternative name \"@device_pnp_\\\\?\\usb\"\n[dshow @ 000001] \"Microphone (Realtek)\" (audio)\n[dshow @ 000001] \"OBS Virtual Camera\" (video)\n";
+        assert_eq!(parse_dshow_devices(modern), vec!["Integrated Camera", "OBS Virtual Camera"]);
+        let legacy = "[dshow @ 01] DirectShow video devices (some may be both video and audio devices)\n[dshow @ 01]  \"USB2.0 HD UVC WebCam\"\n[dshow @ 01]     Alternative name \"@device_pnp_x\"\n[dshow @ 01] DirectShow audio devices\n[dshow @ 01]  \"Microphone\"\n";
+        assert_eq!(parse_dshow_devices(legacy), vec!["USB2.0 HD UVC WebCam"]);
     }
 
     #[test]

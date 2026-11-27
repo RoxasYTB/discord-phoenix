@@ -1000,6 +1000,11 @@ impl PhoenixApp {
                         crate::voice::call::preview_uploaded(&key, ok);
                     });
                 }
+                match &e {
+                    crate::voice::VoiceUiEvent::CameraFailed(f) => crate::ui::voice_panel::media_failure_modal(f, false),
+                    crate::voice::VoiceUiEvent::ScreenFailed(f) => crate::ui::voice_panel::media_failure_modal(f, true),
+                    _ => {}
+                }
                 self.voice.apply(e)
             }
             AppEvent::Users(users) => {

@@ -381,6 +381,31 @@ fn meter_row() -> AnyElement {
         .into_any_element()
 }
 
+pub fn media_failure_modal(failure: &crate::voice::MediaFailure, screen: bool) {
+    let title = if screen { crate::t!("golive.unavailable") } else { crate::t!("voice.camera_start_failed") };
+    let (title, body) = match failure {
+        crate::voice::MediaFailure::NoDevice => (crate::t!("voice.camera_unavailable"), crate::t!("voice.no_camera_detected")),
+        crate::voice::MediaFailure::NoFfmpeg => (title, crate::t!("voice.ffmpeg_missing")),
+        crate::voice::MediaFailure::Other(e) => (title, SharedString::from(e.clone())),
+    };
+    crate::actions::open_modal(
+        crate::ui::modals::Modal::Form(crate::ui::modals::Form {
+            title,
+            subtitle: Some(body),
+            fields: Vec::new(),
+            choices: Vec::new(),
+            choice: None,
+            check: None,
+            submit: crate::t!("common.okay"),
+            danger: false,
+            preview: None,
+            width: 440.,
+            on_submit: Rc::new(|_, _, _, _| {}),
+        }),
+        None,
+    );
+}
+
 pub fn toggle_camera_menu(pos: Point<Pixels>) {
     let open = CAMERA_MENU.with(|m| m.borrow().is_some());
     let next = (!open).then(|| (pos, crate::ui::settings::voice::cameras()));
