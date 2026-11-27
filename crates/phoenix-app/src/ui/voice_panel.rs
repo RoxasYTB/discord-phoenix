@@ -463,7 +463,7 @@ pub fn audio_menu_open(kind: Audio) -> bool {
     AUDIO_MENU.with(|m| m.borrow().as_ref().is_some_and(|(k, _, _)| *k == kind))
 }
 
-fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, deafened: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, deafened: bool, in_voice: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let e = cx.entity();
     let dismiss: context_menu::Dismiss = Rc::new(move |_: &mut Window, cx: &mut App| {
         AUDIO_MENU.with(|m| *m.borrow_mut() = None);
@@ -476,14 +476,18 @@ fn audio_menu(kind: Audio, pos: Point<Pixels>, devices: Vec<String>, deafened: b
         p.ptt_key.as_ref().map(|_| (p.input_mode == crate::voice::prefs::InputMode::PushToTalk, p.audio_profile == PROFILE_STUDIO))
     });
     let mut items = vec![device_submenu(kind, devices)];
-    if full {
+    if kind == Audio::Mic {
         items.push(profile_submenu());
+    }
+    if full {
         items.push(device_submenu(Audio::Deafen, crate::voice::call::devices().1));
     }
     items.push(MenuItem::Separator);
     items.push(MenuItem::Custom(volume_row(kind, cx)));
-    if full {
+    if full || (kind == Audio::Mic && in_voice) {
         items.push(MenuItem::Custom(meter_row()));
+    }
+    if full {
         items.push(MenuItem::Custom(volume_row(Audio::Deafen, cx)));
     }
     items.push(MenuItem::Separator);
@@ -1330,7 +1334,7 @@ fn popout(app: &PhoenixApp, tab: Tab, cx: &mut Context<PhoenixApp>) -> AnyElemen
 pub fn overlays(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement> {
     let mut out = Vec::new();
     if let Some((kind, pos, devices)) = AUDIO_MENU.with(|m| m.borrow().clone()) {
-        out.push(audio_menu(kind, pos, devices, app.deafened, cx));
+        out.push(audio_menu(kind, pos, devices, app.deafened, app.voice_channel.is_some(), cx));
     }
     if let Some((pos, cams)) = CAMERA_MENU.with(|m| m.borrow().clone()) {
         out.push(camera_menu(pos, cams, cx));
