@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["gpui-pre", "gpui-pre-wgpu"]
+members = ["gpui-pre", "gpui-pre-wgpu", "gpui-pre-linux"]
 exclude = ["gpui-base"]
 
 [patch.crates-io]
