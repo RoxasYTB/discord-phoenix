@@ -2,16 +2,16 @@
 
 Audit du 27/11/2026 sur origin/main `8c7b358b`. Ce document remplace le pourcentage de lignes ✅ comme mesure de l'avancement. Il se refait à la main : chaque état ci-dessous doit citer une preuve, et un état ne monte d'un cran que sur une nouvelle preuve réelle.
 
-<!-- real-progress {"score":63.0,"low":50.8,"high":77.0,"features":122,"verified":32,"unverified":76,"broken":4,"missing":10,"critical":26,"critical_verified":16,"critical_broken":4,"proof_measured":44,"proof_compared":8,"at":"2026-11-27"} -->
+<!-- real-progress {"score":72.6,"low":63.7,"high":82.9,"features":122,"verified":46,"unverified":65,"broken":3,"missing":8,"critical":26,"critical_verified":22,"critical_broken":3,"proof_measured":44,"proof_compared":8,"at":"2026-11-27"} -->
 
 ## Résultat
 
 | mesure | valeur |
 |---|---|
-| **Score réel pondéré** | **63 %** (fourchette 51 à 77 %) |
-| Couverture fonctionnelle | 112 fonctionnalités sur 122 existent dans le code (94 % du poids), mais **32 seulement sont vérifiées en vrai** (38 % du poids) |
+| **Score réel pondéré** | **73 %** (fourchette 64 à 83 %) |
+| Couverture fonctionnelle | 114 fonctionnalités sur 122 existent dans le code (96 % du poids), mais **46 seulement sont vérifiées en vrai** (55 % du poids) |
 | Niveau de preuve des ✅ | **44 %** s'appuient sur une mesure du vrai client, **8 %** ont été comparés à un rendu Phoenix ; 40 % viennent du CSS ou du JS seuls, 8 % d'un test unitaire, 7 % de rien |
-| Parcours critiques | **16 sur 26** prouvés en usage ou en test réel, 4 cassés connus, 6 non prouvés |
+| Parcours critiques | **22 sur 26** prouvés en usage ou en test réel, 3 cassés connus, 1 non prouvés |
 
 L'ancien chiffre (94,2 % : 2287 ✅, 114 ⚠, 26 ❌, 64 ➖ dans `docs/parity/*.md`) mesure autre chose : la part des détails inventoriés qui ont été codés. Il est biaisé pour trois raisons.
 
@@ -78,11 +78,11 @@ Docs les plus faibles : `inventory.md` (« page présente ✅ » sans mesure), `
 | Reprise après coupure réseau | critique | prouvé (usage) | 26/11 : deux coupures reprises en < 0,1 s |
 | Statut propre visible des autres | critique | cassé, correctif non prouvé | hors ligne pour tous jusqu'au 26/11 |
 | Lire et défiler un salon | critique | prouvé (QA) | QA run2 OK ; run1 KO ; le build de l'utilisateur n'a pas encore le correctif |
-| Charger l'historique ancien | critique | non prouvé | jamais testé jusqu'à la pagination |
+| Charger l'historique ancien | critique | prouvé (QA) | pagination jusqu'au début de #phoenix, plusieurs pages dans #général (27/11) |
 | Revenir au présent | important | prouvé (QA) | QA d'entrées du 27/11 sur `29718d29` : barre affichée après 30 crans, clic, `at_bottom == 1` (deux runs) |
 | Envoyer, éditer, supprimer, réagir | critique | prouvé (test réel) | salon de test, 26/11 |
 | Menu contextuel d'un message | critique | prouvé (entrées réelles) | 27/11 : clic droit X11 réel (Xvfb, `xdotool`) sur le texte et sur une vidéo de #phoenix, menu ouvert, Échap le ferme ; les KO de la QA venaient de son ancre `@chat#-2`, sans ligne quand la liste est au bas |
-| Répondre | critique | non prouvé | aucun envoi de réponse |
+| Répondre | critique | prouvé (test réel) | réponse envoyée au clavier dans #phoenix (27/11) |
 | Pièces jointes (envoi) | critique | prouvé (test réel) | PNG de 3,3 Mo envoyé |
 | Images | critique | prouvé (usage) | ≈ 8 échecs en deux jours, liens expirés |
 | Vidéos | critique | prouvé (QA et entrées réelles) | 27/11 sur `79a47024` : clic, lecture (0,4 s puis +4 s), pause, plein écran au bouton, sortie par Échap, en QA d'entrées et en clics X11 réels sous Xvfb ; seek →, 5 s, sous Xvfb |
@@ -90,15 +90,15 @@ Docs les plus faibles : `inventory.md` (« page présente ✅ » sans mesure), `
 | MP : liste et ouverture | critique | prouvé | ouverture réelle |
 | MP : envoi | critique | non prouvé | aucun envoi en MP |
 | Notifications de bureau | critique | prouvé (test réel) | popup, son, clic (27/11) |
-| Non-lus et pastilles | critique | non prouvé | pastilles seulement simulées |
+| Non-lus et pastilles | critique | prouvé (QA) | pastille de mention d'un MP réel identique au client ; non-lus de serveur pas vus |
 | Recherche | important | prouvé (rendus réels) | résultats réels affichés |
-| Vocal : rejoindre | critique | non prouvé | DAVE rejoint, `rtp_audio=0` |
-| Vocal : entendre | critique | cassé, correctif non prouvé | -100 dB sur toute la session du 26/11 |
-| Vocal : parler | critique | non prouvé | aucun auditeur |
+| Vocal : rejoindre | critique | prouvé (usage) | appel réel du 27/11, DAVE, rtp_audio 31 018 |
+| Vocal : entendre | critique | prouvé (usage) | « je les entends » (27/11 15 h), level_db -14 à -30 |
+| Vocal : parler | critique | prouvé (usage) | « ils m'entendent » (27/11 15 h) |
 | Vocal : changer de salon | critique | cassé, correctif non prouvé | plus de connexion après le changement |
 | Mute, sourdine | important | non prouvé | seulement `deafened=false` dans les traces |
 | Caméra, stream, appel MP | important | non prouvés | aucune image reçue en direct, aucun appel |
-| Paramètres principaux | important | ouverture prouvée, effets non prouvés | panique de Mon compte corrigée sans réouverture |
+| Paramètres principaux | important | ouverture prouvée, effets non prouvés | ouverture prouvée, Mon compte rouvert sans panique (QA 27/11), zoom local prouvé, thème non testable |
 | Stabilité en usage long | critique | cassé (mémoire) | 10 h sans plantage, mais RSS de 423 à 875 Mio, correctif non remesuré |
 
 Le build de l'utilisateur au moment de l'audit (`766fa7ba`) ne contient ni les correctifs de défilement ni le lecteur vidéo. Les plaintes sur ces deux points portent donc sur un build plus ancien, mais la QA du 27/11 montrait que la vidéo et le saut au présent échouaient aussi sur main. Reprise le même jour : le saut au présent passe depuis 8c7b358b, et la vidéo se lisait déjà ; c'est la QA qui ne faisait pas tourner ses minuteries (voir `docs/qa.md`).
@@ -145,7 +145,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 |---|---|---|---|---|
 | 11 | Rail des serveurs, dossiers, changer de serveur | critique | vérifiée en vrai | QA d'entrées 27/11 : « Changer de serveur au clic » OK |
 | 12 | Liste des salons (catégories, repli, défilement, clic) | critique | vérifiée en vrai | QA 27/11 : « Changer de salon au clic » et « Liste des salons : molette » OK |
-| 13 | Non-lus, pastilles de mention, marquer comme lu | critique | présente, non vérifiée | pastilles 1/12/120 seulement simulées en local ; rail réel vérifié seulement sans pastille |
+| 13 | Non-lus, pastilles de mention, marquer comme lu | critique | vérifiée en vrai | pastille de mention réelle : MP d'un tiers reçu pendant un rendu real_shots (27/11 15h30), badge « 1 » sur l'avatar du MP dans le rail, identique au client au même instant ; aucune pastille de non-lu de serveur vue (aucun message non lu pendant 4 min d'attente) ; marquer comme lu non exécuté (ack interdit) |
 | 14 | Sélecteur rapide Ctrl+K | important | vérifiée en vrai | QA 27/11 OK |
 | 15 | Réorganiser serveurs et salons (glisser-déposer) | détail | présente, non vérifiée | `rail_dnd.rs`, `channel_dnd.rs`, écritures jamais exécutées |
 | 16 | Favoris | détail | présente, non vérifiée | `favorites.rs`, rendus démo et réels, écritures non exécutées |
@@ -162,16 +162,16 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 |---|---|---|---|---|
 | 23 | Afficher les messages d'un salon (groupage, auteurs, dates) | critique | vérifiée en vrai | real-compare.md et real-glitches.md : environ 30 écrans réels comparés |
 | 24 | Défilement (molette, pavé tactile, PageUp/PageDown) | critique | vérifiée en vrai | QA run2 27/11 13:45 OK ; run1 12:14 KO ; le build de l'utilisateur (766fa7ba) n'a pas encore ces correctifs |
-| 25 | Charger l'historique plus ancien | critique | présente, non vérifiée | aucune étape QA ne remonte jusqu'à la pagination |
+| 25 | Charger l'historique plus ancien | critique | vérifiée en vrai | QA d'entrées 27/11 (29718d29) : #phoenix 51 → 110 éléments à la molette jusqu'à « Bienvenue sur #phoenix » ; #général 51 → 2201 éléments en 6 coups de molette, messages du 24/11 affichés alors que la première page s'arrêtait au 26/11 |
 | 26 | Revenir au présent (barre de saut) | important | vérifiée en vrai | QA d'entrées du 27/11 sur `29718d29` (après 8c7b358b) : 30 crans de molette, barre « Tu consultes d'anciens messages », clic, `at_bottom == 1`, deux runs |
-| 27 | Sauter à un message (réponse, lien, épingle, résultat) | important | présente, non vérifiée | code présent, non testé en réel |
+| 27 | Sauter à un message (réponse, lien, épingle, résultat) | important | vérifiée en vrai | QA 27/11 (81187596) : clic sur la citation d'une réponse, `flash` = message cité ; résultat de recherche du 25/11 hors de la page chargée, `flash` = 1575263335010799749. Saut vers un autre salon non prouvé : un lien de message cliqué dans #général n'ouvre rien (backlog) |
 | 28 | Indicateur de frappe | important | présente, non vérifiée | typing.md : valeurs CSS, jamais vu avec un vrai tiers qui écrit |
 | 29 | Markdown (titres, listes, citations, spoilers, code coloré) | important | vérifiée en vrai | real-glitches.md : glitchs relevés sur des écrans réels puis corrigés |
 | 30 | Mentions, émojis personnalisés et animés, horodatages | important | vérifiée en vrai | rendus réels comparés (real-compare.md) |
 | 31 | Images et mosaïques | critique | vérifiée en vrai | usage réel : environ 8 échecs en 2 jours (liens expirés), rendus réels |
 | 32 | Lecture vidéo (lecture, seek, plein écran) | critique | vérifiée en vrai | 27/11 : la lecture marchait, la QA ne faisait pas avancer l'horloge de ses minuteries (corrigé) et tapait les touches du lecteur DVP ; QA d'entrées sur `79a47024` : lecture, pause, plein écran, Échap ; sous Xvfb (binaire complet, clics X11) : lecture, pause, seek → de 5 s, plein écran ; Échap ne quittait pas le plein écran, corrigé (c0e116b4). Image figée sur l'ancienne position après un seek en pause |
 | 33 | Embeds (liens, YouTube, X, riches) | important | vérifiée en vrai | rendus réels ; mosaïque X jamais vue sur un vrai post |
-| 34 | Fichiers et audio joints (lecture audio) | important | présente, non vérifiée | `media/audio_file.rs`, lecture jamais prouvée |
+| 34 | Fichiers et audio joints (lecture audio) | important | vérifiée en vrai | QA 27/11 (81187596) : lecture de tonalite-440hz.wav depuis un résultat de recherche, son coupé, `audio_t` 0,37 → 2,44 s |
 | 35 | Messages vocaux (lecture et enregistrement) | important | présente, non vérifiée | voice-messages.md : CSS et JS, aucune lecture réelle |
 | 36 | Messages système, bannières de fil, annonces | détail | présente, non vérifiée | rendus, pas de comparaison dédiée |
 | 37 | Composants d'application (boutons, menus, conteneurs v2) | important | présente, non vérifiée | affichage présent, interactions jamais envoyées |
@@ -190,13 +190,13 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | 45 | Supprimer un message | critique | vérifiée en vrai | suppression réelle avec confirmation (26/11 19:55) |
 | 46 | Menu contextuel d'un message (clic droit) | critique | vérifiée en vrai | 27/11 : clic droit X11 réel sous Xvfb (binaire complet, vrai compte, #phoenix) sur un texte et sur une vidéo, Échap ferme ; le KO de la QA était son ancre `@chat#-2` (`bounds_for_item` sans ligne pour une liste au bas), corrigée dans le scénario |
 | 47 | Réagir (ajouter, retirer) | critique | vérifiée en vrai | 👍 ajouté puis retiré en réel (26/11 19:55) |
-| 48 | Répondre à un message | critique | présente, non vérifiée | aucun envoi réel de réponse tracé |
+| 48 | Répondre à un message | critique | vérifiée en vrai | QA 27/11 (81187596) : Maj+Tab, flèche haut, R, texte, Entrée dans #phoenix ; réponse réelle 1575933472504287253 avec message_reference vérifié en GET |
 | 49 | Envoyer des pièces jointes (bouton +, glisser, préupload) | critique | vérifiée en vrai | PNG de 3,3 Mo envoyé en réel (25/11, 26/11) |
-| 50 | Coller une image du presse-papiers | important | présente, non vérifiée | `chat/state.rs` gère `ClipboardEntry::Image`, jamais testé en réel |
-| 51 | Sélecteur d'émojis | important | présente, non vérifiée | pickers.md : surtout CSS |
-| 52 | GIF (Tenor) et favoris | important | présente, non vérifiée | `pickers/gif.rs`, aucun envoi réel |
+| 50 | Coller une image du presse-papiers | important | vérifiée en vrai | QA 27/11 (81187596) : PNG mis dans le presse-papiers de la fenêtre hors écran, Ctrl+V, plateau à 1 fichier, envoi réel 1575933511121240205 (1 pièce jointe, GET) |
+| 51 | Sélecteur d'émojis | important | vérifiée en vrai | QA 27/11 (81187596) : bouton émoji, clic sur :MISKINE:, `<:MISKINE:…>` inséré dans le compositeur, envoi réel 1575934849825382454 |
+| 52 | GIF (Tenor) et favoris | important | présente, non vérifiée | `pickers/gif.rs`, aucun envoi réel ; QA 27/11 : vraies catégories Klipy affichées, l'envoi d'un GIF bloque le rendu hors écran (backlog) |
 | 53 | Envoyer un sticker | détail | présente, non vérifiée | `pickers/sticker.rs` |
-| 54 | Commandes slash d'applications | important | présente, non vérifiée | `commands/`, interactions jamais envoyées |
+| 54 | Commandes slash d'applications | important | vérifiée en vrai | QA 27/11 (81187596) : `/ping` liste French.gg, upbot, FlaviBot, Rythm ; Bas, Entrée, Entrée lance /ping d'upbot dans #phoenix (RunCommand), réponse du bot reçue (application 799368668349726751) |
 | 55 | Transférer un message | détail | présente, non vérifiée | `modals/forward.rs` |
 | 56 | Créer un fil, un sondage, un message programmé, un rappel | important | présente, non vérifiée | code présent, rien d'exécuté en réel hors salon de test |
 | 57 | Épingles (voir, épingler) | détail | présente, non vérifiée | `actions/pins.rs` |
@@ -216,7 +216,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | # | fonctionnalité | poids | état | preuve |
 |---|---|---|---|---|
 | 63 | Recherche (filtres, résultats) | important | vérifiée en vrai | résultats réels en rendu (25/11, 26/11), pas d'usage de l'utilisateur |
-| 64 | Aller au résultat de recherche | important | présente, non vérifiée | non testé |
+| 64 | Aller au résultat de recherche | important | vérifiée en vrai | QA 27/11 (81187596) : clic sur un résultat du 25/11 hors de la page chargée, saut et surbrillance (`flash`) ; correctif du saut avant le premier chargement (81187596). Depuis un autre salon : non reprouvé, la recherche Discord renvoyait 0 résultat (API vérifiée en GET) |
 
 ### Notifications
 
@@ -231,10 +231,10 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 
 | # | fonctionnalité | poids | état | preuve |
 |---|---|---|---|---|
-| 69 | Rejoindre un salon vocal (connexion, chiffrement DAVE) | critique | présente, non vérifiée | 26/11 18:51 : DAVE rejoint mais `rtp_audio=0` |
-| 70 | Entendre les autres | critique | cassée connue | phoenix-voice.log 26/11 : -100 dB sur les 16 relevés, `no key for sender` ; correctif dcadb31b jamais testé |
-| 71 | Parler (être entendu) | critique | présente, non vérifiée | `Speaking true` local, aucune confirmation côté auditeur |
-| 72 | Changer de salon vocal | critique | cassée connue | 26/11 18:51 : plus aucune connexion après changement ; correctif 766fa7ba sans session depuis |
+| 69 | Rejoindre un salon vocal (connexion, chiffrement DAVE) | critique | vérifiée en vrai | appel réel de l'utilisateur 27/11 14:51 (8fc6cda5), phoenix-voice.log : DAVE actif, `Connected` aead_aes256_gcm_rtpsize, rtp_audio jusqu'à 31 018 |
+| 70 | Entendre les autres | critique | vérifiée en vrai | « je les entends, et ils m'entendent » (utilisateur, appel avec des amis, 27/11 15 h, 8fc6cda5) ; phoenix-voice.log depuis 14:51:54 : `decoded` jusqu'à 6224 par interlocuteur, ≈ 320 relevés entre -10 et -40 dB |
+| 71 | Parler (être entendu) | critique | vérifiée en vrai | les amis de l'utilisateur l'entendent pendant l'appel réel du 27/11 15 h (8fc6cda5) |
+| 72 | Changer de salon vocal | critique | cassée connue | 26/11 18:51 : plus aucune connexion après changement ; correctif 766fa7ba sans session depuis ; 27/11 : aucun changement de salon dans la session de 14:51 (trois reconnexions au même salon, état vocal propre d'une autre session ignoré), toujours non prouvé |
 | 73 | Couper le micro, mettre en sourdine | important | présente, non vérifiée | seulement `deafened=false` dans les traces |
 | 74 | Push-to-talk, détection de voix, sensibilité | important | présente, non vérifiée | `voice/ptt.rs`, `audio/device.rs` |
 | 75 | Suppression de bruit (Krisp) et annulation d'écho | important | absente | filtre maison simple ; annulation d'écho : drapeau sans traitement ; pas de Krisp |
@@ -270,9 +270,9 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 
 | # | fonctionnalité | poids | état | preuve |
 |---|---|---|---|---|
-| 93 | Mon compte (e-mail, mot de passe, 2FA) | important | présente, non vérifiée | panique le 26/11 (corrigée par 4bc118f4), réouverture non tracée |
+| 93 | Mon compte (e-mail, mot de passe, 2FA) | important | vérifiée en vrai | QA 27/11 (29718d29) : ouverture au clic sur l'engrenage, défilement jusqu'à « Désactiver le compte », survol de toute la page, aucune panique |
 | 94 | Données, confidentialité, contenu et social | important | présente, non vérifiée | rendus réels, écritures bloquées |
-| 95 | Apparence (thème, zoom, densité, police) | important | présente, non vérifiée | rendus réels ; effet des réglages comparé seulement en partie (themes.md) |
+| 95 | Apparence (thème, zoom, densité, police) | important | présente, non vérifiée | rendus réels ; effet des réglages comparé seulement en partie (themes.md) ; QA 27/11 : zoom Ctrl+= 100 → 110 % (config isolée), thème : écriture refusée par la garde, effet non testable sans écrire les réglages |
 | 96 | Voix et vidéo (périphériques, test du micro) | important | présente, non vérifiée | rendus réels ; test micro jamais vérifié |
 | 97 | Ouvrir et parcourir les paramètres | important | vérifiée en vrai | QA 27/11 : « Paramètres : ouvrir et défiler » OK |
 | 98 | Notifications, raccourcis, langue, accessibilité, avancés | important | présente, non vérifiée | rendus réels ; effet des réglages non vérifié |
