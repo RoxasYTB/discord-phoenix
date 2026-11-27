@@ -613,6 +613,39 @@ the constants above come from the Chromium source.
   loading) is called on every step. A step that lands within 0.05 px of the end snaps to it,
   so float rounding cannot leave the chat one hair above the bottom.
 
+**Fixes, 2026-11-26 evening (branch `gpui-scroll-fix`).**
+- The chat did not move with the wheel. A `ListAlignment::Bottom` list resting at its end has
+  no anchor, so its logical top is past the last item; `StateInner::scroll_by` started from that
+  height and every step was clamped back to the end. It now starts from the offset the list is
+  drawn at (`min(scroll_top, scroll_max)`). Test `test_smooth_step_scrolls_a_bottom_list_resting_at_its_end`.
+- Notch distance: `wheel_line_delta` gives 40 DIPs per line divided by the page zoom (120 DIPs a
+  notch). Measured on Chrome 158 under Xvfb with real X11 wheel clicks (`xdotool click 4`),
+  device scale 1.5, page zoom 1: 120 CSS px a notch. In the client (Wayland scale 1, dpr 1.5)
+  a CDP wheel of 100 DIPs scrolls 66.7 CSS px, so its deltas are divided by the 1.5 zoom:
+  one notch is 80 CSS px, 120 physical px. Before, a notch was 60 px in a list and
+  `3 × line_height` in a div.
+- Inactive windows: GPUI throttles an unfocused window to 30 fps (`inactive_frame_interval`),
+  so a wheel over Phoenix while another window had the focus animated every other frame. The
+  frame handler no longer throttles while `Window::smooth_scrolling()`.
+- `ListState::smooth_scroll_by` and `ScrollHandle::smooth_scroll_by` run a scroll on the same
+  animation (same key) as the wheel; Phoenix's scrollbar track clicks use them.
+- Measured curve (Chrome 158, rAF `scrollTop`): one notch of 120 px eases in and out over
+  175–200 ms; 10 notches sent 25 ms apart reach their 1200 px target 300–370 ms after the
+  first, without a pause between notches, which is the retarget already implemented.
+
+**Page scroll, 2026-11-27 (branch `gpui-scroll2`).**
+- Neither the scroll-fix commit above nor the PageUp fix `e9d7972e` was ever built: `Cargo.toml`
+  pins GPUI to a git rev (`4a3f89ec`), and both changes only went into `vendor/` on branches
+  whose pin never merged. So `real_shots` kept showing `list_top=(51, 0)` after a PageUp from the
+  bottom: `ListState::scroll_by` started from the past-the-end anchor (`content height`), moved
+  less than a viewport, and the next layout found the bottom of the list visible again and
+  dropped the anchor (`ListAlignment::Bottom` → `set_scroll_anchor(None)`). Both fixes are now in
+  the pinned rev.
+- `ListState::scroll_by_notify(distance, view, window, cx)` scrolls now from the drawn offset
+  through `StateInner::scroll`, like one wheel step: the scroll handler runs (history loading,
+  « Revenir au présent »), the end re-attaches the tail. Phoenix's PageUp/PageDown spring calls it
+  once per frame. Test `test_scroll_by_notify_runs_the_handler_and_follows_the_tail_at_the_end`.
+
 Tests: `smooth_scroll::tests` (segment ramp, ease-in-out of one notch over 200 ms, second notch
 keeps the velocity, reversing restarts from the current offset, a notch after the end starts a
 fresh segment).

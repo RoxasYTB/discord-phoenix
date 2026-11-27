@@ -3417,11 +3417,21 @@ impl Interactivity {
             let hitbox = hitbox.clone();
             let current_view = window.current_view();
             let smooth_offset = scroll_offset.clone();
+            let page_zoom = window.page_zoom();
             window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble && hitbox.should_handle_scroll(window) {
                     let mut scroll_offset = scroll_offset.borrow_mut();
                     let old_scroll_offset = *scroll_offset;
-                    let mut delta = event.delta.pixel_delta(line_height);
+                    // PHOENIX PATCH (smooth wheel): a notch moves as far as in Chromium.
+                    let mut delta = match event.delta {
+                        crate::ScrollDelta::Lines(lines)
+                            if crate::smooth_wheel_scroll_enabled()
+                                && event.source == crate::ScrollSource::Pointer =>
+                        {
+                            crate::wheel_line_delta(lines, page_zoom)
+                        }
+                        _ => event.delta.pixel_delta(line_height),
+                    };
 
                     if restrict_scroll_to_axis
                         && event.delta.precise()
@@ -4503,6 +4513,24 @@ impl ScrollHandle {
     pub fn set_offset(&self, position: Point<Pixels>) {
         let state = self.0.borrow();
         *state.offset.borrow_mut() = position;
+    }
+
+    /// PHOENIX PATCH (smooth wheel): moves the content by `delta` (negative `y` scrolls
+    /// down) with the wheel animation, merged with a wheel animation already running on
+    /// this container. `view` is notified on every frame of it.
+    pub fn smooth_scroll_by(&self, delta: Point<Pixels>, view: EntityId, window: &mut Window) {
+        if delta == Point::default() {
+            return;
+        }
+        let target = self.0.borrow().offset.clone();
+        let key = Rc::as_ptr(&target) as *const () as usize;
+        window.smooth_wheel_scroll(key, delta, move |step, _, cx| {
+            let mut offset = target.borrow_mut();
+            offset.x += step.x;
+            offset.y += step.y;
+            drop(offset);
+            cx.notify(view);
+        });
     }
 
     /// Get the logical scroll top, based on a child index and a pixel offset.

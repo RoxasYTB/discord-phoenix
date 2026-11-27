@@ -588,6 +588,39 @@ impl ListState {
         state.set_scroll_anchor(Some(scroll_top));
     }
 
+    /// PHOENIX PATCH (smooth wheel): scrolls by `distance` pixels (positive moves toward
+    /// the end) with the wheel animation, merged with a wheel animation already running on
+    /// this list. `view` is notified on every frame of it.
+    pub fn smooth_scroll_by(&self, distance: Pixels, view: EntityId, window: &mut Window) {
+        if distance == px(0.) {
+            return;
+        }
+        let state = self.clone();
+        let key = Rc::as_ptr(&state.0) as *const () as usize;
+        window.smooth_wheel_scroll(key, point(px(0.), -distance), move |step, window, cx| {
+            state.0.borrow_mut().scroll_by(step, view, window, cx)
+        });
+    }
+
+    /// PHOENIX PATCH (page scroll): scrolls by `distance` pixels now (positive moves toward
+    /// the end) from the offset the list is drawn at, like one frame of a wheel animation:
+    /// the scroll handler runs, a bottom-aligned list that reaches its end follows the tail
+    /// again, and `view` is notified.
+    pub fn scroll_by_notify(
+        &self,
+        distance: Pixels,
+        view: EntityId,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if distance == px(0.) {
+            return;
+        }
+        self.0
+            .borrow_mut()
+            .scroll_by(point(px(0.), -distance), view, window, cx);
+    }
+
     /// Scroll the list to the very end (past the last item).
     ///
     /// Unlike [`scroll_to_reveal_item`], this uses the total item count as the
@@ -942,11 +975,19 @@ impl StateInner {
             return;
         };
         let height = bounds.size.height;
-        let top = self.logical_scroll_top();
-        let current = self.scroll_top(&top);
         let padding = self.last_padding.unwrap_or_default();
         let scroll_max =
             (self.items.summary().height + padding.top + padding.bottom - height).max(px(0.));
+        // A bottom-aligned list resting at its end has no anchor, and its logical top is
+        // past the last item: start from the offset it is drawn at instead.
+        let current = self.scroll_top(&self.logical_scroll_top()).min(scroll_max);
+        let (start, ..) = self
+            .items
+            .find::<ListItemSummary, _>((), &Height(current), Bias::Right);
+        let top = ListOffset {
+            item_ix: start.count,
+            offset_in_item: current - start.height,
+        };
         let mut delta = delta;
         if (current - delta.y - scroll_max).abs() < px(0.05) {
             delta.y = current - scroll_max;
@@ -1658,6 +1699,7 @@ impl Element for List {
         let scroll_top = prepaint.layout.scroll_top;
         let hitbox_id = prepaint.hitbox.id;
         let mut accumulated_scroll_delta = ScrollDelta::default();
+        let page_zoom = window.page_zoom();
         window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble && hitbox_id.should_handle_scroll(window) {
                 // PHOENIX PATCH (smooth wheel): wheel notches are animated, see `smooth_scroll`.
@@ -1665,7 +1707,10 @@ impl Element for List {
                     && !event.delta.precise()
                     && event.source == crate::ScrollSource::Pointer
                 {
-                    let delta = event.delta.pixel_delta(px(20.));
+                    let delta = match event.delta {
+                        ScrollDelta::Lines(lines) => crate::wheel_line_delta(lines, page_zoom),
+                        ScrollDelta::Pixels(delta) => delta,
+                    };
                     if delta.y != px(0.) {
                         let state = list_state.clone();
                         let key = Rc::as_ptr(&state.0) as *const () as usize;
@@ -1980,6 +2025,77 @@ mod test {
         let offset = state.logical_scroll_top();
         assert_eq!(offset.item_ix, 0);
         assert_eq!(offset.offset_in_item, px(0.));
+    }
+
+    #[gpui::test]
+    fn test_smooth_step_scrolls_a_bottom_list_resting_at_its_end(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        let state = ListState::new(10, crate::ListAlignment::Bottom, px(0.)).measure_all();
+
+        struct TestView(ListState);
+        impl Render for TestView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                list(self.0.clone(), |_, _, _| {
+                    div().h(px(20.)).w_full().into_any()
+                })
+                .w_full()
+                .h_full()
+            }
+        }
+
+        let view = cx.update(|_, cx| cx.new(|_| TestView(state.clone())));
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {
+            view.clone().into_any_element()
+        });
+        assert_eq!(state.scroll_px_offset_for_scrollbar().y, px(-100.));
+
+        cx.update(|window, cx| {
+            state.0.borrow_mut().scroll_by(
+                point(px(0.), px(30.)),
+                view.entity_id(),
+                window,
+                cx,
+            )
+        });
+        assert_eq!(state.scroll_px_offset_for_scrollbar().y, px(-70.));
+    }
+
+    #[gpui::test]
+    fn test_scroll_by_notify_runs_the_handler_and_follows_the_tail_at_the_end(
+        cx: &mut TestAppContext,
+    ) {
+        let cx = cx.add_empty_window();
+
+        let state = ListState::new(10, crate::ListAlignment::Bottom, px(0.)).measure_all();
+        let calls = Rc::new(RefCell::new(0));
+        let seen = calls.clone();
+        state.set_scroll_handler(move |_, _, _| *seen.borrow_mut() += 1);
+
+        struct TestView(ListState);
+        impl Render for TestView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                list(self.0.clone(), |_, _, _| {
+                    div().h(px(20.)).w_full().into_any()
+                })
+                .w_full()
+                .h_full()
+            }
+        }
+
+        let view = cx.update(|_, cx| cx.new(|_| TestView(state.clone())));
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {
+            view.clone().into_any_element()
+        });
+
+        cx.update(|window, cx| state.scroll_by_notify(px(-90.), view.entity_id(), window, cx));
+        assert_eq!(state.scroll_px_offset_for_scrollbar().y, px(-10.));
+        assert_eq!(*calls.borrow(), 1);
+
+        cx.update(|window, cx| state.scroll_by_notify(px(500.), view.entity_id(), window, cx));
+        assert_eq!(state.scroll_px_offset_for_scrollbar().y, px(-100.));
+        assert_eq!(state.logical_scroll_top().item_ix, 10);
+        assert_eq!(*calls.borrow(), 2);
     }
 
     #[gpui::test]
