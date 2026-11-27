@@ -2161,7 +2161,12 @@ fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size
                 match b {
                     RBlock::Heading(..) => el.font_weight(FontWeight::BOLD).text_size(z(size + 2.)),
                     RBlock::Subtext(_) => el.text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)),
-                    RBlock::ListItem { .. } => div().flex().child(div().w(z(16.)).child("\u{2022}")).child(el),
+                    RBlock::ListItem { ordered, depth, .. } => {
+                        let marker = ordered.map_or_else(|| "•".into(), |n| format!("{n}."));
+                        div().flex().pl(z(16. * f32::from(*depth)))
+                            .child(div().flex_none().pr(z(6.)).child(marker))
+                            .child(el.flex_1().min_w_0())
+                    }
                     _ => el,
                 }
                 .into_any_element()

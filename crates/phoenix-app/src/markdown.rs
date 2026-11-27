@@ -155,6 +155,18 @@ impl MentionResolver for NoResolve {
     }
 }
 
+fn push_quote_line(quote: &mut String, line: &str) {
+    let trimmed = line.trim_start_matches(' ');
+    if let Some(item) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+        quote.push_str(&line[..line.len() - trimmed.len()]);
+        quote.push_str("• ");
+        quote.push_str(item);
+    } else {
+        quote.push_str(line);
+    }
+    quote.push('\n');
+}
+
 pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut rest = src;
@@ -208,14 +220,24 @@ pub fn parse(src: &str, r: &dyn MentionResolver) -> Vec<Block> {
                 continue;
             }
         }
+        if let Some(first) = line.strip_prefix(">>> ").or_else(|| (line == ">>>").then_some("")) {
+            flush(&mut para, false, &mut blocks, &mut spoilers);
+            flush(&mut quote, true, &mut blocks, &mut spoilers);
+            if !first.is_empty() {
+                push_quote_line(&mut quote, first);
+            }
+            for line in next.lines() {
+                push_quote_line(&mut quote, line);
+            }
+            break;
+        }
         if let Some(b) = line_block(line, r, &mut spoilers) {
             flush(&mut para, false, &mut blocks, &mut spoilers);
             flush(&mut quote, true, &mut blocks, &mut spoilers);
             blocks.push(b);
         } else if let Some(q) = line.strip_prefix("> ").or_else(|| (line == ">").then_some("")) {
             flush(&mut para, false, &mut blocks, &mut spoilers);
-            quote.push_str(q);
-            quote.push('\n');
+            push_quote_line(&mut quote, q);
         } else {
             flush(&mut quote, true, &mut blocks, &mut spoilers);
             para.push_str(line);
@@ -957,6 +979,16 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn multiline_quoted_rules_preserve_formatting_and_emoji() {
+        let blocks = parse(">>> - **Important** <a:badge:123>\n- Next entry\nlast line", &NoResolve);
+        let [Block::Quote(inline)] = blocks.as_slice() else { panic!("{blocks:?}") };
+        assert_eq!(inline.text, "• Important <a:badge:123>\n• Next entry\nlast line");
+        assert!(inline.spans.iter().any(|span| span.style.has(Style::BOLD)));
+        let rich = crate::richtext::rich_inline(inline, &|_| true, gpui::black());
+        assert_eq!(rich.emoji[0].1.as_ref(), "<a:badge:123>");
     }
 
     #[test]
