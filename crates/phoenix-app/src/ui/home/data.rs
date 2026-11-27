@@ -200,6 +200,8 @@ pub enum Overlay {
 
 #[derive(Default)]
 pub struct NavState {
+    pub scroll_positions: HashMap<Id, ScrollPosition>,
+    pub welcome_expanded: HashMap<Id, bool>,
     pub relationships: Vec<Relationship>,
     pub relationship_revision: u64,
     pub pending_friend_actions: HashSet<Id>,
@@ -354,9 +356,16 @@ impl NavState {
 #[derive(Debug, Default, PartialEq)]
 pub struct NavPrefs {
     pub last_channel: Vec<(Option<u64>, u64)>,
+    pub scroll_positions: Vec<(Id, ScrollPosition)>,
     pub collapsed: Vec<u64>,
     pub folders: Vec<u64>,
     pub hide_muted: Vec<u64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScrollPosition {
+    pub message: Id,
+    pub offset: u32,
 }
 
 impl NavPrefs {
@@ -372,6 +381,9 @@ impl NavPrefs {
             let nums: Vec<u64> = it.filter_map(|x| x.parse().ok()).collect();
             match (key, nums.as_slice()) {
                 ("last", [g, c]) => p.last_channel.push(((*g != 0).then_some(*g), *c)),
+                ("scroll", [channel, message, offset]) if u32::try_from(*offset).is_ok() => {
+                    p.scroll_positions.push((Id(*channel), ScrollPosition { message: Id(*message), offset: *offset as u32 }));
+                }
                 ("collapsed", ids) => p.collapsed.extend(ids),
                 ("folders", ids) => p.folders.extend(ids),
                 ("hide_muted", ids) => p.hide_muted.extend(ids),
@@ -386,6 +398,9 @@ impl NavPrefs {
         let mut out = String::new();
         for (g, c) in &self.last_channel {
             out.push_str(&format!("last {} {c}\n", g.unwrap_or(0)));
+        }
+        for (channel, position) in &self.scroll_positions {
+            out.push_str(&format!("scroll {} {} {}\n", channel.0, position.message.0, position.offset));
         }
         out.push_str(&format!("collapsed {}\n", join(&self.collapsed)));
         out.push_str(&format!("folders {}\n", join(&self.folders)));
@@ -441,6 +456,7 @@ mod tests {
     fn prefs_roundtrip() {
         let p = NavPrefs {
             last_channel: vec![(None, 5), (Some(7), 9)],
+            scroll_positions: vec![(Id(9), ScrollPosition { message: Id(42), offset: 13 })],
             collapsed: vec![1, 2],
             folders: vec![3],
             hide_muted: vec![],

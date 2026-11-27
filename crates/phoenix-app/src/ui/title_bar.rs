@@ -318,6 +318,7 @@ fn win_buttons(cx: &mut Context<PhoenixApp>) -> impl IntoElement {
                 )
                 .when(!cfg!(windows), |d| {
                     d.on_click(cx.listener(|a, _, w, _| {
+                        a.persist_chat_position();
                         if a.prefs.local.minimize_to_tray && crate::tray::running() {
                             w.minimize_window();
                         } else {

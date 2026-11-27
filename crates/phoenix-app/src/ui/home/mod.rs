@@ -119,6 +119,7 @@ impl PhoenixApp {
         for (g, c) in p.last_channel {
             self.last_channel.insert(g.map(Id), Id(c));
         }
+        self.nav.scroll_positions.extend(p.scroll_positions);
         self.collapsed.extend(p.collapsed.into_iter().map(Id));
         self.nav.expanded_folders.extend(p.folders);
         self.nav.hide_muted.extend(p.hide_muted.into_iter().map(Id));
@@ -152,7 +153,9 @@ impl PhoenixApp {
         folders.sort();
         let mut hide: Vec<u64> = self.nav.hide_muted.iter().map(|i| i.0).collect();
         hide.sort();
-        NavPrefs { last_channel: last, collapsed, folders, hide_muted: hide }.save();
+        let mut scroll_positions: Vec<_> = self.nav.scroll_positions.iter().map(|(channel, position)| (*channel, *position)).collect();
+        scroll_positions.sort_by_key(|(channel, _)| *channel);
+        NavPrefs { last_channel: last, scroll_positions, collapsed, folders, hide_muted: hide }.save();
     }
 
     pub fn toggle_category_saved(&mut self, id: Id, cx: &mut Context<Self>) {
@@ -167,6 +170,7 @@ impl PhoenixApp {
         if self.selected_guild.is_some() {
             self.select_guild(None, cx);
         }
+        self.remember_chat_position();
         self.nav.home = view;
         self.selected_channel = None;
         self.last_channel.remove(&None);

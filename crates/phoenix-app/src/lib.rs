@@ -120,6 +120,9 @@ pub fn open_main_window(backend: Arc<dyn backend::Backend>, cx: &mut App) -> Opt
         tts::enable_output();
         let weak = view.downgrade();
         window.on_window_should_close(cx, move |w, cx| {
+            if let Some(view) = weak.upgrade() {
+                view.update(cx, |app, _| app.persist_chat_position());
+            }
             let hide = tray::running() && weak.upgrade().is_some_and(|v| v.read(cx).prefs.local.minimize_to_tray);
             if hide {
                 w.minimize_window();

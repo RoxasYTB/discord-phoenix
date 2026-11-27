@@ -301,6 +301,7 @@ pub fn load_first_page(app: &PhoenixApp, id: Id, cx: &mut Context<PhoenixApp>) {
     let fut = app.backend.load_messages(id, None, 50);
     cx.spawn(async move |this, cx| {
         let res = fut.await;
+        let loaded = res.is_ok();
         let on_screen = this.update(cx, |a, _| a.selected_channel == Some(id)).unwrap_or(false);
         let msgs = match res {
             Ok(m) => m,
@@ -323,15 +324,27 @@ pub fn load_first_page(app: &PhoenixApp, id: Id, cx: &mut Context<PhoenixApp>) {
             };
             let rendered = render_page(&msgs, &resolver, me, off, &revealed);
             let _ = this.update(cx, |a, cx| {
+                if loaded {
+                    crate::ui::chat::welcome::observe_history(a, id, &msgs);
+                }
                 insert_first_page(a, id, msgs, rendered, cx);
                 crate::commands::state::apply_read_mark(a, id);
+                if loaded {
+                    a.restore_chat_position(id, cx);
+                }
             });
             return;
         }
         let Some((msgs, rendered)) = layout(&this, cx, msgs).await else { return };
         let _ = this.update(cx, |a, cx| {
+            if loaded {
+                crate::ui::chat::welcome::observe_history(a, id, &msgs);
+            }
             insert_first_page(a, id, msgs, rendered, cx);
             crate::commands::state::apply_read_mark(a, id);
+            if loaded {
+                a.restore_chat_position(id, cx);
+            }
         });
     })
     .detach();

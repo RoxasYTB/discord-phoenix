@@ -181,6 +181,7 @@ impl PhoenixApp {
         if QUITTING.swap(true, Ordering::SeqCst) {
             return;
         }
+        self.persist_chat_position();
         let leave = self.voice_channel.take().map(|_| {
             crate::voice::soundboard::stop_all();
             self.backend.join_voice(None)

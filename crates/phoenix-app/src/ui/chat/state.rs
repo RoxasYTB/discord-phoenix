@@ -287,9 +287,6 @@ impl PhoenixApp {
 
     pub fn jump_to_present(&mut self, cx: &mut Context<Self>) {
         if self.leave_detached(cx) {
-            self.chat.at_bottom = true;
-            self.chat.new_messages = None;
-            cx.notify();
             return;
         }
         self.message_list.scroll_to_end();

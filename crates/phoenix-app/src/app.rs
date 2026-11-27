@@ -494,6 +494,8 @@ impl PhoenixApp {
         self.selected_guild = None;
         self.selected_channel = None;
         self.last_channel.clear();
+        self.nav.scroll_positions.clear();
+        self.nav.prefs_loaded = false;
         self.sidebar_rows.clear();
         self.member_rows.clear();
         self.typing.clear();
@@ -510,6 +512,7 @@ impl PhoenixApp {
     }
 
     pub fn logout(&mut self, cx: &mut Context<Self>) {
+        self.persist_chat_position();
         let fut = self.backend.logout();
         cx.spawn(async move |_, _| {
             let _ = fut.await;
@@ -526,6 +529,7 @@ impl PhoenixApp {
     }
 
     pub fn apply_ready(&mut self, r: ReadyData, cx: &mut Context<Self>) {
+        self.persist_chat_position();
         let mine = self.people.activities.remove(&r.me.id);
         let known_presences = std::mem::take(&mut self.presences);
         let known_activities = std::mem::take(&mut self.people.activities);
@@ -609,6 +613,11 @@ impl PhoenixApp {
         self.nav_home_target(guild, target.is_some());
         if let Some(t) = target {
             self.open_channel_chat(t, cx);
+        } else {
+            self.remember_chat_position();
+            self.selected_channel = None;
+            self.message_list.reset(0);
+            self.save_nav_prefs();
         }
         cx.notify();
     }
@@ -688,6 +697,7 @@ impl PhoenixApp {
 
     pub fn open_channel_chat(&mut self, id: Id, cx: &mut Context<Self>) {
         self.refuse_trap_in_agent_session(id);
+        self.remember_chat_position();
         crate::ui::discovery::close();
         crate::ui::favorites::on_channel_opened(self, id);
         crate::commands::state::remember_read_mark(self, id);
@@ -745,6 +755,7 @@ impl PhoenixApp {
         }
         if cached {
             crate::commands::state::apply_read_mark(self, id);
+            self.restore_chat_position(id, cx);
             if stale {
                 self.backend.prefetch_messages(id);
             }
