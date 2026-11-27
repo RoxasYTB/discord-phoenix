@@ -1183,6 +1183,11 @@ impl PhoenixApp {
             }
             _ => {}
         }
+        if user == self.me.id && !own && channel.is_some() && guild.is_some() && call_guild == Some(guild) {
+            crate::voice::roster::reset(self);
+            self.voice_channel = None;
+            self.pending_own_voice = None;
+        }
         if user == self.me.id && own {
             let stale_leave = channel.is_none() && guild.is_some() && call_guild.is_some_and(|g| g != guild);
             if !stale_leave {

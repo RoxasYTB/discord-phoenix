@@ -195,11 +195,14 @@ impl GatewayHandle {
 pub struct ReconnectPolicy {
     pub max_attempts: u32,
     pub backoff: Duration,
+    pub hello_timeout: Duration,
 }
+
+pub const HELLO_TIMEOUT: Duration = Duration::from_secs(20);
 
 impl Default for ReconnectPolicy {
     fn default() -> Self {
-        Self { max_attempts: 5, backoff: Duration::from_millis(500) }
+        Self { max_attempts: 5, backoff: Duration::from_millis(500), hello_timeout: HELLO_TIMEOUT }
     }
 }
 
@@ -229,7 +232,7 @@ async fn run(
 ) -> Result<()> {
     let mut attempts = 0u32;
     loop {
-        let exit = match connect_once(&mut m, &url, &mut cmds, &events).await {
+        let exit = match connect_once(&mut m, &url, policy.hello_timeout, &mut cmds, &events).await {
             Ok(e) => e,
             Err(e) => Exit::Closed(None, e.to_string()),
         };
@@ -255,12 +258,19 @@ async fn run(
 async fn connect_once(
     m: &mut GatewayMachine,
     url: &str,
+    hello_timeout: Duration,
     cmds: &mut mpsc::UnboundedReceiver<Command>,
     events: &mpsc::UnboundedSender<GatewayEvent>,
 ) -> Result<Exit> {
-    let (mut ws, _) = tokio_tungstenite::connect_async(url).await?;
+    let hello_by = tokio::time::Instant::now() + hello_timeout;
+    let no_hello = || Exit::Closed(None, format!("did not receive OP_HELLO within {} ms", hello_timeout.as_millis()));
+    let Ok(open) = tokio::time::timeout_at(hello_by, tokio_tungstenite::connect_async(url)).await else {
+        return Ok(no_hello());
+    };
+    let (mut ws, _) = open?;
     ws.send(Message::Text(m.on_open().into())).await?;
     let mut hb: Option<tokio::time::Interval> = None;
+    let mut hello = false;
     loop {
         let tick = async {
             match hb.as_mut() {
@@ -284,18 +294,23 @@ async fn connect_once(
                 };
                 match parsed {
                     Some(Ok(msg)) => {
-                        if let ServerMessage::Hello { .. } = msg
-                            && let Some(iv) = m.heartbeat_interval()
-                        {
-                            let mut i = tokio::time::interval_at(tokio::time::Instant::now() + iv.mul_f32(0.5), iv);
-                            i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-                            hb = Some(i);
+                        if let ServerMessage::Hello { .. } = msg {
+                            hello = true;
+                            if let Some(iv) = m.heartbeat_interval() {
+                                let mut i = tokio::time::interval_at(tokio::time::Instant::now() + iv.mul_f32(0.5), iv);
+                                i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                                hb = Some(i);
+                            }
                         }
                         let _ = events.send(GatewayEvent::Message(msg));
                     }
                     Some(Err(e)) => tracing::warn!(error = %e, "ignoring undecodable voice gateway frame"),
                     None => {}
                 }
+            }
+            _ = tokio::time::sleep_until(hello_by), if !hello => {
+                let _ = ws.close(None).await;
+                return Ok(no_hello());
             }
             _ = tick => {
                 let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
@@ -366,5 +381,83 @@ mod tests {
         m.heartbeat(2).unwrap();
         m.on_text(r#"{"op":6,"d":{"t":2}}"#).unwrap();
         assert!(m.heartbeat(3).is_ok());
+    }
+
+    fn quick_hello(ms: u64) -> ReconnectPolicy {
+        ReconnectPolicy { max_attempts: 0, backoff: Duration::from_millis(10), hello_timeout: Duration::from_millis(ms) }
+    }
+
+    async fn next(rx: &mut mpsc::UnboundedReceiver<GatewayEvent>) -> GatewayEvent {
+        tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.expect("event timeout").expect("channel")
+    }
+
+    #[tokio::test]
+    async fn a_server_that_never_says_hello_is_given_up() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (s, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(s).await.unwrap();
+            let first = ws.next().await.unwrap().unwrap();
+            assert!(first.to_text().unwrap().contains("\"op\":0"));
+            while let Some(Ok(m)) = ws.next().await {
+                if m.is_close() {
+                    break;
+                }
+            }
+        });
+        let (_h, mut rx, task) = spawn(info(), Some(format!("ws://{addr}")), quick_hello(300));
+        match next(&mut rx).await {
+            GatewayEvent::Closed { code: None, reason } => assert!(reason.contains("OP_HELLO"), "{reason}"),
+            e => panic!("unexpected {e:?}"),
+        }
+        let err = task.await.unwrap().unwrap_err();
+        assert!(crate::connection::retryable(&err), "{err}");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_stuck_websocket_handshake_is_given_up() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let hold = tokio::spawn(async move {
+            let (s, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            drop(s);
+        });
+        let (_h, mut rx, task) = spawn(info(), Some(format!("ws://{addr}")), quick_hello(300));
+        assert!(matches!(next(&mut rx).await, GatewayEvent::Closed { code: None, .. }));
+        assert!(crate::connection::retryable(&task.await.unwrap().unwrap_err()));
+        hold.abort();
+    }
+
+    #[tokio::test]
+    async fn a_hello_in_time_disarms_the_deadline() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (s, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(s).await.unwrap();
+            let _ = ws.next().await;
+            ws.send(Message::Text(r#"{"op":8,"d":{"heartbeat_interval":5000}}"#.into())).await.unwrap();
+            ws.send(Message::Text(r#"{"op":2,"seq":1,"d":{"ssrc":11,"ip":"127.0.0.1","port":4000,"modes":["aead_aes256_gcm_rtpsize"],"streams":[]}}"#.into())).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            let _ = ws.close(None).await;
+        });
+        let (_h, mut rx, _task) = spawn(info(), Some(format!("ws://{addr}")), quick_hello(300));
+        let mut ready = false;
+        loop {
+            match next(&mut rx).await {
+                GatewayEvent::Message(ServerMessage::Ready(_)) => ready = true,
+                GatewayEvent::Message(_) => {}
+                GatewayEvent::Closed { reason, .. } => {
+                    assert!(!reason.contains("OP_HELLO"), "{reason}");
+                    break;
+                }
+                GatewayEvent::Reconnecting { .. } => break,
+            }
+        }
+        assert!(ready);
+        server.await.unwrap();
     }
 }

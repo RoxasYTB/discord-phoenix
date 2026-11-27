@@ -91,7 +91,7 @@ async fn identify_heartbeat_dave_binary_resume() {
     let (h, mut rx, task) = gateway::spawn(
         info,
         Some(format!("ws://{addr}")),
-        ReconnectPolicy { max_attempts: 2, backoff: Duration::from_millis(10) },
+        ReconnectPolicy { max_attempts: 2, backoff: Duration::from_millis(10), ..ReconnectPolicy::default() },
     );
 
     assert!(matches!(next_event(&mut rx).await, GatewayEvent::Message(ServerMessage::Hello { .. })));
@@ -203,7 +203,7 @@ async fn go_live_stream_ops_against_the_mock_gateway() {
         max_dave_protocol_version: 1,
         stream: true,
     };
-    let (h, mut rx, _task) = gateway::spawn(info, Some(format!("ws://{addr}")), ReconnectPolicy { max_attempts: 0, backoff: Duration::from_millis(10) });
+    let (h, mut rx, _task) = gateway::spawn(info, Some(format!("ws://{addr}")), ReconnectPolicy { max_attempts: 0, backoff: Duration::from_millis(10), ..ReconnectPolicy::default() });
     let mut ready = None;
     let mut video = None;
     while ready.is_none() || video.is_none() {

@@ -435,6 +435,24 @@ mod tests {
     }
 
     #[gpui::test]
+    fn another_client_taking_voice_in_our_guild_ends_our_call(cx: &mut gpui::TestAppContext) {
+        use crate::backend::AppEvent;
+        let window = voice_app(cx);
+        window
+            .update(cx, |app, _, cx| {
+                let (vc, g) = guild_voice(app);
+                let me = app.me.id;
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: me, own: true }, cx);
+                assert_eq!(app.voice_channel, Some(vc));
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: None, user: me, own: false }, cx);
+                assert_eq!(app.voice_channel, Some(vc), "a leave of another client ended our call");
+                app.handle_event(AppEvent::VoiceStateUpdate { guild: Some(g), channel: Some(vc), user: me, own: false }, cx);
+                assert_eq!(app.voice_channel, None, "another client took our voice and we stayed in the call");
+            })
+            .unwrap();
+    }
+
+    #[gpui::test]
     fn members_heard_on_the_voice_gateway_join_the_list(cx: &mut gpui::TestAppContext) {
         use crate::backend::AppEvent;
         use crate::model::Id;

@@ -425,7 +425,6 @@ impl VoiceManager {
     pub fn join(&self, emit: &Emit, gw: &GatewayHandle, cache: &Cache, channel: Option<u64>) -> Result<(), String> {
         let mut st = self.state.lock();
         st.retries = 0;
-        st.joining = false;
         st.emit = Some(emit.clone());
         st.gw = Some(gw.clone());
         if channel.is_some() && st.target.map(|t| t.channel) == channel && st.running.is_some() {
@@ -434,19 +433,15 @@ impl VoiceManager {
         }
         st.region = channel.and_then(|c| cache.channel(Snowflake(c))).and_then(|c| c.rtc_region.clone());
         stop(&mut st);
-        st.generation += 1;
-        st.session_id = None;
-        st.server = None;
         let Some(ch) = channel else {
-            if let Some(t) = st.target.take() {
+            if let Some(t) = begin_join(&mut st, None) {
                 gw.update_voice_state(t.guild.map(Snowflake), None, st.muted, st.deafened).map_err(|e| e.to_string())?;
             }
             ui(emit, VoiceUiEvent::Status(VoiceStatus::Idle));
             return Ok(());
         };
         let guild = cache.channel(Snowflake(ch)).and_then(|c| c.guild_id).map(|g| g.0);
-        st.target = Some(Target { guild, channel: ch });
-        st.joining = true;
+        begin_join(&mut st, Some(Target { guild, channel: ch }));
         gw.update_voice_state(guild.map(Snowflake), Some(Snowflake(ch)), st.muted, st.deafened).map_err(|e| e.to_string())?;
         ui(emit, VoiceUiEvent::Status(VoiceStatus::AwaitingEndpoint));
         Ok(())
@@ -483,63 +478,45 @@ impl VoiceManager {
         let Some(target) = st.target else { return };
         match ev {
             GatewayEvent::VoiceStateUpdate(v) if v.user_id.0 == me => {
-                let action = own_voice_state(target, st.joining, v.guild_id.map(|g| g.0), v.channel_id.map(|c| c.0));
+                let ours = own_session(&v.session_id, &crate::commands::session_id());
+                let (guild, channel) = (v.guild_id.map(|g| g.0), v.channel_id.map(|c| c.0));
+                let action = own_voice_state(target, st.joining, ours, guild, channel);
                 if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
-                    eprintln!("voice-trace: own voice state target={} action={action:?}", target.channel);
+                    eprintln!("voice-trace: own voice state target={} guild={guild:?} ours={ours} action={action:?}", target.channel);
                 }
-                match action {
-                    OwnVoice::Ignore => {}
-                    OwnVoice::Left => {
-                        stop(&mut st);
-                        st.target = None;
-                        st.generation += 1;
-                        ui(emit, VoiceUiEvent::Status(VoiceStatus::Idle));
-                    }
-                    OwnVoice::Moved(t) => {
-                        st.target = Some(t);
-                        st.joining = false;
-                        stop(&mut st);
-                        st.generation += 1;
-                        st.session_id = Some(v.session_id.clone());
-                        self.try_start(&mut st, emit, me);
-                    }
-                    OwnVoice::Joined(t) => {
-                        st.target = Some(t);
-                        st.joining = false;
-                        if st.session_id.as_deref() != Some(v.session_id.as_str()) {
-                            st.session_id = Some(v.session_id.clone());
-                        }
-                        self.try_start(&mut st, emit, me);
-                    }
-                }
+                let step = on_voice_state(&mut st, action, &v.session_id);
+                self.apply_step(&mut st, emit, me, step);
             }
             GatewayEvent::VoiceServerUpdate(s) => {
-                let ours = match target.guild {
-                    Some(g) => s.guild_id.is_some_and(|x| x.0 == g),
-                    None => s.channel_id.is_some_and(|x| x.0 == target.channel) || s.guild_id.is_none(),
-                };
-                if !ours {
-                    return;
+                let running = st.running.is_some();
+                let step = on_server_update(&mut st, s.guild_id.map(|g| g.0), s.channel_id.map(|c| c.0), s.endpoint.as_deref(), &s.token, running);
+                if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
+                    eprintln!("voice-trace: server update target={} step={step:?}", target.channel);
                 }
-                match &s.endpoint {
-                    Some(ep) => {
-                        let new = Some((ep.clone(), s.token.clone()));
-                        if st.server != new || st.running.is_none() {
-                            stop(&mut st);
-                            st.generation += 1;
-                            st.retries = 0;
-                            st.server = new;
-                            self.try_start(&mut st, emit, me);
-                        }
-                    }
-                    None => {
-                        stop(&mut st);
-                        st.server = None;
-                        ui(emit, VoiceUiEvent::Status(VoiceStatus::AwaitingEndpoint));
-                    }
-                }
+                self.apply_step(&mut st, emit, me, step);
             }
             _ => {}
+        }
+    }
+
+    fn apply_step(&self, st: &mut State, emit: &Emit, me: u64, step: Step) {
+        match step {
+            Step::Nothing => {}
+            Step::Start => self.try_start(st, emit, me),
+            Step::Restart => {
+                stop(st);
+                st.generation += 1;
+                self.try_start(st, emit, me);
+            }
+            Step::Idle => {
+                stop(st);
+                st.generation += 1;
+                ui(emit, VoiceUiEvent::Status(VoiceStatus::Idle));
+            }
+            Step::AwaitEndpoint => {
+                stop(st);
+                ui(emit, VoiceUiEvent::Status(VoiceStatus::AwaitingEndpoint));
+            }
         }
     }
 
@@ -645,12 +622,7 @@ impl VoiceManager {
                                 return;
                             }
                             stop(&mut st);
-                            let delay = retry_delay(retry, st.retries);
-                            if delay.is_some() {
-                                st.retries += 1;
-                                st.generation += 1;
-                            }
-                            delay.map(|d| (d, st.generation))
+                            on_dropped(&mut st, retry)
                         };
                         if let Some((delay, next)) = again {
                             if std::env::var_os("PHOENIX_VOICE_TRACE").is_some() {
@@ -1303,7 +1275,97 @@ enum OwnVoice {
     Moved(Target),
 }
 
-fn own_voice_state(target: Target, joining: bool, guild: Option<u64>, channel: Option<u64>) -> OwnVoice {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Nothing,
+    Start,
+    Restart,
+    Idle,
+    AwaitEndpoint,
+}
+
+fn begin_join(st: &mut State, next: Option<Target>) -> Option<Target> {
+    st.generation += 1;
+    st.session_id = None;
+    st.server = None;
+    st.joining = next.is_some();
+    match next {
+        Some(t) => st.target.replace(t),
+        None => st.target.take(),
+    }
+}
+
+fn own_session(session: &str, gateway: &str) -> bool {
+    session.is_empty() || gateway.is_empty() || session == gateway
+}
+
+fn on_voice_state(st: &mut State, action: OwnVoice, session: &str) -> Step {
+    match action {
+        OwnVoice::Ignore => Step::Nothing,
+        OwnVoice::Left => {
+            st.target = None;
+            Step::Idle
+        }
+        OwnVoice::Moved(t) => {
+            st.target = Some(t);
+            st.joining = false;
+            st.session_id = Some(session.to_owned());
+            Step::Restart
+        }
+        OwnVoice::Joined(t) => {
+            st.target = Some(t);
+            st.joining = false;
+            if st.session_id.as_deref() != Some(session) {
+                st.session_id = Some(session.to_owned());
+            }
+            Step::Start
+        }
+    }
+}
+
+fn on_server_update(st: &mut State, guild: Option<u64>, channel: Option<u64>, endpoint: Option<&str>, token: &str, running: bool) -> Step {
+    let Some(target) = st.target else { return Step::Nothing };
+    let ours = match target.guild {
+        Some(g) => guild == Some(g),
+        None => channel == Some(target.channel) || guild.is_none(),
+    };
+    if !ours {
+        return Step::Nothing;
+    }
+    match endpoint {
+        Some(ep) => {
+            let new = Some((ep.to_owned(), token.to_owned()));
+            if st.server == new && running {
+                return Step::Nothing;
+            }
+            st.retries = 0;
+            st.server = new;
+            Step::Restart
+        }
+        None => {
+            st.server = None;
+            Step::AwaitEndpoint
+        }
+    }
+}
+
+fn on_dropped(st: &mut State, retry: bool) -> Option<(std::time::Duration, u64)> {
+    let delay = retry_delay(retry, st.retries);
+    if delay.is_some() {
+        st.retries += 1;
+        st.generation += 1;
+    }
+    delay.map(|d| (d, st.generation))
+}
+
+fn own_voice_state(target: Target, joining: bool, ours: bool, guild: Option<u64>, channel: Option<u64>) -> OwnVoice {
+    if !ours {
+        let same = match target.guild {
+            Some(g) => guild == Some(g),
+            None => guild.is_none() && channel == Some(target.channel),
+        };
+        return if same && channel.is_some() && !joining { OwnVoice::Left } else { OwnVoice::Ignore };
+    }
     match channel {
         Some(c) if c == target.channel => OwnVoice::Joined(Target { guild: guild.or(target.guild), channel: c }),
         Some(c) if guild == target.guild && !joining => OwnVoice::Moved(Target { guild, channel: c }),
@@ -1440,38 +1502,38 @@ mod voice_state_tests {
 
     #[test]
     fn leaving_the_old_guild_keeps_the_new_target() {
-        assert_eq!(own_voice_state(B, false, Some(10), None), OwnVoice::Ignore);
-        assert_eq!(own_voice_state(B, false, Some(20), Some(200)), OwnVoice::Joined(B));
-        assert_eq!(own_voice_state(A, false, Some(20), None), OwnVoice::Ignore);
-        assert_eq!(own_voice_state(A, false, Some(10), Some(100)), OwnVoice::Joined(A));
+        assert_eq!(own_voice_state(B, false, true, Some(10), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(B, false, true, Some(20), Some(200)), OwnVoice::Joined(B));
+        assert_eq!(own_voice_state(A, false, true, Some(20), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(A, false, true, Some(10), Some(100)), OwnVoice::Joined(A));
     }
 
     #[test]
     fn a_late_state_of_another_guild_is_ignored() {
-        assert_eq!(own_voice_state(B, false, Some(10), Some(100)), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(B, false, true, Some(10), Some(100)), OwnVoice::Ignore);
     }
 
     #[test]
     fn leaving_and_moving_in_the_same_guild() {
-        assert_eq!(own_voice_state(A, false, Some(10), None), OwnVoice::Left);
-        assert_eq!(own_voice_state(A, false, Some(10), Some(101)), OwnVoice::Moved(Target { guild: Some(10), channel: 101 }));
+        assert_eq!(own_voice_state(A, false, true, Some(10), None), OwnVoice::Left);
+        assert_eq!(own_voice_state(A, false, true, Some(10), Some(101)), OwnVoice::Moved(Target { guild: Some(10), channel: 101 }));
     }
 
     #[test]
     fn the_old_state_of_a_quick_rejoin_is_ignored() {
         let a2 = Target { guild: Some(10), channel: 101 };
-        assert_eq!(own_voice_state(a2, true, Some(10), None), OwnVoice::Ignore);
-        assert_eq!(own_voice_state(a2, true, Some(10), Some(100)), OwnVoice::Ignore);
-        assert_eq!(own_voice_state(a2, true, Some(10), Some(101)), OwnVoice::Joined(a2));
+        assert_eq!(own_voice_state(a2, true, true, Some(10), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(a2, true, true, Some(10), Some(100)), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(a2, true, true, Some(10), Some(101)), OwnVoice::Joined(a2));
     }
 
     #[test]
     fn private_calls_have_no_guild() {
         let dm = Target { guild: None, channel: 300 };
-        assert_eq!(own_voice_state(dm, false, None, Some(300)), OwnVoice::Joined(dm));
-        assert_eq!(own_voice_state(dm, false, None, None), OwnVoice::Left);
-        assert_eq!(own_voice_state(dm, false, Some(10), None), OwnVoice::Ignore);
-        assert_eq!(own_voice_state(Target { guild: None, channel: 100 }, false, Some(10), Some(100)), OwnVoice::Joined(A));
+        assert_eq!(own_voice_state(dm, false, true, None, Some(300)), OwnVoice::Joined(dm));
+        assert_eq!(own_voice_state(dm, false, true, None, None), OwnVoice::Left);
+        assert_eq!(own_voice_state(dm, false, true, Some(10), None), OwnVoice::Ignore);
+        assert_eq!(own_voice_state(Target { guild: None, channel: 100 }, false, true, Some(10), Some(100)), OwnVoice::Joined(A));
     }
 
     #[test]
@@ -1485,7 +1547,7 @@ mod voice_state_tests {
     fn switching_guilds_reaches_a_startable_state() {
         let mut st = State { target: Some(B), ..Default::default() };
         for (g, c) in [(Some(10), None), (Some(20), Some(200))] {
-            match own_voice_state(st.target.unwrap(), true, g, c) {
+            match own_voice_state(st.target.unwrap(), true, true, g, c) {
                 OwnVoice::Joined(t) | OwnVoice::Moved(t) => {
                     st.target = Some(t);
                     st.session_id = Some("s2".into());
@@ -1497,5 +1559,201 @@ mod voice_state_tests {
         st.server = Some(("new".into(), "t2".into()));
         assert_eq!(st.target, Some(B));
         assert!(st.session_id.is_some() && st.server.is_some() && st.running.is_none());
+    }
+    const A2: Target = Target { guild: Some(10), channel: 101 };
+
+    #[derive(Default)]
+    struct Sim {
+        st: State,
+        live: Option<(u64, String, String)>,
+        pending: Option<u64>,
+        idle: bool,
+    }
+
+    impl Sim {
+        fn connected(t: Target) -> Self {
+            let mut s = Sim::default();
+            s.join(t);
+            s.state(true, "me", t.guild, Some(t.channel));
+            s.server(t.guild, "tok-a");
+            assert_eq!(s.live, Some((t.channel, "me".into(), "tok-a".into())));
+            s
+        }
+
+        fn join(&mut self, t: Target) {
+            self.live = None;
+            begin_join(&mut self.st, Some(t));
+        }
+
+        fn state(&mut self, ours: bool, session: &str, guild: Option<u64>, channel: Option<u64>) {
+            let Some(t) = self.st.target else { return };
+            let action = own_voice_state(t, self.st.joining, ours, guild, channel);
+            let step = on_voice_state(&mut self.st, action, session);
+            self.step(step);
+        }
+
+        fn server(&mut self, guild: Option<u64>, token: &str) {
+            let step = on_server_update(&mut self.st, guild, None, Some("ep"), token, self.live.is_some());
+            self.step(step);
+        }
+
+        fn drop_conn(&mut self, retry: bool) {
+            self.live = None;
+            self.pending = on_dropped(&mut self.st, retry).map(|(_, g)| g);
+        }
+
+        fn retry_fires(&mut self) {
+            if self.pending.take() == Some(self.st.generation) {
+                self.start();
+            }
+        }
+
+        fn step(&mut self, step: Step) {
+            match step {
+                Step::Nothing => {}
+                Step::Start => self.start(),
+                Step::Restart => {
+                    self.live = None;
+                    self.st.generation += 1;
+                    self.start();
+                }
+                Step::Idle => {
+                    self.live = None;
+                    self.st.generation += 1;
+                    self.idle = true;
+                }
+                Step::AwaitEndpoint => self.live = None,
+            }
+        }
+
+        fn start(&mut self) {
+            if self.live.is_some() {
+                return;
+            }
+            if let (Some(t), Some(s), Some((_, tok))) = (self.st.target, self.st.session_id.clone(), self.st.server.clone()) {
+                self.live = Some((t.channel, s, tok));
+            }
+        }
+    }
+
+    fn live(channel: u64, session: &str, token: &str) -> Option<(u64, String, String)> {
+        Some((channel, session.into(), token.into()))
+    }
+
+    #[test]
+    fn switching_inside_a_guild_connects_to_the_new_channel() {
+        let mut s = Sim::connected(A);
+        s.join(A2);
+        s.state(true, "me", Some(10), Some(101));
+        assert_eq!(s.live, None);
+        s.server(Some(10), "tok-b");
+        assert_eq!(s.live, live(101, "me", "tok-b"));
+
+        let mut s = Sim::connected(A);
+        s.join(A2);
+        s.server(Some(10), "tok-b");
+        s.state(true, "me", Some(10), Some(101));
+        assert_eq!(s.live, live(101, "me", "tok-b"));
+    }
+
+    #[test]
+    fn switching_guilds_connects_to_the_new_guild() {
+        let mut s = Sim::connected(A);
+        s.join(B);
+        s.state(true, "me", Some(10), None);
+        s.server(Some(10), "tok-stale");
+        s.state(true, "me", Some(20), Some(200));
+        assert_eq!(s.live, None);
+        s.server(Some(20), "tok-b");
+        assert_eq!(s.live, live(200, "me", "tok-b"));
+        assert!(!s.idle);
+    }
+
+    #[test]
+    fn going_back_quickly_inside_a_guild_ends_on_the_first_channel() {
+        let mut s = Sim::connected(A);
+        s.join(A2);
+        s.join(A);
+        s.state(true, "me", Some(10), Some(101));
+        s.server(Some(10), "tok-b");
+        assert_eq!(s.live, None);
+        s.state(true, "me", Some(10), Some(100));
+        s.server(Some(10), "tok-a2");
+        assert_eq!(s.live, live(100, "me", "tok-a2"));
+    }
+
+    #[test]
+    fn going_back_quickly_across_guilds_never_connects_to_the_middle_one() {
+        let mut s = Sim::connected(A);
+        s.join(B);
+        s.join(A);
+        s.state(true, "me", Some(10), None);
+        s.state(true, "me", Some(20), Some(200));
+        s.server(Some(20), "tok-b");
+        assert_eq!(s.live, None);
+        s.state(true, "me", Some(20), None);
+        s.state(true, "me", Some(10), Some(100));
+        s.server(Some(10), "tok-a2");
+        assert_eq!(s.live, live(100, "me", "tok-a2"));
+        assert!(!s.idle);
+    }
+
+    #[test]
+    fn switching_while_a_reconnect_is_pending_drops_the_reconnect() {
+        let mut s = Sim::connected(A);
+        s.drop_conn(true);
+        assert!(s.pending.is_some());
+        s.join(B);
+        s.retry_fires();
+        assert_eq!(s.live, None);
+        s.state(true, "me", Some(10), None);
+        s.state(true, "me", Some(20), Some(200));
+        s.server(Some(20), "tok-b");
+        assert_eq!(s.live, live(200, "me", "tok-b"));
+    }
+
+    #[test]
+    fn a_reconnect_reuses_our_session() {
+        let mut s = Sim::connected(A);
+        s.state(false, "web", Some(20), Some(200));
+        s.drop_conn(true);
+        s.retry_fires();
+        assert_eq!(s.live, live(100, "me", "tok-a"));
+    }
+
+    #[test]
+    fn another_client_in_the_channel_we_join_does_not_lend_its_session() {
+        let mut s = Sim::connected(A);
+        s.join(A2);
+        s.state(false, "web", Some(10), Some(101));
+        s.server(Some(10), "tok-b");
+        assert_eq!(s.live, None);
+        s.state(true, "me", Some(10), Some(101));
+        assert_eq!(s.live, live(101, "me", "tok-b"));
+    }
+
+    #[test]
+    fn another_client_taking_our_guild_voice_disconnects_us() {
+        let mut s = Sim::connected(A);
+        s.state(false, "web", Some(10), Some(100));
+        assert!(s.idle && s.live.is_none() && s.st.target.is_none());
+
+        let mut s = Sim::connected(A);
+        s.state(false, "web", Some(10), Some(101));
+        assert!(s.idle && s.live.is_none());
+
+        let mut s = Sim::connected(A);
+        s.state(false, "web", Some(10), None);
+        s.state(false, "web", Some(20), Some(200));
+        s.state(false, "web", Some(20), None);
+        assert!(!s.idle);
+        assert_eq!(s.live, live(100, "me", "tok-a"));
+    }
+
+    #[test]
+    fn sessions_are_matched_only_when_both_are_known() {
+        assert!(own_session("abc", "abc"));
+        assert!(!own_session("abc", "def"));
+        assert!(own_session("", "def") && own_session("abc", ""));
     }
 }
