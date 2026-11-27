@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
 use crate::codec::Codec;
@@ -60,7 +60,6 @@ pub struct RxStats {
 
 struct Packet {
     payload_type: u8,
-    marker: bool,
     timestamp: u32,
     payload: Vec<u8>,
 }
@@ -74,6 +73,8 @@ struct Missing {
 struct Track {
     user: u64,
     packets: BTreeMap<u64, Packet>,
+    markers: BTreeSet<u64>,
+    last_accepted: Option<Instant>,
     last: Option<u64>,
     next: Option<u64>,
     missing: BTreeMap<u64, Missing>,
@@ -84,7 +85,7 @@ struct Track {
 
 impl Track {
     fn new(user: u64) -> Self {
-        Self { user, packets: BTreeMap::new(), last: None, next: None, missing: BTreeMap::new(), waiting_key: true, last_key_request: None, heard: None }
+        Self { user, packets: BTreeMap::new(), markers: BTreeSet::new(), last_accepted: None, last: None, next: None, missing: BTreeMap::new(), waiting_key: true, last_key_request: None, heard: None }
     }
 
     fn unwrap_seq(&self, seq: u16) -> u64 {
@@ -101,6 +102,8 @@ impl Track {
 
     fn reset(&mut self) {
         self.packets.clear();
+        self.markers.clear();
+        self.last_accepted = None;
         self.missing.clear();
         self.next = None;
         self.waiting_key = true;
@@ -108,6 +111,7 @@ impl Track {
 
     fn drop_through(&mut self, ext: u64) {
         self.packets.retain(|s, _| *s > ext);
+        self.markers.retain(|s| *s > ext);
         self.missing.retain(|s, _| *s > ext);
         self.next = Some(ext + 1);
     }
@@ -202,7 +206,10 @@ impl VideoReceiver {
             return Vec::new();
         }
         t.missing.remove(&ext);
-        t.packets.insert(ext, Packet { payload_type: pt, marker: h.marker, timestamp: h.timestamp, payload: payload.to_vec() });
+        t.packets.insert(ext, Packet { payload_type: pt, timestamp: h.timestamp, payload: payload.to_vec() });
+        if h.marker {
+            t.markers.insert(ext);
+        }
         if t.packets.len() > MAX_BUFFERED {
             t.reset();
             return Vec::new();
@@ -217,27 +224,23 @@ impl VideoReceiver {
             let start = match t.next {
                 Some(n) => n,
                 None => {
-                    let Some((&m, _)) = t.packets.iter().find(|(_, p)| p.marker) else { break };
+                    let Some(&m) = t.markers.first() else { break };
                     t.drop_through(m);
                     continue;
                 }
             };
-            let mut end = None;
-            let mut s = start;
-            while let Some(p) = t.packets.get(&s) {
-                if p.marker {
-                    end = Some(s);
-                    break;
-                }
-                s += 1;
+            let Some(&end) = t.markers.range(start..).next() else { break };
+            if t.missing.range(start..=end).next().is_some() || !t.packets.contains_key(&start) {
+                break;
             }
-            let Some(end) = end else { break };
             let first = &t.packets[&start];
             let (pt, ts) = (first.payload_type, first.timestamp);
             let codec = Codec::from_payload_type(pt).map(|c| c.0);
-            let whole = (start..=end).all(|s| t.packets.get(&s).is_some_and(|p| p.timestamp == ts && p.payload_type == pt));
+            let mut packets = t.packets.range(start..=end).map(|(_, packet)| packet);
+            let whole = packets.clone().count() as u64 == end - start + 1
+                && packets.clone().all(|p| p.timestamp == ts && p.payload_type == pt);
             let data = match (codec, whole) {
-                (Some(c), true) => depacketize(c, (start..=end).filter_map(|s| t.packets.get(&s))),
+                (Some(c), true) => depacketize(c, &mut packets),
                 _ => None,
             };
             t.drop_through(end);
@@ -256,19 +259,34 @@ impl VideoReceiver {
     }
 
     pub fn accept(&mut self, f: &EncodedFrame, keyframe: bool) -> bool {
+        self.accept_at(f, keyframe, Instant::now())
+    }
+
+    fn accept_at(&mut self, f: &EncodedFrame, keyframe: bool, now: Instant) -> bool {
+        let current = self.current.get(&f.user_id).copied();
+        if let Some(current) = current.filter(|&ssrc| ssrc != f.ssrc) {
+            let layers = self.layers(f.user_id);
+            let quality = |ssrc| layers.iter().find(|layer| layer.ssrc == ssrc).map_or(0, |layer| layer.quality);
+            let current_healthy = self.tracks.get(&current).and_then(|track| track.last_accepted)
+                .is_some_and(|last| now.saturating_duration_since(last) < GAP_TIMEOUT);
+            if !keyframe || (current_healthy && quality(f.ssrc) <= quality(current)) {
+                return false;
+            }
+        }
         let Some(t) = self.tracks.get_mut(&f.ssrc) else { return false };
         if t.waiting_key && !keyframe {
             self.stats.dropped_frames += 1;
             return false;
         }
         t.waiting_key = false;
-        match self.current.get(&f.user_id) {
-            Some(&c) if c == f.ssrc => true,
-            Some(_) if !keyframe => false,
-            _ => {
-                self.current.insert(f.user_id, f.ssrc);
-                true
-            }
+        t.last_accepted = Some(now);
+        self.current.insert(f.user_id, f.ssrc);
+        true
+    }
+
+    pub fn request_track_keyframe(&mut self, ssrc: u32) {
+        if let Some(track) = self.tracks.get_mut(&ssrc) {
+            track.waiting_key = true;
         }
     }
 
@@ -315,11 +333,12 @@ impl VideoReceiver {
         for ssrc in give_up {
             if let Some(t) = self.tracks.get_mut(&ssrc) {
                 let next = t.next.unwrap_or(0);
-                match t.packets.range(next..).find(|(_, p)| p.marker).map(|(&s, _)| s) {
+                match t.markers.range(next..).next().copied() {
                     Some(m) => t.drop_through(m),
                     None => {
                         let upto = t.missing.keys().next_back().copied().unwrap_or(next);
                         t.packets.retain(|s, _| *s > upto);
+                        t.markers.retain(|s| *s > upto);
                         t.missing.clear();
                         t.next = None;
                     }
@@ -590,8 +609,13 @@ mod tests {
         assert!(r.accept(&f(1), true));
         assert!(r.accept(&f(1), false));
         assert!(!r.accept(&f(2), false));
-        assert!(r.accept(&f(2), true));
-        assert!(!r.accept(&f(1), false));
+        let now = Instant::now();
+        assert!(r.accept_at(&f(2), true, now));
+        assert!(!r.accept_at(&f(1), true, now + Duration::from_millis(5)));
+        r.request_track_keyframe(1);
+        assert!(r.accept_at(&f(2), false, now + Duration::from_millis(10)));
+        assert!(!r.accept_at(&f(1), false, now + Duration::from_millis(10)));
+        assert!(r.accept_at(&f(1), true, now + Duration::from_millis(10) + GAP_TIMEOUT));
         r.set_layers(7, vec![Layer { ssrc: 1, rtx_ssrc: 0, quality: 50 }]);
         assert_eq!(r.user_for(2), None);
         assert_eq!(r.layers(7).len(), 1);

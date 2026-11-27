@@ -197,7 +197,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     };
 
     if video.is_some() {
-        window.request_animation_frame();
+        crate::ui::call_view::schedule_video_refresh(window, cx);
     }
     crate::voice::call::set_pip_view();
     if is_stream

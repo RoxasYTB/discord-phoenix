@@ -543,7 +543,7 @@ fn deliver_video(frames: Vec<EncodedFrame>, vrx: &mut VideoReceiver, dave: &mut 
     for f in frames {
         let Some(plain) = open_video_frame(&f, dave) else {
             stats.video_decrypt_errors += 1;
-            vrx.request_keyframe(f.user_id);
+            vrx.request_track_keyframe(f.ssrc);
             continue;
         };
         let keyframe = video_rx::is_keyframe(f.codec, &plain);

@@ -243,7 +243,7 @@ impl gpui::Render for CallPopoutView {
         }
 
         if crate::voice::call::camera_active() || crate::voice::call::remote_video_active() {
-            window.request_animation_frame();
+            crate::ui::call_view::schedule_video_refresh(window, cx);
         }
 
         let k = zoom();

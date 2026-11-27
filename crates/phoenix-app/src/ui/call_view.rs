@@ -13,6 +13,21 @@ pub(crate) fn t(i: usize) -> Hsla {
     crate::theme::c_for(tok(i), crate::ui::settings::AppTheme::Onyx)
 }
 
+pub(crate) fn schedule_video_refresh(window: &Window, cx: &gpui::App) {
+    thread_local! {
+        static PENDING: std::cell::RefCell<std::collections::HashSet<gpui::WindowId>> = Default::default();
+    }
+
+    let id = window.window_handle().window_id();
+    if PENDING.with(|pending| pending.borrow_mut().insert(id)) {
+        window.spawn(cx, async move |cx| {
+            cx.background_executor().timer(Duration::from_millis(12)).await;
+            PENDING.with(|pending| pending.borrow_mut().remove(&id));
+            let _ = cx.update(|window, _| window.refresh());
+        }).detach();
+    }
+}
+
 thread_local! {
     static SHOWN: Cell<Option<Id>> = const { Cell::new(None) };
     static CHAT_OPEN: Cell<bool> = const { Cell::new(false) };
@@ -542,8 +557,10 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         let active = app.voice.is_speaking(u) || crate::voice::soundboard::is_user_playing(u);
         crate::ui::voice_panel::speaking_fade(u, active).1
     });
-    if fading || ring_fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active() || crate::ui::voice_effects::has_effects() {
+    if fading || ring_fading || crate::ui::voice_effects::has_effects() {
         window.request_animation_frame();
+    } else if crate::voice::call::camera_active() || crate::voice::call::remote_video_active() {
+        schedule_video_refresh(window, cx);
     }
 
     DRAWN.with(|d| d.borrow_mut().clear());
@@ -646,8 +663,10 @@ pub fn render_private(app: &PhoenixApp, header: gpui::Div, window: &mut Window, 
         let active = app.voice.is_speaking(u) || crate::voice::soundboard::is_user_playing(u);
         crate::ui::voice_panel::speaking_fade(u, active).1
     });
-    if ring_fading || (video && (fading || crate::voice::call::camera_active() || crate::voice::call::remote_video_active())) {
+    if ring_fading || (video && fading) {
         window.request_animation_frame();
+    } else if video && (crate::voice::call::camera_active() || crate::voice::call::remote_video_active()) {
+        schedule_video_refresh(window, cx);
     }
     let header = header.bg(gpui::transparent_black()).border_color(gpui::transparent_black());
     let body: AnyElement = if popped {

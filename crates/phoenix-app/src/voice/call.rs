@@ -222,9 +222,12 @@ fn push_video(map: &'static Mutex<Decoders>, user: u64, codec: phoenix_voice::co
         }
     }
     if let Some(d) = r.get_mut(&user)
-        && d.push(frame).is_err()
+        && let Err(error) = d.try_push(frame)
     {
-        r.remove(&user);
+        let decoder = r.remove(&user);
+        drop(r);
+        tracing::warn!(?codec, %error, "video decoder reset while receiving a frame");
+        drop(decoder);
         return true;
     }
     false

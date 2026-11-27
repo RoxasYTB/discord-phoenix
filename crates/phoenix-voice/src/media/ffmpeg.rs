@@ -256,7 +256,7 @@ pub fn decode_args(codec: Codec, max: (u32, u32), hwaccel: Option<&str>, dav1d: 
     if let Some(h) = hwaccel {
         a.extend(["-hwaccel".into(), h.into()]);
     }
-    a.extend(["-probesize", "32", "-analyzeduration", "0", "-flags", "low_delay"].map(String::from));
+    a.extend(["-filter_threads", "1", "-threads", "2", "-probesize", "32", "-analyzeduration", "0", "-flags", "low_delay"].map(String::from));
     if codec == Codec::Av1 && dav1d {
         a.extend(["-c:v", "libdav1d", "-max_frame_delay", "1"].map(String::from));
     }
@@ -265,7 +265,7 @@ pub fn decode_args(codec: Codec, max: (u32, u32), hwaccel: Option<&str>, dav1d: 
         "scale=w='min(iw,{})':h='min(ih,{})':force_original_aspect_ratio=decrease:force_divisible_by=2",
         max.0, max.1
     ));
-    a.extend(["-fps_mode", "passthrough", "-flush_packets", "1", "-f", "image2pipe", "-c:v", "pam", "-pix_fmt", "rgba", "-"].map(String::from));
+    a.extend(["-fps_mode", "passthrough", "-flush_packets", "1", "-f", "image2pipe", "-c:v", "pam", "-threads", "1", "-pix_fmt", "rgba", "-"].map(String::from));
     a
 }
 
@@ -344,7 +344,7 @@ static FRAME_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64
 
 pub struct FfmpegDecoder {
     child: Child,
-    stdin: Option<ChildStdin>,
+    input: mpsc::SyncSender<Vec<u8>>,
     codec: Codec,
     pts: u64,
     hwaccel: bool,
@@ -366,28 +366,47 @@ impl FfmpegDecoder {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|e| Error::Encoder(format!("ffmpeg decoder: {e}")))?;
-        let mut stdin = child.stdin.take();
+        let mut stdin = child.stdin.take().ok_or(Error::Encoder("ffmpeg decoder stdin".into()))?;
         let stdout = child.stdout.take().ok_or(Error::Encoder("ffmpeg decoder stdout".into()))?;
+        let (input, pending) = mpsc::sync_channel::<Vec<u8>>(12);
+        let writer = std::thread::Builder::new().name("phoenix-video-out".into()).spawn(move || {
+            if stdin.write_all(&header).is_ok() {
+                for packet in pending {
+                    if stdin.write_all(&packet).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+        if let Err(e) = writer {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(Error::Io(e));
+        }
         let latest: std::sync::Arc<std::sync::Mutex<Option<VideoFrame>>> = Default::default();
         let decoded: std::sync::Arc<std::sync::atomic::AtomicU64> = Default::default();
         let (slot, count) = (latest.clone(), decoded.clone());
-        std::thread::Builder::new()
+        let reader = std::thread::Builder::new()
             .name("phoenix-video-in".into())
             .spawn(move || {
                 let mut r = std::io::BufReader::with_capacity(1 << 20, stdout);
                 while let Some((w, h, buf)) = read_pam(&mut r) {
                     let serial = FRAME_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let frame = VideoFrame { width: w, height: h, pts_us: serial, data: std::sync::Arc::from(buf) };
                     if let Ok(mut s) = slot.lock() {
-                        *s = Some(VideoFrame { width: w, height: h, pts_us: serial, data: std::sync::Arc::from(buf) });
+                        let previous = s.replace(frame);
+                        drop(s);
+                        drop(previous);
                     }
                     count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
-            })
-            .map_err(Error::Io)?;
-        if let Some(i) = stdin.as_mut() {
-            i.write_all(&header).map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))?;
+            });
+        if let Err(e) = reader {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(Error::Io(e));
         }
-        Ok(Self { child, stdin, codec, pts: 0, hwaccel: hwaccel.is_some(), latest, decoded })
+        Ok(Self { child, input, codec, pts: 0, hwaccel: hwaccel.is_some(), latest, decoded })
     }
 
     pub fn codec(&self) -> Codec {
@@ -412,16 +431,21 @@ impl FfmpegDecoder {
 
     pub fn push(&mut self, frame: &[u8]) -> Result<()> {
         let packet = ivf_frame(self.codec, frame, self.pts)?;
+        self.input.send(packet).map_err(|_| Error::Encoder("ffmpeg decoder closed".into()))?;
         self.pts += 1;
-        let stdin = self.stdin.as_mut().ok_or(Error::Encoder("ffmpeg decoder closed".into()))?;
-        stdin.write_all(&packet).map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))?;
-        stdin.flush().map_err(|e| Error::Encoder(format!("ffmpeg decoder write: {e}")))
+        Ok(())
+    }
+
+    pub fn try_push(&mut self, frame: &[u8]) -> Result<()> {
+        let packet = ivf_frame(self.codec, frame, self.pts)?;
+        self.input.try_send(packet).map_err(|e| Error::Encoder(format!("ffmpeg decoder input: {e}")))?;
+        self.pts += 1;
+        Ok(())
     }
 }
 
 impl Drop for FfmpegDecoder {
     fn drop(&mut self) {
-        self.stdin.take();
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
