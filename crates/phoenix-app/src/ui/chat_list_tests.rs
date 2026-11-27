@@ -42,7 +42,7 @@ impl Chat {
     fn draw(&mut self) {
         for _ in 0..3 {
             self.vcx.run_until_parked();
-            self.vcx.refresh().unwrap();
+            self.vcx.update(|_, cx| cx.refresh_windows());
         }
         self.vcx.run_until_parked();
     }
