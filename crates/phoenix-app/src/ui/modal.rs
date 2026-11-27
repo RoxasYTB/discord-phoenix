@@ -21,6 +21,10 @@ pub struct Confirm {
 }
 
 pub fn frame(id: &'static str, on_cancel: Action, card: impl IntoElement) -> AnyElement {
+    frame_named(id, None, on_cancel, card)
+}
+
+pub fn frame_named(id: &'static str, label: Option<SharedString>, on_cancel: Action, card: impl IntoElement) -> AnyElement {
     deferred(
         div()
             .id(id)
@@ -37,8 +41,8 @@ pub fn frame(id: &'static str, on_cancel: Action, card: impl IntoElement) -> Any
             .child(crate::ui::popout_motion::modal_card(
                 id,
                 crate::ui::focus_ring::trap_modal(
-                    div()
-                        .id("modal-card")
+                    crate::ui::a11y::role(div().id("modal-card"), gpui::Role::Dialog)
+                        .when_some(label.filter(|_| crate::ui::a11y::on()), |d, l| d.aria_label(l))
                         .occlude()
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
                 )
@@ -61,6 +65,7 @@ pub fn confirm_labeled(m: Confirm, cancel_label: SharedString, on_close: Action)
     let ok = m.on_confirm.clone();
     let mut body = m.body.into_iter();
     let subtitle = body.next();
+    let title = m.title.clone();
     let rest: Vec<AnyElement> = body.collect();
     let has_body = !rest.is_empty();
     let card = div()
@@ -170,5 +175,5 @@ pub fn confirm_labeled(m: Confirm, cancel_label: SharedString, on_close: Action)
                     ),
                 ),
         );
-    frame("modal-backdrop", cancel, card)
+    frame_named("modal-backdrop", Some(title), cancel, card)
 }

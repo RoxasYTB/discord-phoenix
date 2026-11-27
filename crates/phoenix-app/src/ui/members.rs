@@ -493,6 +493,7 @@ pub fn header(t: SharedString) -> AnyElement {
 
 fn group_header(app: &PhoenixApp, g: Id, id: &str, count: u32) -> AnyElement {
     let name = group_name(app, g, id);
+    let spoken = crate::ui::a11y::member_group(name.trim(), count);
     let icon = id
         .parse::<u64>()
         .ok()
@@ -514,6 +515,8 @@ fn group_header(app: &PhoenixApp, g: Id, id: &str, count: u32) -> AnyElement {
                 .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(SharedString::from(name.trim().to_string())))
                 .child(div().flex_none().whitespace_nowrap().child(SharedString::from(format!("\u{a0}— {count}")))),
         )
+        .id(SharedString::from(format!("member-group-{id}")))
+        .map(|d| crate::ui::a11y::named(d, gpui::Role::Heading, move || spoken))
         .into_any_element()
 }
 
@@ -623,7 +626,20 @@ pub fn member_row_in(
     let has_plate = user.is_some_and(|u| u.nameplate.is_some());
     div().py(z(1.)).child(div()
         .id(("member", mem.user.0))
-        .when(crate::ui::a11y::on(), |d| d.role(gpui::Role::ListItem).aria_label(name.clone()))
+        .when(crate::ui::a11y::on(), |d| {
+            let status = if streaming {
+                crate::t!("activity.live")
+            } else {
+                match mem.presence {
+                    Presence::Online => crate::t!("status.online"),
+                    Presence::Idle => crate::t!("status.idle"),
+                    Presence::Dnd => crate::t!("status.dnd"),
+                    Presence::Offline => crate::t!("status.offline"),
+                }
+            };
+            let activity = sub.as_ref().and_then(|s| s.main.as_ref().map(|m| m.0.clone()).or_else(|| s.custom.as_ref().and_then(|c| c.1.clone())));
+            d.role(gpui::Role::ListItem).aria_label(crate::ui::a11y::member(&name, &status, activity.as_deref()))
+        })
         .on_hover({
             let e = e.clone();
             move |h, _, cx| {

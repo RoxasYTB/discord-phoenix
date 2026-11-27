@@ -91,8 +91,7 @@ fn switch_row(
     cx: &mut Cx,
 ) -> Div {
     div().child(
-        div()
-            .id(eid(format!("vs-switch-{id}")))
+        crate::ui::a11y::switch(div().id(eid(format!("vs-switch-{id}"))), title.clone(), on)
             .when(!disabled, |d| d.group(crate::ui::controls::SWITCH_ROW))
             .flex()
             .gap(z(12.))
@@ -190,6 +189,13 @@ pub(crate) fn slider(
     let (lo, hi) = track.unwrap_or((Palette::BLURPLE, TRACK));
     div()
         .id(eid(format!("slider-{id}")))
+        .when(crate::ui::a11y::on(), |d| {
+            d.role(gpui::Role::Slider)
+                .aria_value(bubble.clone())
+                .aria_numeric_value((frac * 100.).round() as f64)
+                .aria_min_numeric_value(0.)
+                .aria_max_numeric_value(100.)
+        })
         .relative()
         .w_full()
         .h(z(24.))

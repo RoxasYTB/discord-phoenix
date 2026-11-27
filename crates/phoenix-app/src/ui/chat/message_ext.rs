@@ -455,6 +455,7 @@ fn burst_pill(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ix: 
     };
     let pill = div()
         .id(("reaction-burst", ix))
+        .map(|d| crate::ui::a11y::named(d, gpui::Role::Button, || crate::ui::a11y::super_reaction(&r.emoji, r.burst_count, me_burst)))
         .relative()
         .py(z(2.))
         .px(z(6.))

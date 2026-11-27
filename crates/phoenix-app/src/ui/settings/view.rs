@@ -376,8 +376,10 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
     let id: String = id.into();
     let group: SharedString = format!("nav-{id}").into();
     let fade_key = crate::ui::states::key(("settings-nav", id.as_str()));
-    div()
-        .id(eid(id))
+    let label: SharedString = label.into();
+    let spoken = label.clone();
+    crate::ui::a11y::named(div().id(eid(id)), gpui::Role::Link, move || spoken)
+        .when(crate::ui::a11y::on(), |d| d.aria_selected(selected))
         .group(group.clone())
         .relative()
         .when(selected, |d| {
@@ -421,7 +423,7 @@ fn nav_item(id: impl Into<String>, icon: &str, label: impl Into<SharedString>, s
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .when(destructive, |d| d.text_color(c(tok(label_fg))))
-                .child(label.into()),
+                .child(label),
         )
 }
 
@@ -708,7 +710,7 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
             .min_w_0()
             .text_size(z(16.))
             .text_color(c(tok(idx::TEXT_DEFAULT)))
-            .child(gpui_component::input::Input::new(&input).appearance(false).bordered(false).px_0().text_size(z(16.)))
+            .child(gpui_component::input::Input::new(&input).aria_label(crate::t!("settings.search")).appearance(false).bordered(false).px_0().text_size(z(16.)))
             .into_any_element(),
         None => div()
             .flex_1()
@@ -828,8 +830,7 @@ fn nav(app: &PhoenixApp, cx: &mut Cx) -> Div {
                 .min_h_0()
                 .mr(z(4.))
                 .child(
-                    div()
-                        .id("settings-nav")
+                    crate::ui::a11y::named(div().id("settings-nav"), gpui::Role::Navigation, || crate::t!("a11y.settings_pages"))
                         .flex_1()
                         .min_h_0()
                         .overflow_y_scroll()
@@ -861,8 +862,7 @@ fn content_header(label: SharedString, nested: Option<super::nested::Nested>, cx
             .items_center()
             .gap(z(8.))
             .child(
-                div()
-                    .id("settings-back")
+                crate::ui::a11y::named(div().id("settings-back"), gpui::Role::Button, || crate::t!("a11y.back"))
                     .size(z(32.))
                     .rounded(z(8.))
                     .flex()
@@ -904,8 +904,7 @@ fn content_header(label: SharedString, nested: Option<super::nested::Nested>, cx
         .border_color(c(tok(idx::BORDER_MUTED)))
         .child(left)
         .child(
-            div()
-                .id("settings-close")
+            crate::ui::a11y::named(div().id("settings-close"), gpui::Role::Button, || crate::t!("a11y.close"))
                 .size(z(32.))
                 .rounded(z(8.))
                 .flex()
@@ -1194,8 +1193,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
                 })
                 .child(page(app, cx)),
         );
-    let card = div()
-        .id("user-settings-card")
+    let card = crate::ui::a11y::named(div().id("user-settings-card"), gpui::Role::Dialog, || crate::t!("a11y.user_settings"))
         .size_full()
         .max_w(z(1400.))
         .rounded(z(12.))

@@ -205,6 +205,8 @@ fn switch_row(app: &PhoenixApp, id: &'static str, title: SharedString, desc: Opt
     let disabled = (matches!(b, Bind::Proto) && super::synced_map::disabled(&synced.proto, synced.compact, id))
         || (id == "theme-devices" && get_bool(app, "theme-sync", Bind::Pref(false)));
     let on = get_bool(app, id, b) || (id == "avatars" && !synced.compact);
+    let spoken = title.clone();
+    let a11y = move |d: gpui::Stateful<gpui::Div>| crate::ui::a11y::switch(d, spoken, on);
     if disabled {
         let row = item_ex(
             title,
@@ -213,10 +215,9 @@ fn switch_row(app: &PhoenixApp, id: &'static str, title: SharedString, desc: Opt
             true,
             true,
         );
-        return row.id(eid(format!("sw-{id}"))).cursor(gpui::CursorStyle::OperationNotAllowed).into_any_element();
+        return a11y(row.id(eid(format!("sw-{id}")))).cursor(gpui::CursorStyle::OperationNotAllowed).into_any_element();
     }
-    item(title, desc, Some(controls::switch(eid(format!("sw-knob-{id}")), on).into_any_element()), true)
-        .id(eid(format!("sw-{id}")))
+    a11y(item(title, desc, Some(controls::switch(eid(format!("sw-knob-{id}")), on).into_any_element()), true).id(eid(format!("sw-{id}"))))
         .group(controls::SWITCH_ROW)
         .cursor_pointer()
         .on_click(cx.listener(move |a, _, _, cx| set_bool(a, id, b, !on, cx)))

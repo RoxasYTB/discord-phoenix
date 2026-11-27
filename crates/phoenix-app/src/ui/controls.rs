@@ -108,6 +108,14 @@ pub fn marker_slider(
             div().absolute().top(z(26.)).left(relative(frac)).w(z(0.)).flex().justify_center().child(
                 div()
                     .id(ElementId::Name(format!("{id}-grab").into()))
+                    .when(crate::ui::a11y::on(), |d| {
+                        d.role(gpui::Role::Slider)
+                            .aria_value(labels.get(current).cloned().unwrap_or_default())
+                            .aria_numeric_value(current as f64)
+                            .aria_min_numeric_value(0.)
+                            .aria_max_numeric_value((n - 1) as f64)
+                            .aria_numeric_value_step(1.)
+                    })
                     .flex_none()
                     .size(z(16.))
                     .rounded_full()
@@ -208,7 +216,7 @@ pub fn radio_indicator(selected: bool) -> Div {
 
 pub fn checkbox_option(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> gpui::Stateful<Div> {
     let label: SharedString = label.into();
-    checkbox_option_el(id, label.into_any_element(), selected)
+    crate::ui::a11y::check(checkbox_option_el(id, label.clone().into_any_element(), selected), gpui::Role::CheckBox, label, selected)
 }
 
 pub fn checkbox_option_el(id: impl Into<ElementId>, label: gpui::AnyElement, selected: bool) -> gpui::Stateful<Div> {
@@ -256,8 +264,8 @@ pub fn checkbox_option_el(id: impl Into<ElementId>, label: gpui::AnyElement, sel
 }
 
 pub fn radio_option(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> gpui::Stateful<Div> {
-    div()
-        .id(id.into())
+    let label: SharedString = label.into();
+    crate::ui::a11y::check(div().id(id.into()), gpui::Role::RadioButton, label.clone(), selected)
         .flex()
         .items_center()
         .gap(z(12.))
@@ -269,7 +277,7 @@ pub fn radio_option(id: impl Into<ElementId>, label: impl Into<SharedString>, se
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .text_color(c(tok(idx::TEXT_DEFAULT)))
-                .child(label.into()),
+                .child(label),
         )
 }
 
@@ -353,8 +361,8 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bt
             CONTROL_CRITICAL_PRIMARY_BORDER_ACTIVE,
         ],
     };
-    div()
-        .id(id.into())
+    let label: SharedString = label.into();
+    crate::ui::a11y::named(div().id(id.into()), gpui::Role::Button, || label.clone())
         .flex()
         .flex_none()
         .items_center()
@@ -375,7 +383,7 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bt
         .text_color(c(tok(fg)))
         .whitespace_nowrap()
         .max_w_full()
-        .child(div().min_w_0().truncate().child(label.into()))
+        .child(div().min_w_0().truncate().child(label))
 }
 
 pub fn button_icon(id: impl Into<ElementId>, icon: &'static str, label: impl Into<SharedString>, kind: BtnKind) -> gpui::Stateful<Div> {
@@ -397,8 +405,10 @@ pub fn button_sm(id: impl Into<ElementId>, label: impl Into<SharedString>, kind:
 }
 
 pub fn select_field(id: impl Into<ElementId>, value: impl Into<SharedString>) -> gpui::Stateful<Div> {
-    div()
-        .id(id.into())
+    let value: SharedString = value.into();
+    let spoken = value.clone();
+    crate::ui::a11y::role(div().id(id.into()), gpui::Role::ComboBox)
+        .when(crate::ui::a11y::on(), move |d| d.aria_value(spoken))
         .h(z(40.))
         .pl(z(12.))
         .flex()
@@ -418,7 +428,7 @@ pub fn select_field(id: impl Into<ElementId>, value: impl Into<SharedString>) ->
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .text_color(c(tok(idx::TEXT_STRONG)))
-                .child(value.into()),
+                .child(value),
         )
         .child(
             div().w(z(36.)).h_full().flex().items_center().justify_center().pr(z(4.)).child(

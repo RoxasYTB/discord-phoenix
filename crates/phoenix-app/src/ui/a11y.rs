@@ -29,6 +29,14 @@ pub fn role<E: StatefulInteractiveElement>(el: E, role: Role) -> E {
     if on() { el.role(role) } else { el }
 }
 
+pub fn switch<E: StatefulInteractiveElement>(el: E, label: SharedString, on: bool) -> E {
+    if self::on() { el.role(Role::Switch).aria_label(label).aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False }) } else { el }
+}
+
+pub fn check<E: StatefulInteractiveElement>(el: E, role: Role, label: SharedString, on: bool) -> E {
+    if self::on() { el.role(role).aria_label(label).aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False }) } else { el }
+}
+
 pub struct Live<E> {
     inner: E,
     live: accesskit::Live,
@@ -236,6 +244,9 @@ pub struct ChannelInfo {
     pub nsfw: bool,
     pub voice_users: Vec<SharedString>,
     pub members: u32,
+    pub user_limit: Option<u32>,
+    pub call_secs: Option<i64>,
+    pub activities: Vec<SharedString>,
 }
 
 fn triple(base: &str, mentions: u32, unread: bool, name: &str) -> String {
@@ -277,6 +288,16 @@ pub fn channel(kind: Kind, name: &str, info: &ChannelInfo) -> SharedString {
                 if more > 0 {
                     l.push(crate::t!(plural("a11y.voice_overflow_one", "a11y.voice_overflow_other", more), n = more).to_string());
                 }
+                if let Some(limit) = info.user_limit.filter(|l| *l > 0) {
+                    l.push(crate::t!("a11y.voice_limit", n = info.voice_users.len(), limit = limit).to_string());
+                }
+            }
+            if let Some(secs) = info.call_secs {
+                l.push(crate::t!("a11y.call_duration", duration = duration(secs)).to_string());
+            }
+            if !info.activities.is_empty() {
+                let names: Vec<&str> = info.activities.iter().map(|s| &**s).collect();
+                l.push(crate::t!("a11y.voice_activities", names = names.join(", ")).to_string());
             }
             l.join(", ")
         }
@@ -355,6 +376,40 @@ pub fn reaction(token: &str, count: u32, me: bool) -> SharedString {
     crate::t!(key, name = name, n = count)
 }
 
+pub fn super_reaction(token: &str, count: u32, me: bool) -> SharedString {
+    let name = emoji_name(token);
+    let key = match (me, count == 1) {
+        (false, true) => "a11y.super_reaction_one",
+        (false, false) => "a11y.super_reaction_other",
+        (true, true) => "a11y.super_reaction_me_one",
+        (true, false) => "a11y.super_reaction_me_other",
+    };
+    crate::t!(key, name = name, n = count)
+}
+
+pub fn duration(secs: i64) -> String {
+    let s = secs.max(0) as u32;
+    let (h, m, sec) = (s / 3600, s / 60 % 60, s % 60);
+    let mut parts = Vec::new();
+    if h > 0 {
+        parts.push(crate::t!(plural("a11y.hours_one", "a11y.hours_other", h), n = h).to_string());
+    }
+    parts.push(crate::t!(plural("a11y.minutes_one", "a11y.minutes_other", m), n = m).to_string());
+    parts.push(crate::t!(plural("a11y.seconds_one", "a11y.seconds_other", sec), n = sec).to_string());
+    parts.join(", ")
+}
+
+pub fn member(name: &str, status: &str, activity: Option<&str>) -> SharedString {
+    match activity.filter(|a| !a.is_empty()) {
+        Some(a) => format!("{name}, {status}, {a}").into(),
+        None => format!("{name}, {status}").into(),
+    }
+}
+
+pub fn member_group(name: &str, count: u32) -> SharedString {
+    crate::t!(plural("a11y.member_group_one", "a11y.member_group_other", count), name = name, n = count)
+}
+
 pub fn attachment(a: &crate::model::Attachment) -> SharedString {
     if a.is_image { crate::t!("a11y.image") } else { a.filename.clone() }
 }
@@ -426,6 +481,31 @@ mod tests {
         assert_eq!(&*category("Info"), "Info (category)");
         assert_eq!(Kind::of(ChannelKind::Text, true, true), Kind::GroupDm);
         assert_eq!(Kind::of(ChannelKind::Voice, false, false), Kind::Voice);
+    }
+
+    #[test]
+    fn voice_labels_add_the_limit_duration_and_activities() {
+        let info = ChannelInfo {
+            voice_users: ["a", "b"].iter().map(|s| SharedString::from(*s)).collect(),
+            user_limit: Some(5),
+            call_secs: Some(34 * 3600 + 6 * 60 + 40),
+            activities: vec!["Chess".into(), "Poker".into()],
+            ..Default::default()
+        };
+        assert_eq!(
+            &*channel(Kind::Voice, "vc", &info),
+            "vc (voice channel), a, b, 2 of 5 users, call duration 34 hours, 6 minutes, 40 seconds, Active activities in this channel: Chess, Poker"
+        );
+        assert_eq!(duration(61), "1 minute, 1 second");
+    }
+
+    #[test]
+    fn members_and_super_reactions_are_named() {
+        assert_eq!(&*member("Nelly", "Online", Some("Playing Triforce")), "Nelly, Online, Playing Triforce");
+        assert_eq!(&*member("Nelly", "Idle", None), "Nelly, Idle");
+        assert_eq!(&*member_group("Admins", 12), "Admins, 12 members");
+        assert_eq!(&*super_reaction("🔥", 1, false), "fire, 1 super reaction, press to super react");
+        assert_eq!(&*super_reaction("🔥", 2, true), "fire, 2 super reactions, press to remove your super reaction");
     }
 
     #[test]

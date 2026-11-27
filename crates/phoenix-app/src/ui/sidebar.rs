@@ -1373,6 +1373,16 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                     nsfw: extra.is_some_and(|e| e.nsfw),
                     voice_users: if is_dm { Vec::new() } else { ch.voice_users.iter().map(|u| voice_user_name(app, *u)).collect() },
                     members: extra.map(|e| e.recipients as u32 + 1).unwrap_or(1),
+                    user_limit: (ch.kind == ChannelKind::Voice).then(|| app.backend.channel_user_limit(id)).flatten(),
+                    call_secs: (matches!(ch.kind, ChannelKind::Voice | ChannelKind::Stage) && !ch.voice_users.is_empty())
+                        .then(|| crate::voice::start_time::get(id.0))
+                        .flatten()
+                        .map(|st| crate::voice::start_time::now_s() - st),
+                    activities: if ch.kind == ChannelKind::Voice {
+                        crate::ui::call_activity::channel_activities(app, id).iter().filter_map(|(a, _)| crate::ui::call_activity::info(*a).name).collect()
+                    } else {
+                        Vec::new()
+                    },
                 };
                 crate::ui::a11y::channel(crate::ui::a11y::Kind::of(ch.kind, is_dm, is_group), &name, &info)
             })
