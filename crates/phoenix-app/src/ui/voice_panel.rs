@@ -810,7 +810,6 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
     let noise_open = noise_popout_open(app);
     let enlarge = enlarge_targets(app, cx);
     let bx = panel_box(enlarge);
-    let hangup = crate::ui::go_live::HangupAction::current(app);
     div()
         .flex_none()
         .border_b_1()
@@ -931,15 +930,11 @@ pub fn voice_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoE
                         .child(
                             panel_button(
                                 "hangup",
-                                if hangup.disconnects() {
-                                    lottie_glyph(panel_key("hangup", false), Lottie::Disconnect, false, false, || panel_glyph(Icon::PhoneHangup, false))
-                                } else {
-                                    svg().path(hangup.icon()).size(z(20.)).text_color(t(idx::ICON_FEEDBACK_CRITICAL)).into_any_element()
-                                },
-                                !hangup.disconnects(),
+                                lottie_glyph(panel_key("hangup", false), Lottie::Disconnect, false, false, || panel_glyph(Icon::PhoneHangup, false)),
+                                false,
                             )
-                                .tip(hangup.label())
-                                .on_click(cx.listener(move |a, _, _, cx| hangup.run(a, cx))),
+                                .tip(crate::t!("voice.disconnect"))
+                                .on_click(cx.listener(|a, _, _, cx| a.join_voice(None, cx))),
                         ),
                 ),
         )

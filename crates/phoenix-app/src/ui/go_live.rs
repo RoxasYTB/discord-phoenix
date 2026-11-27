@@ -68,10 +68,7 @@ pub fn stop(app: &PhoenixApp) {
 
 pub(crate) enum HangupAction {
     Disconnect,
-    StopSharing,
-    StopWatching(String),
-    TurnOffCamera,
-    HideCamera(crate::model::Id),
+    StopWatching(Vec<String>),
 }
 
 impl HangupAction {
@@ -83,38 +80,20 @@ impl HangupAction {
             && let Some(key) = call_view::stream_key(app, owner)
             && app.voice.watching.contains(&key)
         {
-            return Self::StopWatching(key);
+            return Self::StopWatching(vec![key]);
         }
-        let camera_action = |user| {
-            if user == app.me.id { Self::TurnOffCamera } else { Self::HideCamera(user) }
-        };
-        let users = app.voice_channel.and_then(|ch| app.channels.get(&ch)).map_or(&[][..], |ch| ch.voice_users.as_slice());
-        if let Focus::Tile(user, false) = call_view::focus()
-            && users.contains(&user)
-            && call_view::camera_visible(app, user)
-        {
-            return camera_action(user);
-        }
-        if live(app) {
-            return Self::StopSharing;
-        }
-        if let Some(channel) = app.voice_channel
-            && let Some(key) = app.voice.watching.iter().find(|key| {
-                crate::voice::stream::parse_key(key).is_some_and(|stream| stream.channel == channel.0)
+        let others: Vec<String> = app
+            .voice_channel
+            .map(|channel| {
+                app.voice
+                    .watching
+                    .iter()
+                    .filter(|key| crate::voice::stream::parse_key(key).is_some_and(|stream| stream.channel == channel.0 && stream.owner != app.me.id.0))
+                    .cloned()
+                    .collect()
             })
-        {
-            return Self::StopWatching(key.clone());
-        }
-        if call_view::camera_visible(app, app.me.id) {
-            return Self::TurnOffCamera;
-        }
-        let mut cameras = users.iter().copied().filter(|&user| call_view::camera_visible(app, user));
-        if let Some(user) = cameras.next()
-            && cameras.next().is_none()
-        {
-            return camera_action(user);
-        }
-        Self::Disconnect
+            .unwrap_or_default();
+        if others.is_empty() { Self::Disconnect } else { Self::StopWatching(others) }
     }
 
     pub(crate) fn disconnects(&self) -> bool {
@@ -124,30 +103,24 @@ impl HangupAction {
     pub(crate) fn icon(&self) -> gpui::SharedString {
         match self {
             Self::Disconnect => crate::assets::Icon::PhoneHangup.path(),
-            Self::StopSharing | Self::StopWatching(_) => crate::icons::path("voice/screen-x"),
-            Self::TurnOffCamera | Self::HideCamera(_) => "icons/call/camera-off.svg".into(),
+            Self::StopWatching(_) => crate::icons::path("voice/screen-x"),
         }
     }
 
     pub(crate) fn label(&self) -> gpui::SharedString {
         match self {
             Self::Disconnect => crate::t!("voice.disconnect"),
-            Self::StopSharing => crate::t!("voice.stop_share"),
-            Self::StopWatching(_) | Self::HideCamera(_) => crate::t!("voice.stop_watching"),
-            Self::TurnOffCamera => crate::t!("voice.camera_off"),
+            Self::StopWatching(_) => crate::t!("voice.stop_watching"),
         }
     }
 
     pub(crate) fn run(&self, app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         match self {
             Self::Disconnect => app.join_voice(None, cx),
-            Self::StopSharing => stop(app),
-            Self::StopWatching(key) => drop(app.backend.voice_control(VoiceControl::StopWatching(key.clone()))),
-            Self::TurnOffCamera => drop(app.backend.voice_control(VoiceControl::SetCamera(false))),
-            Self::HideCamera(user) => {
-                app.voice.hidden_cameras.insert(*user);
-                crate::voice::call::set_hidden_cameras(&app.voice.hidden_cameras);
-                crate::ui::call_view::set_focus(crate::ui::call_view::Focus::Grid);
+            Self::StopWatching(keys) => {
+                for key in keys {
+                    drop(app.backend.voice_control(VoiceControl::StopWatching(key.clone())));
+                }
             }
         }
         cx.notify();
