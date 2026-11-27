@@ -319,30 +319,22 @@ pub struct TooltipParticipant {
     pub streaming: bool,
 }
 
-pub fn guild_tooltip_state(
-    connected: bool,
-    guild_muted: bool,
-    participants: &[TooltipParticipant],
-    activity_users: &[Id],
-) -> GuildTooltipState {
+pub fn guild_tooltip_state(guild_muted: bool, participants: &[TooltipParticipant], activity_users: &[Id]) -> GuildTooltipState {
     let mut out = GuildTooltipState { muted: guild_muted, ..Default::default() };
-    if guild_muted && !connected {
-        return out;
-    }
     for &u in activity_users {
         if !out.activity.contains(&u) {
             out.activity.push(u);
         }
     }
     for p in participants {
-        if p.hidden_user || !p.eligible || p.channel_muted || out.activity.contains(&p.user) {
+        if p.hidden_user || p.channel_muted || out.activity.contains(&p.user) {
             continue;
         }
         if p.streaming {
             if !out.stream.contains(&p.user) {
                 out.stream.push(p.user);
             }
-        } else if !out.voice.contains(&p.user) {
+        } else if p.eligible && !out.voice.contains(&p.user) {
             out.voice.push(p.user);
         }
     }
@@ -357,9 +349,6 @@ fn collect_guild_tooltip(app: &PhoenixApp, g: &Guild) -> GuildTooltipState {
         return GuildTooltipState { muted: guild_muted, ..Default::default() };
     };
     let connected = app.voice_channel.is_some_and(|v| chans.contains(&v));
-    if guild_muted && !connected {
-        return GuildTooltipState { muted: true, ..Default::default() };
-    }
     let flags = crate::ui::voice_panel::flags;
     let me = app.me.id;
     let self_stream = connected && (crate::ui::go_live::live(app) || flags(me).stream);
@@ -385,7 +374,7 @@ fn collect_guild_tooltip(app: &PhoenixApp, g: &Guild) -> GuildTooltipState {
             }
         }
     }
-    guild_tooltip_state(connected, guild_muted, &participants, &activity_users)
+    guild_tooltip_state(guild_muted, &participants, &activity_users)
 }
 
 fn activity_row(app: &PhoenixApp, icon_name: &'static str, users: &[Id]) -> Option<gpui::Div> {
@@ -436,7 +425,7 @@ fn guild_tooltip_extra(app: &PhoenixApp, g: &Guild) -> Option<gpui::Div> {
     if state.is_empty() {
         return None;
     }
-    let has_activity = !state.voice.is_empty() || !state.stream.is_empty() || !state.activity.is_empty();
+    let after_rows = !state.voice.is_empty() || !state.stream.is_empty();
     Some(
         div()
             .flex()
@@ -447,10 +436,10 @@ fn guild_tooltip_extra(app: &PhoenixApp, g: &Guild) -> Option<gpui::Div> {
             .when(state.muted, |d| {
                 d.child(
                     div()
-                        .mt(z(if has_activity { 8. } else { 2. }))
+                        .when(after_rows, |d| d.mt(z(8.)))
                         .text_size(z(12.))
                         .line_height(z(16.))
-                        .font_weight(FontWeight::NORMAL)
+                        .font_weight(FontWeight::MEDIUM)
                         .text_color(c(tok(idx::TEXT_MUTED)))
                         .child(crate::t!("rail.muted")),
                 )
@@ -458,7 +447,29 @@ fn guild_tooltip_extra(app: &PhoenixApp, g: &Guild) -> Option<gpui::Div> {
     )
 }
 
+fn guild_tooltip_name(app: &PhoenixApp, g: &Guild) -> AnyElement {
+    let mut features = app.backend.guild_features(g.id);
+    if g.discoverable {
+        features.push("DISCOVERABLE".into());
+    }
+    let kind = crate::ui::guild_badge::kind(&features);
+    let badge = match kind {
+        crate::ui::guild_badge::Kind::Staff => None,
+        _ => crate::ui::guild_badge::element(kind, crate::ui::guild_badge::premium(g.boosts, g.boost_tier), 18.),
+    };
+    div()
+        .flex()
+        .items_start()
+        .children(badge.map(|b| div().flex_none().mt(z(2.)).mr(z(8.)).child(b)))
+        .child(div().min_w_0().line_clamp(2).text_ellipsis().child(g.name.clone()))
+        .into_any_element()
+}
+
 fn right_tooltip_with(text: SharedString, extra: Option<gpui::Div>, item_h: f32) -> AnyElement {
+    right_tooltip_el(text.into_any_element(), extra, item_h)
+}
+
+fn right_tooltip_el(head: AnyElement, extra: Option<gpui::Div>, item_h: f32) -> AnyElement {
     let card = div()
         .max_w(z(196.))
         .px(z(12.))
@@ -472,7 +483,7 @@ fn right_tooltip_with(text: SharedString, extra: Option<gpui::Div>, item_h: f32)
         .line_height(z(20.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(Palette::TEXT_NORMAL))
-        .child(text)
+        .child(head)
         .children(extra);
     let mut pointer = div().flex().flex_col().justify_center().items_end().w(z(5.));
     for i in 0..9 {
@@ -1087,7 +1098,7 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, folder: Optio
             }
             d.child(pill(id.0, selected, hover, g.unread))
                 .child(masked(ICON, false, icon_box, voice_badge(guild_media(app, g)), count(g.mentions)))
-                .when(hover, |d| d.child(right_tooltip_with(g.name.clone(), guild_tooltip_extra(app, g), ICON)))
+                .when(hover, |d| d.child(right_tooltip_el(guild_tooltip_name(app, g), guild_tooltip_extra(app, g), ICON)))
         })
         .into_any_element()
 }
@@ -1437,7 +1448,6 @@ mod media_tests {
     fn tooltip_partitions_voice_stream_and_activity_without_duplicates() {
         let s = guild_tooltip_state(
             false,
-            false,
             &[tp(1, false), tp(2, true), tp(3, false), tp(1, false), tp(4, false), tp(5, true)],
             &[Id(4), Id(5)],
         );
@@ -1448,31 +1458,32 @@ mod media_tests {
     }
 
     #[test]
-    fn tooltip_muted_guild_hides_activity_unless_connected() {
-        let disconnected = guild_tooltip_state(false, true, &[tp(1, false), tp(2, true)], &[Id(3)]);
-        assert_eq!(disconnected, GuildTooltipState { muted: true, ..Default::default() });
-        assert!(!disconnected.is_empty());
+    fn tooltip_muted_guild_keeps_its_voice_and_stream_rows() {
+        let empty = guild_tooltip_state(true, &[], &[]);
+        assert_eq!(empty, GuildTooltipState { muted: true, ..Default::default() });
+        assert!(!empty.is_empty());
 
-        let connected = guild_tooltip_state(true, true, &[tp(1, false), tp(2, true)], &[]);
-        assert!(connected.muted);
-        assert_eq!(connected.voice, vec![Id(1)]);
-        assert_eq!(connected.stream, vec![Id(2)]);
+        let busy = guild_tooltip_state(true, &[tp(1, false), tp(2, true)], &[Id(3)]);
+        assert!(busy.muted);
+        assert_eq!(busy.voice, vec![Id(1)]);
+        assert_eq!(busy.stream, vec![Id(2)]);
+        assert_eq!(busy.activity, vec![Id(3)]);
     }
 
     #[test]
     fn tooltip_skips_muted_channels_afk_and_hidden_users() {
         let s = guild_tooltip_state(
             false,
-            false,
             &[
                 TooltipParticipant { channel_muted: true, ..tp(1, false) },
-                TooltipParticipant { eligible: false, ..tp(2, true) },
+                TooltipParticipant { eligible: false, ..tp(2, false) },
                 TooltipParticipant { hidden_user: true, ..tp(3, false) },
                 tp(4, false),
+                TooltipParticipant { eligible: false, ..tp(5, true) },
             ],
             &[],
         );
         assert_eq!(s.voice, vec![Id(4)]);
-        assert!(s.stream.is_empty());
+        assert_eq!(s.stream, vec![Id(5)]);
     }
 }

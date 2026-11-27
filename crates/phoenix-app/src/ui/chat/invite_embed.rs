@@ -944,12 +944,12 @@ fn profile_card(
             div().mt(z(-34.)).px(z(16.)).child(
                 div()
                     .size(z(70.))
-                    .rounded(z(22.))
+                    .rounded(z(70. * 0.3))
                     .bg(tk(idx::BACKGROUND_SURFACE_HIGHEST))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(guild_icon(p, 64., 19., 14.)),
+                    .child(guild_icon(p, 64., 64. * 0.3, 14.)),
             ),
         )
         .child(

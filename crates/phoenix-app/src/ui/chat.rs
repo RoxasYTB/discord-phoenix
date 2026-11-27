@@ -1599,17 +1599,57 @@ fn with_edited(t: &RichText) -> (SharedString, Vec<gpui::TextRun>) {
     let mut text = t.text.to_string();
     text.push_str(&crate::t!("chat.edited_suffix"));
     let mut runs = t.runs.clone();
-    let mut f = crate::richtext::ui_font();
-    f.weight = FontWeight::NORMAL;
     runs.push(gpui::TextRun {
         len: crate::t!("chat.edited_suffix").len(),
-        font: f,
-        color: c(Palette::TEXT_MUTED),
+        font: edited_font(),
+        color: gpui::transparent_black(),
         background_color: None,
         underline: None,
         strikethrough: None,
     });
     (text.into(), runs)
+}
+
+fn edited_font() -> gpui::Font {
+    let mut f = crate::richtext::ui_font();
+    f.weight = FontWeight::NORMAL;
+    f
+}
+
+fn edited_gap() -> usize {
+    let s = crate::t!("chat.edited_suffix");
+    s.len() - s.trim_start().len()
+}
+
+fn edited_overlay(layout: gpui::TextLayout, at: usize) -> impl IntoElement {
+    gpui::canvas(
+        |_, _, _| (),
+        move |_, _, window, cx| {
+            let (Some(here), Some(next)) = (layout.position_for_index(at), layout.position_for_index(at + 1)) else {
+                return;
+            };
+            let origin = if next.y > here.y { gpui::point(layout.bounds().origin.x, next.y) } else { here };
+            let lh = layout.line_height();
+            let text_size = window.text_style().font_size.to_pixels(window.rem_size());
+            let size = z(10.);
+            let font = edited_font();
+            let label = crate::t!("chat.edited");
+            let run = gpui::TextRun { len: label.len(), font: font.clone(), color: c(Palette::TEXT_MUTED), background_color: None, underline: None, strikethrough: None };
+            let ts = window.text_system().clone();
+            let id = ts.resolve_font(&font);
+            let baseline = |s: gpui::Pixels| {
+                let (a, d) = (ts.ascent(id, s).abs(), ts.descent(id, s).abs());
+                (lh - a - d) / 2. + a
+            };
+            let dy = baseline(text_size) - baseline(size);
+            let line = ts.shape_line(label, size, &[run], None);
+            let _ = line.paint(gpui::point(origin.x, origin.y + dy), lh, gpui::TextAlign::Left, None, window, cx);
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_0()
 }
 
 fn rich(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited: Option<i64>) -> AnyElement {
@@ -1630,20 +1670,11 @@ fn rich_k(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited:
         }
         return el;
     }
-    if let Some(at) = edited.filter(|_| t.click_ranges.is_empty() && !t.text.contains('\n') && t.text.chars().count() <= 60) {
-        let plain = div().line_height(gpui::relative(1.375)).child(StyledText::new(t.text.clone()).with_runs(t.runs.clone()));
-        return div()
-            .flex()
-            .flex_wrap()
-            .items_end()
-            .child(plain)
-            .child(div().ml(z(4.)).mb(z(5.)).child(edited_marker(at)))
-            .into_any_element();
-    }
     let (text, runs) = if edited.is_some() { with_edited(t) } else { (t.text.clone(), t.runs.clone()) };
     let runs = mention::hovered_runs(msg, bi, 0, &t.click_ranges, &t.click_targets, &runs).unwrap_or(runs);
     let runs = mention::anchor_runs(msg, bi, 0, &runs).unwrap_or(runs);
     let styled = StyledText::new(text).with_runs(runs);
+    let overlay = edited.map(|_| edited_overlay(styled.layout().clone(), t.text.len() + edited_gap()));
     let lh = gpui::relative(1.375);
     let edited_tip = edited.map(|at| {
         let from = t.text.len();
@@ -1653,8 +1684,10 @@ fn rich_k(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited:
     if t.click_ranges.is_empty() {
         return match edited_tip {
             Some(tip) => div()
+                .relative()
                 .line_height(lh)
                 .child(InteractiveText::new(("rt", (msg.0 << 8) | bi as u64), styled).tooltip(tip))
+                .children(overlay)
                 .into_any_element(),
             None => div().line_height(lh).child(styled).into_any_element(),
         };
@@ -1680,6 +1713,7 @@ fn rich_k(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited:
                 mention::leave(msg, bi, Some(0), 0..n, w);
             }
         })
+        .relative()
         .line_height(lh)
         .on_mouse_down(gpui::MouseButton::Right, {
             let re = entity.clone();
@@ -1718,6 +1752,7 @@ fn rich_k(entity: &Entity<PhoenixApp>, msg: Id, bi: usize, t: &RichText, edited:
                 },
             ),
         )
+        .children(overlay)
         .into_any_element()
 }
 
