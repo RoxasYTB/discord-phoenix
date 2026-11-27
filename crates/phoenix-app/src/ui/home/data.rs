@@ -146,7 +146,6 @@ pub enum NavRequest {
     LeaveGuild(Id),
     Relationship { user: Id, action: RelAction },
     FetchRelationships,
-    SendFriendRequest(Id),
     OpenDm(Id),
     CloseDm(Id),
     MessageRequest { channel: Id, accept: bool },
