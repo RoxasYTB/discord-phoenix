@@ -636,7 +636,10 @@ impl PhoenixApp {
                         && matches!(self.channels[id].name.to_lowercase().as_str(), "general" | "général")
                 })
                 .or_else(|| {
-                    l.iter().copied().filter(open).find(|id| matches!(self.channels[id].kind, ChannelKind::Text | ChannelKind::Announcement | ChannelKind::Forum))
+                    l.iter().copied().filter(open).find(|id| self.channels[id].kind == ChannelKind::Text)
+                })
+                .or_else(|| {
+                    l.iter().copied().filter(open).find(|id| matches!(self.channels[id].kind, ChannelKind::Announcement | ChannelKind::Forum))
                 })
             }),
             None => None,
