@@ -125,7 +125,7 @@ pub fn load_when_visible(entity: Entity<PhoenixApp>) -> AnyElement {
             }
             let entity = entity.clone();
             cx.spawn(async move |cx| {
-                let _ = entity.update(cx, |a, cx| a.load_older(cx));
+                entity.update(cx, |a, cx| a.load_older(cx));
             })
             .detach();
         },
