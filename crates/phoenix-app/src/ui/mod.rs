@@ -146,7 +146,7 @@ pub fn avatar_cdn(user: Option<&User>, size: f32, cdn: u32) -> AnyElement {
 pub fn avatar_hover(user: Option<&User>, size: f32, play: bool) -> AnyElement {
     match user.map(|u| &u.avatar) {
         Some(ImageRef::Url(url)) if play && crate::media::is_animated(url) => {
-            gpui::img(url.clone()).id(crate::media::anim_id(url)).size(px(size)).rounded_full().flex_none().into_any_element()
+            crate::media::playing_over_still(url.clone(), true, px(size), px(size / 2.))
         }
         _ => avatar(user, size),
     }

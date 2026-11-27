@@ -139,7 +139,8 @@ impl HttpClient for CachingHttpClient {
         let t0 = std::time::Instant::now();
         let inner = self.inner.clone();
         async move {
-            if let Some(bytes) = store.read(&url) {
+            if let Some(mut bytes) = store.read(&url) {
+                super::frame_delay::normalize(&mut bytes);
                 crate::perf::span("media_disk", t0);
                 return Ok(Response::builder().status(200).body(AsyncBody::from(bytes))?);
             }
@@ -152,6 +153,7 @@ impl HttpClient for CachingHttpClient {
             let mut bytes = Vec::new();
             body.read_to_end(&mut bytes).await?;
             store.write(&url, &bytes);
+            super::frame_delay::normalize(&mut bytes);
             Ok(Response::from_parts(parts, AsyncBody::from(bytes)))
         }
         .boxed()

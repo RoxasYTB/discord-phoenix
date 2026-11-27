@@ -895,27 +895,7 @@ fn favorites(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Option<AnyElement
 
 fn guild_inner(g: &Guild, size: f32) -> AnyElement {
     match &g.icon {
-        ImageRef::Url(u) if crate::media::is_animated(u) => {
-            let r = z(ICON_RADIUS * size / ICON);
-            let group = SharedString::new_static("phx-guild-icon");
-            div()
-                .relative()
-                .size(z(size))
-                .group(group.clone())
-                .child(img(crate::media::static_variant(u)).size(z(size)).rounded(r))
-                .child(
-                    img(u.clone())
-                        .id(crate::media::anim_id(u))
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .size(z(size))
-                        .rounded(r)
-                        .invisible()
-                        .group_hover(group, |s| s.visible()),
-                )
-                .into_any_element()
-        }
+        ImageRef::Url(u) if crate::media::is_animated(u) => crate::media::hover_animated(u.clone(), z(size), z(ICON_RADIUS * size / ICON)),
         ImageRef::Url(u) => img(u.clone()).size(z(size)).rounded(z(ICON_RADIUS * size / ICON)).into_any_element(),
         _ => div()
             .text_size(z(if size < 30. {

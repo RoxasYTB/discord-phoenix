@@ -1956,7 +1956,20 @@ fn attachment_inner(a: &Attachment, cx: &App) -> AnyElement {
                     let gif = a.filename.to_ascii_lowercase().ends_with(".gif");
                     let still = gif && !media::gif_plays(&a.url);
                     let im = media_image_with(&a.url, a.original.clone(), a.filename.clone(), (a.width, a.height), size, still);
-                    if gif { media::gif_hover(a.url.clone(), im).into_any_element() } else { im.into_any_element() }
+                    if gif {
+                        let animated = media::resized(&a.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32);
+                        let poster = (!still && !media::lru::ready(&animated)).then(|| {
+                            let mut p = img(media::video_poster(&a.url, (size.0 * 2.) as u32, (size.1 * 2.) as u32));
+                            if let Some(cache) = media::lru::chat() {
+                                p = p.image_cache(&cache);
+                            }
+                            p.absolute().inset_0().size_full().rounded(z(8.)).object_fit(gpui::ObjectFit::Cover)
+                        });
+                        let im = if poster.is_some() { im.with_loading(|| div().size_full().into_any_element()) } else { im };
+                        media::gif_hover(a.url.clone(), div().relative().w(z(size.0)).max_w_full().children(poster).child(im)).into_any_element()
+                    } else {
+                        im.into_any_element()
+                    }
                 })
                 .children(alt.map(|t| alt_text::badge(a.url.clone(), t)))
                 .into_any_element();

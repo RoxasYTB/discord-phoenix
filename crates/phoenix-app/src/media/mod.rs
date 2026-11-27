@@ -2,6 +2,7 @@ pub mod audio_file;
 pub mod cache;
 pub mod emoji;
 pub mod emoji_seqs;
+pub mod frame_delay;
 pub mod lottie;
 pub mod lru;
 pub mod video_file;
@@ -112,18 +113,17 @@ pub fn avatar_image(url: SharedString, size: f32) -> AnyElement {
     if !is_animated(&url) {
         return img(url).size(px(size)).rounded_full().flex_none().into_any_element();
     }
+    hover_animated(url, px(size), px(size / 2.))
+}
+
+pub fn hover_animated(url: SharedString, size: gpui::Pixels, radius: gpui::Pixels) -> AnyElement {
     let hovered = emoji::window_focused() && HOVERED_AVATAR.with(|h| h.borrow().as_ref() == Some(&url));
-    let src = if hovered { url.clone() } else { static_variant(&url) };
-    let mut im = img(src);
-    if hovered && let Some(cache) = lru::chat() {
-        im = im.image_cache(&cache);
-    }
     let key = url.clone();
     div()
         .id(gpui::ElementId::Name(format!("avatar-hover-{url}").into()))
         .flex_none()
-        .size(px(size))
-        .child(im.id(anim_id(&url)).size(px(size)).rounded_full())
+        .size(size)
+        .child(playing_over_still(url, hovered, size, radius))
         .on_hover(move |h, window, _| {
             let changed = HOVERED_AVATAR.with(|cur| {
                 let mut cur = cur.borrow_mut();
@@ -135,6 +135,22 @@ pub fn avatar_image(url: SharedString, size: f32) -> AnyElement {
             if changed {
                 window.refresh();
             }
+        })
+        .into_any_element()
+}
+
+pub fn playing_over_still(url: SharedString, play: bool, size: gpui::Pixels, radius: gpui::Pixels) -> AnyElement {
+    div()
+        .relative()
+        .flex_none()
+        .size(size)
+        .when(!play || !lru::ready(&url), |d| d.child(img(static_variant(&url)).absolute().top_0().left_0().size(size).rounded(radius)))
+        .when(play, |d| {
+            let mut im = img(url.clone());
+            if let Some(cache) = lru::chat() {
+                im = im.image_cache(&cache);
+            }
+            d.child(im.id(anim_id(&url)).absolute().top_0().left_0().size(size).rounded(radius))
         })
         .into_any_element()
 }

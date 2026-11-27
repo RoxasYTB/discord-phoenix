@@ -57,6 +57,7 @@ impl LruImageCache {
             if let Some((item, _)) = self.items.remove(&k)
                 && let Some(Ok(img)) = item.get()
             {
+                READY.with_borrow_mut(|r| r.remove(&k));
                 cx.drop_image(img, Some(window));
             }
         }
@@ -112,6 +113,9 @@ impl ImageCache for LruImageCache {
         let entry = self.items.entry(key).or_insert_with(|| (ImageCacheItem::new(resource, cx), tick));
         entry.1 = tick;
         let out = entry.0.use_image(window);
+        if matches!(out, Some(Ok(_))) {
+            READY.with_borrow_mut(|r| r.insert(key));
+        }
         if (inserted && self.items.len() >= 4) || self.tick.is_multiple_of(16) {
             self.evict(key, window, cx);
         }
@@ -123,6 +127,7 @@ struct ChatCache(#[allow(dead_code)] Entity<LruImageCache>);
 impl Global for ChatCache {}
 
 thread_local! {
+    static READY: RefCell<std::collections::HashSet<u64>> = RefCell::new(std::collections::HashSet::new());
     static CHAT: RefCell<Option<WeakEntity<LruImageCache>>> = const { RefCell::new(None) };
 }
 
@@ -130,6 +135,11 @@ pub fn init(cx: &mut App) {
     let c = LruImageCache::new(BUDGET_BYTES, cx);
     CHAT.with_borrow_mut(|s| *s = Some(c.downgrade()));
     cx.set_global(ChatCache(c));
+}
+
+pub fn ready(url: &gpui::SharedString) -> bool {
+    let key = hash(&Resource::Uri(url.clone().into()));
+    READY.with_borrow(|r| r.contains(&key))
 }
 
 pub fn chat() -> Option<Entity<LruImageCache>> {

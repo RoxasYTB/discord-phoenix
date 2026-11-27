@@ -116,7 +116,15 @@ impl RenderOnce for CustomEmojiImage {
                     }
                 })
             })
-            .child(img(src.clone()).id(gpui::ElementId::Name(src)).size(px(size)).with_fallback(fallback))
+            .relative()
+            .when(play && !super::lru::ready(&src), |d| d.child(img(emoji.static_url(px_size)).absolute().top_0().left_0().size(px(size))))
+            .child({
+                let mut im = img(src.clone());
+                if play && let Some(cache) = super::lru::chat() {
+                    im = im.image_cache(&cache);
+                }
+                im.id(gpui::ElementId::Name(src)).size(px(size)).with_fallback(fallback)
+            })
             .into_any_element()
     }
 }

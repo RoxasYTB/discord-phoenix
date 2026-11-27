@@ -62,11 +62,10 @@ fn hover_download(group: SharedString, url: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-const FILE_RULES: [(&str, &[&str]); 12] = [
+const FILE_RULES: [(&str, &[&str]); 9] = [
     ("acrobat", &["pdf"]),
     ("sketch", &["sketch"]),
     ("ai", &["ai"]),
-    ("ps", &["psd"]),
     ("archive", &["rar", "zip", "7z", "tar", "tar.gz"]),
     (
         "code",
@@ -79,8 +78,6 @@ const FILE_RULES: [(&str, &[&str]); 12] = [
     ("spreadsheet", &["xls", "xlsx", "numbers", "csv"]),
     ("webcode", &["html", "xhtml", "htm", "xml", "xsd", "css", "styl"]),
     ("audio", &["mp3", "ogg", "opus", "wav", "aiff", "flac"]),
-    ("video", &["mp4", "webm", "mov", "mkv", "avi", "m4v", "ogv"]),
-    ("image", &["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "heic", "ico", "tiff"]),
 ];
 
 pub fn file_class(filename: &str) -> &'static str {
@@ -406,11 +403,11 @@ pub fn upload_progress_card(
     } else {
         div()
             .w_full()
-            .h(z(6.))
-            .rounded(z(3.))
-            .bg(tk(idx::BACKGROUND_MOD_NORMAL))
+            .h(z(8.))
+            .rounded(z(4.))
+            .bg(tk(idx::PROGRESSBAR_TRACK_BACKGROUND))
             .overflow_hidden()
-            .child(div().h_full().rounded(z(3.)).bg(tk(idx::CONTROL_BRAND_FOREGROUND)).min_w(z(10.)).w(gpui::relative(frac)))
+            .child(div().h_full().bg(tk(idx::PROGRESSBAR_INDICATOR_BACKGROUND)).w(gpui::relative(frac)))
             .into_any_element()
     };
     Some(
@@ -493,9 +490,9 @@ mod tests {
         assert_eq!(super::file_class("data.csv"), "spreadsheet");
         assert_eq!(super::file_class("page.html"), "webcode");
         assert_eq!(super::file_class("song.flac"), "audio");
-        assert_eq!(super::file_class("clip.mp4"), "video");
-        assert_eq!(super::file_class("art.psd"), "ps");
-        assert_eq!(super::file_class("photo.png"), "image");
+        assert_eq!(super::file_class("clip.mp4"), "unknown");
+        assert_eq!(super::file_class("art.psd"), "unknown");
+        assert_eq!(super::file_class("photo.png"), "unknown");
         assert_eq!(super::file_class("README"), "unknown");
         assert!(super::file_icon_url("acrobat").ends_with("a42338c030af6d9c.svg"));
         assert!(super::file_icon_url("image").ends_with("5dea307a4037ec4e.svg"));
