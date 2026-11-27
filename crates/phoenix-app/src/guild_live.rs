@@ -11,6 +11,7 @@ pub const ENTITY_NONE: u64 = 0;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Live {
     pub stages: HashMap<u64, u64>,
+    pub topics: HashMap<u64, String>,
     pub events: HashMap<u64, Option<u64>>,
     pub activities: HashMap<(String, u64), Activity>,
 }
@@ -59,6 +60,14 @@ fn id(v: Option<&Value>) -> Option<u64> {
     }
 }
 
+fn topic(instance: &Value) -> String {
+    instance.get("topic").and_then(Value::as_str).unwrap_or_default().to_owned()
+}
+
+pub fn stage_topic(guild: u64, channel: u64) -> Option<String> {
+    store().as_ref()?.get(&guild)?.topics.get(&channel).cloned()
+}
+
 pub fn active_event(e: &Value) -> bool {
     e.get("status").and_then(Value::as_u64) == Some(EVENT_ACTIVE) && e.get("entity_type").and_then(Value::as_u64).is_some_and(|t| t != ENTITY_NONE)
 }
@@ -71,6 +80,7 @@ pub fn from_guild(stages: &[Value], events: &[Value], activities: &[Value]) -> L
     for s in stages {
         if let (Some(i), Some(c)) = (id(s.get("id")), id(s.get("channel_id"))) {
             l.stages.insert(i, c);
+            l.topics.insert(c, topic(s));
         }
     }
     for e in events.iter().filter(|e| active_event(e)) {
@@ -109,10 +119,21 @@ pub fn apply(live: &mut HashMap<u64, Live>, name: &str, data: &Value) -> bool {
     let l = live.entry(guild).or_default();
     match name {
         "STAGE_INSTANCE_CREATE" | "STAGE_INSTANCE_UPDATE" => match id(data.get("channel_id")) {
-            Some(c) => l.stages.insert(i, c) != Some(c),
+            Some(c) => {
+                let t = topic(data);
+                let changed = l.topics.get(&c) != Some(&t);
+                l.topics.insert(c, t);
+                (l.stages.insert(i, c) != Some(c)) | changed
+            }
             None => false,
         },
-        "STAGE_INSTANCE_DELETE" => l.stages.remove(&i).is_some(),
+        "STAGE_INSTANCE_DELETE" => match l.stages.remove(&i) {
+            Some(c) => {
+                l.topics.remove(&c);
+                true
+            }
+            None => false,
+        },
         "GUILD_SCHEDULED_EVENT_CREATE" | "GUILD_SCHEDULED_EVENT_UPDATE" if active_event(data) => l.events.insert(i, id(data.get("channel_id"))).is_none(),
         "GUILD_SCHEDULED_EVENT_CREATE" | "GUILD_SCHEDULED_EVENT_UPDATE" | "GUILD_SCHEDULED_EVENT_DELETE" => l.events.remove(&i).is_some(),
         _ => false,
@@ -174,12 +195,15 @@ mod tests {
         let mut m = HashMap::new();
         assert!(apply(&mut m, "STAGE_INSTANCE_CREATE", &json!({ "id": "1", "guild_id": "5", "channel_id": "50" })));
         assert!(!apply(&mut m, "STAGE_INSTANCE_UPDATE", &json!({ "id": "1", "guild_id": "5", "channel_id": "50" })));
+        assert!(apply(&mut m, "STAGE_INSTANCE_UPDATE", &json!({ "id": "1", "guild_id": "5", "channel_id": "50", "topic": "Q&A" })));
+        assert_eq!(m[&5].topics.get(&50).map(String::as_str), Some("Q&A"));
         assert!(apply(&mut m, "GUILD_SCHEDULED_EVENT_UPDATE", &json!({ "id": "2", "guild_id": "5", "status": 2, "entity_type": 1, "channel_id": "50" })));
         assert_eq!(m[&5].events.get(&2), Some(&Some(50)));
         assert!(apply(&mut m, "GUILD_SCHEDULED_EVENT_UPDATE", &json!({ "id": "2", "guild_id": "5", "status": 3, "entity_type": 1 })));
         assert!(m[&5].events.is_empty());
         assert!(apply(&mut m, "STAGE_INSTANCE_DELETE", &json!({ "id": "1", "guild_id": "5" })));
         assert!(m[&5].stages.is_empty());
+        assert!(m[&5].topics.is_empty());
         assert!(!apply(&mut m, "MESSAGE_CREATE", &json!({ "id": "1", "guild_id": "5" })));
     }
 }

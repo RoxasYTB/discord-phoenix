@@ -50,6 +50,7 @@ pub enum ActionRequest {
     Admin(phoenix_api::rest::guild_manage::AdminCall),
     AdminMfa(phoenix_api::rest::guild_manage::AdminCall, String),
     SaveFolders(Vec<crate::ui::home::data::GuildFolder>),
+    Stage(phoenix_api::rest::stage::StageCall),
 }
 
 #[derive(Clone, Debug)]

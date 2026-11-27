@@ -1507,6 +1507,7 @@ fn voice_flags(v: &phoenix_api::models::VoiceState) -> crate::model::VoiceFlags 
         video: v.self_video,
         suppress: v.suppress,
         undiscoverable: v.discoverable == Some(false),
+        hand: v.request_to_speak_timestamp.as_deref().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).map(|d| d.timestamp_millis()),
     }
 }
 

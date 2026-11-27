@@ -136,6 +136,10 @@ pub(crate) async fn request_with(allowed: bool, rest: RestClient, req: ActionReq
             rest.voice_moderate(sf(guild), sf(u), op).await.map_err(e)?;
             ActionReply::Done
         }
+        R::Stage(c) => {
+            rest.stage(&c).await.map_err(e)?;
+            ActionReply::Done
+        }
         R::CloneChannel { guild, channel, name } => {
             let src = rest.get_channel(sf(channel)).await.map_err(e)?;
             let c = rest.clone_channel(sf(guild), &src, &name).await.map_err(e)?;

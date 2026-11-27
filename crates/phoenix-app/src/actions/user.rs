@@ -154,6 +154,7 @@ pub fn voice_items(app: &PhoenixApp, user: Id, guild: Option<Id>, e: &Ent) -> Vo
         }));
     }
     let Some(g) = g else { return out };
+    out.mods.extend(crate::ui::stage::user_items(app, vc.0, user, e));
     let admin = has(app, Some(g), super::ADMINISTRATOR);
     if admin || has(app, Some(g), MUTE_MEMBERS) {
         let on = f.server_mute;

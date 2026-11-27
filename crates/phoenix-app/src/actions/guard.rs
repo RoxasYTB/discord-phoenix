@@ -1,5 +1,6 @@
 use phoenix_api::rest::guild_manage::AdminCall;
 use phoenix_api::rest::guild_server::ServerCall;
+use phoenix_api::rest::stage::StageCall;
 use reqwest::Method;
 
 pub use phoenix_api::rest::guard::{GuardedWrite, agent_session, blocked, permitted, read_only, set_writes_enabled, writes_enabled};
@@ -20,6 +21,13 @@ fn moderation_call(c: &AdminCall) -> bool {
     )
 }
 
+fn stage_moderation(c: &StageCall) -> bool {
+    matches!(
+        c,
+        StageCall::SetUserSuppress { .. } | StageCall::InviteToSpeak { .. } | StageCall::MoveUserToAudience { .. } | StageCall::End { .. }
+    )
+}
+
 fn moderation_action(req: &ActionRequest) -> Option<(Method, String)> {
     match req {
         ActionRequest::Admin(c) | ActionRequest::AdminMfa(c, _) if moderation_call(c) => {
@@ -30,6 +38,10 @@ fn moderation_action(req: &ActionRequest) -> Option<(Method, String)> {
             Some((if *add { Method::PUT } else { Method::DELETE }, format!("/guilds/{}/members/{}/roles/{}", guild.0, user.0, role.0)))
         }
         ActionRequest::SetMemberRoles { guild, user, .. } => Some((Method::PATCH, format!("/guilds/{}/members/{}", guild.0, user.0))),
+        ActionRequest::Stage(c) if stage_moderation(c) => {
+            let r = phoenix_api::rest::stage::build(c);
+            Some((r.method, r.path))
+        }
         _ => None,
     }
 }
@@ -300,6 +312,17 @@ mod tests {
         let out = crate::actions::exec::request_with(true, rest, ActionRequest::Admin(AdminCall::Kick { guild: G, user: U }), sink()).await.unwrap();
         assert!(matches!(out, crate::actions::ActionReply::Json(serde_json::Value::Null)));
         assert!(server.await.unwrap().starts_with("DELETE /guilds/1/members/2 HTTP/1.1"));
+    }
+
+    #[test]
+    fn stage_moderator_calls_are_moderation() {
+        use phoenix_api::rest::stage::StageCall as S;
+        let ch = Snowflake(9);
+        for c in [S::SetUserSuppress { guild: G, channel: ch, user: U, suppress: false }, S::MoveUserToAudience { guild: G, channel: ch, user: U }, S::End { channel: ch }] {
+            assert!(refuse_action(false, &ActionRequest::Stage(c.clone())).is_some());
+            assert!(refuse_action(true, &ActionRequest::Stage(c)).is_none());
+        }
+        assert!(refuse_action(false, &ActionRequest::Stage(S::RequestToSpeak { guild: G, channel: ch, at: None })).is_none());
     }
 
     #[test]

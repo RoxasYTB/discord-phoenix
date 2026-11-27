@@ -472,4 +472,5 @@ pub struct VoiceFlags {
     pub video: bool,
     pub suppress: bool,
     pub undiscoverable: bool,
+    pub hand: Option<i64>,
 }
