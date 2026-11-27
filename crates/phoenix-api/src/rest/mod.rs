@@ -109,6 +109,8 @@ pub struct CreateMessage {
     pub enforce_nonce: Option<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<Value>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub components: Vec<Value>,
 }
 
 impl CreateMessage {

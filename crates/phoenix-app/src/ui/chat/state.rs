@@ -951,9 +951,11 @@ impl PhoenixApp {
         self.composer.update(cx, |s, cx| s.set_value("", window, cx));
         let reply = self.replying_to.take().map(|r| (r, self.chat.reply_mention));
         self.chat.reply_mention = true;
+        let hero_channel = super::announce::channel(self);
         let files: Vec<Upload> = std::mem::take(&mut self.chat.uploads)
             .into_iter()
             .map(|f| Upload {
+                hero: super::announce::is_hero(hero_channel, &f),
                 filename: f.name.to_string(),
                 bytes: Arc::unwrap_or_clone(f.bytes),
                 spoiler: f.spoiler,

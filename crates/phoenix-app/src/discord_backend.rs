@@ -987,7 +987,8 @@ impl Backend for DiscordBackend {
                 msg = msg.reply_to(sf(channel), sf(r), mention);
             }
             let pres: Vec<Option<preupload::Pre>> = files.iter().map(|f| f.pre.and_then(preupload::take)).collect();
-            let files: Vec<phoenix_api::rest::FileUpload> = files
+            let hero = files.iter().position(|f| f.hero);
+            let mut files: Vec<phoenix_api::rest::FileUpload> = files
                 .into_iter()
                 .map(|f| phoenix_api::rest::FileUpload {
                     filename: f.filename,
@@ -997,6 +998,12 @@ impl Backend for DiscordBackend {
                     ..Default::default()
                 })
                 .collect();
+            if let Some(hero) = hero {
+                phoenix_api::rest::uploads::unique_filenames(&mut files);
+                msg.components = phoenix_api::rest::uploads::announcement_components(&msg.content, &files, hero);
+                msg.content.clear();
+                msg.flags = Some(phoenix_api::rest::uploads::FLAG_IS_COMPONENTS_V2);
+            }
             let attachments = if files.is_empty() {
                 Vec::new()
             } else {

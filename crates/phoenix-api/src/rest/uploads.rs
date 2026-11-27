@@ -110,6 +110,60 @@ fn content_type(f: &FileUpload) -> Option<String> {
     f.content_type.clone().or_else(|| content_type_for(&f.filename).map(str::to_owned))
 }
 
+pub const FLAG_IS_COMPONENTS_V2: u64 = 1 << 15;
+
+pub fn unique_filenames(files: &mut [FileUpload]) {
+    let mut taken: std::collections::HashSet<String> = files.iter().map(|f| f.filename.clone()).collect();
+    let mut seen = std::collections::HashSet::new();
+    for f in files.iter_mut() {
+        if seen.insert(f.filename.clone()) {
+            continue;
+        }
+        let (stem, ext) = match f.filename.rfind('.') {
+            Some(i) if i > 0 => f.filename.split_at(i),
+            _ => (f.filename.as_str(), ""),
+        };
+        let mut n = 1;
+        let mut name = format!("{stem}_{n}{ext}");
+        while taken.contains(&name) {
+            n += 1;
+            name = format!("{stem}_{n}{ext}");
+        }
+        taken.insert(name.clone());
+        seen.insert(name.clone());
+        f.filename = name;
+    }
+}
+
+fn is_media(f: &FileUpload) -> bool {
+    content_type(f).is_some_and(|t| t.starts_with("image/") || t.starts_with("video/"))
+}
+
+fn gallery_item(f: &FileUpload) -> Value {
+    let mut item = json!({ "media": { "url": format!("attachment://{}", f.filename) }, "spoiler": f.spoiler });
+    if let Some(d) = f.description.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        item["description"] = json!(d);
+    }
+    item
+}
+
+pub fn announcement_components(content: &str, files: &[FileUpload], hero: usize) -> Vec<Value> {
+    let Some(header) = files.get(hero) else { return Vec::new() };
+    let mut out = vec![json!({ "type": 12, "id": 82733, "items": [{ "media": { "url": format!("attachment://{}", header.filename) }, "spoiler": false }] })];
+    if !content.is_empty() {
+        out.push(json!({ "type": 10, "id": 82744, "content": content }));
+    }
+    let rest: Vec<&FileUpload> = files.iter().enumerate().filter(|(i, _)| *i != hero).map(|(_, f)| f).collect();
+    let media: Vec<Value> = rest.iter().copied().filter(|f| is_media(f)).map(gallery_item).collect();
+    if !media.is_empty() {
+        out.push(json!({ "type": 12, "id": 82755, "items": media }));
+    }
+    for (t, f) in rest.iter().copied().filter(|f| !is_media(f)).enumerate() {
+        out.push(json!({ "type": 13, "id": 82766 + t, "file": { "url": format!("attachment://{}", f.filename) }, "spoiler": f.spoiler }));
+    }
+    out
+}
+
 pub fn attachment_slots_body(files: &[FileUpload]) -> Value {
     let slots: Vec<Value> = files
         .iter()
@@ -321,6 +375,37 @@ mod tests {
 
     fn file(name: &str, len: usize) -> FileUpload {
         FileUpload { filename: name.into(), bytes: vec![7; len], ..Default::default() }
+    }
+
+    #[test]
+    fn duplicate_filenames_get_a_suffix_like_the_client() {
+        let mut files = vec![file("a.png", 1), file("a.png", 1), file("a_1.png", 1), file("a.png", 1), file("noext", 1), file("noext", 1)];
+        unique_filenames(&mut files);
+        let names: Vec<&str> = files.iter().map(|f| f.filename.as_str()).collect();
+        assert_eq!(names, ["a.png", "a_2.png", "a_1.png", "a_3.png", "noext", "noext_1"]);
+    }
+
+    #[test]
+    fn announcement_header_image_is_a_media_gallery() {
+        let mut spoiler = file("b.mp4", 1);
+        spoiler.spoiler = true;
+        spoiler.description = Some(" alt ".into());
+        let files = [file("x.png", 1), file("hero.jpg", 1), spoiler, file("doc.pdf", 1), file("raw.bin", 1)];
+        let c = announcement_components("# Title\nbody", &files, 1);
+        assert_eq!(
+            Value::Array(c),
+            json!([
+                { "type": 12, "id": 82733, "items": [{ "media": { "url": "attachment://hero.jpg" }, "spoiler": false }] },
+                { "type": 10, "id": 82744, "content": "# Title\nbody" },
+                { "type": 12, "id": 82755, "items": [
+                    { "media": { "url": "attachment://x.png" }, "spoiler": false },
+                    { "media": { "url": "attachment://b.mp4" }, "spoiler": true, "description": "alt" },
+                ] },
+                { "type": 13, "id": 82766, "file": { "url": "attachment://doc.pdf" }, "spoiler": false },
+                { "type": 13, "id": 82767, "file": { "url": "attachment://raw.bin" }, "spoiler": false },
+            ])
+        );
+        assert_eq!(announcement_components("", &files[1..2], 0).len(), 1);
     }
 
     #[test]

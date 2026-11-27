@@ -102,6 +102,7 @@ pub struct Upload {
     pub spoiler: bool,
     pub description: Option<String>,
     pub pre: Option<u64>,
+    pub hero: bool,
 }
 
 #[derive(Clone)]
