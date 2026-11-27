@@ -2215,6 +2215,7 @@ pub fn dialogs(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Vec<AnyElement
     out.extend(moderation_dialog(app, cx));
     out.extend(crate::ui::sidebar::sync_prompt(app, cx));
     out.extend(crate::ui::events::modal(app, cx));
+    out.extend(crate::ui::events::menu_layer(app, cx));
     out.extend(group_dm(app, cx));
     out.extend(crate::ui::chat::voice_message::draft_modal(app, cx));
     out.extend(crate::ui::chat::video_player::fullscreen_layer(cx));

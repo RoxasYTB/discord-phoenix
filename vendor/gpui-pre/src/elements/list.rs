@@ -1002,19 +1002,22 @@ impl StateInner {
     // PHOENIX PATCH (smooth wheel): how far a wheel animation may move the content from
     // where it is drawn, see `Window::smooth_wheel_scroll`.
     fn wheel_room(&self) -> (Point<Pixels>, Point<Pixels>) {
-        let unbounded = (point(px(0.), px(f32::MIN)), point(px(0.), px(f32::MAX)));
         let Some(bounds) = self.last_layout_bounds else {
-            return unbounded;
+            return (point(px(0.), px(f32::MIN)), point(px(0.), px(f32::MAX)));
         };
-        if self.items.summary().has_unknown_height {
-            return unbounded;
-        }
+        let top = self.logical_scroll_top();
+        let mut cursor = self.items.cursor::<ListItemSummary>(());
+        let before: ListItemSummary = cursor.summary(&Count(top.item_ix), Bias::Right);
+        let after: ListItemSummary =
+            cursor.summary(&Count(self.items.summary().count), Bias::Right);
         let padding = self.last_padding.unwrap_or_default();
         let scroll_max = (self.items.summary().height + padding.top + padding.bottom
             - bounds.size.height)
             .max(px(0.));
-        let current = self.scroll_top(&self.logical_scroll_top()).min(scroll_max);
-        (point(px(0.), current - scroll_max), point(px(0.), current))
+        let current = self.scroll_top(&top).min(scroll_max);
+        let down = if after.has_unknown_height { px(f32::MIN) } else { current - scroll_max };
+        let up = if before.has_unknown_height { px(f32::MAX) } else { current };
+        (point(px(0.), down), point(px(0.), up))
     }
 
     fn logical_scroll_top(&self) -> ListOffset {

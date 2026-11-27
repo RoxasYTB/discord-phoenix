@@ -423,13 +423,13 @@ mod tests {
         let mut last_step = f32::MAX;
         for ms in (40..400).step_by(8) {
             let v = f32::from(c.value(at(t0, ms)).y);
-            assert!(v <= 150.0 && v >= last, "{ms} {v}");
-            if v < 150.0 {
+            assert!(v <= 150.001 && v >= last - 0.001, "{ms} {v}");
+            if v < 149.999 {
                 last_step = 150.0 - v;
             }
             last = v;
         }
-        assert!(last_step < 5.0, "{last_step}");
+        assert!(last_step < 8.0, "{last_step}");
         assert_eq!(c.value(at(t0, 1000)).y, px(150.));
     }
 

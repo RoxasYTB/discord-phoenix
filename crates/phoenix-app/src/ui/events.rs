@@ -363,7 +363,7 @@ fn event_menu(app: &PhoenixApp, guild: Id, e: &GuildEvent) -> Vec<crate::ui::con
             label: crate::t!("events.add_to_calendar"),
             icon: None,
             subtext: None,
-            on_click: Some(std::rc::Rc::new(move |_, _, cx| save_ics(text.clone(), cx))),
+            on_click: Some(std::rc::Rc::new(move |_: &gpui::ClickEvent, _: &mut Window, cx: &mut App| save_ics(text.clone(), cx))),
             items: vec![
                 MenuItem::action(crate::t!("events.calendar_google"), None, move |_, _, cx| cx.open_url(&g)),
                 MenuItem::action(crate::t!("events.calendar_ics"), None, move |_, _, cx| save_ics(text2.clone(), cx)),
@@ -732,16 +732,19 @@ pub fn modal(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                 .child(div().flex_1().min_h_0().pt(z(8.)).pr(z(16.)).pb(z(16.)).pl(z(24.)).child(body))
                 .children(crate::ui::chat::scrollbar::bar_for("events-list", crate::ui::chat::scrollbar::Bar::Thin)),
         );
-    let menu = s.menu.and_then(|(id, pos)| {
-        let ev = s.list.iter().flatten().find(|e| e.id == id)?;
-        let items = event_menu(app, guild, ev);
-        let dismiss: crate::ui::context_menu::Dismiss = std::rc::Rc::new(|w: &mut Window, cx: &mut App| {
-            with(cx, |s| s.menu = None);
-            w.refresh();
-        });
-        Some(crate::ui::context_menu::render(pos, items, dismiss))
+    Some(crate::ui::modal::frame("events-modal", on_close, card))
+}
+
+pub fn menu_layer(app: &PhoenixApp, cx: &App) -> Option<AnyElement> {
+    let s = cx.try_global::<Slot>()?.0.as_ref()?;
+    let (id, pos) = s.menu?;
+    let ev = s.list.iter().flatten().find(|e| e.id == id)?;
+    let items = event_menu(app, s.guild, ev);
+    let dismiss: crate::ui::context_menu::Dismiss = std::rc::Rc::new(|w: &mut Window, cx: &mut App| {
+        with(cx, |s| s.menu = None);
+        w.refresh();
     });
-    Some(div().size_full().child(crate::ui::modal::frame("events-modal", on_close, card)).children(menu).into_any_element())
+    Some(crate::ui::context_menu::render(pos, items, dismiss))
 }
 
 fn info_row(icon: AnyElement, content: impl IntoElement) -> gpui::Div {
