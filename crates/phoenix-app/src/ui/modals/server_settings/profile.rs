@@ -361,9 +361,9 @@ fn card(s: &State, guild: u64, cta: Option<AnyElement>) -> AnyElement {
     let icon = s
         .uploads
         .get("icon")
-        .map(|p| gpui::img(p.clone()).size(z(70.)).rounded(z(20.)).object_fit(gpui::ObjectFit::Cover).into_any_element())
-        .or_else(|| icon_url(guild, g, 128).map(|u| gpui::img(u).size(z(70.)).rounded(z(20.)).into_any_element()))
-        .unwrap_or_else(|| div().size(z(70.)).rounded(z(20.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).into_any_element());
+        .map(|p| gpui::img(p.clone()).size(z(64.)).rounded(z(19.)).object_fit(gpui::ObjectFit::Cover).into_any_element())
+        .or_else(|| icon_url(guild, g, 128).map(|u| gpui::img(u).size(z(64.)).rounded(z(19.)).into_any_element()))
+        .unwrap_or_else(|| div().size(z(64.)).rounded(z(19.)).bg(c(tok(idx::BACKGROUND_BASE_LOWER))).into_any_element());
     let tag = kit::s(&p, "tag");
     let online = kit::n(&p, "online_count");
     let members = kit::n(&p, "member_count");
@@ -441,7 +441,7 @@ fn card(s: &State, guild: u64, cta: Option<AnyElement>) -> AnyElement {
         .flex()
         .flex_col()
         .child(banner)
-        .child(div().px(z(16.)).mt(z(-34.)).child(div().w(z(70.)).rounded(z(24.)).border_4().border_color(c(tok(idx::BACKGROUND_SURFACE_HIGH))).child(icon)))
+        .child(div().px(z(16.)).mt(z(-34.)).child(div().size(z(70.)).rounded(z(21.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).flex().items_center().justify_center().child(icon)))
         .child(header)
         .child(body)
         .children(cta.map(|b| div().px(z(16.)).pb(z(16.)).child(b)))
