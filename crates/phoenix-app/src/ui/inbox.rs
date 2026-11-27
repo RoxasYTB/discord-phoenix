@@ -1150,13 +1150,30 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
     let days = card.msgs.first().is_some_and(|m| local_day(m.timestamp) != Some(today));
     let mut body = div().pb(z(16.)).flex().flex_col();
     let mut prev: Option<&Message> = None;
-    for m in &card.msgs {
+    let entity = cx.entity();
+    for (i, m) in card.msgs.iter().enumerate() {
         let day = local_day(m.timestamp);
         if days && prev.is_none_or(|p| local_day(p.timestamp) != day) {
             if let Some(d) = day {
                 body = body.child(day_divider(crate::i18n::long_date(d).into()));
             }
             prev = None;
+        }
+        match crate::ui::chat::blocked::row_in(app, &entity, &card.msgs, i) {
+            crate::ui::chat::blocked::Row::Normal | crate::ui::chat::blocked::Row::Expanded(None) => {}
+            crate::ui::chat::blocked::Row::Hidden => {
+                prev = None;
+                continue;
+            }
+            crate::ui::chat::blocked::Row::Collapsed(bar) => {
+                body = body.child(bar);
+                prev = None;
+                continue;
+            }
+            crate::ui::chat::blocked::Row::Expanded(Some(bar)) => {
+                body = body.child(bar);
+                prev = None;
+            }
         }
         let start = prev.is_none_or(|p| p.author != m.author || m.timestamp - p.timestamp > 7 * 60);
         let id = m.id;

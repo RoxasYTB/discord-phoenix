@@ -29,7 +29,10 @@ pub enum Row {
 }
 
 pub fn row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, entry: &ChannelMessages, i: usize) -> Row {
-    let msgs = &entry.msgs;
+    row_in(app, entity, &entry.msgs, i)
+}
+
+pub fn row_in(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msgs: &[crate::model::Message], i: usize) -> Row {
     let Some(w) = why(app, msgs[i].author) else { return Row::Normal };
     let mut start = i;
     while start > 0 && why(app, msgs[start - 1].author) == Some(w) {
