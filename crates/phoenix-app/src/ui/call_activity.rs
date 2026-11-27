@@ -11,7 +11,6 @@ use crate::ui::call_view::t;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AppInfo {
-    pub loading: bool,
     pub name: Option<SharedString>,
     pub icon: Option<SharedString>,
     pub splash: Option<SharedString>,
@@ -59,7 +58,7 @@ pub fn ensure(app: &PhoenixApp, app_id: u64, cx: &mut gpui::App) {
         if m.contains_key(&app_id) {
             return false;
         }
-        m.insert(app_id, AppInfo { loading: true, ..Default::default() });
+        m.insert(app_id, AppInfo::default());
         true
     });
     if !fresh {
@@ -71,7 +70,7 @@ pub fn ensure(app: &PhoenixApp, app_id: u64, cx: &mut gpui::App) {
         let (name, icon) = public.await.map(|v| parse_public(app_id, &v)).unwrap_or_default();
         let splash = assets.await.ok().and_then(|v| parse_splash(app_id, &v));
         cx.update(|cx| {
-            INFO.with(|m| m.borrow_mut().insert(app_id, AppInfo { loading: false, name, icon, splash }));
+            INFO.with(|m| m.borrow_mut().insert(app_id, AppInfo { name, icon, splash }));
             cx.refresh_windows();
         });
     })
@@ -132,9 +131,9 @@ fn summary(app: &PhoenixApp, users: &[u64], size: f32) -> gpui::Div {
 pub fn subheader(names: &[SharedString]) -> Option<SharedString> {
     let first = names.first()?;
     Some(match names.len() {
-        1 => crate::t!("call.activity_playing_one", username = first.as_ref()),
-        2 => crate::t!("call.activity_playing_two", username = first.as_ref(), count = 1),
-        n => crate::t!("call.activity_playing_many", username = first.as_ref(), count = n - 1),
+        1 => crate::t!("call.activity_playing_one", username = first),
+        2 => crate::t!("call.activity_playing_two", username = first, count = 1),
+        n => crate::t!("call.activity_playing_many", username = first, count = n - 1),
     })
 }
 
