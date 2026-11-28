@@ -828,7 +828,17 @@ pub fn render(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &
         _ => SysIcon::Glyph(icon, color),
     };
     let joinable = call == Some(CallState::Joinable);
-    let thread = msg.thread.clone().filter(|_| msg.kind == MessageKind::ThreadCreated);
+    let thread = if msg.kind == MessageKind::ThreadCreated {
+        msg.thread.clone().or_else(|| {
+            let tid = msg.sys.as_ref().and_then(|s| s.ref_channel)?;
+            let ch = app.channels.get(&tid).or_else(|| app.nav.find_thread(tid));
+            let name = ch.map(|c| c.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| msg.content.clone());
+            let message_count = app.messages.get(&tid).map_or(0, |e| e.msgs.len() as u32);
+            Some(crate::model::ThreadRef { id: tid, name, message_count })
+        })
+    } else {
+        None
+    };
     let line = div()
         .id(("sysmsg", msg.id.0))
         .relative()
