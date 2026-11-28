@@ -1148,6 +1148,9 @@ impl Backend for DiscordBackend {
     fn premium_tier2(&self) -> bool {
         self.inner.session().ok().and_then(|s| s.cache.current_user()).is_some_and(|u| u.premium_type == Some(2))
     }
+    fn nitro_tier(&self) -> Option<u8> {
+        self.inner.session().ok()?.cache.current_user().map(|user| user.premium_type.unwrap_or(0))
+    }
     fn has_premium(&self) -> bool {
         self.inner.session().ok().and_then(|s| s.cache.current_user()).is_none_or(|u| u.premium_type.unwrap_or(0) > 0)
     }

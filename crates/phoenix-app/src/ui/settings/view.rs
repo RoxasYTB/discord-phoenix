@@ -643,7 +643,7 @@ fn reveal_probe() -> impl IntoElement {
     .size_full()
 }
 
-fn select_page(p: Page, cx: &mut Cx) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static {
+pub(super) fn select_page(p: Page, cx: &mut Cx) -> impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static {
     cx.listener(move |a, _, _, cx| {
         if let Some(s) = st(a) {
             s.page = p;
@@ -1171,7 +1171,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Cx) -> Option<AnyE
         .child(
             div()
                 .mx_auto()
-                .my(z(64.))
+                .py(z(64.))
                 .w_full()
                 .max_w(z(728.))
                 .px(z(16.))

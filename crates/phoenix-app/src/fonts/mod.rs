@@ -168,6 +168,15 @@ fn download(missing: Vec<(PathBuf, String)>) -> Vec<PathBuf> {
 }
 
 pub fn init() -> Vec<PathBuf> {
+    // The public Discord web client uses these faces even when its local cache
+    // is unavailable or uses a format the asset extractor cannot read.
+    const WEB_UI_FACES: &[(&str, u16, bool, &str)] = &[
+        ("gg sans", 400, false, "66d715454104d24e.woff2"),
+        ("gg sans", 500, false, "b272b33815319bae.woff2"),
+        ("gg sans", 600, false, "2df2c3ff74408972.woff2"),
+        ("gg sans", 700, false, "189422196a4f8b53.woff2"),
+        ("ABC Ginto Discord Nord", 700, true, "404896f5b47121de.woff2"),
+    ];
     let Some(dir) = out_dir() else { return Vec::new() };
     let mut written = Vec::new();
     let mut missing: Vec<(PathBuf, String)> = Vec::new();
@@ -181,6 +190,21 @@ pub fn init() -> Vec<PathBuf> {
         }
     }
     missing.retain(|(t, _)| !written.contains(t));
+    if std::fs::create_dir_all(&dir).is_ok() {
+        for &(family, weight, italic, asset) in WEB_UI_FACES {
+            let target = dir.join(face_file(family, weight, italic, "woff2"));
+            if target.with_extension("ttf").is_file() {
+                continue;
+            }
+            if target.is_file() {
+                if !written.contains(&target) {
+                    written.push(target);
+                }
+            } else if !missing.iter().any(|(path, _)| *path == target) {
+                missing.push((target, asset.into()));
+            }
+        }
+    }
     written.extend(download(missing));
     written
 }

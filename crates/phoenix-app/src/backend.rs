@@ -223,6 +223,9 @@ pub trait Backend: Send + Sync + 'static {
     fn guild_stickers(&self, _guild: Id) -> Vec<crate::ui::pickers::types::StickerData> {
         Vec::new()
     }
+    fn nitro_tier(&self) -> Option<u8> {
+        None
+    }
     fn has_premium(&self) -> bool {
         true
     }

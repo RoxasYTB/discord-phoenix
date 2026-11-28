@@ -7,6 +7,7 @@ pub mod connections;
 pub mod billing;
 mod boost;
 mod gift;
+mod nitro;
 mod pages;
 pub mod subscriptions;
 pub mod synced_map;

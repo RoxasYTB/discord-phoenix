@@ -511,17 +511,25 @@ impl Backend for MockBackend {
             ])
         })
     }
+    fn nitro_tier(&self) -> Option<u8> {
+        if std::env::var_os("PHX_NO_PREMIUM").is_some() {
+            Some(0)
+        } else {
+            Some(2)
+        }
+    }
     fn has_premium(&self) -> bool {
         std::env::var_os("PHX_NO_PREMIUM").is_none()
     }
     fn subscriptions(&self) -> BoxFuture<Option<crate::ui::settings::subscriptions::Subs>> {
         use crate::ui::settings::subscriptions as sub;
+        let has_nitro = self.nitro_tier() == Some(2);
         let users: Vec<User> = self.inner.lock().map(|i| i.users.iter().take(6).cloned().collect()).unwrap_or_default();
         Box::pin(async move {
             let mut members: Vec<sub::Member> = users.into_iter().enumerate().map(|(k, user)| sub::Member { owner: k == 1, me: user.id == ME, user }).collect();
             members.sort_by_key(|m| !m.owner);
             let credits = vec![sub::Credit { plan: "sp.su.plan_basic_month", tier: 0, months: 1 }];
-            Ok(Some(sub::Subs { squad: Some(sub::Squad { members }), credits }))
+            Ok(Some(sub::Subs { squad: has_nitro.then_some(sub::Squad { members }), credits }))
         })
     }
     fn update_profile(&self, _guild: Option<Id>, _patch: crate::ui::settings::profile_editor::ProfilePatch) -> BoxFuture<()> {

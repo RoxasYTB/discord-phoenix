@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, prelude::FluentBuilder as _};
+use gpui::{AnyElement, Context, Div, ElementId, FontWeight, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _};
 
 use crate::{
     app::PhoenixApp,
@@ -149,41 +149,49 @@ const BADGES: &[(&str, u32)] = &[
     ("sp.gi.t6", 20),
 ];
 
-pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
-    let mut grid = div().flex().justify_center().gap(z(8.));
-    for (k, n) in BADGES {
-        grid = grid.child(
+pub(super) fn badges(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
+    let grid = div()
+        .mx_auto()
+        .w_full()
+        .max_w(z(520.))
+        .flex()
+        .flex_wrap()
+        .justify_center()
+        .gap_y(z(28.))
+        .children(BADGES.iter().map(|&(key, count)| {
             div()
-                .w(z(96.))
-                .p(z(8.))
+                .w(z(104.))
+                .max_w_full()
+                .flex_none()
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap(z(8.))
-                .child(gpui::svg().path(crate::icons::path("gift")).size(z(44.)).text_color(c(tok(idx::ICON_MUTED))))
+                .gap(z(12.))
+                .child(gpui::svg().path(crate::icons::path("gift")).size(z(36.)).text_color(c(tok(idx::ICON_MUTED))))
                 .child(
                     div()
                         .flex()
                         .flex_col()
                         .items_center()
-                        .gap(z(2.))
-                        .child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_MUTED, tr(k)))
-                        .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!("sp.gi.gifted", n = n))),
-                ),
-        );
-    }
+                        .text_center()
+                        .child(text(14., 18., FontWeight::BOLD, idx::TEXT_MUTED, tr(key)))
+                        .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE, crate::t!("sp.gi.gifted", n = count))),
+                )
+        }));
     div()
-        .py(z(10.))
+        .pt(z(3.))
         .flex()
         .flex_col()
         .child(
             div()
-                .p(z(32.))
+                .px(z(32.))
+                .pt(z(44.))
+                .pb(z(32.))
                 .rounded_t(z(12.))
                 .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
                 .flex()
                 .flex_col()
-                .gap(z(16.))
+                .gap(z(24.))
                 .child(grid)
                 .child(text(12., 16., FontWeight::NORMAL, idx::TEXT_SUBTLE, tr("sp.gi.footer")).text_center()),
         )
@@ -194,29 +202,46 @@ pub(super) fn badges(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElem
                 .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
                 .flex()
                 .justify_end()
-                .child(controls::button_icon(eid("gift-send"), "gift", tr("sp.gi.send"), BtnKind::Primary)),
+                .child(controls::button_icon(eid("gift-send"), "gift", tr("sp.gi.send"), BtnKind::Primary)
+                    .on_click(cx.listener(|app, _, _, cx| app.open_gift_nitro(None, cx)))),
         )
         .into_any_element()
 }
 
-pub(super) fn purchased(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
+pub(super) fn purchased(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElement {
+    let highlight = gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() };
+    let (description, highlights) = super::account::bracket_runs(&tr("sp.gi.none_desc"), highlight);
+    let ranges = highlights.iter().map(|(range, _)| range.clone()).collect();
+    let entity = cx.entity();
+    let link = gpui::InteractiveText::new("gift-purchased-nitro", gpui::StyledText::new(description).with_highlights(highlights))
+        .on_click(ranges, move |_, _, cx| {
+            entity.update(cx, |app, cx| {
+                app.settings = None;
+                app.open_home_view(crate::ui::home::data::HomeView::Nitro, cx);
+            });
+        });
     div()
+        .pt(z(45.))
+        .pb(z(32.))
         .flex()
         .flex_col()
+        .items_center()
+        .text_center()
         .gap(z(8.))
-        .child(text(16., 20., FontWeight::MEDIUM, idx::TEXT_DEFAULT, tr("sp.gi.none")))
-        .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED, tr("sp.gi.none_desc")))
+        .child(text(24., 28., FontWeight::MEDIUM, idx::TEXT_STRONG, tr("sp.gi.none")))
+        .child(div().text_size(z(16.)).line_height(z(20.)).text_color(c(tok(idx::TEXT_MUTED))).child(link))
         .into_any_element()
 }
 
-pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
+pub(super) fn subscriptions(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let data = super::subscriptions::get().unwrap_or_default();
     let mut head = div()
         .flex()
         .flex_col()
         .pt(z(11.))
         .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")).mb(z(16.)))
-        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
+        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")))
+        .child(div().mt(z(16.)).child(super::nitro::status_card(app)));
     if let Some(sq) = &data.squad {
         head = head.child(div().mt(z(16.)).child(squad_card(sq)));
     }

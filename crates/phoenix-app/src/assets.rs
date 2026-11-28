@@ -383,6 +383,9 @@ impl AssetSource for Assets {
         if path == "icon.png" {
             return Ok(Some(Cow::Borrowed(APP_ICON_PNG)));
         }
+        if path == "nitro-member-gradient.svg" {
+            return Ok(Some(Cow::Borrowed(br##"<svg xmlns="http://www.w3.org/2000/svg" width="696" height="461"><defs><linearGradient id="nitro"><stop stop-color="#8645bd"/><stop offset=".52" stop-color="#af3daf"/><stop offset="1" stop-color="#a85d86"/></linearGradient></defs><rect width="696" height="461" rx="16" fill="url(#nitro)"/></svg>"##)));
+        }
         if let Some(p) = path.strip_prefix("local/") {
             return Ok(std::fs::read(p).ok().map(Cow::Owned));
         }
