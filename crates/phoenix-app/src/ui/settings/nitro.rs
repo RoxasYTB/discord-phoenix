@@ -327,8 +327,7 @@ fn member_banner(app: &PhoenixApp, plan: Plan, cx: &mut Context<PhoenixApp>) -> 
         )
         .when(full, |d| {
             d.child(
-                div().relative().flex_1().min_w_0().mr(z(-40.))
-                    .child(gpui::img(super::art::nitro_tier()).w_full().max_w(z(296.)).h(z(280.)).object_fit(gpui::ObjectFit::Contain)),
+                gpui::img(super::art::nitro_tier()).absolute().top(z(25.)).left(z(384.)).w(z(313.)).h(z(328.)),
             )
         })
 }
