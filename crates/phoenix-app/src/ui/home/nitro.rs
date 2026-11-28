@@ -359,7 +359,7 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
                         .flex()
                         .flex_col()
                         .child(nav)
-                        .child(div().px(z(32.)).pt(z(80.)).pb(z(64.)).child(hello)),
+                        .child(div().relative().px(z(32.)).pt(z(80.)).pb(z(64.)).child(hello).child(hero_art(cx))),
                 )
                 .child(
                     div()
@@ -374,6 +374,31 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
         )
         .children(crate::ui::chat::scrollbar::bar_for("nitro-scroll", crate::ui::chat::scrollbar::Bar::Auto))
         .into_any_element()
+}
+
+const ART_W: f32 = 340.31;
+const WUMPUS: &str = "https://cdn.discordapp.com/assets/content/a3e8e17987398023e2afd61ec5078a9bce18b2832f2f1775a1ba3c033ce13270.webm";
+const TRINKETS: [(&str, f32, f32, f32, f32); 4] = [
+    ("https://cdn.discordapp.com/assets/content/0b1a59149e615fc048010a3c7f109f8695c8b2004712e99417fcb0dec43fcb44.png", 90., -10., 43.05, 46.72),
+    ("https://cdn.discordapp.com/assets/content/b39a5f2755e6da320fce10c8a4a10bdebef9926b671256b1681976198c5656d4.png", 291.59, 25., 23.96, 24.68),
+    ("https://cdn.discordapp.com/assets/content/7c23a220a6f31150648930e2ebb435aa7cc89ad57895275bed6f1900869f4de0.png", 58.65, 113.57, 41.44, 38.21),
+    ("https://cdn.discordapp.com/assets/content/ae5638c61a572593c6b03b92e80d3846e0cfe7a9e893f3faf05aecd670a4017d.png", 311.81, 158.83, 29.31, 41.22),
+];
+
+fn hero_art(cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let plays = !crate::ui::settings::effects::reduced_motion();
+    let mut art = div().absolute().top(z(80.)).right(z(32.)).w(z(ART_W)).h(z(0.)).child(
+        div()
+            .absolute()
+            .left(z(89.7))
+            .top(z(-0.17))
+            .size(z(174.56))
+            .child(crate::ui::chat::video_player::gifv("nitro-home-wumpus".into(), WUMPUS.into(), SharedString::default(), plays, cx)),
+    );
+    for (url, x, y, w, h) in TRINKETS {
+        art = art.child(img(url).absolute().left(z(x)).top(z(y)).w(z(w)).h(z(h)).object_fit(gpui::ObjectFit::Contain));
+    }
+    art.into_any_element()
 }
 
 pub(crate) fn greeting(hour: u32) -> SharedString {
