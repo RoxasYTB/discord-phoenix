@@ -1834,10 +1834,14 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
                         .invisible()
                         .group_hover("pin", |s| s.visible())
                         .child(sm_text_button(("pin-jump", id.0), crate::t!("pins.jump"), false).on_click(cx.listener(move |a, _, _, cx| a.jump_to_message(ch, id, cx))))
-                        .child(sm_icon_button(("pin-unpin", id.0), "close").on_click(cx.listener(move |a, _, _, cx| {
-                            cx.stop_propagation();
-                            a.unpin_from_popout(ch, id, cx)
-                        }))),
+                        .child(sm_icon_button(("pin-unpin", id.0), "close").on_click({
+                            let mut m = m.clone();
+                            m.pinned = true;
+                            cx.listener(move |a, ev: &gpui::ClickEvent, _, cx| {
+                                cx.stop_propagation();
+                                a.request_pin_message(ch, m.clone(), ev.modifiers().shift, cx)
+                            })
+                        })),
                 ),
         );
     }

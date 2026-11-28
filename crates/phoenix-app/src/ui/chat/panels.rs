@@ -27,8 +27,8 @@ pub fn overlays(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<Phoenix
     if let Some((ch, id)) = app.chat.confirm_delete {
         out.push(delete_modal(app, ch, id, cx));
     }
-    if let Some((ch, id)) = app.chat.confirm_pin {
-        out.push(pin_modal(app, ch, id, cx));
+    if let Some((ch, m)) = &app.chat.confirm_pin {
+        out.push(pin_modal(app, *ch, m, cx));
     }
     out
 }
@@ -671,11 +671,10 @@ fn delete_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx
     })
 }
 
-fn pin_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn pin_modal(app: &PhoenixApp, ch: crate::model::Id, msg: &Message, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let e = cx.entity();
     let e2 = e.clone();
-    let msg = app.messages.get(&ch).and_then(|x| x.msgs.iter().find(|x| x.id == id));
-    let unpin = msg.is_some_and(|m| m.pinned);
+    let unpin = msg.pinned;
     let channel = app.channels.get(&ch);
     let subtitle = if unpin {
         crate::t!("msg.unpin_confirm")
@@ -685,9 +684,7 @@ fn pin_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx: &
         crate::t!("msg.pin_confirm")
     };
     let mut body: Vec<AnyElement> = vec![div().text_size(z(16.)).child(subtitle).into_any_element()];
-    if let Some(m) = msg {
-        body.push(message_card(app, m).shadow_md().into_any_element());
-    }
+    body.push(message_card(app, msg).shadow_md().into_any_element());
     if unpin {
         body.push(
             div()

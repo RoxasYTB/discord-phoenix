@@ -635,10 +635,13 @@ pub fn search_result_items(
         acts.push(MenuItem::action(label, Some(crate::icons::path("pin")), move |ev, _, cx: &mut App| {
             let skip = ev.modifiers().shift;
             ep.update(cx, |a, cx| {
-                if !skip && a.find_msg(channel, msg).is_some_and(|m| m.pinned == pinned) {
-                    a.request_pin(channel, msg, false, cx)
-                } else {
-                    a.set_pinned_by_id(channel, msg, !pinned, cx)
+                let found = a.find_msg(channel, msg).cloned().or_else(|| a.chat.search_menu_msg.clone().filter(|m| m.id == msg));
+                match found {
+                    Some(mut m) => {
+                        m.pinned = pinned;
+                        a.request_pin_message(channel, m, skip, cx)
+                    }
+                    None => a.set_pinned_by_id(channel, msg, !pinned, cx),
                 }
             })
         }));

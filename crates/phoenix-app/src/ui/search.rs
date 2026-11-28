@@ -551,8 +551,10 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
         .on_click(cx.listener(move |a, _, _, cx| a.jump_to_message(channel, id, cx)))
         .on_mouse_down(gpui::MouseButton::Right, {
             let (author, pinned, kind) = (m.author, m.pinned, crate::ui::chat::panels::wire_type(m));
+            let (e, hit) = (cx.entity(), m.clone());
             move |ev, w, cx| {
                 cx.stop_propagation();
+                e.update(cx, |a, _| a.chat.search_menu_msg = Some(hit.clone()));
                 let link = crate::ui::chat::mention::any_hovered_link(id);
                 crate::ui::extra_menus::open(crate::ui::extra_menus::Target::SearchResult { channel, msg: id, author, pinned, kind, link }, ev.position, w)
             }

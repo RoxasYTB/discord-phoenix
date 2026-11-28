@@ -96,7 +96,8 @@ pub struct ChatState {
     pub reply_mention: bool,
     pub menu: Option<MenuState>,
     pub confirm_delete: Option<(Id, Id)>,
-    pub confirm_pin: Option<(Id, Id)>,
+    pub confirm_pin: Option<(Id, Message)>,
+    pub search_menu_msg: Option<Message>,
     pub pins: Option<PinsState>,
     pub thread: Option<ThreadPanel>,
     pub(crate) create_thread: Option<crate::ui::thread_create::CreateThread>,
@@ -141,6 +142,7 @@ impl Default for ChatState {
             menu: None,
             confirm_delete: None,
             confirm_pin: None,
+            search_menu_msg: None,
             pins: None,
             thread: None,
             create_thread: None,
@@ -557,15 +559,31 @@ impl PhoenixApp {
         self.chat.menu = None;
         if skip_confirm {
             self.toggle_pin(channel, id, cx);
-        } else if self.find_msg(channel, id).is_some() {
-            self.chat.confirm_pin = Some((channel, id));
+        } else if let Some(m) = self.find_msg(channel, id).cloned() {
+            self.chat.confirm_pin = Some((channel, m));
+        }
+        cx.notify();
+    }
+
+    pub fn request_pin_message(&mut self, channel: Id, m: Message, skip_confirm: bool, cx: &mut Context<Self>) {
+        self.chat.menu = None;
+        if !skip_confirm {
+            self.chat.confirm_pin = Some((channel, m));
+        } else if m.pinned {
+            self.unpin_from_popout(channel, m.id, cx);
+        } else {
+            self.set_pinned_by_id(channel, m.id, true, cx);
         }
         cx.notify();
     }
 
     pub fn confirm_pin(&mut self, cx: &mut Context<Self>) {
-        if let Some((channel, id)) = self.chat.confirm_pin.take() {
-            self.toggle_pin(channel, id, cx);
+        if let Some((channel, m)) = self.chat.confirm_pin.take() {
+            if m.pinned {
+                self.unpin_from_popout(channel, m.id, cx);
+            } else {
+                self.set_pinned_by_id(channel, m.id, true, cx);
+            }
         }
         cx.notify();
     }
