@@ -25,7 +25,7 @@ fn close_modals(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) -> bool {
     if ui::chat::voice_message::close_modal(cx) {
         return true;
     }
-    if app.chat.confirm_delete.take().is_some() {
+    if app.chat.confirm_delete.take().is_some() || app.chat.confirm_pin.take().is_some() {
         return true;
     }
     if ui::server_pages::with(|s| matches!(s.modal, Some((_, "delete")))) && ui::server_pages::escape() {

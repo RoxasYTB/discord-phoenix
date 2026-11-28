@@ -162,3 +162,10 @@ Still not done: the members table of Server Settings (client `member-safety-guil
 | Server Settings > Members | `a667d8c06f3b3cfa.js`: row `onContextMenu` and the « … » button (`x8Nn4M`) open the moderation (guild user) menu; `member-safety-guild-member-*-menu` is the join-date filter, not a row menu | the home-made Copy ID / Kick / Ban popup is gone; both open `user_menu` with the guild | ✅ |
 | Server Settings > Audit Log | `916d0bef82cfb632.js` `userHook`: right click on the user opens the user menu | avatar and sentence open `user_menu` | ✅ |
 | Emoji, Invites, Bans, Webhooks pages, composer attachments, reply previews | no `onContextMenu` found next to these rows in the 2 800 cached chunks and the 325 live ones (reply previews: only the author, done in Part A) | none | ✅ nothing to add (⚠ absence read from the JS, not live) |
+
+## Profile item and pin confirmation (28/11)
+
+| item | source | behaviour | status |
+| --- | --- | --- | --- |
+| « Profil » in the user menus | `6d9fc3f3cb3978ff.js` module 243949 (`id:"user-profile"`, action `openUserProfileModal` then `POPOUT_CLOSE`) | opens the full profile modal, not the popout | ✅ `user_menu::render` calls `open_profile_modal` |
+| Pin / Unpin (message menu, hover toolbar, P key, search menu) | `d5b297eb0233cd09.js` module 979766 and `15299af603b47329.js` `rS` (`shiftKey ? pinMessage : confirmPin`), `8da2d6fa30f1639c.js` `confirmPin` / `confirmUnpin` | without Shift: confirm modal with the message preview. Pin: title `bKMaZX`, subtitle `3IRluI` (`hMRngA` in DMs), button `rOQ5BX`, primary. Unpin: title `CFF2vL`, subtitle `NjEPp7`, button `lAU5jB`, critical, hint `oCVB3Y` under the card. Shift skips the modal | ✅ `request_pin` / `pin_modal`, Enter confirms, Escape cancels |

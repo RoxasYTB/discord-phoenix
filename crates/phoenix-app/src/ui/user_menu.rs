@@ -51,7 +51,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     };
     let (u, g) = (o.user, o.guild);
     let mut items = vec![
-        act(crate::t!("menu.profile"), Rc::new(move |a, ev, w, cx| a.open_profile(u, g, ev.position(), w, cx))),
+        act(crate::t!("menu.profile"), Rc::new(move |a, _, _, cx| a.open_profile_modal(u, cx))),
     ];
     if app.selected_channel.is_some() {
         items.push(act(

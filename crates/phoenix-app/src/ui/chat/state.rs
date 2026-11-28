@@ -96,6 +96,7 @@ pub struct ChatState {
     pub reply_mention: bool,
     pub menu: Option<MenuState>,
     pub confirm_delete: Option<(Id, Id)>,
+    pub confirm_pin: Option<(Id, Id)>,
     pub pins: Option<PinsState>,
     pub thread: Option<ThreadPanel>,
     pub(crate) create_thread: Option<crate::ui::thread_create::CreateThread>,
@@ -139,6 +140,7 @@ impl Default for ChatState {
             reply_mention: true,
             menu: None,
             confirm_delete: None,
+            confirm_pin: None,
             pins: None,
             thread: None,
             create_thread: None,
@@ -236,7 +238,7 @@ impl PhoenixApp {
         self.message_list.remeasure();
     }
 
-    fn find_msg(&self, channel: Id, id: Id) -> Option<&Message> {
+    pub fn find_msg(&self, channel: Id, id: Id) -> Option<&Message> {
         self.messages.get(&channel)?.msgs.iter().find(|m| m.id == id)
     }
 
@@ -246,6 +248,7 @@ impl PhoenixApp {
         self.chat.edit = None;
         self.chat.menu = None;
         self.chat.confirm_delete = None;
+        self.chat.confirm_pin = None;
         for f in self.chat.uploads.drain(..) {
             if let Some(k) = f.pre {
                 self.backend.drop_preupload(k);
@@ -548,6 +551,23 @@ impl PhoenixApp {
             id.0
         );
         cx.write_to_clipboard(ClipboardItem::new_string(url));
+    }
+
+    pub fn request_pin(&mut self, channel: Id, id: Id, skip_confirm: bool, cx: &mut Context<Self>) {
+        self.chat.menu = None;
+        if skip_confirm {
+            self.toggle_pin(channel, id, cx);
+        } else if self.find_msg(channel, id).is_some() {
+            self.chat.confirm_pin = Some((channel, id));
+        }
+        cx.notify();
+    }
+
+    pub fn confirm_pin(&mut self, cx: &mut Context<Self>) {
+        if let Some((channel, id)) = self.chat.confirm_pin.take() {
+            self.toggle_pin(channel, id, cx);
+        }
+        cx.notify();
     }
 
     pub fn toggle_pin(&mut self, channel: Id, id: Id, cx: &mut Context<Self>) {

@@ -157,7 +157,7 @@ impl PhoenixApp {
                 set_focused(None);
                 self.start_reply(id, window, cx);
             }
-            "p" if plain => self.toggle_pin(ch, id, cx),
+            "p" if !m.control && !m.alt && !m.platform => self.request_pin(ch, id, m.shift, cx),
             "+" | "=" if !m.control && !m.alt => self.open_emoji_picker(EmojiTarget::Reaction { channel: ch, msg: id }, cx),
             "f" if plain => self.open_forward(ch, id, cx),
             "s" if plain => {
@@ -200,6 +200,10 @@ impl PhoenixApp {
         }
         if self.chat.confirm_delete.is_some() && ks.key == "enter" && !ks.modifiers.modified() {
             self.confirm_delete(cx);
+            return true;
+        }
+        if self.chat.confirm_pin.is_some() && ks.key == "enter" && !ks.modifiers.modified() {
+            self.confirm_pin(cx);
             return true;
         }
         let m = ks.modifiers;
