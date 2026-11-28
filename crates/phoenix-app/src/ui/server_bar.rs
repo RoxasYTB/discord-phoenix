@@ -439,6 +439,8 @@ fn pad_bottom() -> f32 {
 const FOLDER_PAD: f32 = (FOLDER - ICON) / 2.;
 const PREVIEW_PAD: f32 = 4.;
 const PREVIEW_GAP: f32 = 2.;
+const PREVIEW_OUTER_RADIUS: f32 = 13.;
+const PREVIEW_INNER_RADIUS: f32 = 4.;
 const PILL_MS: u64 = 200;
 const EASE_OUT_QUINT: gpui::CubicBezier = gpui::CubicBezier(0.22, 1., 0.36, 1.);
 
@@ -1097,41 +1099,56 @@ fn favorites(app: &PhoenixApp, entity: &Entity<PhoenixApp>) -> Option<AnyElement
     )
 }
 
-fn guild_inner(g: &Guild, size: f32) -> AnyElement {
+fn preview_radii(i: usize) -> [f32; 4] {
+    let mut r = [PREVIEW_INNER_RADIUS; 4];
+    r[[0, 1, 3, 2][i.min(3)]] = PREVIEW_OUTER_RADIUS;
+    r
+}
+
+fn corners<E: Styled>(el: E, r: [f32; 4]) -> E {
+    el.rounded_tl(z(r[0])).rounded_tr(z(r[1])).rounded_br(z(r[2])).rounded_bl(z(r[3]))
+}
+
+fn guild_inner(g: &Guild, size: f32, r: [f32; 4]) -> AnyElement {
     match &g.icon {
         ImageRef::Url(u) if crate::media::is_animated(u) => {
-            let r = z(ICON_RADIUS * size / ICON);
             let group = SharedString::new_static("phx-guild-icon");
             div()
                 .relative()
                 .size(z(size))
                 .group(group.clone())
-                .child(img(crate::media::static_variant(u)).size(z(size)).rounded(r))
-                .child(
+                .child(corners(img(crate::media::static_variant(u)).size(z(size)), r))
+                .child(corners(
                     img(u.clone())
                         .id(crate::media::anim_id(u))
                         .absolute()
                         .top_0()
                         .left_0()
                         .size(z(size))
-                        .rounded(r)
                         .invisible()
                         .group_hover(group, |s| s.visible()),
-                )
+                    r,
+                ))
                 .into_any_element()
         }
-        ImageRef::Url(u) => img(u.clone()).size(z(size)).rounded(z(ICON_RADIUS * size / ICON)).into_any_element(),
+        ImageRef::Url(u) => corners(img(u.clone()).size(z(size)), r).into_any_element(),
+        _ if size < 30. => div()
+            .w_full()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .text_center()
+            .text_size(z(10.))
+            .line_height(z(size))
+            .font_weight(FontWeight::NORMAL)
+            .child(g.acronym.clone())
+            .into_any_element(),
         _ => div()
-            .text_size(z(if size < 30. {
-                7.
-            } else {
-                match g.acronym.chars().count() {
-                    0..=2 => 18.,
-                    3 | 4 => 16.,
-                    5 => 14.,
-                    6 => 12.,
-                    _ => 10.,
-                }
+            .text_size(z(match g.acronym.chars().count() {
+                0..=2 => 18.,
+                3 | 4 => 16.,
+                5 => 14.,
+                6 => 12.,
+                _ => 10.,
             }))
             .font_weight(FontWeight::MEDIUM)
             .child(g.acronym.clone())
@@ -1278,7 +1295,7 @@ fn guild(app: &PhoenixApp, entity: &Entity<PhoenixApp>, g: &Guild, folder: Optio
         .rounded(z(ICON_RADIUS))
         .when(!has_icon, |d| d.bg(c(if active { Palette::BLURPLE } else { Palette::GUILD_ICON_BG })))
         .text_color(if active && !has_icon { gpui::white() } else { c(Palette::TEXT_NORMAL) })
-        .child(guild_inner(g, ICON));
+        .child(guild_inner(g, ICON, [ICON_RADIUS; 4]));
     drop_target(row(("guild", id.0), id.0, entity), RailNode::Guild(id), folder, last, entity)
         .map(|d| crate::ui::a11y::named(d, gpui::Role::TreeItem, || crate::ui::a11y::guild(&g.name, g.mentions, g.unread, guild_media(app, g))))
         .when(crate::ui::a11y::on(), |d| d.aria_selected(selected).aria_level(if folder.is_some() { 2 } else { 1 }))
@@ -1341,21 +1358,16 @@ fn folder(
         let cell = (inner - PREVIEW_GAP) / 2.;
         let mut grid = div().size(z(inner)).flex().flex_wrap().gap(z(PREVIEW_GAP));
         for (i, g) in guilds.iter().take(4).enumerate() {
-            let r = |big: bool| if big { z(13.) } else { z(4.) };
+            let r = preview_radii(i);
             grid = grid.child(
-                div()
-                    .size(z(cell))
-                    .rounded_tl(r(i == 0))
-                    .rounded_tr(r(i == 1))
-                    .rounded_bl(r(i == 2))
-                    .rounded_br(r(i == 3))
+                corners(div().size(z(cell)), r)
                     .overflow_hidden()
-                    .bg(c(Palette::GUILD_ICON_BG))
+                    .when(!matches!(g.icon, ImageRef::Url(_)), |d| d.bg(c(Palette::BG_PRIMARY)))
                     .flex()
                     .items_center()
                     .justify_center()
                     .text_color(c(Palette::TEXT_NORMAL))
-                    .child(guild_inner(g, cell)),
+                    .child(guild_inner(g, cell, r)),
             );
         }
         div()
@@ -1459,6 +1471,14 @@ fn action(entity: &Entity<PhoenixApp>, id: &'static str, i: Icon, label: SharedS
 #[cfg(test)]
 mod rail_dm_tests {
     use super::*;
+
+    #[test]
+    fn folder_preview_rounds_only_the_outer_corner() {
+        assert_eq!(preview_radii(0), [13., 4., 4., 4.]);
+        assert_eq!(preview_radii(1), [4., 13., 4., 4.]);
+        assert_eq!(preview_radii(2), [4., 4., 4., 13.]);
+        assert_eq!(preview_radii(3), [4., 4., 13., 4.]);
+    }
 
     #[test]
     fn sixteen_quick_home_clicks_toggle_discodo() {
