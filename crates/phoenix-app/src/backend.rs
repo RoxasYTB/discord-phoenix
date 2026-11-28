@@ -33,7 +33,6 @@ impl std::fmt::Display for BackendError {
 pub enum Credentials {
     Token(String),
     Password { login: String, password: String },
-    Mfa { code: String },
 }
 
 impl std::fmt::Debug for Credentials {
@@ -43,7 +42,6 @@ impl std::fmt::Debug for Credentials {
             Self::Password { login, .. } => {
                 f.debug_struct("Password").field("login", login).field("password", &"<redacted>").finish()
             }
-            Self::Mfa { .. } => f.write_str("Mfa(<redacted>)"),
         }
     }
 }
@@ -255,9 +253,10 @@ pub trait Backend: Send + Sync + 'static {
     fn mfa_options(&self) -> crate::auth::MfaOptions {
         crate::auth::MfaOptions { totp: true, ..Default::default() }
     }
-    fn login_mfa(&self, _method: crate::auth::MfaMethod, code: String) -> BoxFuture<ReadyData> {
-        self.login(Credentials::Mfa { code })
+    fn login_mfa(&self, _method: crate::auth::MfaMethod, _code: String) -> BoxFuture<ReadyData> {
+        Box::pin(async { Err(BackendError(crate::t!("login_mfa.error_generic").to_string())) })
     }
+    fn reset_mfa(&self) {}
     fn send_mfa_sms(&self) -> BoxFuture<String> {
         Box::pin(async { Err(BackendError(crate::t!("backend.sms_unavailable").to_string())) })
     }

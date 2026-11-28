@@ -6,7 +6,7 @@ use gpui_component::input::{Input, InputState};
 
 use crate::{
     app::PhoenixApp,
-    auth::{MfaMethod, QrState},
+    auth::QrState,
     theme::{Palette, c},
 };
 
@@ -43,7 +43,18 @@ fn field(state: &Entity<InputState>) -> impl IntoElement {
         .child(Input::new(state).appearance(false).bordered(false))
 }
 
-pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn backdrop() -> gpui::Div {
+    div().size_full().flex().items_center().justify_center().bg(gpui::linear_gradient(
+        135.,
+        gpui::linear_color_stop(c(0x404EED), 0.),
+        gpui::linear_color_stop(c(0x23272A), 1.),
+    ))
+}
+
+pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    if app.login_mfa_step && !app.login_with_token {
+        return backdrop().child(super::login_mfa::render(app, window, cx)).into_any_element();
+    }
     let err = app.login_error.as_ref();
     let form = div()
         .flex_1()
@@ -81,42 +92,6 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
                         .text_color(c(Palette::TEXT_MUTED))
                         .child(crate::t!("login.token_note")),
                 )
-            } else if app.login_mfa_step {
-                let opts = app.backend.mfa_options();
-                let method = app.login_ui.mfa_method;
-                let (title, hint): (SharedString, SharedString) = match method {
-                    MfaMethod::Totp => (crate::t!("login.mfa_code"), crate::t!("login.mfa_hint")),
-                    MfaMethod::Backup => (crate::t!("login.backup_code"), crate::t!("login.backup_hint")),
-                    MfaMethod::Sms => (
-                        crate::t!("login.sms_code"),
-                        match &app.login_ui.sms_phone {
-                            Some(p) => crate::t!("login.sms_sent", p = p),
-                            None => crate::t!("login.sms_sending"),
-                        },
-                    ),
-                };
-                let methods: Vec<MfaMethod> = [
-                    (opts.totp, MfaMethod::Totp),
-                    (opts.sms, MfaMethod::Sms),
-                    (opts.backup || opts.totp, MfaMethod::Backup),
-                ]
-                .into_iter()
-                .filter_map(|(on, m)| on.then_some(m))
-                .collect();
-                d.child(label(title, err))
-                    .child(field(&app.login_mfa))
-                    .child(div().mt(px(8.)).text_size(px(12.)).text_color(c(Palette::TEXT_MUTED)).child(hint))
-                    .child(div().mt(px(12.)).flex().gap(px(12.)).children(methods.into_iter().filter(|m| *m != method).map(
-                        |m| {
-                            div()
-                                .id(SharedString::from(format!("mfa-{}", m.label())))
-                                .text_size(px(14.))
-                                .text_color(c(Palette::TEXT_LINK))
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |a, _, _, cx| crate::auth::choose_mfa(a, m, cx)))
-                                .child(crate::t!("login.use_method", m = m.label().to_lowercase()))
-                        },
-                    )))
             } else {
                 d.child(label(crate::t!("login.email"), err))
                     .child(field(&app.login_email))
@@ -240,16 +215,7 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
                 .child(qr_text),
         );
 
-    div()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .bg(gpui::linear_gradient(
-            135.,
-            gpui::linear_color_stop(c(0x404EED), 0.),
-            gpui::linear_color_stop(c(0x23272A), 1.),
-        ))
+    backdrop()
         .child(
             div()
                 .w(px(784.))
@@ -264,6 +230,7 @@ pub fn render(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<PhoenixAp
                 .child(div().w(px(1.)).h(px(300.)).bg(c(Palette::BG_PRIMARY)))
                 .child(qr),
         )
+        .into_any_element()
 }
 
 fn qr_code(modules: &[bool], n: usize) -> AnyElement {

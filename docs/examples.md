@@ -232,6 +232,7 @@ PROBE_CHANNEL=phoenix|general PROBE_CHUNK_KIB=4096 \
 Offscreen render of one non-chat view in a given theme.
 `cargo run -p phoenix-app --example views -- out.png [dark|light|ash|onyx] <scene>`
 Scenes: friends-all, friends-pending, inbox, pins, threads, search, profile, profile-modal, appearance, account, status, switcher, emoji, gif, sticker, friends, forum, post, events, browse, guide, dm-menu, dm-submenu.
+Login scenes (no mock session, demo accounts of `mock::mock_mfa`): login, login-mfa (authenticator code), login-mfa-error (wrong code), login-mfa-select, login-mfa-backup (10 s warning), login-mfa-backup-code, login-mfa-sms, login-mfa-key (security key only).
 
 ## `voice_settings`
 

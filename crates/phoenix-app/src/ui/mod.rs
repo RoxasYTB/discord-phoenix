@@ -50,6 +50,7 @@ pub mod locale_inputs;
 pub mod invite;
 pub mod image_viewer;
 pub mod login;
+pub mod login_mfa;
 pub mod settings;
 pub mod easter;
 pub mod extra_menus;

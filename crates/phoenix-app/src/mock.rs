@@ -58,6 +58,7 @@ struct Inner {
     members: HashMap<Id, Vec<Member>>,
     roles: Vec<(Id, Vec<Role>)>,
     sent_uploads: Vec<Vec<Upload>>,
+    mfa: Option<crate::auth::MfaOptions>,
 }
 
 #[derive(Clone)]
@@ -279,6 +280,7 @@ impl MockBackend {
                 members,
                 roles,
                 sent_uploads: Vec::new(),
+                mfa: None,
             })),
             latency: Duration::from_millis(120),
         }
@@ -432,6 +434,30 @@ impl MockBackend {
     }
 }
 
+pub fn mock_mfa(login: &str) -> Option<crate::auth::MfaOptions> {
+    use crate::auth::MfaOptions;
+    let (name, domain) = login.split_once('@')?;
+    if domain != "phoenix.demo" {
+        return None;
+    }
+    match name {
+        "mfa" => Some(MfaOptions { totp: true, sms: true, backup: true, webauthn: true }),
+        "totp" => Some(MfaOptions { totp: true, backup: true, ..Default::default() }),
+        "sms" => Some(MfaOptions { sms: true, ..Default::default() }),
+        "key" => Some(MfaOptions { webauthn: true, ..Default::default() }),
+        _ => None,
+    }
+}
+
+pub fn mock_mfa_check(method: crate::auth::MfaMethod, code: &str) -> Result<(), String> {
+    use crate::auth::MfaMethod;
+    match (method, code) {
+        (MfaMethod::Totp | MfaMethod::Sms, "123456") | (MfaMethod::Backup, "abcd1234") => Ok(()),
+        (_, "999999") => Err("Invalid two-factor auth ticket".into()),
+        _ => Err("Invalid two-factor code".into()),
+    }
+}
+
 impl Backend for MockBackend {
     fn voice_regions(&self) -> BoxFuture<Vec<(gpui::SharedString, gpui::SharedString)>> {
         let regions = ["Atlanta", "Brazil", "Hong Kong", "India", "Japan", "Rotterdam", "Russia", "Singapore", "South Africa", "Sydney", "US Central", "US East", "US South", "US West"];
@@ -507,6 +533,36 @@ impl Backend for MockBackend {
         }
     }
 
+    fn needs_mfa(&self) -> bool {
+        self.inner.lock().is_ok_and(|i| i.mfa.is_some())
+    }
+
+    fn mfa_options(&self) -> crate::auth::MfaOptions {
+        self.inner.lock().ok().and_then(|i| i.mfa).unwrap_or_default()
+    }
+
+    fn reset_mfa(&self) {
+        if let Ok(mut i) = self.inner.lock() {
+            i.mfa = None;
+        }
+    }
+
+    fn send_mfa_sms(&self) -> BoxFuture<String> {
+        self.delayed(|| "+*******1234".to_owned())
+    }
+
+    fn login_mfa(&self, method: crate::auth::MfaMethod, code: String) -> BoxFuture<ReadyData> {
+        if let Err(e) = mock_mfa_check(method, &code) {
+            let wait = self.delayed(|| ());
+            return Box::pin(async move {
+                wait.await?;
+                Err(BackendError(e))
+            });
+        }
+        self.reset_mfa();
+        self.login(Credentials::Token("mock-token".into()))
+    }
+
     fn restore_session(&self) -> Option<BoxFuture<ReadyData>> {
         std::env::var("PHOENIX_MOCK_AUTOLOGIN")
             .is_ok_and(|v| !v.is_empty() && v != "0")
@@ -515,10 +571,22 @@ impl Backend for MockBackend {
 
     fn login(&self, creds: Credentials) -> BoxFuture<ReadyData> {
         let inner = self.inner.clone();
+        if let Credentials::Password { login, password } = &creds
+            && !password.is_empty()
+            && let Some(opts) = mock_mfa(login)
+        {
+            if let Ok(mut i) = inner.lock() {
+                i.mfa = Some(opts);
+            }
+            let wait = self.delayed(|| ());
+            return Box::pin(async move {
+                wait.await?;
+                Err(BackendError(String::new()))
+            });
+        }
         let ok = match &creds {
             Credentials::Token(t) => !t.trim().is_empty(),
             Credentials::Password { login, password } => !login.is_empty() && !password.is_empty(),
-            Credentials::Mfa { code } => !code.is_empty(),
         };
         if ok {
             let rels: Vec<_> = (1..NAMES.len().min(15) as u64)
@@ -1015,5 +1083,24 @@ mod tests {
         assert_eq!(s.proto.get("push-delay"), Some(&600));
         let s = futures::executor::block_on(b.save_settings(SettingsPatch::Rest("e-tips", true))).unwrap();
         assert!(s.flag("e-tips"));
+    }
+
+    #[test]
+    fn mock_mfa_walks_the_login_flow() {
+        use crate::auth::{MfaMethod, MfaOptions};
+        let b = MockBackend::synchronous();
+        let pw = |login: &str| Credentials::Password { login: login.into(), password: "pw".into() };
+        let first = futures::executor::block_on(b.login(pw("totp@phoenix.demo")));
+        assert_eq!(first.err().map(|e| e.0), Some(String::new()));
+        assert!(b.needs_mfa());
+        assert_eq!(b.mfa_options(), MfaOptions { totp: true, backup: true, ..Default::default() });
+        let wrong = futures::executor::block_on(b.login_mfa(MfaMethod::Totp, "000000".into()));
+        assert_eq!(wrong.err().map(|e| e.0).as_deref(), Some("Invalid two-factor code"));
+        assert!(b.needs_mfa());
+        assert_eq!(futures::executor::block_on(b.send_mfa_sms()).unwrap(), "+*******1234");
+        assert!(futures::executor::block_on(b.login_mfa(MfaMethod::Backup, "abcd1234".into())).is_ok());
+        assert!(!b.needs_mfa());
+        assert!(mock_mfa("someone@example.com").is_none());
+        assert_eq!(mock_mfa("key@phoenix.demo").map(|o| o.methods()), Some(vec![MfaMethod::Webauthn]));
     }
 }

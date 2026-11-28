@@ -10,19 +10,19 @@ use crate::{
     ui::settings::{AppTheme, SettingsPatch, SyncedSettings},
 };
 
-pub(super) fn mfa_required(inner: &Inner, ticket: String, totp: bool, sms: bool, backup: bool) -> Result<ReadyData, BackendError> {
-    if !totp && !sms && !backup {
-        return Err(err(
-            "This account only allows a security key for 2FA, which Phoenix can't use. Log in with the QR code or a token instead.",
-        ));
-    }
+pub(super) fn mfa_required(inner: &Inner, ticket: String, login_instance_id: Option<String>, opts: MfaOptions) -> Result<ReadyData, BackendError> {
     *inner.mfa_ticket.lock() = Some(Secret::new(ticket));
-    *inner.mfa_opts.lock() = MfaOptions { totp, sms, backup };
-    Err(err(if totp {
-        "Enter the 6-digit code from your authenticator app."
-    } else {
-        "Choose how to receive your login code below."
-    }))
+    *inner.mfa_instance.lock() = login_instance_id;
+    *inner.mfa_opts.lock() = opts;
+    Err(err(""))
+}
+
+fn mfa_err(e: ApiError) -> BackendError {
+    match &e {
+        ApiError::CaptchaRequired { .. } | ApiError::RateLimited { .. } => api_err(e),
+        ApiError::Api { body, .. } if !body.message.is_empty() => err(body.message.clone()),
+        _ => err(crate::t!("login_mfa.error_generic").to_string()),
+    }
 }
 
 impl DiscordBackend {
@@ -32,28 +32,21 @@ impl DiscordBackend {
 
     pub(super) fn login_mfa_impl(&self, method: MfaMethod, code: String) -> BoxFuture<ReadyData> {
         self.spawn(move |inner| async move {
-            let ticket = inner.mfa_ticket.lock().clone().ok_or_else(|| err("Log in with your password first."))?;
-            let code: String = code.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
-            if code.is_empty() {
-                return Err(err("Enter your code."));
-            }
+            let ticket = inner.mfa_ticket.lock().clone().ok_or_else(|| err(crate::t!("login_mfa.error_generic").to_string()))?;
+            let instance = inner.mfa_instance.lock().clone();
             let rest = RestClient::unauthenticated(inner.props.clone());
-            let token = match method {
-                MfaMethod::Totp => rest.login_mfa_totp(ticket.expose(), &code).await,
-                MfaMethod::Backup => rest.login_mfa_backup(ticket.expose(), &code).await,
-                MfaMethod::Sms => rest.login_mfa_sms(ticket.expose(), &code).await,
-            }
-            .map_err(api_err)?;
+            let token = rest.login_mfa(method.api(), ticket.expose(), &code, instance.as_deref()).await.map_err(mfa_err)?;
             inner.mfa_ticket.lock().take();
+            inner.mfa_instance.lock().take();
             connect(inner, Secret::new(token), true).await
         })
     }
 
     pub(super) fn send_mfa_sms_impl(&self) -> BoxFuture<String> {
         self.spawn(move |inner| async move {
-            let ticket = inner.mfa_ticket.lock().clone().ok_or_else(|| err("Log in with your password first."))?;
+            let ticket = inner.mfa_ticket.lock().clone().ok_or_else(|| err(crate::t!("login_mfa.error_generic").to_string()))?;
             let rest = RestClient::unauthenticated(inner.props.clone());
-            rest.login_mfa_sms_send(ticket.expose()).await.map_err(api_err)
+            rest.login_mfa_sms_send(ticket.expose()).await.map_err(mfa_err)
         })
     }
 
@@ -406,5 +399,26 @@ mod affinity_tests {
     fn keeps_the_server_order() {
         let v = serde_json::json!({"guild_affinities": [{"guild_id": "30", "affinity": 1.5}, {"guild_id": "10", "affinity": 9.0}, {"affinity": 2.0}]});
         assert_eq!(super::parse_guild_affinities(&v), vec![crate::model::Id(30), crate::model::Id(10)]);
+    }
+}
+
+#[cfg(test)]
+mod mfa_tests {
+    use super::*;
+    use phoenix_api::error::ApiErrorBody;
+
+    fn api(status: u16, code: u32, message: &str) -> ApiError {
+        ApiError::Api { status, body: Box::new(ApiErrorBody { code, message: message.into(), ..Default::default() }), raw: String::new() }
+    }
+
+    #[test]
+    fn login_mfa_errors_show_what_the_client_shows() {
+        assert_eq!(mfa_err(api(400, 60008, "Invalid two-factor code")).0, "Invalid two-factor code");
+        assert_eq!(mfa_err(api(400, 60006, "Invalid two-factor auth ticket")).0, "Invalid two-factor auth ticket");
+        assert_eq!(mfa_err(api(401, 0, "")).0, crate::t!("login_mfa.error_generic").to_string());
+        let limited = mfa_err(ApiError::RateLimited { retry_after: std::time::Duration::from_secs(30), global: false });
+        assert!(limited.0.contains("30"));
+        let captcha = mfa_err(ApiError::CaptchaRequired { sitekey: None, body: Box::default() });
+        assert!(captcha.0.contains("captcha"));
     }
 }

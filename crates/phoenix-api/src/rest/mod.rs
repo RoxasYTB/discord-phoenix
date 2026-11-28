@@ -138,7 +138,15 @@ impl CreateMessage {
 #[derive(Clone)]
 pub enum LoginResponse {
     Token { user_id: Option<UserId>, token: String },
-    MfaRequired { user_id: Option<UserId>, ticket: String, totp: bool, sms: bool, backup: bool, webauthn: bool },
+    MfaRequired {
+        user_id: Option<UserId>,
+        ticket: String,
+        totp: bool,
+        sms: bool,
+        backup: bool,
+        webauthn: bool,
+        login_instance_id: Option<String>,
+    },
 }
 
 impl std::fmt::Debug for LoginResponse {
@@ -178,6 +186,8 @@ struct RawLogin {
     backup: bool,
     #[serde(default)]
     webauthn: Option<Value>,
+    #[serde(default)]
+    login_instance_id: Option<String>,
 }
 
 enum Body {
@@ -633,26 +643,6 @@ impl RestClient {
             .await?;
         parse_login(raw)
     }
-
-    pub async fn login_mfa_totp(&self, ticket: &str, code: &str) -> Result<String> {
-        #[derive(Deserialize)]
-        struct T {
-            token: String,
-        }
-        let t: T = self
-            .call(
-                Method::POST,
-                "/auth/mfa/totp",
-                Body::Json(json!({
-                    "code": code,
-                    "ticket": ticket,
-                    "login_source": null,
-                    "gift_code_sku_id": null,
-                })),
-            )
-            .await?;
-        Ok(t.token)
-    }
 }
 
 fn parse_login(raw: RawLogin) -> Result<LoginResponse> {
@@ -669,6 +659,7 @@ fn parse_login(raw: RawLogin) -> Result<LoginResponse> {
             sms: raw.sms,
             backup: raw.backup,
             webauthn: raw.webauthn.is_some_and(|v| !v.is_null()),
+            login_instance_id: raw.login_instance_id,
         });
     }
     Err(Error::Protocol("login response had neither token nor MFA ticket".into()))

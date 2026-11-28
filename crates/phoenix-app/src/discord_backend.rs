@@ -91,6 +91,7 @@ struct Inner {
     sink: Mutex<Option<EventSink>>,
     session: Mutex<Option<Arc<Session>>>,
     mfa_ticket: Mutex<Option<Secret>>,
+    mfa_instance: Mutex<Option<String>>,
     mfa_opts: Mutex<crate::auth::MfaOptions>,
     remote_auth: Mutex<Option<tokio::task::AbortHandle>>,
     pre_rest: Mutex<Option<RestClient>>,
@@ -153,6 +154,7 @@ impl DiscordBackend {
                 sink: Mutex::new(None),
                 session: Mutex::new(None),
                 mfa_ticket: Mutex::new(None),
+                mfa_instance: Mutex::new(None),
                 mfa_opts: Mutex::new(Default::default()),
                 remote_auth: Mutex::new(None),
                 pre_rest: Mutex::new(None),
@@ -541,18 +543,10 @@ impl Backend for DiscordBackend {
                     let rest = RestClient::unauthenticated(inner.props.clone());
                     match rest.login(login.trim(), &password).await.map_err(api_err)? {
                         LoginResponse::Token { token, .. } => connect(inner, Secret::new(token), true).await,
-                        LoginResponse::MfaRequired { ticket, totp, sms, backup, .. } => {
-                            account::mfa_required(&inner, ticket, totp, sms, backup)
+                        LoginResponse::MfaRequired { ticket, totp, sms, backup, webauthn, login_instance_id, .. } => {
+                            account::mfa_required(&inner, ticket, login_instance_id, crate::auth::MfaOptions { totp, sms, backup, webauthn })
                         }
                     }
-                }
-                Credentials::Mfa { code } => {
-                    let ticket = inner.mfa_ticket.lock().clone().ok_or_else(|| err("Log in with your password first."))?;
-                    let code: String = code.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
-                    let rest = RestClient::unauthenticated(inner.props.clone());
-                    let token = rest.login_mfa_totp(ticket.expose(), &code).await.map_err(api_err)?;
-                    inner.mfa_ticket.lock().take();
-                    connect(inner, Secret::new(token), true).await
                 }
             }
         })
@@ -587,6 +581,11 @@ impl Backend for DiscordBackend {
 
     fn send_mfa_sms(&self) -> BoxFuture<String> {
         self.send_mfa_sms_impl()
+    }
+
+    fn reset_mfa(&self) {
+        self.inner.mfa_ticket.lock().take();
+        self.inner.mfa_instance.lock().take();
     }
 
     fn remote_auth(&self) -> Option<BoxFuture<ReadyData>> {
@@ -874,6 +873,7 @@ impl Backend for DiscordBackend {
     fn logout(&self) -> BoxFuture<()> {
         self.spawn(move |inner| async move {
             inner.mfa_ticket.lock().take();
+            inner.mfa_instance.lock().take();
             inner.pre_rest.lock().take();
             if let Some(s) = inner.session.lock().take() {
                 s.gateway.shutdown();

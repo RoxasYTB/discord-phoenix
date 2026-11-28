@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
         _ => AppTheme::Dark,
     };
     let scene = args.next().unwrap_or_else(|| "appearance".into());
-    let login_only = false;
+    let login_only = scene.starts_with("login");
 
     let text = gpui_platform::current_platform(true).text_system();
     let mut cx = HeadlessAppContext::with_platform(text, Arc::new(Assets), || {
@@ -262,6 +262,42 @@ fn main() -> anyhow::Result<()> {
             })?;
             pump(&mut cx, 4);
         }
+    }
+    if login_only {
+        let v = view.borrow().clone().expect("view");
+        let who = match scene.as_str() {
+            "login-mfa-sms" => "sms@phoenix.demo",
+            "login-mfa-key" => "key@phoenix.demo",
+            "login-mfa" | "login-mfa-error" => "totp@phoenix.demo",
+            _ => "mfa@phoenix.demo",
+        };
+        if scene != "login" {
+            cx.update_window(win.into(), |_, window, cx| {
+                v.update(cx, |app, cx| {
+                    app.login_email.update(cx, |s, cx| s.set_value(who, window, cx));
+                    app.login_password.update(cx, |s, cx| s.set_value("demo", window, cx));
+                    app.submit_login(window, cx);
+                });
+            })?;
+            pump(&mut cx, 10);
+        }
+        cx.update_window(win.into(), |_, window, cx| {
+            v.update(cx, |app, cx| {
+                use phoenix_app::auth::{self, MfaSlide};
+                match scene.as_str() {
+                    "login-mfa-select" => auth::set_slide(app, MfaSlide::Select, cx),
+                    "login-mfa-backup" => auth::set_slide(app, MfaSlide::Backup, cx),
+                    "login-mfa-backup-code" => auth::set_slide(app, MfaSlide::BackupAck, cx),
+                    "login-mfa-error" => {
+                        app.login_mfa.update(cx, |s, cx| s.set_value("000000", window, cx));
+                        auth::submit_mfa(app, cx);
+                    }
+                    _ => {}
+                }
+                cx.notify();
+            });
+        })?;
+        pump(&mut cx, 10);
     }
     if let Some((x, y)) = std::env::var("PHX_MOUSE").ok().and_then(|v| {
         let (x, y) = v.split_once(',')?;

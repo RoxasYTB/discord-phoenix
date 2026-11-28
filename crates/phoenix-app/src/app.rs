@@ -267,7 +267,7 @@ impl PhoenixApp {
         let login_email = cx.new(|cx| InputState::new(window, cx));
         let login_password = cx.new(|cx| InputState::new(window, cx).masked(true));
         let login_token = cx.new(|cx| InputState::new(window, cx).masked(true));
-        let login_mfa = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("login.six_digit")));
+        let login_mfa = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("login_mfa.code_placeholder")));
         let max_rows = ((f32::from(window.viewport_size().height) * 0.5 / 22.).floor() as usize).max(2);
         let composer = cx.new(|cx| gpui_component::input::TextareaState::new(window, cx).auto_grow(1, max_rows).submit_on_enter(true));
 
@@ -286,6 +286,11 @@ impl PhoenixApp {
         subs.push(cx.observe(&composer, |this, area, cx| {
             if ui::chat::rich_input::enabled(this) {
                 ui::chat::rich_input::snap_quote_caret(&area, cx);
+            }
+        }));
+        subs.push(cx.subscribe_in(&login_mfa, window, |this, _, ev: &InputEvent, window, cx| {
+            if let InputEvent::Change = ev {
+                crate::auth::on_code_change(this, window, cx);
             }
         }));
         for input in [&login_email, &login_password, &login_token, &login_mfa] {
@@ -484,9 +489,7 @@ impl PhoenixApp {
         if self.login_mfa_step && !self.login_with_token {
             return crate::auth::submit_mfa(self, cx);
         }
-        let creds = if self.login_mfa_step && !self.login_with_token {
-            Credentials::Mfa { code: self.login_mfa.read(cx).value().to_string() }
-        } else if self.login_with_token {
+        let creds = if self.login_with_token {
             Credentials::Token(self.login_token.read(cx).value().to_string())
         } else {
             Credentials::Password {
@@ -507,10 +510,8 @@ impl PhoenixApp {
                         this.login_mfa_step = false;
                         this.apply_ready(ready, cx)
                     }
-                    Err(e) => {
-                        this.login_mfa_step = this.backend.needs_mfa();
-                        this.login_error = Some(e.0.into());
-                    }
+                    Err(_) if this.backend.needs_mfa() => crate::auth::start_mfa(this, cx),
+                    Err(e) => this.login_error = Some(e.0.into()),
                 }
                 cx.notify();
             });
@@ -561,6 +562,7 @@ impl PhoenixApp {
         self.nav.pending_friend_actions.clear();
         self.nav.relationship_revision = self.nav.relationship_revision.wrapping_add(1);
         self.login_mfa_step = false;
+        self.login_ui.mfa = Default::default();
         self.login_error = None;
         self.screen = Screen::Login;
         cx.notify();
@@ -1682,6 +1684,7 @@ impl Render for PhoenixApp {
         ui::chat::selection::begin_frame(self.selected_channel.map(|c| c.0));
         ui::a11y::sync(window);
         crate::auth::ensure_qr(self, cx);
+        crate::auth::sync(self, window, cx);
         crate::theme::sync(&self.prefs, window, cx);
         crate::sounds::set_focused(window.is_window_active());
         phoenix_api::props::set_app_skeleton(self.screen == Screen::Main);
