@@ -247,7 +247,7 @@ fn banner_action(id: &'static str, label: SharedString, primary: bool) -> gpui::
         .hover(move |d| d.bg(if primary { gpui::rgb(0xece8f2) } else { gpui::rgba(0x251029eb) }))
         .text_color(if primary { gpui::black() } else { gpui::white() })
         .text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM)
-        .text_center().child(label)
+        .text_center().child(div().min_w_0().child(label))
 }
 
 fn member_banner(app: &PhoenixApp, plan: Plan, cx: &mut Context<PhoenixApp>) -> Div {
@@ -298,7 +298,7 @@ fn member_banner(app: &PhoenixApp, plan: Plan, cx: &mut Context<PhoenixApp>) -> 
         .items_center()
         .gap(z(14.))
         .child(
-            div().relative().flex().flex_col().flex_1().min_w_0().max_w(z(328.))
+            div().relative().flex().flex_col().flex_shrink_0().w(z(328.)).max_w_full()
                 .text_color(gpui::white())
                 .child(title)
                 .child(div().text_size(z(14.)).line_height(z(20.)).font_weight(FontWeight::BOLD).child(monthly_price(plan)))
