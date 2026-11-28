@@ -129,7 +129,7 @@ impl gpui::Render for Overlay {
         let message = app.clips.message.clone();
         let title = channel.map(|ch| ch.name.clone()).unwrap_or_else(|| crate::t!("game.overlay.no_voice"));
         if !enabled {
-            cx.defer(|cx| close(cx));
+            cx.defer(close);
         }
         div()
             .size_full()
