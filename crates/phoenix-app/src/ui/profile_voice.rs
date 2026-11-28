@@ -188,7 +188,7 @@ pub fn card(app: &PhoenixApp, user: Id, col: Colors, entity: Entity<PhoenixApp>)
         .justify_between()
         .gap(z(4.))
         .child(header_text)
-        .child(
+        .when(!app.users.get(&user).is_some_and(|u| u.bot), |d| d.child(
             div()
                 .id(("profile-voice-more", user.0))
                 .mr(z(4.))
@@ -200,7 +200,7 @@ pub fn card(app: &PhoenixApp, user: Id, col: Colors, entity: Entity<PhoenixApp>)
                     crate::ui::voice_row::open_activity_menu(ev.position(), user, w);
                 })
                 .child(svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
-        );
+        ));
 
     let e_join = entity.clone();
     let name = div()
