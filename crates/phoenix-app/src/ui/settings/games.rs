@@ -62,10 +62,11 @@ pub(super) fn current(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElem
     let playing = running.and_then(|apps| apps.iter().find(|name| added.contains(*name)));
     let current = playing.map(|name| name.clone().into()).unwrap_or_else(|| crate::t!("sp.rg.none"));
 
-    let mut card = div().mt(z(10.)).flex().flex_col().gap(z(8.)).p(z(16.)).rounded(z(12.))
+    let mut card = div().mt(z(10.)).flex().flex_col().gap(z(4.)).p(z(16.)).rounded(z(12.))
         .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
-        .child(div().text_size(z(16.)).font_weight(gpui::FontWeight::SEMIBOLD).child(current))
-        .child(div().flex().items_center().gap(z(4.)).text_size(z(14.))
+        .child(div().text_size(z(16.)).line_height(z(22.)).font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE))).child(current))
+        .child(div().flex().items_center().gap(z(4.)).text_size(z(14.)).line_height(z(18.))
             .child(div().text_color(c(tok(idx::TEXT_MUTED))).child(crate::t!("sp.rg.cant_find")))
             .child(div().id("rg-add").cursor_pointer().text_color(c(tok(idx::TEXT_LINK)))
                 .child(crate::t!("sp.rg.add"))
