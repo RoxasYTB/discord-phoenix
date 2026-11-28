@@ -145,8 +145,6 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let mut body = div().flex().flex_col();
     for (i, r) in list.iter().take(200).enumerate() {
         let u = app.users.get(&Id(r.id));
-        let menu_key = format!("member-{}", r.id);
-        let open = s.menu.as_deref() == Some(menu_key.as_str());
         let uid = r.id;
         let mut roles = div().w(z(160.)).flex_none().flex().gap(z(4.)).overflow_hidden();
         for rid in r.roles.iter().take(2) {
@@ -157,7 +155,7 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         if r.roles.len() > 2 {
             roles = roles.child(text(format!("+{}", r.roles.len() - 2), 12., 16., FontWeight::MEDIUM, idx::TEXT_SUBTLE));
         }
-        let mk = menu_key.clone();
+        let guild = s.guild;
         body = body.child(
             div()
                 .id(("ss-member", i))
@@ -184,13 +182,15 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                 .child(text(ago(r.created), 14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT).w(z(110.)).flex_none())
                 .child(roles)
                 .child(
-                    kit::icon_btn(("ss-member-more", i), "more-vertical", 32., 16., false).on_click(cx.listener(move |_, _, _, cx| {
-                        let k = mk.clone();
-                        with_state(|s| s.menu = if s.menu.as_deref() == Some(k.as_str()) { None } else { Some(k) });
-                        cx.notify();
-                    })),
+                    kit::icon_btn(("ss-member-more", i), "more-vertical", 32., 16., false).on_click(move |ev, w, cx| {
+                        cx.stop_propagation();
+                        crate::ui::user_menu::open(Id(uid), Some(guild), ev.position(), w)
+                    }),
                 )
-                .when(open, |d| d.child(gpui::deferred(member_menu(s.guild, uid, cx)).with_priority(30))),
+                .on_mouse_down(gpui::MouseButton::Right, move |ev, w, cx| {
+                    cx.stop_propagation();
+                    crate::ui::user_menu::open(Id(uid), Some(guild), ev.position, w)
+                }),
         );
     }
     div()
@@ -206,56 +206,8 @@ pub fn members(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         .into_any_element()
 }
 
-fn menu_item(id: (&'static str, usize), label: SharedString, danger: bool) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .h(z(32.))
-        .px(z(8.))
-        .rounded(z(4.))
-        .flex()
-        .items_center()
-        .cursor_pointer()
-        .text_size(z(14.))
-        .line_height(z(18.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(c(tok(if danger { idx::TEXT_FEEDBACK_CRITICAL } else { idx::TEXT_DEFAULT })))
-        .hover(move |s| s.bg(c(tok(if danger { idx::BACKGROUND_FEEDBACK_MOD_CRITICAL } else { idx::BACKGROUND_MOD_NORMAL }))))
-        .child(label)
-}
-
 pub fn member_calls(guild: Id, user: u64) -> [AdminCall; 2] {
     [AdminCall::Kick { guild: sf(guild), user: Snowflake(user) }, AdminCall::Ban { guild: sf(guild), user: Snowflake(user), delete_message_seconds: 0 }]
-}
-
-fn member_menu(guild: Id, user: u64, cx: &mut Cx) -> AnyElement {
-    let [kick, ban] = member_calls(guild, user);
-    div()
-        .absolute()
-        .top(z(48.))
-        .right(z(16.))
-        .w(z(188.))
-        .p(z(8.))
-        .rounded(z(8.))
-        .border_1()
-        .border_color(c(tok(idx::BORDER_SUBTLE)))
-        .bg(c(tok(idx::BACKGROUND_SURFACE_HIGHER)))
-        .occlude()
-        .flex()
-        .flex_col()
-        .child(menu_item(("ss-mm", 0), crate::t!("common.copy_user_id"), false).on_click(cx.listener(move |a, _, _, cx| {
-            cx.write_to_clipboard(gpui::ClipboardItem::new_string(user.to_string()));
-            with_state(|s| s.menu = None);
-            a.parity_toast(crate::t!("gs.eng.copied"), cx);
-        })))
-        .child(menu_item(("ss-mm", 1), crate::t!("gs.members.kick"), true).on_click(cx.listener(move |a, _, _, cx| {
-            with_state(|s| s.menu = None);
-            a.admin_toast(kick.clone(), Some(crate::t!("gs.members.kicked")), cx);
-        })))
-        .child(menu_item(("ss-mm", 2), crate::t!("gs.members.ban"), true).on_click(cx.listener(move |a, _, _, cx| {
-            with_state(|s| s.menu = None);
-            a.admin_toast(ban.clone(), Some(crate::t!("gs.members.banned")), cx);
-        })))
-        .into_any_element()
 }
 
 pub fn invite_rows(list: &[Value]) -> Vec<&Value> {
