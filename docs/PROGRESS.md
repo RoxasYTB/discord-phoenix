@@ -4,7 +4,7 @@ Audit du 27/11/2026 sur origin/main `8c7b358b`. Ce document remplace le pourcent
 
 Mise à jour du 28/11 (QA de nuit) : le salon de test #phoenix, supprimé le 27/11, a été recréé à l'identique (`1576039645127385188`). Toute la QA d'entrées de `docs/qa.md` repasse (39/39), et sept fonctionnalités passent « vérifiées en vrai » sur des écritures réelles dans ce salon, contrôlées en GET : sondages (création et vote), GIF, transfert, fils, sondages et messages programmés, épingles, message vocal (tonalité générée) et raccourcis clavier.
 
-<!-- real-progress {"score":75.1,"low":67.4,"high":84.2,"features":122,"verified":55,"unverified":56,"broken":3,"missing":8,"critical":26,"critical_verified":22,"critical_broken":3,"proof_measured":44,"proof_compared":8,"at":"2026-11-28"} -->
+<!-- real-progress {"score":75.1,"low":67.4,"high":84.2,"features":122,"verified":59,"unverified":51,"broken":4,"missing":8,"critical":26,"critical_verified":22,"critical_broken":3,"proof_measured":44,"proof_compared":8,"at":"2026-11-28"} -->
 
 ## Résultat
 
@@ -317,3 +317,14 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | 120 | Lecteur d'écran | important | absente | aucune intégration AT-SPI ou accesskit |
 | 121 | Raccourcis clavier | important | vérifiée en vrai | QA d'entrées du 28/11 sur le nouveau #phoenix (`1576039645127385188`, int-bin `6d24e386`/`eb489280`), vérifié en GET : Ctrl+I, Ctrl+P, Ctrl+U, Ctrl+/, Ctrl+S, Alt+haut/bas, Alt+gauche/droite, Ctrl+Alt+haut/bas, Ctrl+K, Ctrl+= et Ctrl+0 (config isolée) ; Ctrl+E et Ctrl+G ouvrent les sélecteurs depuis `863eaa6b` (deux intercepteurs ouvraient puis refermaient le sélecteur) |
 | 122 | Synthèse vocale (/tts) | détail | présente, non vérifiée | `tts.rs` |
+
+## QA du 28/11 au soir sur d1dd79a5 (real_shots hors écran, vrai compte, #phoenix)
+
+- Infobulles : « Modifier » sur la barre d'actions de trois réponses compactes identiques, puis un cran de molette sans bouger le pointeur. L'infobulle suit son ancre pendant la première image puis disparaît ; aucune infobulle orpheline sur 30 images. Conforme.
+- Lien de message au chargement à froid : « # 〢💬 · phoenix › 💬 », plus de « # inconnu » (ligne 57 fermée, corrigée par 92fb36f7).
+- Message vocal de 10 s (1576191696453116087) : lecture de 0,23 à 9,99 s puis fin normale (ligne 55 fermée).
+- Menu + puis sous-menu « Programmer un message » ouvert 6 s : pas de gel. La boucle de la ligne 50 est bornée depuis 92fb36f7 (placement par menu, deux rafraîchissements au plus par changement de sous-menu). Non reproduite.
+- Fils à 940 px : ouverture depuis l'aperçu, Échap ferme la recherche, puis le fil, et rend le focus au compositeur du salon ; changement de salon sans fil résiduel. Conforme.
+- Non conforme : à 940 px, la recherche ouverte avec un fil réduit le chat et le fil à quelques dizaines de pixels (texte coupé lettre par lettre). Comportement du client à mesurer.
+- Effets de profil hors focus : non testables hors écran. La fenêtre headless n'est jamais active (`is_active` renvoie false), donc depuis b4a4cd77 les effets restent figés dans real_shots. Reprise et mouvement réduit à vérifier dans l'application.
+- Ligne 46 (rafraîchissement d'historique) : toujours non reproduite.
