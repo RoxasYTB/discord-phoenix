@@ -1140,8 +1140,8 @@ pub(crate) fn message(
             }
         }
     }
-    for e in msg.embeds.iter().filter(show_embed) {
-        content = content.child(embed(app, entity, e, cx));
+    for (ei, e) in msg.embeds.iter().filter(show_embed).enumerate() {
+        content = content.child(embed_for_msg(app, entity, e, Some((id.0, selection::EMBED_BASE + ei * selection::EMBED_STRIDE)), cx));
     }
     if has_media {
         media::set_current_author(None);
@@ -1346,7 +1346,27 @@ pub(crate) fn message(
             .child({
                 let hovered = crate::ui::avatar_deco::hovered(crate::ui::avatar_deco::hover_key(2, msg.id.0));
                 let motion = if hovered { crate::fonts::Motion::Loop } else { crate::fonts::Motion::Still };
-                crate::fonts::role_name_text_moving(name, author, 16., app.selected_guild.is_some(), author_role_gradient, hovered, motion)
+                let name_len = name.len();
+                selection::note(id.0, selection::AUTHOR_BLOCK, name.clone(), &[]);
+                if author_role_gradient.is_none() {
+                    let run = gpui::TextRun {
+                        len: name_len,
+                        font: gpui::Font { family: crate::theme::FONT_UI().into(), weight: FontWeight::MEDIUM, ..Default::default() },
+                        color,
+                        background_color: None,
+                        underline: None,
+                        strikethrough: None,
+                    };
+                    let runs = selection::highlight(id.0, selection::AUTHOR_BLOCK, 0, name_len, vec![run]);
+                    let st = StyledText::new(name).with_runs(runs);
+                    let probe = selection::probe(st.layout().clone(), id.0, selection::AUTHOR_BLOCK, 0, name_len);
+                    div().relative().child(st).child(probe).into_any_element()
+                } else {
+                    div()
+                        .when(selection::covers(id.0, selection::AUTHOR_BLOCK, &(0..name_len)), |d| d.bg(selection::selection_bg()))
+                        .child(crate::fonts::role_name_text_moving(name, author, 16., app.selected_guild.is_some(), author_role_gradient, hovered, motion))
+                        .into_any_element()
+                }
             })
     });
 
@@ -2186,7 +2206,7 @@ fn embed_blocks(app: &PhoenixApp, src: &str) -> std::rc::Rc<[RBlock]> {
     })
 }
 
-fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size: f32) -> AnyElement {
+fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size: f32, sel: Option<(u64, usize)>) -> AnyElement {
     let blocks = embed_blocks(app, src);
     let key = {
         use std::hash::{Hash, Hasher};
@@ -2196,21 +2216,33 @@ fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size
     };
     let mut d = div().flex().flex_col().text_size(fz(size)).line_height(z(18.)).min_w_0();
     for (bi, b) in blocks.iter().enumerate() {
+        let block_sel = sel.map(|(m, base)| (m, base + bi));
         d = d.child(match b {
-            RBlock::Code { code, runs, .. } => div()
-                .my(z(4.))
-                .p(z(8.))
-                .rounded(z(4.))
-                .bg(c(Palette::BG_TERTIARY))
-                .font_family(FONT_MONO())
-                .text_size(z(12.))
-                .line_height(z(16.))
-                .child(StyledText::new(code.clone()).with_runs(runs.clone()))
-                .into_any_element(),
+            RBlock::Code { code, runs, .. } => {
+                let mut runs = runs.clone();
+                if let Some((m, sb)) = block_sel {
+                    selection::note(m, sb, code.clone(), &[]);
+                    runs = selection::highlight(m, sb, 0, code.len(), runs);
+                }
+                let st = StyledText::new(code.clone()).with_runs(runs);
+                let probe = block_sel.map(|(m, sb)| selection::probe(st.layout().clone(), m, sb, 0, code.len()));
+                div()
+                    .relative()
+                    .my(z(4.))
+                    .p(z(8.))
+                    .rounded(z(4.))
+                    .bg(c(Palette::BG_TERTIARY))
+                    .font_family(FONT_MONO())
+                    .text_size(z(12.))
+                    .line_height(z(16.))
+                    .child(st)
+                    .children(probe)
+                    .into_any_element()
+            }
             RBlock::Quote(t) => div()
                 .flex()
                 .child(div().w(z(4.)).rounded(z(4.)).bg(c(Palette::INTERACTIVE_MUTED)).flex_none())
-                .child(div().pl(z(12.)).child(embed_text(entity, key, bi, t, EMBED_EMOJI)))
+                .child(div().pl(z(12.)).child(embed_text(entity, key, bi, t, EMBED_EMOJI, block_sel)))
                 .into_any_element(),
             b => {
                 let empty = RichText {
@@ -2222,7 +2254,7 @@ fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size
                 };
                 let t = b.text().unwrap_or(&empty);
                 let emoji_px = embed_emoji_px(matches!(b, RBlock::Heading(..)), size);
-                let el = embed_text(entity, key, bi, t, emoji_px);
+                let el = embed_text(entity, key, bi, t, emoji_px, block_sel);
                 match b {
                     RBlock::Heading(..) => el.font_weight(FontWeight::BOLD).text_size(z(size + 2.)),
                     RBlock::Subtext(_) => el.text_size(z(12.)).text_color(c(Palette::TEXT_MUTED)),
@@ -2241,8 +2273,11 @@ fn embed_markdown(app: &PhoenixApp, entity: &Entity<PhoenixApp>, src: &str, size
     d.into_any_element()
 }
 
-fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, range: std::ops::Range<usize>) -> AnyElement {
-    let runs = message_ext::slice_runs(&t.runs, range.clone());
+fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, range: std::ops::Range<usize>, sel: Option<(u64, usize)>) -> AnyElement {
+    let mut runs = message_ext::slice_runs(&t.runs, range.clone());
+    if let Some((m, sb)) = sel {
+        runs = selection::highlight(m, sb, range.start, range.len(), runs);
+    }
     let text: SharedString = t.text[range.clone()].to_owned().into();
     let off = range.start;
     let mut ranges = Vec::new();
@@ -2257,7 +2292,9 @@ fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText
         }
     }
     if ranges.is_empty() {
-        return StyledText::new(text).with_runs(runs).into_any_element();
+        let st = StyledText::new(text).with_runs(runs);
+        let probe = sel.map(|(m, sb)| selection::probe(st.layout().clone(), m, sb, range.start, range.len()));
+        return div().relative().child(st).children(probe).into_any_element();
     }
     let runs = mention::anchor_runs(key, bi, off, &runs).unwrap_or(runs);
     let anchor = {
@@ -2272,7 +2309,9 @@ fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText
     let e = entity.clone();
     let id = key.0.wrapping_mul(31).wrapping_add(((bi as u64) << 32) | off as u64);
     let scope = range.clone();
-    let text_el = InteractiveText::new(("embed-rt", id), StyledText::new(text).with_runs(runs))
+    let styled = StyledText::new(text).with_runs(runs);
+    let probe = sel.map(|(m, sb)| selection::probe(styled.layout().clone(), m, sb, range.start, range.len()));
+    let text_el = InteractiveText::new(("embed-rt", id), styled)
         .on_hover(move |ix, _ev, w, _cx| mention::set_anchor(key, bi, range.clone(), ix.and_then(&hover).map(|a| a.0), w))
         .tooltip(move |ix, w, cx| {
             let (r, url) = anchor(ix)?;
@@ -2282,7 +2321,7 @@ fn embed_link_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText
             let url = urls[ix].clone();
             e.update(cx, |a, cx| crate::ui::modals::leave_link::click(a, &shown[ix], &url, w, cx));
         });
-    mention::leave_guard(("embed-rt-leave", id), key, bi, None, scope, text_el).into_any_element()
+    div().relative().child(mention::leave_guard(("embed-rt-leave", id), key, bi, None, scope, text_el)).children(probe).into_any_element()
 }
 
 const EMBED_EMOJI: f32 = 18.;
@@ -2303,16 +2342,19 @@ pub(crate) fn embed_title_rich(app: &PhoenixApp, src: &str, links: bool, base: g
     crate::ui::emoji_text::inline_rich(app, src, base, links, FontWeight::SEMIBOLD)
 }
 
-fn embed_title_el(entity: &Entity<PhoenixApp>, t: RichText, salt: u64) -> AnyElement {
-    if t.emoji.is_empty() && t.runs.len() <= 1 && t.click_ranges.is_empty() {
+fn embed_title_el(entity: &Entity<PhoenixApp>, t: RichText, salt: u64, sel: Option<(u64, usize)>) -> AnyElement {
+    if sel.is_none() && t.emoji.is_empty() && t.runs.len() <= 1 && t.click_ranges.is_empty() {
         return div().child(t.text).into_any_element();
     }
-    embed_text(entity, embed_key(&t.text, salt), 0, &t, EMBED_EMOJI).into_any_element()
+    embed_text(entity, embed_key(&t.text, salt), 0, &t, EMBED_EMOJI, sel).into_any_element()
 }
 
-fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, emoji_px: f32) -> gpui::Div {
+fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, emoji_px: f32, sel: Option<(u64, usize)>) -> gpui::Div {
+    if let Some((m, sb)) = sel {
+        selection::note(m, sb, t.text.clone(), &t.emoji);
+    }
     if t.emoji.is_empty() {
-        return div().child(embed_link_text(entity, key, bi, t, 0..t.text.len()));
+        return div().child(embed_link_text(entity, key, bi, t, 0..t.text.len(), sel));
     }
     let mut row = div().min_w_0().max_w_full().flex().flex_wrap().items_center();
     let push = |mut row: gpui::Div, range: std::ops::Range<usize>| -> gpui::Div {
@@ -2323,7 +2365,7 @@ fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, emo
                 row = row.child(div().w_full().h_0());
             }
             for w in message_ext::words(&t.text, r.clone()) {
-                row = row.child(div().flex_none().max_w_full().child(embed_link_text(entity, key, bi, t, w)));
+                row = row.child(div().flex_none().max_w_full().child(embed_link_text(entity, key, bi, t, w, sel)));
             }
             start = r.end + 1;
         }
@@ -2335,7 +2377,12 @@ fn embed_text(entity: &Entity<PhoenixApp>, key: Id, bi: usize, t: &RichText, emo
             continue;
         }
         row = push(row, last..r.start);
-        row = row.child(div().mx(z(1.)).child(crate::media::emoji::emoji_element(token, emoji_px)));
+        row = row.child(
+            div()
+                .mx(z(1.))
+                .when(sel.is_some_and(|(m, sb)| selection::covers(m, sb, r)), |d| d.bg(selection::selection_bg()))
+                .child(crate::media::emoji::emoji_element(token, emoji_px)),
+        );
         last = r.end;
     }
     push(row, last..t.text.len())
@@ -2373,6 +2420,10 @@ fn embed_player(v: &crate::model::EmbedMedia, poster: SharedString, size: (f32, 
 }
 
 pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx: &App) -> AnyElement {
+    embed_for_msg(app, entity, e, None, cx)
+}
+
+fn embed_for_msg(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, sel: Option<(u64, usize)>, cx: &App) -> AnyElement {
     let has_text = e.title.is_some() || e.description.is_some() || e.author.is_some() || !e.fields.is_empty();
     let media_only = e.kind.as_deref() == Some("gifv") || (e.kind.as_deref() == Some("image") && !has_text);
     if media_only && let Some(m) = e.thumbnail.as_ref().or(e.image.as_ref()) {
@@ -2452,9 +2503,13 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
     }
     let fields = (!rows.is_empty()).then(|| {
         let mut grid = div().flex().flex_col().gap(z(8.));
+        let mut fi = 0usize;
         for r in rows {
             let mut row = div().flex().gap(z(8.));
             for f in r {
+                let name_sel = sel.map(|(m, b)| (m, b + 200 + fi * 20));
+                let val_sel = sel.map(|(m, b)| (m, b + 200 + fi * 20 + 1));
+                fi += 1;
                 row = row.child(
                     div()
                         .flex_1()
@@ -2466,9 +2521,9 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                                 .line_height(z(18.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(tk(idx::TEXT_STRONG))
-                                .child(embed_title_el(entity, embed_title_rich(app, &f.name, e.url.is_none(), tk(idx::TEXT_STRONG)), 1)),
+                                .child(embed_title_el(entity, embed_title_rich(app, &f.name, e.url.is_none(), tk(idx::TEXT_STRONG)), 1, name_sel)),
                         )
-                        .child(embed_markdown(app, entity, &f.value, 14.)),
+                        .child(embed_markdown(app, entity, &f.value, 14., val_sel)),
                 );
             }
             grid = grid.child(row);
@@ -2542,7 +2597,7 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(if url.is_some() { tk(idx::TEXT_LINK) } else { tk(idx::TEXT_STRONG) })
             .when(url.is_some(), |d| d.hover(|s| s.underline()))
-            .child(embed_title_el(entity, rich, 0))
+            .child(embed_title_el(entity, rich, 0, sel.map(|(m, b)| (m, b + 1))))
             .when_some(url, |d, u| d.cursor_pointer().on_click(move |_, _, cx| cx.open_url(&u)))
     });
 
@@ -2581,7 +2636,9 @@ pub(crate) fn embed(app: &PhoenixApp, entity: &Entity<PhoenixApp>, e: &Embed, cx
                         })
                         .children(author)
                         .children(title)
-                        .when_some(e.description.clone().filter(|_| !matches!(e.kind.as_deref(), Some("image" | "video" | "gifv"))), |d, t| d.child(embed_markdown(app, entity, &t, 14.)))
+                        .when_some(e.description.clone().filter(|_| !matches!(e.kind.as_deref(), Some("image" | "video" | "gifv"))), |d, t| {
+                            d.child(embed_markdown(app, entity, &t, 14., sel.map(|(m, b)| (m, b + 10))))
+                        })
                         .children(fields)
                         .when_some(big, |d, m| {
                             let (mw, mh) = embed_rules::media_max(e);

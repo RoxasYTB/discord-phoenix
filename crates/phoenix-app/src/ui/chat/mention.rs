@@ -140,6 +140,10 @@ pub fn hovered_link(msg: Id, bi: usize, seed: u64) -> Option<gpui::SharedString>
     HOVER_LINK.with(|h| h.borrow().as_ref().filter(|(m, b, s, _)| *m == msg.0 && *b == bi && *s == seed).map(|(_, _, _, u)| u.clone()))
 }
 
+pub fn any_hovered_link(msg: Id) -> Option<gpui::SharedString> {
+    HOVER_LINK.with(|h| h.borrow().as_ref().filter(|(m, _, _, _)| *m == msg.0).map(|(_, _, _, u)| u.clone()))
+}
+
 pub fn hovered_user(msg: Id, bi: usize, seed: u64) -> Option<u64> {
     HOVER_USER.with(Cell::get).filter(|(m, b, s, _)| *m == msg.0 && *b == bi && *s == seed).map(|(_, _, _, u)| u)
 }

@@ -905,7 +905,8 @@ pub fn rich_with_emoji_scaled(
     k: f32,
 ) -> AnyElement {
     let jumbo = crate::richtext::is_jumbo_text(t);
-    super::selection::note(msg.0, bi, t.text.clone(), &t.emoji);
+    let sel_bi = super::selection::BODY_BASE + bi;
+    super::selection::note(msg.0, sel_bi, t.text.clone(), &t.emoji);
     let k = k * crate::theme::font_scale();
     let size = k * if jumbo { 48. } else { 22. };
     let mut row = div().flex().flex_wrap().items_center().text_size(z(16. * k)).line_height(z(22. * k));
@@ -953,7 +954,7 @@ pub fn rich_with_emoji_scaled(
                 r.background_color = None;
             }
         }
-        let seg_runs = super::selection::highlight(msg.0, bi, range.start, range.len(), seg_runs);
+        let seg_runs = super::selection::highlight(msg.0, sel_bi, range.start, range.len(), seg_runs);
         let mut ranges = Vec::new();
         let mut targets = Vec::new();
         for (cr, tg) in t.click_ranges.iter().zip(t.click_targets.iter()) {
@@ -973,7 +974,7 @@ pub fn rich_with_emoji_scaled(
         };
         if ranges.is_empty() {
             let st = gpui::StyledText::new(text).with_runs(seg_runs);
-            let probe = super::selection::probe(st.layout().clone(), msg.0, bi, range.start, range.len());
+            let probe = super::selection::probe(st.layout().clone(), msg.0, sel_bi, range.start, range.len());
             let el = cell(div().child(st).child(probe).into_any_element()).into_any_element();
             return row.child(pill(el, &range, part));
         }
@@ -992,7 +993,7 @@ pub fn rich_with_emoji_scaled(
             .collect();
         let full = t.text.clone();
         let styled = gpui::StyledText::new(text).with_runs(seg_runs);
-        let probe = super::selection::probe(styled.layout().clone(), msg.0, bi, range.start, range.len());
+        let probe = super::selection::probe(styled.layout().clone(), msg.0, sel_bi, range.start, range.len());
         let e = entity.clone();
         let te = entity.clone();
         let (hr, ht) = (ranges.clone(), targets.clone());
@@ -1082,7 +1083,7 @@ pub fn rich_with_emoji_scaled(
             div()
                 .mx(z(1.))
                 .when(jumbo, |d| d.py(z(4.)))
-                .when(super::selection::covers(msg.0, bi, r), |d| d.bg(super::selection::selection_bg()))
+                .when(super::selection::covers(msg.0, sel_bi, r), |d| d.bg(super::selection::selection_bg()))
                 .when_some(target, |d, t| d.on_mouse_down(gpui::MouseButton::Right, move |_, _, _| super::panels::set_menu_item(t.clone())))
                 .child(crate::media::emoji::emoji_element(token, size)),
         );

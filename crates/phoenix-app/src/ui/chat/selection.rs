@@ -72,6 +72,10 @@ pub fn selection_bg() -> Hsla {
 }
 
 pub const SELECTION_RGBA: u32 = 0x0041c6cc;
+pub const AUTHOR_BLOCK: usize = 0;
+pub const BODY_BASE: usize = 1;
+pub const EMBED_BASE: usize = 10_000;
+pub const EMBED_STRIDE: usize = 1_000;
 
 pub fn begin_frame(channel: Option<u64>) {
     CELLS.with(|c| c.borrow_mut().clear());
@@ -463,5 +467,16 @@ mod tests {
         assert_eq!(nearest_in(&cells, gpui::point(gpui::px(200.), gpui::px(10.))), Some(p(1, 0, 11)));
         assert_eq!(nearest_in(&cells, gpui::point(gpui::px(200.), gpui::px(60.))), Some(p(2, 0, 4)));
         assert_eq!(nearest_in(&cells, gpui::point(gpui::px(-5.), gpui::px(-5.))), Some(p(1, 0, 0)));
+    }
+
+    #[test]
+    fn copies_author_body_and_embed_in_visual_order() {
+        begin_frame(Some(7));
+        note(100, AUTHOR_BLOCK, "Alice".into(), &[]);
+        note(100, BODY_BASE, "hello".into(), &[]);
+        note(100, EMBED_BASE + 1, "Embed Title".into(), &[]);
+        note(100, EMBED_BASE + 10, "Embed Desc".into(), &[]);
+        set_for_test(Some(7), p(100, AUTHOR_BLOCK, 0), p(100, EMBED_BASE + 10, 10));
+        assert_eq!(selected_text().as_deref(), Some("Alice\nhello\nEmbed Title\nEmbed Desc"));
     }
 }

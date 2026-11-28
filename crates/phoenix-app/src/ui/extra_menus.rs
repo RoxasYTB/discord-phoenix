@@ -33,7 +33,7 @@ pub enum Target {
     SecurityKey { id: String, name: SharedString, last: bool },
     BoostBar(Id),
     Role { guild: Id, role: u64 },
-    SearchResult { channel: Id, msg: Id, author: Id, pinned: bool, kind: u8 },
+    SearchResult { channel: Id, msg: Id, author: Id, pinned: bool, kind: u8, link: Option<SharedString> },
 }
 
 pub const NITRO_SKU: &str = "521847234246082599";
@@ -572,7 +572,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
         Target::QuestMore(q) => quest_items(&e, q),
         Target::SecurityKey { id, name, last } => security_key_items(&e, id.clone(), name.clone(), *last),
         Target::BoostBar(g) => boost_bar_items(app, &e, *g),
-        Target::SearchResult { channel, msg, author, pinned, kind } => search_result_items(app, &e, *channel, *msg, *author, *pinned, *kind),
+        Target::SearchResult { channel, msg, author, pinned, kind, link } => {
+            search_result_items(app, &e, *channel, *msg, *author, *pinned, *kind, link.clone())
+        }
         Target::Role { guild, role } => {
             let items = crate::ui::modals::server_settings::roles::menu_items(app, &e, *guild, *role);
             if items.is_empty() {
@@ -603,7 +605,16 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     Some(context_menu::render(pos, items, dismiss))
 }
 
-pub fn search_result_items(app: &PhoenixApp, e: &Ent, channel: Id, msg: Id, author: Id, pinned: bool, kind: u8) -> Vec<MenuItem> {
+pub fn search_result_items(
+    app: &PhoenixApp,
+    e: &Ent,
+    channel: Id,
+    msg: Id,
+    author: Id,
+    pinned: bool,
+    kind: u8,
+    link: Option<SharedString>,
+) -> Vec<MenuItem> {
     let mut groups: Vec<Vec<MenuItem>> = Vec::new();
     if let Some(sel) = crate::ui::chat::selection::selected_text() {
         groups.push(vec![MenuItem::action(crate::t!("ta.copy"), None, |_, _, cx: &mut App| {
@@ -619,24 +630,39 @@ pub fn search_result_items(app: &PhoenixApp, e: &Ent, channel: Id, msg: Id, auth
     let mut acts = Vec::new();
     if rules.pin && (guild.is_none() || crate::actions::has(app, guild, crate::actions::MANAGE_MESSAGES | (1 << 51))) {
         let label = if pinned { crate::t!("msg.unpin") } else { crate::t!("msg.pin") };
-        acts.push(act(e, label, move |a, _, cx| {
-            a.set_pinned_by_id(channel, msg, !pinned, cx);
+        let ep = e.clone();
+        acts.push(MenuItem::action(label, Some(crate::icons::path("pin")), move |_, _, cx: &mut App| {
+            ep.update(cx, |a, cx| a.set_pinned_by_id(channel, msg, !pinned, cx))
         }));
     }
-    acts.push(act(e, crate::t!("msg.mark_unread"), move |a, _, cx| {
-        a.mark_unread_by_id(channel, msg, cx);
+    let eu = e.clone();
+    acts.push(MenuItem::action(crate::t!("msg.mark_unread"), Some(crate::icons::path("mark-unread")), move |_, _, cx: &mut App| {
+        eu.update(cx, |a, cx| a.mark_unread_by_id(channel, msg, cx))
     }));
-    acts.push(act(e, crate::t!("msg.copy_link"), move |a, _, cx| a.copy_message_link(channel, msg, cx)));
+    let el = e.clone();
+    acts.push(MenuItem::action(crate::t!("msg.copy_link"), Some(crate::icons::path("link")), move |_, _, cx: &mut App| {
+        el.update(cx, |a, cx| a.copy_message_link(channel, msg, cx))
+    }));
     if rules.delete && (author == app.me.id || manage) {
         let ed = e.clone();
-        acts.push(MenuItem::danger(crate::t!("msg.delete"), None, move |ev, _, cx: &mut App| {
+        acts.push(MenuItem::danger(crate::t!("msg.delete"), Some(crate::icons::path("delete")), move |ev, _, cx: &mut App| {
             let skip = ev.modifiers().shift;
             ed.update(cx, |a, cx| a.request_delete(channel, msg, skip, cx))
         }));
     }
     groups.push(acts);
+    if let Some(url) = link {
+        groups.push(native_link_items(e, url));
+    }
     if app.prefs.synced.developer_mode {
-        groups.push(vec![copy(crate::t!("msg.copy_id"), msg.0.to_string()), copy(crate::t!("msg.copy_author_id"), author.0.to_string())]);
+        groups.push(vec![
+            MenuItem::action(crate::t!("msg.copy_id"), Some(crate::icons::path("id")), move |_, _, cx: &mut App| {
+                cx.write_to_clipboard(ClipboardItem::new_string(msg.0.to_string()))
+            }),
+            MenuItem::action(crate::t!("msg.copy_author_id"), Some(crate::icons::path("id")), move |_, _, cx: &mut App| {
+                cx.write_to_clipboard(ClipboardItem::new_string(author.0.to_string()))
+            }),
+        ]);
     }
     let mut out = Vec::new();
     for g in groups {

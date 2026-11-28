@@ -543,7 +543,8 @@ fn result_card(app: &PhoenixApp, ix: usize, m: &Message, hl: &Highlighter, cx: &
             let (author, pinned, kind) = (m.author, m.pinned, crate::ui::chat::panels::wire_type(m));
             move |ev, w, cx| {
                 cx.stop_propagation();
-                crate::ui::extra_menus::open(crate::ui::extra_menus::Target::SearchResult { channel, msg: id, author, pinned, kind }, ev.position, w)
+                let link = crate::ui::chat::mention::any_hovered_link(id);
+                crate::ui::extra_menus::open(crate::ui::extra_menus::Target::SearchResult { channel, msg: id, author, pinned, kind, link }, ev.position, w)
             }
         })
         .children(reply)

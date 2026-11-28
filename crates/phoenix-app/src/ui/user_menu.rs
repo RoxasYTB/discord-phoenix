@@ -71,8 +71,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     }
     let rel = app.nav.relationship(u).map(|r| r.kind);
     let friend = rel == Some(crate::ui::home::data::RelationshipKind::Friend);
+    let blocked = rel == Some(crate::ui::home::data::RelationshipKind::Blocked);
     let bot = app.users.get(&u).is_some_and(|x| x.bot);
-    if !me && friend {
+    if !me && !bot && !blocked {
         items.push(act(crate::t!("menu.call"), Rc::new(move |a, _, _, cx| a.open_call_ui(u, cx))));
     }
     if !me && !app.prefs.local.streamer_hides_info() {
@@ -104,7 +105,9 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
             items.push(act(crate::t!("menu.change_nickname"), Rc::new(move |a, _, _, cx| a.open_nickname(gid, Some(u), cx))));
         }
     }
-    items.push(MenuItem::submenu(crate::t!("menu.apps"), vec![MenuItem::disabled(crate::t!("menu.apps_none"), None)]));
+    if g.is_some() {
+        items.push(MenuItem::submenu(crate::t!("menu.apps"), vec![MenuItem::disabled(crate::t!("menu.apps_none"), None)]));
+    }
     if !me {
         if !bot {
             let invites: Vec<MenuItem> = app
@@ -125,16 +128,24 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
                 RelationshipKind::Friend => items.push(act(crate::t!("menu.remove_friend"), Rc::new(move |a, _, _, cx| a.confirm_remove_friend(u, cx)))),
                 _ if app.nav.pending_friend_actions.contains(&u) => items.push(MenuItem::disabled(crate::t!("friends.request_sent_menu"), None)),
                 RelationshipKind::Blocked => items.push(MenuItem::disabled(crate::t!("friends.add"), None)),
-                RelationshipKind::Incoming => items.push(act(crate::t!("ptb.accept_request"), Rc::new(move |a, _, _, cx| a.friend_menu_action(u, cx)))),
-                RelationshipKind::Outgoing | RelationshipKind::None => items.push(act(crate::t!("friends.add"), Rc::new(move |a, _, _, cx| a.friend_menu_action(u, cx)))),
+                RelationshipKind::Incoming | RelationshipKind::Outgoing | RelationshipKind::None => {
+                    items.push(act(crate::t!("friends.add"), Rc::new(move |a, _, _, cx| a.friend_menu_action(u, cx))))
+                }
             }
         }
-        let ign = if crate::actions::user::is_ignored(u) { "menu.unignore" } else { "menu.ignore" };
-        items.push(act(crate::t!(ign), Rc::new(move |a, _, _, cx| a.request_ignore(u, cx))));
-        items.push(MenuItem::danger(crate::t!("menu.block"), None, {
-            let e = e.clone();
-            move |_, _, cx: &mut App| e.update(cx, |a, cx| a.confirm_block(u, cx))
-        }));
+        if blocked {
+            items.push(act(
+                crate::t!("friends.unblock"),
+                Rc::new(move |a, _, _, cx| a.relationship_action(u, RelAction::Remove, cx)),
+            ));
+        } else {
+            let ign = if crate::actions::user::is_ignored(u) { "menu.unignore" } else { "menu.ignore" };
+            items.push(act(crate::t!(ign), Rc::new(move |a, _, _, cx| a.request_ignore(u, cx))));
+            items.push(MenuItem::danger(crate::t!("menu.block"), None, {
+                let e = e.clone();
+                move |_, _, cx: &mut App| e.update(cx, |a, cx| a.confirm_block(u, cx))
+            }));
+        }
     }
     if let Some(gid) = g {
         let manage = crate::ui::inbox::has_perm(app.backend.guild_permissions(gid), MANAGE_ROLES);
