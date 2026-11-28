@@ -101,6 +101,10 @@ Every check prints `QA OK [step] ...` or `QA KO [step] ...`, then
 `QA summary ok=N ko=M` and the list of shots (`qa-<name>.png`).
 `PHX_SCRIPT_STRICT=1` turns a failed check into a failed run.
 
+A `QA KO` is always one line: multi-line errors are folded with spaces (`diagnostics::one_line`). wgpu validation errors print `Validation Error` first and the actual cause (`Caused by: In Queue::write_texture ...`) on the following lines, so `grep "QA KO" log.txt` used to keep only the useless first line. This is how the cause of the inbox scroll failure at 1010 px (28/11 morning, real account, `PHX_SCALE=1.5`, 1280x700) was lost; it no longer reproduces on d1dd79a5 with the same script (wheel steps of 10 px to 1100 px), on the real account or with the demo data, which has no unread cards.
+
+In the app the same GPU error does not crash: the renderer skips the frame, clears the atlas and its intermediate textures after 6 failed frames in a row and tries again (`WgpuRenderer::draw`), so a persistent error shows as a frozen frame with `GPU error during frame` in the log, never as a panic.
+
 The mock counterpart, `ui/input_qa_tests.rs`, sends the same kind of events to a
 `VisualTestContext` window on demo data and runs with `cargo test` in the
 integrator.

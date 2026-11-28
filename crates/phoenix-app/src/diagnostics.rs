@@ -136,6 +136,10 @@ pub fn session_description() -> String {
     )
 }
 
+pub fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +218,12 @@ mod tests {
     fn commit_is_baked_in() {
         assert!(!COMMIT.is_empty());
         assert!(version_line().contains(VERSION));
+    }
+
+    #[test]
+    fn one_line_keeps_the_cause_of_a_multi_line_gpu_error() {
+        let e = "GPU error during headless rendering: Validation Error\n\nCaused by:\n  In Queue::write_texture\n    Copy would overrun\n";
+        assert_eq!(super::one_line(e), "GPU error during headless rendering: Validation Error Caused by: In Queue::write_texture Copy would overrun");
+        assert_eq!(super::one_line("plain"), "plain");
     }
 }

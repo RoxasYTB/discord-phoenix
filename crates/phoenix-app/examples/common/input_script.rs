@@ -106,7 +106,7 @@ pub fn run(cx: &mut HeadlessAppContext, env: &Env, script: &str) -> anyhow::Resu
             continue;
         }
         if let Err(e) = r.exec(cx, line) {
-            let msg = format!("[{}] line {n} `{line}`: {e:#}", r.step);
+            let msg = phoenix_app::diagnostics::one_line(&format!("[{}] line {n} `{line}`: {e:#}", r.step));
             println!("QA KO {msg}");
             r.report.ko.push(msg);
         }
@@ -490,7 +490,7 @@ impl Run<'_, '_> {
             println!("QA OK [{}] {detail}", self.step);
             self.report.ok += 1;
         } else {
-            let msg = format!("[{}] {detail}", self.step);
+            let msg = phoenix_app::diagnostics::one_line(&format!("[{}] {detail}", self.step));
             println!("QA KO {msg}");
             self.report.ko.push(msg);
         }
