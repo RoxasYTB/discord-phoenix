@@ -1027,6 +1027,7 @@ pub(crate) struct DeferredDraw {
     parent_node: DispatchNodeId,
     element_id_stack: ElementIdStack,
     text_style_stack: Vec<TextStyleRefinement>,
+    image_cache_stack: Vec<AnyImageCache>,
     content_mask: Option<ContentMask<Pixels>>,
     rem_size: Pixels,
     element: Option<AnyElement>,
@@ -4246,6 +4247,8 @@ impl Window {
                         .clone_from(&deferred_draw.element_id_stack);
                     self.text_style_stack
                         .clone_from(&deferred_draw.text_style_stack);
+                    self.image_cache_stack
+                        .clone_from(&deferred_draw.image_cache_stack);
                     (
                         deferred_draw.element.take(),
                         deferred_draw.parent_node,
@@ -4287,6 +4290,7 @@ impl Window {
 
             self.element_id_stack.clear();
             self.text_style_stack.clear();
+            self.image_cache_stack.clear();
             round_start = round_end;
         }
     }
@@ -4312,6 +4316,8 @@ impl Window {
 
             let paint_start = self.paint_index();
             let content_mask = deferred_draw.content_mask;
+            self.image_cache_stack
+                .clone_from(&deferred_draw.image_cache_stack);
             if let Some(element) = deferred_draw.element.as_mut() {
                 let ((), accessed_entities) = cx.detect_accessed_entities(|cx| {
                     self.with_rendered_view(deferred_draw.current_view, |window| {
@@ -4331,6 +4337,7 @@ impl Window {
         }
         self.next_frame.deferred_draws = deferred_draws;
         self.element_id_stack.clear();
+        self.image_cache_stack.clear();
     }
 
     fn deferred_draw_traversal_order(&mut self) -> SmallVec<[usize; 8]> {
@@ -4391,6 +4398,7 @@ impl Window {
                     parent_node: reused_subtree.refresh_node_id(deferred_draw.parent_node),
                     element_id_stack: deferred_draw.element_id_stack.clone(),
                     text_style_stack: deferred_draw.text_style_stack.clone(),
+                    image_cache_stack: deferred_draw.image_cache_stack.clone(),
                     content_mask: deferred_draw.content_mask,
                     rem_size: deferred_draw.rem_size,
                     priority: deferred_draw.priority,
@@ -4874,6 +4882,7 @@ impl Window {
             parent_node,
             element_id_stack: self.element_id_stack.clone(),
             text_style_stack: self.text_style_stack.clone(),
+            image_cache_stack: self.image_cache_stack.clone(),
             content_mask,
             rem_size: self.rem_size(),
             priority,
