@@ -8,7 +8,7 @@ use crate::{
     theme::{c, generated::idx, tok, z},
 };
 
-pub struct CreateThread {
+pub(crate) struct CreateThread {
     pub channel: Id,
     pub name: Entity<InputState>,
     pub starter: Entity<InputState>,
@@ -56,14 +56,6 @@ pub fn default_thread_name(content: &str, embed_title: Option<&str>, poll_questi
     cut(&out, 40)
 }
 
-impl gpui::Global for Slot {}
-#[derive(Default)]
-struct Slot(Option<CreateThread>);
-
-pub fn is_open(cx: &gpui::App) -> bool {
-    cx.try_global::<Slot>().is_some_and(|s| s.0.is_some())
-}
-
 fn t(i: usize) -> gpui::Hsla {
     c(tok(i))
 }
@@ -73,8 +65,14 @@ fn icon(name: &str, size: f32, color: gpui::Hsla) -> gpui::Svg {
 }
 
 impl PhoenixApp {
+    pub(crate) fn active_thread_form(&self) -> Option<&CreateThread> {
+        self.chat.create_thread.as_ref().filter(|form| self.selected_channel == Some(form.channel))
+    }
+
     pub fn open_create_thread(&mut self, channel: Id, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.channels.get(&channel).is_some_and(|c| c.guild.is_some() && matches!(c.kind, ChannelKind::Text | ChannelKind::Announcement)) {
+        if self.selected_channel != Some(channel)
+            || !self.channels.get(&channel).is_some_and(|c| c.guild.is_some() && matches!(c.kind, ChannelKind::Text | ChannelKind::Announcement))
+        {
             return;
         }
         let name = cx.new(|cx| InputState::new(window, cx).placeholder(crate::t!("thread.name_placeholder")));
@@ -90,7 +88,7 @@ impl PhoenixApp {
         starter.update(cx, |s, cx| s.focus(window, cx));
         self.chat.thread = None;
         self.parity.threads_open = false;
-        cx.set_global(Slot(Some(CreateThread { channel, name, starter, private: false, source: None, _subs: subs })));
+        self.chat.create_thread = Some(CreateThread { channel, name, starter, private: false, source: None, _subs: subs });
         cx.notify();
     }
 
@@ -101,7 +99,7 @@ impl PhoenixApp {
         let default = default_thread_name(&m.content, m.embeds.first().and_then(|e| e.title.as_deref()), poll.as_deref());
         self.open_create_thread(channel, window, cx);
         let ph: SharedString = if default.is_empty() { crate::t!("thread.default_name") } else { default.clone().into() };
-        let input = cx.global_mut::<Slot>().0.as_mut().map(|s| {
+        let input = self.chat.create_thread.as_mut().filter(|s| s.channel == channel).map(|s| {
             s.source = Some((msg, default));
             s.name.clone()
         });
@@ -111,13 +109,15 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    pub fn close_create_thread(&mut self, cx: &mut Context<Self>) {
-        cx.set_global(Slot(None));
+    pub fn close_create_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.chat.create_thread = None;
+        self.focus_chat_composer(window, cx);
         cx.notify();
     }
 
     fn submit_create_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(s) = cx.try_global::<Slot>().and_then(|s| s.0.as_ref()) else { return };
+        let Some(s) = self.active_thread_form() else { return };
+        let form = s.name.clone();
         let (channel, private) = (s.channel, s.private);
         let name = s.name.read(cx).value().trim().to_string();
         let starter = s.starter.read(cx).value().trim().to_string();
@@ -127,13 +127,7 @@ impl PhoenixApp {
             let thread_name = name.clone();
             self.action(ActionRequest::CreateThread { channel, msg, name }, cx, move |a, r, cx| match r {
                 Ok(ActionReply::Channel(id)) => {
-                    a.close_create_thread(cx);
-                    let (e, tname) = (cx.entity(), thread_name.clone());
-                    cx.defer(move |cx| {
-                        let _ = handle.update(cx, |_, w, cx| {
-                            e.update(cx, |a, cx| a.open_thread(crate::model::ThreadRef { id, name: tname.into(), message_count: 0 }, w, cx))
-                        });
-                    });
+                    a.show_created_thread(&form, id, thread_name, handle, cx);
                     if !starter.is_empty() {
                         let fut = a.backend.send_message(id, starter, None);
                         cx.spawn(async move |this, cx| {
@@ -158,13 +152,7 @@ impl PhoenixApp {
         let thread_name = name.clone();
         self.action(ActionRequest::CreateStandaloneThread { channel, name, private, announcement }, cx, move |a, r, cx| match r {
             Ok(ActionReply::Channel(id)) => {
-                a.close_create_thread(cx);
-                let (e, tname) = (cx.entity(), thread_name.clone());
-                cx.defer(move |cx| {
-                    let _ = handle.update(cx, |_, w, cx| {
-                        e.update(cx, |a, cx| a.open_thread(crate::model::ThreadRef { id, name: tname.into(), message_count: 0 }, w, cx))
-                    });
-                });
+                a.show_created_thread(&form, id, thread_name, handle, cx);
                 if !starter.is_empty() {
                     let fut = a.backend.send_message(id, starter, None);
                     cx.spawn(async move |this, cx| {
@@ -179,13 +167,24 @@ impl PhoenixApp {
             Err(e) => a.parity_toast(e.0, cx),
         });
     }
+
+    fn show_created_thread(&self, form: &Entity<InputState>, id: Id, name: String, handle: gpui::AnyWindowHandle, cx: &mut Context<Self>) {
+        let entity = cx.entity();
+        let form = form.clone();
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                entity.update(cx, |app, cx| {
+                    if app.active_thread_form().is_some_and(|current| current.name == form) {
+                        app.open_thread(crate::model::ThreadRef { id, name: name.into(), message_count: 0 }, window, cx);
+                    }
+                })
+            });
+        });
+    }
 }
 
-pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
-    let s = cx.try_global::<Slot>()?.0.as_ref()?;
-    if app.selected_channel != Some(s.channel) {
-        return None;
-    }
+pub fn panel(app: &PhoenixApp, width: gpui::Pixels, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+    let s = app.active_thread_form()?;
     let private = s.private;
     let (name, starter) = (s.name.clone(), s.starter.clone());
     let source = s.source.as_ref().map(|(m, _)| *m);
@@ -210,6 +209,8 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .child(
             div()
                 .flex_1()
+                .min_w_0()
+                .truncate()
                 .text_size(z(16.))
                 .line_height(z(20.))
                 .font_weight(FontWeight::MEDIUM)
@@ -219,6 +220,7 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
         .child(
             div()
                 .id("create-thread-close")
+                .flex_none()
                 .ml(z(10.))
                 .size(z(32.))
                 .flex()
@@ -226,7 +228,7 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                 .justify_center()
                 .cursor_pointer()
                 .child(icon("close", 20., t(idx::INTERACTIVE_ICON_DEFAULT)))
-                .on_click(cx.listener(|a, _: &ClickEvent, _, cx| a.close_create_thread(cx))),
+                .on_click(cx.listener(|a, _: &ClickEvent, window, cx| a.close_create_thread(window, cx))),
         );
     let label = |text: SharedString| {
         div()
@@ -301,8 +303,8 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
                                     .text_color(t(idx::TEXT_STRONG))
                                     .child(crate::t!("thread.private_hint")),
                             )
-                            .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
-                                if let Some(s) = cx.global_mut::<Slot>().0.as_mut() {
+                            .on_click(cx.listener(|app, _: &ClickEvent, _, cx| {
+                                if let Some(s) = app.chat.create_thread.as_mut() {
                                     s.private = !s.private;
                                 }
                                 cx.notify();
@@ -329,7 +331,7 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
     Some(
         div()
             .id("create-thread")
-            .w(z(480.))
+            .w(width)
             .flex_none()
             .h_full()
             .border_l_1()

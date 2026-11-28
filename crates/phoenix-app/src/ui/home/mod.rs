@@ -182,6 +182,7 @@ impl PhoenixApp {
         }
         self.remember_chat_position();
         self.nav.home = view;
+        self.chat.create_thread = None;
         self.selected_channel = None;
         self.last_channel.remove(&None);
         self.save_nav_prefs();

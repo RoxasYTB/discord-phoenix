@@ -224,6 +224,7 @@ pub fn open(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
         Some(t) => app.open_channel_chat(t, cx),
         None => {
             app.selected_guild = None;
+            app.chat.create_thread = None;
             app.selected_channel = None;
             app.rebuild_sidebar();
             app.rebuild_members();

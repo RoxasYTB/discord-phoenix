@@ -491,6 +491,7 @@ pub fn nsfw_gate(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEl
                                     .cursor_pointer()
                                     .hover(|s| s.bg(c(Palette::BG_MOD_HOVER)))
                                     .on_click(cx.listener(|a, _, _, cx| {
+                                        a.chat.create_thread = None;
                                         a.selected_channel = None;
                                         cx.notify();
                                     }))

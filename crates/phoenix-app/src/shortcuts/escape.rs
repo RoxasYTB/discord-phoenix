@@ -100,6 +100,10 @@ impl PhoenixApp {
         if ui::mod_view::escape() {
             return;
         }
+        if self.active_thread_form().is_some() && !ui::search::is_focused(window, cx) {
+            self.close_create_thread(window, cx);
+            return;
+        }
         if ui::search::is_open(cx) {
             ui::search::close(self, window, cx);
             return;
@@ -115,15 +119,11 @@ impl PhoenixApp {
         if self.replying_to.take().is_some() {
             return;
         }
-        if ui::thread_create::is_open(cx) {
-            self.close_create_thread(cx);
-            return;
-        }
         let side = self.chat.thread.as_ref().map(|t| t.thread.id);
         let main = self.escape_ack(cx);
         let thread = side.is_some_and(|t| self.ack_side(t, cx));
         if !main && !thread && side.is_some() {
-            self.close_thread(cx);
+            self.close_thread_and_focus(window, cx);
             return;
         }
         if !self.leave_detached(cx) {

@@ -153,6 +153,7 @@ impl PhoenixApp {
             }
         }
         if self.selected_channel == Some(channel) {
+            self.chat.create_thread = None;
             self.selected_channel = None;
         }
         self.rebuild_sidebar();
@@ -190,6 +191,7 @@ impl PhoenixApp {
                         voice_users: Vec::new(),
                     });
                     if kind != ChannelKind::Category && kind != ChannelKind::Voice && kind != ChannelKind::Stage {
+                        a.chat.create_thread = None;
                         a.selected_channel = Some(id);
                     }
                 }

@@ -542,6 +542,7 @@ impl PhoenixApp {
         self.presences.clear();
         self.messages.clear();
         self.selected_guild = None;
+        self.chat.create_thread = None;
         self.selected_channel = None;
         self.last_channel.clear();
         self.nav.scroll_positions.clear();
@@ -668,6 +669,7 @@ impl PhoenixApp {
             self.open_channel_chat(t, cx);
         } else {
             self.remember_chat_position();
+            self.chat.create_thread = None;
             self.selected_channel = None;
             self.message_list.reset(0);
             self.save_nav_prefs();
@@ -776,6 +778,9 @@ impl PhoenixApp {
             self.selected_guild = guild;
             self.rebuild_sidebar();
             self.rebuild_members();
+        }
+        if self.selected_channel != Some(id) {
+            self.chat.create_thread = None;
         }
         self.selected_channel = Some(id);
         crate::notifications::clear(id.0);
@@ -1349,6 +1354,7 @@ impl PhoenixApp {
         if let Some(sel) = self.selected_channel
             && !self.channels.contains_key(&sel)
         {
+            self.chat.create_thread = None;
             self.selected_channel = None;
         }
     }

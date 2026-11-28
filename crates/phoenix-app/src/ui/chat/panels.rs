@@ -855,7 +855,7 @@ fn thread_intro(app: &PhoenixApp, id: crate::model::Id, name: SharedString, entr
     d
 }
 
-pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub fn thread_panel(app: &PhoenixApp, width: gpui::Pixels, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let t = app.chat.thread.as_ref()?;
     let entity: Entity<PhoenixApp> = cx.entity();
     let id = t.thread.id;
@@ -891,7 +891,7 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
     use crate::theme::generated::idx;
     Some(
         div()
-            .w(z(480.))
+            .w(width)
             .flex_none()
             .h_full()
             .border_l_1()
@@ -962,7 +962,7 @@ pub fn thread_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<An
                             .child(btn("thread-more", "more-horizontal").tip(crate::t!("header.more")).on_click(move |ev, w, _| {
                                 crate::ui::thread_menu::open_at(id, crate::actions::thread::Place::Sidebar, ev.position(), w)
                             }))
-                            .child(btn("close-thread", "close").on_click(cx.listener(|a, _, _, cx| a.close_thread(cx))))
+                            .child(btn("close-thread", "close").on_click(cx.listener(|a, _, window, cx| a.close_thread_and_focus(window, cx))))
                     }),
             )
             .child(body)

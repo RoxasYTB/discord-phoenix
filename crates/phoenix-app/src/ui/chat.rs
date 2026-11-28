@@ -66,12 +66,15 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         crate::ui::dm_profile_panel::ensure_profile(app, peer, cx);
     }
     let show_members = app.show_members && app.selected_guild.is_some();
-    let show_members = show_members && app.chat.thread.is_none() && !crate::ui::thread_create::is_open(cx);
+    let show_members = show_members && app.chat.thread.is_none() && app.active_thread_form().is_none();
     let show_members = show_members && !in_voice_panel && !crate::ui::call_view::active(app);
     let search_results = crate::ui::search::results_shown(cx);
     app.backend.set_members_shown(app.show_members && app.chat.thread.is_none() && !search_results);
     let mod_view = crate::ui::mod_view::render(app, window, cx);
-    let thread_sidebar = panels::thread_panel(app, cx).or_else(|| crate::ui::thread_create::panel(app, cx));
+    let search_width = if search_results { crate::ui::search::results_width(window) } else { gpui::px(0.) };
+    let available = if in_voice_panel { z(480.) } else { crate::ui::search::chat_width(window) };
+    let thread_width = ((available - search_width - z(8.)).max(gpui::px(0.)) * 0.5).min(z(480.));
+    let thread_sidebar = panels::thread_panel(app, thread_width, cx).or_else(|| crate::ui::thread_create::panel(app, thread_width, cx));
     let has_split = mod_view.is_some() || thread_sidebar.is_some();
     let a11y_channel = || app.selected_channel.and_then(|c| app.channels.get(&c)).map(|c| c.name.clone()).unwrap_or_default();
     let main = crate::ui::a11y::named(div().id("chat-main"), gpui::Role::Main, || crate::t!("a11y.channel_main", name = a11y_channel()))
@@ -135,7 +138,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                         .child(panels::drop_overlay(app))
                         .children(crate::ui::forum::render(app, cx)),
                 )
-                .when(search_results, |d| d.child(div().flex_none().w(gpui::px(crate::ui::search::WIDTH))))
+                .when(search_results && !has_split, |d| d.child(div().flex_none().w(search_width)))
                 .when(show_members && !search_results, |d| d.child(members::render(app, cx)))
                 .when(!search_results, |d| {
                     d.children(crate::ui::dm_profile_panel::render(app, cx)).children(crate::ui::group_dm::members_panel(app, cx))
@@ -152,6 +155,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
             .child(main)
             .when_some(thread_sidebar, |d, tp| d.child(div().w(z(8.)).flex_none().h_full()).child(tp))
             .children(mod_view)
+            .when(search_results, |d| d.child(div().flex_none().w(search_width)))
             .into_any_element()
     } else {
         main.into_any_element()

@@ -326,6 +326,7 @@ mod tests {
             .update(cx, |app, _, cx| {
                 app.apply_ready(first, cx);
                 app.select_guild(None, cx);
+                app.chat.create_thread = None;
                 app.selected_channel = None;
                 app.nav.home = HomeView::Quests;
                 on_resync(app, Resync(ready()), cx);

@@ -98,6 +98,7 @@ pub struct ChatState {
     pub confirm_delete: Option<(Id, Id)>,
     pub pins: Option<PinsState>,
     pub thread: Option<ThreadPanel>,
+    pub(crate) create_thread: Option<crate::ui::thread_create::CreateThread>,
     pub uploads: Vec<PendingFile>,
     pub sending: Vec<Sending>,
     pub attach_menu: bool,
@@ -140,6 +141,7 @@ impl Default for ChatState {
             confirm_delete: None,
             pins: None,
             thread: None,
+            create_thread: None,
             uploads: Vec::new(),
             sending: Vec::new(),
             attach_menu: false,
@@ -727,6 +729,7 @@ impl PhoenixApp {
     }
 
     pub fn open_thread(&mut self, thread: ThreadRef, window: &mut Window, cx: &mut Context<Self>) {
+        self.chat.create_thread = None;
         let id = thread.id;
         let input = cx.new(|cx| InputState::new(window, cx));
         let sub = cx.subscribe_in(&input, window, |this, _, ev: &InputEvent, window, cx| {
@@ -752,6 +755,22 @@ impl PhoenixApp {
     pub fn close_thread(&mut self, cx: &mut Context<Self>) {
         self.chat.thread = None;
         cx.notify();
+    }
+
+    pub(crate) fn close_thread_and_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_thread(cx);
+        self.focus_chat_composer(window, cx);
+    }
+
+    pub(crate) fn focus_chat_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let input = if let Some(form) = self.active_thread_form() {
+            &form.starter
+        } else if let Some(thread) = &self.chat.thread {
+            &thread.input
+        } else {
+            &self.composer
+        };
+        input.update(cx, |s, cx| s.focus(window, cx));
     }
 
     fn send_in_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {

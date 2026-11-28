@@ -8,6 +8,7 @@ use chrono::{Datelike, NaiveDate};
 use phoenix_api::rest::search::{FilterKey, PendingFilter, complete_filter, parse_search_with, pending_filter};
 
 use crate::ui::search_query::{self as sq, Answer, AnswerLead};
+use crate::ui::tooltip::Tipped as _;
 
 use crate::{
     search_highlight::Highlighter,
@@ -19,7 +20,16 @@ use crate::{
 };
 
 pub const PAGE: u32 = 25;
-pub const WIDTH: f32 = 420.;
+const WIDTH: f32 = 420.;
+
+pub(super) fn results_width(window: &Window) -> gpui::Pixels {
+    px((f32::from(chat_width(window)) * 0.4).min(WIDTH))
+}
+
+pub(super) fn chat_width(window: &Window) -> gpui::Pixels {
+    let navigation = z(crate::theme::m::SERVER_BAR_W + crate::ui::sidebar_resize::width());
+    (window.viewport_size().width - navigation).max(px(0.))
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SearchRequest {
@@ -288,7 +298,7 @@ pub fn close(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
     if cx.has_global::<Search>() {
         cx.global_mut::<Search>().0 = None;
     }
-    app.composer.update(cx, |s, cx| s.focus(window, cx));
+    app.focus_chat_composer(window, cx);
     cx.notify();
 }
 
@@ -301,7 +311,7 @@ fn set_idle(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixA
     if let Some(s) = cx.global_mut::<Search>().0.as_mut() {
         s.idle = true;
     }
-    app.composer.update(cx, |s, cx| s.focus(window, cx));
+    app.focus_chat_composer(window, cx);
     cx.notify();
 }
 
@@ -830,6 +840,14 @@ fn results_panel(
     } else {
         crate::t!("search.results", n = group_digits(total))
     };
+    let width = results_width(window);
+    let result_button = |id, glyph, label| {
+        if width < z(350.) {
+            icon_secondary(id, glyph).tip(label)
+        } else {
+            sm_secondary(id, glyph, label)
+        }
+    };
     let header = div()
         .flex_none()
         .h(z(48.))
@@ -838,15 +856,17 @@ fn results_panel(
         .flex()
         .items_center()
         .justify_between()
-        .child(div().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(title))
+        .gap(z(8.))
+        .child(div().min_w_0().truncate().text_size(z(16.)).line_height(z(20.)).font_weight(FontWeight::MEDIUM).text_color(tk(idx::TEXT_STRONG)).child(title))
         .child(
             div()
+                .flex_none()
                 .flex()
                 .gap(z(8.))
-                .child(sm_secondary("search-results-filters", "inbox/filter", crate::t!("search.filters")).on_click(cx.listener(|a, _, w, cx| {
+                .child(result_button("search-results-filters", "inbox/filter", crate::t!("search.filters")).on_click(cx.listener(|a, _, w, cx| {
                     crate::ui::search_filters::open(a, w, cx);
                 })))
-                .child(sm_secondary("search-results-sort", "sort", crate::t!("search.sort")).on_mouse_down(
+                .child(result_button("search-results-sort", "sort", crate::t!("search.sort")).on_mouse_down(
                     gpui::MouseButton::Left,
                     cx.listener(|_, _, _, cx| {
                         cx.stop_propagation();
@@ -902,7 +922,7 @@ fn results_panel(
         .top(z(layout::TITLE_BAR_H + layout::HEADER_H))
         .right_0()
         .bottom_0()
-        .w(px(WIDTH))
+        .w(width)
         .bg(tk(idx::BACKGROUND_BASE_LOWEST))
         .border_l_1()
         .border_color(tk(idx::APP_FRAME_BORDER))
