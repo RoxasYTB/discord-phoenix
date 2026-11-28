@@ -140,6 +140,7 @@ pub struct PhoenixApp {
     pub mic_muted: bool,
     pub deafened: bool,
     pub voice_channel: Option<Id>,
+    pending_entrance_sound: Option<Id>,
     pub voice: crate::voice::VoiceUi,
     pub show_members: bool,
     pub people: crate::presence::People,
@@ -467,6 +468,7 @@ impl PhoenixApp {
             mic_muted: self_mute,
             deafened: self_deaf,
             voice_channel: None,
+            pending_entrance_sound: None,
             voice: Default::default(),
             show_members: true,
             people: Default::default(),
@@ -1106,6 +1108,9 @@ impl PhoenixApp {
             }
             AppEvent::VoiceStateUpdate { guild, channel, user, own } => {
                 self.apply_voice_state(guild, channel, user, own);
+                if own && user == self.me.id {
+                    self.maybe_play_entrance_sound(cx);
+                }
                 self.rebuild_sidebar();
             }
             AppEvent::Voice(e) => {
@@ -1135,7 +1140,11 @@ impl PhoenixApp {
                     crate::voice::VoiceUiEvent::ScreenFailed(f) => crate::ui::voice_panel::media_failure_modal(f, true),
                     _ => {}
                 }
-                self.voice.apply(e)
+                let connected = matches!(e, crate::voice::VoiceUiEvent::Status(crate::voice::VoiceStatus::Connected));
+                self.voice.apply(e);
+                if connected {
+                    self.maybe_play_entrance_sound(cx);
+                }
             }
             AppEvent::Users(users) => {
                 let fresh: Vec<u64> = users.iter().filter(|u| !self.users.contains_key(&u.id)).map(|u| u.id.0).collect();
@@ -1467,6 +1476,15 @@ impl PhoenixApp {
     }
 
     pub fn join_voice(&mut self, ch: Option<Id>, cx: &mut Context<Self>) {
+        self.join_voice_with_sound(ch, true, cx);
+    }
+
+    pub fn join_voice_without_sound(&mut self, ch: Id, cx: &mut Context<Self>) {
+        self.join_voice_with_sound(Some(ch), false, cx);
+    }
+
+    fn join_voice_with_sound(&mut self, ch: Option<Id>, play_sound: bool, cx: &mut Context<Self>) {
+        self.pending_entrance_sound = ch.filter(|ch| play_sound && Some(*ch) != self.voice_channel);
         crate::voice::soundboard::stop_all();
         if ch.is_some() {
             crate::ui::voice_effects::prewarm();
@@ -1474,6 +1492,50 @@ impl PhoenixApp {
         self.backend.join_voice(ch).detach_ok();
         crate::voice::on_join_clicked(self, ch);
         cx.notify();
+    }
+
+    pub(crate) fn entrance_sound_for(&self, channel: Id) -> Option<phoenix_api::rest::settings::JoinSound> {
+        if !self.backend.premium_tier2() {
+            return None;
+        }
+        let channel_data = self.channels.get(&channel)?;
+        let guild = channel_data.guild?;
+        if channel_data.kind != crate::model::ChannelKind::Voice {
+            return None;
+        }
+        let sounds = &self.prefs.synced.join_sounds;
+        let sound = sounds.get(&guild.0).or_else(|| sounds.get(&0)).copied()?;
+        let external = sound.source_guild != 0 && sound.source_guild != guild.0;
+        self.backend.channel_permissions(channel)
+            .is_none_or(|permissions| permissions & (1 << 42) != 0 && (!external || permissions & (1 << 45) != 0))
+            .then_some(sound)
+    }
+
+    fn maybe_play_entrance_sound(&mut self, cx: &mut Context<Self>) {
+        let Some(channel) = self.pending_entrance_sound else { return };
+        if self.voice.status != crate::voice::VoiceStatus::Connected || self.voice_channel != Some(channel) {
+            return;
+        }
+        self.pending_entrance_sound = None;
+        let Some(sound) = self.entrance_sound_for(channel) else { return };
+        if crate::ui::pickers::soundboard::disabled(self) {
+            return;
+        }
+        let catalog = &cx.global::<crate::ui::pickers::Pickers>().soundboard;
+        let list = if sound.source_guild == 0 { catalog.defaults.as_ref() } else { catalog.guild_sounds.get(&Id(sound.source_guild)) };
+        let volume = list.and_then(|sounds| sounds.iter().find(|s| s.id.0 == sound.sound)).map_or(1., |s| s.volume);
+        let play = self.backend.play_entrance_sound(channel);
+        cx.spawn(async move |this, cx| {
+            if let Err(error) = play.await {
+                tracing::debug!(%error, "could not play the voice entrance sound");
+                return;
+            }
+            let _ = this.update(cx, |app, cx| {
+                if app.voice_channel == Some(channel) {
+                    crate::voice::soundboard::play(app, Id(sound.sound), volume, app.me.id, cx);
+                }
+            });
+        }).detach();
     }
 
     pub fn toggle_category(&mut self, id: Id, cx: &mut Context<Self>) {

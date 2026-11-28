@@ -584,7 +584,7 @@ fn subnav_keys(p: Page) -> &'static [&'static str] {
         Page::PrivacySafety => &["settings.sub.content_filters", "settings.sub.spam", "settings.sub.dms", "settings.sub.friend_requests", "settings.sub.connected_games", "settings.sub.ignore_block"],
         Page::Notifications => &["settings.sub.overview", "settings.sub.sounds", "settings.sub.badges", "settings.sub.email", "settings.sub.advanced_n"],
         Page::Billing => &["settings.sub.payment", "settings.sub.transactions"],
-        Page::VoiceVideo => &["settings.sub.voice", "settings.sub.camera", "settings.sub.streaming", "settings.sub.sounds", "settings.sub.soundboard", "settings.sub.advanced"],
+        Page::VoiceVideo => &["settings.sub.voice", "settings.sub.camera", "settings.sub.streaming", "settings.sub.sounds", "settings.sub.soundboard"],
         Page::Appearance => &["settings.sub.theme", "settings.sub.app_icon", "settings.sub.messages", "settings.sub.chat_box", "settings.sub.search", "settings.sub.streamer"],
         Page::Accessibility => &["settings.sub.readability", "settings.sub.density", "settings.sub.contrast", "settings.sub.motion", "settings.sub.audio_sr"],
         Page::System => &["settings.sub.general", "settings.sub.custom_keys", "settings.sub.default_keys", "settings.sub.advanced_n"],

@@ -6,6 +6,7 @@ pub enum Kind {
     Enum(&'static [u64]),
     Str(&'static [&'static str]),
     Bits(u64),
+    Fixed32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -90,7 +91,7 @@ pub static ENTRIES: &[Entry] = &[
     en("time-format", &[13, 9], false, &[0, 1, 2], 0),
     b("favs", &[15, 3], false),
     b("data-clips", &[19, 1], true),
-    en("sb-volume", &[5, 9, 1], false, &[], 0),
+    Entry { id: "sb-volume", path: &[5, 9], wrapper: true, kind: Kind::Fixed32, default: 0 },
     en("client-theme", &[13, 3, 2], true, &[], 0),
 ];
 
@@ -138,6 +139,7 @@ pub fn read_all(raw: &[u8]) -> std::collections::HashMap<&'static str, u64> {
         let as_str = matches!(e.kind, Kind::Str(_));
         let v = match proto_read(raw, e.path, e.wrapper, as_str) {
             Some(ProtoValue::Int(v)) => v,
+            Some(ProtoValue::Fixed32(v)) => u64::from(v),
             Some(ProtoValue::Str(s)) => match e.kind {
                 Kind::Str(opts) => match opts.iter().position(|o| *o == s) {
                     Some(i) => i as u64,
@@ -243,6 +245,7 @@ pub fn change(id: &str, wire: u64) -> Option<phoenix_api::rest::settings::Settin
     let e = entry(id)?;
     let value = match e.kind {
         Kind::Str(opts) => ProtoValue::Str(opts.get(wire as usize)?.to_string()),
+        Kind::Fixed32 => ProtoValue::Fixed32(u32::try_from(wire).ok()?),
         _ => ProtoValue::Int(wire),
     };
     Some(phoenix_api::rest::settings::SettingChange::Path { path: e.path.to_vec(), wrapper: e.wrapper, value })
@@ -251,6 +254,18 @@ pub fn change(id: &str, wire: u64) -> Option<phoenix_api::rest::settings::Settin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn soundboard_volume_uses_the_float_wire_type() {
+        let volume = 42.0_f32.to_bits();
+        let encoded = change("sb-volume", volume.into()).unwrap().encode();
+        let mut expected = vec![0x2a, 7, 0x4a, 5, 0x0d];
+        expected.extend_from_slice(&volume.to_le_bytes());
+        assert_eq!(encoded, expected);
+        assert_eq!(read_all(&encoded).get("sb-volume"), Some(&u64::from(volume)));
+        assert_eq!(read_all(&[0x2a, 2, 0x4a, 0]).get("sb-volume"), Some(&0));
+        assert!(!read_all(&[]).contains_key("sb-volume"));
+    }
 
     #[test]
     fn roundtrip_through_wire() {

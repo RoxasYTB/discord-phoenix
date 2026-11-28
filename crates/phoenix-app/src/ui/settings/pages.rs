@@ -234,23 +234,24 @@ pub(super) fn dropdown(
     cx: &mut Cx,
 ) -> AnyElement {
     let field = controls::select_field(eid(format!("sel-{id}")), opts.get(cur).cloned().unwrap_or_default());
-    dropdown_with(app, id, field, opts, cur, width, on_pick, cx)
+    dropdown_with(app, id, field, opts, cur, z(width).into(), false, on_pick, cx)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn dropdown_with(
+pub(super) fn dropdown_with(
     app: &PhoenixApp,
     id: &'static str,
     field: gpui::Stateful<Div>,
     opts: Vec<SharedString>,
     cur: usize,
-    width: f32,
+    width: gpui::Length,
+    open_above: bool,
     on_pick: impl Fn(&mut PhoenixApp, usize, &mut Cx) + Clone + 'static,
     cx: &mut Cx,
 ) -> AnyElement {
     let open = app.settings.as_ref().is_some_and(|s| s.open_select == Some(id));
     let field = field
-        .w(z(width))
+        .w_full()
         .when(open, |d| {
             d.relative().child(
                 div().absolute().top(z(-1.)).bottom(z(-1.)).left(z(-1.)).right(z(-1.)).rounded(z(8.)).border_2().border_color(c(tok(idx::INPUT_BORDER_ACTIVE))),
@@ -262,14 +263,14 @@ fn dropdown_with(
             }
             cx.notify();
         }));
-    let mut wrap = div().relative().child(field);
+    let mut wrap = div().relative().w(width).max_w_full().child(field);
     if open {
         let list = div()
             .id(eid(format!("sel-{id}-list")))
             .absolute()
-            .top(z(44.))
+            .when_else(open_above, |d| d.bottom(z(44.)), |d| d.top(z(44.)))
             .left_0()
-            .w(z(width))
+            .w_full()
             .max_h(z(320.))
             .overflow_y_scroll()
             .p(z(4.))
@@ -824,7 +825,7 @@ fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
                     .child(opts[cur].clone()),
             )
             .child(gpui::svg().path("icons/chevron.svg").size(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))));
-        let dd = dropdown_with(app, id, field, opts.clone(), cur, 140., move |a, i, cx| set_pick(a, id, pk, i, cx), cx);
+        let dd = dropdown_with(app, id, field, opts.clone(), cur, z(140.).into(), false, move |a, i, cx| set_pick(a, id, pk, i, cx), cx);
         div()
             .h(z(49.))
             .py(z(4.))
@@ -1652,7 +1653,8 @@ fn language_row(app: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> AnyElemen
         field,
         opts,
         ix,
-        696.,
+        z(696.).into(),
+        false,
         |a, i, cx| {
             if let Some(s) = a.settings.as_mut() {
                 s.open_select = None;
@@ -1927,7 +1929,8 @@ fn kb_entry(app: &PhoenixApp, k: &crate::keybinds::Keybind, cx: &mut Cx) -> Div 
         kb_field(static_id(format!("kb-act-field-{id}")), k.action.label(), true),
         ACTIONS.iter().map(|a| a.label()).collect(),
         cur,
-        280.,
+        z(280.).into(),
+        false,
         move |a, i, cx| {
             if let Some(s) = a.settings.as_mut() {
                 s.open_select = None;

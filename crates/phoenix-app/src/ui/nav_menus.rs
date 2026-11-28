@@ -529,6 +529,9 @@ fn render_target(app: &PhoenixApp, target: Target, pos: Point<Pixels>, cx: &mut 
                     if voice {
                         items.push(MenuItem::Separator);
                         items.push(act(&e, crate::t!("menu.open_voice_chat"), move |a, _, cx| a.open_channel_chat(id, cx)));
+                        if app.voice_channel != Some(id) && app.entrance_sound_for(id).is_some() {
+                            items.push(act(&e, crate::t!("menu.join_without_sound"), move |a, _, cx| a.join_voice_without_sound(id, cx)));
+                        }
                         let hidden = crate::ui::voice_row::names_hidden(id);
                         let e2 = e.clone();
                         items.push(MenuItem::check(crate::t!("menu.hide_voice_names"), hidden, move |_, _, cx: &mut App| {

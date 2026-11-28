@@ -149,3 +149,11 @@ Source: web.js module 594061 (`updateAsync`, `markDirty`, `persistChanges`), 159
 * ✅ The client PATCHes only the categories it changed (a copy of the whole category, for example `status` = field 11), and merges every pending change into one `protoToSave`. Phoenix now does the same: every settings-proto 1 write goes through `RestClient::edit_settings_proto`. Edits made while a write is in flight (or waiting on a 429) are merged into the next GET + PATCH, and only the changed top-level fields are sent (`proto_delta`).
 * ✅ Status change (status picker) = `updateAsync("status")`: field 11 with the new `status`, `status_expires_at_ms` 0 and `status_created_at_ms` kept when the status is the same (else now). The custom status (11.2) is copied byte for byte. Before this, the picker used the legacy `PATCH /users/@me/settings` with `custom_status: {text}`, which dropped the emoji and the expiry. Test `status_change_only_writes_the_status_category_and_keeps_the_custom_status`.
 * No code path writes the settings proto by itself: USER_SETTINGS_PROTO_UPDATE only GETs the settings again. The 429s on 26/11 at 16:18 (6 retries, so at least two PATCHes) were a burst of user writes (custom status, toggles or a rail drop), each a GET + full PATCH with no merging.
+
+## Soundboard
+
+The [Soundboard support guide](https://support.discord.com/hc/en-us/articles/12612888127767) describes the local volume, global and per-server entrance sounds, and joining without playing an entrance sound. The provided Windows reference at 100% shows 40 px fields, a full-width server selector and a 321 px sound selector.
+
+The Discord web client stores volume as a fixed32 float inside `audioContext.soundboardSettings` (category 5, field 9). Entrance preferences use the guild settings map (category 3, map field 1), with `joinSound` at field 6. Map key zero is the global default. The voice effects module (458976 in the web client bundle inspected for this change) sends the configured sound through `POST /channels/{channel_id}/custom-call-sounds` after connecting.
+
+The settings UI was exercised on Windows with the mock backend. Live playback and account synchronization remain to be checked in a real voice channel.

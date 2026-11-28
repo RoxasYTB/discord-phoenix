@@ -59,6 +59,7 @@ struct Inner {
     roles: Vec<(Id, Vec<Role>)>,
     sent_uploads: Vec<Vec<Upload>>,
     mfa: Option<crate::auth::MfaOptions>,
+    settings: crate::ui::settings::SyncedSettings,
 }
 
 #[derive(Clone)]
@@ -285,6 +286,7 @@ impl MockBackend {
                 roles,
                 sent_uploads: Vec::new(),
                 mfa: None,
+                settings: Default::default(),
             })),
             latency: Duration::from_millis(120),
         }
@@ -471,6 +473,18 @@ pub fn mock_mfa_check(method: crate::auth::MfaMethod, code: &str) -> Result<(), 
 }
 
 impl Backend for MockBackend {
+    fn load_settings(&self) -> BoxFuture<crate::ui::settings::SyncedSettings> {
+        let settings = self.inner.lock().unwrap().settings.clone();
+        Box::pin(async move { Ok(settings) })
+    }
+
+    fn save_settings(&self, patch: crate::ui::settings::SettingsPatch) -> BoxFuture<crate::ui::settings::SyncedSettings> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.settings.apply(&patch);
+        let settings = inner.settings.clone();
+        Box::pin(async move { Ok(settings) })
+    }
+
     fn voice_regions(&self) -> BoxFuture<Vec<(gpui::SharedString, gpui::SharedString)>> {
         let regions = ["Atlanta", "Brazil", "Hong Kong", "India", "Japan", "Rotterdam", "Russia", "Singapore", "South Africa", "Sydney", "US Central", "US East", "US South", "US West"];
         Box::pin(async move { Ok(regions.iter().map(|n| (gpui::SharedString::from(n.to_lowercase().replace(' ', "-")), gpui::SharedString::from(*n))).collect()) })
@@ -529,6 +543,21 @@ impl Backend for MockBackend {
         } else {
             Some(2)
         }
+    }
+    fn soundboard_default_sounds(&self) -> BoxFuture<Vec<SoundboardSound>> {
+        Box::pin(async {
+            Ok(vec![SoundboardSound {
+                id: Id(1),
+                name: Some("Quack".into()),
+                available: true,
+                volume: 1.,
+                ..Default::default()
+            }])
+        })
+    }
+
+    fn premium_tier2(&self) -> bool {
+        std::env::var_os("PHX_NO_PREMIUM").is_none()
     }
     fn has_premium(&self) -> bool {
         std::env::var_os("PHX_NO_PREMIUM").is_none()

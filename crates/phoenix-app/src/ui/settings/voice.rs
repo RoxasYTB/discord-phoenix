@@ -860,7 +860,134 @@ static LOWER: &[B] = &[
     B::Title("sp.vo.sounds"),
     B::Custom("sp.snd.deafen", voice_sounds),
     B::Related("bell", "settings.page.notifications", "sp.vo.sounds_d", super::Page::Notifications),
+    B::Divider,
+    B::Title("settings.sub.soundboard"),
+    B::Custom("soundboard.volume", soundboard_settings),
 ];
+
+fn soundboard_settings(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
+    let volume = app.settings.as_ref().and_then(|s| s.soundboard_volume_preview)
+        .unwrap_or_else(|| crate::voice::soundboard::setting_volume(app));
+    let save_volume: OnSlide = Rc::new(|app, fraction, done, cx| {
+        let volume = (fraction * 100.).round();
+        if let Some(s) = app.settings.as_mut() {
+            s.soundboard_volume_preview = (!done).then_some(volume);
+        }
+        if done {
+            super::save(app, super::SettingsPatch::Proto("sb-volume", u64::from(volume.to_bits())), cx);
+        }
+    });
+    div().flex().flex_col()
+        .child(h5(crate::t!("soundboard.volume")).pb(z(4.)))
+        .child(soundboard_help("sb-volume-help", crate::t!("sp.vo.soundboard_volume_desc")))
+        .child(slider("settings-soundboard", volume / 100., format!("{volume:.0}%").into(), None, save_volume, cx))
+        .child(div().mt(z(22.)).text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD)
+            .text_color(c(tok(idx::TEXT_STRONG))).child(crate::t!("sp.vo.entrance_sounds")))
+        .child(div().mt(z(4.)).child(soundboard_help("sb-entrance-help", crate::t!("sp.vo.entrance_sounds_desc"))))
+        .child(entrance_sound_fields(app, cx))
+        .into_any_element()
+}
+
+fn soundboard_help(id: &'static str, text: SharedString) -> Div {
+    let style = gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() };
+    let (text, highlights) = super::account::bracket_runs(&text, style);
+    let links = highlights.iter().map(|(range, _)| range.clone()).collect();
+    note("").child(
+        gpui::InteractiveText::new(id, gpui::StyledText::new(text).with_highlights(highlights))
+            .on_click(links, |_, _, cx| cx.open_url("https://support.discord.com/hc/articles/12612888127767")),
+    )
+}
+
+fn entrance_sound_fields(app: &PhoenixApp, cx: &mut Cx) -> Div {
+    use crate::ui::{controls, pickers::{Pickers, soundboard}};
+    use phoenix_api::rest::settings::JoinSound;
+
+    let premium = app.backend.premium_tier2();
+    let mut guilds: Vec<_> = app.guilds.iter().filter(|g| !crate::ui::join_flow::is_lurking(g.id)).collect();
+    guilds.sort_by_cached_key(|g| g.name.to_lowercase());
+    let mut scopes = vec![0];
+    let mut guild_names = vec![crate::t!("sp.vo.entrance_all_servers")];
+    for guild in &guilds {
+        scopes.push(guild.id.0);
+        guild_names.push(guild.name.clone());
+    }
+    let target = app.settings.as_ref().map_or(0, |s| s.soundboard_target);
+    let scope = scopes.iter().position(|id| *id == target).unwrap_or(0);
+    let target = scopes[scope];
+    let guild_field = super::pages::dropdown_with(
+        app, "entrance-guild", controls::select_field("entrance-guild-field", guild_names[scope].clone()),
+        guild_names, scope, relative(1.).into(), true,
+        move |a, i, cx| {
+            if let Some(settings) = a.settings.as_mut() {
+                settings.soundboard_target = scopes[i];
+                settings.open_select = None;
+            }
+            cx.notify();
+        },
+        cx,
+    );
+
+    let current = app.prefs.synced.join_sounds.get(&target).copied();
+    let selecting = app.settings.as_ref().is_some_and(|s| s.open_select == Some("entrance-sound"));
+    if current.is_some() || selecting {
+        soundboard::ensure_loaded(app, cx);
+    }
+    let catalog = &cx.global::<Pickers>().soundboard;
+    let mut names = vec![crate::t!("sp.vo.entrance_none")];
+    let mut choices = vec![None];
+    for sound in catalog.defaults.iter().flatten().filter(|s| s.available) {
+        if let Some(name) = &sound.name {
+            names.push(name.clone());
+            choices.push(Some(JoinSound { sound: sound.id.0, source_guild: 0 }));
+        }
+    }
+    for guild in guilds {
+        for sound in catalog.guild_sounds.get(&guild.id).into_iter().flatten().filter(|s| s.available) {
+            if let Some(name) = &sound.name {
+                names.push(format!("{name} · {}", guild.name).into());
+                choices.push(Some(JoinSound { sound: sound.id.0, source_guild: guild.id.0 }));
+            }
+        }
+    }
+    let selected = choices.iter().position(|sound| *sound == current);
+    let name = selected.map(|i| names[i].clone()).unwrap_or_else(|| {
+        if catalog.loading { crate::t!("sp.vo.entrance_loading") } else { crate::t!("sp.vo.entrance_unavailable") }
+    });
+    let field = div().id("entrance-sound-field")
+        .h(z(40.)).px(z(12.)).flex().items_center().gap(z(4.)).rounded(z(8.)).border_1()
+        .border_color(c(tok(idx::INPUT_BORDER_DEFAULT))).bg(c(tok(idx::INPUT_BACKGROUND_DEFAULT)))
+        .when(premium, |d| d.cursor_pointer().hover(|s| s.border_color(c(tok(idx::INPUT_BORDER_HOVER)))))
+        .text_size(z(16.)).text_color(c(tok(idx::TEXT_STRONG)))
+        .child(div().min_w_0().overflow_hidden().whitespace_nowrap().child(name))
+        .child(icon(Icon::Speaker, 18., c(tok(idx::TEXT_SUBTLE))))
+        .child(div().flex_1())
+        .child(gpui::svg().path(crate::icons::path("pen")).size(z(20.)).flex_none().text_color(c(tok(idx::TEXT_SUBTLE))));
+    let sound_field = if premium {
+        super::pages::dropdown_with(
+            app, "entrance-sound", field, names, selected.unwrap_or(usize::MAX), z(321.).into(), true,
+            move |a, i, cx| {
+                if let Some(settings) = a.settings.as_mut() {
+                    settings.open_select = None;
+                }
+                if a.prefs.synced.join_sounds.get(&target).copied() != choices[i] {
+                    super::save(a, super::SettingsPatch::JoinSound(target, choices[i]), cx);
+                }
+                cx.notify();
+            },
+            cx,
+        )
+    } else {
+        field.w(z(321.)).max_w_full().opacity(0.6).into_any_element()
+    };
+    div()
+        .child(div().mt(z(32.)).child(h5(crate::t!("sp.vo.entrance_server"))).child(guild_field))
+        .child(div().mt(z(46.))
+            .child(div().flex().items_start().gap(z(4.))
+                .child(h5(crate::t!("sp.vo.entrance_sound")))
+                .child(div().pt(z(2.)).child(icon(Icon::Nitro, 14., c(tok(idx::TEXT_STRONG))))))
+            .child(sound_field)
+            .when(!premium, |d| d.child(note(crate::t!("sp.vo.entrance_nitro")).mt(z(6.)))))
+}
 
 fn voice_sounds(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
     let notice = (!app.prefs.local.notification_sounds).then(|| {

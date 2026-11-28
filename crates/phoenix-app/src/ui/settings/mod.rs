@@ -76,6 +76,7 @@ pub struct SyncedSettings {
     pub favorites: phoenix_api::rest::favorites::Favorites,
     pub custom_theme: Option<crate::theme::client_theme::CustomTheme>,
     pub raid_alerts: std::collections::HashMap<u64, phoenix_api::rest::settings::RaidAlerts>,
+    pub join_sounds: std::collections::HashMap<u64, phoenix_api::rest::settings::JoinSound>,
 }
 
 impl Default for SyncedSettings {
@@ -92,6 +93,7 @@ impl Default for SyncedSettings {
             favorites: Default::default(),
             custom_theme: None,
             raid_alerts: Default::default(),
+            join_sounds: Default::default(),
         }
     }
 }
@@ -108,6 +110,7 @@ pub enum SettingsPatch {
     Rest(&'static str, bool),
     Favorites(Box<phoenix_api::rest::favorites::Favorites>),
     RaidAlerts(u64, phoenix_api::rest::settings::RaidAlerts),
+    JoinSound(u64, Option<phoenix_api::rest::settings::JoinSound>),
 }
 
 impl SyncedSettings {
@@ -137,6 +140,13 @@ impl SyncedSettings {
             SettingsPatch::Favorites(f) => self.favorites = (**f).clone(),
             SettingsPatch::RaidAlerts(g, a) => {
                 self.raid_alerts.insert(*g, *a);
+            }
+            SettingsPatch::JoinSound(guild, sound) => {
+                if let Some(sound) = sound {
+                    self.join_sounds.insert(*guild, *sound);
+                } else {
+                    self.join_sounds.remove(guild);
+                }
             }
         }
     }
@@ -430,6 +440,8 @@ pub struct SettingsState {
     pub scroll: gpui::ScrollHandle,
     pub nested: Option<nested::Nested>,
     pub active_section: usize,
+    pub soundboard_volume_preview: Option<f32>,
+    pub soundboard_target: u64,
 }
 
 pub fn open(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
