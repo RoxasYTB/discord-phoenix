@@ -756,6 +756,8 @@ pub fn blocks(p: Page) -> &'static [B] {
         Page::Advanced => DEVELOPER,
         Page::Profiles => PROFILES,
         Page::RegisteredGames => GAMES,
+        Page::Clips => super::game_media::CLIPS,
+        Page::GameOverlay => super::game_media::OVERLAY,
         Page::Nitro => NITRO,
         Page::ServerBoost => BOOST,
         Page::Subscriptions => SUBSCRIPTIONS,

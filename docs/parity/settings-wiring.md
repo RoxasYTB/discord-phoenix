@@ -157,3 +157,11 @@ The [Soundboard support guide](https://support.discord.com/hc/en-us/articles/126
 The Discord web client stores volume as a fixed32 float inside `audioContext.soundboardSettings` (category 5, field 9). Entrance preferences use the guild settings map (category 3, map field 1), with `joinSound` at field 6. Map key zero is the global default. The voice effects module (458976 in the web client bundle inspected for this change) sends the configured sound through `POST /channels/{channel_id}/custom-call-sounds` after connecting.
 
 The settings UI was exercised on Windows with the mock backend. Live playback and account synchronization remain to be checked in a real voice channel.
+
+## Windows Clips and Game Overlay
+
+The [Clips guide](https://support.discord.com/hc/en-us/articles/16861982215703-Clips-and-Auto-Clips-FAQ) and the [Game Overlay guide](https://support.discord.com/hc/en-us/articles/217659737-Game-Overlay-101) describe the reference settings groups and interactions. The settings use Phoenix's existing section, dropdown, and switch controls.
+
+Clips store a bounded H.264 buffer in memory after a window is explicitly selected. The manual save produces a local MP4. The current implementation captures video on Windows and requires FFmpeg. The save length is aligned to an available keyframe.
+
+Game Overlay uses a movable, topmost Phoenix window for windowed and borderless games on Windows. Its voice widget reads the current channel roster and speaking flags. Windows registers the clip and overlay keybinds while their features are available.
