@@ -968,3 +968,20 @@ scores stay at 12 % because the animated emojis and the « popular » order diff
 
 - Shop: header Orbs pill no longer clips at 1280 px (`shop_page.rs` compact nav spacing + flexible search bar `120..256` px, `flex_none` on wishlist and Orbs pill); `COLLECTION_SALE` countdown banner (`container_arblTP`, 292 px, 22×32 digit tiles, 6×16 colons, `Dark`/`Light`/`GradientV1`/`Transparent` styles, `97Qza2` copy and `5GoOlx` CTA) implemented in `shop_page.rs` (`wt/shop-orbs`). Still open: promotion feed endpoint carrying live `COLLECTION_SALE` assignments and header search rotating suggestions (`collectibles_search_bar`, chunk 6b4565136c5e825f).
 - Gift inventory: banner art now loads the client Lottie (`GiftCardBanner`, `96c9c7a8574bdf47c51fa14ce5ebdf8caf88bfbb71597a60a1d80d8973180649.lottiejson`, 282×188, `aspect-ratio 6/4`) via `media::lottie::image` with static gift SVG fallback, and bullet icons use `xxs` 10 px (`settings/gift.rs`, `wt/shop-orbs`).
+
+### Zoom 150 / 200 % (28/11 17:10, int-bin d1dd79a5)
+
+Client on Friends (`/channels/@me`, the only ack-free route it was on), emulated to 853×467 CSS px at dpr 2.25 (150 %)
+and 640×350 at dpr 3 (200 %), then `clearDeviceMetricsOverride`. Phoenix `real_shots PHX_W/PHX_H/PHX_SCALE` same sizes.
+The offscreen buffer of `real_shots` stops at 2× the CSS size (1706×934 and 1280×700 instead of 1919×1051 and 1920×1050),
+so only the left part is compared, on the client shot cropped to the same box.
+
+| View | Zoom | Overall | Notes |
+|---|---|---|---|
+| Friends, Online | 150 % | 13.2 | rail, mention / voice badges, header and tabs line up; the client shows a « Quête terminée » card over the DM list |
+| Friends, Online | 200 % | 10.8 | same; header tabs cut by the window like the client |
+| Test channel (Phoenix only) | 150 / 200 % | — | member list kept, channel list fixed, chat column squeezed: same rules as `responsive.md` (channel views cannot be opened in the client, ack) |
+
+Fixed: in a friend row the display name did not shrink (no `min-width: 0`), so a long name pushed the server tag out of
+the row. Client CSS `.userInfo_jPuNMC{display:flex;min-width:0}`, `.username_jPuNMC{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}`:
+the name ellipsizes (« ! Peдyaн Ịاlاه 마다… ») and the tag stays (`home/friends.rs`). Rail badges at 150 / 200 % now compared: ✅.
