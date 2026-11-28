@@ -47,7 +47,7 @@ fn text(value: SharedString, size: f32, weight: FontWeight, color: usize) -> Div
     div().text_size(z(size)).line_height(z(size + 5.)).font_weight(weight).text_color(c(tok(color))).child(value)
 }
 
-pub(super) fn status_card(app: &PhoenixApp) -> Div {
+fn status_card(app: &PhoenixApp) -> Div {
     let plan = Plan::for_account(app);
     let active = matches!(plan, Plan::Basic | Plan::Classic | Plan::Nitro);
     let (label, description) = match plan {
@@ -250,8 +250,15 @@ fn banner_action(id: &'static str, label: SharedString, primary: bool) -> gpui::
         .text_center().child(label)
 }
 
-fn member_banner(plan: Plan, cx: &mut Context<PhoenixApp>) -> Div {
+fn member_banner(app: &PhoenixApp, plan: Plan, cx: &mut Context<PhoenixApp>) -> Div {
     let full = plan == Plan::Nitro;
+    let title: AnyElement = if full && app.backend.premium_with_group() {
+        crate::fonts::nitro(div().h(z(36.)).text_size(z(32.)).line_height(z(24.)), true)
+            .child(SharedString::from(crate::t!("sp.su.squad").to_uppercase()))
+            .into_any_element()
+    } else {
+        div().flex().child(wordmark(plan, 52.)).into_any_element()
+    };
     let perks = if full {
         vec![
             ("chat/upload", crate::t!("sp.ni.p1")),
@@ -293,7 +300,7 @@ fn member_banner(plan: Plan, cx: &mut Context<PhoenixApp>) -> Div {
         .child(
             div().relative().flex().flex_col().flex_1().min_w_0().max_w(z(328.))
                 .text_color(gpui::white())
-                .child(div().flex().child(wordmark(plan, 52.)))
+                .child(title)
                 .child(div().text_size(z(14.)).line_height(z(20.)).font_weight(FontWeight::BOLD).child(monthly_price(plan)))
                 .child(
                     div().mt(z(16.)).flex().flex_col().gap(z(8.))
@@ -366,7 +373,7 @@ pub(super) fn page(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> AnyElement
     let plan = Plan::for_account(app);
     let page = crate::fonts::ui_root(div().w_full().flex().flex_col().gap(z(40.)));
     if matches!(plan, Plan::Nitro | Plan::Basic) {
-        page.pt(z(10.)).child(gift_banner(cx)).child(member_banner(plan, cx)).child(member_comparison(plan))
+        page.pt(z(10.)).child(gift_banner(cx)).child(member_banner(app, plan, cx)).child(member_comparison(plan))
     } else {
         page.child(div().flex().flex_col().gap(z(12.)).child(status_card(app)).child(plan_actions(cx)))
             .child(comparison(plan))

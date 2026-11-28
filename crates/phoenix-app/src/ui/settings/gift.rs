@@ -233,15 +233,14 @@ pub(super) fn purchased(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> Any
         .into_any_element()
 }
 
-pub(super) fn subscriptions(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
+pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let data = super::subscriptions::get().unwrap_or_default();
     let mut head = div()
         .flex()
         .flex_col()
         .pt(z(11.))
         .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")).mb(z(16.)))
-        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")))
-        .child(div().mt(z(16.)).child(super::nitro::status_card(app)));
+        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
     if let Some(sq) = &data.squad {
         head = head.child(div().mt(z(16.)).child(squad_card(sq)));
     }

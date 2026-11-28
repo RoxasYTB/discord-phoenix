@@ -168,8 +168,6 @@ fn download(missing: Vec<(PathBuf, String)>) -> Vec<PathBuf> {
 }
 
 pub fn init() -> Vec<PathBuf> {
-    // The public Discord web client uses these faces even when its local cache
-    // is unavailable or uses a format the asset extractor cannot read.
     const WEB_UI_FACES: &[(&str, u16, bool, &str)] = &[
         ("gg sans", 400, false, "66d715454104d24e.woff2"),
         ("gg sans", 500, false, "b272b33815319bae.woff2"),
