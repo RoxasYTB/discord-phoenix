@@ -320,7 +320,7 @@ pub fn reactions(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, a
             row = row.child(burst_pill(app, entity, msg, ix, r));
         }
         if r.count > 0 {
-            row = row.child(normal_pill(entity, msg, ix, r));
+            row = row.child(normal_pill(app, entity, msg, ix, r));
         }
     }
     let e = entity.clone();
@@ -353,14 +353,17 @@ fn count_label(n: u32) -> gpui::Div {
     div().text_size(z(16.)).line_height(z(16.)).font_weight(FontWeight::SEMIBOLD).w(z(12. * n.to_string().len() as f32)).text_center()
 }
 
-fn normal_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::model::Reaction) -> AnyElement {
+fn normal_pill(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate::model::Reaction) -> AnyElement {
     let (ch, id) = (msg.channel, msg.id);
     let hc = crate::theme::high_contrast();
     let e = entity.clone();
     let rc = r.clone();
     let emoji_el = div().my(z(2.)).child(crate::media::emoji::emoji_element(&r.emoji, 20.));
-    let fade_key = crate::ui::states::key(("reaction", msg.id.0, ix));
-    crate::ui::states::track(div().id(("reaction", ix)), fade_key)
+    let fade_key = super::burst_tip::pill_key(ch, id, r, false);
+    let tip = super::burst_tip::layer(app, entity, msg, r, false);
+    let e_hover = entity.clone();
+    let rh = r.clone();
+    div().id(("reaction", ix))
         .map(|d| crate::ui::a11y::named(d, gpui::Role::Button, || crate::ui::a11y::reaction(&r.emoji, r.count, r.me)))
         .relative()
         .py(z(2.))
@@ -392,6 +395,7 @@ fn normal_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate:
         .active(|s| s.bg(tk(idx::REACTION_BACKGROUND_ACTIVE)).border_color(tk(idx::REACTION_BORDER_ACTIVE)))
         .cursor_pointer()
         .group("reaction")
+        .child(super::burst_tip::probe(fade_key))
         .child(emoji_el)
         .child(
             count_label(r.count)
@@ -405,7 +409,18 @@ fn normal_pill(entity: &Entity<PhoenixApp>, msg: &Message, ix: usize, r: &crate:
                 .group_active("reaction", |s| s.text_color(tk(idx::REACTION_TEXT_ACTIVE)))
                 .child(SharedString::from(r.count.to_string())),
         )
-        .on_click(move |_, _, cx| e.update(cx, |a, cx| a.toggle_reaction(ch, id, &rc, cx)))
+        .children(tip)
+        .on_hover(move |on, window, cx| {
+            if crate::ui::states::set_hover(fade_key, *on) {
+                window.refresh();
+                super::burst_tip::on_pill_hover(&e_hover, ch, id, &rh, false, *on, cx);
+            }
+        })
+        .on_click(move |_, window, cx| {
+            super::burst_tip::dismiss(fade_key);
+            window.refresh();
+            e.update(cx, |a, cx| a.toggle_reaction(ch, id, &rc, cx));
+        })
         .into_any_element()
 }
 
@@ -425,11 +440,11 @@ fn burst_pill(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ix: 
         .my(z(2.))
         .children(playing.as_ref().map(|(img, at)| burst::overlay(img.clone(), *at, 20.)))
         .child(div().when(hide, |d| d.opacity(0.)).child(crate::media::emoji::emoji_element(&r.emoji, 20.)));
-    let fade_key = crate::ui::states::key(("reaction-burst", msg.id.0, ix));
+    let fade_key = burst_tip::pill_key(ch, id, r, true);
     let hovered = crate::ui::states::hovered(fade_key);
     let (e_hover, e_click) = (entity.clone(), entity.clone());
     let (rh, rc) = (r.clone(), r.clone());
-    let tip = burst_tip::layer(app, entity, msg, r, fade_key);
+    let tip = burst_tip::layer(app, entity, msg, r, true);
     let accent = pal.map(|p| p.accent);
     let me_burst = r.me_burst;
     let shake = match playing.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() / 0.5) {
@@ -484,14 +499,18 @@ fn burst_pill(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, ix: 
         .on_hover(move |on, window, cx| {
             if crate::ui::states::set_hover(fade_key, *on) {
                 window.refresh();
+                burst_tip::on_pill_hover(&e_hover, ch, id, &rh, true, *on, cx);
             }
-            burst_tip::on_pill_hover(&e_hover, ch, id, &rh, *on, cx);
             if *on && let Some(accent) = accent {
                 let rh = rh.clone();
                 e_hover.update(cx, |_, cx| burst::play(burst::Play { channel: ch, msg: id, token: &rh.emoji, emoji_id: rh.emoji_id, accent, kind: burst::Kind::Hover }, cx));
             }
         })
-        .on_click(move |_, _, cx| e_click.update(cx, |a, cx| a.toggle_burst_reaction(ch, id, &rc, cx)));
+        .on_click(move |_, window, cx| {
+            burst_tip::dismiss(fade_key);
+            window.refresh();
+            e_click.update(cx, |a, cx| a.toggle_burst_reaction(ch, id, &rc, cx));
+        });
     match shake {
         Some((dx, dy, _)) => pill.left(z(dx)).top(z(dy)).into_any_element(),
         None => pill.into_any_element(),

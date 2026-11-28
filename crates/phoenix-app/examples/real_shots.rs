@@ -1795,14 +1795,14 @@ fn main() -> anyhow::Result<()> {
                     let pick = app.selected_channel.and_then(|c| {
                         let msgs = &app.messages.get(&c)?.msgs;
                         let m = msgs.iter().rev().find(|m| m.reactions.iter().any(|r| r.burst_count > 0))?;
-                        let ix = m.reactions.iter().position(|r| r.burst_count > 0)?;
-                        Some((c, m.id, ix, m.reactions[ix].clone()))
+                        let r = m.reactions.iter().find(|r| r.burst_count > 0)?;
+                        Some((c, m.id, r.clone()))
                     });
                     if kind == "burstupsell" {
                         phoenix_app::ui::modals::burst_upsell::open(cx);
-                    } else if let Some((c, m, ix, r)) = pick {
+                    } else if let Some((c, m, r)) = pick {
                         println!("burst tooltip on {m:?} {}", r.emoji);
-                        let key = phoenix_app::ui::states::key(("reaction-burst", m.0, ix));
+                        let key = phoenix_app::ui::chat::burst_tip::pill_key(c, m, &r, true);
                         phoenix_app::ui::states::set_hover(key, true);
                         phoenix_app::ui::chat::burst_tip::load_names(app, c, m, &r, cx);
                         phoenix_app::ui::chat::burst_tip::refresh_after(cx, phoenix_app::ui::chat::burst_tip::SHOW_AFTER);

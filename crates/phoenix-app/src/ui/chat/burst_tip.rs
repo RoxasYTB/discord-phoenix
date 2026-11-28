@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::time::Duration;
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 
 use gpui::{
     AnyElement, App, Bounds, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, SharedString, StatefulInteractiveElement, Styled, anchored, canvas, div, point, prelude::*, px,
@@ -17,21 +17,48 @@ const MAX_W: f32 = 288.;
 const GAP: f32 = 8.;
 const ROOM: f32 = 120.;
 
-type ReactorKey = (u64, u64, String);
+const CACHE_CAPACITY: usize = 64;
+const CACHE_TTL: Duration = Duration::from_secs(30);
+
+type ReactorKey = (u64, u32, bool);
+type ReactorNames = Vec<(Id, SharedString)>;
+
+enum Preview {
+    Loading,
+    Ready(ReactorNames),
+    Failed,
+}
+
+struct CacheEntry {
+    key: ReactorKey,
+    started: Instant,
+    state: Preview,
+}
 
 thread_local! {
     static BOUNDS: RefCell<HashMap<u64, Bounds<Pixels>>> = RefCell::new(HashMap::new());
-    static USERS: RefCell<HashMap<ReactorKey, Vec<Id>>> = RefCell::new(HashMap::new());
-    static LOADING: RefCell<HashSet<ReactorKey>> = RefCell::new(HashSet::new());
-    static SHOWN: RefCell<HashSet<u64>> = RefCell::new(HashSet::new());
+    static CACHE: RefCell<VecDeque<CacheEntry>> = const { RefCell::new(VecDeque::new()) };
+    static SHOWN: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
 }
 
-fn reactor_key(channel: Id, msg: Id, r: &Reaction) -> ReactorKey {
-    (channel.0, msg.0, r.emoji_id.map_or_else(|| r.emoji.to_string(), |i| i.0.to_string()))
+pub fn pill_key(channel: Id, msg: Id, r: &Reaction, burst: bool) -> u64 {
+    crate::ui::states::key(("reaction-pill", channel, msg, r.emoji_id, r.emoji_id.is_none().then_some(&r.emoji), burst))
+}
+
+fn reactor_key(pill: u64, r: &Reaction, burst: bool) -> ReactorKey {
+    if burst { (pill, r.burst_count, r.me_burst) } else { (pill, r.count, r.me) }
 }
 
 pub fn tip_key(pill: u64) -> u64 {
-    crate::ui::states::key(("reaction-burst-tip", pill))
+    crate::ui::states::key(("reaction-tip", pill))
+}
+
+pub fn dismiss(pill: u64) {
+    if SHOWN.get() == Some(pill) {
+        SHOWN.set(None);
+    }
+    crate::ui::states::set_hover(pill, false);
+    crate::ui::states::set_hover(tip_key(pill), false);
 }
 
 pub fn text(names: &[String], total: u32, emoji: &str) -> Option<SharedString> {
@@ -74,52 +101,101 @@ pub fn refresh_after(cx: &mut App, d: Duration) {
     .detach();
 }
 
-pub fn on_pill_hover(entity: &Entity<PhoenixApp>, channel: Id, id: Id, r: &Reaction, on: bool, cx: &mut App) {
+pub fn on_pill_hover(entity: &Entity<PhoenixApp>, channel: Id, id: Id, r: &Reaction, burst: bool, on: bool, cx: &mut App) {
     if !on {
         refresh_after(cx, HIDE_AFTER);
         return;
     }
-    refresh_after(cx, SHOW_AFTER);
-    entity.update(cx, |a, cx| load_names(a, channel, id, r, cx));
+    let pill = pill_key(channel, id, r, burst);
+    let hover = crate::ui::states::state(pill);
+    let route = entity.read(cx).selected_channel;
+    let entity = entity.downgrade();
+    let reaction = r.clone();
+    cx.spawn(async move |cx| {
+        cx.background_executor().timer(SHOW_AFTER).await;
+        cx.update(|cx| {
+            if crate::ui::states::state(pill) == hover && let Some(entity) = entity.upgrade() {
+                entity.update(cx, |a, cx| {
+                    if a.selected_channel == route {
+                        request_names(a, channel, id, &reaction, burst, cx);
+                        cx.notify();
+                    }
+                });
+            }
+        });
+    })
+    .detach();
 }
 
 pub fn load_names(a: &mut PhoenixApp, channel: Id, id: Id, r: &Reaction, cx: &mut gpui::Context<PhoenixApp>) {
-    let key = reactor_key(channel, id, r);
-    if USERS.with(|u| u.borrow().contains_key(&key)) || LOADING.with(|l| l.borrow().contains(&key)) {
+    request_names(a, channel, id, r, true, cx);
+}
+
+fn request_names(a: &mut PhoenixApp, channel: Id, id: Id, r: &Reaction, burst: bool, cx: &mut gpui::Context<PhoenixApp>) {
+    let pill = pill_key(channel, id, r, burst);
+    let key = reactor_key(pill, r, burst);
+    let started = Instant::now();
+    let should_request = CACHE.with_borrow_mut(|cache| {
+        if let Some(index) = cache.iter().position(|entry| entry.key.0 == pill) {
+            let Some(entry) = cache.remove(index) else { return false };
+            if entry.key == key && matches!(&entry.state, Preview::Ready(_)) && entry.started.elapsed() < CACHE_TTL {
+                cache.push_back(entry);
+                return false;
+            }
+        }
+        cache.push_back(CacheEntry { key, started, state: Preview::Loading });
+        if cache.len() > CACHE_CAPACITY {
+            cache.pop_front();
+        }
+        true
+    });
+    if !should_request {
         return;
     }
-    LOADING.with(|l| l.borrow_mut().insert(key.clone()));
-    let emoji = r.clone();
-    a.action(ActionRequest::Reactors { channel, msg: id, emoji, burst: true }, cx, move |a, res, _| {
-        LOADING.with(|l| l.borrow_mut().remove(&key));
-        let ids = match res {
-            Ok(ActionReply::Users(us)) => {
-                let ids = us.iter().map(|u| u.id).collect();
-                for u in us {
-                    a.users.entry(u.id).or_insert(u);
-                }
-                ids
+
+    let route = a.selected_channel;
+    let hover = crate::ui::states::state(pill);
+    a.action(ActionRequest::Reactors { channel, msg: id, emoji: r.clone(), burst }, cx, move |a, res, _| {
+        CACHE.with_borrow_mut(|cache| {
+            let Some(index) = cache.iter().position(|entry| entry.key == key && entry.started == started) else { return };
+            let current_hover = crate::ui::states::state(pill);
+            let active = if current_hover.is_some_and(|(on, _)| on) {
+                current_hover == hover
+            } else {
+                visible(current_hover, crate::ui::states::state(tip_key(pill)), SHOWN.get() == Some(pill))
+            };
+            if a.selected_channel != route || !active {
+                cache.remove(index);
+                return;
             }
-            _ => Vec::new(),
-        };
-        USERS.with(|u| u.borrow_mut().insert(key, ids));
+            cache[index].state = match res {
+                Ok(ActionReply::Users(users)) => Preview::Ready(users.into_iter().take(100).map(|u| (u.id, u.display_name)).collect()),
+                _ => Preview::Failed,
+            };
+        });
     });
 }
 
-fn names(app: &PhoenixApp, msg: &Message, r: &Reaction) -> Vec<String> {
+fn names(app: &PhoenixApp, msg: &Message, users: &ReactorNames) -> Vec<String> {
     let guild = app.channels.get(&msg.channel).and_then(|c| c.guild);
-    let ids = USERS.with(|u| u.borrow().get(&reactor_key(msg.channel, msg.id, r)).cloned()).unwrap_or_default();
-    ids.into_iter()
-        .filter(|u| !app.nav.is_blocked(*u) && !app.nav.is_ignored(*u))
-        .filter_map(|u| app.member_nick_in(guild, u).map(|n| n.to_string()).or_else(|| app.users.get(&u).map(|x| x.display_name.to_string())))
+    users.iter()
+        .filter(|(id, _)| !app.nav.is_blocked(*id) && !app.nav.is_ignored(*id))
         .take(3)
+        .map(|(id, name)| app.member_nick_in(guild, *id).unwrap_or_else(|| name.clone()).to_string())
         .collect()
 }
 
 pub fn probe(pill: u64) -> AnyElement {
     canvas(
         move |b, _, _| {
-            BOUNDS.with(|m| m.borrow_mut().insert(pill, b));
+            if crate::ui::states::hovered(pill) || SHOWN.get() == Some(pill) {
+                BOUNDS.with_borrow_mut(|bounds| {
+                    if bounds.len() >= CACHE_CAPACITY && !bounds.contains_key(&pill) {
+                        bounds.retain(|k, _| SHOWN.get() == Some(*k));
+                    }
+                    bounds.insert(pill, b);
+                });
+            }
         },
         |_, _, _, _| {},
     )
@@ -138,46 +214,70 @@ fn nitro_icon() -> gpui::Svg {
     gpui::svg().path(crate::icons::path("nitro")).size(z(24.)).flex_none().mr(z(5.)).text_color(c(tok(idx::TEXT_DEFAULT)))
 }
 
-pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &Reaction, pill: u64) -> Option<AnyElement> {
+pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &Reaction, burst: bool) -> Option<AnyElement> {
+    let pill = pill_key(msg.channel, msg.id, r, burst);
     let tip = tip_key(pill);
-    let shown = SHOWN.with(|s| s.borrow().contains(&pill));
-    let show = visible(crate::ui::states::state(pill), crate::ui::states::state(tip), shown);
-    let label = crate::ui::modals::reactions::tab_label(r);
-    let line = show.then(|| text(&names(app, msg, r), r.burst_count, &label)).flatten();
-    SHOWN.with(|s| {
-        let mut s = s.borrow_mut();
-        if line.is_some() {
-            s.insert(pill);
-        } else {
-            s.remove(&pill);
+    let shown = SHOWN.get() == Some(pill);
+    if !visible(crate::ui::states::state(pill), crate::ui::states::state(tip), shown) {
+        if shown {
+            SHOWN.set(None);
         }
+        return None;
+    }
+    let b = BOUNDS.with_borrow(|bounds| bounds.get(&pill).copied())?;
+    SHOWN.set(Some(pill));
+    let label = crate::ui::modals::reactions::tab_label(r);
+    let (line, failed) = CACHE.with_borrow(|cache| match cache.iter().find(|entry| entry.key.0 == pill).map(|entry| &entry.state) {
+        Some(Preview::Ready(users)) => {
+            let names = names(app, msg, users);
+            let line = if names.is_empty() {
+                crate::t!("reaction_preview.empty")
+            } else if burst {
+                text(&names, r.burst_count, &label).unwrap_or_default()
+            } else {
+                let remaining = r.count.saturating_sub(names.len() as u32);
+                let names = names.join(", ");
+                if remaining == 0 {
+                    names.into()
+                } else {
+                    crate::i18n::t("reaction_preview.more", &[("names", &names), ("count", &remaining.to_string())])
+                }
+            };
+            (line, false)
+        }
+        Some(Preview::Failed) => (crate::t!("reaction_preview.failed"), true),
+        _ => (crate::t!("common.loading"), false),
     });
-    let line = line?;
-    let b = BOUNDS.with(|m| m.borrow().get(&pill).copied())?;
     let premium = app.backend.has_premium();
     let (ch, id) = (msg.channel, msg.id);
     let e_open = entity.clone();
     let e_add = entity.clone();
     let e_unlock = entity.clone();
     let rc = r.clone();
-    let list = msg.reactions.clone();
-    let selected = crate::ui::modals::reactions::entries(&list)
-        .iter()
-        .position(|en| en.burst && list.get(en.index).is_some_and(|x| x.emoji == r.emoji && x.emoji_id == r.emoji_id))
-        .unwrap_or(0);
+    let list = &msg.reactions;
+    let selected = burst.then(|| {
+        crate::ui::modals::reactions::entries(list)
+            .iter()
+            .position(|en| en.burst && list.get(en.index).is_some_and(|x| x.emoji == r.emoji && x.emoji_id == r.emoji_id))
+            .unwrap_or(0)
+    });
+    let e_retry = entity.clone();
+    let retry_emoji = r.clone();
     let inner = div()
-        .id(("burst-tip-inner", pill))
-        .cursor_pointer()
+        .id(("reaction-tip-inner", pill))
+        .when(burst, |d| d.cursor_pointer())
         .flex()
         .items_center()
         .child(div().size(z(32.)).flex_none().child(crate::media::emoji::emoji_element(&r.emoji, 32.)))
         .child(body_text(format!("\u{200E}{line}")).ml(z(12.)).flex_1().min_w_0())
-        .on_click(move |_, _, cx| {
-            SHOWN.with(|s| s.borrow_mut().remove(&pill));
+        .when_some(selected, |d, selected| d.on_click(move |_, window, cx| {
+            cx.stop_propagation();
+            dismiss(pill);
+            window.refresh();
             e_open.update(cx, |a, cx| a.open_reactions(ch, id, selected, cx));
-        });
+        }));
     let prompt = div().mt(z(12.)).pt(z(8.)).border_t_1().border_color(c(tok(idx::BORDER_SUBTLE))).w_full().flex().items_center();
-    let footer = if r.me_burst {
+    let footer = burst.then(|| if r.me_burst {
         prompt.when(premium, |d| d.child(nitro_icon())).child(body_text(crate::t!("burst.tip_sent")).ml(z(12.))).into_any_element()
     } else if premium {
         prompt
@@ -185,7 +285,12 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
             .cursor_pointer()
             .child(nitro_icon())
             .child(body_text(crate::t!("burst.tip_add")).ml(z(12.)))
-            .on_click(move |_, _, cx| e_add.update(cx, |a, cx| a.toggle_burst_reaction(ch, id, &rc, cx)))
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                dismiss(pill);
+                window.refresh();
+                e_add.update(cx, |a, cx| a.toggle_burst_reaction(ch, id, &rc, cx));
+            })
             .into_any_element()
     } else {
         prompt
@@ -194,20 +299,23 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
                     div().mt(z(8.)).w_full().flex().child(
                         crate::ui::controls::button_icon(("burst-tip-unlock", pill), "nitro", crate::t!("burst.tip_unlock"), crate::ui::controls::BtnKind::Expressive)
                             .flex_1()
-                            .on_click(move |_, _, cx| {
+                            .on_click(move |_, window, cx| {
                                 cx.stop_propagation();
+                                dismiss(pill);
+                                window.refresh();
                                 e_unlock.update(cx, crate::ui::modals::burst_upsell::open_nitro);
                             }),
                     ),
                 ),
             )
             .into_any_element()
-    };
+    });
     let card = div()
-        .id(("burst-tip", pill))
+        .id(("reaction-tip", pill))
         .max_w(z(MAX_W))
-        .p(z(16.))
-        .rounded(z(crate::theme::generated::global::RADIUS_XS))
+        .p(z(if burst { 16. } else { 10. }))
+        .rounded(z(if burst { crate::theme::generated::global::RADIUS_XS } else { 10. }))
+        .when(!burst, |d| d.border_1().border_color(c(tok(idx::BORDER_SUBTLE))))
         .overflow_hidden()
         .bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
         .shadow(crate::ui::inbox::popout_shadow())
@@ -223,7 +331,18 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
             }
         })
         .child(inner)
-        .child(footer);
+        .when(failed, |d| d.child(
+            crate::ui::controls::button(("reaction-tip-retry", pill), crate::t!("common.retry"), crate::ui::controls::BtnKind::Secondary)
+                .mt(z(8.))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    e_retry.update(cx, |a, cx| {
+                        request_names(a, ch, id, &retry_emoji, burst, cx);
+                        cx.notify();
+                    });
+                }),
+        ))
+        .children(footer);
     let top = f32::from(b.origin.y);
     let mid = f32::from(b.origin.x + b.size.width / 2.);
     let span = f32::from(z(MAX_W + 32.));
