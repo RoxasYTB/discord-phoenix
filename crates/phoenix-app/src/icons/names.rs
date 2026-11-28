@@ -254,7 +254,7 @@ pub const MAP: &[(&str, &[&str])] = &[
     ("access/plus-small", &["PlusSmallIcon"]),
     ("server/dropper", &["EyeDropperIcon"]),
     ("event/location", &["LocationIcon"]),
-    ("picker/sparkle", &["SparkleIcon"]),
+    ("picker/sparkle", &["SparklesIcon", "SparkleIcon"]),
     ("mod/user-minus", &["UserMinusIcon"]),
     ("mod/hammer", &["HammerIcon"]),
     ("mod/clock-warning", &["ClockWarningIcon"]),

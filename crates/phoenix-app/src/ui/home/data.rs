@@ -213,7 +213,6 @@ pub enum Overlay {
 #[derive(Default)]
 pub struct NavState {
     pub scroll_positions: HashMap<Id, ScrollPosition>,
-    pub welcome_expanded: HashMap<Id, bool>,
     pub relationships: Vec<Relationship>,
     pub relationship_revision: u64,
     pub pending_friend_actions: HashSet<Id>,

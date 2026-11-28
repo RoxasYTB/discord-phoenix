@@ -110,7 +110,6 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                         .children(crate::ui::join_flow::verification_banner(app, cx))
                         .children(discovery_notice(app, cx))
                         .children(crate::ui::join_flow::nsfw_gate(app, cx))
-                        .children(app.selected_channel.and_then(|channel| welcome::render(app, &cx.entity(), channel, window.viewport_size().height * 0.42)))
                         .child(
                             crate::ui::a11y::named(div().id("chat-messages"), gpui::Role::List, || crate::t!("a11y.messages_in", name = a11y_channel()))
                                 .flex_1()
@@ -766,6 +765,9 @@ fn intro(app: &PhoenixApp, entity: &Entity<PhoenixApp>, ch: Id, reached_start: b
     let name = channel.map(|c| c.name.clone()).unwrap_or_default();
     if !reached_start {
         return skeleton::for_channel(ch.0, app.prefs.synced.compact);
+    }
+    if let Some(checklist) = welcome::render(app, entity, ch) {
+        return checklist;
     }
     if let Some(chan) = channel.filter(|c| c.guild.is_none()) {
         let group = crate::ui::dm_profile_panel::is_group_dm(app, chan.id);
