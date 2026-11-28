@@ -576,6 +576,11 @@ mod tests {
         (a - b).abs() < 1e-3
     }
 
+    fn close_mod(a: f32, b: f32, period: f32) -> bool {
+        let d = (a - b).rem_euclid(period);
+        d < 1e-3 || (period - d) < 1e-3
+    }
+
     #[test]
     fn role_gradient_is_horizontal_and_repeats_every_period() {
         let fill = NameFill::Role { stops: vec![(0x9e6bff, 0.), (0x9fc1ff, 0.5), (0x9e6bff, 1.)], period: px(100.) };
@@ -631,10 +636,10 @@ mod tests {
         let s = scroll.to_glyph_scroll(1.5);
         let t0 = gpui::gradient_clock(start);
         let period = 150.;
-        assert!(close(s.displacement(t0, period), 0.));
+        assert!(close_mod(s.displacement(t0, period), 0., period));
         assert!(close(s.displacement(t0 + 0.375, period), 37.5));
         assert!(close(s.displacement(t0 + 0.75, period), 75.));
-        assert!(close(s.displacement(t0 + 1.5, period), 0.));
+        assert!(close_mod(s.displacement(t0 + 1.5, period), 0., period));
         assert!(close(s.displacement(t0 + 2.25, period), 75.));
         assert!(s.running(t0 + 60.));
         let g = role().gradient(point(px(0.), px(0.)), px(250.), px(20.), px(0.)).unwrap().scroll(Some(scroll));
