@@ -154,3 +154,11 @@ Still not done: stream tile menu, search results, reply previews and composer at
 | shop and quests | `full-profile-shop-this-look`, `wishlist-overflow-menu`, quest « … » menus | `ShopLook`, `WishlistMore`, `QuestMore` | ✅ (existing) |
 
 Still not done: the members table of Server Settings (client `member-safety-guild-member-*-menu`), and the emoji, webhook, invite and ban rows (their client menus were not read), reply previews and composer attachments.
+
+### Part C, third night batch (28/11)
+
+| item | client | Phoenix | status |
+|---|---|---|---|
+| Server Settings > Members | `a667d8c06f3b3cfa.js`: row `onContextMenu` and the « … » button (`x8Nn4M`) open the moderation (guild user) menu; `member-safety-guild-member-*-menu` is the join-date filter, not a row menu | the home-made Copy ID / Kick / Ban popup is gone; both open `user_menu` with the guild | ✅ |
+| Server Settings > Audit Log | `916d0bef82cfb632.js` `userHook`: right click on the user opens the user menu | avatar and sentence open `user_menu` | ✅ |
+| Emoji, Invites, Bans, Webhooks pages, composer attachments, reply previews | no `onContextMenu` found next to these rows in the 2 800 cached chunks and the 325 live ones (reply previews: only the author, done in Part A) | none | ✅ nothing to add (⚠ absence read from the JS, not live) |
