@@ -23,6 +23,67 @@ const HERO_GRADIENT_H: f32 = 984.;
 
 thread_local! {
     static PAGE_W: std::cell::Cell<f32> = const { std::cell::Cell::new(0.) };
+    static MY_PREMIUM_SINCE: std::cell::Cell<Option<i64>> = const { std::cell::Cell::new(None) };
+    static PREMIUM_SINCE_ASKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+const TENURE: [(u32, &str, &str); 8] = [
+    (1, "nitro.tier_bronze", "https://cdn.discordapp.com/assets/content/d8df65e0c94fd9d1f5028b4b252710fede2f4059d419d32b6f70f253f0c27999.png"),
+    (3, "nitro.tier_silver", "https://cdn.discordapp.com/assets/content/d0e033cda164abbfc02c39e70afcccb410954ceb63544178608eff0323092ccd.png"),
+    (6, "nitro.tier_gold", "https://cdn.discordapp.com/assets/content/a67846bf44a97eeaf00209a31f30146f2c3685abb207ec89f1aa97404efb7883.png"),
+    (12, "nitro.tier_platinum", "https://cdn.discordapp.com/assets/content/10b3c17fdd7d4f454e9c2335a94e48f05a1ed9c23e5f48101e5b9895f8055bb7.png"),
+    (24, "nitro.tier_diamond", "https://cdn.discordapp.com/assets/content/1468c2db0e265bed25bdcae7f6fe586a66493cd7c8cf0ca9228dc8b899e22d1b.png"),
+    (36, "nitro.tier_emerald", "https://cdn.discordapp.com/assets/content/5d4f18789f059f49d6bb2519692c96e36479ddac46af90030e6bb0473199f0ed.png"),
+    (60, "nitro.tier_ruby", "https://cdn.discordapp.com/assets/content/ecfc2da5e1ee0563dc487d35e1aad74f083dd2f18e5798028ffbc96f255d6840.png"),
+    (72, "nitro.tier_opal", "https://cdn.discordapp.com/assets/content/7fbfa17e5011425252d9ff6c1f286f41560c8acc58cb543b3c895031ffda5289.png"),
+];
+
+fn months_since(since: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> u32 {
+    let mut m = 0;
+    while since.checked_add_months(chrono::Months::new(m + 1)).is_some_and(|d| d <= now) {
+        m += 1;
+    }
+    m
+}
+
+pub(crate) fn tenure(since: i64, now: i64) -> Option<(usize, Option<(usize, i64)>)> {
+    let (since, now) = (chrono::DateTime::from_timestamp(since, 0)?, chrono::DateTime::from_timestamp(now, 0)?);
+    let months = months_since(since, now);
+    let tier = TENURE.iter().rposition(|t| t.0 <= months)?;
+    let next = TENURE.get(tier + 1).and_then(|n| {
+        let at = since.checked_add_months(chrono::Months::new(n.0))?;
+        Some((tier + 1, ((at - now).num_seconds() + 86_399) / 86_400))
+    });
+    Some((tier, next))
+}
+
+fn tenure_perk(since: i64, now: i64) -> Option<(Perk, SharedString)> {
+    let (tier, next) = tenure(since, now)?;
+    let (_, name, art) = TENURE[tier];
+    let description = next.map_or_else(SharedString::default, |(n, days)| {
+        let next_name = crate::t!(TENURE[n].1);
+        if days <= 30 {
+            crate::t!("nitro.tenure_next_days", n = days, next = next_name)
+        } else {
+            crate::t!("nitro.tenure_next_months", n = (days as f64 / 30.4375).ceil() as i64, next = next_name)
+        }
+    });
+    let date = chrono::DateTime::from_timestamp(since, 0)?.with_timezone(&chrono::Local);
+    let date = if crate::i18n::locale().starts_with("fr") { date.format("%d/%m/%y") } else { date.format("%-m/%-d/%y") }.to_string();
+    Some((Perk { id: "tenure-badge", title: crate::t!(name), description, art, art_max_w: Some(276.), cta: None }, crate::t!("nitro.tenure_since", date = date)))
+}
+
+fn ensure_premium_since(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
+    if !app.backend.has_premium() || PREMIUM_SINCE_ASKED.with(|a| a.replace(true)) {
+        return;
+    }
+    let fut = app.backend.user_profile(app.me.id, None);
+    cx.spawn(async move |this, cx| {
+        let Ok(p) = fut.await else { return };
+        MY_PREMIUM_SINCE.with(|s| s.set(p.premium_since));
+        let _ = this.update(cx, |_, cx| cx.notify());
+    })
+    .detach();
 }
 
 pub(crate) fn grid_columns(page_w: f32) -> (usize, Option<f32>) {
@@ -100,7 +161,7 @@ fn section_title(t: SharedString) -> gpui::Div {
         .child(SharedString::from(t.to_uppercase()))
 }
 
-fn card(ix: usize, p: &Perk, pill: Option<SharedString>, w: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn card(ix: usize, p: &Perk, pill: Option<SharedString>, caption: Option<SharedString>, w: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let group: SharedString = format!("nitro-card-{ix}").into();
     let cta = p.cta;
     div()
@@ -126,11 +187,11 @@ fn card(ix: usize, p: &Perk, pill: Option<SharedString>, w: f32, cx: &mut Contex
                 .px(z(8.))
                 .py(z(2.))
                 .rounded_full()
-                .bg(c(tok(idx::BADGE_EXPRESSIVE_BACKGROUND)))
+                .bg(gpui::white())
                 .text_size(z(12.))
                 .line_height(z(16.))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(tok(idx::BADGE_EXPRESSIVE_TEXT)))
+                .text_color(gpui::rgb(0x2f3035))
                 .child(SharedString::from(t.to_uppercase()))
         }))
         .child(
@@ -151,6 +212,7 @@ fn card(ix: usize, p: &Perk, pill: Option<SharedString>, w: f32, cx: &mut Contex
                 .p(z(20.))
                 .flex()
                 .flex_col()
+                .children(caption.map(|t| div().mb(z(4.)).text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_MUTED))).child(t)))
                 .child(div().text_size(z(20.)).line_height(z(24.)).font_weight(FontWeight::SEMIBOLD).text_color(c(tok(idx::TEXT_STRONG))).child(p.title.clone()))
                 .child(
                     div()
@@ -315,8 +377,12 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
     let (cols, content_w) = grid_columns(PAGE_W.with(std::cell::Cell::get));
     let card_w = content_w.map_or(CARD_W, |w| (w - 24. * (cols - 1) as f32) / cols as f32);
     let mut cards: Vec<AnyElement> = Vec::new();
+    ensure_premium_since(app, cx);
+    if let Some((perk, caption)) = MY_PREMIUM_SINCE.with(std::cell::Cell::get).and_then(|since| tenure_perk(since, chrono::Utc::now().timestamp())) {
+        cards.push(card(usize::MAX, &perk, Some(crate::t!("nitro.tenure_pill")), Some(caption), card_w, cx));
+    }
     for (i, p) in perks(crate::ui::quests_page::premium_multiplier()).iter().enumerate() {
-        cards.push(card(i, p, None, card_w, cx));
+        cards.push(card(i, p, None, None, card_w, cx));
     }
     let grid = div().flex().flex_wrap().gap_x(z(24.)).gap_y(z(24.)).children(cards);
     div()
@@ -420,6 +486,18 @@ mod tests {
         assert_eq!(perks(None).len(), 5);
         assert!(perks(Some(1.2))[0].description.contains("1"));
         assert_eq!(perks(None)[0].cta, None);
+    }
+
+    #[test]
+    fn tenure_badge_follows_the_client_tiers() {
+        let since = chrono::DateTime::parse_from_rfc3339("2026-08-16T22:21:22Z").unwrap().timestamp();
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-28T12:00:00Z").unwrap().timestamp();
+        let (tier, next) = tenure(since, now).unwrap();
+        assert_eq!(tier, 1);
+        let (n, days) = next.unwrap();
+        assert_eq!(n, 2);
+        assert_eq!((days as f64 / 30.4375).ceil() as i64, 3);
+        assert_eq!(tenure(since, since + 86_400), None);
     }
 
     #[test]
