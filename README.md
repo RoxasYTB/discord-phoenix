@@ -386,6 +386,25 @@ Contributions are welcome, from a one-pixel fix to a whole feature. Please read 
 aimed at 1:1 parity with the official client. The real client's CSS, behaviour and assets are the reference.
 Binary assets are loaded from your local Discord install and are not shipped in this repository.
 
+### Pull requests and issues need visual proof
+
+Any change you can see needs before and after screenshots of the same view, at the same window size and scale.
+Anything that moves (hover, animation, a menu opening, scrolling, video or GIF playback) also needs a before and after GIF.
+A PR without them is not reviewed, unless it says it changes nothing visible.
+
+Take them with the demo data, never with your own account, so that no names, messages or servers end up on GitHub:
+
+```sh
+# the app on demo data, to try the change by hand
+PHOENIX_MOCK=1 PHOENIX_MOCK_AUTOLOGIN=1 cargo run -p phoenix-app
+
+# offscreen render of the same view, on main ("before") and on your branch ("after")
+PHX_W=1280 PHX_H=800 PHX_SCALE=1.5 cargo run -p phoenix-app --example screenshot -- after.png
+```
+
+For a GIF, add an input script with a `record` step, then convert the frames. See
+[CONTRIBUTING.md](CONTRIBUTING.md#screenshots-and-gifs) for the details.
+
 ## License
 
 Licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT), at your option.

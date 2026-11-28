@@ -134,6 +134,7 @@ or edge instead of the centre, `#n` picks list item `n` (`#-1` = last), and
 | `clip_image <file>` | put a PNG or JPEG on the offscreen window's clipboard (never the user's), for `key ctrl-v` |
 | `region <name> x,y,w,h` | a screen rectangle for `px:<name>` |
 | `shot <name>` | capture `<out>-<name>.png` |
+| `record <name> <n>@<fps>` | capture `n` frames in real time, one every `1/fps` s while the window keeps animating: `<out>-<name>-0000.png`… and `<out>-<name>.ffconcat` with the measured time of each frame (`scripts/media/gif.py` turns it into a GIF at the real rate); prints the fps reached |
 | `print <probe>...`, `mark <probe>...` | print, or remember for `changed` / `up` / `down` |
 | `expect <probe> <op> [value]` | one check |
 | `until <ms> <probe> <op> [value]` | wait until the check holds, then report it |
@@ -166,3 +167,24 @@ application commands and components, ONLY in the sandbox channel `15760396451273
 threads it created there. A GIF picked in the picker is sent there with the test prefix in front of
 its link. With `PHX_WRITE=1` the messages this run sent can also be edited, deleted, reacted to (super reactions included), pinned and forwarded to the sandbox itself; voice messages go out only with `PHOENIX_VOICE_MESSAGE_TONE=<secs>` set, so the recorder takes a generated 440 Hz tone and never the microphone. Everything else stays refused. Run setting changes with `XDG_CONFIG_HOME` pointing at a
 copy of the config, so the local preferences of the user's Phoenix are never rewritten.
+
+## Frame sequences and GIFs
+
+`shot` advances the clock by 4 s per capture, so it cannot show motion. `record` can: it
+captures the window while time runs normally, so hover transitions, menus that open,
+springs, smooth scrolling and playing GIFs come out as a sequence. A capture takes time
+in a dev build, so the fps reached can be lower than the one asked; the `.ffconcat` file
+keeps the real timing either way.
+
+```
+move @chat#-1.l+60,0
+record hover 45@30
+```
+
+The same scripts run on demo data with the `screenshot` example (`PHX_SCRIPT`), which is
+what public media (PRs, issues, README) must use:
+
+```sh
+PHX_W=1280 PHX_H=800 PHX_SCALE=1.5 PHX_SCRIPT=hover.qa int-bin/screenshot out/after.png
+python3 scripts/media/gif.py out/after-hover.ffconcat out/after-hover.gif
+```

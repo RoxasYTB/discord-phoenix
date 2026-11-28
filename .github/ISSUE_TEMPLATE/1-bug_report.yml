@@ -107,8 +107,15 @@ body:
 - type: textarea
   id: media
   attributes:
-    label: Screenshots or video / Captures ou vidéo
+    label: Screenshots / Captures
     description: Drag files here. **Required for visual bugs.** Blur usernames, messages, emails and private servers first. · Glisse les fichiers ici. **Obligatoire pour les bugs visuels.** Floute d'abord pseudos, messages, e-mails et serveurs privés.
+  validations:
+    required: false
+- type: textarea
+  id: animation
+  attributes:
+    label: GIF of the motion / GIF du mouvement
+    description: 'For anything that moves (hover, animation, menu opening, scrolling, video or GIF playback): an animated GIF or a short video of the problem. Same window size as the screenshots. Use demo data if you can (`PHOENIX_MOCK=1`, see CONTRIBUTING.md), otherwise blur private data. · Pour tout ce qui bouge (survol, animation, menu qui s''ouvre, défilement, lecture vidéo ou GIF) : un GIF animé ou une courte vidéo du problème. Même taille de fenêtre que les captures. Utilise les données de démo si tu peux (`PHOENIX_MOCK=1`, voir CONTRIBUTING.md), sinon floute les données privées.'
   validations:
     required: false
 - type: textarea

@@ -51,7 +51,7 @@ Contributions written with the help of AI tools are welcome. The same rules appl
 - **Do your own quality check before opening a PR**:
   - it builds, and `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` pass;
   - you ran the app and tried the change yourself, including the edge cases (empty states, long names, narrow window, other themes);
-  - for UI changes, you compared the result with the official client at the same window size and zoom, and attached before/after screenshots;
+  - for UI changes, you compared the result with the official client at the same window size and zoom, and attached before/after screenshots, plus before/after GIFs for anything that moves (see [Screenshots and GIFs](#screenshots-and-gifs));
   - measured values have their source recorded in `docs/parity/`;
   - the diff only touches what the change needs: no unrelated reformatting, no dead code, no code comments (only `// SAFETY:` is allowed);
   - no tokens, personal data or private screenshots anywhere in the diff;
@@ -62,10 +62,66 @@ PRs that skip these checks will be sent back.
 ## Pull requests
 
 - Keep PRs focused; one topic each.
+- Visible changes need before/after screenshots, and before/after GIFs when something moves, made with demo data (see [Screenshots and GIFs](#screenshots-and-gifs)).
 - CI (fmt, clippy with `-D warnings`, tests on Linux/Windows/macOS) must pass.
 - Tests and fixtures must not contain real tokens, user IDs or message content.
 - No code comments (`//`, `///`, `//!`, `/* */`, `#` in scripts), except `// SAFETY:` above an `unsafe` block. Explanations go in the commit message or `docs/`; parity sources go in `docs/parity/`; example usage goes in `docs/examples.md`.
 - By contributing, you agree your work is dual-licensed under MIT OR Apache-2.0, like the project.
+
+## Screenshots and GIFs
+
+Every PR or issue about something visible shows it. This is required, not a nice extra.
+
+- **Before and after screenshots** of the same view, at the same window size and scale (1280x800 at scale 1.5 unless the bug needs another size). Put them side by side or one under the other, "before" first.
+- **Before and after GIFs** for anything that moves: hover and pressed states with a transition, animations, menus and popouts that open or close, scrolling, video and GIF playback, loading. Static shots do not show timing.
+- **GIF quality**: full palette computed over every frame, no lossy optimiser, the real frame rate, no resizing. The command below does that. Keep each file under 25 MB by recording a shorter clip, not by scaling it down.
+- **Demo data only**. GitHub is public. Render with the mock backend, never with your account: no DMs, no account or profile pages, no email, phone number, real server or real user. If a view cannot be reached on demo data, blur everything private and say so.
+- A PR that changes nothing visible says "no visible change" in that section instead.
+
+### Making them
+
+Use the mock backend to try the change by hand:
+
+```sh
+PHOENIX_MOCK=1 PHOENIX_MOCK_AUTOLOGIN=1 cargo run -p phoenix-app
+```
+
+For the screenshots, render the same view offscreen on `main` and on your branch with the `screenshot` example (demo data, no window on screen):
+
+```sh
+PHX_W=1280 PHX_H=800 PHX_SCALE=1.5 cargo run -p phoenix-app --example screenshot -- before.png
+PHX_W=1280 PHX_H=800 PHX_SCALE=1.5 cargo run -p phoenix-app --example screenshot -- after.png
+```
+
+`PHX_DM=<id>` opens a demo DM, and `PHX_SCRIPT` drives the window with real input events (clicks, hovers, keys, wheel) before the capture; the script language is in [docs/qa.md](docs/qa.md#script-commands). Other views have their own examples in [docs/examples.md](docs/examples.md).
+
+For a GIF, write a script that sets up the state and records it. `record <name> <frames>@<fps>` saves numbered PNGs while the app keeps running, plus a `.ffconcat` file with the measured time of each frame:
+
+```
+move 640,400
+record hover 45@30
+```
+
+```sh
+PHX_W=1280 PHX_H=800 PHX_SCALE=1.5 PHX_SCRIPT=hover.qa \
+  cargo run -p phoenix-app --example screenshot -- after.png
+```
+
+Then turn the frames into a GIF:
+
+```sh
+python3 scripts/media/gif.py after-hover.ffconcat after-hover.gif
+```
+
+It runs ffmpeg with one palette for the whole clip (`palettegen=stats_mode=full`, `paletteuse` with `sierra2_4a` dithering, no scaling), then writes the measured delay of each frame into the GIF, so it plays at the real rate. ffmpeg's concat demuxer drops those per-frame durations for PNG input, which is why a plain `ffmpeg -f concat` is not enough. Frames closer than 20 ms are merged, since browsers slow down shorter GIF delays. For a screen recording, the same filter works straight on the video:
+
+```sh
+ffmpeg -i clip.mp4 -filter_complex "split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle" -loop 0 clip.gif
+```
+
+`--dither none` gives steadier frames on flat UI, the default `sierra2_4a` hides banding on gradients and images. Do the same on `main` for the "before" GIF, with the same script.
+
+Drop the files into the PR or issue description. Maintainers keep theirs on the `pr-media` branch so they never land on `main`.
 
 ## Releases
 

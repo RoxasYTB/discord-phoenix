@@ -79,6 +79,13 @@ body:
     description: '**Side by side: Phoenix on the left, official Discord on the right**, same view, same window size, same zoom. Blur private data. · **Côte à côte : Phoenix à gauche, Discord officiel à droite**, même vue, même taille de fenêtre, même zoom. Floute les données privées.'
   validations:
     required: true
+- type: textarea
+  id: animation
+  attributes:
+    label: GIF of the motion / GIF du mouvement
+    description: 'For anything that moves (hover, animation, menu opening, scrolling, video or GIF playback): an animated GIF or a short video of the problem, in Phoenix and in the official client. Same window size as the screenshots. Use demo data if you can (`PHOENIX_MOCK=1`, see CONTRIBUTING.md), otherwise blur private data. · Pour tout ce qui bouge (survol, animation, menu qui s''ouvre, défilement, lecture vidéo ou GIF) : un GIF animé ou une courte vidéo du problème, dans Phoenix et dans le client officiel. Même taille de fenêtre que les captures. Utilise les données de démo si tu peux (`PHOENIX_MOCK=1`, voir CONTRIBUTING.md), sinon floute les données privées.'
+  validations:
+    required: false
 - type: input
   id: window-size
   attributes:

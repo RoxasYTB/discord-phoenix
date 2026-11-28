@@ -183,6 +183,8 @@ makes the run fail when a check fails. Every check prints `QA OK|KO [step] ...`,
 Offscreen render of the main window to a PNG (no on-screen window).
 `cargo run -p phoenix-app --example screenshot -- out.png [login]`
 `PHX_DM=<channel id>` opens a demo DM (901 NEON, 902 TOON, 903 POP, 904 GUMMY display name styles).
+`PHX_W` / `PHX_H` set the window size in logical px (default 1280x800), `PHX_SCALE` the scale factor.
+`PHX_SCRIPT=<file or inline script>` drives the demo window with the input script of `real_shots` (docs/qa.md): `shot <name>` writes `<out>-<name>.png`, `record <name> <n>@<fps>` writes a frame sequence and its `.ffconcat` timing for a GIF. This is the way to make before/after media for PRs and issues, since it never touches a real account.
 `PHX_MOUSE=x,y` with `PHX_GRADIENT_AT=0,500,…` writes `<out>-gNNNN.png`, the frame with the
 animation clock that many ms after the first running name animation (GPUI patches 17 and 18), and
 `PHX_PRESENT_CPU=<secs>` prints the CPU while it animates (present only, full redraw) and idle,
