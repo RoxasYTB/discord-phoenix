@@ -429,6 +429,9 @@ fn related(app: &PhoenixApp, icon: &'static str, title: &'static str, desc: &'st
                 s.page = page;
                 s.open_select = None;
             }
+            if page == Page::RegisteredGames {
+                super::games::refresh(a, cx);
+            }
             cx.notify();
         }))
         .child(lead)
@@ -856,50 +859,14 @@ fn content_filters(app: &PhoenixApp, cx: &mut Cx) -> AnyElement {
 
 static GAMES: &[B] = &[
     B::Title("sp.rg.current"),
-    B::Custom("sp.rg.none", current_game),
+    B::Custom("sp.rg.none", super::games::current),
     B::Divider,
     B::Title("sp.rg.added"),
     B::Lead("sp.rg.igdb"),
+    B::Custom("sp.rg.added", super::games::added),
     B::Divider,
     B::Related("user-profile", "settings.page.activity", "sp.rg.related_d", Page::ActivityPrivacy),
 ];
-
-fn current_game(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
-    div()
-        .mt(z(10.))
-        .flex()
-        .flex_col()
-        .gap(z(4.))
-        .p(z(16.))
-        .rounded(z(12.))
-        .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))
-        .child(
-            div()
-                .text_size(z(16.))
-                .line_height(z(22.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(c(tok(idx::INTERACTIVE_TEXT_ACTIVE)))
-                .child(tr("sp.rg.none")),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(z(4.))
-                .text_size(z(14.))
-                .line_height(z(18.))
-                .child(div().text_color(c(tok(idx::TEXT_MUTED))).child(tr("sp.rg.cant_find")))
-                .child(
-                    div()
-                        .id("rg-add")
-                        .cursor_pointer()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(c(tok(idx::TEXT_BRAND)))
-                        .child(tr("sp.rg.add")),
-                ),
-        )
-        .into_any_element()
-}
 
 static NITRO: &[B] = &[B::Custom("sp.ni.title", super::nitro::page)];
 

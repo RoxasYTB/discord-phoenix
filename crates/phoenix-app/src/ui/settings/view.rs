@@ -652,6 +652,10 @@ pub(super) fn select_page(p: Page, cx: &mut Cx) -> impl Fn(&gpui::ClickEvent, &m
             s.nested = None;
             s.active_section = 0;
             s.scroll.set_offset(gpui::Point::default());
+            s.game_picker_open = false;
+        }
+        if p == Page::RegisteredGames {
+            super::games::refresh(a, cx);
         }
         cx.notify();
     })
