@@ -781,6 +781,19 @@ consumes the paste when it took one.
 After changing it: commit it on that branch, push, and set the `gpui-pre-linux` rev in
 `Cargo.toml` and in `Cargo.lock`. X11 is not patched.
 
+## 24. Deferred elements keep their image cache (`src/window.rs` `DeferredDraw::image_cache_stack`, `defer_draw`, `prepaint_deferred_draws`, `paint_deferred_draws`)
+
+**Problem.** `deferred()` children are laid out inside the tree but prepainted and painted after it,
+when `Window::image_cache_stack` is empty. Every `img()` in a popout, menu or modal drawn through
+`deferred()` (including Phoenix's `media::lru::deferred`, which wraps the child in the LRU cache)
+therefore resolved its image in the LRU at layout and again through `use_asset` at prepaint and paint.
+The second copy lives in GPUI's global asset map, which never evicts: each avatar, banner or
+decoration seen in a profile popout stayed decoded in memory for the rest of the session.
+
+**Patch.** `defer_draw` records the image cache stack with the element id and text style stacks,
+and the deferred prepaint and paint restore it, then clear it. Rev: `617acfac` on
+`gpui-deferred-cache` (parent `29af93c0`, so nothing else moves).
+
 ## Running the vendored tests
 
 The lib tests of both crates run from a small test-only workspace, `vendor/Cargo.toml`
