@@ -70,6 +70,7 @@ pub struct OpenPicker {
     pub selected: usize,
     pub hovered: Option<usize>,
     pub tone_open: bool,
+    pub burst: bool,
     pub anchor: Option<Point<Pixels>>,
     _sub: Subscription,
 }
@@ -201,6 +202,7 @@ pub fn open(app: &mut PhoenixApp, tab: Tab, target: EmojiTarget, window: &mut Wi
         selected: 0,
         hovered: None,
         tone_open: false,
+        burst: false,
         anchor,
         _sub: sub,
     });
@@ -614,7 +616,7 @@ pub(crate) use crate::theme::generated::idx;
 
 fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let op = cx.global::<Pickers>().open.as_ref()?;
-    let (tab, target, anchor, input) = (op.tab, op.target, op.anchor, op.input.clone());
+    let (tab, target, anchor, input, burst) = (op.tab, op.target, op.anchor, op.input.clone(), op.burst);
     let has_tabs = matches!(target, EmojiTarget::Composer);
     let ph = if has_tabs { PICKER_H } else { PICKER_H_NO_TABS };
     let vp = window.viewport_size();
@@ -667,6 +669,9 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
         .gap(px(12.))
         .child(search_box(&input));
     if tab == Tab::Emoji {
+        if matches!(target, EmojiTarget::Reaction { .. }) {
+            header = header.child(grid::burst_toggle(burst, cx));
+        }
         header = header.child(grid::tone_button(cx));
         if has_tabs {
             header = header.child(add_emoji_button());
@@ -707,6 +712,12 @@ fn render_picker(app: &PhoenixApp, window: &mut Window, cx: &mut Context<Phoenix
                         spread_radius: px(0.),
                         inset: false,
                     }])
+                    .when(burst, |d| {
+                        d.shadow(vec![
+                            gpui::BoxShadow { color: tk(idx::BACKGROUND_BRAND), offset: gpui::point(px(0.), px(0.)), blur_radius: px(0.), spread_radius: px(2.), inset: false },
+                            gpui::BoxShadow { color: tk(idx::BACKGROUND_BRAND).opacity(0.5), offset: gpui::point(px(0.), px(0.)), blur_radius: px(100.), spread_radius: px(0.), inset: false },
+                        ])
+                    })
                     .when(embed.is_some(), |d| d.rounded(px(0.)).border_0().shadow(Vec::new()).bg(tk(idx::BACKGROUND_BASE_LOWER)))
                     .overflow_hidden()
                     .pt(px(16.))
