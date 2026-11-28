@@ -295,14 +295,23 @@ impl PhoenixApp {
         cx.notify();
     }
 
-    pub fn jump_to_first_unread(&mut self, cx: &mut Context<Self>) {
+    pub fn jump_to_first_unread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((channel, id)) = self.chat.unread_marker.filter(|(c, _)| Some(*c) == self.selected_channel) else {
             self.jump_to_present(cx);
             return;
         };
         match self.messages.get(&channel).and_then(|e| e.msgs.iter().position(|m| m.id == id)) {
             Some(ix) => {
-                self.message_list.scroll_to_reveal_item(ix + 1);
+                let view = self.message_list.viewport_bounds();
+                match self.message_list.bounds_for_item(ix + 1).filter(|_| view.size.height > gpui::px(0.)) {
+                    Some(node) => {
+                        let rel = f32::from(node.top() - view.top());
+                        let by = super::page_scroll::middle_offset(rel, f32::from(node.size.height), f32::from(view.size.height), f32::from(crate::theme::z(1.)));
+                        let reduced = crate::ui::settings::effects::reduced_motion();
+                        super::page_scroll::animate_by(&self.message_list, f64::from(by), cx.entity_id(), window, reduced);
+                    }
+                    None => self.message_list.scroll_to_reveal_item(ix + 1),
+                }
                 cx.notify();
             }
             None => self.jump_to_message(channel, id, cx),

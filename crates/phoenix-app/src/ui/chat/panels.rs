@@ -1055,7 +1055,7 @@ pub fn new_messages_bar(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Optio
                     .pl(z(4.))
                     .pr(z(12.))
                     .cursor_pointer()
-                    .on_click(cx.listener(|a, _, _, cx| a.jump_to_first_unread(cx)))
+                    .on_click(cx.listener(|a, _, w, cx| a.jump_to_first_unread(w, cx)))
                     .child(div().truncate().child(text)),
             )
             .child(

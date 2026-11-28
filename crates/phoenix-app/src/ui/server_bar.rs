@@ -392,7 +392,10 @@ fn jump_to(h: &gpui::ScrollHandle, j: Jump, window: &mut Window) {
     let to = to.clamp(0., f32::from(h.max_offset().y) / zf);
     let idle = RAIL_JUMP.with_borrow_mut(|r| {
         let idle = r.is_none();
-        *r = Some((crate::ui::chat::page_scroll::Spring::new(f64::from(scroll_top), f64::from(to)), scroll_top));
+        match r.as_mut() {
+            Some((spring, shown)) => spring.retarget(f64::from(*shown), f64::from(to)),
+            None => *r = Some((crate::ui::chat::page_scroll::Spring::new(f64::from(scroll_top), f64::from(to)), scroll_top)),
+        }
         idle
     });
     if idle {

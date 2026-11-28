@@ -110,6 +110,20 @@ pub fn page(list: &ListState, up: bool, view: EntityId, window: &mut Window, red
     start(list, Goal::By, by, view, window, reduced);
 }
 
+pub const JUMP_BUFFER: f32 = 32.;
+
+pub fn middle_offset(rel: f32, node_h: f32, view_h: f32, zoom: f32) -> f32 {
+    (rel - 0.5 * view_h + 0.5 * node_h - 8. * zoom).min(rel - JUMP_BUFFER * zoom)
+}
+
+pub fn animate_by(list: &ListState, by: f64, view: EntityId, window: &mut Window, reduced: bool) {
+    let by = by.clamp(-top_of(list), below_of(list));
+    if by.abs() < 0.5 {
+        return;
+    }
+    start(list, Goal::By, by, view, window, reduced);
+}
+
 pub fn to_top(list: &ListState, view: EntityId, window: &mut Window, reduced: bool) {
     start(list, Goal::Top, -top_of(list), view, window, reduced);
 }
@@ -192,6 +206,13 @@ mod tests {
             }
         }
         out
+    }
+
+    #[test]
+    fn unread_jump_centres_the_message_like_the_client_middle_orientation() {
+        assert_eq!(middle_offset(900., 40., 600., 1.), 612.);
+        assert_eq!(middle_offset(900., 600., 600., 1.), 868.);
+        assert_eq!(middle_offset(-300., 40., 600., 1.5), -592.);
     }
 
     #[test]
