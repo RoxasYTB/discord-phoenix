@@ -38,7 +38,8 @@ pub fn playback_volume(sound_volume: f32, setting: f32, output_volume: u32) -> f
 }
 
 pub fn setting_volume(app: &PhoenixApp) -> f32 {
-    app.prefs.synced.proto.get("sb-volume").map_or(100., |v| f32::from_bits(*v as u32))
+    app.prefs.synced.proto.get("sb-volume").map(|v| f32::from_bits(*v as u32))
+        .filter(|v| v.is_finite()).map_or(100., |v| v.clamp(0., 100.))
 }
 
 #[derive(Default)]

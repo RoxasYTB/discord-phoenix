@@ -237,7 +237,7 @@ fn voice_guild(app: &PhoenixApp) -> Option<Id> {
     app.voice_channel.and_then(|c| app.channels.get(&c)).and_then(|c| c.guild)
 }
 
-fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
+pub(crate) fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
     let vg = voice_guild(app);
     let (need_defaults, need_guilds, need_top) = {
         let st = &mut cx.global_mut::<Pickers>().soundboard;

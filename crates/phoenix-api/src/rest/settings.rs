@@ -204,6 +204,7 @@ pub enum SettingChange {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProtoValue {
     Int(u64),
+    Fixed32(u32),
     Str(String),
 }
 
@@ -427,29 +428,71 @@ pub fn guild_raid_alerts(raw: &[u8]) -> std::collections::HashMap<u64, RaidAlert
 }
 
 pub fn with_guild_raid_alerts(raw: &[u8], guild: u64, alerts: RaidAlerts) -> Vec<u8> {
+    update_guild_settings(raw, guild, |value| {
+        let mut out = Vec::new();
+        for (tag, wire, number, data) in fields(value) {
+            if !matches!(tag, 8 | 9) {
+                reencode(tag, wire, number, data, &mut out);
+            }
+        }
+        if alerts.push_off {
+            field_varint(8, 1, &mut out);
+        }
+        if alerts.nag_off {
+            field_varint(9, 1, &mut out);
+        }
+        out
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct JoinSound {
+    pub sound: u64,
+    pub source_guild: u64,
+}
+
+pub fn guild_join_sounds(raw: &[u8]) -> std::collections::HashMap<u64, JoinSound> {
+    guild_entries(raw)
+        .into_iter()
+        .filter_map(|(guild, settings)| {
+            let (_, _, _, data) = fields(&settings).into_iter().rev().find(|f| f.0 == 6 && f.1 == 2)?;
+            let sound_fields = fields(data);
+            let read_id = |tag| sound_fields.iter().rev().find(|f| f.0 == tag && f.1 == 1).map_or(0, |f| f.2);
+            let sound = read_id(1);
+            (sound != 0).then(|| (guild, JoinSound { sound, source_guild: read_id(2) }))
+        })
+        .collect()
+}
+
+pub fn with_guild_join_sound(raw: &[u8], guild: u64, sound: Option<JoinSound>) -> Vec<u8> {
+    update_guild_settings(raw, guild, |value| {
+        let mut out = Vec::new();
+        for (tag, wire, number, data) in fields(value) {
+            if tag != 6 {
+                reencode(tag, wire, number, data, &mut out);
+            }
+        }
+        if let Some(sound) = sound {
+            let mut data = Vec::new();
+            field_fixed64(1, sound.sound, &mut data);
+            if sound.source_guild != 0 {
+                field_fixed64(2, sound.source_guild, &mut data);
+            }
+            field_bytes(6, &data, &mut out);
+        }
+        out
+    })
+}
+
+fn update_guild_settings(raw: &[u8], guild: u64, update: impl FnOnce(&[u8]) -> Vec<u8>) -> Vec<u8> {
     let mut entries = guild_entries(raw);
-    if !entries.iter().any(|e| e.0 == guild) {
-        entries.push((guild, Vec::new()));
+    if let Some((_, value)) = entries.iter_mut().find(|(key, _)| *key == guild) {
+        *value = update(value);
+    } else {
+        entries.push((guild, update(&[])));
     }
     let mut all = Vec::new();
-    for (k, v) in entries {
-        let value = if k == guild {
-            let mut o = Vec::new();
-            for (t, w, x, d) in fields(&v) {
-                if !matches!(t, 8 | 9) {
-                    reencode(t, w, x, d, &mut o);
-                }
-            }
-            if alerts.push_off {
-                field_varint(8, 1, &mut o);
-            }
-            if alerts.nag_off {
-                field_varint(9, 1, &mut o);
-            }
-            o
-        } else {
-            v
-        };
+    for (k, value) in entries {
         let mut entry = Vec::new();
         varint((1 << 3) | 1, &mut entry);
         entry.extend_from_slice(&k.to_le_bytes());
@@ -688,6 +731,10 @@ impl SettingChange {
                 let Some((&last, outer)) = path.split_last() else { return out };
                 let put = |tag: u32, o: &mut Vec<u8>| match value {
                     ProtoValue::Int(v) => field_varint(tag, *v, o),
+                    ProtoValue::Fixed32(v) => {
+                        varint(((tag as u64) << 3) | 5, o);
+                        o.extend_from_slice(&v.to_le_bytes());
+                    }
                     ProtoValue::Str(s) => field_bytes(tag, s.as_bytes(), o),
                 };
                 let mut cur = Vec::new();
@@ -821,6 +868,22 @@ pub fn from_json(v: &Value) -> PreloadedUserSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entrance_sounds_round_trip_with_global_and_guild_settings() {
+        let global = JoinSound { sound: 8, source_guild: 0 };
+        let local = JoinSound { sound: 88, source_guild: 42 };
+        let alerts = RaidAlerts { push_off: true, nag_off: true };
+        let raw = with_guild_raid_alerts(&[], 42, alerts);
+        let raw = with_guild_join_sound(&raw, 0, Some(global));
+        let raw = with_guild_join_sound(&raw, 42, Some(local));
+        let sounds = guild_join_sounds(&raw);
+        assert_eq!(sounds.get(&0), Some(&global));
+        assert_eq!(sounds.get(&42), Some(&local));
+        let raw = with_guild_join_sound(&raw, 42, None);
+        assert_eq!(guild_join_sounds(&raw).into_iter().collect::<Vec<_>>(), vec![(0, global)]);
+        assert_eq!(guild_raid_alerts(&raw).get(&42), Some(&alerts));
+    }
 
     #[test]
     fn raid_alert_flags_round_trip_inside_the_guild_map() {

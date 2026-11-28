@@ -35,6 +35,11 @@ impl RestClient {
         self.call(Method::GET, &format!("/guilds/{}/top-soundboard-sounds", guild.0), super::Body::None).await
     }
 
+    pub async fn play_entrance_sound(&self, channel: crate::models::ChannelId) -> Result<()> {
+        let body = serde_json::json!({"animation_type": 1, "animation_id": 0});
+        self.call_empty(Method::POST, &format!("/channels/{}/custom-call-sounds", channel.0), super::Body::Json(body)).await
+    }
+
     pub async fn send_soundboard_sound(
         &self,
         channel: crate::models::ChannelId,
