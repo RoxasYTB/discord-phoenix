@@ -45,11 +45,12 @@ pub fn open(app: Entity<PhoenixApp>, cx: &mut App) {
         }
         clear_handle();
     }
+    let title = format!("Discord Phoenix - {}", crate::t!("call.title"));
     let bounds = Bounds::centered(None, size(px(860.), px(560.)), cx);
     let opts = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: Some(TitlebarOptions {
-            title: Some("Discord Phoenix — Appel".into()),
+            title: Some(title.clone().into()),
             appears_transparent: true,
             ..Default::default()
         }),
@@ -60,7 +61,7 @@ pub fn open(app: Entity<PhoenixApp>, cx: &mut App) {
     };
     let app_for_close = app.downgrade();
     if let Ok(handle) = cx.open_window(opts, move |window, cx| {
-        window.set_window_title("Discord Phoenix — Appel");
+        window.set_window_title(&title);
         window.on_window_should_close(cx, move |_, cx| {
             clear_handle();
             if let Some(a) = app_for_close.upgrade() {
@@ -270,6 +271,20 @@ impl gpui::Render for CallPopoutView {
             .flex_col()
             .bg(t(idx::BLACK))
             .text_color(white)
+            .on_key_down(cx.listener(|this, ev: &gpui::KeyDownEvent, w, cx| {
+                if ev.keystroke.key == "escape" {
+                    if w.is_fullscreen() {
+                        w.toggle_fullscreen();
+                    } else {
+                        clear_handle();
+                        let app = this.app.clone();
+                        cx.defer(move |cx| {
+                            app.update(cx, |_, cx| cx.notify());
+                        });
+                        w.remove_window();
+                    }
+                }
+            }))
             .child(
                 crate::ui::window_chrome::drag_region(div().id("popout-title-bar"))
                     .h(z(m::TITLE_BAR_H))

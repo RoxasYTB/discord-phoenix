@@ -244,14 +244,11 @@ pub fn message_sounds(c: &MessageCtx, f: &crate::notifications::MessageFacts, fl
 }
 
 pub fn on_message(prefs: &crate::notifications::NotifyPrefs, cache: &phoenix_api::Cache, me: phoenix_api::models::Snowflake, m: &phoenix_api::models::Message) {
-    let blocked = cache.relationships().iter().any(|r| {
-        matches!(r.kind, phoenix_api::models::RelationshipType::Blocked) && r.user.as_ref().map(|u| u.id).or(r.user_id).unwrap_or(r.id) == m.author.id
-    });
     let f = crate::notifications::facts(cache, me, m);
     let notify = crate::notifications::should_notify(prefs, &f);
     let allow_any = !prefs.allow_no_messages(f.guild, f.channel, f.parent);
     let c = message_ctx();
-    for s in message_sounds(&c, &f, m.flags, blocked, notify, allow_any) {
+    for s in message_sounds(&c, &f, m.flags, f.blocked, notify, allow_any) {
         play(s, VOLUME);
     }
 }

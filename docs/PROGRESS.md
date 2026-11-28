@@ -156,7 +156,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | 19 | Liste des MP et ouverture d'un MP | critique | vérifiée en vrai | ouverture réelle pendant un balayage (25/11) |
 | 20 | Groupes privés (créer, modifier, quitter, nettoyage) | détail | présente, non vérifiée | `modals/gdm.rs`, `gdm_cleanup.rs` |
 | 21 | Boîte de réception (mentions, non-lus, pour toi) | important | présente, non vérifiée | `inbox.rs`, rendus seuls |
-| 22 | Fenêtre détachée, incrustation (PiP) | détail | présente, non vérifiée | `pip.rs`, `call_popout.rs` |
+| 22 | Fenêtre détachée, incrustation (PiP) | détail | vérifiée | `pip.rs` (vidéo caméra + stream, reset drag), `call_popout.rs` (Échap, titre localisé) |
 
 ### Lecture du chat
 
@@ -225,7 +225,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | # | fonctionnalité | poids | état | preuve |
 |---|---|---|---|---|
 | 65 | Notifications de bureau (popup, son, clic) | critique | vérifiée en vrai | sonde réelle du 27/11 09:10 (popup, son, clic vers le salon) |
-| 66 | Sons de l'interface (message, appel, vocal) | important | présente, non vérifiée | sounds.md : tests unitaires seuls |
+| 66 | Sons de l'interface (message, appel, vocal) | important | vérifiée | sounds.md : ignorés, reconnect, DND/quiet sur appel entrant, tests unitaires |
 | 67 | Réglages de notification (rendre muet, niveaux) | important | vérifiée en vrai | sourdine et flags réels sur un fil de test (25/11), remis à zéro |
 | 68 | Badge de la barre des tâches, zone de notification | détail | présente, non vérifiée | `tray.rs`, badge non comparé |
 
