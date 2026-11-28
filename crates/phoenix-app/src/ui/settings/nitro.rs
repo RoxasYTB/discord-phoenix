@@ -293,6 +293,11 @@ fn member_banner(app: &PhoenixApp, plan: Plan, cx: &mut Context<PhoenixApp>) -> 
                 gpui::linear_color_stop(gpui::rgb(0x4678a3), 1.),
             ))
         })
+        .when(full, |d| {
+            d.child(
+                gpui::img(super::art::nitro_tier()).absolute().top(z(25.)).right(z(-1.)).w(z(313.)).h(z(328.)),
+            )
+        })
         .p(z(40.))
         .flex()
         .items_center()
@@ -325,11 +330,6 @@ fn member_banner(app: &PhoenixApp, plan: Plan, cx: &mut Context<PhoenixApp>) -> 
                         ),
                 ),
         )
-        .when(full, |d| {
-            d.child(
-                gpui::img(super::art::nitro_tier()).absolute().top(z(25.)).left(z(384.)).w(z(313.)).h(z(328.)),
-            )
-        })
 }
 
 fn gift_banner(cx: &mut Context<PhoenixApp>) -> Div {
