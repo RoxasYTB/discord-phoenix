@@ -443,6 +443,9 @@ pub trait Backend: Send + Sync + 'static {
     fn storefront_skus(&self, _skus: Vec<u64>) -> BoxFuture<Vec<phoenix_api::rest::collectibles::LookSku>> {
         Box::pin(async { Ok(Vec::new()) })
     }
+    fn storefront_pricing(&self, _skus: Vec<u64>) -> BoxFuture<serde_json::Value> {
+        Box::pin(async { Ok(serde_json::Value::Null) })
+    }
     fn set_status(&self, _status: Presence, _custom: Option<String>) -> BoxFuture<()> {
         Box::pin(async { Ok(()) })
     }

@@ -26,6 +26,34 @@ pub fn storefront_skus_path(skus: &[u64], locale: &str) -> String {
     format!("{STOREFRONT_SKUS}?{ids}locale={locale}&with_bundled_skus=true&include_google_sku_ids=false&ignore_cache=false")
 }
 
+pub fn storefront_pricing_path(skus: &[u64]) -> String {
+    let ids: Vec<String> = skus.iter().map(|s| format!("sku_ids={s}")).collect();
+    format!("/storefront/pricing?{}", ids.join("&"))
+}
+
+fn money(v: &Value) -> Option<(i64, u32, String)> {
+    Some((v.get("amount")?.as_i64()?, u32::try_from(v.get("exponent")?.as_u64()?).ok()?, v.get("currency")?.as_str()?.to_owned()))
+}
+
+pub fn sale_prices(v: &Value) -> Vec<(u64, (i64, u32, String))> {
+    let Some(map) = v.get("sku_price_map").and_then(Value::as_object) else { return Vec::new() };
+    map.iter()
+        .filter_map(|(sku, entry)| {
+            let rid = entry.get("pricing_result_id")?.as_str()?;
+            let res = v.get("pricing_result_id_map")?.get(rid)?.get("0")?;
+            let user = money(res.get("user_price")?.as_array()?.first()?)?;
+            let discounted = res.get("prices")?.as_object()?.values().any(|tier| {
+                let first = |k: &str| tier.get(k).and_then(Value::as_array).and_then(|a| a.first()).and_then(money);
+                matches!((first("0"), first("1")), (Some(full), Some(off)) if off.0 == user.0 && full.0 > user.0)
+            });
+            if !discounted {
+                return None;
+            }
+            Some((sku.parse().ok()?, user))
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct LookSku {
     pub sku: u64,
@@ -122,6 +150,10 @@ impl RestClient {
         self.call(Method::GET, &storefront_skus_path(skus, &self.locale()), Body::None).await
     }
 
+    pub async fn get_storefront_pricing(&self, skus: &[u64]) -> Result<Value> {
+        self.call(Method::GET, &storefront_pricing_path(skus), Body::None).await
+    }
+
     pub async fn get_collectibles_purchases(&self) -> Result<Value> {
         self.call(Method::GET, PURCHASES, Body::None).await
     }
@@ -131,6 +163,19 @@ impl RestClient {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn storefront_pricing_reads_the_discounted_user_price() {
+        let v = json!({
+            "sku_price_map": {"7": {"pricing_result_id": "r"}, "8": {"pricing_result_id": "q"}},
+            "pricing_result_id_map": {
+                "r": {"0": {"user_price": [{"amount": 1274, "currency": "eur", "exponent": 2}], "prices": {"0": {"0": [{"amount": 2099, "currency": "eur", "exponent": 2}], "1": [{"amount": 1574, "currency": "eur", "exponent": 2}]}, "3": {"0": [{"amount": 1699, "currency": "eur", "exponent": 2}], "1": [{"amount": 1274, "currency": "eur", "exponent": 2}]}}}},
+                "q": {"0": {"user_price": [{"amount": 499, "currency": "eur", "exponent": 2}], "prices": {"0": {"0": [{"amount": 599, "currency": "eur", "exponent": 2}]}, "3": {"0": [{"amount": 499, "currency": "eur", "exponent": 2}]}}}}
+            }
+        });
+        assert_eq!(sale_prices(&v), vec![(7, (1274, 2, "eur".to_owned()))]);
+        assert_eq!(storefront_pricing_path(&[1, 2]), "/storefront/pricing?sku_ids=1&sku_ids=2");
+    }
 
     #[test]
     fn flattens_products() {

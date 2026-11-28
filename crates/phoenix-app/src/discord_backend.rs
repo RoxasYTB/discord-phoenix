@@ -1393,6 +1393,9 @@ impl Backend for DiscordBackend {
     fn storefront_skus(&self, skus: Vec<u64>) -> BoxFuture<Vec<phoenix_api::rest::collectibles::LookSku>> {
         self.storefront_skus_impl(skus)
     }
+    fn storefront_pricing(&self, skus: Vec<u64>) -> BoxFuture<serde_json::Value> {
+        self.with_session(move |_, s| async move { s.rest.get_storefront_pricing(&skus).await.map_err(api_err) })
+    }
     fn authorized_apps(&self) -> BoxFuture<Option<Vec<crate::ui::settings::authorized_apps::AuthorizedApp>>> {
         self.authorized_apps_impl()
     }

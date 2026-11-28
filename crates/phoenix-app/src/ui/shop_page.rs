@@ -62,6 +62,7 @@ thread_local! {
     static CATEGORIES: RefCell<std::rc::Rc<Vec<crate::ui::shop_collection::Category>>> = RefCell::new(std::rc::Rc::new(Vec::new()));
     static COLLECTION: Cell<Option<u64>> = const { Cell::new(None) };
     static ORBS: Cell<Option<u64>> = const { Cell::new(None) };
+    static SALES: RefCell<std::collections::HashMap<u64, (i64, u32, String)>> = RefCell::new(std::collections::HashMap::new());
     static BALANCE_ASKED: Cell<bool> = const { Cell::new(false) };
     static SEARCH: RefCell<Option<gpui::Entity<gpui_component::input::InputState>>> = const { RefCell::new(None) };
     static WISHED: RefCell<Vec<crate::ui::profile_wishlist::WishItem>> = const { RefCell::new(Vec::new()) };
@@ -170,6 +171,7 @@ pub fn wishlist_write(sku: u64, current: Option<&crate::ui::profile_wishlist::Wi
 }
 
 pub const TIER_DEFAULT: &str = "0";
+const PRICING_CHUNK: usize = 50;
 pub const TIER_SALE: &str = "2";
 pub const TIER_PREMIUM_2: &str = "4";
 pub const ORB_CURRENCY: &str = "discord_orb";
@@ -300,8 +302,9 @@ pub fn shown_price(k: &ShopCard, premium: bool, balance: Option<u64>) -> Option<
     }
     let fiat = fiat?;
     let nitro = premium && matches!((&k.nitro, &k.base), (Some(n), Some(b)) if n.0 < b.0);
-    Some(match k.sale.clone() {
-        Some(s) if s.0 < fiat.0 => Shown::Fiat { price: s, former: Some(fiat), nitro: false },
+    let sale = k.sale.clone().or_else(|| SALES.with(|m| m.borrow().get(&k.sku).cloned()));
+    Some(match sale {
+        Some(s) if s.0 < fiat.0 => Shown::Fiat { price: s, former: Some(fiat), nitro },
         _ => Shown::Fiat { price: fiat, former: None, nitro },
     })
 }
@@ -365,10 +368,23 @@ fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
         let v = fut.await.unwrap_or(Value::Null);
         let h = home.await.unwrap_or(Value::Null);
         let built = cx.background_executor().spawn(async move { (parse(&v), parse_home(&h, &v), crate::ui::shop_collection::parse_categories(&v)) }).await;
+        let mut skus: Vec<u64> = built.0.iter().map(|k| k.sku).chain(built.1.cards.keys().copied()).collect();
+        skus.sort_unstable();
+        skus.dedup();
         CARDS.with(|c| *c.borrow_mut() = Some(built.0));
         HOME.with(|c| *c.borrow_mut() = Some(std::rc::Rc::new(built.1)));
+        let Ok(pricing) = this.update(cx, |a, _| skus.chunks(PRICING_CHUNK).map(|c| a.backend.storefront_pricing(c.to_vec())).collect::<Vec<_>>()) else { return };
         CATEGORIES.with(|c| *c.borrow_mut() = std::rc::Rc::new(built.2));
         let _ = this.update(cx, |_, cx| cx.notify());
+        for fut in pricing {
+            let Ok(v) = fut.await else { continue };
+            let sales = phoenix_api::rest::collectibles::sale_prices(&v);
+            if sales.is_empty() {
+                continue;
+            }
+            SALES.with(|m| m.borrow_mut().extend(sales));
+            let _ = this.update(cx, |_, cx| cx.notify());
+        }
     })
     .detach();
 }
@@ -1385,7 +1401,7 @@ mod tests {
         let mut sale = k.clone();
         sale.orbs = None;
         sale.sale = Some((974, 2, "eur".into()));
-        assert_eq!(shown_price(&sale, true, None), Some(Shown::Fiat { price: (974, 2, "eur".into()), former: Some((1299, 2, "eur".into())), nitro: false }));
+        assert_eq!(shown_price(&sale, true, None), Some(Shown::Fiat { price: (974, 2, "eur".into()), former: Some((1299, 2, "eur".into())), nitro: true }));
         assert_eq!(discount(1299, 974), Some(25));
     }
 
