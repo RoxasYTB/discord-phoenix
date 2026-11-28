@@ -288,5 +288,21 @@ fn main() -> anyhow::Result<()> {
     let img = cx.capture_screenshot(win.into())?;
     img.save(&out)?;
     println!("wrote {out} ({}x{})", img.width(), img.height());
+    if let Ok(spec) = std::env::var("PHX_INBOX_SCROLL") {
+        let v = view.borrow().clone().expect("view");
+        let stem = out.trim_end_matches(".png").to_string();
+        for y in phoenix_app::ui::inbox::inbox_scroll_frames(&spec) {
+            cx.update(|cx| {
+                phoenix_app::ui::inbox::set_inbox_scroll(y);
+                v.update(cx, |_, cx| cx.notify());
+            });
+            for _ in 0..2 {
+                cx.update_window(win.into(), |_, window, _| window.refresh())?;
+                pump(&mut cx, 2);
+            }
+            let img = cx.capture_screenshot(win.into())?;
+            img.save(format!("{stem}-s{:04}.png", y as u32))?;
+        }
+    }
     Ok(())
 }

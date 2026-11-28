@@ -3081,6 +3081,17 @@ fn main() -> anyhow::Result<()> {
             })
         });
     }
+    if let Ok(spec) = std::env::var("PHX_INBOX_SCROLL") {
+        let stem = out.trim_end_matches(".png").to_string();
+        for y in phoenix_app::ui::inbox::inbox_scroll_frames(&spec) {
+            cx.update(|cx| {
+                phoenix_app::ui::inbox::set_inbox_scroll(y);
+                v.update(cx, |_, cx| cx.notify());
+            });
+            pump(&mut cx, 100);
+            shoot(&mut cx, &format!("{stem}-s{:04}.png", y as u32))?;
+        }
+    }
     let shot = shoot(&mut cx, &out);
     if voice_test {
         cx.update_window(win.into(), |_, _, cx| v.update(cx, |app, _| drop(app.backend.voice_control(phoenix_app::voice::VoiceControl::SetCamera(false)))))?;

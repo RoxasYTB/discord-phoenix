@@ -72,6 +72,10 @@ impl Default for MockBackend {
     }
 }
 
+fn mock_unreads() -> bool {
+    std::env::var_os("PHX_MOCK_UNREADS").is_some()
+}
+
 pub fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -295,6 +299,14 @@ impl MockBackend {
 
     pub fn synchronous() -> Self {
         Self { latency: Duration::ZERO, ..Self::new() }
+    }
+
+    fn history(inner: &mut Inner, channel: Id) -> &[Message] {
+        if !inner.history.contains_key(&channel) {
+            let h = Self::generate_history(inner, channel);
+            inner.history.insert(channel, h);
+        }
+        &inner.history[&channel]
     }
 
     fn generate_history(inner: &mut Inner, channel: Id) -> Vec<Message> {
@@ -650,17 +662,56 @@ impl Backend for MockBackend {
         let inner = self.inner.clone();
         self.delayed(move || {
             let Ok(mut i) = inner.lock() else { return vec![] };
-            if !i.history.contains_key(&channel) {
-                let h = Self::generate_history(&mut i, channel);
-                i.history.insert(channel, h);
-            }
-            let h = &i.history[&channel];
+            let h = Self::history(&mut i, channel);
             let end = before
                 .and_then(|b| h.iter().position(|m| m.id == b))
                 .unwrap_or(h.len());
             let start = end.saturating_sub(limit as usize);
             h[start..end].to_vec()
         })
+    }
+
+    fn load_messages_at(&self, channel: Id, at: HistoryAt, limit: u32) -> BoxFuture<Vec<Message>> {
+        if !mock_unreads() {
+            return Box::pin(async { Ok(Vec::new()) });
+        }
+        let inner = self.inner.clone();
+        self.delayed(move || {
+            let Ok(mut i) = inner.lock() else { return vec![] };
+            let h = Self::history(&mut i, channel);
+            let (HistoryAt::Around(id) | HistoryAt::After(id)) = at;
+            let pos = h.iter().position(|m| m.id.0 >= id.0).unwrap_or(h.len());
+            let start = if matches!(at, HistoryAt::Around(_)) { pos.saturating_sub(limit as usize / 2) } else { pos };
+            h[start..(start + limit as usize).min(h.len())].to_vec()
+        })
+    }
+
+    fn inbox_unreads(&self, guild_order: &[Id]) -> Vec<crate::ui::inbox_unreads::Entry> {
+        if !mock_unreads() {
+            return Vec::new();
+        }
+        let Ok(mut i) = self.inner.lock() else { return Vec::new() };
+        let picks: Vec<(Id, Option<Id>)> = guild_order
+            .iter()
+            .flat_map(|g| i.channels.iter().filter(move |c| c.guild == Some(*g) && c.kind == ChannelKind::Text).take(2).map(|c| (c.id, c.guild)))
+            .take(5)
+            .collect();
+        picks
+            .into_iter()
+            .zip([4usize, 9, 3, 12, 6])
+            .filter_map(|((channel, guild), n)| {
+                let h = Self::history(&mut i, channel);
+                Some(crate::ui::inbox_unreads::Entry {
+                    channel,
+                    guild,
+                    kind: crate::ui::inbox_unreads::Kind::Messages,
+                    oldest_read: h.get(h.len().checked_sub(n + 1)?)?.id,
+                    newest: h.last()?.id,
+                    mentions: 0,
+                    sort: 5,
+                })
+            })
+            .collect()
     }
 
     fn send_message_ex(

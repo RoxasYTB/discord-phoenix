@@ -807,22 +807,60 @@ fn channel_label(app: &PhoenixApp, ch: Id) -> (SharedString, Option<SharedString
     (name.into(), guild)
 }
 
-fn channel_head(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>>) -> gpui::Div {
-    channel_head_with(app, ch, buttons, false, 0)
+#[derive(Clone, Copy, Default)]
+struct Stick {
+    shift: gpui::Pixels,
+    top: gpui::Pixels,
+    bottom: gpui::Pixels,
 }
 
-fn channel_head_with(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>>, collapsed: bool, mentions: u32) -> gpui::Div {
+fn head_height(app: &PhoenixApp, ch: Id, collapsed: bool) -> gpui::Pixels {
+    let text = if channel_label(app, ch).1.is_some() { z(36.) } else { z(20.) };
+    z(24.) + text.max(z(32.)) + if collapsed { gpui::px(0.) } else { gpui::px(1.) }
+}
+
+fn stick_at(card_top: gpui::Pixels, card_h: gpui::Pixels, head_h: gpui::Pixels, edge: gpui::Pixels, radius: gpui::Pixels) -> Stick {
+    let inner = (radius - edge).max(gpui::px(0.));
+    let max = (card_h - edge - edge - head_h).max(gpui::px(0.));
+    let shift = (-(card_top + edge)).clamp(gpui::px(0.), max);
+    Stick { shift, top: (inner - shift).max(gpui::px(0.)), bottom: (inner - (max - shift)).max(gpui::px(0.)) }
+}
+
+fn stick(ix: usize, head_h: gpui::Pixels) -> Stick {
+    let (edge, radius) = (gpui::px(1.), z(12.));
+    INBOX_SCROLL.with(|h| match h.bounds_for_item(ix) {
+        Some(card) => stick_at(card.top() - h.bounds().top() + h.offset().y, card.size.height, head_h, edge, radius),
+        None => Stick { top: (radius - edge).max(gpui::px(0.)), ..Stick::default() },
+    })
+}
+
+fn sticky_head(head: gpui::Stateful<gpui::Div>, s: Stick) -> gpui::Stateful<gpui::Div> {
+    head.flex_none().relative().top(s.shift).block_mouse_except_scroll()
+}
+
+fn channel_head(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>>, s: Stick) -> gpui::Div {
+    channel_head_with(app, ch, buttons, false, 0, s)
+}
+
+fn channel_head_with(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui::Div>>, collapsed: bool, mentions: u32, s: Stick) -> gpui::Div {
     let (name, guild_name) = channel_label(app, ch);
     let channel = app.channels.get(&ch).or_else(|| app.nav.find_thread(ch));
     let guild = channel.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g));
-    let glyph = match channel.map(|c| c.kind) {
-        Some(crate::model::ChannelKind::Voice) => "speaker",
-        Some(crate::model::ChannelKind::Announcement) => "megaphone",
-        Some(crate::model::ChannelKind::Forum) => "forum",
+    let kind = channel.map_or(crate::model::ChannelKind::Text, |c| c.kind);
+    let locked = app.nav.extras.get(&ch).is_some_and(|e| e.locked);
+    let glyph = crate::ui::sidebar::channel_icon_override(kind, channel.is_some_and(|c| crate::ui::sidebar::is_rules_channel(app, c)), locked).unwrap_or(match kind {
+        crate::model::ChannelKind::Voice => "speaker",
+        crate::model::ChannelKind::Announcement => "megaphone",
+        crate::model::ChannelKind::Forum => "forum",
+        crate::model::ChannelKind::Stage => "stage",
         _ => "hash",
-    };
+    });
     div()
         .p(z(12.))
+        .rounded_tl(s.top)
+        .rounded_tr(s.top)
+        .rounded_bl(s.bottom)
+        .rounded_br(s.bottom)
         .flex()
         .items_center()
         .gap(z(8.))
@@ -833,7 +871,7 @@ fn channel_head_with(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui:
             Some(g) => div().size(z(32.)).rounded(z(8.)).overflow_hidden().child(crate::ui::invite::guild_icon(Some(&g.icon), &g.name, 32. * crate::theme::zoom())),
             None => div().size(z(32.)).rounded(z(8.)).overflow_hidden().child(avatar(channel.and_then(|c| c.voice_users.first()).and_then(|u| app.users.get(u)), 32.)),
         })
-        .child(named("chevron-right", 12., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
+        .child(named("chevron-right", 12., tk(idx::INTERACTIVE_ICON_DEFAULT)))
         .child(
             div()
                 .flex_1()
@@ -849,7 +887,7 @@ fn channel_head_with(app: &PhoenixApp, ch: Id, buttons: Vec<gpui::Stateful<gpui:
                         .line_height(z(20.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(tk(idx::TEXT_DEFAULT))
-                        .child(named(glyph, 12., tk(idx::TEXT_DEFAULT)))
+                        .child(named(glyph, 12., tk(idx::INTERACTIVE_ICON_DEFAULT)))
                         .child(div().min_w_0().whitespace_nowrap().overflow_hidden().text_ellipsis().child(name))
                         .when(mentions > 0, |d| d.child(div().flex_none().ml(z(4.)).child(crate::ui::badge(mentions)))),
                 )
@@ -1030,25 +1068,30 @@ fn inbox_box() -> gpui::Div {
 fn message_entry(
     app: &PhoenixApp,
     m: &Message,
+    ix: usize,
     cx: &mut Context<PhoenixApp>,
     close_glyph: &'static str,
     close: impl Fn(&mut PhoenixApp, &mut Context<PhoenixApp>) + 'static,
 ) -> AnyElement {
     let (ch, id) = (m.channel, m.id);
+    let s = stick(ix, head_height(app, ch, false));
+    let head = channel_head(
+        app,
+        ch,
+        vec![
+            sm_icon_button(("inbox-jump", id.0), "inbox/jump").on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, id, cx))),
+            sm_icon_button(("inbox-x", id.0), close_glyph).on_click(cx.listener(move |a, _, _, cx| close(a, cx))),
+        ],
+        s,
+    );
     inbox_box()
-        .child(channel_head(
-            app,
-            ch,
-            vec![
-                sm_icon_button(("inbox-jump", id.0), "inbox/jump").on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, id, cx))),
-                sm_icon_button(("inbox-x", id.0), close_glyph).on_click(cx.listener(move |a, _, _, cx| close(a, cx))),
-            ],
-        ))
+        .flex_col_reverse()
         .child(div().pt(z(12.)).pb(z(12.)).child(cozy_message(app, m, 2., cx)))
+        .child(sticky_head(div().id(("inbox-head", id.0)).child(head), s))
         .into_any_element()
 }
 
-fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: &mut Context<PhoenixApp>) -> AnyElement {
+fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, ix: usize, cx: &mut Context<PhoenixApp>) -> AnyElement {
     let ch = card.entry.channel;
     if card.entry.kind == crate::ui::inbox_unreads::Kind::GuildEvents {
         let gid = card.entry.guild.unwrap_or(ch);
@@ -1116,7 +1159,7 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
             gpui::svg()
                 .path(crate::icons::path("chevron"))
                 .size(z(16.))
-                .text_color(tk(idx::INTERACTIVE_TEXT_DEFAULT))
+                .text_color(tk(idx::INTERACTIVE_ICON_DEFAULT))
                 .when(collapsed, |s| s.with_transformation(gpui::Transformation::rotate(gpui::radians(-std::f32::consts::FRAC_PI_2)))),
         )
         .on_click(cx.listener(move |a, _, _, cx| {
@@ -1132,6 +1175,7 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
             }
             cx.notify();
         }));
+    let s = stick(ix, head_height(app, ch, collapsed));
     let head = div()
         .id(("inbox-unread", ch.0))
         .cursor_pointer()
@@ -1142,7 +1186,8 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
                 a.select_channel(ch, cx);
             }
         }))
-        .child(channel_head_with(app, ch, vec![bell, read, chevron], collapsed, card.entry.mentions));
+        .child(channel_head_with(app, ch, vec![bell, read, chevron], collapsed, card.entry.mentions, s));
+    let head = sticky_head(head, s);
     if collapsed {
         return inbox_box().child(head).into_any_element();
     }
@@ -1219,7 +1264,7 @@ fn unread_card(app: &PhoenixApp, card: &crate::commands::state::UnreadCard, cx: 
                 .child(sm_text_button(("inbox-unread-all", ch.0), crate::t!("inbox.view_all"), true).on_click(cx.listener(move |a, _, _, cx| a.jump_from_inbox(ch, last, cx)))),
         );
     }
-    inbox_box().child(head).child(body).into_any_element()
+    inbox_box().flex_col_reverse().child(body).child(head).into_any_element()
 }
 
 fn day_divider(label: SharedString) -> gpui::Div {
@@ -1360,9 +1405,9 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
             } else {
                 list = scroller(list);
             }
-            for m in &i.mentions {
+            for (ix, m) in i.mentions.iter().enumerate() {
                 let id = m.id;
-                list = list.child(message_entry(app, m, cx, "check", move |a, cx| a.dismiss_mention(id, cx)));
+                list = list.child(message_entry(app, m, ix, cx, "check", move |a, cx| a.dismiss_mention(id, cx)));
             }
             if !i.reached_end && !i.mentions.is_empty() && !i.loading {
                 list = list.child(
@@ -1386,16 +1431,16 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
             } else {
                 list = scroller(list);
             }
-            for m in &i.saved {
+            for (ix, m) in i.saved.iter().enumerate() {
                 let (ch, id) = (m.channel, m.id);
-                list = list.child(message_entry(app, m, cx, "close", move |a, cx| a.unsave(ch, id, cx)));
+                list = list.child(message_entry(app, m, ix, cx, "close", move |a, cx| a.unsave(ch, id, cx)));
             }
         }
         InboxTab::Reminders if !crate::actions::message::reminders().is_empty() => {
             list = scroller(list);
-            for m in crate::actions::message::reminders() {
+            for (ix, m) in crate::actions::message::reminders().into_iter().enumerate() {
                 let (ch, id) = (m.channel, m.id);
-                list = list.child(message_entry(app, &m, cx, "check", move |a, cx| a.clear_reminder(ch, id, cx)));
+                list = list.child(message_entry(app, &m, ix, cx, "check", move |a, cx| a.clear_reminder(ch, id, cx)));
             }
         }
         InboxTab::Reminders => {
@@ -1408,7 +1453,7 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
         }
         InboxTab::Scheduled if !i.scheduled.is_empty() => {
             list = scroller(list);
-            for m in &i.scheduled {
+            for (ix, m) in i.scheduled.iter().enumerate() {
                 let (id, at) = (m.id, m.timestamp);
                 let tip = crate::ui::tooltip::tip;
                 let buttons = vec![
@@ -1429,18 +1474,25 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                     crate::ui::chat::message_ext::edit_frame(&e.input, &cx.entity(), |a, w, cx| a.cancel_scheduled_edit(w, cx), |a, w, cx| a.save_scheduled_edit(w, cx))
                         .into_any_element()
                 });
+                let s = stick(ix, head_height(app, m.channel, false));
                 list = list.child(
                     inbox_box()
-                        .child(channel_head(app, m.channel, buttons))
+                        .flex_col_reverse()
                         .child(
                             div()
-                                .pt(z(8.))
-                                .text_size(z(12.))
-                                .line_height(z(16.))
-                                .text_color(tk(idx::TEXT_MUTED))
-                                .child(crate::ui::chat::scheduled::done_text(at)),
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .pt(z(8.))
+                                        .text_size(z(12.))
+                                        .line_height(z(16.))
+                                        .text_color(tk(idx::TEXT_MUTED))
+                                        .child(crate::ui::chat::scheduled::done_text(at)),
+                                )
+                                .child(div().pt(z(12.)).pb(z(12.)).child(cozy_message_with(app, m, 2., cx, editor))),
                         )
-                        .child(div().pt(z(12.)).pb(z(12.)).child(cozy_message_with(app, m, 2., cx, editor))),
+                        .child(sticky_head(div().id(("sched-head", id.0)).child(channel_head(app, m.channel, buttons, s)), s)),
                 );
             }
         }
@@ -1459,6 +1511,7 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                 list = scroller(list);
             }
             let mut prev_sort = None;
+            let mut ix = 0;
             for card in i.unreads.iter().filter(|c| c.loaded) {
                 let sort = card.entry.sort;
                 if prev_sort != Some(sort) {
@@ -1469,10 +1522,12 @@ fn inbox(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
                     };
                     if let Some(l) = label {
                         list = list.child(day_divider(l).flex_none().mx(z(0.)).mt(z(48.)).mb(z(32.)));
+                        ix += 1;
                     }
                 }
                 prev_sort = Some(sort);
-                list = list.child(unread_card(app, card, cx));
+                list = list.child(unread_card(app, card, ix, cx));
+                ix += 1;
             }
             if i.unreads_loading {
                 list = list.child(loading_spinner(!i.unreads.iter().any(|c| c.loaded)));
@@ -1815,6 +1870,19 @@ pub fn pins_popout(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<Any
     )
     .with_priority(10)
     .into_any_element())
+}
+
+pub fn set_inbox_scroll(y: f32) {
+    INBOX_SCROLL.with(|h| h.set_offset(gpui::point(gpui::px(0.), gpui::px(-y))));
+}
+
+pub fn inbox_scroll_frames(spec: &str) -> Vec<f32> {
+    let mut it = spec.split(':').filter_map(|v| v.trim().parse::<f32>().ok());
+    let (Some(a), Some(b), Some(step)) = (it.next(), it.next(), it.next()) else { return Vec::new() };
+    if step <= 0. {
+        return Vec::new();
+    }
+    (0..).map(|i| a + step * i as f32).take_while(|y| *y <= b).collect()
 }
 
 thread_local! {
@@ -2415,6 +2483,31 @@ fn thread_facepile(app: &PhoenixApp, ids: &[Id], count: u32) -> Option<gpui::Div
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn channel_head_sticks_then_leaves_with_its_card() {
+        use gpui::px;
+        let (head, edge, r) = (px(60.67), px(0.67), px(12.));
+        let at = |top: f32, h: f32| super::stick_at(px(top), px(h), head, edge, r);
+        let rest = at(16., 634.72);
+        assert_eq!(rest.shift, px(0.));
+        assert_eq!(rest.top, px(11.33));
+        let stuck = at(-184., 634.72);
+        assert!((stuck.shift - px(183.33)).abs() < px(0.01));
+        assert_eq!(stuck.top, px(0.));
+        let pushed = at(-584., 634.72);
+        assert!((pushed.shift + px(-584.) + edge - px(-10.61)).abs() < px(0.02));
+        assert_eq!(pushed.bottom, px(11.33));
+        let collapsed = at(-30., 62.);
+        assert_eq!(collapsed.shift, px(0.));
+    }
+
+    #[test]
+    fn scroll_frame_ranges() {
+        assert_eq!(super::inbox_scroll_frames("0:30:10"), vec![0., 10., 20., 30.]);
+        assert!(super::inbox_scroll_frames("0:30:0").is_empty());
+        assert!(super::inbox_scroll_frames("oops").is_empty());
+    }
+
 
     #[test]
     fn add_to_dm_popout_follows_the_client_titles_and_actions() {
