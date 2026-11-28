@@ -222,6 +222,20 @@ pub fn scope(child: impl IntoElement) -> AnyElement {
     }
 }
 
+pub fn deferred(child: impl IntoElement) -> gpui::Deferred {
+    match chat() {
+        Some(cache) => gpui::deferred(gpui::image_cache(cache).child(child)),
+        None => gpui::deferred(child),
+    }
+}
+
+pub fn deferred_full(child: impl IntoElement) -> gpui::Deferred {
+    match chat() {
+        Some(cache) => gpui::deferred(gpui::image_cache(cache).size_full().child(child)),
+        None => gpui::deferred(child),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

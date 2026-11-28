@@ -1252,7 +1252,7 @@ fn popout(sort: Sort, filters: &[Filter]) -> Option<AnyElement> {
         }
     }
     let at = BUTTONS.with(|c| c.get()[which as usize]).map_or(gpui::point(pos.x, pos.y - z(16.)), |b| gpui::point(b.right(), b.top() - z(8.)));
-    Some(gpui::deferred(gpui::anchored().position(at).anchor(gpui::Anchor::BottomRight).snap_to_window_with_margin(z(8.)).child(card)).with_priority(20).into_any_element())
+    Some(crate::media::lru::deferred(gpui::anchored().position(at).anchor(gpui::Anchor::BottomRight).snap_to_window_with_margin(z(8.)).child(card)).with_priority(20).into_any_element())
 }
 
 #[cfg(test)]

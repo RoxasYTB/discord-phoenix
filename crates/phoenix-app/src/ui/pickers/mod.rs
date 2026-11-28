@@ -560,7 +560,7 @@ pub fn render_overlays(app: &PhoenixApp, window: &mut Window, cx: &mut Context<P
         } else {
             el
         };
-        out.push(if matches!(t, EmojiTarget::Field(_) | EmojiTarget::PollAnswer(_) | EmojiTarget::GuideTask | EmojiTarget::GuideAnswer | EmojiTarget::ExprUpload | EmojiTarget::ProfileReact | EmojiTarget::RoleIcon | EmojiTarget::ForumPost(_)) { gpui::deferred(el).with_priority(50).into_any_element() } else { el });
+        out.push(if matches!(t, EmojiTarget::Field(_) | EmojiTarget::PollAnswer(_) | EmojiTarget::GuideTask | EmojiTarget::GuideAnswer | EmojiTarget::ExprUpload | EmojiTarget::ProfileReact | EmojiTarget::RoleIcon | EmojiTarget::ForumPost(_)) { crate::media::lru::deferred(el).with_priority(50).into_any_element() } else { el });
     }
     if let Some(el) = soundboard::render(app, window, cx) {
         out.push(el);

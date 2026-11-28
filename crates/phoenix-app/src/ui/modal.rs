@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, FontWeight, IntoElement, MouseButton, ParentElement, SharedString, Styled,
-    Window, deferred, div, prelude::*,
+    Window, div, prelude::*,
 };
 
 
@@ -25,7 +25,7 @@ pub fn frame(id: &'static str, on_cancel: Action, card: impl IntoElement) -> Any
 }
 
 pub fn frame_named(id: &'static str, label: Option<SharedString>, on_cancel: Action, card: impl IntoElement) -> AnyElement {
-    deferred(
+    crate::media::lru::deferred_full(
         div()
             .id(id)
             .absolute()

@@ -347,7 +347,7 @@ pub fn render_for_edit(app: &PhoenixApp, window: &Window, cx: &mut Context<Phoen
     let max = max_height(true, true, false, f32::from(window.viewport_size().height) / zoom, f32::from(b.size.height) / zoom);
     let list = popup(app, max, cx)?;
     Some(
-        gpui::deferred(
+        crate::media::lru::deferred(
             div()
                 .absolute()
                 .left(b.origin.x)

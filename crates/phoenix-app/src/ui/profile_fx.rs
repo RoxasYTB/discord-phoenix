@@ -12,10 +12,13 @@ use crate::{app::PhoenixApp, ui::settings::collectibles::{Anchor, Collectible, F
 
 const MAX_W: u32 = 450;
 const MAX_ANIMS: usize = 4;
+const MAX_STREAMS: usize = 4;
+const MAX_BYTES_CACHE: usize = 8;
+const MAX_META: usize = 128;
 const IDLE_DROP: Duration = Duration::from_secs(3);
 const INTRO_MS: u64 = 500;
 
-const AHEAD: usize = 4;
+const AHEAD: usize = 2;
 
 type Decoded = (u64, u64, Arc<RenderImage>);
 
@@ -47,6 +50,9 @@ pub fn product(app: &PhoenixApp, sku: u64, cx: &mut Context<PhoenixApp>) -> Opti
     let s = cx.default_global::<Store>();
     if let Some(p) = s.products.get(&sku) {
         return p.clone();
+    }
+    if s.products.len() >= MAX_META {
+        s.products.clear();
     }
     s.products.insert(sku, None);
     let fut = app.backend.collectible_product(sku);
@@ -139,6 +145,11 @@ fn effect_bytes(src: &SharedString, cx: &mut Context<PhoenixApp>) -> Option<Arc<
             _ => None,
         };
     }
+    if s.bytes.len() >= MAX_BYTES_CACHE
+        && let Some(old) = s.bytes.iter().filter(|(_, (b, _))| !matches!(b, Bytes::Loading)).min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
+    {
+        s.bytes.remove(&old);
+    }
     s.bytes.insert(src.clone(), (Bytes::Loading, Instant::now()));
     let http = cx.http_client();
     let (key, fetch) = (src.clone(), src.clone());
@@ -170,13 +181,26 @@ fn stream_frame(src: &SharedString, at: Option<u64>, cx: &mut Context<PhoenixApp
     {
         stale = old.shown.map(|(_, _, i)| i).or(old.stale);
     }
+    let mut evicted_stream = Vec::new();
+    if !s.streams.contains_key(src) && s.streams.len() >= MAX_STREAMS
+        && let Some(old) = s.streams.iter().min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone())
+        && let Some((st, _)) = s.streams.remove(&old)
+    {
+        evicted_stream.extend(st.shown.map(|(_, _, i)| i));
+        evicted_stream.extend(st.stale);
+    }
     let (st, used) = s.streams.entry(src.clone()).or_insert_with(|| (start_stream(bytes), Instant::now()));
     *used = Instant::now();
     if stale.is_some() {
         st.stale = stale;
     }
-    let at = at?;
-    let mut dropped = Vec::new();
+    let mut dropped = evicted_stream;
+    let Some(at) = at else {
+        for img in dropped {
+            cx.drop_image(img, None);
+        }
+        return None;
+    };
     while st.shown.as_ref().is_none_or(|(_, end, _)| *end <= at) {
         match st.rx.try_recv() {
             Ok(next) => {
@@ -262,6 +286,9 @@ fn art_size(url: &SharedString, cx: &mut Context<PhoenixApp>) -> Option<(f32, f3
     let s = cx.default_global::<Store>();
     if let Some(v) = s.sizes.get(url) {
         return *v;
+    }
+    if s.sizes.len() >= MAX_META {
+        s.sizes.clear();
     }
     s.sizes.insert(url.clone(), None);
     let http = cx.http_client();
@@ -390,7 +417,7 @@ pub fn frame(f: &FrameSpec, w: f32, front: bool, cx: &mut Context<PhoenixApp>) -
     let mut d = div().absolute().top_0().bottom_0().left(z(-f.overflow_horizontal * k)).w(z(box_w));
     for (i, (url, anchor, _)) in layers {
         let Some((iw, ih)) = art_size(url, cx) else { continue };
-        let art = img(url.clone()).w_full().h(z(box_w * ih / iw.max(1.))).flex_none();
+        let art = crate::media::lru::cached(img(url.clone())).w_full().h(z(box_w * ih / iw.max(1.))).flex_none();
         if f.staple.get(i).copied().unwrap_or(false) {
             let l = div().absolute().left_0().right_0();
             let l = match anchor {

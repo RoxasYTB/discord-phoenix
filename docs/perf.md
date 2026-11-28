@@ -606,3 +606,14 @@ Still in the numbers, and not fixed:
   flushes them); the window app flushes them every frame.
 - Profile effects still decode every frame up front while they play (up to 91 MiB for
   one); decoding frames on demand would bring that to a few frames.
+
+### Follow-up: lazy chat rows, bounded profile effect streams, deferred popouts in LRU (2026-11-28)
+
+Live release process before this batch (PID 1474203, `~/.local/opt/discord-phoenix-main/discord-phoenix`, read-only `/proc`):
+- `VmRSS`: 1,004,020 KiB (980.5 MiB), `VmHWM`: 1,095,296 KiB (1,069.6 MiB)
+- `Pss`: 984,228 KiB (961.2 MiB), `RssAnon`: 912,572 KiB (891.2 MiB)
+
+Changes:
+1. **Lazy chat rows enabled by default (`ui/chat/rows.rs`, `ui/chat_list_tests.rs`)**: `measure_everything()` is now `false` by default (opt-in via `PHX_MEASURE_ALL=1`). The older-page test now scrolls so both the bottom of the placeholder skeleton and the first message are in the viewport (matching real scrolling), and the thumb-stability test waits for `measure_ahead` to settle before asserting scroll range stability.
+2. **Tighter profile effect streaming (`ui/profile_fx.rs`)**: reduced `AHEAD` buffer from 4 to 2 frames per active layer, capped `streams` (4), `bytes` (8) and metadata caches (128) with `cx.drop_image` on stream eviction, and routed profile frame `img()` calls through `media::lru::cached`.
+3. **Deferred popouts & modals in `LruImageCache` (`media/lru.rs` + popout/modal call sites)**: added `lru::deferred` and `lru::deferred_full` so images rendered inside `gpui::deferred(...)` layers (modals, settings, boost layer, pickers, profile toolbar, context menus, autocomplete, voice/quest/burst popouts) use the shared LRU cache instead of GPUI's unbounded asset cache.

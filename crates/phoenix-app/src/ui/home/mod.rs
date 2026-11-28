@@ -83,7 +83,7 @@ pub fn overlay(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoen
         Overlay::Topic(ch) => topic::render(app, ch, cx),
         other => crate::ui::invite::render(app, &other, window, cx),
     };
-    Some(if above_modal { gpui::deferred(el).with_priority(26).into_any_element() } else { el })
+    Some(if above_modal { crate::media::lru::deferred(el).with_priority(26).into_any_element() } else { el })
 }
 
 impl PhoenixApp {

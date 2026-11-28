@@ -432,7 +432,7 @@ pub fn stream_preview(app: &crate::app::PhoenixApp, user: Id, entity: gpui::Enti
             |d, t| d.opacity(t).ml(z(10. * t)),
         );
     Some(
-        gpui::deferred(gpui::anchored().position(point(b.right() + z(17.), b.top() - z(12.))).child(card))
+        crate::media::lru::deferred(gpui::anchored().position(point(b.right() + z(17.), b.top() - z(12.))).child(card))
             .with_priority(1)
             .into_any_element(),
     )

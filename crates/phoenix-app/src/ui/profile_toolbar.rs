@@ -175,7 +175,7 @@ pub fn toast(user: Id, banner_h: f32) -> Option<AnyElement> {
     } else {
         row.into_any_element()
     };
-    Some(gpui::deferred(el).with_priority(45).into_any_element())
+    Some(crate::media::lru::deferred(el).with_priority(45).into_any_element())
 }
 
 fn heights(uid: Id, layout: Layout) -> (f32, f32) {
@@ -588,7 +588,7 @@ pub const REPLY_ROWS: usize = 4;
 
 fn reply_box(input: &Entity<TextareaState>, layout: Layout, themed: bool, top: f32) -> AnyElement {
     let w = if layout == Layout::Sidebar { 276. } else { 300. };
-    let anchored = gpui::deferred(
+    let anchored = crate::media::lru::deferred(
         gpui::anchored().position_mode(gpui::AnchoredPositionMode::Local).position(gpui::point(z(reply_offset(layout, themed)), z(top + 6.))).child(
             div()
                 .id("ptb-reply")
@@ -818,7 +818,7 @@ pub fn status(
         .children(bar)
         .children(reply.map(|i| reply_box(&i, layout, themed, h)));
     let el = crate::ui::states::track(el, ck);
-    Some(if interacting.is_some() { gpui::deferred(el).with_priority(30).into_any_element() } else { el.into_any_element() })
+    Some(if interacting.is_some() { crate::media::lru::deferred(el).with_priority(30).into_any_element() } else { el.into_any_element() })
 }
 
 fn expand_button(uid: Id, layout: Layout, open: bool, hover: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {

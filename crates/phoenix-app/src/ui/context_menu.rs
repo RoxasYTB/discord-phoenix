@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, ClickEvent, FontWeight, IntoElement, MouseButton, ParentElement, Pixels, Point,
-    SharedString, Styled, Window, anchored, deferred, div, prelude::*, svg,
+    SharedString, Styled, Window, anchored, div, prelude::*, svg,
 };
 
 use crate::theme::{c, generated::idx, tok};
@@ -794,7 +794,7 @@ pub fn render_anchored_at(pos: Point<Pixels>, corner: gpui::Anchor, items: Vec<M
     .size_0();
     let d1 = dismiss.clone();
     let d2 = dismiss.clone();
-    deferred(
+    crate::media::lru::deferred_full(
         div()
             .id("context-menu-backdrop")
             .absolute()

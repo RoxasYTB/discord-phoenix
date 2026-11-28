@@ -584,7 +584,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     .absolute()
     .size_0();
     Some(
-        gpui::deferred(div().id("boost-layer").absolute().inset_0().occlude().child(scroller).child(close_btn).child(keys))
+        crate::media::lru::deferred_full(div().id("boost-layer").absolute().inset_0().occlude().child(scroller).child(close_btn).child(keys))
             .with_priority(5)
             .into_any_element(),
     )

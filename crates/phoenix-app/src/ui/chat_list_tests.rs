@@ -68,6 +68,12 @@ impl Chat {
 #[gpui::test]
 fn the_thumb_keeps_its_size_while_scrolling_through_loaded_messages(cx: &mut TestAppContext) {
     let mut chat = setup(cx);
+    for _ in 0..30 {
+        if rows::is_settled() {
+            break;
+        }
+        chat.draw();
+    }
     let (n0, max0, thumb0) = chat.read(|a| {
         (a.message_list.item_count(), f32::from(a.message_list.max_offset_for_scrollbar().y), scrollbar::auto_thumb(&a.message_list))
     });
@@ -93,6 +99,11 @@ fn an_older_page_replaces_the_placeholders_and_keeps_the_view(cx: &mut TestAppCo
     chat.act(|a, _| {
         a.messages.get_mut(&ch).unwrap().loading = true;
         a.message_list.scroll_to(ListOffset { item_ix: 0, offset_in_item: px(0.) });
+    });
+    chat.draw();
+    let sk_h = chat.read(|a| a.message_list.bounds_for_item(0).map_or(px(0.), |b| b.size.height));
+    chat.act(|a, _| {
+        a.message_list.scroll_to(ListOffset { item_ix: 0, offset_in_item: (sk_h - px(160.)).max(px(0.)) });
     });
     chat.draw();
     assert!(chat.read(rows::skeleton_shown), "the placeholders are on screen at the top");

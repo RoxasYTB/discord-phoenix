@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, deferred, div, prelude::*};
+use gpui::{AnyElement, Context, FontWeight, IntoElement, ParentElement, SharedString, Styled, Window, div, prelude::*};
 
 use crate::{
     actions::close_modal,
@@ -267,7 +267,7 @@ fn overlay_ex(
                 .child(div().flex_none().when(narrow, |d| d.w_full()).when(!narrow, |d| d.w(z(264.))).py(z(60.)).pl(z(20.)).pr(z(6.)).flex().child(side)),
         )
         .children(crate::ui::chat::scrollbar::bar_for_n(id, 2, crate::ui::chat::scrollbar::Bar::ThinFade));
-    deferred(crate::ui::popout_motion::layer(
+    crate::media::lru::deferred_full(crate::ui::popout_motion::layer(
         id,
         div()
             .id(id)

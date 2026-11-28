@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, App, Bounds, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, SharedString, StatefulInteractiveElement, Styled, anchored, canvas, deferred, div, point, prelude::*, px,
+    AnyElement, App, Bounds, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, SharedString, StatefulInteractiveElement, Styled, anchored, canvas, div, point, prelude::*, px,
 };
 
 use crate::actions::{ActionReply, ActionRequest};
@@ -230,7 +230,7 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
     let below = top < f32::from(z(ROOM));
     let frame = div().w(px(span)).flex().flex_col().items_center().child(card);
     let (corner, y) = if below { (gpui::Anchor::TopLeft, f32::from(b.origin.y + b.size.height) + f32::from(z(GAP))) } else { (gpui::Anchor::BottomLeft, top - f32::from(z(GAP))) };
-    let el = deferred(
+    let el = crate::media::lru::deferred(
         anchored()
             .position_mode(gpui::AnchoredPositionMode::Window)
             .anchor(corner)

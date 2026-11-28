@@ -30,6 +30,12 @@ thread_local! {
     static KEEP: Cell<Option<Keep>> = const { Cell::new(None) };
     static TOP_ROW: Cell<Option<Bounds<Pixels>>> = const { Cell::new(None) };
     static TOP_ROW_SHOWN: Cell<Option<Bounds<Pixels>>> = const { Cell::new(None) };
+    static SETTLED: Cell<bool> = const { Cell::new(true) };
+}
+
+#[cfg(test)]
+pub fn is_settled() -> bool {
+    SETTLED.get()
 }
 
 pub fn insert(list: &ListState, at: usize, n: usize) {
@@ -73,7 +79,7 @@ pub fn prepend(list: &ListState, channel: Id, n: usize, len: usize) {
 
 pub fn measure_everything() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| !std::env::var_os("PHX_MEASURE_ROWS").is_some_and(|v| !v.is_empty() && v != "0"))
+    *ON.get_or_init(|| std::env::var_os("PHX_MEASURE_ALL").is_some_and(|v| !v.is_empty() && v != "0"))
 }
 
 fn row_key(app: &PhoenixApp, channel: Id, ix: usize) -> Option<u64> {
@@ -148,8 +154,10 @@ pub fn measure_ahead(entity: Entity<PhoenixApp>, render: RenderRow) -> AnyElemen
             }
             let mut order: Vec<usize> = (0..count).filter(|ix| keys[*ix].is_some() && cached(keys[*ix], width, generation).is_none()).collect();
             if order.is_empty() {
+                SETTLED.set(true);
                 return;
             }
+            SETTLED.set(false);
             order.sort_by_key(|ix| ix.abs_diff(top.item_ix));
             let space = size(AvailableSpace::Definite(view.size.width), AvailableSpace::MinContent);
             let started = Instant::now();
