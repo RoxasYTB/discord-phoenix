@@ -107,7 +107,12 @@ fn reset_state() {
     OPEN_SUB.with(|c| c.set(None));
     HL_ROOT.with(|c| c.set(None));
     HL_SUB.with(|c| c.set(None));
-    PLACED.with(|c| c.set(Placed { sub: [0.; 4], ..c.get() }));
+    FLIP_REFRESHES.with(|c| c.set(0));
+    PLACED.with(|m| {
+        for p in m.borrow_mut().values_mut() {
+            p.sub = [0.; 4];
+        }
+    });
 }
 
 enum Nav {
@@ -252,6 +257,7 @@ fn handle_key(key: &str, nav: &[Nav], pos: Point<Pixels>, dismiss: &Dismiss, w: 
 
 fn set_open_sub(v: Option<usize>, w: &mut Window) {
     if OPEN_SUB.with(|c| c.replace(v)) != v {
+        FLIP_REFRESHES.with(|c| c.set(0));
         w.refresh();
     }
 }
@@ -367,10 +373,11 @@ const FLIP_PAD: f32 = 48.;
 
 thread_local! {
     static VIEW_H: std::cell::Cell<f32> = const { std::cell::Cell::new(700.) };
-    static PLACED: std::cell::Cell<Placed> = const { std::cell::Cell::new(Placed { root: [0.; 4], sub: [0.; 4], view_w: 0. }) };
+    static PLACED: std::cell::RefCell<std::collections::HashMap<&'static str, Placed>> = std::cell::RefCell::new(std::collections::HashMap::new());
+    static FLIP_REFRESHES: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct Placed {
     root: [f32; 4],
     sub: [f32; 4],
@@ -384,21 +391,35 @@ fn sub_flips(p: Placed) -> bool {
     p.view_w > 0. && w > right && left > right
 }
 
-fn measure(depth: u8) -> impl IntoElement {
+fn measure(id: &'static str, depth: u8) -> impl IntoElement {
     gpui::canvas(
         move |b, w, _| {
             let k = f32::from(z(1.)).max(0.01);
             let edges = [b.left(), b.top(), b.right(), b.bottom()].map(|v| f32::from(v) / k);
-            let before = PLACED.with(std::cell::Cell::get);
-            let mut p = before;
-            if depth == 0 {
-                p.root = edges;
-                p.view_w = f32::from(w.viewport_size().width) / k;
-            } else {
-                p.sub = edges;
-            }
-            PLACED.with(|c| c.set(p));
-            if sub_flips(p) != sub_flips(before) {
+            let (before, p) = PLACED.with(|m| {
+                let mut map = m.borrow_mut();
+                let entry = map.entry(id).or_default();
+                let before = *entry;
+                if depth == 0 {
+                    entry.root = edges;
+                    entry.view_w = f32::from(w.viewport_size().width) / k;
+                } else {
+                    entry.sub = edges;
+                }
+                (before, *entry)
+            });
+            if OPEN_SUB.with(std::cell::Cell::get).is_some()
+                && sub_flips(p) != sub_flips(before)
+                && FLIP_REFRESHES.with(|c| {
+                    let n = c.get();
+                    if n < 2 {
+                        c.set(n + 1);
+                        true
+                    } else {
+                        false
+                    }
+                })
+            {
                 w.on_next_frame(|w, _| w.refresh());
             }
         },
@@ -410,7 +431,10 @@ fn measure(depth: u8) -> impl IntoElement {
 
 #[doc(hidden)]
 pub fn debug_panels() -> ([f32; 4], [f32; 4], f32) {
-    let p = PLACED.with(std::cell::Cell::get);
+    let p = PLACED.with(|m| {
+        let map = m.borrow();
+        map.get("context-menu").or_else(|| map.values().next()).copied().unwrap_or_default()
+    });
     (p.root, p.sub, p.view_w)
 }
 
@@ -430,7 +454,7 @@ fn row_h(item: &MenuItem) -> f32 {
 }
 
 pub fn panel(id: &'static str, items: Vec<MenuItem>, dismiss: Dismiss) -> gpui::Stateful<gpui::Div> {
-    panel_at(id, 0, items, dismiss)
+    panel_at(id, id, 0, items, dismiss)
 }
 
 fn row(id: (&'static str, usize), lit: bool, danger: bool) -> gpui::Stateful<gpui::Div> {
@@ -458,7 +482,7 @@ fn label_box(label: SharedString) -> gpui::Div {
     div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(label)
 }
 
-fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss) -> gpui::Stateful<gpui::Div> {
+fn panel_at(id: &'static str, root_id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss) -> gpui::Stateful<gpui::Div> {
     let hl = if depth == 0 { HL_ROOT.with(|c| c.get()) } else { HL_SUB.with(|c| c.get()) };
     let open_sub = if depth == 0 { OPEN_SUB.with(|c| c.get()) } else { None };
     let max_h = VIEW_H.with(|v| v.get()) - VIEWPORT_PAD * 2.;
@@ -484,7 +508,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
             MenuItem::Submenu { label, items, icon, subtext, danger, on_click } => {
                 let open = open_sub == Some(ix);
                 if open {
-                    let flip = sub_flips(PLACED.with(std::cell::Cell::get));
+                    let flip = sub_flips(PLACED.with(|m| m.borrow().get(root_id).copied().unwrap_or_default()));
                     sub_panel = Some(
                         div()
                             .absolute()
@@ -494,7 +518,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                                 gpui::anchored()
                                     .anchor(if flip { gpui::Anchor::TopRight } else { gpui::Anchor::TopLeft })
                                     .snap_to_window_with_margin(z(VIEWPORT_PAD))
-                                    .child(panel_at("context-submenu", 1, items, dismiss.clone())),
+                                    .child(panel_at("context-submenu", root_id, 1, items, dismiss.clone())),
                             ),
                     );
                 }
@@ -761,7 +785,7 @@ fn panel_at(id: &'static str, depth: u8, items: Vec<MenuItem>, dismiss: Dismiss)
                 .child(list)
                 .children(crate::ui::chat::scrollbar::bar_for(id, crate::ui::chat::scrollbar::Bar::Thin)),
         )
-        .child(measure(depth))
+        .child(measure(root_id, depth))
         .child(div().absolute().top_0().left_0().size_full().rounded(z(8.)).border_1().border_color(c(tok(idx::BORDER_SUBTLE))))
         .children(sub_panel)
 }

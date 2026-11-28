@@ -167,6 +167,9 @@ pub struct PageResolver {
     channels: HashMap<u64, String>,
     roles: HashMap<u64, (String, Option<u32>, bool)>,
     sounds: HashMap<(u64, u64), SoundboardMention>,
+    current_guild: Option<u64>,
+    link_channels: HashMap<u64, crate::markdown::LinkChannel>,
+    link_guilds: HashMap<u64, crate::markdown::LinkGuild>,
 }
 
 impl MentionResolver for PageResolver {
@@ -185,8 +188,30 @@ impl MentionResolver for PageResolver {
     fn has_role(&self, id: u64) -> bool {
         self.roles.get(&id).is_some_and(|r| r.2)
     }
+    fn current_guild(&self) -> Option<u64> {
+        self.current_guild
+    }
+    fn link_channel(&self, id: u64) -> Option<crate::markdown::LinkChannel> {
+        self.link_channels.get(&id).cloned()
+    }
+    fn link_guild(&self, id: u64) -> Option<crate::markdown::LinkGuild> {
+        self.link_guilds.get(&id).cloned()
+    }
     fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<SoundboardMention> {
         self.sounds.get(&(guild_id, sound_id)).or_else(|| self.sounds.get(&(0, sound_id))).cloned()
+    }
+}
+
+fn link_ids(text: &str, guilds: &mut HashSet<u64>, channels: &mut HashSet<u64>) {
+    for (i, _) in text.match_indices("https://") {
+        if let Some(m) = crate::markdown::channel_link::match_url(&text[i..]) {
+            if let Some(g) = m.guild {
+                guilds.insert(g);
+            }
+            if let Some(c) = m.channel {
+                channels.insert(c);
+            }
+        }
     }
 }
 
@@ -215,12 +240,18 @@ fn mention_ids(text: &str, users: &mut HashSet<u64>, roles: &mut HashSet<u64>, c
 
 pub fn page_resolver(app: &PhoenixApp, msgs: &[Message]) -> PageResolver {
     let (mut u, mut r, mut c) = (HashSet::new(), HashSet::new(), HashSet::new());
+    let (mut link_g, mut link_c) = (HashSet::new(), HashSet::new());
     for m in msgs {
         mention_ids(&m.content, &mut u, &mut r, &mut c);
+        link_ids(&m.content, &mut link_g, &mut link_c);
     }
     let guild = msgs.first().and_then(|m| app.channels.get(&m.channel).or_else(|| app.nav.find_thread(m.channel))).and_then(|c| c.guild);
     let members = guild.and_then(|g| Some((g, app.members.get(&g)?)));
-    let mut out = PageResolver::default();
+    let resolver = app.resolver();
+    let mut out = PageResolver {
+        current_guild: guild.map(|g| g.0).or_else(|| resolver.current_guild()),
+        ..PageResolver::default()
+    };
     for id in u {
         let nick = members.and_then(|(g, ms)| crate::member_index::find(ms, g, Id(id))).and_then(|m| m.nick.as_ref().map(ToString::to_string));
         if let Some(name) = nick.or_else(|| app.users.get(&Id(id)).map(|u| u.display_name.to_string())) {
@@ -242,6 +273,19 @@ pub fn page_resolver(app: &PhoenixApp, msgs: &[Message]) -> PageResolver {
             .and_then(|ms| ms.iter().find(|m| m.user == app.me.id))
             .is_some_and(|m| m.roles.contains(&Id(id)));
         out.roles.insert(id, (role.name.to_string(), role.color, mine));
+    }
+    for id in link_c {
+        if let Some(ch) = resolver.link_channel(id) {
+            if let Some(g) = ch.guild {
+                link_g.insert(g);
+            }
+            out.link_channels.insert(id, ch);
+        }
+    }
+    for id in link_g {
+        if let Some(g) = resolver.link_guild(id) {
+            out.link_guilds.insert(id, g);
+        }
     }
     out
 }
@@ -266,6 +310,15 @@ impl MentionResolver for MessagePageResolver<'_> {
     }
     fn has_role(&self, id: u64) -> bool {
         self.base.has_role(id)
+    }
+    fn current_guild(&self) -> Option<u64> {
+        self.base.current_guild()
+    }
+    fn link_channel(&self, id: u64) -> Option<crate::markdown::LinkChannel> {
+        self.base.link_channel(id)
+    }
+    fn link_guild(&self, id: u64) -> Option<crate::markdown::LinkGuild> {
+        self.base.link_guild(id)
     }
     fn soundboard(&self, guild_id: u64, sound_id: u64) -> Option<SoundboardMention> {
         self.sounds
