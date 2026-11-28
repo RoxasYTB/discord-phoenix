@@ -244,7 +244,7 @@ fn banner_action(id: &'static str, label: SharedString, primary: bool) -> gpui::
         .flex().items_center().justify_center()
         .rounded(z(8.)).cursor_pointer()
         .bg(if primary { gpui::white().into() } else { gpui::rgba(0x251029b8) })
-        .hover(move |d| d.bg(if primary { gpui::rgb(0xece8f2).into() } else { gpui::rgba(0x251029eb) }))
+        .hover(move |d| d.bg(if primary { gpui::rgb(0xece8f2) } else { gpui::rgba(0x251029eb) }))
         .text_color(if primary { gpui::black() } else { gpui::white() })
         .text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM)
         .text_center().child(label)
