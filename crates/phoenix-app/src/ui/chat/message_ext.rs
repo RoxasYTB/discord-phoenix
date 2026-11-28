@@ -238,7 +238,10 @@ pub fn toolbar(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, shi
                 .into_any_element(),
             B::Pin => tool_button("tb-pin", id.0, Icon::Pin.path(), 20.)
                 .tip(if msg.pinned { crate::t!("msg.unpin") } else { crate::t!("msg.pin") })
-                .on_click(move |_, _, cx| ee.update(cx, |a, cx| a.toggle_pin(ch, id, cx)))
+                .on_click(move |ev, _, cx| {
+                    let skip = ev.modifiers().shift;
+                    ee.update(cx, |a, cx| a.request_pin(ch, id, skip, cx))
+                })
                 .into_any_element(),
             B::Thread => tool_button("tb-thread", id.0, crate::icons::path("chat/thread"), 20.)
                 .tip(crate::t!("msg.create_thread"))

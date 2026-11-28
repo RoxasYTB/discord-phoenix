@@ -27,6 +27,9 @@ pub fn overlays(app: &PhoenixApp, _window: &mut Window, cx: &mut Context<Phoenix
     if let Some((ch, id)) = app.chat.confirm_delete {
         out.push(delete_modal(app, ch, id, cx));
     }
+    if let Some((ch, id)) = app.chat.confirm_pin {
+        out.push(pin_modal(app, ch, id, cx));
+    }
     out
 }
 
@@ -402,7 +405,10 @@ fn message_menu(app: &PhoenixApp, m: super::state::MenuState, cx: &mut Context<P
         items.push(MenuItem::action(
             if pinned { crate::t!("msg.unpin") } else { crate::t!("msg.pin") },
             Some(Icon::Pin.path()),
-            move |_, _, cx| ee.update(cx, |a, cx| a.toggle_pin(ch, id, cx)),
+            move |ev, _, cx| {
+                let skip = ev.modifiers().shift;
+                ee.update(cx, |a, cx| a.request_pin(ch, id, skip, cx))
+            },
         ));
     }
     let ee = e.clone();
@@ -659,6 +665,50 @@ fn delete_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx
         on_cancel: Rc::new(move |_, cx| {
             e2.update(cx, |a, cx| {
                 a.chat.confirm_delete = None;
+                cx.notify();
+            })
+        }),
+    })
+}
+
+fn pin_modal(app: &PhoenixApp, ch: crate::model::Id, id: crate::model::Id, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let e = cx.entity();
+    let e2 = e.clone();
+    let msg = app.messages.get(&ch).and_then(|x| x.msgs.iter().find(|x| x.id == id));
+    let unpin = msg.is_some_and(|m| m.pinned);
+    let channel = app.channels.get(&ch);
+    let subtitle = if unpin {
+        crate::t!("msg.unpin_confirm")
+    } else if let Some(c) = channel.filter(|c| c.guild.is_some()) {
+        crate::t!("msg.pin_confirm_channel", channel = c.name.clone())
+    } else {
+        crate::t!("msg.pin_confirm")
+    };
+    let mut body: Vec<AnyElement> = vec![div().text_size(z(16.)).child(subtitle).into_any_element()];
+    if let Some(m) = msg {
+        body.push(message_card(app, m).shadow_md().into_any_element());
+    }
+    if unpin {
+        body.push(
+            div()
+                .text_size(z(14.))
+                .child(crate::t!("msg.unpin_hint_lead"))
+                .child(div().font_weight(FontWeight::BOLD).child(crate::t!("msg.unpin_hint_action")))
+                .child(crate::t!("msg.unpin_hint_tail"))
+                .flex()
+                .flex_wrap()
+                .into_any_element(),
+        );
+    }
+    modal::confirm(modal::Confirm {
+        title: if unpin { crate::t!("msg.unpin") } else { crate::t!("msg.pin_title") },
+        body,
+        confirm_label: if unpin { crate::t!("msg.unpin_confirm_button") } else { crate::t!("msg.pin_confirm_button") },
+        danger: unpin,
+        on_confirm: Rc::new(move |_, cx| e.update(cx, |a, cx| a.confirm_pin(cx))),
+        on_cancel: Rc::new(move |_, cx| {
+            e2.update(cx, |a, cx| {
+                a.chat.confirm_pin = None;
                 cx.notify();
             })
         }),

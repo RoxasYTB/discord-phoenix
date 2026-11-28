@@ -632,8 +632,15 @@ pub fn search_result_items(
     if rules.pin && (guild.is_none() || crate::actions::has(app, guild, crate::actions::MANAGE_MESSAGES | (1 << 51))) {
         let label = if pinned { crate::t!("msg.unpin") } else { crate::t!("msg.pin") };
         let ep = e.clone();
-        acts.push(MenuItem::action(label, Some(crate::icons::path("pin")), move |_, _, cx: &mut App| {
-            ep.update(cx, |a, cx| a.set_pinned_by_id(channel, msg, !pinned, cx))
+        acts.push(MenuItem::action(label, Some(crate::icons::path("pin")), move |ev, _, cx: &mut App| {
+            let skip = ev.modifiers().shift;
+            ep.update(cx, |a, cx| {
+                if !skip && a.find_msg(channel, msg).is_some_and(|m| m.pinned == pinned) {
+                    a.request_pin(channel, msg, false, cx)
+                } else {
+                    a.set_pinned_by_id(channel, msg, !pinned, cx)
+                }
+            })
         }));
     }
     let eu = e.clone();
