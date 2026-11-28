@@ -4,6 +4,8 @@ use serde_json::Value;
 use crate::model::User;
 
 pub const NITRO_APP: &str = "521842831262875670";
+pub(super) const DISCORD_SUBSCRIPTIONS: &str = "https://discord.com/settings/subscriptions";
+pub(super) const DISCORD_BILLING: &str = "https://discord.com/settings/billing";
 
 pub const OWNER: u64 = 1;
 
@@ -39,6 +41,34 @@ pub struct Credit {
 pub struct Subs {
     pub squad: Option<Squad>,
     pub credits: Vec<Credit>,
+    pub personal: Option<Vec<Subscription>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Subscription {
+    pub plan: &'static str,
+    pub tier: u8,
+    pub period_end: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub canceled: bool,
+}
+
+pub fn parse_subscriptions(value: &Value) -> Option<Vec<Subscription>> {
+    let subscriptions = value.as_array().or_else(|| value.get("subscriptions")?.as_array())?;
+    Some(subscriptions.iter().filter_map(|sub| {
+        let status = sub.get("status")?.as_u64()?;
+        if !matches!(status, 1..=3) {
+            return None;
+        }
+        let period_end = sub.get("current_period_end").filter(|_| status != 2).and_then(Value::as_str)
+            .and_then(|date| chrono::DateTime::parse_from_rfc3339(date).ok());
+        if status == 3 && period_end.is_some_and(|date| date <= chrono::Utc::now()) {
+            return None;
+        }
+        let entry = sub.get("items").and_then(Value::as_array).and_then(|items| {
+            items.iter().filter_map(|item| item.get("plan_id")?.as_str().and_then(plan)).next()
+        }).or_else(|| sub.get("plan_id")?.as_str().and_then(plan))?;
+        Some(Subscription { plan: entry.0, tier: entry.1, period_end, canceled: status == 3 })
+    }).collect())
 }
 
 static DATA: RwLock<Option<Subs>> = RwLock::new(None);
@@ -115,6 +145,23 @@ pub fn months_label(n: u32) -> gpui::SharedString {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+
+    #[test]
+    fn personal_subscriptions_distinguish_missing_data_and_read_active_periods() {
+        let v = json!([
+            {"status": 1, "items": [{"plan_id": "511651880837840896"}], "current_period_end": "2099-12-27T12:00:00Z"},
+            {"status": 3, "items": [{"plan_id": "978380692553465866"}], "current_period_end": "2099-12-29T12:00:00Z"},
+            {"status": 2, "items": [{"plan_id": "511651880837840896"}], "current_period_end": "2099-12-31T12:00:00Z"},
+            {"status": 4, "items": [{"plan_id": "511651880837840896"}]}
+        ]);
+        let subscriptions = super::parse_subscriptions(&v).unwrap();
+        assert_eq!(subscriptions.len(), 3);
+        assert_eq!(subscriptions[0].plan, "sp.su.plan_nitro_month");
+        assert!(subscriptions[0].period_end.is_some());
+        assert!(subscriptions[1].canceled);
+        assert!(subscriptions[2].period_end.is_none());
+        assert!(super::parse_subscriptions(&json!({})).is_none());
+    }
 
     #[test]
     fn credits_group_per_plan() {

@@ -347,7 +347,9 @@ impl DiscordBackend {
                 .await
                 .map(|v| sub::parse_credits(&v))
                 .unwrap_or_default();
-            Ok(Some(sub::Subs { squad, credits }))
+            let personal = get("/users/@me/billing/subscriptions".into()).await
+                .and_then(|value| sub::parse_subscriptions(&value));
+            Ok(Some(sub::Subs { squad, credits, personal }))
         })
     }
 }

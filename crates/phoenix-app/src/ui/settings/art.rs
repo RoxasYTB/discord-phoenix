@@ -13,7 +13,7 @@ pub fn connections() -> Vec<(&'static str, String, bool)> {
         app("Battle.net", "1356665549089800303/e9cb3d82f173c6a131fd08bbfaab9a65"),
         svg("Bluesky", "2709f058378a099d"),
         svg("Letterboxd", "6b6632ec799ccf64"),
-        svg("PayPal", "dcb64a4ff8f61b2c"),
+        ("PayPal", paypal(), false),
         svg("Reddit", "adfd927dcc2049a5"),
         svg("Steam", "1f7ec18f3695d4cf"),
         svg("X", "a61999ae9bfb9658"),
@@ -32,6 +32,10 @@ pub fn connections() -> Vec<(&'static str, String, bool)> {
         svg("Twitch", "4fda00c96319c8ae"),
         svg("YouTube", "0fa530ba9c04ac32"),
     ]
+}
+
+pub fn paypal() -> String {
+    a("dcb64a4ff8f61b2c.svg")
 }
 
 pub fn connection_icon(kind: &str) -> Option<(String, bool)> {

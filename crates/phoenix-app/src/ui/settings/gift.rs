@@ -233,31 +233,88 @@ pub(super) fn purchased(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> Any
         .into_any_element()
 }
 
-pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
-    let data = super::subscriptions::get().unwrap_or_default();
+pub(super) fn subscriptions(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
+    let loaded = super::subscriptions::get();
+    let data = loaded.clone().unwrap_or_default();
+    let personal = data.personal.as_deref().unwrap_or_default();
     let mut head = div()
         .flex()
         .flex_col()
         .pt(z(11.))
-        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")).mb(z(16.)))
-        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
-    if let Some(sq) = &data.squad {
-        head = head.child(div().mt(z(16.)).child(squad_card(sq)));
+        .gap(z(4.))
+        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")))
+        .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
+    if personal.is_empty() {
+        head = head.child(div().mt(z(12.)).child(super::nitro::status_card(app)));
+        if loaded.is_some() && data.personal.is_none() {
+            head = head.child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED, tr("sp.su.unavailable")));
+        }
+    } else {
+        head = head.child(div().mt(z(12.)).flex().flex_col().gap(z(12.)).children(personal.iter().enumerate().map(|(i, sub)| subscription_card(i, sub))));
     }
     div()
         .flex()
         .flex_col()
         .gap(z(32.))
         .child(head)
+        .when(!personal.is_empty(), |d| d.child(payment_section(personal)))
+        .children(data.squad.as_ref().map(squad_card))
         .child(
             div()
                 .flex()
                 .flex_col()
                 .child(text(20., 24., FontWeight::MEDIUM, idx::TEXT_STRONG, tr("sp.su.credit")).mb(z(12.)))
                 .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.credit_desc")).mt(z(-8.)))
+                .when(loaded.is_some() && data.credits.is_empty(), |d| {
+                    d.child(div().mt(z(24.)).min_h(z(62.)).px(z(20.)).rounded(z(8.))
+                        .bg(c(tok(idx::BACKGROUND_MOD_SUBTLE))).flex().items_center().gap(z(10.))
+                        .child(gpui::svg().path(crate::icons::path("help")).size(z(24.)).text_color(c(tok(idx::TEXT_STRONG))))
+                        .child(text(14., 18., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.no_credit"))))
+                })
                 .children(data.credits.iter().map(|cr| credit_row(cr, data.squad.is_some()))),
         )
         .into_any_element()
+}
+
+fn subscription_card(i: usize, sub: &super::subscriptions::Subscription) -> Div {
+    let basic = sub.tier == 0;
+    let (a, b) = if basic { (0x3559a0, 0x597fa6) } else { (0x8447bd, 0xa75d88) };
+    let manage = controls::button_sm(("subscription-manage", i), tr("sp.su.manage"), BtnKind::Secondary)
+        .bg(gpui::white()).text_color(gpui::black())
+        .on_click(|_, _, cx| cx.open_url(super::subscriptions::DISCORD_SUBSCRIPTIONS));
+    let cancel = controls::button_sm(("subscription-cancel", i), tr("common.cancel"), BtnKind::Secondary)
+        .bg(gpui::transparent_black()).text_color(gpui::white())
+        .on_click(|_, _, cx| cx.open_url(super::subscriptions::DISCORD_SUBSCRIPTIONS));
+    div().min_h(z(112.)).rounded(z(4.)).p(z(16.)).flex().items_center().gap(z(8.))
+        .bg(gpui::linear_gradient(90., gpui::linear_color_stop(gpui::rgb(a), 0.), gpui::linear_color_stop(gpui::rgb(b), 1.)))
+        .child(gpui::img(super::art::nitro_tier()).w(z(96.)).h(z(80.)).object_fit(gpui::ObjectFit::Contain).flex_none())
+        .child(div().flex_1().min_w_0().flex().flex_col().gap(z(4.)).text_color(gpui::white())
+            .child(div().flex().items_center().justify_between().flex_wrap().gap(z(8.))
+                .child(crate::fonts::nitro(div().text_size(z(28.)).line_height(z(32.)), true).child(if basic { "NITRO BASIC" } else { "NITRO" }))
+                .child(div().flex().flex_wrap().items_center().gap(z(8.)).child(cancel).child(manage)))
+            .child(div().text_size(z(16.)).line_height(z(20.)).child(tr(sub.plan)))
+            .when(sub.canceled, |d| d.child(div().text_size(z(14.)).line_height(z(18.)).child(tr("sp.su.pending_cancel")))))
+}
+
+fn payment_section(personal: &[super::subscriptions::Subscription]) -> Div {
+    let panel = || div().flex_1().min_w_0().p(z(16.)).rounded(z(8.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGH)))
+        .flex().flex_col().gap(z(8.));
+    div().flex().flex_col().gap(z(12.))
+        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.payment")))
+        .child(div().flex().gap(z(16.))
+            .child(panel()
+                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.payment_info")))
+                .children(personal.iter().map(|sub| {
+                    let value = sub.period_end.map(|end| {
+                        let date = crate::i18n::medium_date(end.with_timezone(&chrono::Local).date_naive());
+                        crate::t!(if sub.canceled { "sp.su.ends_on" } else { "sp.su.renews_on" }, date = date)
+                    }).unwrap_or_else(|| tr("sp.su.no_period"));
+                    text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, value)
+                })))
+            .child(panel()
+                .child(text(16., 20., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.pay_with")))
+                .child(controls::button("subscription-payment", tr("sp.su.open_discord"), BtnKind::Secondary)
+                    .on_click(|_, _, cx| cx.open_url(super::subscriptions::DISCORD_SUBSCRIPTIONS)))))
 }
 
 fn squad_card(sq: &super::subscriptions::Squad) -> AnyElement {

@@ -889,16 +889,20 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
     let data = super::billing::get().unwrap_or_default();
     let has_sources = !data.sources.is_empty();
     let source_rows = data.sources.iter().enumerate().map(|(i, src)| {
+        let logo = div().w(z(32.)).h(z(22.)).flex_none().rounded(z(3.)).flex().items_center().justify_center();
+        let logo = if src.brand == "PayPal" {
+            logo.bg(gpui::white()).child(gpui::img(super::art::paypal()).size(z(18.)).object_fit(gpui::ObjectFit::Contain))
+        } else {
+            logo.bg(c(tok(idx::BACKGROUND_MOD_STRONG))).text_size(z(8.)).font_weight(FontWeight::BOLD)
+                .text_color(c(tok(idx::TEXT_STRONG))).child(src.brand.clone())
+        };
         div()
             .mt(z(if i == 0 { 52. } else { 16. }))
             .h(z(42.))
             .flex()
             .items_center()
             .gap(z(14.))
-            .child(
-                div().w(z(32.)).h(z(22.)).flex_none().rounded(z(3.)).bg(c(tok(idx::BACKGROUND_MOD_STRONG))).flex().items_center().justify_center()
-                    .text_size(z(8.)).font_weight(FontWeight::BOLD).text_color(c(tok(idx::TEXT_STRONG))).child(src.brand.clone()),
-            )
+            .child(logo)
             .child(
                 div()
                     .flex_1()
@@ -921,7 +925,8 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                     )
                     .child(desc_text(src.sub.clone().into())),
             )
-            .child(controls::button_sm(eid(format!("billing-edit-{i}")), tr("common.edit"), BtnKind::Secondary))
+            .child(controls::button_sm(eid(format!("billing-edit-{i}")), tr("common.edit"), BtnKind::Secondary)
+                .on_click(|_, _, cx| cx.open_url(super::subscriptions::DISCORD_BILLING)))
             .into_any_element()
     });
     let country = data.country.as_deref().map(|cc| {
@@ -950,11 +955,13 @@ fn billing_sources(_: &PhoenixApp, _: &mut Cx) -> AnyElement {
                     ),
                 )
                 .child(div().ml(z(14.)).flex_1().text_size(z(14.)).line_height(z(18.)).font_weight(FontWeight::MEDIUM).text_color(c(tok(idx::TEXT_DEFAULT))).child(tr("sp.bl.gift")))
-                .child(controls::button_sm(eid("billing-redeem"), tr("sp.bl.redeem"), BtnKind::Secondary)),
+                .child(controls::button_sm(eid("billing-redeem"), tr("sp.bl.redeem"), BtnKind::Secondary)
+                    .on_click(|_, _, cx| cx.open_url(super::subscriptions::DISCORD_BILLING))),
         )
         .child(line().mt(z(16.)))
         .child(
-            div().mt(z(20.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)),
+            div().mt(z(20.)).flex().justify_end().child(controls::button(eid("billing-add"), tr("sp.bl.add"), BtnKind::Primary)
+                .on_click(|_, _, cx| cx.open_url(super::subscriptions::DISCORD_BILLING))),
         )
         .into_any_element()
 }
