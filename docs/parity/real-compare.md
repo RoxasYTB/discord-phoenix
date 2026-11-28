@@ -912,6 +912,21 @@ Popouts: server menu 11.7 (header chevron turns up while open instead of a cross
 account popout 17.6 (voice card server name now one line with an ellipsis; the « … » menu of the voice section is still
 missing), poll creation modal: overall 5.2 (its box was not detected by the scorer).
 
+### New views (28/11 12:40, client painting, int-bin 52d8bd63)
+
+| View (1280×700) | Region | Score | Notes |
+|---|---|---|---|
+| Full profile (modal) | modal | 6.8 (overall 5.5) | — |
+| Add a server (modal) | overall | 5.7 | — |
+| Inbox, Mentions | popout | 8.1 (overall 6.4) | the inbox tab was put back on « Messages non lus » after the pass |
+| Friends, Online | overall | 8.2 | online count and presences moved between capture and render (66 vs 63) |
+| Friends, All | overall | 8.9 | same |
+| Friends, Pending | overall | 7.1 | — |
+
+Checked after the merge of 863eaa6b: the GIF picker body is black like `container_rfDq2B` (sampled pixels identical), the
+emoji rail starts with the Nitro item and its separator and no longer lists the Project Phoenix server; both popout
+scores stay at 12 % because the animated emojis and the « popular » order differ in time.
+
 ### Sources found for the store gaps (28/11 afternoon, not implemented yet)
 
 - Shop sale (« Vendredi en mode sombre », -25 %): not in `GET /collectibles-shop`, `/collectibles-categories/v2`,
