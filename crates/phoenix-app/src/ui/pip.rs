@@ -88,8 +88,16 @@ pub fn has_watched_stream(app: &PhoenixApp, ch_id: Id) -> bool {
     })
 }
 
+pub fn has_active_video(app: &PhoenixApp, ch_id: Id) -> bool {
+    app.channels.get(&ch_id).is_some_and(|ch| {
+        ch.voice_users.iter().any(|&u| {
+            crate::ui::voice_panel::flags(u).video && !crate::voice::prefs::prefs().lock().user(u).video_disabled
+        })
+    })
+}
+
 pub fn active(app: &PhoenixApp) -> bool {
-    app.voice_channel.is_some_and(|ch| has_watched_stream(app, ch))
+    app.voice_channel.is_some_and(|ch| has_watched_stream(app, ch) || has_active_video(app, ch))
         && !crate::ui::call_view::active(app)
         && !crate::ui::call_popout::is_open()
 }
@@ -156,6 +164,7 @@ fn pip_btn(id: &'static str, icon: Icon, danger: bool, active_state: bool, tip: 
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     crate::ui::call_view::release_video_images(window, cx);
     if !active(app) {
+        DRAG.with(|d| d.set(DragState::default()));
         return None;
     }
     let ch_id = app.voice_channel?;

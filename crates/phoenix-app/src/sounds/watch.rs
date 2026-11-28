@@ -17,6 +17,7 @@ pub struct Snap {
     pub stage: bool,
     pub afk: bool,
     pub connected: bool,
+    pub reconnecting: bool,
     pub video: bool,
     pub others: Vec<Id>,
     pub streamers: Vec<Id>,
@@ -45,8 +46,12 @@ fn voice_cues(a: &Snap, b: &Snap, moved: bool) -> Vec<&'static str> {
         out.push(if b.video { "camera_on" } else { "camera_off" });
     }
     if !a.connected && b.connected && !b.stage {
-        out.push("user_join");
-    } else if a.connected && !b.connected && !a.stage {
+        if a.reconnecting && a.channel == b.channel {
+            out.push("reconnect");
+        } else {
+            out.push("user_join");
+        }
+    } else if a.connected && !b.connected && !b.reconnecting && !a.stage {
         out.push("disconnect");
     }
     if moved && a.channel.is_some() && b.channel.is_some() && a.channel != b.channel {
@@ -110,6 +115,7 @@ pub fn snapshot(app: &PhoenixApp) -> Snap {
         stage: ch.is_some_and(|c| c.kind == ChannelKind::Stage),
         afk: ch.and_then(|c| c.guild).and_then(|g| app.guilds.iter().find(|x| x.id == g)).is_some_and(|g| g.afk_channel == channel),
         connected: channel.is_some() && app.voice.status == VoiceStatus::Connected,
+        reconnecting: channel.is_some() && app.voice.status == VoiceStatus::Reconnecting,
         video: channel.is_some() && crate::ui::voice_panel::flags(app.me.id).video,
         others,
         streamers,
@@ -164,7 +170,8 @@ pub fn watch(app: &PhoenixApp) {
             }
         }
     }
-    set_loop(&RING_IN, b.incoming && !is_disabled("call_ringing"), || play_loop(ringtone(), VOLUME));
+    let dnd = app.presence == Presence::Dnd;
+    set_loop(&RING_IN, b.incoming && !dnd && !quiet && !is_disabled("call_ringing"), || play_loop(ringtone(), VOLUME));
     set_loop(&RING_OUT, b.outgoing && !is_disabled("call_calling"), || play_loop("call_calling", VOLUME));
 }
 
@@ -223,5 +230,8 @@ mod tests {
         let mine = Snap { streamers: vec![Id(9)], ..a.clone() };
         assert_eq!(cues(&mine, &a, false), ["stream_ended"]);
         assert_eq!(cues(&a, &Snap { video: true, ..a.clone() }, false), ["camera_on"]);
+        let reconn = Snap { connected: false, reconnecting: true, ..a.clone() };
+        assert!(cues(&a, &reconn, false).is_empty(), "entering reconnect does not play disconnect");
+        assert_eq!(cues(&reconn, &a, false), ["reconnect"]);
     }
 }
