@@ -20,6 +20,7 @@ pub struct Probe {
     pub height: u32,
     pub fps: f64,
     pub audio: bool,
+    pub alpha_decoder: Option<&'static str>,
 }
 
 fn parse_clock(s: &str) -> Option<f64> {
@@ -42,12 +43,15 @@ pub fn parse_probe(stderr: &str) -> Option<Probe> {
     let mut p = Probe::default();
     let mut video = false;
     let mut rotated = false;
+    let mut codec = None;
+    let mut alpha = false;
     for line in stderr.lines() {
         let l = line.trim();
         if let Some(rest) = l.strip_prefix("Duration:") {
             p.duration = parse_clock(rest.split(',').next().unwrap_or("")).filter(|d| *d > 0.);
         } else if l.starts_with("Stream #") && l.contains(": Video:") && !video {
             video = true;
+            codec = l.split(": Video: ").nth(1).and_then(|r| r.split([' ', ',']).next()).map(str::to_owned);
             if let Some((w, h)) = dims(l) {
                 p.width = w;
                 p.height = h;
@@ -60,7 +64,16 @@ pub fn parse_probe(stderr: &str) -> Option<Probe> {
             p.audio = true;
         } else if l.contains("rotation of") && (l.contains("90.00") || l.contains("270.00")) {
             rotated = true;
+        } else if l.starts_with("alpha_mode") && l.ends_with(": 1") {
+            alpha = true;
         }
+    }
+    if alpha {
+        p.alpha_decoder = match codec.as_deref() {
+            Some("vp9") => Some("libvpx-vp9"),
+            Some("vp8") => Some("libvpx"),
+            _ => None,
+        };
     }
     if rotated {
         std::mem::swap(&mut p.width, &mut p.height);
@@ -73,6 +86,19 @@ pub fn probe(path: &Path) -> Option<Probe> {
     parse_probe(&String::from_utf8_lossy(&out.stderr))
 }
 
+fn alpha_decoder(path: &Path) -> Option<&'static str> {
+    static SEEN: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, Option<&'static str>>>> = std::sync::OnceLock::new();
+    let seen = SEEN.get_or_init(Default::default);
+    if let Some(d) = seen.lock().ok()?.get(path) {
+        return *d;
+    }
+    let d = probe(path).and_then(|p| p.alpha_decoder);
+    if let Ok(mut m) = seen.lock() {
+        m.insert(path.to_path_buf(), d);
+    }
+    d
+}
+
 pub fn available() -> bool {
     static OK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *OK.get_or_init(ffmpeg::available)
@@ -82,8 +108,11 @@ pub fn output_fps(probe_fps: f64) -> f64 {
     if probe_fps.is_finite() && probe_fps > 0. { probe_fps.min(MAX_FPS) } else { MAX_FPS }
 }
 
-pub fn video_args(path: &Path, start: f64, rate: f64, fps: f64, max: (u32, u32), looped: bool) -> Vec<String> {
+pub fn video_args(path: &Path, start: f64, rate: f64, fps: f64, max: (u32, u32), looped: bool, decoder: Option<&str>) -> Vec<String> {
     let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin"].map(String::from).to_vec();
+    if let Some(d) = decoder {
+        a.extend(["-c:v".into(), d.to_owned()]);
+    }
     if looped {
         a.extend(["-stream_loop".into(), "-1".into()]);
     }
@@ -341,7 +370,7 @@ pub struct SessionSpec<'a> {
 impl Session {
     pub fn spawn(spec: &SessionSpec) -> Option<Self> {
         let mut child = ffmpeg::ffmpeg_command()
-            .args(video_args(spec.path, spec.start, spec.rate, spec.fps, spec.max, spec.looped))
+            .args(video_args(spec.path, spec.start, spec.rate, spec.fps, spec.max, spec.looped, alpha_decoder(spec.path)))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -506,13 +535,13 @@ mod tests {
     #[test]
     fn decoder_arguments() {
         let p = Path::new("/tmp/x.mp4");
-        let v = video_args(p, 12.5, 1.5, 30., (825, 525), false);
+        let v = video_args(p, 12.5, 1.5, 30., (825, 525), false, None);
         let pos = |a: &[String], k: &str| a.iter().position(|x| x == k);
         assert!(pos(&v, "-ss").unwrap() < pos(&v, "-i").unwrap());
         assert_eq!(v[pos(&v, "-ss").unwrap() + 1], "12.500");
         assert!(v.iter().any(|x| x.starts_with("setpts=PTS/1.5000,fps=30.000,scale=w='min(iw,825)'")));
         assert!(pos(&v, "-stream_loop").is_none());
-        let l = video_args(p, 0., 1., 15., (100, 100), true);
+        let l = video_args(p, 0., 1., 15., (100, 100), true, None);
         assert!(pos(&l, "-stream_loop").unwrap() < pos(&l, "-i").unwrap());
         assert!(pos(&l, "-ss").is_none());
         let a = audio_args(p, 3., 2., (48_000, 2));
@@ -522,6 +551,10 @@ mod tests {
         assert_eq!(output_fps(59.94), 30.);
         assert_eq!(output_fps(0.), 30.);
         assert_eq!(output_fps(24.), 24.);
+        let w = video_args(p, 0., 1., 30., (100, 100), true, Some("libvpx-vp9"));
+        assert!(pos(&w, "-c:v").unwrap() < pos(&w, "-i").unwrap());
+        let probe = parse_probe("  Duration: 00:00:04.00, start: 0.000000\n  Stream #0:0: Video: vp9 (Profile 0), yuv420p(tv), 360x360, 30 fps\n      alpha_mode      : 1\n").unwrap();
+        assert_eq!(probe.alpha_decoder, Some("libvpx-vp9"));
     }
 
     #[test]

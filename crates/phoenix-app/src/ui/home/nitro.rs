@@ -20,6 +20,7 @@ pub const CARD_H: f32 = 380.;
 pub const MAX_CARDS: usize = 6;
 const SCROLL_GUTTER: f32 = 16.;
 const HERO_GRADIENT_H: f32 = 984.;
+const PAGE_GRADIENT: &str = "https://discord.com/assets/3ebfa123a3805f56.svg";
 
 thread_local! {
     static PAGE_W: std::cell::Cell<f32> = const { std::cell::Cell::new(0.) };
@@ -413,7 +414,8 @@ pub fn render(app: &mut PhoenixApp, _window: &mut Window, cx: &mut Context<Phoen
                             160.,
                             gpui::linear_color_stop(c(tok(idx::BACKGROUND_BRAND)).opacity(0.55), 0.),
                             gpui::linear_color_stop(gpui::black(), 1.),
-                        )),
+                        ))
+                        .child(img(PAGE_GRADIENT).size_full().object_fit(gpui::ObjectFit::Fill)),
                 )
                 .child(
                     gpui::canvas(|b, _, _| PAGE_W.with(|w| w.set(f32::from(b.size.width) / crate::theme::zoom() - SCROLL_GUTTER)), |_, _, _, _| {})
