@@ -26,7 +26,7 @@
 > account being limited or terminated. You use this software at your own risk.
 
 <p align="center">
-  <img src="docs/screenshots/2026-11-25b/chat-text-channel.png" alt="Discord Phoenix showing a text channel" width="900">
+  <img src="https://raw.githubusercontent.com/RoxasYTB/project-phoenix/5e5783e58105d01f83ec9ff6db2c68bc6d8f5c47/pr-48/narrow-after.png" alt="Discord Phoenix demo showing a text channel and member list in a narrow window" width="900">
 </p>
 
 ## Why
@@ -129,186 +129,22 @@ tables in [`docs/parity/`](docs/parity) track about 1,950 checked items.
 
 ## Screenshots
 
-Rendered by Discord Phoenix itself on a real account, offscreen at 1.5x scale, in the Aperture Sciences server.
-Some third-party names are blurred. Captured on 2026-11-25 and 26 from main at `cf83f562` to `594490f1`.
+> [!WARNING]
+> <strong><ins>WORK IN PROGRESS. THESE SCREENSHOTS SHOW A DEVELOPMENT PREVIEW.</ins></strong>
 
-### Chat
+Discord Phoenix rendered these views with demo data. The images were published on 2026-11-28.
+The repository version is `0.1.0-beta.3` as of 2026-11-28 (`c937033e`).
+The media commits record the publication date. The exact capture date and build revision were not recorded.
 
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/chat-text-channel.png" alt="Text channel with replies, attachments, server tags and the member list"><br><sub>Text channel with replies, attachments, server tags and the member list</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/chat-embeds-member-list.png" alt="Link embeds, member list with role groups and activities"><br><sub>Link embeds, member list with role groups and activities</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/announcement-channel.png" alt="Announcement channel with the Follow button and reactions"><br><sub>Announcement channel with the Follow button and reactions</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/pinned-messages.png" alt="Pinned messages popout"><br><sub>Pinned messages popout</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/threads-popout.png" alt="Threads popout"><br><sub>Threads popout</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/search.png" alt="Search results with highlights, filters and pages"><br><sub>Search results with highlights, filters and pages</sub></td>
-</tr>
-</table>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/RoxasYTB/project-phoenix/5e5783e58105d01f83ec9ff6db2c68bc6d8f5c47/pr-48/narrow-after.png" alt="Demo text channel with replies and a member list in a narrow window" width="900"><br>
+  <sub>Text channel and member list in a narrow window</sub>
+</p>
 
-### Forums
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/forum-list.png" alt="Forum channel with pinned and older posts"><br><sub>Forum channel with pinned and older posts</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/forum-tags.png" alt="Forum tags and post previews"><br><sub>Forum tags and post previews</sub></td>
-</tr>
-</table>
-
-### Composer and pickers
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/emoji-picker.png" alt="Emoji picker with the server's popular emojis"><br><sub>Emoji picker with the server's popular emojis</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/gif-picker.png" alt="GIF picker"><br><sub>GIF picker</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/sticker-picker.png" alt="Sticker picker"><br><sub>Sticker picker</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/create-poll.png" alt="Create a poll"><br><sub>Create a poll</sub></td>
-</tr>
-</table>
-
-### Menus
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/message-menu.png" alt="Message context menu"><br><sub>Message context menu</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/channel-menu.png" alt="Channel context menu"><br><sub>Channel context menu</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-menu.png" alt="Server context menu"><br><sub>Server context menu</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-dropdown.png" alt="Server dropdown"><br><sub>Server dropdown</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/user-panel-status.png" alt="User panel and status popout"><br><sub>User panel and status popout</sub></td>
-</tr>
-</table>
-
-### Voice
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/call-voice-channel.png" alt="Call view in a voice channel"><br><sub>Call view in a voice channel</sub></td>
-</tr>
-</table>
-
-### Inbox and moderation
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/inbox-mentions.png" alt="Inbox, Mentions tab"><br><sub>Inbox, Mentions tab</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/inbox-unreads.png" alt="Inbox, Unreads tab"><br><sub>Inbox, Unreads tab</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/mod-view.png" alt="Mod View"><br><sub>Mod View</sub></td>
-</tr>
-</table>
-
-### Dialogs
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/follow-announcements.png" alt="Follow an announcement channel"><br><sub>Follow an announcement channel</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/create-event.png" alt="Create event wizard"><br><sub>Create event wizard</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/add-server.png" alt="Add a server, with templates"><br><sub>Add a server, with templates</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/invite-dialog.png" alt="Invite dialog"><br><sub>Invite dialog</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-notifications.png" alt="Server notification settings"><br><sub>Server notification settings</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-boost.png" alt="Server Boost layer"><br><sub>Server Boost layer</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-guide.png" alt="Server Guide"><br><sub>Server Guide</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/discover.png" alt="Discover"><br><sub>Discover</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/discover-apps.png" alt="Discover, Apps"><br><sub>Discover, Apps</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/quests.png" alt="Quests"><br><sub>Quests</sub></td>
-</tr>
-</table>
-
-### User settings
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-appearance.png" alt="Appearance"><br><sub>Appearance</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-voicevideo.png" alt="Voice & Video"><br><sub>Voice & Video</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-notifications.png" alt="Notifications"><br><sub>Notifications</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-accessibility.png" alt="Accessibility"><br><sub>Accessibility</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-language.png" alt="Language & Time"><br><sub>Language & Time</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-advanced.png" alt="Developer"><br><sub>Developer</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-activityprivacy.png" alt="Activity Privacy"><br><sub>Activity Privacy</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-registeredgames.png" alt="Registered Games"><br><sub>Registered Games</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-privacysafety.png" alt="Content filters"><br><sub>Content filters</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-dataprivacy.png" alt="Data & Privacy"><br><sub>Data & Privacy</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-nitro.png" alt="Nitro"><br><sub>Nitro</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-serverboost.png" alt="Server Boost"><br><sub>Server Boost</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/settings-giftinventory.png" alt="Gift Inventory"><br><sub>Gift Inventory</sub></td>
-</tr>
-</table>
-
-### Server and channel settings
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-profile.png" alt="Server profile"><br><sub>Server profile</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-tag.png" alt="Server tag"><br><sub>Server tag</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-engagement.png" alt="Engagement"><br><sub>Engagement</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-boost-perks.png" alt="Boost perks"><br><sub>Boost perks</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-emoji.png" alt="Emoji"><br><sub>Emoji</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-stickers.png" alt="Stickers"><br><sub>Stickers</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-soundboard.png" alt="Soundboard"><br><sub>Soundboard</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-roles.png" alt="Roles"><br><sub>Roles</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-integrations.png" alt="Integrations"><br><sub>Integrations</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/server-settings-access.png" alt="Access"><br><sub>Access</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/channel-settings.png" alt="Channel settings"><br><sub>Channel settings</sub></td>
-</tr>
-</table>
-
-### Themes and zoom
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/theme-light.png" alt="Light theme"><br><sub>Light theme</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/theme-ash.png" alt="Ash theme"><br><sub>Ash theme</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/theme-onyx.png" alt="Onyx theme"><br><sub>Onyx theme</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/zoom-125.png" alt="125 % zoom"><br><sub>125 % zoom</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/screenshots/2026-11-25b/narrow-window.png" alt="Narrow window (900 px)"><br><sub>Narrow window (900 px)</sub></td>
-<td></td>
-</tr>
-</table>
-
+<p align="center">
+  <img src="https://raw.githubusercontent.com/RoxasYTB/project-phoenix/5e5783e58105d01f83ec9ff6db2c68bc6d8f5c47/pr-46/games-after.png" alt="Registered Games settings in the Phoenix demo" width="900"><br>
+  <sub>Registered Games settings</sub>
+</p>
 
 ## Benchmarks
 
