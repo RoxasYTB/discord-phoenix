@@ -325,6 +325,21 @@ pub fn format_price(amount: i64, exponent: u32, currency: &str) -> String {
     }
 }
 
+fn home_skus(h: &Home) -> Vec<u64> {
+    let mut out: Vec<u64> = Vec::new();
+    for b in &h.blocks {
+        if let Block::Hero { skus, .. } | Block::Shelf { skus, .. } | Block::Picks(skus) = b {
+            for s in skus {
+                if !out.contains(s) {
+                    out.push(*s);
+                }
+            }
+        }
+    }
+    out.truncate(PRICING_CHUNK * 4);
+    out
+}
+
 pub fn discount(base: i64, mine: i64) -> Option<u32> {
     (base > 0 && mine < base).then(|| ((base - mine) * 100 + base / 2) as u32 / base as u32).filter(|p| *p > 0)
 }
@@ -368,15 +383,13 @@ fn ensure_loaded(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) {
         let v = fut.await.unwrap_or(Value::Null);
         let h = home.await.unwrap_or(Value::Null);
         let built = cx.background_executor().spawn(async move { (parse(&v), parse_home(&h, &v), crate::ui::shop_collection::parse_categories(&v)) }).await;
-        let mut skus: Vec<u64> = built.0.iter().map(|k| k.sku).chain(built.1.cards.keys().copied()).collect();
-        skus.sort_unstable();
-        skus.dedup();
+        let skus = home_skus(&built.1);
         CARDS.with(|c| *c.borrow_mut() = Some(built.0));
         HOME.with(|c| *c.borrow_mut() = Some(std::rc::Rc::new(built.1)));
-        let Ok(pricing) = this.update(cx, |a, _| skus.chunks(PRICING_CHUNK).map(|c| a.backend.storefront_pricing(c.to_vec())).collect::<Vec<_>>()) else { return };
         CATEGORIES.with(|c| *c.borrow_mut() = std::rc::Rc::new(built.2));
         let _ = this.update(cx, |_, cx| cx.notify());
-        for fut in pricing {
+        for chunk in skus.chunks(PRICING_CHUNK) {
+            let Ok(fut) = this.update(cx, |a, _| a.backend.storefront_pricing(chunk.to_vec())) else { return };
             let Ok(v) = fut.await else { continue };
             let sales = phoenix_api::rest::collectibles::sale_prices(&v);
             if sales.is_empty() {
