@@ -6449,7 +6449,7 @@ dependencies = [
 
 [[package]]
 name = "phoenix-api"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "base64 0.23.1",
  "bitflags 2.13.2",
@@ -6475,7 +6475,7 @@ dependencies = [
 
 [[package]]
 name = "phoenix-app"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
