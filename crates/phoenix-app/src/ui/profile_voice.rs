@@ -197,7 +197,7 @@ pub fn card(app: &PhoenixApp, user: Id, col: Colors, entity: Entity<PhoenixApp>)
                 .tooltip(crate::ui::tooltip::tip(crate::t!("profile.more")))
                 .on_click(move |ev, w, cx| {
                     cx.stop_propagation();
-                    crate::ui::nav_menus::open(crate::ui::nav_menus::Target::Channel(cid), ev.position(), w);
+                    crate::ui::voice_row::open_activity_menu(ev.position(), user, w);
                 })
                 .child(svg().path(crate::icons::path("more-horizontal")).size(z(16.)).text_color(c(tok(idx::INTERACTIVE_TEXT_DEFAULT)))),
         );

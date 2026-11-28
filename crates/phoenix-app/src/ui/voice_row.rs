@@ -455,6 +455,11 @@ thread_local! {
     static STREAM_MENU: std::cell::Cell<Option<(gpui::Point<gpui::Pixels>, Id)>> = const { std::cell::Cell::new(None) };
 }
 
+pub fn open_activity_menu(pos: gpui::Point<gpui::Pixels>, user: Id, window: &mut gpui::Window) {
+    STREAM_MENU.with(|m| m.set(Some((pos, user))));
+    window.refresh();
+}
+
 pub fn stream_menu(entity: gpui::Entity<crate::app::PhoenixApp>) -> Option<AnyElement> {
     let (pos, user) = STREAM_MENU.with(|m| m.get())?;
     let close: crate::ui::context_menu::Dismiss = std::rc::Rc::new(|w: &mut gpui::Window, _: &mut gpui::App| {
