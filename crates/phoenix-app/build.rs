@@ -67,6 +67,9 @@ fn windows_icon() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if target_os == "windows" && target_env == "msvc" {
+        if std::env::var("PROFILE").as_deref() == Ok("debug") {
+            println!("cargo:rustc-link-arg-bin=discord-phoenix=/STACK:33554432");
+        }
         println!("cargo:rustc-link-arg-bin=discord-phoenix={}", res.display());
     }
 }
