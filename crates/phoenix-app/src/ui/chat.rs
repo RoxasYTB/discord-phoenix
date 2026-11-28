@@ -71,6 +71,8 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
     let search_results = crate::ui::search::results_shown(cx);
     app.backend.set_members_shown(app.show_members && app.chat.thread.is_none() && !search_results);
     let mod_view = crate::ui::mod_view::render(app, window, cx);
+    let thread_sidebar = panels::thread_panel(app, cx).or_else(|| crate::ui::thread_create::panel(app, cx));
+    let has_split = mod_view.is_some() || thread_sidebar.is_some();
     let a11y_channel = || app.selected_channel.and_then(|c| app.channels.get(&c)).map(|c| c.name.clone()).unwrap_or_default();
     let main = crate::ui::a11y::named(div().id("chat-main"), gpui::Role::Main, || crate::t!("a11y.channel_main", name = a11y_channel()))
         .flex_1()
@@ -79,7 +81,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .relative()
         .flex()
         .flex_col()
-        .when(mod_view.is_some(), |d| d.border_r_1().border_color(c(tok(idx::BORDER_SUBTLE))).rounded_tr(z(12.)).overflow_hidden())
+        .when(has_split, |d| d.border_r_1().border_color(c(tok(idx::BORDER_SUBTLE))).rounded_tr(z(12.)).overflow_hidden())
         .bg(crate::theme::client_theme::surface(crate::theme::client_theme::Level::Chat, Some(crate::theme::client_theme::Level::AppFrame), Palette::BG_PRIMARY))
         .map(|d| {
             if crate::ui::call_view::private_split(app) {
@@ -137,14 +139,22 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
                 .when(show_members && !search_results, |d| d.child(members::render(app, cx)))
                 .when(!search_results, |d| {
                     d.children(crate::ui::dm_profile_panel::render(app, cx)).children(crate::ui::group_dm::members_panel(app, cx))
-                })
-                .children(panels::thread_panel(app, cx))
-                .children(crate::ui::thread_create::panel(app, cx)),
+                }),
         )
         .children(panels::pins_popout(app, cx));
-    match mod_view {
-        Some(mv) => div().flex_1().min_w_0().h_full().flex().flex_row().child(main).child(mv).into_any_element(),
-        None => main.into_any_element(),
+    if has_split {
+        div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_row()
+            .child(main)
+            .when_some(thread_sidebar, |d, tp| d.child(div().w(z(8.)).flex_none().h_full()).child(tp))
+            .children(mod_view)
+            .into_any_element()
+    } else {
+        main.into_any_element()
     }
 }
 

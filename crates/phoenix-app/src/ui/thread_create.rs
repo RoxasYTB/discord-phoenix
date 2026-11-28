@@ -197,7 +197,7 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
     });
     let header = div()
         .flex_none()
-        .h(z(49.))
+        .h(z(crate::theme::m::HEADER_H))
         .pt(z(8.))
         .pr(z(8.))
         .pb(z(8.))
@@ -334,7 +334,9 @@ pub fn panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyElemen
             .h_full()
             .border_l_1()
             .border_t_1()
+            .border_r_1()
             .rounded_tl(z(12.))
+            .overflow_hidden()
             .border_color(t(idx::BORDER_SUBTLE))
             .bg(t(idx::BACKGROUND_BASE_LOWER))
             .flex()
