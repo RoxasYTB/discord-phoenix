@@ -656,6 +656,13 @@ impl Backend for ReadOnly {
     fn sticker_packs(&self) -> BoxFuture<Vec<phoenix_app::ui::pickers::types::StickerPackData>> {
         self.0.sticker_packs()
     }
+    fn send_sticker(&self, ch: Id, sticker: Id) -> BoxFuture<()> {
+        if !sandbox_writes() || !in_sandbox(ch) {
+            return denied();
+        }
+        eprintln!("write: send_sticker in {ch:?} ({sticker:?})");
+        self.0.send_sticker(ch, sticker)
+    }
     fn gif_trending(&self) -> BoxFuture<phoenix_app::ui::pickers::types::GifHome> {
         self.0.gif_trending()
     }
