@@ -1712,7 +1712,7 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
         .child(
             crate::ui::a11y::named(div().id("me"), gpui::Role::Button, || crate::t!("a11y.manage_profile"))
                 .flex_1()
-                .min_w(z(112.))
+                .min_w_0()
                 .ml(z(-6.))
                 .py(z(5.))
                 .px(z(6.))
