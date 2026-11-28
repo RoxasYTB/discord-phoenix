@@ -552,8 +552,8 @@ pub(crate) fn avatar_block(i: &Info, size: f32, ring: f32, ring_color: u32) -> D
             i.presence,
             c(ring_color),
             |d| d,
-            i.prof.and_then(|p| p.decoration.clone()).map(|deco| crate::ui::avatar_deco::src(&deco, true)),
-            !crate::ui::settings::effects::reduced_motion(),
+            i.prof.and_then(|p| p.decoration.clone()).map(|deco| crate::ui::avatar_deco::src(&deco, crate::ui::avatar_deco::ambient())),
+            crate::ui::avatar_deco::ambient(),
         ))
 }
 
@@ -840,6 +840,7 @@ fn roles_block(app: &PhoenixApp, guild: Option<Id>, uid: Id, roles: Vec<crate::m
     });
     div().mt(z(2.)).flex().flex_wrap().gap(z(4.)).children(roles.into_iter().take(shown).enumerate().map(|(i, r)| {
         let cap = if !expanded && shown < total && i >= row2 { second_row } else { ROLE_ROW_W };
+        let clipped = widths.get(i).is_some_and(|w| *w > cap);
         let remove = guild.filter(|g| role_removable(app, *g, uid, &r)).map(|g| {
             let e = entity.clone();
             let role = r.clone();
@@ -891,6 +892,10 @@ fn roles_block(app: &PhoenixApp, guild: Option<Id>, uid: Id, roles: Vec<crate::m
                 d.child(div().flex_none().ml(z(4.)).child(img(u).size(z(12.)).object_fit(gpui::ObjectFit::Contain)))
             })
             .children(remove)
+            .when(clipped, |d| {
+                use crate::ui::tooltip::Tipped as _;
+                d.relative().tip(r.name.clone())
+            })
     })).children(toggle).children(add_btn)
 }
 

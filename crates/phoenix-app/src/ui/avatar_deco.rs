@@ -39,7 +39,23 @@ mod tests {
 }
 
 thread_local! {
-    static HOVER: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+    static HOVER: std::cell::Cell<Option<(u64, std::time::Instant)>> = const { std::cell::Cell::new(None) };
+}
+
+pub const REDUCED_MOTION_HOVER_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
+
+pub fn may_animate(focused: bool, reduced: bool, hovered: Option<std::time::Duration>, only_hover: bool) -> bool {
+    let wanted = focused && (hovered.is_some() || (!reduced && !only_hover));
+    wanted && (!reduced || hovered.is_some_and(|held| held >= REDUCED_MOTION_HOVER_DELAY))
+}
+
+pub fn ambient() -> bool {
+    may_animate(crate::media::emoji::window_focused(), crate::ui::settings::effects::reduced_motion(), None, false)
+}
+
+pub fn plays(key: u64) -> bool {
+    let held = HOVER.with(|h| h.get()).filter(|(k, _)| *k == key).map(|(_, at)| at.elapsed());
+    may_animate(crate::media::emoji::window_focused(), crate::ui::settings::effects::reduced_motion(), held, true)
 }
 
 pub fn hover_key(kind: u8, id: u64) -> u64 {
@@ -47,14 +63,26 @@ pub fn hover_key(kind: u8, id: u64) -> u64 {
 }
 
 pub fn hovered(key: u64) -> bool {
-    HOVER.with(|h| h.get()) == Some(key)
+    HOVER.with(|h| h.get()).is_some_and(|(k, _)| k == key)
 }
 
-pub fn set_hover(key: u64, hovered: bool) -> bool {
-    HOVER.with(|h| {
-        let next = if hovered { Some(key) } else if h.get() == Some(key) { None } else { h.get() };
-        h.replace(next) != next
-    })
+pub fn set_hover(key: u64, hovered: bool, cx: &mut gpui::App) -> bool {
+    let changed = HOVER.with(|h| {
+        let cur = h.get();
+        let next = if hovered {
+            Some(cur.filter(|(k, _)| *k == key).unwrap_or_else(|| (key, std::time::Instant::now())))
+        } else if cur.is_some_and(|(k, _)| k == key) {
+            None
+        } else {
+            cur
+        };
+        h.set(next);
+        cur.map(|(k, _)| k) != next.map(|(k, _)| k)
+    });
+    if changed && hovered && crate::ui::settings::effects::reduced_motion() {
+        crate::ui::chat::burst_tip::refresh_after(cx, REDUCED_MOTION_HOVER_DELAY);
+    }
+    changed
 }
 
 pub fn url(d: &serde_json::Value) -> Option<SharedString> {
@@ -78,11 +106,27 @@ pub fn src(deco: &SharedString, play: bool) -> SharedString {
 }
 
 pub fn src_for(deco: &SharedString, key: u64) -> SharedString {
-    src(deco, hovered(key))
+    src(deco, plays(key))
 }
 
 #[cfg(test)]
 mod anim_tests {
+    use std::time::Duration;
+
+    #[test]
+    fn decorations_follow_the_client_animation_gate() {
+        let held = Some(Duration::from_millis(1200));
+        let quick = Some(Duration::from_millis(300));
+        assert!(super::may_animate(true, false, None, false));
+        assert!(!super::may_animate(false, false, None, false));
+        assert!(!super::may_animate(false, false, held, true));
+        assert!(!super::may_animate(true, false, None, true));
+        assert!(super::may_animate(true, false, quick, true));
+        assert!(!super::may_animate(true, true, None, false));
+        assert!(!super::may_animate(true, true, quick, true));
+        assert!(super::may_animate(true, true, held, true));
+    }
+
     #[test]
     fn animated_url_only_for_animated_assets() {
         let s = "https://cdn.discordapp.com/avatar-decoration-presets/a_12ab.png?size=96&passthrough=false";

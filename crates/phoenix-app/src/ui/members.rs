@@ -662,7 +662,7 @@ pub fn member_row_in(
         .on_hover({
             let e = e.clone();
             move |h, _, cx| {
-                if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(1, uid.0), *h) {
+                if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(1, uid.0), *h, cx) {
                     e.update(cx, |_, cx| cx.notify());
                 }
             }
@@ -739,7 +739,7 @@ pub fn member_row_in(
                                     .when(sel, |d| d.bg(c(tok(idx::INTERACTIVE_BACKGROUND_SELECTED))))
                             };
                             let deco = crate::ui::avatar_deco::source(user, Some(crate::ui::avatar_deco::hover_key(1, uid.0)));
-                            let play = sel || crate::ui::avatar_deco::hovered(crate::ui::avatar_deco::hover_key(1, uid.0));
+                            let play = sel || crate::ui::avatar_deco::plays(crate::ui::avatar_deco::hover_key(1, uid.0));
                             if mem.presence == crate::model::Presence::Online && crate::ui::mobile_status::is_mobile(uid.0) {
                                 mobile_avatar(user, cut, deco, play)
                             } else {

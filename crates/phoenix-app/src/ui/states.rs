@@ -317,3 +317,21 @@ pub fn forget(key: u64) {
         }
     });
 }
+
+pub fn hover_guard(key: u64) -> gpui::AnyElement {
+    use gpui::IntoElement;
+    gpui::canvas(
+        |bounds, window, _| window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal),
+        move |_, hitbox, window, _| {
+            if hovered(key) && !hitbox.is_hovered(window) {
+                forget(key);
+                window.refresh();
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+    .into_any_element()
+}

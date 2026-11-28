@@ -1416,7 +1416,7 @@ pub(crate) fn message(
         .on_hover({
             let e = entity.clone();
             move |h, _, cx| {
-                if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(2, id.0), *h) {
+                if crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(2, id.0), *h, cx) {
                     e.update(cx, |_, cx| cx.notify());
                 }
             }
@@ -1522,7 +1522,7 @@ pub(crate) fn message(
                         .active(|s| s.mt(z(1.)))
                         .on_click(message_ext::open_author(entity, msg))
             .on_mouse_down(gpui::MouseButton::Right, message_ext::open_author_menu(entity, msg))
-                        .child(crate::ui::avatar_hover(author, msg_avatar(), crate::ui::avatar_deco::hovered(crate::ui::avatar_deco::hover_key(2, id.0))))
+                        .child(crate::ui::avatar_hover(author, msg_avatar(), crate::ui::avatar_deco::plays(crate::ui::avatar_deco::hover_key(2, id.0))))
                         .when_some(author.and_then(|u| u.decoration.clone()), |d, deco| {
                             let s = msg_avatar() * 1.2;
                             let off = (s - msg_avatar()) / 2.;

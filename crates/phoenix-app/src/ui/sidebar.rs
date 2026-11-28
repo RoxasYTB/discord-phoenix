@@ -1409,7 +1409,7 @@ fn channel_row(app: &PhoenixApp, entity: &Entity<PhoenixApp>, id: Id) -> AnyElem
                         if *hovered {
                             e.update(cx, |a, cx| crate::history_ui::hover_channel(a, id, cx));
                         }
-                        if is_dm && crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(4, id.0), *hovered) {
+                        if is_dm && crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(4, id.0), *hovered, cx) {
                             e.update(cx, |_, cx| cx.notify());
                         }
                     }
@@ -1726,7 +1726,7 @@ fn user_panel(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoElemen
                 .hover(|s| s.bg(t(idx::BACKGROUND_MOD_NORMAL)))
                 .on_click(cx.listener(|a, _, w, cx| a.toggle_status_picker(w, cx)))
                 .on_hover(cx.listener(|_, h: &bool, _, cx| {
-                    let deco = crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(3, 0), *h);
+                    let deco = crate::ui::avatar_deco::set_hover(crate::ui::avatar_deco::hover_key(3, 0), *h, cx);
                     if crate::ui::states::set_hover(crate::ui::states::key("user-panel-roll"), *h) || deco {
                         cx.notify();
                     }

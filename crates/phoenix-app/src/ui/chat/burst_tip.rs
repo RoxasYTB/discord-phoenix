@@ -186,6 +186,10 @@ fn names(app: &PhoenixApp, msg: &Message, users: &ReactorNames) -> Vec<String> {
 }
 
 pub fn probe(pill: u64) -> AnyElement {
+    div().absolute().top_0().left_0().size_full().child(bounds_probe(pill)).child(crate::ui::states::hover_guard(pill)).into_any_element()
+}
+
+fn bounds_probe(pill: u64) -> AnyElement {
     canvas(
         move |b, _, _| {
             if crate::ui::states::hovered(pill) || SHOWN.get() == Some(pill) {
@@ -331,6 +335,7 @@ pub fn layer(app: &PhoenixApp, entity: &Entity<PhoenixApp>, msg: &Message, r: &R
             }
         })
         .child(inner)
+        .child(crate::ui::states::hover_guard(tip))
         .when(failed, |d| d.child(
             crate::ui::controls::button(("reaction-tip-retry", pill), crate::t!("common.retry"), crate::ui::controls::BtnKind::Secondary)
                 .mt(z(8.))
