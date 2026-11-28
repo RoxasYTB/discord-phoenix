@@ -166,6 +166,56 @@ impl Run<'_, '_> {
         }
     }
 
+    fn record(&mut self, cx: &mut HeadlessAppContext, name: &str, n: usize, fps: f64) -> anyhow::Result<()> {
+        let (sf, vp) = cx.update_window(self.env.win, |_, window, _| (window.scale_factor(), window.viewport_size()))?;
+        let (w, h) = ((f32::from(vp.width) * sf).round() as u32, (f32::from(vp.height) * sf).round() as u32);
+        let t0 = std::time::Instant::now();
+        let mut last = t0;
+        let mut frames = Vec::with_capacity(n);
+        for i in 0..n {
+            let due = t0 + Duration::from_secs_f64(i as f64 / fps);
+            loop {
+                let now = std::time::Instant::now();
+                cx.advance_clock(now - last);
+                last = now;
+                cx.simulate_frame_request(self.env.win);
+                settle(cx);
+                let now = std::time::Instant::now();
+                if now >= due {
+                    break;
+                }
+                std::thread::sleep((due - now).min(Duration::from_millis(8)));
+            }
+            let at = t0.elapsed();
+            cx.update_window(self.env.win, |_, window, _| window.refresh())?;
+            let mut img = cx.capture_screenshot(self.env.win)?;
+            let (cw, ch) = (w.min(img.width()), h.min(img.height()));
+            if (cw, ch) != (img.width(), img.height()) {
+                img = image::imageops::crop_imm(&img, 0, 0, cw, ch).to_image();
+            }
+            let file = format!("{}-{name}-{i:04}.png", self.env.stem);
+            img.save(&file)?;
+            frames.push((file, at));
+        }
+        let mut list = String::from("ffconcat version 1.0\n");
+        for (i, (file, at)) in frames.iter().enumerate() {
+            let next = frames.get(i + 1).map_or(Duration::from_secs_f64(1. / fps), |(_, t)| t.saturating_sub(*at));
+            let base = std::path::Path::new(file).file_name().and_then(|f| f.to_str()).unwrap_or(file);
+            list.push_str(&format!("file '{base}'\nduration {:.4}\n", next.as_secs_f64()));
+        }
+        if let Some((file, _)) = frames.last() {
+            let base = std::path::Path::new(file).file_name().and_then(|f| f.to_str()).unwrap_or(file);
+            list.push_str(&format!("file '{base}'\n"));
+        }
+        let concat = format!("{}-{name}.ffconcat", self.env.stem);
+        std::fs::write(&concat, list)?;
+        let span = frames.last().map_or(0., |(_, t)| t.as_secs_f64());
+        let real = if span > 0. { n.saturating_sub(1) as f64 / span } else { fps };
+        println!("QA record [{}] {name}: {n} frames, asked {fps} fps, got {real:.1} fps, {concat}", self.step);
+        self.report.shots.push(concat);
+        Ok(())
+    }
+
     fn send(&mut self, cx: &mut HeadlessAppContext, ev: PlatformInput) -> anyhow::Result<()> {
         cx.update_window(self.env.win, |_, window, cx| {
             window.dispatch_event(ev, cx);
@@ -564,6 +614,14 @@ impl Run<'_, '_> {
                 let path = format!("{}-{}.png", self.env.stem, args.first().copied().unwrap_or("shot"));
                 (self.env.shoot)(cx, &path)?;
                 self.report.shots.push(path);
+            }
+            "record" => {
+                let name = args.first().copied().unwrap_or("rec");
+                let spec = args.get(1).copied().unwrap_or("30@30");
+                let (n, fps) = spec.split_once('@').unwrap_or((spec, "30"));
+                let n: usize = n.parse().map_err(|_| anyhow::anyhow!("bad frame count {n}"))?;
+                let fps: f64 = fps.parse().ok().filter(|f: &f64| *f > 0.).ok_or_else(|| anyhow::anyhow!("bad fps {fps}"))?;
+                self.record(cx, name, n, fps)?;
             }
             "print" => {
                 for p in &args {

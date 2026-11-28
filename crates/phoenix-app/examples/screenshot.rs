@@ -6,6 +6,8 @@ use phoenix_app::{app::PhoenixApp, assets::Assets, mock::MockBackend};
 
 #[path = "common/frames_impl.rs"]
 mod frames_impl;
+#[path = "common/input_script.rs"]
+mod input_script;
 #[path = "common/name_frames.rs"]
 mod name_frames;
 
@@ -42,7 +44,8 @@ fn main() -> anyhow::Result<()> {
     });
     let view: Rc<RefCell<Option<Entity<PhoenixApp>>>> = Rc::default();
     let v2 = view.clone();
-    let win = cx.open_window(size(px(1280.), px(800.)), move |window, cx| {
+    let dim = |key: &str, default: f32| std::env::var(key).ok().and_then(|v| v.parse::<f32>().ok()).filter(|v| *v > 0.).unwrap_or(default);
+    let win = cx.open_window(size(px(dim("PHX_W", 1280.)), px(dim("PHX_H", 800.))), move |window, cx| {
         let v = cx.new(|cx| PhoenixApp::new(Arc::new(MockBackend::new()), window, cx));
         *v2.borrow_mut() = Some(v.clone());
         cx.new(|cx| Root::new(v, window, cx))
@@ -109,6 +112,29 @@ fn main() -> anyhow::Result<()> {
             })
         })?;
         pump(&mut cx, 20);
+    }
+    if let Ok(spec) = std::env::var("PHX_SCRIPT") {
+        let script = std::fs::read_to_string(&spec).unwrap_or(spec);
+        let shoot = |cx: &mut HeadlessAppContext, path: &str| -> anyhow::Result<()> {
+            let mut img = None;
+            for _ in 0..2 {
+                cx.update_window(win.into(), |_, window, _| window.refresh())?;
+                pump(cx, 2);
+                cx.advance_clock(Duration::from_secs(2));
+                img = Some(cx.capture_screenshot(win.into())?);
+            }
+            let img = img.expect("frame");
+            img.save(path)?;
+            println!("wrote {path} ({}x{})", img.width(), img.height());
+            Ok(())
+        };
+        let v = view.borrow().clone().expect("view");
+        let env = input_script::Env { win: win.into(), app: v, stem: out.trim_end_matches(".png").to_string(), shoot: &shoot };
+        let report = input_script::run(&mut cx, &env, &script)?;
+        if std::env::var_os("PHX_SCRIPT_STRICT").is_some() {
+            anyhow::ensure!(report.ko.is_empty(), "{} QA checks failed", report.ko.len());
+        }
+        return Ok(());
     }
     if let Ok(spec) = std::env::var("PHX_GRADIENT_AT") {
         return name_frames::gradient_frames(&mut cx, win.into(), &spec, &out, scale.unwrap_or(1.));
