@@ -1312,7 +1312,7 @@ fn popout_card_inner(
     }));
 
     let (fx_sku, frame_sku) = i.prof.map(|p| (p.effect_sku, p.frame_sku)).unwrap_or_default();
-    let effect = fx_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| crate::ui::profile_fx::effect(&c, 300., cx));
+    let effect = fx_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| crate::ui::profile_fx::effect(app, &c, 300., cx));
     let frame = frame_sku.and_then(|s| crate::ui::profile_fx::product(app, s, cx)).and_then(|c| c.frame);
     let body = crate::ui::chat::scrollbar::host(crate::ui::chat::scrollbar::Bar::ThinFade).min_h_0().child(body).children(crate::ui::chat::scrollbar::bar_for("profile-popout-body", crate::ui::chat::scrollbar::Bar::ThinFade));
     let inner = div().flex().flex_col().gap(z(8.)).pb(z(4.)).min_h_0().child(header).child(body).children(footer);

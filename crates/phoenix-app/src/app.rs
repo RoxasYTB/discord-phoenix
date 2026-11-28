@@ -87,6 +87,7 @@ pub struct PhoenixApp {
     pub backend: Arc<dyn Backend>,
     pub screen: Screen,
     pub focus: FocusHandle,
+    pub(crate) profile_fx_clock: ui::profile_fx::PlaybackClock,
 
     pub login_email: Entity<InputState>,
     pub login_password: Entity<InputState>,
@@ -274,6 +275,10 @@ impl PhoenixApp {
         let composer = cx.new(|cx| gpui_component::input::TextareaState::new(window, cx).auto_grow(1, max_rows).submit_on_enter(true));
 
         let mut subs = Vec::new();
+        subs.push(cx.observe_window_activation(window, |this, window, cx| {
+            this.profile_fx_clock.set_active(window.is_window_active());
+            cx.notify();
+        }));
         subs.extend(ui::pickers::install(&composer, window, cx));
         subs.push(cx.subscribe_in(&composer, window, |this, _, ev: &InputEvent, window, cx| {
             match ev {
@@ -409,6 +414,7 @@ impl PhoenixApp {
         };
         Self {
             backend,
+            profile_fx_clock: ui::profile_fx::PlaybackClock::new(window.is_window_active()),
             screen: Screen::Login,
             focus: cx.focus_handle(),
             login_email,

@@ -964,7 +964,7 @@ fn card(app: &PhoenixApp, e: &EditorState, bio_focused: bool, cx: &mut Cx) -> Di
                 }),
             ))
         });
-    let effect = applied(app, e, super::collectibles::Kind::Effect, cx).and_then(|c| crate::ui::profile_fx::effect(&c, 400., cx));
+    let effect = applied(app, e, super::collectibles::Kind::Effect, cx).and_then(|c| crate::ui::profile_fx::effect(app, &c, 400., cx));
     let frame = applied(app, e, super::collectibles::Kind::Frame, cx).and_then(|c| c.frame);
     let inner = div()
         .w(z(400.))

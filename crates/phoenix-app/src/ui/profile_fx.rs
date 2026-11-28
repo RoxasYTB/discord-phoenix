@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
@@ -40,7 +41,6 @@ struct Store {
     anims: HashMap<SharedString, (Option<Arc<RenderImage>>, Instant)>,
     bytes: HashMap<SharedString, (Bytes, Instant)>,
     streams: HashMap<SharedString, (Stream, Instant)>,
-    clocks: HashMap<u64, (Instant, Instant)>,
     sizes: HashMap<SharedString, Option<(f32, f32)>>,
 }
 
@@ -313,27 +313,54 @@ fn art_size(url: &SharedString, cx: &mut Context<PhoenixApp>) -> Option<(f32, f3
     None
 }
 
-fn clock(sku: u64, cx: &mut App) -> Duration {
-    let now = Instant::now();
-    let s = cx.default_global::<Store>();
-    let e = s.clocks.entry(sku).or_insert((now, now));
-    if now.duration_since(e.1) > Duration::from_secs(1) {
-        e.0 = now;
+pub(crate) struct PlaybackClock {
+    active_since: Option<Instant>,
+    active_elapsed: Duration,
+    effects: RefCell<HashMap<u64, (Duration, Duration)>>,
+}
+
+impl PlaybackClock {
+    pub(crate) fn new(active: bool) -> Self {
+        Self {
+            active_since: active.then(Instant::now),
+            active_elapsed: Duration::ZERO,
+            effects: RefCell::default(),
+        }
     }
-    e.1 = now;
-    now.duration_since(e.0)
+
+    pub(crate) fn set_active(&mut self, active: bool) {
+        match (self.active_since, active) {
+            (Some(since), false) => {
+                self.active_elapsed += since.elapsed();
+                self.active_since = None;
+            }
+            (None, true) => self.active_since = Some(Instant::now()),
+            _ => {}
+        }
+    }
+
+    fn elapsed(&self, sku: u64) -> Duration {
+        let now = self.active_elapsed + self.active_since.map_or(Duration::ZERO, |since| since.elapsed());
+        let mut effects = self.effects.borrow_mut();
+        let (started, last_used) = effects.entry(sku).or_insert((now, now));
+        if now - *last_used > Duration::from_secs(1) {
+            *started = now;
+        }
+        *last_used = now;
+        now - *started
+    }
 }
 
 pub static DISABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-pub fn effect(c: &Collectible, w: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub fn effect(app: &PhoenixApp, c: &Collectible, w: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     if DISABLED.load(std::sync::atomic::Ordering::Relaxed) {
         return None;
     }
-    effect_adjusted(c, w, 0., cx)
+    effect_adjusted(app, c, w, 0., cx)
 }
 
-pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
+pub fn effect_adjusted(app: &PhoenixApp, c: &Collectible, w: f32, banner_adj: f32, cx: &mut Context<PhoenixApp>) -> Option<AnyElement> {
     let sku = c.sku;
     let z = crate::theme::z;
     let layer = |a: Arc<RenderImage>, id: Option<SharedString>, left: f32, top: f32| {
@@ -359,11 +386,11 @@ pub fn effect_adjusted(c: &Collectible, w: f32, banner_adj: f32, cx: &mut Contex
             layers.push(layer(a, None, 0., -banner_adj));
         }
     } else {
-        let el = clock(sku, cx).as_millis() as u64;
+        let el = app.profile_fx_clock.elapsed(sku).as_millis() as u64;
         let t = el.saturating_sub(INTRO_MS);
         let loop_end = c.effects.iter().map(|l| l.start + l.duration).max().unwrap_or(0);
         let stopped = !c.effects.iter().any(|l| l.looping) && t >= loop_end;
-        animating = !stopped;
+        animating = !stopped && app.profile_fx_clock.active_since.is_some();
         for (i, l) in c.effects.iter().enumerate() {
             if i == 0
                 && c.persistent
