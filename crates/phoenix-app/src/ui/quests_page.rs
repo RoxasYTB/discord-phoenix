@@ -305,6 +305,16 @@ pub struct HomeHero {
     pub image: Option<SharedString>,
     pub has_content: bool,
     pub tooltip: Option<(SharedString, SharedString)>,
+    pub sponsored: Option<Sponsored>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Sponsored {
+    pub title: SharedString,
+    pub subtitle: SharedString,
+    pub image: Option<SharedString>,
+    pub sponsor: Option<SharedString>,
+    pub cta: Option<(SharedString, SharedString)>,
 }
 
 pub fn home_hero_path() -> String {
@@ -336,7 +346,14 @@ pub fn parse_home_hero(v: &Value) -> Option<HomeHero> {
     let has_content = !e.is_null() && (image.is_some() || gradient(&e["linear_gradient"]) || gradient(&e["radial_gradient"]) || tooltip);
     let text = |v: &Value| v.as_str().map(|s| SharedString::from(s.to_owned()));
     let tooltip = text(&e["tooltip_title"]).map(|t| (t, text(&e["tooltip_subtitle"]).unwrap_or_default()));
-    Some(HomeHero { id, image, has_content, tooltip })
+    let sponsored = text(&content["label_title"]).map(|title| Sponsored {
+        title,
+        subtitle: text(&content["label_subtitle"]).unwrap_or_default(),
+        image: asset(&content["hero_image"]),
+        sponsor: asset(&content["sponsor_image"]),
+        cta: text(&content["cta"]["url"]).zip(text(&content["cta"]["button_label"])),
+    });
+    Some(HomeHero { id, image, has_content, tooltip, sponsored })
 }
 
 pub fn dismissed(contents: &[u8], id: usize) -> bool {
@@ -849,7 +866,83 @@ fn header_bar(cx: &mut Context<PhoenixApp>) -> AnyElement {
         .into_any_element()
 }
 
+fn sponsored_hero(h: Sponsored, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let btn = |id: &'static str, light: bool| {
+        div()
+            .id(id)
+            .h(z(40.))
+            .px(z(16.))
+            .rounded(z(8.))
+            .flex()
+            .items_center()
+            .cursor_pointer()
+            .text_size(z(16.))
+            .line_height(z(20.))
+            .font_weight(FontWeight::MEDIUM)
+            .when(light, |d| {
+                d.bg(tk(idx::CONTROL_OVERLAY_PRIMARY_BACKGROUND_DEFAULT))
+                    .text_color(tk(idx::CONTROL_OVERLAY_PRIMARY_TEXT_DEFAULT))
+                    .hover(|s| s.bg(tk(idx::CONTROL_OVERLAY_PRIMARY_BACKGROUND_HOVER)))
+            })
+            .when(!light, |d| d.text_color(tk(idx::TEXT_STRONG)).hover(|s| s.underline()))
+    };
+    let mut row = div().flex().items_center().gap(z(8.));
+    if let Some((url, label)) = h.cta.clone() {
+        row = row.child(btn("quests-hero-cta", true).child(label).on_click(move |_, _, cx| cx.open_url(&url)));
+    }
+    row = row.child(btn("quests-hero-list", false).child(crate::t!("quests.see_quests")).on_click(cx.listener(|_, _, _, cx| {
+        crate::ui::chat::scrollbar::handle("quests-scroll").set_offset(gpui::point(gpui::px(0.), -z(HERO_H + 64.)));
+        cx.notify();
+    })));
+    div()
+        .relative()
+        .w_full()
+        .h(z(HERO_H))
+        .rounded(z(16.))
+        .overflow_hidden()
+        .border_1()
+        .border_color(tk(idx::BORDER_SUBTLE))
+        .bg(gpui::black())
+        .children(h.image.clone().map(|u| img(u).absolute().inset_0().size_full().rounded(z(16.)).object_fit(gpui::ObjectFit::Cover)))
+        .child(div().absolute().inset_0().bg(gpui::linear_gradient(0., gpui::linear_color_stop(gpui::black().opacity(0.7), 0.), gpui::linear_color_stop(gpui::black().opacity(0.), 0.6))))
+        .children(h.sponsor.clone().map(|u| img(u).absolute().top(z(32.)).left(z(32.)).h(z(32.)).max_w(z(160.)).object_fit(gpui::ObjectFit::Contain)))
+        .child(
+            div()
+                .absolute()
+                .top(z(24.))
+                .right(z(24.))
+                .px(z(8.))
+                .py(z(4.))
+                .rounded(z(8.))
+                .bg(gpui::black().opacity(0.56))
+                .text_size(z(12.))
+                .line_height(z(16.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(gpui::white())
+                .child(crate::t!("quests.sponsored")),
+        )
+        .child(
+            div()
+                .absolute()
+                .inset_0()
+                .p(z(32.))
+                .flex()
+                .flex_col()
+                .justify_end()
+                .gap(z(16.))
+                .child(text(44., 44., FontWeight::BOLD, tk(idx::TEXT_STRONG), h.title.to_uppercase()))
+                .when(!h.subtitle.is_empty(), |d| d.child(text(16., 20., FontWeight::NORMAL, tk(idx::TEXT_STRONG), h.subtitle.clone()).opacity(0.8)))
+                .child(row),
+        )
+        .into_any_element()
+}
+
+const HERO_H: f32 = 500.;
+
 fn hero(cx: &mut Context<PhoenixApp>) -> AnyElement {
+    if let Some(h) = HERO.with(|h| h.borrow().as_ref().and_then(|h| h.sponsored.clone())) {
+        return sponsored_hero(h, cx);
+    }
     let shop = crate::t!("quests.explore_shop");
     let terms = crate::t!("quests.terms");
     let overlay_btn = |id: &'static str, label: SharedString, light: bool| {
@@ -935,6 +1028,7 @@ fn hero(cx: &mut Context<PhoenixApp>) -> AnyElement {
 
 pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     ensure_loaded(app, cx);
+    ensure_hero(app, cx);
     let quests = QUESTS.with(|q| q.borrow().clone());
     let premium = app.backend.has_premium();
     let page_w = f32::from(window.viewport_size().width) / crate::theme::zoom() - crate::ui::sidebar_resize::width() - 72.;
@@ -1034,7 +1128,7 @@ pub fn render(app: &PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp
         .flex_col()
         .bg(tk(idx::BACKGROUND_BASE_LOWER))
         .child(header_bar(cx))
-        .child(div().id("quests-scroll").flex_1().min_h_0().overflow_y_scroll().pr(z(8.)).child(content))
+        .child(div().id("quests-scroll").flex_1().min_h_0().overflow_y_scroll().track_scroll(&crate::ui::chat::scrollbar::handle("quests-scroll")).pr(z(8.)).child(content))
         .children(popout(sort, &filters))
         .into_any_element()
 }
@@ -1318,12 +1412,17 @@ mod tests {
     fn home_hero_entrypoint_follows_the_client() {
         let v = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": "77", "quest_home_entrypoint": {"image": "quests/h/e.png"}}}}]});
         let h = parse_home_hero(&v).unwrap();
-        assert_eq!(h, HomeHero { id: "77".into(), image: Some("https://cdn.discordapp.com/quests/h/e.png".into()), has_content: true, tooltip: None });
+        assert_eq!(h, HomeHero { id: "77".into(), image: Some("https://cdn.discordapp.com/quests/h/e.png".into()), has_content: true, tooltip: None, sponsored: None });
         let tooltip_only = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": 5, "quest_home_entrypoint": {"tooltip_title": "a"}}}}]});
         assert!(!parse_home_hero(&tooltip_only).unwrap().has_content);
         let gradient = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": 5, "quest_home_entrypoint": {"linear_gradient": {"start": "#000", "end": "#fff"}}}}}]});
         assert!(parse_home_hero(&gradient).unwrap().has_content);
         assert_eq!(parse_home_hero(&serde_json::json!({"decisions": [{"creative": {"creative_type": 1}}]})), None);
+        let dune = serde_json::json!({"decisions": [{"creative": {"creative_type": 2, "creative_content": {"id": "9", "label_title": "Dune: Part Three", "label_subtitle": "Only in Theaters", "hero_image": "quests/9/h.jpg", "sponsor_image": "quests/9/s.png", "cta": {"url": "https://x.test/t", "button_label": "Obtenir des tickets"}}}}]});
+        let s = parse_home_hero(&dune).unwrap().sponsored.unwrap();
+        assert_eq!((s.title.as_ref(), s.subtitle.as_ref()), ("Dune: Part Three", "Only in Theaters"));
+        assert_eq!(s.image.as_deref(), Some("https://cdn.discordapp.com/quests/9/h.jpg"));
+        assert_eq!(s.cta, Some(("https://x.test/t".into(), "Obtenir des tickets".into())));
         assert_eq!(parse_home_hero(&Value::Null), None);
         assert_eq!(home_hero_path(), "/quests/get-decisions?placement=3&num_decisions_requested=1");
     }
@@ -1341,7 +1440,7 @@ mod tests {
 
     #[test]
     fn quests_row_badges() {
-        let hero = HomeHero { id: "1".into(), image: None, has_content: true, tooltip: None };
+        let hero = HomeHero { id: "1".into(), image: None, has_content: true, tooltip: None, sponsored: None };
         assert!(entry_point(true, false, None, false).onboarding);
         assert!(!entry_point(true, true, None, false).onboarding);
         assert!(!entry_point(false, false, None, false).onboarding);
