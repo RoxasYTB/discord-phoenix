@@ -763,14 +763,13 @@ impl PhoenixApp {
     }
 
     pub(crate) fn focus_chat_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let input = if let Some(form) = self.active_thread_form() {
-            &form.starter
+        if let Some(form) = self.active_thread_form() {
+            form.starter.update(cx, |s, cx| s.focus(window, cx));
         } else if let Some(thread) = &self.chat.thread {
-            &thread.input
+            thread.input.update(cx, |s, cx| s.focus(window, cx));
         } else {
-            &self.composer
-        };
-        input.update(cx, |s, cx| s.focus(window, cx));
+            self.composer.update(cx, |s, cx| s.focus(window, cx));
+        }
     }
 
     fn send_in_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
