@@ -98,6 +98,17 @@ fn main() -> anyhow::Result<()> {
                             _ => phoenix_app::ui::search::open(app, window, cx),
                         }
                     }
+                    "pin-confirm" | "unpin-confirm" => {
+                        let g = app.guilds.first().map(|g| g.id);
+                        app.select_guild(g, cx);
+                        if let Some(ch) = app.selected_channel {
+                            let last = app.messages.get(&ch).and_then(|x| x.msgs.iter().rev().find(|m| !m.content.is_empty()).cloned());
+                            if let Some(mut m) = last {
+                                m.pinned = scene == "unpin-confirm";
+                                app.request_pin_message(ch, m, false, cx);
+                            }
+                        }
+                    }
                     "members" => {
                         let g = app.guilds.first().map(|g| g.id);
                         app.select_guild(g, cx);
