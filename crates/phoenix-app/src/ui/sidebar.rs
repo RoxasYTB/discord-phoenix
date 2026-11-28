@@ -1684,6 +1684,7 @@ fn panels_card(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> impl IntoEleme
         .flex_col()
         .children(crate::theme::client_theme::fixed_layer(crate::theme::client_theme::Level::Highest, z(7.)))
         .when(app.voice_channel.is_some(), |d| d.child(crate::ui::voice_panel::voice_panel(app, cx)))
+        .when(app.clips.active(), |d| d.child(crate::clips::activity(app, cx)))
         .child(user_panel(app, cx))
 }
 

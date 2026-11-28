@@ -140,6 +140,7 @@ pub struct PhoenixApp {
     pub mic_muted: bool,
     pub deafened: bool,
     pub voice_channel: Option<Id>,
+    pub clips: crate::clips::Clips,
     pub voice: crate::voice::VoiceUi,
     pub show_members: bool,
     pub people: crate::presence::People,
@@ -467,6 +468,7 @@ impl PhoenixApp {
             mic_muted: self_mute,
             deafened: self_deaf,
             voice_channel: None,
+            clips: Default::default(),
             voice: Default::default(),
             show_members: true,
             people: Default::default(),
@@ -520,6 +522,7 @@ impl PhoenixApp {
     }
 
     fn clear_session(&mut self) {
+        self.clips.stop();
         self.users.clear();
         self.guilds.clear();
         self.channels.clear();
@@ -551,6 +554,7 @@ impl PhoenixApp {
     }
 
     pub fn logout(&mut self, cx: &mut Context<Self>) {
+        crate::ui::game_overlay::close(cx);
         self.persist_chat_position();
         let fut = self.backend.logout();
         cx.spawn(async move |_, _| {

@@ -28,6 +28,8 @@ pub enum Action {
     NavigateForward,
     SwitchToVoiceChannel,
     DisconnectFromVoiceChannel,
+    SaveClip,
+    ToggleOverlay,
 }
 
 pub const ACTIONS: &[Action] = &[
@@ -46,6 +48,8 @@ pub const ACTIONS: &[Action] = &[
     Action::NavigateForward,
     Action::SwitchToVoiceChannel,
     Action::DisconnectFromVoiceChannel,
+    Action::SaveClip,
+    Action::ToggleOverlay,
 ];
 
 impl Action {
@@ -66,6 +70,8 @@ impl Action {
             Self::NavigateForward => "NAVIGATE_FORWARD",
             Self::SwitchToVoiceChannel => "SWITCH_TO_VOICE_CHANNEL",
             Self::DisconnectFromVoiceChannel => "DISCONNECT_FROM_VOICE_CHANNEL",
+            Self::SaveClip => "SAVE_CLIP",
+            Self::ToggleOverlay => "TOGGLE_OVERLAY",
         }
     }
 
@@ -90,6 +96,8 @@ impl Action {
             Self::NavigateForward => "forward",
             Self::SwitchToVoiceChannel => "switch_voice",
             Self::DisconnectFromVoiceChannel => "disconnect",
+            Self::SaveClip => "save_clip",
+            Self::ToggleOverlay => "toggle_overlay",
         }
     }
 
@@ -193,7 +201,17 @@ pub fn portal_trigger(id: u64) -> Option<Option<String>> {
     Some(list.iter().find(|(i, _)| *i == key).map(|(_, d)| d.clone()))
 }
 
+#[cfg(windows)]
+fn windows_bound() -> &'static Mutex<Vec<(String, String)>> {
+    static BOUND: OnceLock<Mutex<Vec<(String, String)>>> = OnceLock::new();
+    BOUND.get_or_init(Mutex::default)
+}
+
 fn portal_bound(id: u64) -> bool {
+    #[cfg(windows)]
+    if windows_bound().lock().is_ok_and(|keys| keys.iter().any(|(key, _)| key == &portal_id(id))) {
+        return true;
+    }
     matches!(portal_trigger(id), Some(Some(_)))
 }
 
@@ -242,7 +260,60 @@ pub fn global_list(list: &[Keybind]) -> Vec<(String, String, String)> {
     out
 }
 
+fn available(app: &PhoenixApp, action: Action) -> bool {
+    match action {
+        Action::SaveClip => app.clips.active(),
+        Action::ToggleOverlay => cfg!(windows)
+            && app.screen == crate::app::Screen::Main
+            && app.prefs.local.flag(crate::ui::game_overlay::ENABLED, false),
+        _ => true,
+    }
+}
+
 pub fn sync_global(app: &PhoenixApp) {
+    if phoenix_api::rest::guard::agent_session() {
+        return;
+    }
+    #[cfg(windows)]
+    sync_windows(app);
+    #[cfg(target_os = "linux")]
+    sync_portal(app);
+}
+
+#[cfg(windows)]
+fn sync_windows(app: &PhoenixApp) {
+    thread_local! {
+        static WORKER: RefCell<Option<phoenix_voice::win_hotkey::Worker>> = const { RefCell::new(None) };
+        static LAST: RefCell<Vec<(String, String)>> = const { RefCell::new(Vec::new()) };
+    }
+    let keys: Vec<_> = app.prefs.local.keybinds.iter()
+        .filter(|key| key.enabled && !key.shortcut.is_empty()
+            && matches!(key.action, Action::SaveClip | Action::ToggleOverlay) && available(app, key.action))
+        .map(|key| (portal_id(key.id), key.shortcut.clone())).collect();
+    let changed = LAST.with(|last| *last.borrow() != keys);
+    if !changed {
+        return;
+    }
+    WORKER.with(|slot| {
+        let mut worker = slot.borrow_mut();
+        if worker.is_none() {
+            *worker = phoenix_voice::win_hotkey::Worker::start(
+                |id| global_event(id, false),
+                |keys| {
+                    if let Ok(mut bound) = windows_bound().lock() {
+                        *bound = keys;
+                    }
+                },
+            ).ok();
+        }
+        if worker.as_ref().is_some_and(|worker| worker.replace(keys.clone())) {
+            LAST.with(|last| *last.borrow_mut() = keys);
+        }
+    });
+}
+
+#[cfg(target_os = "linux")]
+fn sync_portal(app: &PhoenixApp) {
     thread_local! {
         static LAST: RefCell<Bound> = const { RefCell::new(None) };
     }
@@ -295,7 +366,7 @@ pub fn on_key_down(app: &mut PhoenixApp, ev: &KeyDownEvent, cx: &mut Context<Pho
         return false;
     }
     let stroke = crate::voice::ptt::stroke_string(&ev.keystroke);
-    let hits: Vec<Keybind> = app.prefs.local.keybinds.iter().filter(|b| b.fires_on(&stroke) && !portal_bound(b.id)).cloned().collect();
+    let hits: Vec<Keybind> = app.prefs.local.keybinds.iter().filter(|b| b.fires_on(&stroke) && available(app, b.action) && !portal_bound(b.id)).cloned().collect();
     for b in hits {
         if b.action.hold() {
             hold(app, b.action, true);
@@ -376,6 +447,8 @@ fn trigger(app: &mut PhoenixApp, b: &Keybind, cx: &mut Context<PhoenixApp>) {
             }
         }
         Action::DisconnectFromVoiceChannel if app.voice_channel.is_some() => app.join_voice(None, cx),
+        Action::SaveClip if app.clips.active() => crate::clips::save(app, cx),
+        Action::ToggleOverlay if app.screen == crate::app::Screen::Main => crate::ui::game_overlay::toggle(app, cx),
         _ => return,
     }
     cx.notify();
@@ -399,7 +472,7 @@ mod tests {
         for a in ACTIONS {
             assert_eq!(Action::from_code(a.code()), *a);
         }
-        assert_eq!(Action::from_code("TOGGLE_OVERLAY"), Action::Unassigned);
+        assert_eq!(Action::from_code("TOGGLE_OVERLAY"), Action::ToggleOverlay);
     }
 
     #[test]

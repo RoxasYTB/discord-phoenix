@@ -7,6 +7,8 @@ pub mod error;
 pub mod gateway;
 #[cfg(target_os = "linux")]
 pub mod hotkey;
+#[cfg(windows)]
+pub mod win_hotkey;
 pub mod leb128;
 pub mod media;
 pub mod rtp;
