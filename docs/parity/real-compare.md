@@ -953,10 +953,19 @@ scores stay at 12 % because the animated emojis and the « popular » order diff
 - Invite modal not compared: opening it creates an invite (`POST /channels/:id/invites`).
 - Solo call view not compared: the user was in a voice call all day.
 
+### After-renders (28/11 14:15, int-bin 01a9b0fa / 5a45a5e6)
+
+| View (1280×700) | Region | Before → After | Notes |
+|---|---|---|---|
+| Nitro home | overall | 16.5 → 14.6 → **9.4** | transparent libvpx Wumpus video + 4 trinkets + page gradient SVG + tenure reward card first (`9abcf299`) |
+| Shop | overall | 23.2 → **21.4** | `RÉDUCTION DE 25 %` badges and struck prices live (`5a45a5e6`); Orbs pill in header clips on the right at 1280 |
+| Quests | overall | 40.4 → 35.7 → 42.8 | DUNE sponsored quest hero + « Sponsorisée » badge (`2ea82f3a`); 42.8 % vs earlier client shot is the video frame offset |
+| Server menu (`guilddrop`) | popout | 11.7 → **11.5** | header chevron points up while open, « Montrer tous les salons » checked |
+| Account / voice popout (`status`) | popout | 17.6 → **15.6** | voice card « … » menu button + single-line server name with ellipsis |
+| Member profile (`profile`) | popout | **17.0** | message input placeholder truncates cleanly before the emoji button |
+
 ### Still open, by visibility
 
-- Quests: the hero is the sponsored quest from the quest placement API (DUNE trailer, « Sponsorisée »); Phoenix shows the static Orbs banner.
-- Shop: sale state (countdown card « Profite de -25 % », « RÉDUCTION DE 25 % » badges, struck prices), header search with rotating suggestions (`collectibles_search_bar` experiment, chunk 6b4565136c5e825f).
-- Nitro home: flying Wumpus video + trinkets, page gradient image, tenure reward card first.
+- Shop: countdown banner card (« Profite de -25 % »), header Orbs pill clipped on the right at 1280 px, header search rotating suggestions (`collectibles_search_bar` experiment, chunk 6b4565136c5e825f).
 - Gift inventory: the banner art is a Lottie (`animatedGraphic_J9WkLo`, `aspect-ratio-6/4`); Phoenix draws a gift glyph.
 - Gift inventory banner: the bullet text wraps one word earlier (icon widths 9.91 vs 12).
