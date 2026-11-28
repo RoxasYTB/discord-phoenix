@@ -47,19 +47,17 @@ pub fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> A
     move |_, cx| cx.new(|_| Tip(text.clone())).into()
 }
 
-use std::{cell::RefCell, collections::HashMap};
+use std::time::{Duration, Instant};
 
-use gpui::{Anchor, AnchoredPositionMode, Bounds, HitboxBehavior, MouseMoveEvent, Pixels, anchored, canvas, deferred, point};
+use gpui::{
+    Anchor, AnchoredPositionMode, AnyElement, AvailableSpace, Bounds, Element, ElementId, GlobalElementId, HitboxBehavior, HitboxId, InspectorElementId,
+    LayoutId, MouseMoveEvent, Pixels, Style, anchored, canvas, point,
+};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
     Top,
     Bottom,
-}
-
-thread_local! {
-    static TIPS: RefCell<HashMap<u64, (Bounds<Pixels>, bool)>> = RefCell::new(HashMap::new());
-    static SINCE: RefCell<HashMap<u64, std::time::Instant>> = RefCell::new(HashMap::new());
 }
 
 const GAP: f32 = 11.;
@@ -204,43 +202,121 @@ fn layer(text: Body, b: Bounds<Pixels>, side: Side, view_h: f32) -> gpui::AnyEle
     } else {
         (crate::ui::states::tip_zoom("tip-zoom", (0.5, 1.), frame.child(card(text)).child(caret(true))), Anchor::BottomLeft, top - gap + caret_h)
     };
-    let tip = deferred(
-        anchored()
-            .position_mode(AnchoredPositionMode::Window)
-            .anchor(corner)
-            .snap_to_window_with_margin(z(EDGE))
-            .position(point(px(mid - span / 2.), px(y)))
-            .child(frame),
-    )
-    .with_priority(3);
-    div().absolute().top_0().left_0().child(tip).into_any_element()
+    anchored()
+        .position_mode(AnchoredPositionMode::Window)
+        .anchor(corner)
+        .snap_to_window_with_margin(z(EDGE))
+        .position(point(px(mid - span / 2.), px(y)))
+        .child(frame)
+        .into_any_element()
 }
 
-fn probe(key: u64, delay: u64) -> gpui::AnyElement {
-    canvas(
-        move |bounds, window, _| (bounds, window.insert_hitbox(bounds, HitboxBehavior::Normal)),
-        move |_, (bounds, hitbox), window, _| {
-            let hovered = hitbox.is_hovered(window);
-            if delay > 0 {
-                SINCE.with(|s| {
-                    let mut s = s.borrow_mut();
-                    if !hovered {
-                        s.remove(&key);
-                    } else if s.entry(key).or_insert_with(std::time::Instant::now).elapsed().as_millis() < delay as u128 {
-                        window.request_animation_frame();
-                    }
-                });
-            }
-            VIEW_H.with(|v| v.set(f32::from(window.viewport_size().height)));
-            TIPS.with(|t| {
-                let mut t = t.borrow_mut();
-                if hovered || t.get(&key).is_none_or(|(b, _)| *b == bounds) {
-                    t.insert(key, (bounds, hovered));
-                }
+struct HoverLayer {
+    key: u64,
+    hitbox: HitboxId,
+    bounds: Bounds<Pixels>,
+    body: Option<Body>,
+    side: Side,
+    delay: Duration,
+}
+
+impl IntoElement for HoverLayer {
+    type Element = Self;
+
+    fn into_element(self) -> Self {
+        self
+    }
+}
+
+impl Element for HoverLayer {
+    type RequestLayoutState = ();
+    type PrepaintState = Option<AnyElement>;
+
+    fn id(&self) -> Option<ElementId> {
+        Some(("phoenix-tooltip", self.key).into())
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(&mut self, _: Option<&GlobalElementId>, _: Option<&InspectorElementId>, window: &mut Window, cx: &mut App) -> (LayoutId, ()) {
+        (window.request_layout(Style::default(), [], cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<AnyElement> {
+        let ready = self.delay.is_zero()
+            || window.with_element_state(id.unwrap(), |since: Option<Option<Instant>>, _| {
+                let since = since.flatten();
+                (since.is_some_and(|since| since.elapsed() >= self.delay), since)
             });
-            window.on_mouse_event(move |_: &MouseMoveEvent, _, window, _| {
-                let now = hitbox.is_hovered(window);
-                if now != hovered {
+        if !ready {
+            return None;
+        }
+
+        let view_h = f32::from(window.viewport_size().height);
+        let mut element = crate::ui::profile_theme::scoped(None, || layer(self.body.take().unwrap(), self.bounds, self.side, view_h));
+        element.prepaint_as_root(point(px(0.), px(0.)), AvailableSpace::min_size(), window, cx);
+        Some(element)
+    }
+
+    fn paint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut (),
+        element: &mut Option<AnyElement>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let hovered = self.hitbox.is_hovered(window);
+        if !self.delay.is_zero() {
+            window.with_element_state(id.unwrap(), |since: Option<Option<Instant>>, window| {
+                if hovered && element.is_none() {
+                    window.request_animation_frame();
+                }
+                ((), hovered.then(|| since.flatten().unwrap_or_else(Instant::now)))
+            });
+        }
+        if hovered && let Some(element) = element {
+            element.paint(window, cx);
+        }
+    }
+}
+
+fn probe(key: u64, body: Body, side: Side, delay: Duration) -> AnyElement {
+    canvas(
+        move |bounds, window, cx| {
+            let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+            if bounds.intersect(&hitbox.content_mask.bounds).contains(&window.mouse_position()) {
+                let geometry = [bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height].map(|value| f32::from(value).to_bits());
+                let mut overlay = HoverLayer {
+                    key: crate::ui::states::key((key, geometry)),
+                    hitbox: hitbox.id,
+                    bounds,
+                    body: Some(body),
+                    side,
+                    delay,
+                }
+                .into_any_element();
+                overlay.layout_as_root(AvailableSpace::min_size(), window, cx);
+                window.defer_draw(overlay, point(px(0.), px(0.)), 3, None);
+            }
+            hitbox.id
+        },
+        move |_, hitbox, window, _| {
+            let hovered = hitbox.is_hovered(window);
+            window.on_mouse_event(move |_: &MouseMoveEvent, phase, window, _| {
+                if phase.bubble() && hitbox.is_hovered(window) != hovered {
                     window.refresh();
                 }
             });
@@ -281,19 +357,8 @@ pub trait Tipped: ParentElement + Styled + Sized {
             Body::Badge(b) => format!("{}\n{}\n{}", b.icon, b.title, b.body.as_deref().unwrap_or_default()),
         };
         let key = crate::ui::states::key(("tip", id, side == Side::Top));
-        let ready = delay == 0 || SINCE.with(|s| s.borrow().get(&key).is_some_and(|t| t.elapsed().as_millis() >= delay as u128));
-        let shown = TIPS.with(|t| t.borrow().get(&key).copied()).filter(|(_, h)| *h && ready);
-        let mut el = self.child(probe(key, delay));
-        if let Some((b, _)) = shown {
-            let view_h = VIEW_H.with(|v| v.get());
-            el = el.child(crate::ui::profile_theme::scoped(None, || layer(text, b, side, view_h)));
-        }
-        el
+        self.child(probe(key, text, side, Duration::from_millis(delay)))
     }
 }
 
 impl<E: ParentElement + Styled + Sized> Tipped for E {}
-
-thread_local! {
-    static VIEW_H: std::cell::Cell<f32> = const { std::cell::Cell::new(10_000.) };
-}
