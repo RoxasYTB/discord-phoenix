@@ -188,8 +188,8 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 |---|---|---|---|---|
 | 42 | Envoyer un message | critique | vérifiée en vrai | envoi réel dans le salon de test (26/11 19:55) |
 | 43 | Auto-complétion (mentions, émojis, salons, commandes) | important | vérifiée en vrai | QA 27/11 : « Composer : frappe et auto-complétion » OK |
-| 44 | Éditer un message | critique | vérifiée en vrai | édition réelle sur le salon de test (26/11 19:55) |
-| 45 | Supprimer un message | critique | vérifiée en vrai | suppression réelle avec confirmation (26/11 19:55) |
+| 44 | Éditer un message | critique | vérifiée en vrai | édition réelle sur le salon de test (26/11 19:55) ; 28/11 sur `863eaa6b` : une modification refusée par le serveur est annulée à l'écran (texte d'origine, pas de « (modifié) ») |
+| 45 | Supprimer un message | critique | vérifiée en vrai | suppression réelle avec confirmation (26/11 19:55) ; 28/11 sur `863eaa6b` : un message supprimé pendant son envoi est supprimé côté serveur dès son arrivée (vérifié en GET) |
 | 46 | Menu contextuel d'un message (clic droit) | critique | vérifiée en vrai | 27/11 : clic droit X11 réel sous Xvfb (binaire complet, vrai compte, #phoenix) sur un texte et sur une vidéo, Échap ferme ; le KO de la QA était son ancre `@chat#-2` (`bounds_for_item` sans ligne pour une liste au bas), corrigée dans le scénario |
 | 47 | Réagir (ajouter, retirer) | critique | vérifiée en vrai | 👍 ajouté puis retiré en réel (26/11 19:55) |
 | 48 | Répondre à un message | critique | vérifiée en vrai | QA 27/11 (81187596) : Maj+Tab, flèche haut, R, texte, Entrée dans #phoenix ; réponse réelle 1575933472504287253 avec message_reference vérifié en GET |
@@ -315,5 +315,5 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | 118 | Stabilité en usage long (mémoire, plantages) | critique | cassée connue | fuite mesurée : RSS de 423 à 875 Mio (perf.md) ; correctif 9bc58282 non remesuré ; 2 paniques le 26/11 |
 | 119 | Performance et démarrage | important | présente, non vérifiée | CPU au repos de 0,45 % en release (25/11) ; pas de mesure de démarrage comparée |
 | 120 | Lecteur d'écran | important | absente | aucune intégration AT-SPI ou accesskit |
-| 121 | Raccourcis clavier | important | vérifiée en vrai | QA d'entrées du 28/11 sur le nouveau #phoenix (`1576039645127385188`, int-bin `6d24e386`/`eb489280`), vérifié en GET : Ctrl+I, Ctrl+P, Ctrl+U, Ctrl+/, Ctrl+S, Alt+haut/bas, Alt+gauche/droite, Ctrl+Alt+haut/bas, Ctrl+K, Ctrl+= et Ctrl+0 (config isolée) ; Ctrl+E et Ctrl+G n'ouvrent toujours pas les sélecteurs (KO aussi sur `a4e9db40`, compositeur ou racine ; le bouton et Ctrl+S marchent) |
+| 121 | Raccourcis clavier | important | vérifiée en vrai | QA d'entrées du 28/11 sur le nouveau #phoenix (`1576039645127385188`, int-bin `6d24e386`/`eb489280`), vérifié en GET : Ctrl+I, Ctrl+P, Ctrl+U, Ctrl+/, Ctrl+S, Alt+haut/bas, Alt+gauche/droite, Ctrl+Alt+haut/bas, Ctrl+K, Ctrl+= et Ctrl+0 (config isolée) ; Ctrl+E et Ctrl+G ouvrent les sélecteurs depuis `863eaa6b` (deux intercepteurs ouvraient puis refermaient le sélecteur) |
 | 122 | Synthèse vocale (/tts) | détail | présente, non vérifiée | `tts.rs` |
