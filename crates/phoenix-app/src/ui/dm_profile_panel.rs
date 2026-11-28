@@ -8,6 +8,7 @@ use crate::{
     model::Id,
     presence::{Activity, ActivityKind, ProfileRequestState, format_date},
     theme::{Palette, c, generated::idx, tok, z},
+    ui::home::data::{RelAction, RelationshipKind},
     ui::profile::{Info, activity_header, avatar_block, banner, banner_buttons, ensure_avatar_colour, info, mana_button, mutuals_row, name_block_clickable, section_title, theme_backdrop},
 };
 
@@ -335,8 +336,65 @@ fn widget_card(app: &PhoenixApp, uid: Id, themed: bool, cx: &mut Context<Phoenix
         .map(|b| b.on_click(move |_, _, cx| e.update(cx, |a, cx| a.open_profile_modal(uid, cx))).into_any_element())
 }
 
+fn load_failed_notice(app: &PhoenixApp, uid: Id) -> Option<Div> {
+    let failed = matches!(app.people.profile_requests.borrow().get(&uid), Some(ProfileRequestState::Failed(_)));
+    let related = app.nav.relationship(uid).is_some_and(|r| matches!(r.kind, RelationshipKind::Friend | RelationshipKind::Incoming));
+    if !failed || related {
+        return None;
+    }
+    Some(
+        div()
+            .flex()
+            .items_start()
+            .gap(z(8.))
+            .p(z(12.))
+            .rounded(z(8.))
+            .bg(c(tok(idx::BACKGROUND_FEEDBACK_MOD_WARNING)))
+            .border_1()
+            .border_color(c(tok(idx::INLINENOTICE_BORDER_WARNING)))
+            .child(div().h(z(18.)).flex().flex_none().items_center().child(svg().path(crate::icons::path("warning")).size(z(16.)).text_color(c(tok(idx::ICON_FEEDBACK_WARNING)))))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(z(14.))
+                    .line_height(z(18.))
+                    .text_color(c(tok(idx::TEXT_DEFAULT)))
+                    .child(crate::t!("dm_panel.load_failed")),
+            ),
+    )
+}
+
+fn incoming_request_card(app: &PhoenixApp, uid: Id, i: &Info, cx: &mut Context<PhoenixApp>) -> Option<gpui::Stateful<Div>> {
+    if !app.nav.relationship(uid).is_some_and(|r| r.kind == RelationshipKind::Incoming) {
+        return None;
+    }
+    let body = crate::t!("dm_panel.incoming_request", name = i.display.clone());
+    let bold = crate::ui::modals::channel_perms::bold_range(&body, &i.display);
+    let text = gpui::StyledText::new(body).with_highlights(bold.map(|r| (r, gpui::HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() })));
+    let act = |action: RelAction| {
+        cx.listener(move |a: &mut PhoenixApp, _: &gpui::ClickEvent, _, cx| {
+            cx.stop_propagation();
+            match &action {
+                RelAction::Accept => a.accept_friend_request(uid, cx),
+                _ => a.relationship_action(uid, action.clone(), cx),
+            }
+        })
+    };
+    let primary = mana_button(("dm-panel-accept", uid.0), crate::t!("friends.accept"), true, false).line_height(z(18.)).on_click(act(RelAction::Accept));
+    let secondary = mana_button(("dm-panel-ignore-request", uid.0), crate::t!("friends.ignore"), false, false).line_height(z(18.)).on_click(act(RelAction::Remove));
+    Some(
+        overlay_card(("dm-panel-incoming", uid.0))
+            .gap(z(8.))
+            .px(z(12.))
+            .py(z(10.))
+            .child(div().text_size(z(14.)).line_height(z(18.)).text_color(c(tok(idx::TEXT_DEFAULT))).child(text))
+            .child(div().flex().items_center().gap(z(8.)).child(primary).child(secondary)),
+    )
+}
+
 fn blocked_notice(app: &PhoenixApp, uid: Id, blocked: bool, ignored: bool, cx: &mut Context<PhoenixApp>) -> Option<gpui::Stateful<Div>> {
-    let incoming = app.nav.relationship(uid).is_some_and(|r| r.kind == crate::ui::home::data::RelationshipKind::Incoming);
+    let incoming = app.nav.relationship(uid).is_some_and(|r| r.kind == RelationshipKind::Incoming);
     let shown = blocked || (ignored && !incoming);
     if !shown {
         return None;
@@ -485,6 +543,7 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
             .flex()
             .flex_col()
             .gap(z(20.))
+            .children(load_failed_notice(app, uid))
             .child(
                 div()
                     .flex()
@@ -504,6 +563,7 @@ fn panel(app: &PhoenixApp, uid: Id, cx: &mut Context<PhoenixApp>) -> AnyElement 
                     )
                     .children(i.prof.and_then(|p| mutuals_row(p, uid, &cx.entity()))),
             )
+            .children(incoming_request_card(app, uid, &i, cx))
             .children(blocked_notice(app, uid, blocked, ignored, cx));
         if let Some(b) = bio {
             let e2 = e.clone();

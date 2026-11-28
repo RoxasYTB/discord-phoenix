@@ -156,3 +156,12 @@ Client JS: `web.b63d846b329d6470.js` module 5990 (eligible tokens), 902008 (guil
 | group header | `channelNameIcon_3Zk3yP` + `channelNameText_3Zk3yP` | content | 16px AtIcon (padding-end 4) + the peer's display name, body-md/medium --text-strong | search.rs channel_group_header | ✅ 1:1 and group DMs: `getChannelIconComponent` (module 713654 `gU`) returns `AtIcon` for both `DM` and `GROUP_DM` (was a members glyph for group DMs) |
 | all DMs | `SearchFetcher.DX` + `createRequestPayload` | request | `POST /users/@me/messages/search/tabs` `{include_nsfw, channel_ids, tabs: {messages: {sort_by, sort_order, …filters, offset, limit: 25}}, track_exact_total_hits: true}`; reply `tabs.messages.{total_results, messages}` | rest/search.rs `to_tabs_body`, `search_dms_tabs`, `parse_tabs_reply` | ✅ unit tests; not run on the account (setting off, POST) |
 | global DM search | Friends page | — | the 2026 client has no separate "search all DMs" field: it is the DM header search with the setting on | — | ✅ (nothing to add) |
+
+## Super Reaction toggle (2026-11-28)
+
+| element | source | value | our code | status |
+|---|---|---|---|---|
+| header toggle | b1b275d45cc7cf27.js `t7` (rendered after the search bar only for `EmojiIntention.REACTION`), CSS 748798 `label_pfW0SY` / `labelChecked_pfW0SY` | 20px SuperReactionIcon, padding 6, --radius-lg, --background-base-lowest + --text-default; checked --brand-500 with a white icon; tooltip « Activer les super réactions » (`buV4av`) / « Super réactions activées » (`5cRA/b`) | ui/pickers/grid.rs burst_toggle | ✅ visual only: the pick still sends a normal reaction (super reactions spend Nitro credits and are a protected write); ❌ the 360° spring rotation and the first-use education tooltip |
+| burst picker ring | CSS 381575 `isBurstReactionPicker_-sZhZn` | box-shadow 0 0 0 2px --background-brand, plus a 100px --background-brand glow at .5 | ui/pickers/mod.rs render_picker | ✅ |
+| burst search placeholder | `defaultSearchPlaceholder: wT(intention, isBurst)` | not located in the cached bundle | — | ❌ |
+

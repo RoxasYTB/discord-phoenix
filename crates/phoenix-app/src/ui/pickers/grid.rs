@@ -710,6 +710,29 @@ fn popular_badge() -> gpui::Div {
         )
 }
 
+pub fn burst_toggle(on: bool, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let label = if on { crate::t!("picker.burst_enabled") } else { crate::t!("picker.burst_enable") };
+    div()
+        .id("burst-toggle")
+        .flex_none()
+        .size(px(32.))
+        .p(px(6.))
+        .rounded(px(crate::theme::generated::global::RADIUS_LG))
+        .overflow_hidden()
+        .cursor_pointer()
+        .bg(tk(if on { idx::BRAND_500 } else { idx::BACKGROUND_BASE_LOWEST }))
+        .text_color(if on { gpui::white() } else { tk(idx::TEXT_DEFAULT) })
+        .tooltip(crate::ui::tooltip::tip(label))
+        .on_click(cx.listener(|_, _, _, cx| {
+            if let Some(op) = cx.global_mut::<Pickers>().open.as_mut() {
+                op.burst = !op.burst;
+            }
+            cx.notify();
+        }))
+        .child(gpui::svg().path(crate::icons::path("super-reaction")).size(px(20.)).text_color(if on { gpui::white() } else { tk(idx::TEXT_DEFAULT) }))
+        .into_any_element()
+}
+
 pub fn tone_button(cx: &mut Context<PhoenixApp>) -> AnyElement {
     let p = cx.global::<Pickers>();
     let tone = p.prefs.tone;
