@@ -570,7 +570,13 @@ impl Backend for MockBackend {
             let mut members: Vec<sub::Member> = users.into_iter().enumerate().map(|(k, user)| sub::Member { owner: k == 1, me: user.id == ME, user }).collect();
             members.sort_by_key(|m| !m.owner);
             let credits = vec![sub::Credit { plan: "sp.su.plan_basic_month", tier: 0, months: 1 }];
-            Ok(Some(sub::Subs { squad: has_nitro.then_some(sub::Squad { members }), credits }))
+            let personal = has_nitro.then(|| sub::Subscription {
+                plan: "sp.su.plan_nitro_month",
+                tier: 2,
+                period_end: Some((chrono::Utc::now() + chrono::Duration::days(30)).fixed_offset()),
+                canceled: false,
+            }).into_iter().collect();
+            Ok(Some(sub::Subs { squad: has_nitro.then_some(sub::Squad { members }), credits, personal: Some(personal) }))
         })
     }
     fn update_profile(&self, _guild: Option<Id>, _patch: crate::ui::settings::profile_editor::ProfilePatch) -> BoxFuture<()> {

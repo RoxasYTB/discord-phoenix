@@ -47,7 +47,7 @@ fn text(value: SharedString, size: f32, weight: FontWeight, color: usize) -> Div
     div().text_size(z(size)).line_height(z(size + 5.)).font_weight(weight).text_color(c(tok(color))).child(value)
 }
 
-fn status_card(app: &PhoenixApp) -> Div {
+pub(super) fn status_card(app: &PhoenixApp) -> Div {
     let plan = Plan::for_account(app);
     let active = matches!(plan, Plan::Basic | Plan::Classic | Plan::Nitro);
     let (label, description) = match plan {
