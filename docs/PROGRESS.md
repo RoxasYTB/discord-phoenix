@@ -4,14 +4,14 @@ Audit du 27/11/2026 sur origin/main `8c7b358b`. Ce document remplace le pourcent
 
 Mise à jour du 28/11 (QA de nuit) : le salon de test #phoenix, supprimé le 27/11, a été recréé à l'identique (`1576039645127385188`). Toute la QA d'entrées de `docs/qa.md` repasse (39/39), et sept fonctionnalités passent « vérifiées en vrai » sur des écritures réelles dans ce salon, contrôlées en GET : sondages (création et vote), GIF, transfert, fils, sondages et messages programmés, épingles, message vocal (tonalité générée) et raccourcis clavier.
 
-<!-- real-progress {"score":74.6,"low":66.6,"high":83.9,"features":122,"verified":53,"unverified":58,"broken":3,"missing":8,"critical":26,"critical_verified":22,"critical_broken":3,"proof_measured":44,"proof_compared":8,"at":"2026-11-28"} -->
+<!-- real-progress {"score":75.1,"low":67.4,"high":84.2,"features":122,"verified":55,"unverified":56,"broken":3,"missing":8,"critical":26,"critical_verified":22,"critical_broken":3,"proof_measured":44,"proof_compared":8,"at":"2026-11-28"} -->
 
 ## Résultat
 
 | mesure | valeur |
 |---|---|
 | **Score réel pondéré** | **75 %** (fourchette 67 à 84 %), 73 % le 27/11 |
-| Couverture fonctionnelle | 114 fonctionnalités sur 122 existent dans le code (96 % du poids), mais **53 seulement sont vérifiées en vrai** (59 % du poids ; 46 le 27/11) |
+| Couverture fonctionnelle | 114 fonctionnalités sur 122 existent dans le code (96 % du poids), mais **55 seulement sont vérifiées en vrai** (60 % du poids ; 46 le 27/11) |
 | Niveau de preuve des ✅ | **44 %** s'appuient sur une mesure du vrai client, **8 %** ont été comparés à un rendu Phoenix ; 40 % viennent du CSS ou du JS seuls, 8 % d'un test unitaire, 7 % de rien |
 | Parcours critiques | **22 sur 26** prouvés en usage ou en test réel, 3 cassés connus, 1 non prouvés |
 
@@ -175,7 +175,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | 33 | Embeds (liens, YouTube, X, riches) | important | vérifiée en vrai | rendus réels ; mosaïque X jamais vue sur un vrai post |
 | 34 | Fichiers et audio joints (lecture audio) | important | vérifiée en vrai | QA 27/11 (81187596) : lecture de tonalite-440hz.wav depuis un résultat de recherche, son coupé, `audio_t` 0,37 → 2,44 s |
 | 35 | Messages vocaux (lecture et enregistrement) | important | présente, non vérifiée | voice-messages.md : CSS et JS, aucune lecture réelle |
-| 36 | Messages système, bannières de fil, annonces | détail | présente, non vérifiée | rendus, pas de comparaison dédiée |
+| 36 | Messages système, bannières de fil, annonces | détail | vérifiée en vrai | 28/11 sur #phoenix (`1576039645127385188`, `real_shots` dpr 1.5) : notice système de création de fil (« yohan a commencé un fil : [Test Phoenix] Fil de test. Voir tous les fils. ») et notice d'épingle affichées en direct dans le chat |
 | 37 | Composants d'application (boutons, menus, conteneurs v2) | important | présente, non vérifiée | affichage présent, interactions jamais envoyées |
 | 38 | Stickers (affichage) | détail | présente, non vérifiée | 404 de stickers dans phoenix.log |
 | 39 | Super réactions (affichage, animation) | détail | vérifiée en vrai | 27/11 : survol à la souris (QA d'entrées) de la pilule Super d'un vrai message de #annonces : info-bulle « … a utilisé la super réaction », effet joué, aucun plantage |
@@ -211,7 +211,7 @@ Puis les critiques jamais prouvées : rejoindre et parler en vocal, répondre, e
 | # | fonctionnalité | poids | état | preuve |
 |---|---|---|---|---|
 | 61 | Lire forums, salons média et fils | important | vérifiée en vrai | lecture réelle de forums et salons média (27/11 12:32) |
-| 62 | Créer un post, répondre dans un fil, suivre | important | présente, non vérifiée | aucune création ni réponse prouvée |
+| 62 | Créer un post, répondre dans un fil, suivre | important | vérifiée en vrai | 28/11 sur #phoenix (`1576039645127385188`, `real_shots` dpr 1.5, vérifié en GET) : ouverture du panneau Fils actifs, création du fil `[Test Phoenix] Fil de test` (`1576226619377328319`), ouverture automatique du panneau de fil, premier message (`1576226623869554689`) et réponse dans le fil (`1576226662230659144`) |
 
 ### Recherche
 
