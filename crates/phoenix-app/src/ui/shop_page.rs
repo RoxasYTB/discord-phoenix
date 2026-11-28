@@ -30,9 +30,28 @@ pub struct Tile {
     pub category: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CountdownStyle {
+    Dark,
+    Light,
+    GradientV1,
+    Transparent,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CollectionSale {
+    pub collection_name: SharedString,
+    pub category: Option<u64>,
+    pub percent_off: u32,
+    pub ends_at: i64,
+    pub style: CountdownStyle,
+    pub show_cta: bool,
+    pub align_left: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {
-    Hero { banner: Option<SharedString>, logo: Option<SharedString>, backdrop: Option<(u32, u32)>, skus: Vec<u64> },
+    Hero { banner: Option<SharedString>, logo: Option<SharedString>, backdrop: Option<(u32, u32)>, skus: Vec<u64>, sale: Option<CollectionSale> },
     Wide { title: SharedString, body: SharedString, banner: SharedString, logo: Option<SharedString> },
     Marketing(Vec<Tile>),
     Shelf { name: SharedString, skus: Vec<u64>, button: Option<SharedString>, category: Option<u64> },
@@ -233,6 +252,44 @@ fn categories(v: &Value) -> impl Iterator<Item = &Value> {
     v.get("categories").and_then(Value::as_array).into_iter().flatten()
 }
 
+pub fn parse_collection_sale(b: &Value) -> Option<CollectionSale> {
+    let promo = b.get("collection_sale").or_else(|| b.get("promotion"))?;
+    let percent_off = promo.get("percent_off").and_then(Value::as_u64).filter(|&p| p > 0)? as u32;
+    let ends_at = promo
+        .get("ends_at")
+        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.timestamp())))?;
+    let style = match promo.get("countdown_style").and_then(Value::as_str) {
+        Some("LIGHT" | "light") => CountdownStyle::Light,
+        Some("GRADIENT_V1" | "gradient_v1") => CountdownStyle::GradientV1,
+        Some("TRANSPARENT" | "transparent") => CountdownStyle::Transparent,
+        _ => CountdownStyle::Dark,
+    };
+    let show_cta = promo.get("show_countdown_cta").and_then(Value::as_bool).unwrap_or(true);
+    let align_left = matches!(promo.get("countdown_position").and_then(Value::as_str), Some("LEFT" | "left"));
+    let collection_name = promo
+        .get("collection_name")
+        .or_else(|| b.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+        .into();
+    let category = promo
+        .get("category_sku_id")
+        .or_else(|| b.get("category_sku_id"))
+        .and_then(Value::as_str)
+        .and_then(|s| s.parse().ok());
+    Some(CollectionSale { collection_name, category, percent_off, ends_at, style, show_cta, align_left })
+}
+
+pub fn countdown_parts(remaining_secs: u64) -> [(u8, u8); 4] {
+    let d = (remaining_secs / 86_400).min(99);
+    let h = (remaining_secs % 86_400) / 3_600;
+    let m = (remaining_secs % 3_600) / 60;
+    let s = remaining_secs % 60;
+    let pair = |n: u64| ((n / 10) as u8, (n % 10) as u8);
+    [pair(d), pair(h), pair(m), pair(s)]
+}
+
 pub fn parse_home(home: &Value, catalog: &Value) -> Home {
     let mut cards = std::collections::HashMap::new();
     for c in categories(catalog).chain(categories(home)) {
@@ -252,6 +309,7 @@ pub fn parse_home(home: &Value, catalog: &Value) -> Home {
                 logo: url(b, "hero_logo_url"),
                 backdrop: b.get("banner_display_config").and_then(|c| c.get("background_style")).and_then(Value::as_str).and_then(backdrop),
                 skus: skus(b, "ranked_sku_ids"),
+                sale: parse_collection_sale(b),
             }),
             Some(1) => blocks.push(Block::Marketing(
                 b.get("subblocks")
@@ -495,16 +553,18 @@ pub fn home_loaded() -> Option<std::rc::Rc<Home>> {
     HOME.with(|h| h.borrow().clone())
 }
 
-fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
+fn header(width: f32, window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement {
     let search = search_input(window, cx);
     let tabs = [crate::t!("shop.tab_now"), crate::t!("shop.tab_browse"), crate::t!("shop.tab_orbs"), crate::t!("shop.tab_more")];
     let carets = [false, true, false, true];
     let sel = TAB.with(Cell::get);
-    let mut nav = div().flex().items_center().gap(z(32.)).ml(z(44.));
+    let compact = width < 980.;
+    let mut nav = div().flex_none().flex().items_center().gap(z(if compact { 16. } else { 32. })).ml(z(if compact { 16. } else { 44. }));
     for (i, (label, caret)) in tabs.into_iter().zip(carets).enumerate() {
         nav = nav.child(
             div()
                 .id(("shop-tab", i))
+                .flex_none()
                 .h(z(48.))
                 .pt(z(2.))
                 .border_b_2()
@@ -512,6 +572,7 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
                 .flex()
                 .items_center()
                 .gap(z(2.))
+                .whitespace_nowrap()
                 .cursor_pointer()
                 .text_size(z(16.))
                 .line_height(z(20.))
@@ -529,6 +590,7 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
     let pill = |id: &'static str| {
         div()
             .id(id)
+            .flex_none()
             .h(z(32.))
             .rounded(z(8.))
             .bg(tk(idx::BACKGROUND_MOD_SUBTLE))
@@ -540,8 +602,11 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
     };
     div()
         .flex_none()
+        .w_full()
+        .min_w_0()
+        .overflow_hidden()
         .h(z(49.))
-        .pl(z(20.))
+        .pl(z(if compact { 14. } else { 20. }))
         .pr(z(14.))
         .border_b_1()
         .border_color(tk(idx::BORDER_SUBTLE))
@@ -550,16 +615,20 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
         .items_center()
         .child(glyph("shop", 24., tk(idx::TEXT_DEFAULT)))
         .child(nav)
-        .child(div().flex_1())
         .child(
             div()
+                .flex_1()
+                .min_w_0()
                 .pl(z(10.))
                 .flex()
                 .items_center()
-                .gap(z(10.))
+                .justify_end()
+                .gap(z(if compact { 8. } else { 10. }))
                 .child(
                     div()
-                        .w(z(256.))
+                        .flex_1()
+                        .min_w(z(120.))
+                        .max_w(z(256.))
                         .h(z(32.))
                         .pl(z(4.))
                         .rounded(z(8.))
@@ -571,7 +640,7 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
                         .gap(z(4.))
                         .text_size(z(14.))
                         .text_color(tk(idx::INPUT_PLACEHOLDER_TEXT_DEFAULT))
-                        .child(div().size(z(22.)).flex().items_center().justify_center().child(glyph("search", 16., tk(idx::ICON_MUTED))))
+                        .child(div().flex_none().size(z(22.)).flex().items_center().justify_center().child(glyph("search", 16., tk(idx::ICON_MUTED))))
                         .child(
                             div().flex_1().min_w_0().child(
                                 gpui_component::input::Input::new(&search).appearance(false).bordered(false).pl(z(0.)).text_size(z(14.)),
@@ -583,6 +652,7 @@ fn header(window: &mut Window, cx: &mut Context<PhoenixApp>) -> impl IntoElement
                     pill("shop-orbs")
                         .px(z(12.))
                         .gap(z(2.))
+                        .whitespace_nowrap()
                         .child(glyph("orbs", 20., tk(idx::INTERACTIVE_TEXT_DEFAULT)))
                         .children(ORBS.with(Cell::get).map(|b| {
                             div()
@@ -1027,9 +1097,130 @@ pub(crate) fn secondary(id: SharedString, label: SharedString) -> gpui::Stateful
     crate::ui::controls::button(id, label, crate::ui::controls::BtnKind::Secondary).h(z(40.)).px(z(16.))
 }
 
+fn countdown_banner(sale: &CollectionSale, now_secs: i64, cx: &mut Context<PhoenixApp>) -> AnyElement {
+    let rem = (sale.ends_at - now_secs).max(0) as u64;
+    let parts = countdown_parts(rem);
+    let (bg, border, tile_bg, num_fg, colon_fg, copy_fg, cta_bg, cta_fg, pad) = match sale.style {
+        CountdownStyle::Light => (
+            gpui::white().opacity(0.5),
+            Some(gpui::black().opacity(0.08)),
+            gpui::rgb(0x111214).into(),
+            gpui::white(),
+            gpui::rgb(0x111214).into(),
+            gpui::rgb(0x111214).into(),
+            gpui::rgb(0x111214).into(),
+            gpui::white(),
+            16.,
+        ),
+        CountdownStyle::Transparent => (
+            gpui::transparent_black(),
+            None,
+            gpui::white(),
+            gpui::black(),
+            gpui::white(),
+            gpui::white(),
+            gpui::white(),
+            gpui::black(),
+            0.,
+        ),
+        CountdownStyle::Dark | CountdownStyle::GradientV1 => (
+            gpui::black().opacity(0.5),
+            Some(tk(idx::BORDER_SUBTLE)),
+            gpui::white(),
+            gpui::black(),
+            gpui::white(),
+            gpui::white(),
+            gpui::white(),
+            gpui::black(),
+            16.,
+        ),
+    };
+    let mut timer = div().flex().items_center().gap(z(6.));
+    for (i, (hi, lo)) in parts.into_iter().enumerate() {
+        if i > 0 {
+            timer = timer.child(
+                div()
+                    .w(z(6.))
+                    .h(z(16.))
+                    .flex()
+                    .flex_col()
+                    .justify_between()
+                    .child(div().size(z(6.)).rounded_full().bg(colon_fg))
+                    .child(div().size(z(6.)).rounded_full().bg(colon_fg)),
+            );
+        }
+        let tile = |d: u8| {
+            div()
+                .w(z(22.))
+                .h(z(32.))
+                .rounded(z(6.))
+                .bg(tile_bg)
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(z(20.))
+                .line_height(z(24.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(num_fg)
+                .child(d.to_string())
+        };
+        timer = timer.child(div().flex().gap(z(2.)).child(tile(hi)).child(tile(lo)));
+    }
+    let category = sale.category;
+    let copy = crate::t!("shop.sale_off", percent = sale.percent_off, collection = sale.collection_name);
+    div()
+        .flex_none()
+        .w(z(292.))
+        .p(z(pad))
+        .rounded(z(16.))
+        .bg(bg)
+        .when_some(border, |d, b| d.border_2().border_color(b))
+        .flex()
+        .flex_col()
+        .gap(z(10.))
+        .child(div().flex().when(sale.align_left, |d| d.justify_start()).when(!sale.align_left, |d| d.justify_center()).child(timer))
+        .child(
+            div()
+                .text_size(z(14.))
+                .line_height(z(18.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(copy_fg)
+                .when(!sale.align_left, |d| d.text_center())
+                .child(copy),
+        )
+        .when(sale.show_cta, |d| {
+            d.child(
+                div()
+                    .id("shop-sale-cta")
+                    .w_full()
+                    .h(z(40.))
+                    .rounded(z(8.))
+                    .bg(cta_bg)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .text_size(z(14.))
+                    .line_height(z(18.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(cta_fg)
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        if let Some(c) = category {
+                            open_collection(c);
+                            cx.notify();
+                        }
+                    }))
+                    .child(crate::t!("shop.sale_cta")),
+            )
+        })
+        .into_any_element()
+}
+
 pub(crate) fn hero(app: &PhoenixApp, home: &Home, block: usize, b: &Block, inner: f32, cx: &mut Context<PhoenixApp>) -> AnyElement {
-    let Block::Hero { banner, logo, backdrop, skus } = b else { return div().into_any_element() };
+    let Block::Hero { banner, logo, backdrop, skus, sale } = b else { return div().into_any_element() };
     let (top, bottom) = backdrop.map_or((gpui::black(), gpui::black()), |(a, b)| (gpui::rgb(a).into(), gpui::rgb(b).into()));
+    let now = chrono::Utc::now().timestamp();
+    let active_sale = sale.as_ref().filter(|s| s.ends_at > now);
     div()
         .relative()
         .w_full()
@@ -1058,7 +1249,10 @@ pub(crate) fn hero(app: &PhoenixApp, home: &Home, block: usize, b: &Block, inner
                         .pb(z(16.))
                         .flex()
                         .items_center()
-                        .children(logo.clone().map(|u| img(u.to_string()).w(z(200.)).h(z(90.)).mb(z(12.)).object_fit(gpui::ObjectFit::Contain))),
+                        .justify_between()
+                        .gap(z(16.))
+                        .children(logo.clone().map(|u| img(u.to_string()).w(z(200.)).h(z(90.)).mb(z(12.)).object_fit(gpui::ObjectFit::Contain)))
+                        .children(active_sale.map(|s| countdown_banner(s, now, cx))),
                 )
                 .child(carousel(app, home, block, skus, inner, cx)),
         )
@@ -1287,7 +1481,9 @@ fn feed(app: &PhoenixApp, home: &Home, f: Frame, cx: &mut Context<PhoenixApp>) -
 
 pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<PhoenixApp>) -> AnyElement {
     ensure_loaded(app, cx);
-    let head = header(window, cx).into_any_element();
+    let zoom = crate::theme::zoom();
+    let width = f32::from(window.viewport_size().width) / zoom - crate::ui::sidebar_resize::width() - 72.;
+    let head = header(width, window, cx).into_any_element();
     let q = SEARCH.with(|s| s.borrow().clone()).map(|i| i.read(cx).value().to_lowercase()).unwrap_or_default();
     let cards = CARDS.with(|c| c.borrow().clone());
     let tab = TAB.with(Cell::get);
@@ -1301,8 +1497,6 @@ pub fn render(app: &mut PhoenixApp, window: &mut Window, cx: &mut Context<Phoeni
         _ => None,
     }
     .filter(|h| !h.blocks.is_empty() && q.trim().is_empty() && coll.is_none());
-    let zoom = crate::theme::zoom();
-    let width = f32::from(window.viewport_size().width) / zoom - crate::ui::sidebar_resize::width() - 72.;
     let handle = crate::ui::chat::scrollbar::handle("shop-scroll");
     let offset = (-f32::from(handle.offset().y) / zoom).max(0.);
     let view_h = Some(f32::from(handle.bounds().size.height) / zoom).filter(|h| *h > 0.).unwrap_or(f32::from(window.viewport_size().height) / zoom);
@@ -1433,10 +1627,38 @@ mod tests {
         let catalog = serde_json::json!({"categories": [{"products": [prod("3")]}]});
         let h = parse_home(&home, &catalog);
         assert_eq!(h.blocks.len(), 4);
-        assert_eq!(h.blocks[0], Block::Hero { banner: Some("b".into()), logo: Some("l".into()), backdrop: Some((0, 0x616161)), skus: vec![1, 2] });
+        assert_eq!(h.blocks[0], Block::Hero { banner: Some("b".into()), logo: Some("l".into()), backdrop: Some((0, 0x616161)), skus: vec![1, 2], sale: None });
         assert!(matches!(&h.blocks[1], Block::Marketing(t) if t.len() == 2 && t[1].category == 51));
         assert!(matches!(&h.blocks[2], Block::Shelf { skus, button: Some(b), category: Some(60), .. } if skus == &vec![3] && b.as_ref() == "Tout voir"));
         assert_eq!(h.blocks[3], Block::Picks(vec![3, 1]));
+    }
+
+    #[test]
+    fn countdown_splits_days_hours_minutes_seconds() {
+        assert_eq!(super::countdown_parts(0), [(0, 0), (0, 0), (0, 0), (0, 0)]);
+        assert_eq!(super::countdown_parts(2 * 86_400 + 13 * 3_600 + 45 * 60 + 9), [(0, 2), (1, 3), (4, 5), (0, 9)]);
+        assert_eq!(super::countdown_parts(120 * 86_400), [(9, 9), (0, 0), (0, 0), (0, 0)]);
+    }
+
+    #[test]
+    fn parses_collection_sale_promotion() {
+        let b = serde_json::json!({
+            "name": "Dark Mode Friday",
+            "category_sku_id": "42",
+            "collection_sale": {
+                "percent_off": 25,
+                "ends_at": "2026-12-01T00:00:00Z",
+                "countdown_style": "LIGHT",
+                "show_countdown_cta": true,
+                "countdown_position": "LEFT"
+            }
+        });
+        let s = super::parse_collection_sale(&b).expect("sale");
+        assert_eq!(s.collection_name.as_ref(), "Dark Mode Friday");
+        assert_eq!(s.category, Some(42));
+        assert_eq!(s.percent_off, 25);
+        assert_eq!(s.style, super::CountdownStyle::Light);
+        assert!(s.show_cta && s.align_left);
     }
 
     #[test]

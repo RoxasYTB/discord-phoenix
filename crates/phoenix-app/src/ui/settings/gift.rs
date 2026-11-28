@@ -18,6 +18,8 @@ fn text(size: f32, line: f32, weight: FontWeight, color: usize, s: SharedString)
     div().text_size(z(size)).line_height(z(line)).font_weight(weight).text_color(c(tok(color))).child(s)
 }
 
+const GIFT_BANNER_LOTTIE: &str = "https://cdn.discordapp.com/assets/content/96c9c7a8574bdf47c51fa14ce5ebdf8caf88bfbb71597a60a1d80d8973180649.lottiejson";
+
 pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let item = |ic: &'static str, k: &'static str| {
         let link = gpui::HighlightStyle { color: Some(c(tok(idx::TEXT_LINK))), ..Default::default() };
@@ -27,7 +29,7 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
             .items_center()
             .gap(z(6.))
             .pl(z(2.))
-            .child(gpui::svg().path(crate::icons::path(ic)).flex_none().size(z(12.)).text_color(c(tok(idx::TEXT_DEFAULT))))
+            .child(gpui::svg().path(crate::icons::path(ic)).flex_none().size(z(10.)).text_color(c(tok(idx::TEXT_DEFAULT))))
             .child(
                 div()
                     .flex_1()
@@ -93,12 +95,29 @@ pub(super) fn promo(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyEleme
         )
         .child(
             div()
+                .flex_none()
                 .w(z(282.))
                 .h(z(188.))
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(gpui::svg().path(crate::icons::path("gift")).size(z(96.)).text_color(gpui::white().opacity(0.8))),
+                .child(
+                    crate::media::lottie::image(
+                        SharedString::from(GIFT_BANNER_LOTTIE),
+                        423,
+                        crate::ui::settings::effects::reduced_motion(),
+                    )
+                    .w(z(282.))
+                    .h(z(188.))
+                    .object_fit(gpui::ObjectFit::Contain)
+                    .with_fallback(|| {
+                        gpui::svg()
+                            .path(crate::icons::path("gift"))
+                            .size(z(96.))
+                            .text_color(gpui::white().opacity(0.8))
+                            .into_any_element()
+                    }),
+                ),
         );
     div().mt(z(11.)).rounded(z(16.)).bg(c(tok(idx::BACKGROUND_SURFACE_HIGH))).child(card).into_any_element()
 }

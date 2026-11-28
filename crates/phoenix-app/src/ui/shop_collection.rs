@@ -250,7 +250,7 @@ pub fn render(app: &PhoenixApp, sku: u64, width: f32, cx: &mut Context<PhoenixAp
     };
     let inner = width.min(SECTION_MAX_W) - 2. * SECTION_PAD;
     let top: AnyElement = if cat.hero_banner.is_some() {
-        let b = Block::Hero { banner: cat.hero_banner.clone(), logo: cat.hero_logo.clone(), backdrop: cat.backdrop, skus: cat.hero_ranking.iter().copied().filter(|s| home.cards.contains_key(s)).collect() };
+        let b = Block::Hero { banner: cat.hero_banner.clone(), logo: cat.hero_logo.clone(), backdrop: cat.backdrop, skus: cat.hero_ranking.iter().copied().filter(|s| home.cards.contains_key(s)).collect(), sale: None };
         div()
             .relative()
             .child(hero(app, &home, CAROUSEL_SCOPE, &b, width - 2. * crate::ui::shop_page::FEED_PAD_X, cx))
