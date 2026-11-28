@@ -966,6 +966,5 @@ scores stay at 12 % because the animated emojis and the « popular » order diff
 
 ### Still open, by visibility
 
-- Shop: countdown banner card (« Profite de -25 % »), header Orbs pill clipped on the right at 1280 px, header search rotating suggestions (`collectibles_search_bar` experiment, chunk 6b4565136c5e825f).
-- Gift inventory: the banner art is a Lottie (`animatedGraphic_J9WkLo`, `aspect-ratio-6/4`); Phoenix draws a gift glyph.
-- Gift inventory banner: the bullet text wraps one word earlier (icon widths 9.91 vs 12).
+- Shop: header Orbs pill no longer clips at 1280 px (`shop_page.rs` compact nav spacing + flexible search bar `120..256` px, `flex_none` on wishlist and Orbs pill); `COLLECTION_SALE` countdown banner (`container_arblTP`, 292 px, 22×32 digit tiles, 6×16 colons, `Dark`/`Light`/`GradientV1`/`Transparent` styles, `97Qza2` copy and `5GoOlx` CTA) implemented in `shop_page.rs` (`wt/shop-orbs`). Still open: promotion feed endpoint carrying live `COLLECTION_SALE` assignments and header search rotating suggestions (`collectibles_search_bar`, chunk 6b4565136c5e825f).
+- Gift inventory: banner art now loads the client Lottie (`GiftCardBanner`, `96c9c7a8574bdf47c51fa14ce5ebdf8caf88bfbb71597a60a1d80d8973180649.lottiejson`, 282×188, `aspect-ratio 6/4`) via `media::lottie::image` with static gift SVG fallback, and bullet icons use `xxs` 10 px (`settings/gift.rs`, `wt/shop-orbs`).
