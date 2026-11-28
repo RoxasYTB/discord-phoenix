@@ -67,7 +67,15 @@ pub fn hovered(key: u64) -> bool {
 }
 
 pub fn set_hover(key: u64, hovered: bool, cx: &mut gpui::App) -> bool {
-    let changed = HOVER.with(|h| {
+    let changed = store_hover(key, hovered);
+    if changed && hovered && crate::ui::settings::effects::reduced_motion() {
+        crate::ui::chat::burst_tip::refresh_after(cx, REDUCED_MOTION_HOVER_DELAY);
+    }
+    changed
+}
+
+fn store_hover(key: u64, hovered: bool) -> bool {
+    HOVER.with(|h| {
         let cur = h.get();
         let next = if hovered {
             Some(cur.filter(|(k, _)| *k == key).unwrap_or_else(|| (key, std::time::Instant::now())))
@@ -78,11 +86,7 @@ pub fn set_hover(key: u64, hovered: bool, cx: &mut gpui::App) -> bool {
         };
         h.set(next);
         cur.map(|(k, _)| k) != next.map(|(k, _)| k)
-    });
-    if changed && hovered && crate::ui::settings::effects::reduced_motion() {
-        crate::ui::chat::burst_tip::refresh_after(cx, REDUCED_MOTION_HOVER_DELAY);
-    }
-    changed
+    })
 }
 
 pub fn url(d: &serde_json::Value) -> Option<SharedString> {
@@ -135,8 +139,8 @@ mod anim_tests {
         let u = super::url(&serde_json::json!({"asset": "a_12ab", "sku_id": "77"})).unwrap();
         assert_eq!(u.as_ref(), "https://cdn.discordapp.com/media/v1/collectibles-shop/77/static?asset=a_12ab");
         assert_eq!(super::animated(&u).as_deref(), Some("https://cdn.discordapp.com/avatar-decoration-presets/a_12ab.webp?size=96&animated=true"));
-        assert!(super::set_hover(super::hover_key(1, 5), true));
-        assert!(!super::set_hover(super::hover_key(1, 5), true));
-        assert!(super::set_hover(super::hover_key(1, 5), false));
+        assert!(super::store_hover(super::hover_key(1, 5), true));
+        assert!(!super::store_hover(super::hover_key(1, 5), true));
+        assert!(super::store_hover(super::hover_key(1, 5), false));
     }
 }
