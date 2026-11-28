@@ -412,11 +412,16 @@ impl Page {
     }
 }
 
+#[cfg(windows)]
+const APPS_NAV: &[Page] = &[Page::RegisteredGames, Page::ActivityPrivacy, Page::Clips, Page::GameOverlay, Page::Connections];
+#[cfg(not(windows))]
+const APPS_NAV: &[Page] = &[Page::RegisteredGames, Page::ActivityPrivacy, Page::Connections];
+
 pub const NAV: &[(&str, &[Page])] = &[
     ("settings.nav.user", &[Page::MyAccount, Page::DataPrivacy, Page::PrivacySafety, Page::Notifications]),
     ("settings.nav.billing", &[Page::Nitro, Page::ServerBoost, Page::Subscriptions, Page::GiftInventory, Page::Billing]),
     ("settings.nav.app", &[Page::VoiceVideo, Page::Appearance, Page::Accessibility, Page::System, Page::Language]),
-    ("settings.nav.apps", &[Page::RegisteredGames, Page::ActivityPrivacy, Page::Clips, Page::GameOverlay, Page::Connections]),
+    ("settings.nav.apps", APPS_NAV),
     ("", &[Page::Advanced]),
 ];
 
