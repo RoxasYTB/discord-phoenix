@@ -233,7 +233,7 @@ pub(super) fn purchased(_: &PhoenixApp, cx: &mut Context<'_, PhoenixApp>) -> Any
         .into_any_element()
 }
 
-pub(super) fn subscriptions(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
+pub(super) fn subscriptions(_: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -> AnyElement {
     let loaded = super::subscriptions::get();
     let data = loaded.clone().unwrap_or_default();
     let personal = data.personal.as_deref().unwrap_or_default();
@@ -241,16 +241,13 @@ pub(super) fn subscriptions(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -
         .flex()
         .flex_col()
         .pt(z(11.))
-        .gap(z(4.))
-        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")))
-        .child(text(14., 18., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
-    if personal.is_empty() {
-        head = head.child(div().mt(z(12.)).child(super::nitro::status_card(app)));
-        if loaded.is_some() && data.personal.is_none() {
-            head = head.child(text(14., 18., FontWeight::NORMAL, idx::TEXT_MUTED, tr("sp.su.unavailable")));
-        }
-    } else {
-        head = head.child(div().mt(z(12.)).flex().flex_col().gap(z(12.)).children(personal.iter().enumerate().map(|(i, sub)| subscription_card(i, sub))));
+        .child(text(20., 24., FontWeight::SEMIBOLD, idx::TEXT_STRONG, tr("sp.su.title")).mb(z(16.)))
+        .child(text(16., 20., FontWeight::NORMAL, idx::TEXT_DEFAULT, tr("sp.su.desc")));
+    if !personal.is_empty() {
+        head = head.child(div().mt(z(16.)).flex().flex_col().gap(z(12.)).children(personal.iter().enumerate().map(|(i, sub)| subscription_card(i, sub))));
+    }
+    if let Some(sq) = &data.squad {
+        head = head.child(div().mt(z(16.)).child(squad_card(sq)));
     }
     div()
         .flex()
@@ -258,7 +255,6 @@ pub(super) fn subscriptions(app: &PhoenixApp, _: &mut Context<'_, PhoenixApp>) -
         .gap(z(32.))
         .child(head)
         .when(!personal.is_empty(), |d| d.child(payment_section(personal)))
-        .children(data.squad.as_ref().map(squad_card))
         .child(
             div()
                 .flex()
