@@ -117,8 +117,8 @@ mod tests {
         (RestClient::with_base(None, ClientProperties::linux_desktop(), format!("http://{addr}")), server)
     }
 
-    fn timeout<F: std::future::Future>(f: F) -> impl std::future::Future<Output = F::Output> {
-        async move { tokio::time::timeout(std::time::Duration::from_secs(5), f).await.unwrap() }
+    async fn timeout<F: std::future::Future>(f: F) -> F::Output {
+        tokio::time::timeout(std::time::Duration::from_secs(5), f).await.unwrap()
     }
 
     #[tokio::test]

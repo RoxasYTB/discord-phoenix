@@ -93,12 +93,8 @@ fn code_field(app: &PhoenixApp, slide: MfaSlide, window: &Window, cx: &Cx) -> gp
 }
 
 fn action(id: &'static str, label: SharedString, kind: BtnKind, enabled: bool, loading: bool, run: fn(&mut PhoenixApp, &mut Cx), cx: &mut Cx) -> AnyElement {
-    let b = if loading {
-        button(id, SharedString::default(), kind).child(crate::ui::spinner::low_motion())
-    } else {
-        button(id, label, kind)
-    }
-    .w_full();
+    let b = if loading { button(id, SharedString::default(), kind).child(crate::ui::spinner::low_motion()) } else { button(id, label, kind) };
+    let b = b.w_full();
     let b = if enabled && !loading { b.on_click(cx.listener(move |a, _, _, cx| run(a, cx))) } else { b.opacity(0.5).cursor_default() };
     crate::ui::focus_ring::ring(b.relative(), crate::ui::states::key(id), 8.).into_any_element()
 }
