@@ -114,6 +114,15 @@ fn when(id: u64) -> String {
     crate::i18n::calendar(t, chrono::Local::now()).to_string()
 }
 
+fn user_menu(user: Option<u64>, guild: Id) -> impl Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static {
+    move |ev, w, cx| {
+        if let Some(u) = user {
+            cx.stop_propagation();
+            crate::ui::user_menu::open(Id(u), Some(guild), ev.position, w);
+        }
+    }
+}
+
 pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
     let log = s.get("audit").cloned().unwrap_or(Value::Null);
     let entries: Vec<Value> = log.get("audit_log_entries").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -170,6 +179,8 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
         let id = kit::s(e, "id");
         let action = kit::n(e, "action_type") as u32;
         let uid = kit::s(e, "user_id");
+        let uid_n: Option<u64> = uid.parse().ok();
+        let guild = s.guild;
         let user = users.iter().find(|u| kit::s(u, "id") == uid).cloned().unwrap_or(Value::Null);
         let target = target_name(&log, e, app);
         let opt = e.get("options");
@@ -201,9 +212,10 @@ pub fn render(app: &PhoenixApp, s: &State, cx: &mut Cx) -> AnyElement {
                         .items_center()
                         .when(has_changes, |d| d.cursor_pointer().hover(|s| s.bg(c(tok(idx::BACKGROUND_MOD_SUBTLE)))))
                         .child(gpui::svg().path(crate::icons::path(icon_for(action))).flex_none().size(z(24.)).text_color(c(kind_color(action))))
-                        .child(div().ml(z(10.)).child(kit::avatar(kit::user_avatar(&user, 80), 40.)))
+                        .child(div().ml(z(10.)).on_mouse_down(gpui::MouseButton::Right, user_menu(uid_n, guild)).child(kit::avatar(kit::user_avatar(&user, 80), 40.)))
                         .child(
                             div()
+                                .on_mouse_down(gpui::MouseButton::Right, user_menu(uid_n, guild))
                                 .mx(z(10.))
                                 .flex_1()
                                 .min_w_0()
