@@ -605,6 +605,7 @@ pub fn render(app: &PhoenixApp, cx: &mut Context<PhoenixApp>) -> Option<AnyEleme
     Some(context_menu::render(pos, items, dismiss))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn search_result_items(
     app: &PhoenixApp,
     e: &Ent,
