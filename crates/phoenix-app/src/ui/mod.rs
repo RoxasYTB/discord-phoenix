@@ -14,6 +14,7 @@ pub mod profile_bot;
 pub mod profile_wishlist;
 pub mod call_activity;
 pub mod call_popout;
+pub mod game_overlay;
 pub mod call_menus;
 pub mod call_toasts;
 pub mod call_layout;

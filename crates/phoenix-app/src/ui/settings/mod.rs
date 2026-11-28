@@ -7,6 +7,7 @@ pub mod connections;
 pub mod billing;
 mod boost;
 mod gift;
+mod game_media;
 mod nitro;
 mod pages;
 pub mod subscriptions;
@@ -167,6 +168,7 @@ pub struct LocalPrefs {
     pub trusted_protocols: std::collections::BTreeSet<String>,
     pub collapsed_in_inbox: std::collections::BTreeSet<u64>,
     pub keybinds: Vec<crate::keybinds::Keybind>,
+    pub clips_directory: Option<PathBuf>,
 }
 
 impl Default for LocalPrefs {
@@ -186,6 +188,7 @@ impl Default for LocalPrefs {
             trusted_protocols: Default::default(),
             collapsed_in_inbox: Default::default(),
             keybinds: Vec::new(),
+            clips_directory: None,
         }
     }
 }
@@ -217,6 +220,7 @@ impl LocalPrefs {
         let f = |k: &str| v.get(k).and_then(Value::as_f64);
         let b = |k: &str, def: bool| v.get(k).and_then(Value::as_bool).unwrap_or(def);
         Self {
+            clips_directory: v.get("clips_directory").and_then(Value::as_str).map(PathBuf::from).filter(|p| p.is_absolute()),
             font_size: f("font_size").map(|x| (x as f32).clamp(12., 24.)).unwrap_or(d.font_size),
             zoom: f("zoom").map(|x| (x as u32).clamp(50, 200)).unwrap_or(d.zoom),
             desktop_notifications: b("desktop_notifications", d.desktop_notifications),
@@ -243,6 +247,7 @@ impl LocalPrefs {
     }
     pub fn to_json(&self) -> Value {
         json!({
+            "clips_directory": self.clips_directory,
             "font_size": self.font_size,
             "zoom": self.zoom,
             "desktop_notifications": self.desktop_notifications,
@@ -368,6 +373,8 @@ pub enum Page {
     System,
     ActivityPrivacy,
     RegisteredGames,
+    Clips,
+    GameOverlay,
     Nitro,
     ServerBoost,
     Subscriptions,
@@ -394,6 +401,8 @@ impl Page {
             Self::VoiceVideo => crate::t!("settings.page.voice_video"),
             Self::Advanced => crate::t!("settings.page.advanced"),
             Self::RegisteredGames => crate::t!("sp.games"),
+            Self::Clips => crate::t!("game.clips"),
+            Self::GameOverlay => crate::t!("game.overlay"),
             Self::Nitro => crate::t!("settings.page.nitro"),
             Self::ServerBoost => crate::t!("settings.page.server_boost"),
             Self::Subscriptions => crate::t!("settings.page.subscriptions"),
@@ -407,7 +416,7 @@ pub const NAV: &[(&str, &[Page])] = &[
     ("settings.nav.user", &[Page::MyAccount, Page::DataPrivacy, Page::PrivacySafety, Page::Notifications]),
     ("settings.nav.billing", &[Page::Nitro, Page::ServerBoost, Page::Subscriptions, Page::GiftInventory, Page::Billing]),
     ("settings.nav.app", &[Page::VoiceVideo, Page::Appearance, Page::Accessibility, Page::System, Page::Language]),
-    ("settings.nav.apps", &[Page::RegisteredGames, Page::ActivityPrivacy, Page::Connections]),
+    ("settings.nav.apps", &[Page::RegisteredGames, Page::ActivityPrivacy, Page::Clips, Page::GameOverlay, Page::Connections]),
     ("", &[Page::Advanced]),
 ];
 
@@ -430,6 +439,8 @@ pub struct SettingsState {
     pub scroll: gpui::ScrollHandle,
     pub nested: Option<nested::Nested>,
     pub active_section: usize,
+    pub clips_sources: Option<Result<Vec<crate::clips::Source>, String>>,
+    pub clips_scanning: bool,
 }
 
 pub fn open(app: &mut PhoenixApp, cx: &mut Context<PhoenixApp>) {
@@ -534,6 +545,12 @@ pub fn save(app: &mut PhoenixApp, patch: SettingsPatch, cx: &mut Context<Phoenix
 
 pub fn update_local(app: &mut PhoenixApp, f: impl FnOnce(&mut LocalPrefs), cx: &mut Context<PhoenixApp>) {
     f(&mut app.prefs.local);
+    if app.clips.active() && !app.prefs.local.flag(crate::clips::ENABLED, false) {
+        app.clips.stop();
+    }
+    if crate::ui::game_overlay::is_open() && !app.prefs.local.flag(crate::ui::game_overlay::ENABLED, false) {
+        crate::ui::game_overlay::close(cx);
+    }
     crate::notifications::set_enabled(app.prefs.local.notifications_on());
     crate::sounds::sync_prefs(&app.prefs.local);
     app.prefs.local.save();

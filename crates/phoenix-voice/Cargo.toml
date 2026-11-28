@@ -40,7 +40,7 @@ ashpd = { version = "0.13", default-features = false, features = ["async-io", "g
 
 [target.'cfg(windows)'.dependencies]
 xcap = { version = "0.9.10", default-features = false }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

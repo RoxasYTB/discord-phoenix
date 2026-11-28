@@ -149,3 +149,11 @@ Source: web.js module 594061 (`updateAsync`, `markDirty`, `persistChanges`), 159
 * ✅ The client PATCHes only the categories it changed (a copy of the whole category, for example `status` = field 11), and merges every pending change into one `protoToSave`. Phoenix now does the same: every settings-proto 1 write goes through `RestClient::edit_settings_proto`. Edits made while a write is in flight (or waiting on a 429) are merged into the next GET + PATCH, and only the changed top-level fields are sent (`proto_delta`).
 * ✅ Status change (status picker) = `updateAsync("status")`: field 11 with the new `status`, `status_expires_at_ms` 0 and `status_created_at_ms` kept when the status is the same (else now). The custom status (11.2) is copied byte for byte. Before this, the picker used the legacy `PATCH /users/@me/settings` with `custom_status: {text}`, which dropped the emoji and the expiry. Test `status_change_only_writes_the_status_category_and_keeps_the_custom_status`.
 * No code path writes the settings proto by itself: USER_SETTINGS_PROTO_UPDATE only GETs the settings again. The 429s on 26/11 at 16:18 (6 retries, so at least two PATCHes) were a burst of user writes (custom status, toggles or a rail drop), each a GET + full PATCH with no merging.
+
+## Windows Clips and Game Overlay
+
+The [Clips guide](https://support.discord.com/hc/en-us/articles/16861982215703-Clips-and-Auto-Clips-FAQ) and the [Game Overlay guide](https://support.discord.com/hc/en-us/articles/217659737-Game-Overlay-101) describe the reference settings groups and interactions. The settings use Phoenix's existing section, dropdown, and switch controls.
+
+Clips store a bounded H.264 buffer in memory after a window is explicitly selected. The manual save produces a local MP4. The current implementation captures video on Windows and requires FFmpeg. The save length is aligned to an available keyframe.
+
+Game Overlay uses a movable, topmost Phoenix window for windowed and borderless games on Windows. Its voice widget reads the current channel roster and speaking flags. Windows registers the clip and overlay keybinds while their features are available.
